@@ -105,6 +105,9 @@ const FINTO_RCLONE = [
   'exit 0',
 ].join('\n');
 
+/** Un `psql` muto: lo script non deve chiamare quello vero della macchina. */
+const FINTO_PSQL = ['#!/usr/bin/env bash', 'cat >/dev/null', 'exit 1'].join('\n');
+
 const FINTO_PGDUMP = [
   '#!/usr/bin/env bash',
   'uscita=""',
@@ -128,6 +131,8 @@ function bancoDiProva(storico?: (copia: string) => string) {
 
   writeFileSync(join(finti, 'pg_dump'), FINTO_PGDUMP);
   chmodSync(join(finti, 'pg_dump'), 0o755);
+  writeFileSync(join(finti, 'psql'), FINTO_PSQL);
+  chmodSync(join(finti, 'psql'), 0o755);
   writeFileSync(join(finti, 'rclone'), FINTO_RCLONE);
   chmodSync(join(finti, 'rclone'), 0o755);
 

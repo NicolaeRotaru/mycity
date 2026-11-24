@@ -76,7 +76,8 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
   // 17/11/2026 — Il titolo dice «non trovata» con parole sue, diverse dal riquadro della pagina
   // («Negozio non trovato», in app/store/[id]/page.tsx): Next manda i metadati in streaming dentro il
   // corpo, e con le stesse parole la scritta compariva due volte, come alla 404 prima della sua cura.
-  if (!store || store.role !== 'seller' || !store.is_approved) {
+  // R07-002 — Anche senza nome: il guscio qui sotto risponde 404 per la stessa condizione.
+  if (!store || store.role !== 'seller' || !store.is_approved || !store.store_name) {
     return { title: 'Vetrina non trovata · MyCity', robots: { index: false }, alternates: { canonical: null } };
   }
   const name = store.store_name ?? 'Negozio';

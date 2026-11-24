@@ -107,7 +107,8 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   // 5/11/2026 — Una lettura caduta non è «ordine non trovato»: si resta qui con «Riprova».
-  const [letturaFallita, setLetturaFallita] = useState(false);
+  // Vale anche per i reclami: senza sapere se ce n'è già uno (aperto o chiuso) il modulo non si mostra.
+  const [letturaFallita, setLetturaFallita] = useState<false | 'ordine' | 'reclami'>(false);
   const [tentativo, setTentativo] = useState(0);
   // 5/11/2026 — Il database tiene un solo reclamo aperto per ordine: se c'è già, lo si dice.
   const [reclamoAperto, setReclamoAperto] = useState<{ created_at: string; status: string } | null>(null);
@@ -156,7 +157,7 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
         .eq('id', params.id)
         .maybeSingle();
       if (error) {
-        setLetturaFallita(true);
+        setLetturaFallita('ordine');
         return;
       }
       if (!data) {
@@ -171,14 +172,18 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
       const riga = data as { seller_id: string };
       const [conNegozio] = await conNegozioDellOrdine(supabase, [riga], 'id, store_name')
         .catch(() => [{ ...riga, seller: null }]);
-      // Se questa lettura cade si mostra il modulo: il database rifiuta comunque il doppione,
-      // e il messaggio qui sotto (submit) lo dice con parole vere.
-      const { data: reclami } = await supabase
+      // Se questa lettura cade il modulo NON si mostra: il database rifiuta solo un secondo reclamo
+      // aperto, e con uno già chiuso il cliente ne aprirebbe un altro senza averne visto l'esito.
+      const { data: reclami, error: erroreReclami } = await supabase
         .from('disputes')
         .select('created_at, status, resolution_notes, refund_cents')
         .eq('order_id', params.id)
         .in('status', Object.keys(RECLAMO_TITOLO))
         .limit(50);
+      if (erroreReclami) {
+        setLetturaFallita('reclami');
+        return;
+      }
       const reclamo = reclamoDaMostrare(reclami as RigaReclamo[] | null);
       setReclamoAperto(reclamo && reclamoAncoraAperto(reclamo) ? { created_at: reclamo.created_at ?? '', status: reclamo.status } : null);
       setReclamoChiuso(reclamo && !reclamoAncoraAperto(reclamo) ? reclamo : null);
@@ -256,8 +261,10 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
     return (
       <div className="container mx-auto px-4 sm:px-6 py-12 max-w-2xl">
         <ErrorState
-          title="Non riesco a caricare l'ordine"
-          description="Sembra un problema di collegamento. L'ordine c'è: riprova."
+          title={letturaFallita === 'reclami' ? 'Non riesco a leggere i reclami di questo ordine' : "Non riesco a caricare l'ordine"}
+          description={letturaFallita === 'reclami'
+            ? 'Sembra un problema di collegamento. Prima di aprirne uno nuovo devo vedere se ce n\'è già uno: riprova.'
+            : "Sembra un problema di collegamento. L'ordine c'è: riprova."}
           retry={() => setTentativo((t) => t + 1)}
         />
       </div>

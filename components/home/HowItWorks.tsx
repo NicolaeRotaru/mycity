@@ -59,7 +59,7 @@ export default function HowItWorks({ className }: { className?: string }) {
   return (
     <section className={className ?? 'container mx-auto px-4 sm:px-6 py-6'}>
       <div className="text-center mb-5">
-        <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
+        <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-label">
           Semplice e senza pensieri
         </span>
         <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mt-1">

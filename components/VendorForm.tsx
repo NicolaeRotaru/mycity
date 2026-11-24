@@ -179,8 +179,15 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
   // Quello che è partito con l'invio: a salvataggio riuscito la fotografia è questa, non quello che
   // il negoziante ha scritto mentre la risposta era in volo.
   const inviata = useRef<string | null>(null);
+  // R07-007 — «Il resto è salvato» si dice quando il salvataggio è riuscito, non quando parte: se
+  // fallisce, il negoziante non deve leggere quella frase accanto all'errore.
+  const avvisoASalvataggioRiuscito = useRef<string | null>(null);
   useEffect(() => {
     if (salvataggioRiuscito > 0 && inviata.current !== null) setSalvata(inviata.current);
+    if (salvataggioRiuscito > 0 && avvisoASalvataggioRiuscito.current !== null) {
+      setCustomError(avvisoASalvataggioRiuscito.current);
+      avvisoASalvataggioRiuscito.current = null;
+    }
   }, [salvataggioRiuscito]);
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => {
@@ -279,6 +286,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
     }
     let customData: StoreCustomization = custom;
     let socialNonSalvati = false;
+    avvisoASalvataggioRiuscito.current = null;
     if (showBranding) {
       // Link incollati, @, sito senza https e WhatsApp senza +39 si correggono da soli.
       const corretta: StoreCustomization = { ...custom, socials: normalizzaSocials(custom.socials) };
@@ -314,9 +322,15 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
           return;
         }
         customData = riprova.data;
-        const nomi = Object.keys(sociali).map((k) => campoDellErrore(['socials', k]) ?? k).join(', ');
+        const chiavi = Object.keys(sociali);
+        const nomi = chiavi.map((k) => campoDellErrore(['socials', k]) ?? k).join(', ');
+        // Un campo che prima era vuoto non «resta com'era»: semplicemente non si salva.
+        const cheFine = chiavi.every((k) => !salvati[k])
+          ? (chiavi.length > 1 ? 'non si sono salvati' : 'non si è salvato')
+          : (chiavi.length > 1 ? "sono rimasti com'erano" : "è rimasto com'era");
         socialNonSalvati = true;
-        setCustomError(`${campo}: ${primo.message} Il resto è salvato; ${nomi} è rimasto com'era.`);
+        setCustomError(`${campo}: ${primo.message}`);
+        avvisoASalvataggioRiuscito.current = `${campo}: ${primo.message} Il resto è salvato; ${nomi} ${cheFine}.`;
       } else {
         customData = parsed.data;
       }

@@ -41,7 +41,6 @@ const FUORI_DALL_EXPORT: Record<string, string> = {
   sponsored_listings: 'spazi pubblicitari comprati dal negozio: dato commerciale',
   seller_promotions: 'promozioni pubbliche del negozio',
   audit_logs: 'registro di controllo: va conservato e non si esporta a richiesta',
-  cod_reconciliations: 'quadratura della cassa contanti: registro contabile',
   catalog_ai_jobs: 'lavorazioni tecniche del catalogo, non dati della persona',
   invoice_sequences: 'contatore del numero di fattura, non un dato della persona',
 };
@@ -100,5 +99,10 @@ describe('l export dei dati personali non salta nessuna tabella', () => {
   it('le esclusioni parlano di tabelle che esistono ancora', () => {
     const fantasmi = Object.keys(FUORI_DALL_EXPORT).filter((t) => !tabelle.includes(t));
     expect(fantasmi, 'esclusioni rimaste da tabelle che non esistono più: ripulire').toEqual([]);
+  });
+
+  it('una tabella esclusa non è anche nell export: l esclusione direbbe il falso', () => {
+    const doppie = Object.keys(FUORI_DALL_EXPORT).filter((t) => t !== 'profiles' && rotta.includes(`from('${t}')`));
+    expect(doppie).toEqual([]);
   });
 });

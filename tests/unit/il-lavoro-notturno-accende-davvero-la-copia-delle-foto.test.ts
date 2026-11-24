@@ -27,7 +27,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FINTO_RCLONE, FINTO_PGDUMP } from './aiuti/finto-rclone';
+import { FINTO_RCLONE, FINTO_PGDUMP, FINTO_PSQL } from './aiuti/finto-rclone';
 
 const RADICE = process.cwd();
 const PERCORSO = join(RADICE, '.github/workflows/backup-db.yml');
@@ -159,6 +159,8 @@ function notteConLeVariabiliDiGitHub(nomePasso: string, lavoro: string, accesa: 
   writeFileSync(join(fornitore, 'products', 'pane-del-giorno.jpg'), 'la foto del negoziante');
   writeFileSync(join(finti, 'pg_dump'), FINTO_PGDUMP);
   chmodSync(join(finti, 'pg_dump'), 0o755);
+  writeFileSync(join(finti, 'psql'), FINTO_PSQL);
+  chmodSync(join(finti, 'psql'), 0o755);
   writeFileSync(join(finti, 'rclone'), FINTO_RCLONE);
   chmodSync(join(finti, 'rclone'), 0o755);
 

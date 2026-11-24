@@ -91,10 +91,17 @@ export type EsitoPushSubito = {
 
 const NIENTE: EsitoPushSubito = { mandate: 0, prese: 0, ridateAlGiro: 0 };
 
-/** Ridà al giro le campanelle non mandate: `pushed_at` di nuovo vuoto. */
-async function ridaiAlGiro(supa: SupabaseClient, ids: string[]): Promise<void> {
+/**
+ * Ridà al giro le campanelle non mandate: `pushed_at` di nuovo vuoto.
+ *
+ * 24/11/2026 (R02-004) — Solo quelle che hanno ancora la NOSTRA presa (`pushed_at` uguale all'ora
+ * con cui le abbiamo prese). Il giro a orario può aver letto la campanella prima della presa,
+ * averla mandata lui e segnata con la sua ora: ridarla al giro cancellava quel segno, e il giro
+ * dopo la rimandava una seconda volta.
+ */
+async function ridaiAlGiro(supa: SupabaseClient, ids: string[], presa: string): Promise<void> {
   if (ids.length === 0) return;
-  const { error } = await supa.from('notifications').update({ pushed_at: null }).in('id', ids);
+  const { error } = await supa.from('notifications').update({ pushed_at: null }).in('id', ids).eq('pushed_at', presa);
   if (error) {
     logger.error('[push subito] push del nuovo ordine non mandata e non ridata al giro', {
       quante: ids.length, message: error.message,
@@ -114,15 +121,17 @@ export async function mandaSubitoLaPushDelNuovoOrdine(
   if (links.length === 0) return NIENTE;
   // Le campanelle prese e non ancora sistemate: se qualcosa lancia a metà, tornano al giro.
   let inSospeso: string[] = [];
+  let presa = '';
   try {
     // Senza chiavi VAPID non si prende niente, come il giro: quando ci saranno, l'arretrato recente parte.
     if (!isPushConfigured()) return NIENTE;
 
     // ① Si prendono, in una scrittura sola: solo quelle ancora da mandare, dell'ultima ora (la finestra del giro).
     const adesso = new Date();
+    presa = adesso.toISOString();
     const { data, error } = await supa
       .from('notifications')
-      .update({ pushed_at: adesso.toISOString() })
+      .update({ pushed_at: presa })
       .in('link', links)
       .is('pushed_at', null)
       .gte('created_at', new Date(adesso.getTime() - 60 * 60 * 1000).toISOString())
@@ -157,7 +166,7 @@ export async function mandaSubitoLaPushDelNuovoOrdine(
     } catch (e) {
       logger.warn('[push subito] iscrizioni non lette: le manda il giro', { message: e instanceof Error ? e.message : String(e) });
       inSospeso = [];
-      await ridaiAlGiro(supa, daMandare.map((n) => n.id));
+      await ridaiAlGiro(supa, daMandare.map((n) => n.id), presa);
       return { mandate: 0, prese: prese.length, ridateAlGiro: daMandare.length };
     }
 
@@ -184,13 +193,13 @@ export async function mandaSubitoLaPushDelNuovoOrdine(
       }
     });
     inSospeso = [];
-    await ridaiAlGiro(supa, daRidare);
+    await ridaiAlGiro(supa, daRidare, presa);
     return { mandate, prese: prese.length, ridateAlGiro: daRidare.length };
   } catch (e) {
     // Anche un guasto inatteso resta qui: l'ordine è già nato, la push la riprende il giro.
     logger.warn('[push subito] push del nuovo ordine non partita', { message: e instanceof Error ? e.message : String(e) });
     const daRidare = inSospeso;
-    if (daRidare.length > 0) await ridaiAlGiro(supa, daRidare).catch(() => undefined);
+    if (daRidare.length > 0) await ridaiAlGiro(supa, daRidare, presa).catch(() => undefined);
     return { mandate: 0, prese: daRidare.length, ridateAlGiro: daRidare.length };
   }
 }

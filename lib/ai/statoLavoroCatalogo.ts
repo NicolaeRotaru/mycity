@@ -30,9 +30,14 @@ export function lavoroInCorso(stato: string | null | undefined): boolean {
   return typeof stato === 'string' && IN_CORSO.has(stato);
 }
 
-/** Il pulsante «Avvia» si mostra solo senza un lavoro aperto. */
-export function puoAvviareLavoro(job: { status: string } | null | undefined): boolean {
-  return !job || lavoroChiuso(job.status);
+/**
+ * Il pulsante «Avvia» si mostra solo senza un lavoro aperto.
+ * 24/11/2026 (R01-015 · R01-016) — E non sotto un lavoro chiuso il cui motivo dice di chiedere
+ * all'assistenza prima di avviarne un altro: la riga di stato non dice piu' «Puoi avviarne un altro»,
+ * e il pulsante non deve dirlo al posto suo. Una regola sola per tutti e due: `vietaDiRipartire`.
+ */
+export function puoAvviareLavoro(job: { status: string; error?: string | null } | null | undefined): boolean {
+  return !job || (lavoroChiuso(job.status) && !vietaDiRipartire(job));
 }
 
 /**
@@ -42,6 +47,11 @@ export function puoAvviareLavoro(job: { status: string } | null | undefined): bo
  * chiuso dopo 24 ore, lo scarto) dicono solo dove si recuperano i risultati, e non vietano di ripartire.
  */
 const CHIEDI_ALL_ASSISTENZA = /chiedi all['’]assistenza/i;
+
+/** Il lavoro e' chiuso con un motivo che vieta di ripartire senza prima chiedere all'assistenza. */
+function vietaDiRipartire(job: { status: string; error?: string | null }): boolean {
+  return (job.status === 'failed' || job.status === 'error') && CHIEDI_ALL_ASSISTENZA.test(job.error ?? '');
+}
 
 /** La riga che spiega lo stato, quando la scheda dei risultati non c'e'. */
 export function testoStatoLavoro(job: { status: string; total: number; error?: string | null }): string | null {
@@ -56,7 +66,7 @@ export function testoStatoLavoro(job: { status: string; total: number; error?: s
     case 'error': {
       const base = `Il lavoro non è andato a buon fine${job.error ? ` (${job.error})` : ''}.`;
       // Se il motivo dice di chiedere all'assistenza prima di ripartire, la riga non dice il contrario.
-      return CHIEDI_ALL_ASSISTENZA.test(job.error ?? '') ? base : `${base} Puoi avviarne un altro.`;
+      return vietaDiRipartire(job) ? base : `${base} Puoi avviarne un altro.`;
     }
     case 'canceled':
       return 'Il lavoro è stato annullato. Puoi avviarne un altro.';

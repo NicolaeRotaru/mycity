@@ -94,6 +94,19 @@ const TETTO_CANCELLAZIONI_MS = 150_000;
 const TETTO_EMAIL_MS = 240_000;
 
 /**
+ * 24/11/2026 (R02-001) — LA CHIUSURA DI «SCRIVILE TU» HA UN TETTO SUO.
+ *
+ * La chiusura degli allarmi «scrivile tu» e «Persone non avvisate» gira dopo le email, quindi dopo
+ * il loro tetto, e non ne aveva uno: con molti allarmi aperti (per ognuno una lettura del profilo e
+ * una scrittura) allungava la notte oltre i 300 secondi della piattaforma, che la ferma senza
+ * risposta e senza battito. Adesso ha un tetto suo, contato dall'inizio del giro e non legato a
+ * quello delle email: dopo questo tempo non si guarda un allarme nuovo, quelli rimasti aperti li
+ * chiude la notte dopo. Viene dopo il caso peggiore delle email (il tetto più due attese della
+ * posta), così anche quella notte la chiusura ha il suo tempo, e lascia venti secondi alla risposta.
+ */
+const TETTO_CHIUSURE_MS = 280_000;
+
+/**
  * Il conto del giro senza il giro: gli account che la notte cancellerebbe e le
  * righe che le potature toccherebbero. Non scrive niente e non lascia il
  * battito, perche' il lavoro non e' stato fatto.
@@ -192,6 +205,8 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // pubblica. E non si aggiusta da sola: se il database rifiuta stanotte,
   // rifiutera' anche domani.
   if (potature.fallite > 0) await svegliaPerLaRitenzione(admin, potature);
+  // R02-002 — Tutte le pulizie riuscite: il guasto è finito, il suo allarme si toglie (vedi sotto).
+  else await chiudiGliAllarmiDellaRitenzione(admin);
 
   // Chiama la function SQL che ritorna gli userId scaduti
   const { data: expired, error: rpcErr } = await admin.rpc('process_expired_deletions');
@@ -209,9 +224,9 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   const rinviatePerOrdiniAperti = await segnalaLeCancellazioniRinviate(admin, new Set(userIds));
   if (userIds.length === 0) {
     // R03-006 — Anche la notte senza nessuno in lista: chi ne è appena uscito ha ancora il suo «scrivile tu».
-    await chiudiGliAllarmiDiChiNonAspettaPiu(admin);
+    await chiudiGliAllarmiDiChiNonAspettaPiu(admin, adesso);
     // R03-003 — E il suo «Persone non avvisate», se non aspetta più o la spiegazione è arrivata.
-    await chiudiGliAllarmiDiChiNonAspettaPiu(admin, TITOLO_NON_AVVISATE, 'non-avvisata');
+    await chiudiGliAllarmiDiChiNonAspettaPiu(admin, adesso, TITOLO_NON_AVVISATE, 'non-avvisata');
     // Le notti senza cancellazioni da fare sono la maggioranza: se il conto
     // delle potature non riuscite non pesa QUI, non pesa quasi mai.
     return NextResponse.json(
@@ -340,9 +355,10 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // 5/11/2026 — Ogni allarme dice QUALE spiegazione è ferma (rinvio o termine scaduto): oltre il
   // mese la stessa persona ne ha due, e prima i due allarmi erano identici.
   // R01-002 — Questi allarmi li scrive `rispondiEntroIlTetto`, uno appena l'email risulta ferma.
-  await chiudiGliAllarmiDelleEmailPartite(admin, avvisi.emailPartiteAvvisi);
-  await chiudiGliAllarmiDiChiNonAspettaPiu(admin);
-  await chiudiGliAllarmiDiChiNonAspettaPiu(admin, TITOLO_NON_AVVISATE, 'non-avvisata');
+  // R02-001 — Le chiusure hanno il loro tetto di tempo (TETTO_CHIUSURE_MS), dall'inizio del giro.
+  await chiudiGliAllarmiDelleEmailPartite(admin, avvisi.emailPartiteAvvisi, adesso);
+  await chiudiGliAllarmiDiChiNonAspettaPiu(admin, adesso);
+  await chiudiGliAllarmiDiChiNonAspettaPiu(admin, adesso, TITOLO_NON_AVVISATE, 'non-avvisata');
 
   return NextResponse.json(
     {
@@ -598,12 +614,41 @@ async function svegliaPerLaRitenzione(admin: Admin, rapporto: RapportoPotature):
   const chiave = `ritenzione-non-riuscita:${[...new Set(rapporto.esiti.filter((e) => !e.ok).map((e) => e.cosa))].sort().join(',')}`;
   await avvisaAmministratori(
     admin,
-    'Dati vecchi non cancellati',
+    TITOLO_RITENZIONE,
     `${quali} I dati che dovevamo cancellare sono ancora al loro posto, oltre il tempo che ` +
       'promettiamo nella pagina della privacy. Non si sistema da sola: se il database ha detto di ' +
       'no stanotte, dirà di no anche domani.',
     chiave,
   );
+}
+
+/** Il titolo dell'allarme delle pulizie non riuscite: lo scrive `svegliaPerLaRitenzione`, lo toglie la chiusura qui sotto. */
+const TITOLO_RITENZIONE = 'Dati vecchi non cancellati';
+
+/**
+ * 24/11/2026 (R02-002) — «DATI VECCHI NON CANCELLATI» VALE FINCHÉ IL GUASTO DURA.
+ *
+ * L'allarme ha un identificativo ricavato da quali pulizie non riescono: la notte dopo, con lo
+ * stesso guasto, la riga c'è già e non se ne scrive un'altra. Ma nessuno la toglieva: se il guasto
+ * si sistemava e settimane dopo tornava uguale, la riga di allora (già letta) bloccava l'allarme
+ * nuovo e gli amministratori non sapevano niente. La notte in cui tutte le pulizie riescono il
+ * guasto è finito: gli allarmi «Dati vecchi non cancellati» degli amministratori si tolgono, così
+ * se torna se ne scrive uno nuovo. Il guasto di allora resta nel registro degli errori (Sentry) e
+ * nella notte rossa. Non lancia: un allarme non tolto è un fastidio da annotare, non un guasto.
+ */
+async function chiudiGliAllarmiDellaRitenzione(admin: Admin): Promise<void> {
+  try {
+    const { data, error } = await admin.from('profiles').select('id').eq('role', 'admin').limit(10);
+    if (error) throw new Error(error.message);
+    for (const a of (data ?? []) as { id: string }[]) {
+      const tolti = await admin.from('notifications').delete().eq('user_id', a.id).eq('title', TITOLO_RITENZIONE);
+      if (tolti.error) throw new Error(tolti.error.message);
+    }
+  } catch (e) {
+    logger.warn('[cron-deletions] allarme «Dati vecchi non cancellati» non tolto dopo le pulizie riuscite', {
+      errore: e instanceof Error ? e.message : 'errore',
+    });
+  }
 }
 
 /**
@@ -715,7 +760,7 @@ async function haAnnullatoNelFrattempo(admin: Admin, userId: string): Promise<bo
 
 async function avvisaUnaVoltaPerAvviso(
   admin: Admin,
-  avvisiFermi: Array<{ id: string; userId: string; tappa?: TappaAvviso }>,
+  avvisiFermi: Array<{ id: string; userId: string; tappa?: TappaAvviso; forsePartita?: true }>,
 ): Promise<{ nuovi: number; nonScritti: number }> {
   const conto = { nuovi: 0, nonScritti: 0 };
   if (avvisiFermi.length === 0) return conto;
@@ -732,7 +777,7 @@ async function avvisaUnaVoltaPerAvviso(
     logger.error('[cron-deletions] nessun amministratore a cui dirlo: allarme non recapitato', { avvisiFermi: avvisiFermi.length });
     return { nuovi: 0, nonScritti: avvisiFermi.length };
   }
-  for (const { id: idAvviso, userId, tappa } of avvisiFermi) {
+  for (const { id: idAvviso, userId, tappa, forsePartita } of avvisiFermi) {
     const quale =
       tappa === 'termine-scaduto'
         ? ' La spiegazione ferma è quella del termine di legge scaduto.'
@@ -755,7 +800,11 @@ async function avvisaUnaVoltaPerAvviso(
         category: 'system',
         title: TITOLO_EMAIL_FERMA,
         body:
-          "Una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. " +
+          // R09-001 — Se una notte prima l'email è stata spedita ma il registro non l'ha segnata, può
+          // essere arrivata: l'allarme non può dire «non è partita».
+          (forsePartita
+            ? "Una spiegazione dell'attesa per la cancellazione non risulta partita per email: una notte prima è stata spedita ma il registro non l'ha segnata, quindi può essere arrivata. "
+            : "Una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. ") +
           "È scritta nel pannello del sito della persona, ma chi vuole andarsene può non rientrarci più: " +
           'controlla la posta del sito oppure scrivile tu. Il giro riprova da solo ogni notte; ' +
           'questo avviso non si ripete finché la spiegazione resta ferma, e si chiude da solo quando parte. ' +
@@ -784,12 +833,13 @@ async function avvisaUnaVoltaPerAvviso(
  * di `avvisaUnaVoltaPerAvviso`) si segnano letti. Non lancia: un allarme
  * rimasto aperto è un fastidio da annotare, non un guasto della notte.
  */
-async function chiudiGliAllarmiDelleEmailPartite(admin: Admin, partite: string[]): Promise<void> {
+async function chiudiGliAllarmiDelleEmailPartite(admin: Admin, partite: string[], inizio: number): Promise<void> {
   if (partite.length === 0) return;
   try {
     const { data, error } = await admin.from('profiles').select('id').eq('role', 'admin').limit(10);
     if (error) throw new Error(error.message);
     for (const idAvviso of partite) {
+      if (chiusureSenzaTempo(inizio, 'email partite')) return;
       for (const a of (data ?? []) as { id: string }[]) {
         const chiuso = await admin
           .from('notifications')
@@ -827,9 +877,13 @@ const ALLARMI_PER_PAGINA = 200;
  * (stesso identificativo con cui nasce: `<idAvviso>:non-avvisata:<amministratore>`), e lo chiude
  * anche quando la spiegazione è ormai nel pannello della persona. Ogni giro legge solo il suo titolo:
  * uno non chiude mai gli allarmi dell'altro.
+ *
+ * R02-001 — Tutto dentro il tetto delle chiusure (`TETTO_CHIUSURE_MS`, dall'inizio del giro): passato
+ * quello non si legge né si chiude un allarme nuovo, e i rimasti li chiude la notte dopo.
  */
 async function chiudiGliAllarmiDiChiNonAspettaPiu(
   admin: Admin,
+  inizio: number,
   titolo: string = TITOLO_EMAIL_FERMA,
   segno: 'email-ferma' | 'non-avvisata' = 'email-ferma',
 ): Promise<void> {
@@ -841,6 +895,7 @@ async function chiudiGliAllarmiDiChiNonAspettaPiu(
     for (const { id: amministratore } of (amministratori ?? []) as { id: string }[]) {
       let dopo: string | null = null;
       for (;;) {
+        if (chiusureSenzaTempo(inizio, segno)) return;
         let q = admin.from('notifications').select('id, body')
           .eq('user_id', amministratore).eq('title', titolo).eq('is_read', false);
         if (dopo) q = q.gt('id', dopo);
@@ -848,6 +903,7 @@ async function chiudiGliAllarmiDiChiNonAspettaPiu(
         if (errLettura) throw new Error(errLettura.message);
         const righe = (Array.isArray(data) ? data : []) as Array<{ id: string; body: string | null }>;
         for (const r of righe) {
+          if (chiusureSenzaTempo(inizio, segno)) return;
           const chi = /Chi aspetta: l'utente ([^\s.]+)\./.exec(String(r.body ?? ''))?.[1];
           if (!chi) continue;
           if (!richieste.has(chi)) richieste.set(chi, await richiestaDi(admin, chi));
@@ -880,6 +936,16 @@ async function chiudiGliAllarmiDiChiNonAspettaPiu(
       errore: e instanceof Error ? e.message : 'errore',
     });
   }
+}
+
+/** R02-001 — Il tetto delle chiusure è passato? Lo dice nel registro: gli allarmi rimasti li chiude la notte dopo. */
+function chiusureSenzaTempo(inizio: number, quale: string): boolean {
+  if (Date.now() - inizio < TETTO_CHIUSURE_MS) return false;
+  logger.warn('[cron-deletions] tetto di tempo delle chiusure raggiunto: gli allarmi rimasti si chiudono la notte dopo', {
+    quale,
+    tettoMs: TETTO_CHIUSURE_MS,
+  });
+  return true;
 }
 
 /** R03-003 — La spiegazione è nel pannello della persona? undefined se non si legge. */

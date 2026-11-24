@@ -7,6 +7,20 @@ import { slugify, RESERVED_SLUGS, homePage, type StoreSite, type SitePage, type 
 import PageSectionsEditor from './PageSectionsEditor';
 import SitePreview from './SitePreview';
 
+
+/**
+ * R09-003 R09-004 — Niente `maxLength` sui campi brevi: il browser tagliava in silenzio quello che si
+ * incollava oltre il tetto. Il testo resta intero e, oltre il tetto che lo schema rifiuta al salvataggio
+ * (`lib/store-site.ts`), l'errore lo dice sotto il campo. Si conta come lo schema
+ * (`z.string().trim().max(n)`); stessa funzione di `BannerFields.tsx`.
+ */
+function sopraIlTetto(valore: string | undefined, max: number): string | undefined {
+  const n = (valore ?? '').trim().length;
+  return n > max
+    ? `Troppo lungo: ${n.toLocaleString('it-IT')} caratteri su ${max.toLocaleString('it-IT')}. Accorcialo, così si salva.`
+    : undefined;
+}
+
 /**
  * Schermata di editing di una singola pagina, in layout a due colonne (≥lg):
  *  - sinistra: freccia indietro, impostazioni pagina (collassabili) ed editor dei
@@ -86,7 +100,7 @@ export default function PageEditor({
             </button>
             {showSettings && (
               <div className="border-t border-cream-200 px-5 py-4 space-y-3">
-                <Input label="Titolo" value={page.title} maxLength={60} onChange={(e) => setPage({ title: e.target.value })} />
+                <Input label="Titolo" value={page.title} error={sopraIlTetto(page.title, 60)} onChange={(e) => setPage({ title: e.target.value })} />
                 {!isHome && (
                   <>
                     <Input
@@ -107,8 +121,8 @@ export default function PageEditor({
                     />
                   </>
                 )}
-                <Input label="Titolo SEO (opzionale)" value={page.seo?.title ?? ''} maxLength={70} onChange={(e) => setPage({ seo: { ...page.seo, title: e.target.value } })} />
-                <Textarea label="Descrizione SEO (opzionale)" rows={2} maxLength={180} value={page.seo?.description ?? ''} onChange={(e) => setPage({ seo: { ...page.seo, description: e.target.value } })} />
+                <Input label="Titolo SEO (opzionale)" value={page.seo?.title ?? ''} error={sopraIlTetto(page.seo?.title, 70)} onChange={(e) => setPage({ seo: { ...page.seo, title: e.target.value } })} />
+                <Textarea label="Descrizione SEO (opzionale)" rows={2} error={sopraIlTetto(page.seo?.description, 180)} value={page.seo?.description ?? ''} onChange={(e) => setPage({ seo: { ...page.seo, description: e.target.value } })} />
               </div>
             )}
           </div>

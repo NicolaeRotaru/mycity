@@ -7,7 +7,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { isPushConfigured, iscrizioniPerUtenti, sendPushToUser } from '@/lib/push/send';
 import { CONSEGNA_PER_CATEGORIA, contrassegno } from '@/lib/push/subito';
 
-// 20/11/2026 (R02-004) — Quanto vale un avviso (`CONSEGNA_PER_CATEGORIA`) e quale sostituisce sul
+// 20/11/2026 — Quanto vale un avviso (`CONSEGNA_PER_CATEGORIA`) e quale sostituisce sul
 // telefono (`contrassegno`) stanno in lib/push/subito.ts: le usa anche l'aiutante per l'invio subito
 // della push del nuovo ordine (`mandaSubitoLaPushDelNuovoOrdine`), che oggi nessuna rotta chiama
 // ancora (vedi sotto), e devono restare uguali.

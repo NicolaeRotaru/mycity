@@ -29,29 +29,8 @@ const stato: {
   mondo: ReturnType<typeof fintoGiroNotturno>;
   senzaChiave: boolean;
   esiti: Record<string, Esito>;
-  /** Il database rifiuta gli avvisi scritti a questa persona (e solo a lei). */
-  rifiutaAvvisiA: string | null;
-  /**
-   * Il registro delle azioni non si legge e non si scrive — solo lì dove la
-   * notte segna i tentativi d'invio. Le potature della stessa tabella restano
-   * buone: altrimenti la notte diventerebbe rossa per loro, non per l'email.
-   */
-  registroInviiRotto: boolean;
-  /**
-   * 27/10/2026 (sesto giro) — Il registro delle azioni si legge, ma ogni riga
-   * nuova la rifiuta con un errore che NON è un doppione (qui un CHECK). È il
-   * pezzo che `registroInviiRotto` non raggiunge: lì si ferma già la lettura.
-   */
-  registroInviiRifiutaLeRighe: boolean;
-  /**
-   * 27/10/2026 (quarto giro, fase 2) — Una lettura sola che non riesce: quella
-   * della riga con questo identificativo in `notifications`. Le altre letture
-   * della stessa tabella (il pannello della persona) vanno.
-   */
-  rifiutaLetturaDi: string | null;
 } = {
-  mondo: fintoGiroNotturno(), senzaChiave: false, esiti: {}, rifiutaAvvisiA: null,
-  registroInviiRotto: false, registroInviiRifiutaLeRighe: false, rifiutaLetturaDi: null,
+  mondo: fintoGiroNotturno(), senzaChiave: false, esiti: {},
 };
 
 const UTENTE = { id: "rider-1", email: "rider@example.com" };
@@ -64,69 +43,31 @@ const SECONDO = { id: "rider-2", email: "rider2@example.com" };
 const PERSONE = [UTENTE, SECONDO];
 
 /**
- * Il finto database del giro notturno, con in più il `.single()` che usa la
- * pagina dell account: legge la prima riga che passa i filtri.
+ * R11-002 — Il finto database è `stato.mondo.admin` (tests/unit/aiuti/finto-giro-notturno.ts): ha già
+ * `.single()`, `auth.admin.getUserById` (dagli `indirizzi`) e i guasti a richiesta. I guasti si
+ * aggiungono a notte in corso con `stato.mondo.guasti.push(...)`, con questi quattro.
  */
-function adminDiProva() {
-  const base = stato.mondo.admin as unknown as {
-    from(t: string): Record<string, unknown> & PromiseLike<{ data: unknown[] | null; error: unknown }>;
-  };
-  return {
-    ...(stato.mondo.admin as object),
-    // L'indirizzo a cui la notte spedisce la spiegazione per email.
-    auth: {
-      admin: {
-        ...((stato.mondo.admin as { auth?: { admin?: object } }).auth?.admin ?? {}),
-        getUserById: async (id: string) => ({ data: { user: PERSONE.find((p) => p.id === id) ?? null }, error: null }),
-      },
-    },
-    from(tabella: string) {
-      const q = base.from(tabella);
-      if (tabella === "notifications" && stato.rifiutaAvvisiA) {
-        const vera = (q.insert as (r: unknown) => unknown).bind(q);
-        q.insert = (righe: Record<string, unknown> | Record<string, unknown>[]) => {
-          const lista = Array.isArray(righe) ? righe : [righe];
-          if (!lista.some((r) => r.user_id === stato.rifiutaAvvisiA)) return vera(righe);
-          return { then: (ok: (v: unknown) => unknown) => Promise.resolve(ok({ data: null, error: { message: "permission denied" } })) };
-        };
-      }
-      if (tabella === "notifications" && stato.rifiutaLetturaDi) {
-        const bersaglio = stato.rifiutaLetturaDi;
-        const veraEq = (q.eq as (c: string, v: unknown) => unknown).bind(q);
-        q.eq = (c: string, v: unknown) => {
-          if (c !== "id" || v !== bersaglio) return veraEq(c, v);
-          const rotta: Record<string, unknown> = {
-            then: (ok: (x: unknown) => unknown) =>
-              Promise.resolve(ok({ data: null, error: { message: "canceling statement due to statement timeout" } })),
-          };
-          rotta.eq = () => rotta;
-          return rotta;
-        };
-      }
-      if (tabella === "audit_logs" && stato.registroInviiRotto) {
-        const rifiuto = { data: null, error: { message: "permission denied for table audit_logs" } };
-        // La lettura filtra per tabella E per avviso: due `eq` di fila.
-        const lettura: Record<string, unknown> = { then: (ok: (v: unknown) => unknown) => Promise.resolve(ok(rifiuto)) };
-        lettura.eq = () => lettura;
-        q.select = () => lettura;
-        q.insert = () => ({ then: (ok: (v: unknown) => unknown) => Promise.resolve(ok(rifiuto)) });
-      }
-      if (tabella === "audit_logs" && stato.registroInviiRifiutaLeRighe) {
-        // Il messaggio vero di PostgREST per un CHECK (23514): niente «duplicate key».
-        const rifiuto = {
-          data: null,
-          error: { message: 'new row for relation "audit_logs" violates check constraint "audit_logs_action_check"', code: "23514" },
-        };
-        q.insert = () => ({ then: (ok: (v: unknown) => unknown) => Promise.resolve(ok(rifiuto)) });
-      }
-      q.single = async () => {
-        const r = await q;
-        return { data: Array.isArray(r.data) ? (r.data[0] ?? null) : null, error: r.error };
-      };
-      return q;
-    },
-  };
-}
+const INDIRIZZI = Object.fromEntries(PERSONE.map((p) => [p.id, p.email]));
+/** Il database rifiuta gli avvisi scritti a questa persona (e solo a lei). */
+const rifiutaAvvisiA = (chi: string) =>
+  stato.mondo.guasti.push({ tabella: "notifications", azione: "insert", messaggio: "permission denied", seRiga: (r) => r.user_id === chi });
+/** Una lettura sola che non riesce: quella della riga con questo identificativo in `notifications`. */
+const rifiutaLetturaDi = (id: string) =>
+  stato.mondo.guasti.push({ tabella: "notifications", azione: "select", seFiltro: ["id", id], messaggio: "canceling statement due to statement timeout" });
+/** Il registro delle azioni non si legge e non si scrive. */
+const registroInviiRotto = () => {
+  for (const azione of ["select", "insert"] as const) {
+    stato.mondo.guasti.push({ tabella: "audit_logs", azione, messaggio: "permission denied for table audit_logs" });
+  }
+};
+/** Il registro si legge, ma ogni riga nuova la rifiuta con un CHECK (23514), non con un doppione. */
+const registroInviiRifiutaLeRighe = () =>
+  stato.mondo.guasti.push({
+    tabella: "audit_logs",
+    azione: "insert",
+    codice: "23514",
+    messaggio: 'new row for relation "audit_logs" violates check constraint "audit_logs_action_check"',
+  });
 
 /** La posta spenta, com'è oggi in produzione: risponde di no, senza lanciare. */
 const POSTA_SPENTA = async (_x: unknown) => ({ ok: false, skipped: true, reason: "non configurata" }) as { ok: boolean };
@@ -135,7 +76,7 @@ const inviaEmail = vi.fn(POSTA_SPENTA);
 vi.mock("@/lib/supabase/server", () => ({
   getAdminSupabase: () => {
     if (stato.senzaChiave) throw new Error("SUPABASE_SERVICE_ROLE_KEY non configurata");
-    return adminDiProva();
+    return stato.mondo.admin;
   },
   getCurrentUser: async () => null,
 }));
@@ -192,12 +133,9 @@ const CASSA_APERTA: Esito = { ok: false, motivo: "cassa_da_versare", errore: MOT
 
 function ilFattorinoConLaCassaAperta(chiesta = CHIESTA, esito: Esito = CASSA_APERTA) {
   stato.senzaChiave = false;
-  stato.rifiutaAvvisiA = null;
-  stato.registroInviiRotto = false;
-  stato.registroInviiRifiutaLeRighe = false;
-  stato.rifiutaLetturaDi = null;
   stato.esiti = { "rider-1": esito };
   stato.mondo = fintoGiroNotturno({
+    indirizzi: INDIRIZZI,
     rpc: { process_expired_deletions: { data: [{ user_id: "rider-1", deleted_at: chiesta }], error: null } },
     tabelle: {
       notifications: [],
@@ -454,7 +392,7 @@ describe("un messaggio dovuto che non parte non passa per partito", () => {
 
   it("se il motivo dell'attesa non si scrive, la notte è rossa e un amministratore lo sa", async () => {
     ilFattorinoConLaCassaAperta();
-    stato.rifiutaAvvisiA = "rider-1";
+    rifiutaAvvisiA("rider-1");
     const res = await passaLaNotte();
     const body = (await (res as Response).json()) as Record<string, unknown>;
     expect(body.avvisiFalliti).toBe(1);
@@ -518,7 +456,7 @@ describe("la spiegazione per email che non parte si riprova, e se non parte anco
 
   it("se il registro degli invii non si legge, non si spedisce alla cieca e un amministratore lo sa subito", async () => {
     ilFattorinoConLaCassaAperta();
-    stato.registroInviiRotto = true;
+    registroInviiRotto();
     inviaEmail.mockImplementation(async () => ({ ok: true }));
     const res = await passaLaNotte();
     const body = (await (res as Response).json()) as Record<string, unknown>;
@@ -539,7 +477,7 @@ describe("la spiegazione per email che non parte si riprova, e se non parte anco
   // «in corso»; ogni altro no ferma l'email e sveglia qualcuno.
   it("se il registro si legge ma rifiuta il turno dell'email, e non è un doppione, la notte è rossa e un amministratore lo sa", async () => {
     ilFattorinoConLaCassaAperta();
-    stato.registroInviiRifiutaLeRighe = true;
+    registroInviiRifiutaLeRighe();
     inviaEmail.mockImplementation(async () => ({ ok: true }));
     const stati: number[] = [];
     const bloccate: unknown[] = [];
@@ -561,18 +499,26 @@ describe("la spiegazione per email che non parte si riprova, e se non parte anco
 
 describe("nessuna pagina costruisce la casella privacy di ripiego", () => {
   it("niente mailto scritto a mano sulla casella di ripiego, in nessuna pagina", () => {
-    const radice = path.join(process.cwd(), "app");
+    // R11-002 — Si guardano anche components/ e i .ts di app/ e di lib/, e anche la concatenazione
+    // («mailto:» + emailPrivacy), non solo il modello con ${…}.
+    const MAILTO_A_MANO = /mailto:(?:\$\{[^}]*|['"`]\s*\+\s*[\w.()]*)emailPrivacy/;
+    // Unico posto dove il mailto della casella si costruisce, e solo quando la casella vera è
+    // configurata (`emailPrivacyConfigurata`): è recapitoPrivacy() stessa, quella che gli altri devono usare.
+    const LA_FUNZIONE_CHE_LO_COSTRUISCE = path.join("lib", "legal", "titolare.ts");
     const colpevoli: string[] = [];
-    const visita = (d: string) => {
+    const visita = (d: string, estensioni: string[]) => {
       for (const n of readdirSync(d)) {
         const p = path.join(d, n);
-        if (statSync(p).isDirectory()) visita(p);
-        else if (p.endsWith(".tsx") && /mailto:\$\{[^}]*emailPrivacy\}/.test(readFileSync(p, "utf8"))) {
+        if (statSync(p).isDirectory()) visita(p, estensioni);
+        else if (path.relative(process.cwd(), p) === LA_FUNZIONE_CHE_LO_COSTRUISCE) continue;
+        else if (estensioni.some((e) => p.endsWith(e)) && MAILTO_A_MANO.test(readFileSync(p, "utf8"))) {
           colpevoli.push(path.relative(process.cwd(), p));
         }
       }
     };
-    visita(radice);
+    visita(path.join(process.cwd(), "app"), [".tsx", ".ts"]);
+    visita(path.join(process.cwd(), "components"), [".tsx", ".ts"]);
+    visita(path.join(process.cwd(), "lib"), [".ts"]);
     expect(colpevoli, "queste pagine mostrano un indirizzo che forse nessuno legge: usino recapitoPrivacy()").toEqual([]);
   });
 });
@@ -804,6 +750,7 @@ describe("con la posta spenta l'allarme suona una volta per stato, non ogni nott
     stato.esiti[SECONDO.id] = CASSA_APERTA;
     const inCoda = [{ user_id: UTENTE.id, deleted_at: CHIESTA }];
     stato.mondo = fintoGiroNotturno({
+      indirizzi: INDIRIZZI,
       rpc: { process_expired_deletions: { data: inCoda, error: null } },
       tabelle: {
         notifications: [],
@@ -851,6 +798,7 @@ describe("il modulo dei contatti e l'allarme non si fanno ingannare", () => {
     ilFattorinoConLaCassaAperta();
     stato.esiti["rider-2"] = CASSA_APERTA;
     stato.mondo = fintoGiroNotturno({
+      indirizzi: INDIRIZZI,
       rpc: {
         process_expired_deletions: {
           data: [{ user_id: "rider-1", deleted_at: CHIESTA }, { user_id: "rider-2", deleted_at: CHIESTA }],
@@ -866,7 +814,7 @@ describe("il modulo dei contatti e l'allarme non si fanno ingannare", () => {
         ],
       },
     });
-    stato.rifiutaAvvisiA = "rider-1";
+    rifiutaAvvisiA("rider-1");
     const res = await passaLaNotte();
     const body = await letto(res);
     expect([body.avvisiRecapitati, body.avvisiFalliti]).toEqual([1, 1]);
@@ -878,7 +826,7 @@ describe("il modulo dei contatti e l'allarme non si fanno ingannare", () => {
 describe("un allarme che non si riesce a scrivere non fa tornare verde la notte", () => {
   it("la spiegazione è ferma e il database rifiuta l'allarme: la notte resta rossa finché qualcuno lo sa", async () => {
     ilFattorinoConLaCassaAperta();
-    stato.rifiutaAvvisiA = "admin-1";
+    rifiutaAvvisiA("admin-1");
     const stati: number[] = [];
     for (let n = 1; n <= 3; n++) stati.push((await passaLaNotte()).status);
     expect(stati, "un allarme per stato vale solo se lo stato è stato detto a qualcuno").toEqual([200, 500, 500]);
@@ -952,7 +900,7 @@ describe("il ritentativo dell'email regge le notti vere, non solo quelle di vent
     ilFattorinoConLaCassaAperta();
     inviaEmail.mockImplementation(GIU);
     expect((await passaLaNotte()).status).toBe(200);
-    stato.registroInviiRifiutaLeRighe = true;
+    registroInviiRifiutaLeRighe();
     inviaEmail.mockImplementation(SU);
     const seconda = await passaLaNotte();
     const body = await letto(seconda);
@@ -969,7 +917,7 @@ describe("se la lettura dell'allarme già scritto non riesce, la notte resta ros
     ilFattorinoConLaCassaAperta();
     await passaLaNotte();
     const { identificativoAvviso } = await import("@/lib/privacy/avvisi-a-chi-aspetta");
-    stato.rifiutaLetturaDi = identificativoAvviso(`${suoi()[0].id}:email-ferma:admin-1`);
+    rifiutaLetturaDi(identificativoAvviso(`${suoi()[0].id}:email-ferma:admin-1`));
     const stati: number[] = [];
     for (let n = 2; n <= 3; n++) stati.push((await passaLaNotte()).status);
     expect(stati, "nessuno sa che la spiegazione è ferma, e la notte è verde").toEqual([500, 500]);

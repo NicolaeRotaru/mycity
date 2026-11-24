@@ -1,6 +1,7 @@
 // lib/ai/tettoSpesa.ts
 import { logger } from '@/lib/logger';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import {
   RIPIEGO_TOLLERATO_MINUTI as TOLLERANZA_RIPIEGO_MINUTI,
   allarmiTettoSpesaAi as allarmiDelTetto,
@@ -139,7 +140,17 @@ async function nessunoHaParlatoNellOra(adesso: number): Promise<boolean> {
       .lt('last_sent_at', new Date(adesso - RIPETI_ALLARME_MS).toISOString())
       .select('alert_key');
     if (presa.error) return true;
-    return (presa.data ?? []).length > 0;
+    if ((presa.data ?? []).length > 0) return true;
+    // La pulizia della memoria degli allarmi (migrazione 660) scatta anche sull'inserimento che
+    // non inserisce niente e toglie le righe di piu' di 24 ore: la riga vecchia sparisce fra
+    // l'inserimento e l'aggiornamento, che allora non trova niente. «Nessuna riga» non vuol dire
+    // «qualcuno ha gia' parlato»: si riprova a scriverla, e chi la scrive parla.
+    const dinuovo = await admin
+      .from('operational_alert_log')
+      .upsert({ alert_key: CHIAVE_ERRORE_RIPIEGO, last_sent_at: ora }, { onConflict: 'alert_key', ignoreDuplicates: true })
+      .select('alert_key');
+    if (dinuovo.error) return true;
+    return (dinuovo.data ?? []).length > 0;
   } catch {
     return true;
   }
@@ -453,7 +464,20 @@ export async function allarmiTettoSpesaAiPerIlCron(opzioni: {
   // 22/11/2026 (R13-004) — Il cron la chiama a ogni giro (ogni 5 minuti). Senza
   // tetto configurato non c'e' niente da dire (allarmiDelTetto torna vuoto): niente
   // sonda, niente righe in operational_alert_log, niente errori nel registro.
-  if (!(tettoEur > 0)) return [];
+  // Con l'AI dei negozi spenta (lib/funzioni-al-lancio.ts) lib/ai/client.ts ferma ogni chiamata
+  // al modello: spendere e' impossibile, e l'allarme sul conto condiviso sarebbe solo rumore
+  // sull'unico canale degli allarmi. Niente sonda e niente righe, come senza tetto.
+  // R08-002: un giro che non guarda il conto non ne ricorda il guasto. Se la riga dell'inizio di
+  // un guasto vecchio restasse, al primo guasto nuovo l'allarme direbbe «non risponde da tre
+  // giorni». Si toglie (best-effort); nessun limite d'eta': un guasto vero lungo conta tutti i suoi minuti.
+  if (!(tettoEur > 0) || !AI_NEGOZI_ACCESA) {
+    try {
+      await getAdminSupabase().from('operational_alert_log').delete().eq('alert_key', CHIAVE_RIPIEGO_DA);
+    } catch {
+      // Se non si cancella, resta com'era: nessun danno nuovo.
+    }
+    return [];
+  }
   const copieAttese = opzioni.copieAttese ?? copie(process.env.AI_COPIE_ATTESE);
   const primo = await sondaContoCondiviso(opzioni.quando);
   try {

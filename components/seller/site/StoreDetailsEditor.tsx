@@ -43,8 +43,10 @@ export default function StoreDetailsEditor({ profile, onBack }: { profile: Profi
     mutationFn: async (form: VendorFormData) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
+      // Il modulo conta gli 80 caratteri sul nome senza spazi in testa e in coda, e il database
+      // (migrazione 830) li conta su quello che si salva: si salva quello che il modulo ha contato.
       const { error } = await supabase.from('profiles').update({
-        store_name:          form.storeName,
+        store_name:          form.storeName.trim(),
         store_logo:          form.storeLogo,
         store_media:         form.storeMedia,
         store_description:   form.storeDescription || null,

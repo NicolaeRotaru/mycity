@@ -223,11 +223,15 @@ export function motivoFasciaRifiutata(
   fascia: string | null | undefined,
   negozi: readonly { nome?: string | null; orari?: unknown }[],
   adesso?: Date,
+  propostaIl?: Date,
 ): string | null {
   const ora = adesso ?? (eFasciaDiOggi(fascia) ? romeNow() : undefined);
   const fuori = ora ? fasciaFuoriTempo(fascia, ora) : null;
   if (fuori) return fuori;
-  const chiuso = negozi.find((n) => !negozioPuoServire(n.orari, fascia, ora));
+  // 24/11/2026 (R03-003, R03-006) — `propostaIl` (ora di Roma, come `romeNow`) è il momento in cui la
+  // cassa ha proposto la fascia: «Domani» si conta da lì, non da quando la rotta la giudica.
+  // Prima il parametro c'era in `negozioPuoServire` ma da qui non scendeva a nessuno.
+  const chiuso = negozi.find((n) => !negozioPuoServire(n.orari, fascia, ora, propostaIl));
   return chiuso ? motivoNegozioChiuso(chiuso.nome ?? 'Il negozio', fascia, ora) : null;
 }
 

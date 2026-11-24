@@ -58,6 +58,25 @@ const NOME_MOTIVO: Record<string, string> = {
   altro: 'Altro',
 };
 
+const NOME_CANALE: Record<string, string> = {
+  segnalanteEmail: "l'email a chi ha segnalato",
+  segnalanteNotifica: 'la notifica a chi ha segnalato',
+  venditore: "l'avviso al venditore",
+};
+
+/** I canali che la rotta dell'esito dichiara caduti (`'fallita'`). */
+function canaliFalliti(corpo: Record<string, unknown> | null): string[] {
+  if (!corpo) return [];
+  return Object.keys(NOME_CANALE).filter((k) => corpo[k] === 'fallita').map((k) => NOME_CANALE[k]);
+}
+
+function messaggioEsitoNonPartito(canali: string[]): string {
+  if (canali.length === 0) {
+    return "L'esito non è partito a chi ha segnalato e al venditore: registra di nuovo la decisione per rimandarlo.";
+  }
+  return `L'esito non è partito: ${canali.join(', ')}. Registra di nuovo la decisione per rimandare solo ${canali.length === 1 ? 'quello' : 'quelli'}.`;
+}
+
 function dove(s: Pick<Segnalazione, 'tipo' | 'oggetto_id'>): string | null {
   if (s.tipo === 'prodotto') return `/product/${s.oggetto_id}`;
   if (s.tipo === 'negozio') return `/store/${s.oggetto_id}`;
@@ -131,22 +150,24 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
       // segnalato e il venditore non ricevevano niente (DSA art. 16.5 e 17), e i
       // Termini promettono «ti scriviamo com'e' andata e perche'». Con una
       // decisione presa, la rotta manda l'esito a entrambi.
-      if (decisione === 'in_esame') return { comunicato: true };
+      if (decisione === 'in_esame') return { comunicato: true, canaliFalliti: [] as string[] };
       try {
         const r = await fetch('/api/segnalazioni', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: s.id }),
         });
-        return { comunicato: r.ok };
+        // R06-014 — la rotta dice quale canale è caduto: lo si legge per nominarlo nel messaggio.
+        const corpo = (await r.json().catch(() => null)) as Record<string, unknown> | null;
+        return { comunicato: r.ok, canaliFalliti: canaliFalliti(corpo) };
       } catch {
-        return { comunicato: false };
+        return { comunicato: false, canaliFalliti: [] as string[] };
       }
     },
     onSuccess: (esito) => {
       toast.success('Decisione registrata');
       if (esito?.comunicato === false) {
-        toast.error("L'esito non è partito a chi ha segnalato e al venditore: registra di nuovo la decisione per rimandarlo.");
+        toast.error(messaggioEsitoNonPartito(esito.canaliFalliti ?? []));
       }
       qc.invalidateQueries({ queryKey: CHIAVE });
     },

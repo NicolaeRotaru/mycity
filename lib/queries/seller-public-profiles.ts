@@ -305,6 +305,12 @@ export type LettoreConFunzioni = LettoreVista & {
   rpc: (nome: string, argomenti: Record<string, unknown>) => any;
 };
 
+/** Il tetto di righe di ogni lettura degli ordini nel ripiego senza la 181. */
+const RIGHE_PER_LETTURA_DEGLI_ORDINI = 1000;
+
+/** L'avviso «funzione assente» è già nel registro di questo processo. */
+let avvisoSenzaLaFunzioneDato = false;
+
 /** La funzione non esiste ancora (migrazione non applicata): PostgREST dice PGRST202, Postgres 42883. */
 function funzioneNonAncoraCreata(errore: unknown): boolean {
   const code = (errore as { code?: string } | null)?.code;
@@ -326,20 +332,38 @@ export async function fetchNomiDeiClienti(
     if (!error) {
       righe = (data ?? []) as Array<{ id: string; full_name: string | null }>;
     } else if (funzioneNonAncoraCreata(error)) {
-      logger.warn('[nomi] funzione nomi_dei_clienti_del_negozio assente (migrazione 181 non applicata): leggo il nome di consegna degli ordini', error);
-      const ordini = await supabase
-        .from('orders')
-        .select('user_id, delivery_full_name')
-        .in('user_id', unici)
-        .order('created_at', { ascending: false })
-        .limit(1000);
-      if (ordini.error) {
-        logger.warn('[nomi] nomi dei clienti non letti nemmeno dagli ordini: si legge «Cliente»', ordini.error);
-        return nomi;
+      // 24/11/2026 — L'avviso si scrive una volta, non a ogni apertura della chat o delle recensioni:
+      // finché la funzione manca diceva la stessa cosa a ogni chiamata, solo rumore nel registro.
+      if (!avvisoSenzaLaFunzioneDato) {
+        avvisoSenzaLaFunzioneDato = true;
+        logger.warn('[nomi] funzione nomi_dei_clienti_del_negozio assente (migrazione 181 non applicata): leggo il nome di consegna degli ordini', error);
       }
-      righe = ((ordini.data ?? []) as Array<{ user_id: string | null; delivery_full_name: string | null }>)
-        .filter((o): o is { user_id: string; delivery_full_name: string | null } => !!o.user_id)
-        .map((o) => ({ id: o.user_id, full_name: o.delivery_full_name }));
+      // 24/11/2026 — Il tetto di 1000 righe valeva per tutti gli id insieme: un cliente con mille
+      // ordini recenti nascondeva chi aveva ordinato una volta, tempo fa. A pagina piena si cercano
+      // ancora gli id che non sono usciti; chi è uscito ha già letto i suoi ordini più recenti.
+      righe = [];
+      let daCercare = unici;
+      while (daCercare.length > 0) {
+        const ordini = await supabase
+          .from('orders')
+          .select('user_id, delivery_full_name')
+          .in('user_id', daCercare)
+          .order('created_at', { ascending: false })
+          .limit(RIGHE_PER_LETTURA_DEGLI_ORDINI);
+        if (ordini.error) {
+          logger.warn('[nomi] nomi dei clienti non letti nemmeno dagli ordini: si legge «Cliente»', ordini.error);
+          break;
+        }
+        const lette = ((ordini.data ?? []) as Array<{ user_id: string | null; delivery_full_name: string | null }>)
+          .filter((o): o is { user_id: string; delivery_full_name: string | null } => !!o.user_id)
+          .map((o) => ({ id: o.user_id, full_name: o.delivery_full_name }));
+        righe.push(...lette);
+        if ((ordini.data ?? []).length < RIGHE_PER_LETTURA_DEGLI_ORDINI) break;
+        const usciti = new Set(lette.map((r) => r.id));
+        const restano = daCercare.filter((id) => !usciti.has(id));
+        if (restano.length === daCercare.length) break;
+        daCercare = restano;
+      }
     } else {
       logger.warn('[nomi] nomi dei clienti non letti: si legge «Cliente»', error);
       return nomi;

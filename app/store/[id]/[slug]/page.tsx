@@ -1,5 +1,5 @@
 'use client';
-import { use } from 'react';
+import { use, useEffect, useState } from 'react';
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -15,6 +15,7 @@ import { CONTENITORE_PAGINA_NEGOZIO } from '@/components/store-sections/misure-v
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import EmptyState from '@/components/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { giornoPiacenza } from '@/lib/tempo-piacenza';
 
 export default function StoreCustomPage(props: { params: Promise<{ id: string; slug: string }> }) {
   const { id, slug } = use(props.params);
@@ -26,6 +27,15 @@ export default function StoreCustomPage(props: { params: Promise<{ id: string; s
     queryFn: async () => (await supabase.auth.getUser()).data.user?.id ?? null,
     staleTime: 60_000,
   });
+
+  // R08-003 — Come la pagina principale del negozio: l'annuncio «fino al 24/11» si decideva solo
+  // al disegno, e una pagina lasciata aperta oltre mezzanotte lo mostrava anche il giorno dopo.
+  // Il giorno di Piacenza si ricontrolla ogni minuto; quando cambia la pagina si ridisegna.
+  const [, setGiorno] = useState(() => giornoPiacenza());
+  useEffect(() => {
+    const timer = setInterval(() => setGiorno(giornoPiacenza()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   // 3/9/2026 — stessa malattia della home del negozio, un cartello più in là:
   // il cerchietto che gira era una terza impaginazione fra lo scheletro e la

@@ -96,8 +96,12 @@ export type RapportoAvvisi = {
   /**
    * 27/10/2026 (quarto giro) — Quali avvisi hanno l'email ferma: i loro
    * identificativi. Chi chiama ne fa UN allarme per avviso, non uno a notte.
+   *
+   * 24/11/2026 (R03-002) — `forsePartita`: una notte prima l'email può essere partita senza che il
+   * segno «partita» si sia scritto (un tentativo senza esito nel registro). Allora l'allarme non può
+   * dire «non è partita»: può dire solo che non risulta partita.
    */
-  emailBloccateAvvisi: Array<{ id: string; userId: string }>;
+  emailBloccateAvvisi: Array<{ id: string; userId: string; forsePartita?: true }>;
   /**
    * 27/10/2026 (quarto giro, fase 2) — Gli avvisi la cui email è partita
    * stanotte. Se c'era un allarme («scrivile tu»), chi chiama lo chiude: la
@@ -211,11 +215,11 @@ export async function recapitaAvvisi(
     // vale per ogni avviso che è nel pannello, scritto stanotte o prima.
     if (posta) {
       const email = await emailDovuta(admin, posta, a, id, registro, adesso);
-      if (email === 'non-partita' || email === 'bloccata') rapporto.emailNonPartite++;
-      if (email === 'bloccata') {
+      if (email === 'non-partita' || email === 'bloccata' || email === 'forse-partita') rapporto.emailNonPartite++;
+      if (email === 'bloccata' || email === 'forse-partita') {
         rapporto.emailBloccate++;
         // Con la persona: l'allarme deve dire a chi scrivere.
-        rapporto.emailBloccateAvvisi.push({ id, userId: a.userId });
+        rapporto.emailBloccateAvvisi.push({ id, userId: a.userId, ...(email === 'forse-partita' ? { forsePartita: true as const } : {}) });
       }
       // 5/11/2026 — Anche 'gia-partita': se la notte in cui è partita la chiusura
       // dell'allarme «scrivile tu» non è riuscita, così si ritenta le notti dopo.
@@ -303,7 +307,7 @@ export type PostaAvvisi = {
  * si legge — e senza un posto dove segnare «partita», spedire vorrebbe dire
  * una email ogni notte.
  */
-type EsitoEmail = 'partita' | 'gia-partita' | 'in-corso' | 'non-partita' | 'bloccata';
+type EsitoEmail = 'partita' | 'gia-partita' | 'in-corso' | 'non-partita' | 'bloccata' | 'forse-partita';
 
 /**
  * 27/10/2026 (quarto giro) — UN TENTATIVO PER NOTTE, ANCHE CON DUE GIRI SFALSATI.
@@ -339,6 +343,17 @@ export const ORE_TRA_DUE_TENTATIVI = 20;
 export const TENTATIVI_EMAIL_MASSIMI = 31;
 const ORA_MS = 3_600_000;
 
+/** R03-002 — Il numero del tentativo scritto nella riga; `null` se non lo dice. */
+function numeroDelTentativo(metadata: unknown): number | null {
+  const n = (metadata as { tentativo?: unknown } | null | undefined)?.tentativo;
+  return typeof n === 'number' && Number.isFinite(n) ? n : null;
+}
+
+/** R03-002 — Il turno è stato preso da quando anche il no si segna (solo allora un turno senza esito dice qualcosa). */
+function segnaIlNo(metadata: unknown): boolean {
+  return (metadata as { segnaIlNo?: unknown } | null | undefined)?.segnaIlNo === true;
+}
+
 /** Quando è stato preso un tentativo; -Infinity se la riga non lo dice. */
 function presoIl(metadata: unknown): number {
   const quando = Date.parse(String((metadata as { presoIl?: unknown } | null | undefined)?.presoIl ?? ''));
@@ -348,6 +363,19 @@ function presoIl(metadata: unknown): number {
 const REGISTRO_INVII = 'audit_logs';
 const EMAIL_TENTATA = 'privacy.avviso_cancellazione.email_tentata';
 const EMAIL_PARTITA = 'privacy.avviso_cancellazione.email_partita';
+/**
+ * 24/11/2026 (R03-002) — EMAIL PARTITA MA NON SEGNATA: L'ALLARME NON DICE «NON PARTITA».
+ *
+ * Se dopo l'invio riuscito il segno «partita» non si scrive (il registro dice di no anche alle
+ * pause del segno), la notte dopo l'email riparte (meglio due volte che nessuna: un giro caduto a
+ * metà non si distingue da questo). Se quell'invio cade, l'esito era «bloccata» e l'allarme diceva
+ * «non è partita per email» per un'email già arrivata. Adesso anche il NO si segna: dopo un invio
+ * non riuscito si scrive «fallita» per quel tentativo. Un tentativo senza «partita» e senza
+ * «fallita» è senza esito: l'email può essere arrivata, e l'esito è `forse-partita`. Solo i
+ * tentativi presi da quando il no si segna (`segnaIlNo` nella riga del turno) possono dirlo: per
+ * quelli di prima non si sa, e restano come erano.
+ */
+const EMAIL_FALLITA = 'privacy.avviso_cancellazione.email_fallita';
 /** R05-006 — Le pause prima di ritentare il segno «partita»: tre prove in tutto, in due secondi e mezzo. */
 const PAUSE_DEL_SEGNO_MS = [500, 2_000];
 
@@ -359,6 +387,8 @@ function rigaDegliInvii(
   quale: string,
   tentativo: number,
   adesso: number,
+  /** R03-002 — Altro da scrivere nella riga (il segno `segnaIlNo` del turno). */
+  inPiu: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return {
     id: identificativoAvviso(`${a.chiave}:email:${quale}`),
@@ -366,7 +396,7 @@ function rigaDegliInvii(
     action: azione,
     target_table: 'notifications',
     target_id: idAvviso,
-    metadata: { tappa: a.tappa, tentativo, presoIl: new Date(adesso).toISOString() },
+    metadata: { tappa: a.tappa, tentativo, presoIl: new Date(adesso).toISOString(), ...inPiu },
   };
 }
 
@@ -380,6 +410,7 @@ async function emailDovuta(
   adesso: number,
 ): Promise<EsitoEmail> {
   let tentativo: number;
+  let forsePartita = false;
   try {
     // 27/10/2026 (quarto giro, fase 2) — Anche la tabella: l'indice del
     // registro è (target_table, target_id), e solo la tabella in testa lo usa.
@@ -397,12 +428,15 @@ async function emailDovuta(
     // finito male): non si rispedisce e non si conta come un no in più.
     const ultimo = Math.max(-Infinity, ...presi.map((r) => presoIl(r.metadata)));
     if (adesso - ultimo < ORE_TRA_DUE_TENTATIVI * ORA_MS) return 'in-corso';
-    if (presi.length >= TENTATIVI_EMAIL_MASSIMI) return 'bloccata';
+    // R03-002 — Un tentativo di prima senza esito (né «partita» né «fallita»): forse è arrivata.
+    const fallite = new Set(righe.filter((r) => r.action === EMAIL_FALLITA).map((r) => numeroDelTentativo(r.metadata)));
+    forsePartita = presi.some((r) => segnaIlNo(r.metadata) && !fallite.has(numeroDelTentativo(r.metadata)));
+    if (presi.length >= TENTATIVI_EMAIL_MASSIMI) return forsePartita ? 'forse-partita' : 'bloccata';
     tentativo = presi.length + 1;
 
     const turno = await admin
       .from(REGISTRO_INVII)
-      .insert([rigaDegliInvii(a, idAvviso, EMAIL_TENTATA, `tentativo:${tentativo}`, tentativo, adesso)]);
+      .insert([rigaDegliInvii(a, idAvviso, EMAIL_TENTATA, `tentativo:${tentativo}`, tentativo, adesso, { segnaIlNo: true })]);
     if (turno.error) {
       // Un altro giro ha preso questo stesso tentativo un attimo prima: spedisce lui.
       if (eUnDoppione(turno.error.message)) return 'in-corso';
@@ -416,7 +450,19 @@ async function emailDovuta(
   }
 
   if (!(await speditaAncheTramitePosta(posta, a, registro, tentativo))) {
-    return tentativo > 1 ? 'bloccata' : 'non-partita';
+    // R03-002 — Anche il no si segna: così una notte dopo si sa che questo tentativo non è arrivato.
+    try {
+      const no = await admin
+        .from(REGISTRO_INVII)
+        .insert([rigaDegliInvii(a, idAvviso, EMAIL_FALLITA, `fallita:${tentativo}`, tentativo, adesso)]);
+      if (no.error && !eUnDoppione(no.error.message)) throw new Error(no.error.message);
+    } catch (e) {
+      registro.warn('[avvisi-cancellazione] email non partita e non segnata: le notti dopo risulterà «forse partita»', {
+        userId: a.userId, tappa: a.tappa, tentativo, errore: e instanceof Error ? e.message : 'errore',
+      });
+    }
+    if (tentativo === 1) return 'non-partita';
+    return forsePartita ? 'forse-partita' : 'bloccata';
   }
 
   // R05-006 — Il segno «partita» si ritenta prima di arrendersi. Un solo rifiuto passeggero del

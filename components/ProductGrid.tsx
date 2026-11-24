@@ -7,6 +7,7 @@ import { ArrowRight, RotateCcw, SearchX } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from './ProductCard';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { queryKeys } from '@/lib/queries/keys';
 import SkeletonCard, { SkeletonGrid } from './SkeletonCard';
 import {
@@ -34,6 +35,13 @@ function righeLetteDellaPagina(pagina: readonly unknown[]): number {
   return typeof lette === 'number' ? lette : pagina.length;
 }
 
+/**
+ * R04-010 — Quante pagine la griglia legge da sola quando quelle arrivate sono tutte scartate dal
+ * filtro dei negozi. Senza tetto, un catalogo lungo di negozi fuori vetrina faceva leggere pagina
+ * dopo pagina (96 righe con le foto ciascuna) finché finiva, con lo scheletro a schermo. Tetto
+ * tecnico: cinque pagine in tutto, la prima compresa; poi decide chi guarda, col pulsante.
+ */
+const PAGINE_LETTE_DA_SOLA = 5;
 
 /**
  * L'ordinamento della griglia. Vive con la lettura, in `lib/queries/griglia-prodotti.ts`: chi
@@ -512,18 +520,24 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   const vuotaMaCeNeSonoAltre = filtered.length === 0 && !!hasNextPage && !isError;
   // `pagineLette` fra le dipendenze: ogni pagina arrivata ancora tutta scartata rimette in moto il giro.
   const pagineLette = domanda.data?.pages.length ?? 0;
+  // R04-010 — Il giro da solo ha un tetto: al massimo `PAGINE_LETTE_DA_SOLA` pagine in tutto. Oltre,
+  // la griglia lo dice e lascia «Carica altri prodotti» a chi guarda, una pagina per pressione.
+  const leggeDaSola = vuotaMaCeNeSonoAltre && pagineLette < PAGINE_LETTE_DA_SOLA;
   useEffect(() => {
-    if (!vuotaMaCeNeSonoAltre || caricando || staLeggendo) return;
+    if (!leggeDaSola || caricando || staLeggendo) return;
     void fetchNextPage();
-  }, [vuotaMaCeNeSonoAltre, caricando, staLeggendo, fetchNextPage, pagineLette]);
+  }, [leggeDaSola, caricando, staLeggendo, fetchNextPage, pagineLette]);
 
 
   // Con la lettura in errore il conteggio non si sa: non si dichiara «0 prodotti» sopra
   // il messaggio d'errore.
+  // R04-010 — Nemmeno con zero a schermo e altre pagine da leggere (anche fermi al tetto, sopra
+  // «…ma ce ne sono altre»): senza il conteggio del database lo zero non è vero.
+  const contoNonSiSa = vuotaMaCeNeSonoAltre && totaleVero == null;
   useEffect(() => {
-    if (!onCount || caricando || inErrore || totaleInAttesa) return;
+    if (!onCount || caricando || inErrore || totaleInAttesa || contoNonSiSa) return;
     onCount(totaleVero ?? filtered.length);
-  }, [onCount, caricando, inErrore, filtered.length, totaleVero, totaleInAttesa]);
+  }, [onCount, caricando, inErrore, filtered.length, totaleVero, totaleInAttesa, contoNonSiSa]);
 
   // Funnel: emette `search_performed` (PostHog + GA4) quando una ricerca
   // testuale si risolve. Solo in contesto ricerca (prop `search` valorizzata),
@@ -649,14 +663,32 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     // Le sezioni per-sottocategoria spariscono quando non hanno prodotti.
     if (isSection) return null;
     // R11-012 R11-007 — Non è «nessun prodotto» finché ci sono altre pagine da leggere.
-    if (vuotaMaCeNeSonoAltre) return <SkeletonGrid count={limit ?? 8} maxColumns={maxColumns} />;
+    if (leggeDaSola) return <SkeletonGrid count={limit ?? 8} maxColumns={maxColumns} />;
+    // R04-010 — Tetto del giro da solo raggiunto: niente scheletro per sempre, e niente «nessun
+    // prodotto» (ce ne sono altre): si dice com'è e si lascia il pulsante.
+    if (vuotaMaCeNeSonoAltre) {
+      return (
+        <Card variant="bordered" radius="xl" padding="none" className="text-center py-16">
+          <p className="text-ink-700 font-semibold mb-1">Ancora nessun prodotto da mostrare</p>
+          <p className="text-sm text-ink-400 mb-4">Nelle prime pagine non c&apos;era niente per questi filtri, ma ce ne sono altre.</p>
+          <button
+            type="button"
+            onClick={() => void fetchNextPage()}
+            disabled={isFetching}
+            className="rounded-full border border-cream-300 bg-white px-6 py-2.5 text-sm font-semibold text-ink-700 hover:border-primary-300 hover:text-primary-700 disabled:opacity-50"
+          >
+            {isFetching ? 'Carico…' : 'Carica altri prodotti'}
+          </button>
+        </Card>
+      );
+    }
     // Stato vuoto arricchito (opt-in): titolo/descrizione personalizzati,
     // azione "Azzera filtri" e slot "Forse cercavi" + alternative. Quando
     // nessuna delle nuove prop è passata, resta lo stato storico generico.
     const enriched = !!emptyTitle || !!emptyDescription || !!onReset || !!emptySuggestions;
     if (enriched) {
       return (
-        <div className="bg-white border border-cream-300 rounded-2xl px-4 py-12">
+        <Card variant="bordered" radius="2xl" padding="none" className="px-4 py-12">
           <div className="text-center">
             <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-cream-100 text-ink-400">
               <SearchX size={30} strokeWidth={1.7} aria-hidden />
@@ -676,15 +708,15 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
             )}
           </div>
           {emptySuggestions}
-        </div>
+        </Card>
       );
     }
     return (
-      <div className="text-center py-16 bg-white border border-cream-300 rounded-xl">
+      <Card variant="bordered" radius="xl" padding="none" className="text-center py-16">
         <SearchX size={48} strokeWidth={1.5} className="mx-auto text-ink-300 mb-3" />
         <p className="text-ink-700 font-semibold mb-1">Nessun prodotto trovato</p>
         <p className="text-sm text-ink-400">Prova a modificare i filtri o cerca qualcos&apos;altro</p>
-      </div>
+      </Card>
     );
   }
 

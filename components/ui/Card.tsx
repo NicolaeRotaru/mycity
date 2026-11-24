@@ -53,7 +53,7 @@ const PADDINGS: Record<Padding, string> = {
   lg:   'p-6',
 };
 
-type Props = {
+type Props = Omit<React.HTMLAttributes<HTMLElement>, 'className' | 'children'> & {
   variant?: Variant;
   padding?: Padding;
   className?: string;
@@ -70,7 +70,7 @@ type Props = {
   'aria-label'?: string;
 };
 
-export function Card({ variant = 'bordered', padding = 'md', className, children, as: Tag = 'div', hover = false, radius = 'xl', href, 'aria-label': ariaLabel }: Props) {
+export function Card({ variant = 'bordered', padding = 'md', className, children, as: Tag = 'div', hover = false, radius = 'xl', href, 'aria-label': ariaLabel, ...resto }: Props) {
   const classi = cn(
     RADIUS[radius],
     VARIANTS[variant],
@@ -85,5 +85,7 @@ export function Card({ variant = 'bordered', padding = 'md', className, children
       </Link>
     );
   }
-  return <Tag className={classi}>{children}</Tag>;
+  // R10-001 — il resto delle prop HTML (aria-live, id, role…) arriva all'elemento.
+  const Elemento = Tag as 'div';
+  return <Elemento {...resto} className={classi}>{children}</Elemento>;
 }

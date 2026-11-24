@@ -12,9 +12,10 @@ import { trackErrorShown } from './analytics/events';
 import { PASSWORD_RUBATA, PASSWORD_SEMPLICE } from './auth/errori-nuova-password';
 import { TIPI_IMMAGINE } from './storage/regole-secchi';
 import { formatiLeggibili } from './storage/carica-immagine';
-// 13/11/2026 (R24-007) — Importarlo accende anche il traduttore italiano di Zod (z.setErrorMap)
-// dove si carica questo file: è voluto, è la stessa lingua.
-import { FRASI_ZOD } from './zod-i18n';
+// 13/11/2026 (R24-007) — Le frasi italiane di Zod. R07-010: le frasi stanno in un file senza Zod
+// (lib/zod-frasi): questo file entra in ogni pagina dal piede del sito e non deve accendere il
+// traduttore (lib/zod-i18n), che si carica a parte quando serve.
+import { FRASI_ZOD } from './zod-frasi';
 
 const SUPABASE_CODE_MAP: Record<string, string> = {
   '23505': 'Questo valore è già stato usato. Prova con uno diverso.',

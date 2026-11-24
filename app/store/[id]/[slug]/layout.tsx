@@ -31,7 +31,8 @@ export async function generateMetadata(props: { params: Promise<{ id: string; sl
   // 404 (`app/not-found.tsx`): Next manda i metadati in streaming dentro il corpo, e con le stesse
   // parole la scritta compariva due volte, nella scheda e nella pagina.
   const notFound: Metadata = { title: 'Pagina del negozio non trovata · MyCity', robots: { index: false }, alternates: { canonical: null } };
-  if (!store || store.role !== 'seller' || !store.is_approved) return notFound;
+  // R10-002 — La stessa condizione con cui il guscio (app/store/[id]/layout.tsx) risponde 404: anche il nome vuoto.
+  if (!store || store.role !== 'seller' || !store.is_approved || !store.store_name) return notFound;
 
   const site = normalizeSite(store.store_site);
   const page = pageBySlug(site, slug);
@@ -46,7 +47,8 @@ export async function generateMetadata(props: { params: Promise<{ id: string; sl
   return {
     title,
     description,
-    robots: noindex ? { index: false } : undefined,
+    // Mai `robots: undefined`: in Next 15.5 cancellerebbe il noindex ereditato dal genitore.
+    ...(noindex ? { robots: { index: false } } : {}),
     openGraph: { title, description, type: 'website', siteName: 'MyCity', images: img },
     twitter: { card: 'summary', title, description, images: img },
     alternates: { canonical: `/store/${id}/${slug}` },

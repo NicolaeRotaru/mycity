@@ -1,5 +1,11 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+/**
+ * @vitest-environment jsdom
+ */
+import { describe, it, expect, vi, afterEach, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { act } from 'react';
+import { monta } from './aiuti/monta-componente';
+import { accendi } from './aiuti/schermo';
 
 /**
  * 29/10/2026 — «Consegna in 30-60 min» ovunque, e in produzione nessun fattorino approvato.
@@ -49,6 +55,107 @@ function dbFinto() {
 }
 
 vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => dbFinto() }));
+
+vi.mock('sonner', () => ({
+  toast: Object.assign(() => undefined, { success: () => undefined, info: () => undefined, error: () => undefined }),
+}));
+
+// R11-005 — La cassa si monta per davvero (il montaggio e il finto sono quelli di
+// riparazione-r22-veloce-cassa-chiede-al-server): la guardia sulla cassa guarda quello che vede il cliente.
+const globale = globalThis as Record<string, unknown>;
+const MARIA = { id: 'cccccccc-3333-4333-8333-cccccccccccc', email: 'maria@test.it' };
+const NEGOZIO_DEL_CARRELLO = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+const FILONE = { id: 'p-filone', name: 'Filone', price: 15, quantity: 1, sellerId: NEGOZIO_DEL_CARRELLO, storeName: 'Pane Quotidiano' };
+const GRUPPI = {
+  groups: [{ sellerId: NEGOZIO_DEL_CARRELLO, storeName: 'Pane Quotidiano', storeLat: null, storeLng: null, items: [FILONE] }],
+  orphans: [],
+  stockIssues: [],
+  variantIssues: [],
+  prezziCambiati: [],
+};
+const domandeAllaVeloce: string[] = [];
+let rispondiAllaVeloce: (esito: { ok: boolean; corpo?: unknown } | Error) => void = () => undefined;
+const reteDiPartenza = globalThis.fetch;
+globalThis.fetch = (async (input: unknown) => {
+  const url = String(typeof input === 'object' && input !== null && 'url' in input ? (input as { url: unknown }).url : input);
+  if (!url.includes('/api/consegna/veloce')) {
+    return { ok: false, status: 503, statusText: 'finto', headers: new Headers(), text: async () => '', json: async () => null };
+  }
+  domandeAllaVeloce.push(url);
+  const esito = await new Promise<{ ok: boolean; corpo?: unknown } | Error>((r) => {
+    rispondiAllaVeloce = r;
+  });
+  if (esito instanceof Error) throw esito;
+  return { ok: esito.ok, status: esito.ok ? 200 : 503, json: async () => esito.corpo };
+}) as unknown as typeof fetch;
+
+const fusoDiPartenza = process.env.TZ;
+let schermo: ReturnType<typeof accendi> | null = null;
+afterEach(() => {
+  schermo?.smonta();
+  schermo = null;
+  localStorage.clear();
+  domandeAllaVeloce.length = 0;
+  rispondiAllaVeloce = () => undefined;
+  delete globale.__DATI_QUERY__;
+  delete globale.__UTENTE__;
+  delete globale.__MUTAZIONI__;
+  if (fusoDiPartenza === undefined) delete process.env.TZ;
+  else process.env.TZ = fusoDiPartenza;
+});
+afterAll(() => {
+  globalThis.fetch = reteDiPartenza;
+});
+
+async function assesta() {
+  for (let i = 0; i < 12; i++) {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+}
+
+/** La cassa aperta da Maria (entrata, nessuna bozza) giovedì 29/10/2026 alle 10:00 di Roma, ora solare. */
+async function cassaAlleDieci() {
+  process.env.TZ = 'Europe/Rome';
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.setSystemTime(new Date('2026-10-29T09:00:00Z'));
+  localStorage.setItem('cart', JSON.stringify(GRUPPI.groups.flatMap((g) => g.items)));
+  globale.__UTENTE__ = MARIA;
+  globale.__MUTAZIONI__ = [];
+  globale.__DATI_QUERY__ = (o: { queryKey: readonly unknown[] }) => {
+    const [chi, cosa] = o.queryKey;
+    if (chi === 'checkout-groups') return String(cosa).includes(FILONE.id) ? GRUPPI : undefined;
+    if (chi === 'auth-user') return MARIA;
+    if (chi === 'user-addresses') return [];
+    return undefined;
+  };
+  const pagina = (await monta('app/checkout/page.tsx')).default;
+  schermo = accendi(pagina, {});
+  await assesta();
+  const s = schermo;
+  const adesso = () => {
+    const b = s.radice.querySelector<HTMLButtonElement>('button[aria-label^="Adesso,"]');
+    expect(b, 'la tessera «Adesso» non si trova: la prova non misurerebbe niente').not.toBeNull();
+    return b!;
+  };
+  return {
+    adesso,
+    /** «Adesso» si può scegliere: la tessera è accesa e, premuta, resta scelta. */
+    siOffre: async () => {
+      if (adesso().disabled) return false;
+      await act(async () => {
+        adesso().click();
+      });
+      await assesta();
+      return adesso().getAttribute('aria-pressed') === 'true';
+    },
+    risponde: async (esito: { ok: boolean; corpo?: unknown }) => {
+      rispondiAllaVeloce(esito);
+      await assesta();
+    },
+  };
+}
 
 import { contaFattoriniOnline, rigaQuandoArrivaNelCarrello, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { GET } from '@/app/api/consegna/veloce/route';
@@ -132,17 +239,26 @@ describe('la consegna veloce si vende solo se c’è un fattorino online', () =>
     }
   });
 
-  it('la cassa offre «Adesso» solo con il sì del server', () => {
-    const picker = readFileSync('components/checkout/DeliverySlotPicker.tsx', 'utf8');
-    // 30/10/2026 (ondata 18) — Il sì vero, non «non ha ancora risposto»: `null` è l'attesa, e la
-    // cassa la tiene ferma senza offrire né togliere «Adesso» (la prova montata è
-    // `la-veloce-resta-scelta-dopo-l-accesso`).
-    expect(picker).toContain('const expressAvailable = expressSiPuo(ora) && veloceDisponibile === true;');
-    const cassa = readFileSync('app/checkout/page.tsx', 'utf8');
-    expect(cassa).toContain('/api/consegna/veloce?negozi=');
-    expect(cassa).toContain('veloceDisponibile={veloceDisponibile}');
-    expect(cassa).toContain('useState<{ negozi: string; possibile: boolean } | null>(null)');
-  });
+  it('la cassa offre «Adesso» solo con il sì del server', async () => {
+    // R11-005 — Prima erano quattro frasi cercate nel testo di DeliverySlotPicker.tsx e di
+    // app/checkout/page.tsx. Adesso la cassa si monta e si guarda quello che vede il cliente.
+    // ① la cassa chiede la veloce al server, una volta, per il negozio del carrello
+    const prima = await cassaAlleDieci();
+    expect(domandeAllaVeloce, 'la cassa non ha chiesto la veloce al server, o l\'ha chiesta più volte').toHaveLength(1);
+    expect(new URL(domandeAllaVeloce[0], 'https://mycity.test').searchParams.get('negozi')).toBe(NEGOZIO_DEL_CARRELLO);
+    // ② finché il server non risponde, «Adesso» non si offre
+    expect(prima.adesso().disabled, 'la cassa offre «Adesso» prima del sì del server').toBe(true);
+    // ③ col sì del server «Adesso» si sceglie
+    await prima.risponde({ ok: true, corpo: { possibile: true } });
+    expect(await prima.siOffre(), 'col sì del server «Adesso» deve potersi scegliere').toBe(true);
+    schermo?.smonta();
+    schermo = null;
+    domandeAllaVeloce.length = 0;
+    // ④ col no del server no
+    const seconda = await cassaAlleDieci();
+    await seconda.risponde({ ok: true, corpo: { possibile: false, perche: 'Nessun fattorino è in servizio adesso.' } });
+    expect(await seconda.siOffre(), 'col no del server la cassa offre lo stesso «Adesso»').toBe(false);
+  }, 60_000);
 });
 
 describe('il carrello non scrive «30-60 min» se la veloce non si può', () => {

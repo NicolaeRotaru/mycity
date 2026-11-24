@@ -286,6 +286,9 @@ export default function ProductForm({
   const [propostaDescrizione, setPropostaDescrizione] = useState<string | null>(null);
   // Il testo che c'era quando la proposta è comparsa: se cambia, «Usa questa» chiede conferma.
   const descrizioneAllaProposta = useRef('');
+  // R08-007 — La proposta e' costruita sul testo che c'era quando si e' premuto «Genera», non su
+  // quello di quando la risposta arriva: le correzioni fatte durante l'attesa non ci sono dentro.
+  const descrizioneAllaRichiesta = useRef('');
   const idTag = useId();
   const [tagInput, setTagInput] = useState('');
   const [unit, setUnit] = useState<ProductUnit>((initialValues?.unit as ProductUnit) ?? 'pezzo');
@@ -352,7 +355,11 @@ export default function ProductForm({
   const topCategories = useMemo(() => categories.filter((c) => !c.parent_id), [categories]);
   const resolveTop = (catId: string): string => {
     let cur = categories.find((c) => c.id === catId);
-    while (cur?.parent_id) {
+    // R07-012 — Se le categorie formano un cerchio (A dentro B dentro A) il giro si ferma alla
+    // prima già vista: prima il modulo restava appeso.
+    const viste = new Set<string>();
+    while (cur?.parent_id && !viste.has(cur.id)) {
+      viste.add(cur.id);
       const parent = categories.find((c) => c.id === cur!.parent_id);
       if (!parent) break;
       cur = parent;
@@ -1073,6 +1080,7 @@ export default function ProductForm({
         <Textarea
           label="Descrizione"
           labelAction={aiAccesa ? (
+            <span className="contents" onClickCapture={() => { descrizioneAllaRichiesta.current = getValues('description') ?? ''; }}>
             <AIDescriptionButton
               productName={watch('name') ?? ''}
               categoryName={categories.find((c) => c.id === currentCategoryId)?.name}
@@ -1082,12 +1090,13 @@ export default function ProductForm({
               // vuoto entra com'era; sopra un testo già scritto si mostra come proposta.
               onResult={(text) => {
                 if ((getValues('description') ?? '').trim()) {
-                  descrizioneAllaProposta.current = getValues('description') ?? '';
+                  descrizioneAllaProposta.current = descrizioneAllaRichiesta.current;
                   setPropostaDescrizione(text);
                 }
                 else setValue('description', text, { shouldValidate: true });
               }}
             />
+            </span>
           ) : undefined}
           {...register('description')}
           rows={4}

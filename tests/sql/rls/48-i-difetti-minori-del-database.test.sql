@@ -94,8 +94,8 @@ SELECT 'il fattorino offline non riceve gli avvisi delle consegne (473)',
 
 -- ── ⑲ ㉛ «Ordine pronto» nella campanella (2090, 982) ──────────────────────
 INSERT INTO esiti
-SELECT 'ordine pronto da consegnare: «un rider passa a prenderlo», senza faccina (2090, 982)',
-       bool_and(body LIKE '%un rider passa a prenderlo%' AND title = 'Ordine pronto'), string_agg(title || ' | ' || body, ' / ')
+SELECT 'ordine pronto da consegnare: «un fattorino passa a prenderlo», senza faccina (2090, 982)',
+       bool_and(body LIKE '%un fattorino passa a prenderlo%' AND title = 'Ordine pronto'), string_agg(title || ' | ' || body, ' / ')
   FROM public.notifications WHERE user_id = 'd4800000-0000-0000-0000-000000000003'
    AND link = '/orders/d4800000-0000-0000-0000-0000000000a1' AND title LIKE '%pronto%';
 INSERT INTO esiti

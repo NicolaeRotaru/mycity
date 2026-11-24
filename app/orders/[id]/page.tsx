@@ -377,8 +377,8 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
       lng: order.rider_lng,
       // Chi ascolta la pagina sente l'etichetta intera: ci mettiamo anche l'età.
       label: posizioneRider.fresca || posizioneRider.minuti == null
-        ? 'Rider'
-        : `Rider · ultima posizione ${daQuantoTempo(posizioneRider.minuti)}`,
+        ? 'Fattorino'
+        : `Fattorino · ultima posizione ${daQuantoTempo(posizioneRider.minuti)}`,
       color: 'amber',
     });
   }
@@ -703,7 +703,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                 ) : (
                   ritiroInNegozio
                     ? 'Mostra questo codice (o il QR) al negozio quando ritiri. Senza questo codice, il negozio non può darti la spesa.'
-                    : 'Mostra questo codice (o il QR) al rider quando arriva. Senza questo codice, il rider non può chiudere la consegna.'
+                    : 'Mostra questo codice (o il QR) al fattorino quando arriva. Senza questo codice, il fattorino non può chiudere la consegna.'
                 )}
               </p>
             </div>
@@ -798,7 +798,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-bold text-ink-900">{order.rider?.full_name ?? 'Il tuo rider'}</p>
+                    <p className="truncate text-sm font-bold text-ink-900">{order.rider?.full_name ?? 'Il tuo fattorino'}</p>
                     {/* Chip ETA "~N min": backend-gated (nessuna colonna eta a backend).
                         Lo slot esiste e viene popolato solo se l'ETA è ricavabile;
                         in assenza di un valore reale, viene omesso (niente orari finti). */}
@@ -888,14 +888,14 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             {pagamento.tipo === 'contanti-da-pagare' && (
               <div className="mt-3 flex items-center gap-2 rounded-lg bg-olive-50 px-3 py-2.5 text-sm font-medium text-olive-800">
                 <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-olive-700" aria-hidden />
-                Paghi {formatPrice(pagamento.centesimi / 100)} in contanti al rider alla consegna.
+                Paghi {formatPrice(pagamento.centesimi / 100)} in contanti al fattorino alla consegna.
               </div>
             )}
             {pagamento.tipo === 'gia-pagato-con-carta' && (
               <div className="mt-3 flex items-center gap-2 rounded-lg bg-olive-50 px-3 py-2.5 text-sm font-medium text-olive-800">
                 <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-olive-700" aria-hidden />
                 Già pagato con carta · {formatPrice(pagamento.centesimi / 100)}
-                {pagamento.rimborsatoCentesimi ? ` · ${formatPrice(pagamento.rimborsatoCentesimi / 100)} già tornati sulla carta` : ''}. Al rider non devi niente.
+                {pagamento.rimborsatoCentesimi ? ` · ${formatPrice(pagamento.rimborsatoCentesimi / 100)} già tornati sulla carta` : ''}. Al fattorino non devi niente.
               </div>
             )}
             {pagamento.tipo === 'rimborsato' && (

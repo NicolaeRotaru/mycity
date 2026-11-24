@@ -239,7 +239,7 @@ describe('il nome del fattorino si vede anche coi profili chiusi (dopo 161 e 164
   it('il negozio, nella pagina dell\'ordine, legge «Rider Luca», non «Rider assegnato»', async () => {
     const { testo, errori } = await aSchermo('app/seller/orders/[id]/page.tsx', { params: { id: O_IN_CORSO } }, clientDegliOrdini(DOPO_LA_161, 'dopo', PANE), PANE);
     expect([...errori.values()]).toEqual([]);
-    expect(testo).toMatch(/Rider\s*Luca/);
+    expect(testo).toMatch(/Fattorino\s*Luca/);
     expect(testo).not.toMatch(/Rider\s*assegnato/);
   });
 });
