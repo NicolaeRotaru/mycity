@@ -760,7 +760,7 @@ async function haAnnullatoNelFrattempo(admin: Admin, userId: string): Promise<bo
 
 async function avvisaUnaVoltaPerAvviso(
   admin: Admin,
-  avvisiFermi: Array<{ id: string; userId: string; tappa?: TappaAvviso }>,
+  avvisiFermi: Array<{ id: string; userId: string; tappa?: TappaAvviso; forsePartita?: true }>,
 ): Promise<{ nuovi: number; nonScritti: number }> {
   const conto = { nuovi: 0, nonScritti: 0 };
   if (avvisiFermi.length === 0) return conto;
@@ -777,7 +777,7 @@ async function avvisaUnaVoltaPerAvviso(
     logger.error('[cron-deletions] nessun amministratore a cui dirlo: allarme non recapitato', { avvisiFermi: avvisiFermi.length });
     return { nuovi: 0, nonScritti: avvisiFermi.length };
   }
-  for (const { id: idAvviso, userId, tappa } of avvisiFermi) {
+  for (const { id: idAvviso, userId, tappa, forsePartita } of avvisiFermi) {
     const quale =
       tappa === 'termine-scaduto'
         ? ' La spiegazione ferma è quella del termine di legge scaduto.'
@@ -800,7 +800,11 @@ async function avvisaUnaVoltaPerAvviso(
         category: 'system',
         title: TITOLO_EMAIL_FERMA,
         body:
-          "Una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. " +
+          // R09-001 — Se una notte prima l'email è stata spedita ma il registro non l'ha segnata, può
+          // essere arrivata: l'allarme non può dire «non è partita».
+          (forsePartita
+            ? "Una spiegazione dell'attesa per la cancellazione non risulta partita per email: una notte prima è stata spedita ma il registro non l'ha segnata, quindi può essere arrivata. "
+            : "Una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. ") +
           "È scritta nel pannello del sito della persona, ma chi vuole andarsene può non rientrarci più: " +
           'controlla la posta del sito oppure scrivile tu. Il giro riprova da solo ogni notte; ' +
           'questo avviso non si ripete finché la spiegazione resta ferma, e si chiude da solo quando parte. ' +
