@@ -1,6 +1,7 @@
 import { Camera, CalendarDays, Check, Film, Globe, MapPin, Sparkles } from 'lucide-react';
 import type { ServizioAgenzia } from '@/lib/agenzia/preventivo';
 import type { TipoAttivita } from '@/lib/agenzia/tipi-attivita';
+import type { SchedaCliente } from '@/lib/agenzia/scheda-cliente';
 import {
   bozzaSito,
   FORMATI_FOTO,
@@ -19,11 +20,12 @@ import {
  * I contenuti li calcola `lib/agenzia/contenuti-servizi.ts`: qui si disegna soltanto.
  */
 
-type Props = { id: ServizioAgenzia; nome: string; tipo: TipoAttivita; giorno: string };
+/** `scheda`: la scheda del locale mandata da n8n (24/11/2026). Senza, la bozza e il piano restano generici. */
+type Props = { id: ServizioAgenzia; nome: string; tipo: TipoAttivita; giorno: string; scheda?: SchedaCliente | null };
 
-export default function AnteprimaServizio({ id, nome, tipo, giorno }: Props) {
-  if (id === 'sito_web') return <BozzaDelSito nome={nome} tipo={tipo} />;
-  if (id === 'social') return <PianoDelMese nome={nome} tipo={tipo} giorno={giorno} />;
+export default function AnteprimaServizio({ id, nome, tipo, giorno, scheda }: Props) {
+  if (id === 'sito_web') return <BozzaDelSito nome={nome} tipo={tipo} scheda={scheda} />;
+  if (id === 'social') return <PianoDelMese nome={nome} tipo={tipo} giorno={giorno} scheda={scheda} />;
   if (id === 'google_maps') return <SchedaSuMaps nome={nome} tipo={tipo} />;
   return <FormatiFotoVideo />;
 }
@@ -40,8 +42,12 @@ function Riquadro({ icona: Icona, titolo, nota, children }: { icona: typeof Glob
   );
 }
 
-function BozzaDelSito({ nome, tipo }: { nome: string; tipo: TipoAttivita }) {
-  const b = bozzaSito(nome, tipo);
+function DaConfermare() {
+  return <span className="ml-1 rounded bg-amber-100 px-1 py-px text-[10px] font-semibold text-amber-800">da confermare</span>;
+}
+
+function BozzaDelSito({ nome, tipo, scheda }: { nome: string; tipo: TipoAttivita; scheda?: SchedaCliente | null }) {
+  const b = bozzaSito(nome, tipo, scheda);
   return (
     <Riquadro icona={Globe} titolo="La bozza del tuo sito" nota="Una prima bozza fatta con i tuoi dati: testi e foto li completiamo insieme.">
       <div className="overflow-hidden rounded-lg border border-cream-300 bg-white shadow-sm">
@@ -62,13 +68,18 @@ function BozzaDelSito({ nome, tipo }: { nome: string; tipo: TipoAttivita }) {
         <div className="grid gap-px bg-cream-200 sm:grid-cols-2">
           {b.sezioni.map((s) => (
             <div key={s.titolo} className="bg-white p-3">
-              <p className="text-xs font-bold text-ink-900">{s.titolo}</p>
+              <p className="text-xs font-bold text-ink-900">{s.titolo}{s.daConfermare && <DaConfermare />}</p>
               <p className="mt-0.5 text-xs text-ink-600">{s.testo}</p>
             </div>
           ))}
         </div>
       </div>
-      <p className="mt-2 text-xs text-ink-500">L&apos;indirizzo {b.indirizzo} è un suggerimento: prima di comprarlo verifichiamo che sia libero.</p>
+      <p className="mt-2 text-xs text-ink-500">
+        {b.indirizzoEsistente
+          ? `${b.indirizzo} è l’indirizzo del sito che hai già: lo teniamo, e il sito nuovo va lì.`
+          : `L’indirizzo ${b.indirizzo} è un suggerimento: prima di comprarlo verifichiamo che sia libero.`}
+        {b.sezioni.some((s) => s.dalLocale) && ' I dati del tuo locale li abbiamo trovati in rete: quelli «da confermare» li controlli tu.'}
+      </p>
     </Riquadro>
   );
 }
@@ -76,8 +87,8 @@ function BozzaDelSito({ nome, tipo }: { nome: string; tipo: TipoAttivita }) {
 const giornoCorto = (data: string) =>
   new Date(`${data}T12:00:00Z`).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', timeZone: 'UTC' });
 
-function PianoDelMese({ nome, tipo, giorno }: { nome: string; tipo: TipoAttivita; giorno: string }) {
-  const piano = pianoEditoriale(nome, tipo, giorno);
+function PianoDelMese({ nome, tipo, giorno, scheda }: { nome: string; tipo: TipoAttivita; giorno: string; scheda?: SchedaCliente | null }) {
+  const piano = pianoEditoriale(nome, tipo, giorno, scheda);
   return (
     <Riquadro
       icona={CalendarDays}

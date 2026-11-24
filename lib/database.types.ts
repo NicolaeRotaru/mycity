@@ -1733,6 +1733,36 @@ export interface Database {
         };
         Relationships: [];
       };
+      preventivi_con_codice: {
+        Row: {
+          seller_id: string;
+          codice: string;
+          stato: string;
+          fascia_scelta: string | null;
+          creato_il: string;
+          accettato_il: string | null;
+          condizioni_accettate_il: string | null;
+        };
+        Insert: {
+          seller_id: string;
+          codice: string;
+          stato?: string;
+          fascia_scelta?: string | null;
+          creato_il?: string;
+          accettato_il?: string | null;
+          condizioni_accettate_il?: string | null;
+        };
+        Update: {
+          seller_id?: string;
+          codice?: string;
+          stato?: string;
+          fascia_scelta?: string | null;
+          creato_il?: string;
+          accettato_il?: string | null;
+          condizioni_accettate_il?: string | null;
+        };
+        Relationships: [];
+      };
       product_list_items: {
         Row: {
           list_id: string;
@@ -2528,6 +2558,30 @@ export interface Database {
           resolved_at?: string | null;
           resolution_note?: string | null;
           handled_by?: string | null;
+        };
+        Relationships: [];
+      };
+      schede_clienti: {
+        Row: {
+          id_attivita: string;
+          scheda: Json;
+          origine: string;
+          ricevuta_il: string;
+          aggiornata_il: string;
+        };
+        Insert: {
+          id_attivita: string;
+          scheda: Json;
+          origine?: string;
+          ricevuta_il?: string;
+          aggiornata_il?: string;
+        };
+        Update: {
+          id_attivita?: string;
+          scheda?: Json;
+          origine?: string;
+          ricevuta_il?: string;
+          aggiornata_il?: string;
         };
         Relationships: [];
       };

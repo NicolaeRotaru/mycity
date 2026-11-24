@@ -1097,3 +1097,28 @@ export function avvisoCancellazioneTemplate(args: { titolo: string; corpoHtml: s
     text: args.testo ?? '',
   };
 }
+
+/**
+ * 24/11/2026 — «ENTRA NELLA TUA PAGINA», AL TITOLARE CHE HA ACCETTATO IL PREVENTIVO DAL LINK.
+ *
+ * Un'attività in «modalità preventivo» (Ora del Gusto) non ha ancora un accesso: quando il
+ * titolare accetta dal link col codice e lascia la sua email, il sito gliela collega e gli manda
+ * questo link per entrare (lib/agenzia/preventivo-col-codice.ts). Il link è di Supabase e vale una
+ * volta sola; dopo, entra con «Accedi» e la stessa email.
+ */
+export function accessoDopoIlPreventivoTemplate(args: { negozio: string; link: string }) {
+  const negozio = escapeHtml(args.negozio);
+  const body = `
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Benvenuto su MyCity, ${negozio}</h1>
+    <p style="margin:0 0 12px;line-height:1.6">Hai accettato il preventivo dei servizi di MyCity, realizzati da SDG Agenzia, il partner di MyCity. Da qui entri nella pagina del tuo negozio: trovi il preventivo, l'abbonamento e i dati del locale da controllare.</p>
+    <p style="margin:0 0 12px;line-height:1.6">I dati che abbiamo trovato in rete li vedi con la loro fonte: in pubblico va solo quello che confermi tu. Prezzi e allergeni li scrivi sempre tu.</p>
+    <p style="margin:24px 0">${btn(args.link, 'Entra nella tua pagina')}</p>
+    <p style="margin:0 0 12px;line-height:1.6;font-size:13px">Il pulsante vale una volta sola. Dopo, entri da «Accedi» con questa email.</p>
+  `;
+  return {
+    subject: `Entra nella pagina di ${args.negozio} su MyCity`,
+    html: shell('Entra nella tua pagina', body),
+    text: `Hai accettato il preventivo dei servizi di MyCity. Entra nella pagina del tuo negozio da qui (vale una volta sola): ${args.link}`,
+  };
+}
+
