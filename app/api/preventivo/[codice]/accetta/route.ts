@@ -4,10 +4,9 @@ import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { isStripeConfigured } from '@/lib/stripe/client';
-import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { ABBONAMENTI } from '@/lib/agenzia/preventivo';
-import { apriCassaServizi } from '@/lib/agenzia/cassa-servizi';
+import { apriCassaDalLink } from '@/lib/agenzia/cassa-dal-link';
 import { accettaPreventivoColCodice, CODICE_VALIDO, leggiPreventivoColCodice } from '@/lib/agenzia/preventivo-col-codice';
 
 export const runtime = 'nodejs';
@@ -17,8 +16,8 @@ export const runtime = 'nodejs';
  *
  * Nessun accesso: la chiave è il codice del link (256 bit casuali). Il titolare manda l'email,
  * l'abbonamento scelto e il sì alle condizioni; il server accetta (lib/agenzia/preventivo-col-codice.ts)
- * e apre subito la cassa Stripe dell'abbonamento, con l'email appena data. Se i pagamenti non sono
- * attivi, l'accettazione vale lo stesso: il titolare entra dal link nell'email e paga dalla sua pagina.
+ * e apre subito la cassa Stripe dell'abbonamento, con l'email appena data. Se la cassa non si apre,
+ * l'accettazione vale lo stesso: il titolare paga più tardi dal pulsante «Paga» dello stesso link.
  * Il canone lo rilegge il server; il browser manda solo il nome della fascia.
  */
 
@@ -63,17 +62,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
     return ApiErrors.conflict(accettato.messaggio);
   }
 
-  const qui = `${env.appUrl()}/preventivo/${codice}`;
   if (!isStripeConfigured()) {
     return NextResponse.json({ ok: true, data: { url: null, accessoInviato: accettato.accessoInviato } }, { status: 200 });
   }
-  const cassa = await apriCassaServizi({
-    sellerId: accettato.sellerId,
-    email,
-    fascia: abbonamento,
-    ritorno: { pagato: `${qui}?pagato=1`, annullato: `${qui}?pagato=0` },
-  });
-  // Se la cassa non si apre, l'accettazione resta: il titolare paga dalla sua pagina.
+  const cassa = await apriCassaDalLink({ codice, sellerId: accettato.sellerId, email, fascia: abbonamento });
+  // Se la cassa non si apre, l'accettazione resta: il titolare paga dal pulsante «Paga» di questo link.
   if (!cassa.ok) {
     return NextResponse.json({ ok: true, data: { url: null, accessoInviato: accettato.accessoInviato } }, { status: 200 });
   }

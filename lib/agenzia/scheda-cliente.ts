@@ -84,20 +84,50 @@ export function datoDi(scheda: SchedaCliente | null | undefined, campo: string):
   return { valore, confermato: valoreConfermato(scheda, campo) !== null };
 }
 
-const HA_UN_PREZZO = /(\d+[.,]\d{2}|\d+\s*(€|euro|eur\b))|€/i;
+/**
+ * Un testo che dice un prezzo: «1,50 €», «2 euro», «€ 3», «1,5», «3.50». Si scarta la riga intera:
+ * i prezzi li scrive il negoziante. In una riga di MENU vale anche un numero da solo in fondo
+ * («Brioche 2»), che in un'idea per un post («sfornata alle 7») non è un prezzo.
+ * (Collaudo del 24/11: «Cornetto 1,5» e «Brioche 2» passavano.)
+ */
+const HA_UN_PREZZO = /\d+([.,]\d{1,2})?\s*(€|euro|eur\b)|€|\b\d+[.,]\d{1,2}\b/i;
+const NUMERO_IN_FONDO = /\s\d{1,3}\s*$/;
+
+/** Vero se il testo non dice un prezzo: solo così entra in un post, nel sito o nel profilo. */
+export function senzaPrezzo(testo: string): boolean {
+  return !HA_UN_PREZZO.test(testo);
+}
+
+/** Le voci dell'analisi (punti di forza, idee) ripulite: niente vuoti, niente prezzi. */
+export function vociSenzaPrezzo(voci: readonly string[] | undefined, quante: number, lunghezzaMassima = 140): string[] {
+  return (voci ?? []).map((x) => x.trim()).filter((x) => x.length >= 3 && x.length <= lunghezzaMassima && senzaPrezzo(x)).slice(0, quante);
+}
+
+/**
+ * La scheda con i soli campi confermati e senza l'analisi (che è una lettura di n8n, non un dato
+ * confermato dal titolare). È quella che si usa dove la pagina non è del negozio: il link col
+ * codice. Nella dashboard del negozio, invece, la scheda va intera, con «da confermare».
+ */
+export function soloConfermati(scheda: SchedaCliente | null | undefined): SchedaCliente | null {
+  if (!scheda) return null;
+  const campi = Object.fromEntries(
+    Object.entries(scheda.campi).filter(([nome]) => valoreConfermato(scheda, nome) !== null),
+  );
+  return { ...scheda, campi, analisi: undefined, da_confermare: [] };
+}
 
 /**
  * I prodotti tipici, dal testo del menu: una voce per riga, senza elenchi puntati, senza righe
  * con un prezzo (i prezzi li conferma il negoziante) e senza doppioni. Al massimo `quanti`.
  */
-export function prodottiTipici(scheda: SchedaCliente | null | undefined, quanti = 8): string[] {
-  const menu = valoreDi(scheda, 'menu_testo');
+export function prodottiTipici(scheda: SchedaCliente | null | undefined, quanti = 8, soloSeConfermato = false): string[] {
+  const menu = soloSeConfermato ? valoreConfermato(scheda, 'menu_testo') : valoreDi(scheda, 'menu_testo');
   if (!menu) return [];
   const visti = new Set<string>();
   const voci: string[] = [];
   for (const riga of menu.split(/\r?\n|;/)) {
     const voce = riga.replace(/^[\s\-–—•·*\d.)]+/, '').replace(/\s+/g, ' ').trim();
-    if (voce.length < 3 || voce.length > 80 || HA_UN_PREZZO.test(voce)) continue;
+    if (voce.length < 3 || voce.length > 80 || !senzaPrezzo(voce) || NUMERO_IN_FONDO.test(riga)) continue;
     const chiave = voce.toLowerCase();
     if (visti.has(chiave)) continue;
     visti.add(chiave);

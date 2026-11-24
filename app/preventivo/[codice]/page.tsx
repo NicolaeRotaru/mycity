@@ -6,10 +6,11 @@ import { logger } from '@/lib/logger';
 import { ABBONAMENTI, FASCE, FRASE_CONDIZIONI, FRASE_PARTNER, LISTINO, SERVIZI_AGENZIA, canonePrimoMese, scriviCanone } from '@/lib/agenzia/preventivo';
 import { leggiPreventivo } from '@/lib/agenzia/leggi-preventivo';
 import { CODICE_VALIDO, leggiPreventivoColCodice } from '@/lib/agenzia/preventivo-col-codice';
-import { leggiSchedaSalvata } from '@/lib/agenzia/scheda-cliente';
+import { leggiSchedaSalvata, soloConfermati } from '@/lib/agenzia/scheda-cliente';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import AccettaDalLink from './AccettaDalLink';
+import PagaDalLink from './PagaDalLink';
 
 /**
  * IL PREVENTIVO DAL LINK COL CODICE — 24/11/2026.
@@ -49,18 +50,36 @@ export default async function PreventivoDalLink({
   }
 
   if (pc.stato === 'accettato') {
+    // Pagato davvero lo dice la tabella degli abbonamenti (la scrive il webhook di Stripe), non l'indirizzo.
+    const abbonamento = await getAdminSupabase()
+      .from('abbonamenti_servizi')
+      .select('stato')
+      .eq('seller_id', pc.sellerId)
+      .in('stato', ['active', 'past_due'])
+      .limit(1);
+    const attivo = !abbonamento.error && (abbonamento.data ?? []).length > 0;
     return (
       <Cornice>
         <div role="status" className="rounded-2xl border-2 border-olive-300 bg-olive-50 p-5">
           <p className="inline-flex items-center gap-2 font-semibold text-ink-900">
             <CheckCircle2 size={18} className="text-olive-700" aria-hidden />
-            {pagato === '1' ? 'Pagamento ricevuto, grazie!' : 'Hai accettato il preventivo'}
+            {attivo ? 'Il tuo abbonamento è attivo' : 'Hai accettato il preventivo'}
           </p>
           <p className="mt-1 text-sm text-ink-700">
-            Ti abbiamo scritto all’email che ci hai dato: da lì entri nella pagina di {pc.nomeAttivita}
-            {pagato === '1' ? ' e trovi l’abbonamento attivo.' : ', dove trovi il preventivo e puoi pagare l’abbonamento.'}
+            Ti abbiamo scritto all’email che ci hai dato, col link per entrare nella pagina di {pc.nomeAttivita}.
+            Controlliamo i dati del negozio e poi va online.
           </p>
         </div>
+        {!attivo && (
+          <div className="mt-4 rounded-2xl border-2 border-cream-300 bg-surface-0 p-5">
+            {pagato === '1' ? (
+              <p className="text-sm text-ink-700">Se hai appena pagato, l’abbonamento si attiva in pochi secondi: ricarica la pagina fra un momento.</p>
+            ) : (
+              <p className="text-sm text-ink-700">L’abbonamento {pc.fasciaScelta ? FASCE[pc.fasciaScelta].nome : ''} non è ancora pagato. Puoi pagarlo da qui.</p>
+            )}
+            <PagaDalLink codice={codice} />
+          </div>
+        )}
       </Cornice>
     );
   }
@@ -73,7 +92,8 @@ export default async function PreventivoDalLink({
       getAdminSupabase().from('schede_clienti').select('scheda').eq('id_attivita', pc.sellerId).maybeSingle(),
     ]);
     letti = l;
-    scheda = s.error ? null : leggiSchedaSalvata(s.data?.scheda);
+    // Il link non è la pagina del negozio: qui solo i dati confermati, niente «da confermare» (collaudo del 24/11).
+    scheda = s.error ? null : soloConfermati(leggiSchedaSalvata(s.data?.scheda));
   } catch (e) {
     logger.error('[preventivo-codice] pagina: preventivo non preparato', { errore: String(e) });
     return <Cornice><p className="text-ink-700">Non riesco a preparare il preventivo in questo momento. Riprova fra qualche minuto.</p></Cornice>;

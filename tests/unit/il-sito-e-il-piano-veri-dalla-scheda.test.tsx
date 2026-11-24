@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { bozzaSito, pianoEditoriale } from '@/lib/agenzia/contenuti-servizi';
-import { SchedaInArrivo, type SchedaCliente } from '@/lib/agenzia/scheda-cliente';
+import { SchedaInArrivo, soloConfermati, type SchedaCliente } from '@/lib/agenzia/scheda-cliente';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 
 /**
@@ -86,6 +86,46 @@ describe('il piano dei 12 post', () => {
     expect(daConfermare.post.map((p) => p.esempio).join(' ')).not.toContain('7:00–19:30');
     const confermati = scheda({ orari: { valore: 'Lun–Sab 7:00–19:30', stato: 'confermato', fonte: null } });
     expect(pianoEditoriale('Ora del Gusto', 'bar', '2026-12-01', confermati).post.map((p) => p.esempio).join(' ')).toContain('7:00–19:30');
+  });
+});
+
+describe('mai prezzi, mai frasi non vere (collaudo del 24/11)', () => {
+  const SPORCA = scheda(
+    {
+      menu_testo: { valore: 'Cornetto 1,5\nBrioche 2\nCaffè 1.20\nTorta di mele', stato: 'da_confermare', fonte: null },
+      sito_ufficiale: { valore: 'https://oradelgusto-falso.example', stato: 'proposta', fonte: null },
+    },
+    { idee_contenuti: ['Colazione completa a soli 3,50€', 'Aperitivo 8 euro', 'Il dehors al tramonto'], punti_di_forza: ['Cornetti a 1 euro', 'il dehors in piazza'] },
+  );
+
+  it('nessun prezzo nel sito o nei post, in nessuna forma', () => {
+    const b = bozzaSito('Ora del Gusto', 'bar', SPORCA);
+    const piano = pianoEditoriale('Ora del Gusto', 'bar', '2026-12-01', SPORCA);
+    const tutto = [...b.sezioni.map((x) => x.testo), ...piano.post.map((p) => `${p.tema} ${p.esempio}`)].join(' | ');
+    expect(tutto).not.toMatch(/3,50|8 euro|1 euro|Cornetto 1,5|Brioche 2|1\.20|€/);
+    expect(tutto).toContain('Torta di mele');
+    expect(tutto).toContain('Il dehors al tramonto');
+    expect(tutto).toContain('il dehors in piazza');
+  });
+
+  it('un menu non confermato non entra nei post (che sono pubblici)', () => {
+    const piano = pianoEditoriale('Ora del Gusto', 'bar', '2026-12-01', SPORCA);
+    expect(piano.post.map((p) => p.esempio).join(' ')).not.toContain('Torta di mele');
+  });
+
+  it('un sito solo proposto non diventa «il sito che hai già»', () => {
+    const b = bozzaSito('Ora del Gusto', 'bar', SPORCA);
+    expect(b.indirizzoEsistente).toBe(false);
+    expect(b.indirizzo).toBe('oradelgusto.it');
+  });
+
+  it('per il link col codice restano solo i campi confermati, senza l analisi', () => {
+    const s = soloConfermati(PIENA)!;
+    expect(Object.keys(s.campi).sort()).toEqual(['indirizzo', 'menu_testo', 'sito_ufficiale', 'telefono']);
+    expect(s.analisi).toBeUndefined();
+    const b = bozzaSito('Ora del Gusto', 'bar', s);
+    expect(b.sezioni.map((x) => x.testo).join(' ')).not.toContain('7:00–19:30');
+    expect(b.sezioni.some((x) => x.daConfermare)).toBe(false);
   });
 });
 

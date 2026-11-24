@@ -21,6 +21,8 @@ const db = vi.hoisted(() => ({
   erroreUtente: null as null | { message: string; code?: string },
   posta: [] as Array<Record<string, unknown>>,
   avvisi: [] as string[],
+  testiAvvisi: [] as string[],
+  emailUtente: 'titolare@example.it' as string | null,
   casse: [] as Array<Record<string, unknown>>,
 }));
 
@@ -31,7 +33,7 @@ vi.mock('@/lib/rate-limit', () => ({
 }));
 vi.mock('@/lib/stripe/client', () => ({ isStripeConfigured: () => true }));
 vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async (m: Record<string, unknown>) => { db.posta.push(m); return { ok: true, id: 'e1' }; }) }));
-vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: vi.fn(async (titolo: string) => { db.avvisi.push(titolo); }) }));
+vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: vi.fn(async (titolo: string, testo: string) => { db.avvisi.push(titolo); db.testiAvvisi.push(testo); }) }));
 vi.mock('@/lib/agenzia/cassa-servizi', () => ({
   apriCassaServizi: vi.fn(async (a: Record<string, unknown>) => {
     db.casse.push(a);
@@ -77,6 +79,7 @@ vi.mock('@/lib/supabase/server', () => {
             db.utenteAggiornato.push({ id, ...v });
             return { data: { user: { id } }, error: null };
           },
+          getUserById: async (id: string) => ({ data: { user: db.emailUtente ? { id, email: db.emailUtente } : null }, error: null }),
           generateLink: async () => ({ data: { properties: { action_link: 'https://supabase.test/verify?token=t' } }, error: null }),
         },
       },
@@ -109,6 +112,8 @@ beforeEach(() => {
   db.erroreUtente = null;
   db.posta = [];
   db.avvisi = [];
+  db.testiAvvisi = [];
+  db.emailUtente = 'titolare@example.it';
   db.casse = [];
 });
 
@@ -171,5 +176,49 @@ describe('accettare dal link col codice', () => {
     db.preventivo!.stato = 'chiuso';
     expect((await accetta(BUONO)).status).toBe(409);
     expect(db.utenteAggiornato).toHaveLength(0);
+  });
+});
+
+async function paga(codice = CODICE) {
+  const { POST } = await import('@/app/api/preventivo/[codice]/paga/route');
+  return POST(new Request(`https://mycity.example/api/preventivo/${codice}/paga`, { method: 'POST' }), { params: Promise.resolve({ codice }) });
+}
+
+describe('dopo aver accettato (collaudo del 24/11)', () => {
+  it('l avviso a Nicola dice l email data e che mancano i dati dell iscrizione', async () => {
+    await accetta(BUONO);
+    expect(db.testiAvvisi[0]).toContain('titolare@example.it');
+    expect(db.testiAvvisi[0]).toContain('IBAN');
+  });
+
+  it('l email già usata e il guasto rispondono con lo stesso messaggio', async () => {
+    db.erroreUtente = { message: 'already registered', code: 'email_exists' };
+    const uno = await (await accetta(BUONO)).json();
+    db.erroreUtente = { message: 'boom' };
+    const due = await (await accetta(BUONO)).json();
+    expect(uno.error.message).toBe(due.error.message);
+  });
+
+  it('chi ha accettato e non ha pagato paga dal link, con la fascia scelta e l email collegata', async () => {
+    await accetta(BUONO);
+    db.casse = [];
+    const r = await paga();
+    expect(r.status).toBe(200);
+    expect(db.casse).toHaveLength(1);
+    expect(db.casse[0]).toMatchObject({ sellerId: ODG, email: 'titolare@example.it', fascia: 'business' });
+    expect(String(db.casse[0].chiaveExtra)).toMatch(/^link-[0-9a-f]{16}$/);
+  });
+
+  it('prima di accettare non si paga dal link', async () => {
+    expect((await paga()).status).toBe(409);
+    expect(db.casse).toHaveLength(0);
+  });
+
+  it('con l email segnaposto (.local) non si apre nessuna cassa', async () => {
+    await accetta(BUONO);
+    db.casse = [];
+    db.emailUtente = 'ora-del-gusto.preventivo@mycity-system.local';
+    expect((await paga()).status).toBe(503);
+    expect(db.casse).toHaveLength(0);
   });
 });

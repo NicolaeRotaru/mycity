@@ -69,11 +69,17 @@ async function clienteDeiServizi(stripe: Stripe, sellerId: string, email: string
   return (await stripe.customers.create({ email, name: negozio, metadata: { kind: KIND_SERVIZI, seller_id: sellerId } })).id;
 }
 
-export async function apriCassaServizi({ sellerId, email, fascia, ritorno }: {
+export async function apriCassaServizi({ sellerId, email, fascia, ritorno, chiaveExtra }: {
   sellerId: string;
   email: string;
   fascia: Abbonamento;
   ritorno: { pagato: string; annullato: string };
+  /**
+   * Un pezzo in più per la chiave di idempotenza di Stripe: la strada del link col codice ci mette
+   * l'impronta di email e indirizzi di ritorno, perché la stessa chiave con parametri diversi Stripe
+   * la rifiuta (collaudo del 24/11). La dashboard non lo passa: la sua chiave resta quella di prima.
+   */
+  chiaveExtra?: string;
 }): Promise<NextResponse> {
   const admin = getAdminSupabase();
   const [profilo, impostazioni, attivi] = await Promise.all([
@@ -141,7 +147,7 @@ export async function apriCassaServizi({ sellerId, email, fascia, ritorno }: {
       subscription_data: { metadata: metadati },
       success_url: ritorno.pagato,
       cancel_url: ritorno.annullato,
-    }, { idempotencyKey: `servizi:${sellerId}:${fascia}:${canone}:${Math.floor(Date.now() / FINESTRA_CASSA_MS)}` });
+    }, { idempotencyKey: `servizi:${sellerId}:${fascia}:${canone}:${chiaveExtra ? `${chiaveExtra}:` : ''}${Math.floor(Date.now() / FINESTRA_CASSA_MS)}` });
     if (!sessione.url) throw new Error('sessione senza indirizzo');
     return NextResponse.json({ ok: true, data: { url: sessione.url } }, { status: 200 });
   } catch (errore) {

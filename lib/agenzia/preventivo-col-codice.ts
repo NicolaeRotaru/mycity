@@ -99,9 +99,10 @@ export async function accettaPreventivoColCodice(input: {
     await admin.from('preventivi_con_codice').update({ stato: 'aperto', fascia_scelta: null, accettato_il: null, condizioni_accettate_il: null }).eq('codice', codice);
     const giaUsata = /already|exists|registered|email_exists/i.test(`${utente.error.message} ${(utente.error as { code?: string }).code ?? ''}`);
     logger.warn('[preventivo-codice] email non collegata', { sellerId: id, giaUsata, message: utente.error.message });
+    // Lo stesso messaggio nei due casi: non si deve poter scoprire da qui se un'email è già su MyCity (collaudo del 24/11).
     return giaUsata
-      ? { ok: false, motivo: 'EMAIL_GIA_USATA', messaggio: 'Questa email ha già un account su MyCity. Usane un’altra, oppure scrivici e colleghiamo noi il preventivo al tuo account.' }
-      : { ok: false, motivo: 'GUASTO', messaggio: 'Non sono riuscito a creare il tuo accesso. Riprova fra un momento.' };
+      ? { ok: false, motivo: 'EMAIL_GIA_USATA', messaggio: 'Non sono riuscito a collegare questa email. Prova con un’altra, oppure scrivici e lo sistemiamo noi.' }
+      : { ok: false, motivo: 'GUASTO', messaggio: 'Non sono riuscito a collegare questa email. Prova con un’altra, oppure scrivici e lo sistemiamo noi.' };
   }
 
   // 2) Il profilo coi soli dati confermati della scheda di n8n, e in revisione.
@@ -113,12 +114,20 @@ export async function accettaPreventivoColCodice(input: {
     .update({ ...dati, approval_status: 'pending', approval_requested_at: new Date().toISOString() })
     .eq('id', id);
   if (profilo.error) logger.error('[preventivo-codice] profilo non compilato', { sellerId: id, message: profilo.error.message });
+  const profiloCompilato = !profilo.error;
 
   // 3) Gli avvisi: a Nicola sempre, al titolare il link per entrare.
+  // L'email non è verificata prima di collegarla: chi ha il link può darne una sua. Per questo l'avviso
+  // a Nicola la dice, così la controlla col titolare prima di approvare (collaudo del 24/11).
   await notifyAdmins(
     `${preventivo.nomeAttivita} ha accettato il preventivo`,
-    `Abbonamento ${FASCE[fascia].nome}. Il negozio è in revisione; il link per entrare è partito all'email che ha dato il titolare.`,
-    '/admin/users?filter=pending',
+    [
+      `Abbonamento ${FASCE[fascia].nome}. Email data dal titolare: ${email} — controlla col titolare che sia la sua.`,
+      profiloCompilato
+        ? 'Il negozio è in revisione, ma arriva dal preventivo: mancano i dati dell’iscrizione (IBAN, documenti). Non approvarlo prima di averli.'
+        : 'ATTENZIONE: il profilo non si è aggiornato (non è in revisione): sistemalo a mano.',
+    ].join(' '),
+    '/admin/preventivi',
     { unaVoltaPer: `preventivo-codice:${id}` },
   ).catch((e: unknown) => logger.warn('[preventivo-codice] avviso a Nicola non partito', { sellerId: id, errore: String(e) }));
 

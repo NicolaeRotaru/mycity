@@ -52,6 +52,7 @@ CREATE POLICY schede_clienti_il_negozio_legge_la_sua ON public.schede_clienti
 
 REVOKE ALL ON public.schede_clienti FROM anon, authenticated;
 GRANT SELECT ON public.schede_clienti TO authenticated;
+GRANT ALL ON public.schede_clienti TO service_role;
 
 COMMENT ON TABLE public.schede_clienti IS
   'La scheda del cliente mandata da n8n (flusso 16), intera: campi con valore/stato/fonte e analisi. Il negozio legge la sua, scrive solo il server. In pubblico solo i campi confermati dal titolare (migrazione 708).';
@@ -70,6 +71,7 @@ CREATE TABLE IF NOT EXISTS public.preventivi_con_codice (
 ALTER TABLE public.preventivi_con_codice ENABLE ROW LEVEL SECURITY;
 -- Nessuna regola: browser e app non lo leggono mai. Solo il server (service_role).
 REVOKE ALL ON public.preventivi_con_codice FROM anon, authenticated;
+GRANT ALL ON public.preventivi_con_codice TO service_role;
 
 COMMENT ON TABLE public.preventivi_con_codice IS
   'Il link /preventivo/<codice> di un''attività senza accesso (modalità preventivo). Solo il server lo legge (migrazione 708).';

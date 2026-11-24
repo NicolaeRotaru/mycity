@@ -16,7 +16,7 @@
  */
 
 import type { TipoAttivita } from './tipi-attivita';
-import { datoDi, prodottiTipici, valoreConfermato, type SchedaCliente } from './scheda-cliente';
+import { datoDi, prodottiTipici, valoreConfermato, vociSenzaPrezzo, type SchedaCliente } from './scheda-cliente';
 
 /*
  * 24/11/2026 — CON LA SCHEDA DI N8N, LA BOZZA E IL PIANO DIVENTANO QUELLI DI QUEL LOCALE.
@@ -95,15 +95,15 @@ function dominioDi(url: string | null | undefined): string | null {
 
 export function bozzaSito(nome: string, tipo: TipoAttivita, scheda?: SchedaCliente | null): BozzaSito {
   const n = nome.trim() || 'La tua attività';
-  const sito = datoDi(scheda, 'sito_ufficiale');
-  const dominio = dominioDi(sito?.valore);
+  // «È l'indirizzo del sito che hai già» è una frase che afferma: solo col sito confermato.
+  const dominio = dominioDi(valoreConfermato(scheda, 'sito_ufficiale'));
   const prodotti = prodottiTipici(scheda, 5);
   const menu = datoDi(scheda, 'menu_testo');
   const indirizzo = datoDi(scheda, 'indirizzo');
   const orari = datoDi(scheda, 'orari');
   const telefono = datoDi(scheda, 'telefono');
   const prenota = datoDi(scheda, 'link_prenotazione');
-  const punti = (scheda?.analisi?.punti_di_forza ?? []).map((x) => x.trim()).filter(Boolean).slice(0, 3);
+  const punti = vociSenzaPrezzo(scheda?.analisi?.punti_di_forza, 3);
 
   const chiSiamo: SezioneSito = punti.length
     ? { titolo: 'Chi siamo', testo: `La storia di ${n}, scritta con te. Da dove partire, da quello che abbiamo trovato: ${elencoUmano(punti)}.`, daConfermare: true, dalLocale: true }
@@ -213,7 +213,7 @@ function postNumero(i: number, nome: string, tipo: TipoAttivita, mese: number, s
 
 /**
  * Il post col dato vero del locale, se la scheda ce l'ha: i prodotti tipici nei post sul prodotto
- * (1°, 8° e 12°), le idee trovate da n8n al posto di tre temi generici (5°, 9° e 11°), gli orari
+ * (1°, 8° e 12°, solo da un menu confermato), le idee trovate da n8n (senza prezzi) al posto di tre temi generici (5°, 9° e 11°), gli orari
  * confermati nella storia delle novità. Senza il dato, `null`: resta il post generico.
  */
 function conIDatiDelLocale(
@@ -224,8 +224,9 @@ function conIDatiDelLocale(
   scheda?: SchedaCliente | null,
 ): Omit<PostDelPiano, 'data'> | null {
   if (!scheda) return null;
-  const prodotti = prodottiTipici(scheda, 8);
-  const idee = (scheda.analisi?.idee_contenuti ?? []).map((x) => x.trim()).filter((x) => x.length >= 3 && x.length <= 140);
+  // Un post esce in pubblico: i prodotti solo da un menu confermato, le idee senza prezzi.
+  const prodotti = prodottiTipici(scheda, 8, true);
+  const idee = vociSenzaPrezzo(scheda.analisi?.idee_contenuti, 3);
   const orari = valoreConfermato(scheda, 'orari');
   const prodotto = (k: number) => prodotti[k % prodotti.length];
   if (prodotti.length && i === 0) return { ...base, tema: `Il prodotto in primo piano: ${prodotto(0)}`, esempio: `Oggi vi presentiamo ${prodotto(0)}. Lo trovate ${luogo} e sulla nostra vetrina MyCity.`, dalLocale: true };

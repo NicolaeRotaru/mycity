@@ -25,7 +25,7 @@ export default function AccettaDalLink({
   const [condizioni, setCondizioni] = useState(false);
   const [invio, setInvio] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
-  const [fatto, setFatto] = useState(false);
+  const [fatto, setFatto] = useState<null | { accessoInviato: boolean }>(null);
 
   async function accetta(e: React.FormEvent) {
     e.preventDefault();
@@ -41,7 +41,7 @@ export default function AccettaDalLink({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, abbonamento: fascia, accettoCondizioni: true }),
       });
-      const corpo = (await r.json().catch(() => null)) as { ok?: boolean; data?: { url?: string | null }; error?: { message?: string } } | null;
+      const corpo = (await r.json().catch(() => null)) as { ok?: boolean; data?: { url?: string | null; accessoInviato?: boolean }; error?: { message?: string } } | null;
       if (!r.ok || !corpo?.ok) {
         setErrore(corpo?.error?.message ?? 'Non sono riuscito a inviare. Riprova fra un momento.');
         return;
@@ -50,7 +50,7 @@ export default function AccettaDalLink({
         window.location.assign(corpo.data.url);
         return;
       }
-      setFatto(true);
+      setFatto({ accessoInviato: corpo.data?.accessoInviato === true });
     } catch {
       setErrore('Non sono riuscito a inviare. Controlla la connessione e riprova.');
     } finally {
@@ -62,7 +62,12 @@ export default function AccettaDalLink({
     return (
       <div role="status" className="mt-6 rounded-2xl border-2 border-olive-300 bg-olive-50 p-5">
         <p className="font-semibold text-ink-900">Fatto, grazie!</p>
-        <p className="mt-1 text-sm text-ink-700">Ti abbiamo scritto a {email}: da lì entri nella tua pagina, dove trovi il preventivo e paghi l’abbonamento.</p>
+        <p className="mt-1 text-sm text-ink-700">
+          {fatto.accessoInviato
+            ? `Ti abbiamo scritto a ${email}: da lì entri nel tuo account.`
+            : 'L’email con il link per entrare non è partita: ti scriviamo noi a breve.'}{' '}
+          L’abbonamento lo paghi riaprendo questo stesso link.
+        </p>
       </div>
     );
   }

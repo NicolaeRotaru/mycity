@@ -24,7 +24,8 @@ export const runtime = 'nodejs';
  */
 
 const INTESTAZIONE = 'x-mycity-segreto';
-const TETTO_SCHEDA = 256 * 1024;
+/** Sotto il limite del database (200.000 byte, migrazione 708): oltre, si risponde 413 e n8n non riprova a vuoto. */
+const TETTO_SCHEDA = 190 * 1024;
 const PREFISSO_DI_SISTEMA = '11111111-1111-1111-1111-';
 
 function arrivaInHttps(req: Request): boolean {
@@ -75,6 +76,9 @@ export async function POST(req: Request): Promise<NextResponse> {
     { id_attivita: id, scheda: { ...scheda, id_attivita: id }, origine: (scheda.origine ?? 'n8n-16').slice(0, 40), aggiornata_il: adesso },
     { onConflict: 'id_attivita' },
   );
+  if (error && String((error as { code?: string }).code) === '23514') {
+    return ApiErrors.payloadTooLarge('La scheda è troppo grande: accorcia il testo del menu o le note.');
+  }
   if (error) {
     logger.error('[scheda-cliente] scheda non salvata', { id, message: error.message });
     return ApiErrors.unavailable('Non sono riuscito a salvare la scheda. Riprova fra poco.');

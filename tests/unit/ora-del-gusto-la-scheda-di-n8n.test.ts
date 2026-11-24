@@ -41,6 +41,7 @@ describe('la scheda: cosa è vero e cosa va confermato', () => {
 
   it('i prodotti tipici vengono dal menu, senza prezzi e senza doppioni', () => {
     expect(prodottiTipici(scheda)).toEqual(['Brioche alla crema', 'Torta di mele']);
+    expect(prodottiTipici(scheda, 8, true)).toEqual([]);
   });
 
   it('una scheda senza tipo giusto, con un id non valido o una fonte che non è un indirizzo web è rifiutata', () => {
@@ -55,6 +56,7 @@ describe('la scheda: cosa è vero e cosa va confermato', () => {
 const db = vi.hoisted(() => ({
   profilo: null as null | { id: string; role: string },
   salvate: [] as Array<Record<string, unknown>>,
+  erroreUpsert: null as null | { code: string; message: string },
 }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@/lib/rate-limit', () => ({
@@ -65,7 +67,7 @@ vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     from: (tabella: string) => {
       if (tabella === 'profiles') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: db.profilo, error: null }) }) }) };
-      if (tabella === 'schede_clienti') return { upsert: async (riga: Record<string, unknown>) => { db.salvate.push(riga); return { error: null }; } };
+      if (tabella === 'schede_clienti') return { upsert: async (riga: Record<string, unknown>) => { if (db.erroreUpsert) return { error: db.erroreUpsert }; db.salvate.push(riga); return { error: null }; } };
       throw new Error(`tabella inattesa ${tabella}`);
     },
   }),
@@ -91,6 +93,7 @@ describe('/api/agenzia/scheda-cliente', () => {
     process.env.N8N_SCHEDA_CLIENTE_SEGRETO = 'segreto-di-prova';
     db.profilo = { id: ODG, role: 'seller' };
     db.salvate = [];
+    db.erroreUpsert = null;
   });
 
   it('con il segreto giusto la scheda si salva intera', async () => {
@@ -125,6 +128,11 @@ describe('/api/agenzia/scheda-cliente', () => {
     db.profilo = null;
     expect((await manda(CORPO)).status).toBe(404);
     expect(db.salvate).toHaveLength(0);
+  });
+
+  it('una scheda oltre il limite del database risponde 413, non «riprova» (n8n non insiste a vuoto)', async () => {
+    db.erroreUpsert = { code: '23514', message: 'violates check constraint' };
+    expect((await manda(CORPO)).status).toBe(413);
   });
 
   it('una scheda fuori formato è rifiutata', async () => {
