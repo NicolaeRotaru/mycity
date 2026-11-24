@@ -134,7 +134,7 @@ describe('lo staff non può approvare un fattorino minorenne', () => {
   });
 });
 
-describe('la riparazione non blocca chi ha l età, né chi la data non ce l ha', () => {
+describe('la riparazione non blocca chi ha l età; il negozio senza data aspetta di scriverla', () => {
   it('trent anni: si approva come prima', async () => {
     profiloBersaglio = {
       id: 'rider-1', role: 'rider', store_name: null, full_name: 'Luca Rossi',
@@ -149,20 +149,39 @@ describe('la riparazione non blocca chi ha l età, né chi la data non ce l ha',
     expect(aggiornamentiProfilo[0]).toMatchObject({ approval_status: 'approved', is_approved: true });
   });
 
-  it('negozio senza data di nascita: si approva lo stesso, non è questa la schermata dove si chiede', async () => {
+  /**
+   * 8/9/2026 la regola era «negozio senza data di nascita: si approva lo stesso», perché i negozi
+   * iscritti prima del campo non avevano nessun posto dove scriverla. 25/11/2026 — il modulo corto
+   * di /sell non chiede più la data all'invio, e senza un freno qui un quindicenne passava con la
+   * sola spunta. Adesso il posto c'è (la pagina «Richiesta in valutazione» di /sell, riquadro
+   * «Dati del titolare»), e il negozio senza data non si approva finché non la scrive.
+   */
+  it('negozio senza data di nascita: non si approva, e il motivo dice dove si scrive', async () => {
     profiloBersaglio = {
       id: 'seller-9', role: 'seller', store_name: 'Pane Quotidiano', full_name: null,
+      legal_first_name: 'Mario', legal_last_name: 'Rossi', legal_fiscal_code: 'RSSMRA80E05G535X',
       legal_birth_date: null,
-      // 1/11/2026: l'approvazione ora pretende una partita IVA valida.
       business_vat_number: '01234567897',
     };
 
     const r = await MODERA(richiesta('approve'));
 
-    expect(
-      r.status,
-      'i negozi iscritti prima che il campo esistesse non si approvano più: riparazione che ne rompe un altra',
-    ).toBe(200);
+    expect(r.status, 'un negozio senza la data di chi firma passava con la sola spunta').toBe(400);
+    expect(JSON.stringify(await r.json())).toContain('Richiesta in valutazione');
+    expect(aggiornamentiProfilo).toHaveLength(0);
+  });
+
+  it('negozio coi dati del titolare maggiorenne: si approva', async () => {
+    profiloBersaglio = {
+      id: 'seller-9', role: 'seller', store_name: 'Pane Quotidiano', full_name: null,
+      legal_first_name: 'Mario', legal_last_name: 'Rossi', legal_fiscal_code: 'RSSMRA80E05G535X',
+      legal_birth_date: nataAnniFa(40),
+      business_vat_number: '01234567897',
+    };
+
+    const r = await MODERA(richiesta('approve'));
+
+    expect(r.status).toBe(200);
     expect(aggiornamentiProfilo[0]).toMatchObject({ approval_status: 'approved', is_approved: true });
   });
 });

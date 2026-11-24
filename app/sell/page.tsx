@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { useProfile } from '@/components/hooks/useProfile';
 import SellerApplicationForm, { type SellerApplicationData } from '@/components/SellerApplicationForm';
+import DatiDelTitolare from '@/components/seller/DatiDelTitolare';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
@@ -121,7 +122,27 @@ export default function SellPage() {
   if (profile?.approval_status === 'pending' && profile?.role === 'seller' && profile?.approval_requested_at && !modifica) {
     return (
       <div className="container mx-auto p-6 max-w-2xl">
-        <PendingNotice requestedAt={profile.approval_requested_at} onModifica={() => setModifica(true)} />
+        <PendingNotice
+          requestedAt={profile.approval_requested_at}
+          onModifica={() => setModifica(true)}
+          titolareMancante={!(profile.legal_first_name && profile.legal_last_name && profile.legal_fiscal_code && profile.legal_birth_date)}
+        />
+        {/* 25/11/2026 — Il modulo corto non chiede chi firma: lo si chiede qui, subito dopo l'invio.
+            Senza questi dati lo staff non approva (lib/admin/regole-approvazione.ts). */}
+        <div className="mt-4">
+          <DatiDelTitolare
+            iniziali={{
+              legalFirstName:     profile.legal_first_name     ?? '',
+              legalLastName:      profile.legal_last_name      ?? '',
+              legalFiscalCode:    profile.legal_fiscal_code    ?? '',
+              legalBirthDate:     profile.legal_birth_date     ?? '',
+              legalResidenceAddr: profile.legal_residence_addr ?? '',
+              legalResidenceCity: profile.legal_residence_city ?? '',
+              legalResidenceZip:  profile.legal_residence_zip  ?? '',
+            }}
+            quandoSalvati={() => invalidaProfiloDiChiEntrato(qc)}
+          />
+        </div>
       </div>
     );
   }
@@ -185,7 +206,7 @@ function SuspendedNotice() {
   );
 }
 
-function PendingNotice({ requestedAt, onModifica }: { requestedAt: string | null; onModifica: () => void }) {
+function PendingNotice({ requestedAt, onModifica, titolareMancante }: { requestedAt: string | null; onModifica: () => void; titolareMancante: boolean }) {
   return (
     <div className="bg-white border-2 border-accent-200 rounded-2xl p-8 text-center">
       <div className="w-20 h-20 mx-auto rounded-2xl bg-accent-100 flex items-center justify-center mb-4">
@@ -202,6 +223,11 @@ function PendingNotice({ requestedAt, onModifica }: { requestedAt: string | null
         Ti contatteremo entro <strong>{TEMPO_RISPOSTA_NEGOZI}</strong> via email e con una notifica in piattaforma.
         Nel frattempo puoi continuare a comprare normalmente.
       </p>
+      {titolareMancante && (
+        <p className="text-sm font-semibold text-ink-900 mb-6 rounded-lg bg-accent-50 border border-accent-200 px-3 py-2">
+          Ultimo passo: qui sotto i dati di chi firma per l&apos;attività. Senza questi non possiamo approvare il negozio.
+        </p>
+      )}
       <div className="flex flex-wrap gap-2 justify-center text-sm">
         {/* ?shop=1: un account negozio senza la modalità acquisto verrebbe rimandato alla dashboard. */}
         <Button href="/?shop=1"><span className="inline-flex items-center gap-2"><Home size={18} aria-hidden /> Continua a comprare</span></Button>

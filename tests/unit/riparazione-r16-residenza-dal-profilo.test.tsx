@@ -123,4 +123,15 @@ describe('R16-010 · la residenza non si precompila con l’indirizzo del profil
       legalResidenceAddr: 'Via Roma 12', legalResidenceCity: 'Piacenza', legalResidenceZip: '29121',
     });
   });
+
+  it('la pagina «Richiesta in valutazione» chiede chi firma, precompilato solo dai dati del titolare', async () => {
+    stato.profilo = {
+      role: 'seller', approval_status: 'pending', approval_requested_at: '2026-11-25T08:00:00Z',
+      ...PROFILO_VECCHIO,
+    };
+    const radice = await monta('@/app/sell/page');
+    expect(radice.querySelector('[data-prova="dati-del-titolare"]'), 'la pagina d’attesa non chiede i dati del titolare').not.toBeNull();
+    expect(radice.textContent).toContain('Ultimo passo');
+    expect(stato.inizialiTitolare).toMatchObject({ legalResidenceAddr: '', legalResidenceCity: '', legalResidenceZip: '' });
+  });
 });

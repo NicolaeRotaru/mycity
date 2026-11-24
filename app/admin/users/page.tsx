@@ -1133,8 +1133,9 @@ function DetailPanel({
         </DetailGroup>
 
         <DetailGroup title="Titolare" icon={User}>
+          {/* 25/11/2026 — Col modulo corto i dati del titolare arrivano dopo l'invio: vuoti si dice. */}
           <DetailRow label="Nome e cognome">
-            {profile.legal_first_name} {profile.legal_last_name}
+            {[profile.legal_first_name, profile.legal_last_name].filter(Boolean).join(' ') || 'non ancora inseriti'}
           </DetailRow>
           <DetailRow label="Email">{profile.email ?? '—'}</DetailRow>
           <DetailRow label="Codice fiscale">
@@ -1151,7 +1152,7 @@ function DetailPanel({
           <DetailRow label="P.IVA"><code>{datoIdentita(datiIdentita, 'business_vat_number')}</code></DetailRow>
           <DetailRow label="Forma giuridica">{profile.business_form ?? '—'}</DetailRow>
           <DetailRow label="Sede legale">
-            {profile.business_address} — {profile.business_city}
+            {[profile.business_address, profile.business_city].filter(Boolean).join(' — ') || 'non ancora inserita'}
           </DetailRow>
           <DetailRow label="PEC">{profile.business_pec ?? '—'}</DetailRow>
         </DetailGroup>

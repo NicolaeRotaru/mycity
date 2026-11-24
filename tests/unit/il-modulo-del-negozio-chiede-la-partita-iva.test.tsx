@@ -76,7 +76,8 @@ describe('il modulo d iscrizione del negozio', () => {
     // Da scrivere a mano restano nome, partita IVA e telefono (l'indirizzo è il selettore della mappa).
     const daScrivere = Array.from(radice.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]), textarea'));
     expect(daScrivere.map((i) => i.getAttribute('name'))).toEqual(['storeName', 'businessVatNumber', 'contactPhone']);
-    expect(radice.textContent, 'il negozio non sa dove mettere il resto').toContain('dal tuo profilo');
+    expect(radice.textContent, 'il negozio non sa dove mettere il resto').toContain('dal tuo pannello');
+    expect(radice.textContent, 'il negozio non sa che dopo gli chiediamo chi firma').toContain('i dati di chi firma');
   });
 
   it('non chiede un email operativa che poi non salviamo, e dice dove scriviamo', async () => {

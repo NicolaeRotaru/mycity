@@ -11,7 +11,7 @@ import { Input, Checkbox } from '@/components/ui/Field';
 // PRIMA di firmare: la commissione qui non si scrive a mano, si prende da dove
 // viene poi trattenuta davvero.
 // R10-005 — Il prezzo dell'abbonamento arriva da dove si calcola l'addebito.
-import { COMMISSIONE_DEL_PERCENTO, FRASE_PREZZO_NEGOZI, IVA_SULLA_COMMISSIONE, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earnings/commissione';
+import { FRASE_PREZZO_NEGOZI, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earnings/commissione';
 import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
 import { Store, Send } from 'lucide-react';
 import { MAX_DETTAGLIO_ATTIVITA, SCHEDE_ATTIVITA, TIPI_ATTIVITA, tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
@@ -106,21 +106,6 @@ const Section = ({
   </section>
 );
 
-const Field = ({
-  label, required, error, children, hint,
-}: { label: string; required?: boolean; error?: string; hint?: string; children: React.ReactNode }) => (
-  <div>
-    <label className="block text-sm font-semibold text-ink-700 mb-1">
-      {label} {required && <span className="text-secondary-600" aria-label="obbligatorio">*</span>}
-    </label>
-    {children}
-    {hint && !error && <p className="text-xs text-ink-400 mt-1">{hint}</p>}
-    {/* secondary-600 e' il bordeaux con cui components/ui/Field.tsx scrive gli errori in tutto
-        il sito: qui c'era la rose di serie di Tailwind, che tailwind.config.ts esclude a parole. */}
-    {error && <p role="alert" aria-live="polite" className="text-xs font-medium text-secondary-600 mt-1">{error}</p>}
-  </div>
-);
-
 export default function SellerApplicationForm({ defaultValues, onSubmit, isLoading = false, emailAccesso = null }: Props) {
   const { register, handleSubmit, watch, formState: { errors } } = useForm<SchemaData>({
     resolver: zodResolver(SellerSchema),
@@ -184,11 +169,9 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         </p>
         <p className="text-primary-100 text-sm leading-relaxed mt-2">
           {/* 31/10/2026 (ondata 6) — Diceva «Nessun costo mensile»: il prezzo dei negozi è una frase sola. */}
-          <strong className="text-white">{FRASE_PREZZO_NEGOZI}</strong>{' '}
-          {ABBONAMENTO_NEGOZI_ACCESO
-            ? `Abbonamento ${PREZZO_ABBONAMENTO_MESE}/mese + commissione ${COMMISSIONE_DEL_PERCENTO} sulle vendite.`
-            : `Commissione ${COMMISSIONE_DEL_PERCENTO} solo sul venduto tramite MyCity, ${IVA_SULLA_COMMISSIONE}.`}
-          {' '}Vale dopo l&apos;approvazione del nostro team.
+          {/* 25/11/2026 — Una volta sola: la frase del prezzo dice già canone e commissione, e la riga
+              che li ripeteva accanto diceva due volte la stessa cosa. */}
+          <strong className="text-white">{FRASE_PREZZO_NEGOZI}</strong> Vale dopo l&apos;approvazione del nostro team.
         </p>
       </div>
 
@@ -237,8 +220,10 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           hint="Come lo chiamano i clienti"
         />
 
-        <Field label={`Indirizzo ${scheda.del}`} required hint="Si vede sulla mappa del marketplace.">
+        {/* L'etichetta la scrive il selettore (associata al campo): qui c'era una seconda etichetta uguale sopra. */}
+        <div>
           <StoreLocationPicker
+            etichetta={`Indirizzo ${scheda.del}`}
             defaultValue={{
               address: defaultValues?.storeAddress,
               lat:     defaultValues?.storeLat,
@@ -249,8 +234,10 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
               if (loc.address.trim()) setLocationError(null);
             }}
           />
-          {locationError && <p role="alert" className="text-xs font-medium text-secondary-600 mt-1">{locationError}</p>}
-        </Field>
+          {locationError
+            ? <p role="alert" className="text-xs font-medium text-secondary-600 mt-1">{locationError}</p>
+            : <p className="text-xs text-ink-400 mt-1">Si vede sulla mappa del marketplace.</p>}
+        </div>
 
         <div className="grid sm:grid-cols-2 gap-4">
           <Input
@@ -317,7 +304,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         )}
       </button>
       <p className="text-center text-xs text-ink-500">
-        Risposta entro 48 ore lavorative. Logo, foto, IBAN e dati per la fattura li aggiungi dopo, dal tuo profilo.
+        Risposta entro 48 ore lavorative. Dopo l&apos;invio ti chiediamo i dati di chi firma.
+        Logo, foto, IBAN e dati per la fattura li aggiungi dal tuo pannello, a negozio approvato.
       </p>
     </form>
   );

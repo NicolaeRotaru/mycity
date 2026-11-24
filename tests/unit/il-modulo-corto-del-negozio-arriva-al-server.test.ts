@@ -180,3 +180,37 @@ describe('i dati del titolare si scrivono dal Profilo', () => {
     expect(stato.avvisi[0][1]).not.toContain('legal_first_name');
   });
 });
+
+describe('i buchi trovati dal collaudo del 25/11', () => {
+  it('un negozio sospeso non riscrive i dati del titolare', async () => {
+    stato.profilo = { role: 'seller', approval_status: 'suspended' };
+    const r = await chiama(salvaTitolare, {
+      legalFirstName: 'Mario', legalLastName: 'Rossi', legalFiscalCode: 'RSSMRA80E05G535X', legalBirthDate: '1980-05-05',
+      legalResidenceAddr: 'Via Roma 1', legalResidenceCity: 'Piacenza', legalResidenceZip: '29121',
+    }, 'PATCH');
+    expect(r.status).toBe(403);
+    expect(stato.scritture).toHaveLength(0);
+  });
+});
+
+describe('lo staff non approva un negozio senza sapere chi firma', async () => {
+  const { motivoPerNonApprovare } = await import('@/lib/admin/regole-approvazione');
+  const negozio = { role: 'seller', approval_status: 'pending', business_vat_number: '01234567897' };
+  const titolare = { legal_first_name: 'Mario', legal_last_name: 'Rossi', legal_fiscal_code: 'RSSMRA80E05G535X', legal_birth_date: '1980-05-05' };
+
+  it('con la sola partita IVA del modulo corto non si approva, e il motivo dice dove scriverli', () => {
+    const motivo = motivoPerNonApprovare(negozio, 'approve', '2026-11-25');
+    expect(motivo).toContain('mancano i dati del titolare');
+    expect(motivo).toContain('data di nascita');
+    expect(motivo).toContain('Richiesta in valutazione');
+  });
+
+  it('basta che manchi la data di nascita: è quella che ferma i minorenni', () => {
+    const { legal_birth_date: _tolta, ...senzaData } = titolare;
+    expect(motivoPerNonApprovare({ ...negozio, ...senzaData }, 'approve', '2026-11-25')).toMatch(/titolare \(data di nascita\)/);
+  });
+
+  it('coi dati del titolare si approva', () => {
+    expect(motivoPerNonApprovare({ ...negozio, ...titolare }, 'approve', '2026-11-25')).toBeNull();
+  });
+});

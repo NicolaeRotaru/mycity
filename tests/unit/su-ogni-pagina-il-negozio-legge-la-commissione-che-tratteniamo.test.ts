@@ -210,7 +210,9 @@ const CASA_DEL_VALORE_AGGANCIATO = '@/app/seller/earnings/commissione';
 
 /** Dove il negozio legge la commissione, e quante volte gliela diciamo. */
 const PAGINE_CON_LA_PROMESSA: Record<string, number> = {
-  'components/SellerApplicationForm.tsx': 2,
+  // 25/11/2026 — Il modulo corto dice il prezzo una volta, con la frase intera (canone + commissione):
+  // la riga accanto ripeteva la stessa commissione.
+  'components/SellerApplicationForm.tsx': 1,
   'app/seller/layout.tsx': 1,
   'components/seller/SubscriptionBanner.tsx': 1,
 };

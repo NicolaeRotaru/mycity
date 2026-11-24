@@ -69,7 +69,12 @@ function richiesta(action: string, extra: Record<string, unknown> = {}): never {
 
 // 01234567897 ha il carattere di controllo giusto; 01234567890 no.
 const PIVA_BUONA = '01234567897';
-const NEGOZIO = { id: 'seller-1', role: 'seller', store_name: 'Pane', full_name: null, legal_birth_date: null, business_vat_number: PIVA_BUONA };
+// 25/11/2026 — Il modulo corto di /sell non chiede più chi firma: per approvare servono anche i
+// dati del titolare (regole-approvazione), e qui si prova la partita IVA, quindi ci sono.
+const NEGOZIO = {
+  id: 'seller-1', role: 'seller', store_name: 'Pane', full_name: null, business_vat_number: PIVA_BUONA,
+  legal_first_name: 'Mario', legal_last_name: 'Rossi', legal_fiscal_code: 'RSSMRA80E05G535X', legal_birth_date: '1980-05-05',
+};
 const FATTORINO = {
   id: 'rider-1', role: 'rider', store_name: null, full_name: 'Luca', legal_birth_date: null,
   kyc_id_doc_front_url: 'rider-1/fronte.jpg', kyc_selfie_url: 'rider-1/selfie.jpg',
