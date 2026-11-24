@@ -77,7 +77,7 @@ export default function CollectionHeader({
         </span>
         <div className="min-w-0">
           <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">{eyebrow}</p>
-          <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
+          <h1 className="mt-0.5 break-words font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
             {title}
           </h1>
           {blurb && <p className="mt-1 text-sm text-ink-500">{blurb}</p>}
