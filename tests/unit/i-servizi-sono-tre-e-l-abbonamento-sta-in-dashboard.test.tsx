@@ -27,6 +27,7 @@ const stato = vi.hoisted(() => ({
   preventivo: null as unknown,
   inVetrina: false as boolean | null,
   approvato: true,
+  erroreLettura: false,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -41,7 +42,11 @@ vi.mock('next/link', async () => {
 });
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (o: { queryKey: readonly unknown[] }) => {
-    if (o.queryKey[1] === 'preventivo-agenzia') return { data: stato.preventivo, isLoading: false, isError: false, refetch: () => undefined };
+    if (o.queryKey[1] === 'preventivo-agenzia') {
+      return stato.erroreLettura
+        ? { data: undefined, isLoading: false, isError: true, error: new Error('guasto'), refetch: () => undefined }
+        : { data: stato.preventivo, isLoading: false, isError: false, refetch: () => undefined };
+    }
     if (o.queryKey[1] === 'in-vetrina') return { data: stato.inVetrina };
     return { data: 0 };
   },
@@ -93,6 +98,7 @@ beforeEach(() => {
   stato.preventivo = vetrina();
   stato.inVetrina = false;
   stato.approvato = true;
+  stato.erroreLettura = false;
 });
 afterEach(() => {
   for (const r of accesi.splice(0)) act(() => r.unmount());
@@ -188,6 +194,13 @@ describe('ogni pagina di servizio è il suo preventivo', () => {
     expect(pulsanti[0].getAttribute('href')).toBe('/seller/abbonamento');
   });
 
+  it('se la lettura non riesce, il pulsante verso l abbonamento resta (collaudo del 24/11)', async () => {
+    stato.erroreLettura = true;
+    const r = await monta(PaginaDelServizio);
+    expect(r.textContent).toContain('Non sono riuscito a leggere la tua vetrina');
+    expect(r.querySelector('a[href="/seller/abbonamento"]')?.textContent).toMatch(/Scegli l.abbonamento/);
+  });
+
   it('la gestione social mostra il piano dei post e la scheda su Google Maps', async () => {
     stato.slug = 'social';
     const r = await monta(PaginaDelServizio);
@@ -205,6 +218,13 @@ describe('la pagina Abbonamento serve solo a scegliere e pagare', () => {
     expect(r.textContent).not.toContain('I formati che ricevi');
     expect(r.textContent).not.toContain('La bozza del tuo sito');
     expect(r.textContent).toContain('Preferisco essere richiamato');
+  });
+
+  it('porta alle pagine dei tre servizi, per rileggere cosa si riceve (collaudo del 24/11)', async () => {
+    const r = await monta(PaginaAbbonamento);
+    for (const href of ['/seller/servizi/foto-video', '/seller/servizi/sito-web', '/seller/servizi/social']) {
+      expect(r.querySelector(`a[href="${href}"]`), href).not.toBeNull();
+    }
   });
 });
 

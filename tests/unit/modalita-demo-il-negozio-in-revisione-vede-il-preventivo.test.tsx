@@ -63,6 +63,13 @@ describe('il negozio in attesa di approvazione', () => {
     expect(html).not.toContain('il-preventivo');
   });
 
+  it('dentro, la striscia in alto porta all abbonamento e alle pagine dei tre servizi (collaudo del 24/11)', () => {
+    const html = disegna();
+    for (const href of ['/seller/abbonamento', '/seller/servizi/foto-video', '/seller/servizi/sito-web', '/seller/servizi/social']) {
+      expect(html).toContain(`href="${href}"`);
+    }
+  });
+
   it('apre anche i suoi prodotti, per prepararli', () => {
     indirizzo = '/seller/products';
     expect(disegna()).toContain('il-preventivo');

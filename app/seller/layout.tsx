@@ -16,7 +16,9 @@ import { Store, Mail, Home, Pencil, X, PauseCircle, Clock, ArrowLeft } from 'luc
 // tratteniamo davvero, cosi' il giorno che cambia questa pagina non resta indietro.
 import { FRASE_PREZZO_NEGOZI } from '@/app/seller/earnings/commissione';
 import { percorsoInRevisione } from '@/lib/auth/decisione-portiere';
-import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
+import { PERCORSO_ABBONAMENTO, hrefServizio } from '@/lib/agenzia/indirizzi-servizi';
+import { SERVIZI_AGENZIA } from '@/lib/agenzia/preventivo';
+import { ETICHETTE_SERVIZI } from '@/components/seller/servizi-nel-menu';
 
 /**
  * Ondata 10 — lo stato della richiesta del negozio, letto davvero.
@@ -233,6 +235,12 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           <Link href="/seller/products" className="font-semibold underline">I tuoi prodotti</Link>
           {' · '}
           <Link href={PERCORSO_ABBONAMENTO} className="font-semibold underline">L’abbonamento</Link>
+          {SERVIZI_AGENZIA.map((id) => (
+            <span key={id}>
+              {' · '}
+              <Link href={hrefServizio(id)} className="font-semibold underline">{ETICHETTE_SERVIZI[id]}</Link>
+            </span>
+          ))}
           {' · '}
           <Link href="/seller/dashboard" className="font-semibold underline">Pagina d’attesa</Link>
         </p>

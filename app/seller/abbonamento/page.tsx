@@ -26,6 +26,8 @@ import {
 } from '@/lib/agenzia/preventivo';
 import { formatPriceFromCents } from '@/lib/format';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
+import { hrefServizio } from '@/lib/agenzia/indirizzi-servizi';
+import { ETICHETTE_SERVIZI } from '@/components/seller/servizi-nel-menu';
 import {
   accettaPreventivo,
   CHIAVE_PREVENTIVO,
@@ -123,6 +125,13 @@ export default function PaginaAbbonamento() {
         sub={`Per ${p.attivita} · ${descriviAttivita(p.tipoAttivita)}. Foto e video, sito web e gestione dei social con Google Maps: tutti e tre in ogni abbonamento.`}
       />
       <p className="-mt-2 mb-4 text-sm font-semibold text-primary-700">{FRASE_PARTNER}</p>
+      {/* Le pagine dei servizi, per chi vuole rileggere cosa riceve prima di scegliere (collaudo del 24/11). */}
+      <nav aria-label="I servizi compresi" className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <span className="text-ink-600">Cosa ricevi:</span>
+        {SERVIZI_AGENZIA.map((id) => (
+          <Link key={id} href={hrefServizio(id)} className="font-semibold text-primary-700 underline underline-offset-2">{ETICHETTE_SERVIZI[id]}</Link>
+        ))}
+      </nav>
 
       {/* Lo stato dell'abbonamento: già pagato, appena pagato, o pagamento annullato (24/11). */}
       {p.attivo ? (

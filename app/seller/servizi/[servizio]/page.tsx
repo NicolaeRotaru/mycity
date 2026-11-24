@@ -50,9 +50,12 @@ export default function PaginaDelServizio() {
         <div className="rounded-2xl border-2 border-cream-300 bg-surface-0 p-5">
           <p className="font-semibold text-ink-900">Non sono riuscito a leggere la tua vetrina</p>
           <p className="mt-1 text-sm text-ink-600">Non vuol dire che manchi qualcosa: vuol dire che la lettura non è riuscita.</p>
-          <button type="button" onClick={() => refetch()} className="mt-3 rounded-lg bg-primary-700 px-4 py-2 text-sm font-bold text-white hover:bg-primary-800">
-            Riprova
-          </button>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Button href={PERCORSO_ABBONAMENTO} iconRight={ArrowRight}>Scegli l&apos;abbonamento</Button>
+            <button type="button" onClick={() => refetch()} className="text-sm font-semibold text-primary-700 underline underline-offset-2">
+              Riprova
+            </button>
+          </div>
         </div>
       )}
 

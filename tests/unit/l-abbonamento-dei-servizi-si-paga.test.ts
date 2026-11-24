@@ -175,7 +175,7 @@ describe('la cassa dell abbonamento dei servizi', () => {
     expect(s.expires_at - Math.floor(Date.now() / 1000)).toBeGreaterThanOrEqual(30 * 60); // la cassa scade presto
     expect(s.success_url).toBe('https://www.mycity-marketplace.com/seller/abbonamento?pagato=1');
     expect(s.cancel_url).toBe('https://www.mycity-marketplace.com/seller/abbonamento?pagato=0');
-    expect(String(stato.opzioniSessioni[0].idempotencyKey)).toMatch(/^servizi:negozio-1:business:50000:\d+$/);
+    expect(String(stato.opzioniSessioni[0].idempotencyKey)).toMatch(/^servizi:negozio-1:business:50000:abbonamento:\d+$/);
   });
 
   it('il canone lo decide il server: un prezzo mandato dal browser non conta', async () => {
