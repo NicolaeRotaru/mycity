@@ -185,15 +185,26 @@ export async function contaVelociInCorso(
   adesso: Date = new Date(),
 ): Promise<number | null> {
   try {
-    const { data, error } = await db
-      .from('orders')
-      .select('user_id, created_at')
-      .eq('delivery_slot', ETICHETTA_ADESSO)
-      .in('delivery_status', STATI_DELLA_CONSEGNA_IN_CORSO);
+    const soglia = adesso.getTime() - ORE_DELLA_VELOCE_IN_CORSO * 3_600_000;
+    const leggi = () =>
+      db
+        .from('orders')
+        .select('user_id, created_at', { count: 'exact' })
+        .eq('delivery_slot', ETICHETTA_ADESSO)
+        .in('delivery_status', STATI_DELLA_CONSEGNA_IN_CORSO);
+    let { data, error, count } = await leggi();
     if (error || !Array.isArray(data)) return null;
+    // R04-013 — Il servizio dati restituisce al massimo 1000 righe per richiesta: se il conteggio vero
+    // è più alto, sono rimaste fuori righe (le veloci dimenticate di sempre possono coprire quelle di
+    // adesso). Allora si rilegge chiedendo al database solo la finestra; se anche così non entra
+    // tutto, il numero non si sa (`null`: un conteggio caduto non vende la veloce).
+    if (typeof count === 'number' && count > data.length) {
+      ({ data, error, count } = await leggi().gte('created_at', new Date(soglia).toISOString()));
+      if (error || !Array.isArray(data)) return null;
+      if (typeof count === 'number' && count > data.length) return null;
+    }
     // La finestra si guarda qui: le veloci aperte sono poche. Una nascita che non si legge conta
     // (non si può dire che sia dimenticata).
-    const soglia = adesso.getTime() - ORE_DELLA_VELOCE_IN_CORSO * 3_600_000;
     const recenti = (data as Array<{ user_id?: unknown; created_at?: unknown }>).filter((r) => {
       const nato = Date.parse(String(r.created_at ?? ''));
       return Number.isNaN(nato) || nato >= soglia;

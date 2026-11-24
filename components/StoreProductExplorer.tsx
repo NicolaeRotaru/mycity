@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Filter, RotateCcw, Star, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { Card } from '@/components/ui/Card';
 import ProductGrid, { type SortOption } from './ProductGrid';
 
 type Props = {
@@ -120,7 +121,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
       </div>
 
       {showFilters && (
-        <div className="bg-white border border-cream-300 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card variant="bordered" radius="2xl" padding="md" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Ordinamento */}
           <div>
             <label htmlFor={idOrdina} className="block text-xs font-semibold text-ink-700 mb-1.5 uppercase tracking-wider">Ordina per</label>
@@ -184,11 +185,11 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
             />
           </div>
 
-          {/* Rating minimo */}
+          {/* Voto minimo */}
           <div>
             <span id={`${idBase}-voto`} className="block text-xs font-semibold text-ink-700 mb-2 uppercase tracking-wider flex items-center gap-1">
               <Star size={11} strokeWidth={2.2} aria-hidden />
-              Rating minimo
+              Voto minimo
             </span>
             <div className="flex gap-1.5" role="group" aria-labelledby={`${idBase}-voto`}>
               {[0, 3, 4, 4.5].map((r) => (
@@ -217,7 +218,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
               </button>
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       <ProductGrid

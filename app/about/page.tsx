@@ -1,6 +1,7 @@
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 import { COMMISSIONE_PERCENTO } from '@/app/seller/earnings/commissione';
 import Link from 'next/link';
+import { Card } from '@/components/ui/Card';
 import {
   Sparkles, MapPin, Handshake, Banknote, Briefcase, Store, ArrowRight,
 } from 'lucide-react';
@@ -168,7 +169,7 @@ export default async function AboutPage() {
       {/* I nostri valori — banda */}
       <section className="bg-cream-100 border-y border-cream-300">
         <div className="container mx-auto px-6 max-w-5xl py-14 md:py-16">
-          <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-3">
+          <h2 className="min-w-0 font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-3 break-words hyphens-auto">
             I nostri valori
           </h2>
           <p className="text-lg leading-relaxed text-ink-700 max-w-[64ch]">
@@ -177,13 +178,13 @@ export default async function AboutPage() {
           <div className="grid md:grid-cols-3 gap-4 mt-6">
             {VALUES.map(({ Icon, title, body }) => (
               // R02-002 — Anche qui, a 320 px col testo al 200%, una parola lunga allargava la pagina di 5 px.
-              <div key={title} className="min-w-0 break-words bg-white border border-cream-300 rounded-xl p-6">
+              <Card key={title} variant="bordered" radius="xl" padding="lg" className="min-w-0 break-words">
                 <span className="w-12 h-12 rounded-lg bg-primary-100 text-primary-700 inline-flex items-center justify-center mb-3.5">
                   <Icon size={22} strokeWidth={2.2} aria-hidden />
                 </span>
                 <h3 className="text-lg font-bold text-ink-900 mb-1.5">{title}</h3>
                 <p className="text-sm leading-relaxed text-ink-600">{body}</p>
-              </div>
+              </Card>
             ))}
           </div>
         </div>
@@ -221,8 +222,8 @@ export default async function AboutPage() {
         {/* CTA band scura */}
         <section className="pb-16">
           <div className="bg-ink-900 text-white rounded-2xl p-8 md:p-11 flex flex-col md:flex-row md:items-center md:justify-between gap-7">
-            <div>
-              <h2 className="font-serif text-2xl md:text-3xl font-extrabold text-white mb-2">
+            <div className="min-w-0">
+              <h2 className="font-serif text-2xl md:text-3xl font-extrabold text-white mb-2 break-words hyphens-auto">
                 Vuoi farne parte?
               </h2>
               <p className="text-white/80 text-base max-w-[46ch]">

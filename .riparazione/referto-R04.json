@@ -1,0 +1,345 @@
+{
+ "sessione": "R04",
+ "aggiornato": "2026-11-24 12:35",
+ "finita": true,
+ "testa": "c0eea2839a9eb82e88925fd82310ad7b78ec5380",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "c0eea2839a9eb82e88925fd82310ad7b78ec5380",
+  "nota": "typecheck + lint (0 errori, 122 avvisi già presenti) + test: 2050 file passati, 1 saltato già alla base; 469 s"
+ },
+ "voci": [
+  {
+   "id": "R04-014",
+   "chiave": "qa-flussi|se il filtro finale sui negozi approvati scarta righe, «carica altri» si ferma",
+   "esito": "gia_riparato_prima",
+   "prova": "lib/queries/griglia-prodotti.ts:419 alla base: Object.defineProperty(tenute, 'righeLette', { value: righeDellaFinestra ?? rows.length, enumerable: false }): la pagina porta le righe lette PRIMA del filtro sui negozi approvati (anche sul ramo della pertinenza, :397). Prove esistenti verdi: npx vitest run tests/unit/riparazione-r02-carica-altri-dopo-il-filtro.test.ts tests/unit/riparazione-r11-carica-altri.test.tsx (12/12)",
+   "nota": "stessa cura della voce gemella sulla griglia (riparata il 17/11); il registro punta a righe vecchie",
+   "verificato_da": "revisore A (opus): file identico fra base e testa; righe 397 e 419 confermate; variante su tutti i rami (pertinenza, categoria madre, prezzo, voto) verde 5/5"
+  },
+  {
+   "id": "R04-012",
+   "chiave": "qa-flussi|«carica altri» sparisce quando una pagina della griglia perde righe al filtro dei negozi",
+   "esito": "gia_riparato_prima",
+   "prova": "components/ProductGrid.tsx alla base: :304 getNextPageParam usa pagineSuccessiva(righeLetteDellaPagina(ultima), …); :775 forseCeNeSonoAltri = cEUnAltraPagina(righeLetteDellaPagina(ultimaPagina), …); :303 structuralSharing: false (commit d4143c9f e fa2f1588). Prova verde: npx vitest run tests/unit/riparazione-r11-carica-altri.test.tsx",
+   "nota": "stessa cura di R04-014, nessun commit nuovo",
+   "verificato_da": "revisore A (opus): righe 303, 304, 775 della base confermate; prove r02/r11 del carica-altri verdi; la griglia non è precaricata dal server, righeLette non si perde"
+  },
+  {
+   "id": "R04-010",
+   "chiave": "performance-percepita|la lettura automatica della griglia con le pagine tutte filtrate non ha un tetto di pagine",
+   "esito": "riparato",
+   "commit": "7ff939f8efa76570a42acdfa872911ebae900980",
+   "file_toccati": [
+    "components/ProductGrid.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-griglia-tetto-pagine.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-griglia-tetto-pagine.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7ff939f8efa76570a42acdfa872911ebae900980^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r04-griglia-tetto-pagine.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Tetto tecnico dichiarato PAGINE_LETTE_DA_SOLA = 5 pagine (la prima compresa): oltre il tetto la griglia non resta sullo scheletro né dice «nessun prodotto», ma mostra «Ancora nessun prodotto da mostrare» con «Carica altri prodotti», una pagina per pressione. Giro di correzione chiesto dal collaudo (commit 1f71b0e0): fermi al tetto con zero prodotti e senza conteggio dal database, la griglia non dichiara più «0 prodotti» al genitore (come già per caricamento ed errore); a pagine finite e vuote lo zero si dice ancora.",
+   "verificato_da": "revisore A (opus): prova verde 3/3 e rossa 2/3 col ProductGrid della base; variante: il tetto si azzera cambiando ricerca e riparte; dopo il tetto «Carica altri» legge una pagina per pressione; 53 file di prova accanto verdi; revisore C (sonnet) sul commit di correzione: zero detto a pagine finite, conteggio giusto dopo «Carica altri»; il genitore può restare sull'ultimo numero (limite di onCount, vedi nuovi_difetti_visti)",
+   "commit_successivi": [
+    "1f71b0e004ed060424045aefeae6848b5a0c0afb"
+   ],
+   "rimesse_successive": [
+    {
+     "commit": "1f71b0e004ed060424045aefeae6848b5a0c0afb",
+     "esito": "regge",
+     "uscita": 0,
+     "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1f71b0e004ed060424045aefeae6848b5a0c0afb^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r04-griglia-tetto-pagine.test.ts --json"
+    }
+   ]
+  },
+  {
+   "id": "R04-004",
+   "chiave": "immagini-media|quattro foto sotto la piega vengono chieste come «urgenti» su ogni home",
+   "esito": "gia_riparato_prima",
+   "prova": "Alla base: components/ProductGrid.tsx:710 priority={prioritaPrimeFoto && !formaFila && i < 4} e la sola griglia della home è una fila (components/home-sections/HomeSectionRenderer.tsx:247 `rail`), quindi in home nessuna foto è urgente; components/home/PromoDeals.tsx:71 priority={false}; components/store-sections/CollectionSection.tsx:98 priority={false} e :156 prioritaPrimeFoto={false}; app/promozioni/page.tsx:138 priority={i < 4} è la prima riga a 4 colonne di una pagina che non è la home.",
+   "nota": "Su telefono /promozioni ha 2 colonne, quindi i<4 rende urgenti due righe: scelta voluta di una riparazione precedente, fuori dalla home, non cambiata.",
+   "verificato_da": "R04 capo squadra: grep di priority= nei quattro file (PromoDeals e CollectionSection priority={false}, ProductGrid solo fuori dalle file)"
+  },
+  {
+   "id": "R04-013",
+   "chiave": "qa-flussi|il conteggio delle veloci in mano non ha filtro di data e oltre 1000 righe esce basso",
+   "esito": "riparato",
+   "commit": "17b320d201e77a333859af8c14b50b279ed68bac",
+   "file_toccati": [
+    "lib/ordini/consegna-veloce.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-veloci-in-mano-oltre-mille.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-veloci-in-mano-oltre-mille.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 17b320d201e77a333859af8c14b50b279ed68bac^ --file lib/ordini/consegna-veloce.ts --prove tests/unit/riparazione-r04-veloci-in-mano-oltre-mille.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Cura solo nel mio file, nessuna prova altrui toccata: contaVelociInCorso calcola la soglia prima di leggere e legge con count:'exact'; se count supera le righe arrivate (taglio a 1000) rilegge con la stessa catena più .gte('created_at', soglia); se la rilettura sbaglia o è ancora tagliata risponde null («non so», che veloceSiPuo tratta già come «la veloce non si vende»). Prova con database finto che taglia a 1000 righe e orologio finto: 1200 vecchie + 2 recenti danno 2, più di 1000 recenti danno null.",
+   "verificato_da": "revisore A (opus) ha trovato questa cura dopo aver smentito il primo esito serve_file_altrui (provata su copie: r02 verde 9/9, 208 file vicini verdi, variante tagliata a 1000 righe 4/4); revisore C (sonnet) sul commit: stessa soglia e campo del filtro JS, stessa catena eq/in, null gestito dai chiamanti, count exact documentato; prova nuova, r02 e tre prove vicine rilanciate verdi",
+   "nota": "Il primo esito era serve_file_altrui (cura con .gte sempre applicata, che rompeva una prova di un'altra sessione): smentito dal collaudo, rifatto nel solo mio file. Caso limite: con la rilettura .gte una riga con created_at NULL non si conta, mentre il filtro JS la conterebbe; solo oltre 1000 righe, e la colonna è di fatto sempre valorizzata."
+  },
+  {
+   "id": "R04-011",
+   "chiave": "qa-flussi|sulla bacheca del fattorino un doppio tocco su un ordine già suo dice «non è più disponibile» invece di «è già tuo»",
+   "esito": "riparato",
+   "commit": "d6bb7968402ecdcd87d593fe30a3efcb65defcca",
+   "file_toccati": [
+    "app/rider/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-bacheca-gia-tuo.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-bacheca-gia-tuo.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d6bb7968402ecdcd87d593fe30a3efcb65defcca^ --file app/rider/page.tsx --prove tests/unit/riparazione-r04-bacheca-gia-tuo.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "prendi_ordine risponde NON_PIU_DISPONIBILE anche quando l'ordine è già di chi lo chiede: prima di dirlo la bacheca legge orders con id e rider_id del fattorino; se è suo scrive «Questo ordine è già tuo.» e porta alla consegna, senza contare di nuovo trackRiderOrderAccepted. La prova monta la pagina col doppio tocco. Giro di correzione chiesto dal collaudo (commit c0eea283): la lettura «è già mio?» guarda anche lo stato (STATI_DELLE_MIE_CONSEGNE_APERTE, la costante della pagina), così un ordine suo ma annullato resta «non è più disponibile».",
+   "verificato_da": "revisore A (opus): prova verde 2/2; letta la migrazione 661 (NON_PIU_DISPONIBILE anche per un ordine già suo); il filtro rider_id esclude gli ordini di altri, il ramo d'errore torna a «non è più disponibile»; l'evento non si conta due volte; revisore C (sonnet) sul commit di correzione: la costante è il CHECK di migrations/011 meno DELIVERED e CANCELED, colonna delivery_status vera",
+   "commit_successivi": [
+    "c0eea2839a9eb82e88925fd82310ad7b78ec5380"
+   ],
+   "rimesse_successive": [
+    {
+     "commit": "c0eea2839a9eb82e88925fd82310ad7b78ec5380",
+     "esito": "regge",
+     "uscita": 0,
+     "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c0eea2839a9eb82e88925fd82310ad7b78ec5380^ --file app/rider/page.tsx --prove tests/unit/riparazione-r04-bacheca-gia-tuo.test.ts --json"
+    }
+   ]
+  },
+  {
+   "id": "R04-015",
+   "chiave": "stati-ui|sulla bacheca del fattorino, se l’interruttore online riesce ma la rilettura dopo cade, la scheda resta sul vecchio stato",
+   "esito": "riparato",
+   "commit": "0e655d33e4a4d924ead87950f3e492e013506f63",
+   "file_toccati": [
+    "app/rider/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-interruttore-rilettura-caduta.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-interruttore-rilettura-caduta.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0e655d33e4a4d924ead87950f3e492e013506f63^ --file app/rider/page.tsx --prove tests/unit/riparazione-r04-interruttore-rilettura-caduta.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Nell'onSuccess di toggleOnline lo stato scritto entra subito in rider.pref con qc.setQueryData, prima della rilettura: se la rilettura cade, scheda e interruttore mostrano lo stato nuovo, cioè quello vero. La prova monta la pagina, accende e spegne con la rilettura che cade.",
+   "verificato_da": "revisore A (opus): prova verde 3/3; setQueryData scrive la stessa forma della queryFn e non tocca le zone; rider.pref usato solo da questa pagina; toggle fallito non tocca la memoria"
+  },
+  {
+   "id": "R04-006",
+   "chiave": "layout-responsive|il titolo di collectionheader non va a capo sulle parole lunghe a 280 px col testo al 200%",
+   "esito": "riparato",
+   "commit": "83390c94a1e035561becf847a2331692377c8ae6",
+   "file_toccati": [
+    "components/CollectionHeader.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-titolo-collezione-a-capo.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-titolo-collezione-a-capo.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 83390c94a1e035561becf847a2331692377c8ae6^ --file components/CollectionHeader.tsx --prove tests/unit/riparazione-r04-titolo-collezione-a-capo.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "insieme_a": [
+    "R04-007"
+   ],
+   "cosa_ho_fatto": "Aggiunto break-words all'h1 di CollectionHeader (il contenitore aveva già min-w-0); prova di render sulle classi.",
+   "verificato_da": "revisore B (opus): prova rilanciata; markup vero di CollectionHeader misurato in Chromium a 280 px col testo al 200%, prima e dopo, con 4 titoli e i rami emoji/icona: prima l'h1 era largo 753 px in una colonna di 136 px, dopo resta nella colonna"
+  },
+  {
+   "id": "R04-007",
+   "chiave": "layout-responsive|il titolo grande di collectionheader esce dalla riga a 280 px col testo al 200%",
+   "esito": "riparato",
+   "commit": "83390c94a1e035561becf847a2331692377c8ae6",
+   "file_toccati": [
+    "components/CollectionHeader.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-titolo-collezione-a-capo.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-titolo-collezione-a-capo.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 83390c94a1e035561becf847a2331692377c8ae6^ --file components/CollectionHeader.tsx --prove tests/unit/riparazione-r04-titolo-collezione-a-capo.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "insieme_a": [
+    "R04-006"
+   ],
+   "cosa_ho_fatto": "Stessa riga della voce gemella: un solo commit, break-words sull'h1.",
+   "verificato_da": "revisore B (opus): stessa misura; il titolo grande è text-3xl (60 px al 200%) e resta nella colonna; sm:text-[32px] non scatta a 280 px; un solo h1 per tutti i rami"
+  },
+  {
+   "id": "R04-005",
+   "chiave": "layout-responsive|in chi siamo altri due titoli h2 non hanno break-words né min-w-0, come quello riparato",
+   "esito": "riparato",
+   "commit": "fe677c2587383e923399cb03e05af095c1918fd5",
+   "file_toccati": [
+    "app/about/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-chi-siamo-altri-titoli.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-chi-siamo-altri-titoli.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fe677c2587383e923399cb03e05af095c1918fd5^ --file app/about/page.tsx --prove tests/unit/riparazione-r04-chi-siamo-altri-titoli.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "«I nostri valori» e «Vuoi farne parte?» hanno break-words hyphens-auto, con min-w-0 sul titolo (il primo) e sulla colonna flex che contiene il secondo; la prova monta la pagina vera e controlla ogni h2.",
+   "verificato_da": "revisore B (opus): prova rilanciata; markup vero di AboutPage misurato in Chromium a 280 px e 200%: «Vuoi farne parte?» prima 133 px in 56 px, dopo non esce; tutti gli h1/h2 della pagina hanno break-words. Nota: il min-w-0 sull'h2 di riga 172 non ha effetto (non è figlio di flex/grid) ma non fa danno"
+  },
+  {
+   "id": "R04-003",
+   "chiave": "immagini-media|il logo del negozio del mese viene ritagliato a quadrato",
+   "esito": "gia_riparato_prima",
+   "prova": "components/home/ShopOfMonthHero.tsx:96 src={logoNegozio(seller.store_logo, 176)} (solo larghezza, niente ritaglio) e :101 className=\"object-contain w-full h-full\"; sizedImage(...,'card') non c'è più nel file, identico alla base.",
+   "verificato_da": "R04 capo squadra: righe 94-102 lette, object-contain e logoNegozio solo larghezza; git diff base..testa vuoto sul file"
+  },
+  {
+   "id": "R04-008",
+   "chiave": "microcopy|nella pagina del negozio il filtro dice ancora «rating minimo», mentre ricerca e categoria ora dicono «voto minimo»",
+   "esito": "riparato",
+   "commit": "f37a158451099f58121cd49214258dd30bc82ebd",
+   "file_toccati": [
+    "components/StoreProductExplorer.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-voto-minimo-negozio.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-voto-minimo-negozio.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f37a158451099f58121cd49214258dd30bc82ebd^ --file components/StoreProductExplorer.tsx --prove tests/unit/riparazione-r04-voto-minimo-negozio.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La scritta del gruppo del voto da «Rating minimo» a «Voto minimo», la stessa di messages/it.json search.minRating usata da ricerca e categoria; la prova monta il componente, apre i filtri e legge l'etichetta.",
+   "verificato_da": "revisore B (opus): prova rilanciata; nessun altro «rating» visibile nel file (restano solo commenti); stessa parola di messages/it.json:83 search.minRating"
+  },
+  {
+   "id": "R04-001",
+   "chiave": "coerenza-brand|card a mano con bg-surface-0 restano fuori dal conteggio delle card ridisegnate",
+   "esito": "gia_riparato_prima",
+   "prova": "app/rider/earnings/page.tsx:214 e :220 sono <Card variant=\"surface\" radius=\"lg\" padding=\"none\">; l'unico bg-surface-0 rimasto nel file è un pulsante-filtro (riga 119), non una card. Già coperto da tests/unit/riparazione-r07-guadagni-fattorino-card.test.ts (verde).",
+   "nota": "le card a mano con bg-surface-0 della bacheca (app/rider/page.tsx) sono state portate a Card nel commit di R04-002",
+   "verificato_da": "R04 capo squadra: grep di bg-surface-0 e <Card in app/rider/earnings/page.tsx (214 e 220 sono Card; 119 è un pulsante)"
+  },
+  {
+   "id": "R04-002",
+   "chiave": "coerenza-brand|la primitiva card è usata in 10 file, mentre 141 card sono ridisegnate a mano con quattro raggi diversi",
+   "esito": "parziale",
+   "commit": "c9e92ee5c69840aa8626e221de6f220bc3c05b63",
+   "file_toccati": [
+    "app/about/page.tsx",
+    "app/rider/page.tsx",
+    "components/ProductGrid.tsx",
+    "components/StoreProductExplorer.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-card-a-mano-miei-file.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-card-a-mano-miei-file.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c9e92ee5c69840aa8626e221de6f220bc3c05b63^ --file app/about/page.tsx,app/rider/page.tsx,components/ProductGrid.tsx,components/StoreProductExplorer.tsx --prove tests/unit/riparazione-r04-card-a-mano-miei-file.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Il raggio per contesto è già deciso in components/ui/Card.tsx (xl contenuto, 2xl prodotto/negozio, lg riquadro interno): 10 riquadri a mano dei miei file (5 in app/rider/page.tsx, 1 in app/about/page.tsx, 3 in components/ProductGrid.tsx, 1 in components/StoreProductExplorer.tsx) sono ora <Card> con variante, raggio e padding equivalenti, stesso elemento div, key conservate.",
+   "cosa_resta": "Restano a mano: app/rider/page.tsx:515 (card con aria-live: Card non passa aria-live, servirebbe una prop in più sulla primitiva); app/rider/page.tsx:520-526 (riquadro online/offline, classi in un template literal); app/rider/page.tsx:634 (bordo accent-2); le caselle dei numeri di app/about/page.tsx:125-129 (le cercano a mano nel sorgente tests/unit/riparazione-r03-chi-siamo-testo-grande.test.ts:37 e tests/unit/riparazione-r21-chi-siamo-riquadro.test.ts:13); i due riquadri decorativi con gradiente di app/about/page.tsx:160 e :196; i circa 125 riquadri 'bg-white border border-cream-300|surface-200 rounded-*' in file di altre sessioni di app/ e components/, da convertire con lo stesso schema (Card variant bordered|quiet|surface + radius xl/2xl/lg) da chi possiede quei file. La prova nuova guarda solo i div con className su una riga.",
+   "verificato_da": "revisore B (opus): diff riquadro per riquadro contro Card.tsx e lib/cn.ts (elemento, prop, classi di sfondo/bordo/raggio/padding equivalenti, nessun conflitto), prova rilanciata, 73 file di prova accanto verdi, tsc 0; ha corretto il conto (10, non 11) e completato cosa_resta"
+  },
+  {
+   "id": "R04-009",
+   "chiave": "mobile-pwa|il manifest del sito ha la registrazione vecchia: la voce parlava di orientation portrait che alla base non c'è",
+   "esito": "gia_riparato_prima",
+   "prova": "grep -c orientation public/manifest.json = 0; la registrazione è quella nuova: app/layout.tsx:126-127 e :243 scrive <link rel=\"manifest\" href=\"/manifest.json\"> nel <head>, con prova tests/unit/riparazione-r10-manifest-nel-head.test.tsx; il manifest ha id, start_url '/?source=pwa', display standalone + display_override, icone any/maskable.",
+   "verificato_da": "R04 capo squadra: grep -c orientation public/manifest.json = 0; app/layout.tsx:127 e :243 collegano il manifest nel head"
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "l'occhiello maiuscolo di CollectionHeader esce dalla colonna a 280 px col testo al 200%",
+   "dimensione": "layout-responsive",
+   "severita": "minore",
+   "file": "components/CollectionHeader.tsx:79",
+   "descrizione": "Occhiello uppercase con tracking largo senza break-words: «CATEGORIA» è 157 px in una colonna di 136 px (esce di circa 21 px nel margine, senza scorrimento laterale); nel ramo emoji il chip da 52 px fissi lascia uscire l'emoji di 56 px."
+  },
+  {
+   "titolo": "il titolo di CollectionHeader da 640 px in su ha una misura in pixel fissi",
+   "dimensione": "layout-responsive",
+   "severita": "minore",
+   "file": "components/CollectionHeader.tsx:80",
+   "descrizione": "sm:text-[32px] non cresce col testo ingrandito dal browser; c'era già prima."
+  },
+  {
+   "titolo": "in chi siamo i due pulsanti della fascia scura finale escono dalla fascia a 280 px col testo al 200%",
+   "dimensione": "layout-responsive",
+   "severita": "minore",
+   "file": "app/about/page.tsx:224-247",
+   "descrizione": "Con p-8 la colonna interna resta di 56 px e i pulsanti escono di circa 24 px dalla fascia (senza scorrimento laterale); misurato coi font di riserva; c'era già prima."
+  },
+  {
+   "titolo": "sulla bacheca del fattorino una casella dice ancora «Rating» in inglese",
+   "dimensione": "microcopy",
+   "severita": "minore",
+   "file": "app/rider/page.tsx:560",
+   "descrizione": "La casella del voto del fattorino è scritta «Rating», mentre il resto del sito dice «voto»."
+  },
+  {
+   "titolo": "onCount della griglia non sa dire «non so»: con la griglia ferma al tetto la categoria può restare su un numero vecchio",
+   "dimensione": "stati-ui",
+   "severita": "minore",
+   "file": "app/category/[slug]/page.tsx:176",
+   "descrizione": "resultCount (righe 176 e 597) non si azzera al cambio filtro e onCount accetta solo numeri: con la griglia ferma al tetto di pagine senza prodotti a schermo, o in caricamento/errore, la riga «N prodotti» resta sull'ultimo valore. Serve che onCount accetti null o che il genitore azzeri il conteggio al cambio filtro (file non di R04)."
+  }
+ ],
+ "domande_per_nicola": [],
+ "conto": {
+  "agenti": 6,
+  "subagenti": 6,
+  "nota": "2 riparatori (lotto 1 opus, lotto 2 sonnet), 2 revisori opus, 1 giro di correzione opus, 1 revisore sonnet delle correzioni; tetto di 6 raggiunto, nessuno fermato"
+ },
+ "costo_usd": 16.93,
+ "costo_nota": "usage.cost_usd di get_session senza id, letto prima della consegna; il campo si aggiorna a turno chiuso, quindi non conta ancora l'ultimo turno (giro di correzione, revisore C, verify)"
+}

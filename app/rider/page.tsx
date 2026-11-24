@@ -15,6 +15,7 @@ import { type OrderStatus } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
@@ -370,6 +371,21 @@ export default function RiderDashboardPage() {
         // R04-007 — Già preso da un altro, o non più pronto (annullato, tornato in preparazione).
         if (esito?.motivo === 'GIA_PRESO') throw new OrdineNonPiuPrendibile('Ordine già preso da un altro rider');
         if (esito?.motivo === 'NON_PIU_DISPONIBILE') {
+          // R04-011 — `prendi_ordine` (661) risponde così anche quando l'ordine è GIÀ di chi chiama: un
+          // doppio tocco su «Accetta», o la presa fatta da un'altra scheda. Prima di dire «non è più
+          // disponibile» si guarda se è già suo (gli ordini suoi il fattorino li legge): se sì, è suo.
+          // Solo se è ancora una consegna aperta: un ordine suo ma annullato non è «già tuo».
+          const { data: { user: io } } = await supabase.auth.getUser();
+          const { data: giaMio } = io
+            ? await supabase
+                .from('orders')
+                .select('id')
+                .eq('id', orderId)
+                .eq('rider_id', io.id)
+                .in('delivery_status', STATI_DELLE_MIE_CONSEGNE_APERTE)
+                .maybeSingle()
+            : { data: null };
+          if ((giaMio as { id?: string } | null)?.id === orderId) return { id: orderId, giaTuo: true };
           throw new OrdineNonPiuPrendibile('Questo ordine non è più disponibile: non è più tra quelli pronti da prendere');
         }
         throw new Error(
@@ -384,7 +400,7 @@ export default function RiderDashboardPage() {
               : "Non siamo riusciti a prendere l'ordine. Riprova.",
         );
       }
-      const data2 = { id: esito.id };
+      const data2 = { id: esito.id, giaTuo: false };
 
       // #44 — Qui c'era una chiamata a `notify()` dal browser. Non ha mai
       // funzionato: la tabella delle notifiche non ha nessuna regola che
@@ -395,9 +411,10 @@ export default function RiderDashboardPage() {
       return data2;
     },
     onSuccess: (data) => {
-      trackRiderOrderAccepted(data.id);
+      // R04-011 — Un ordine già suo non è una presa nuova: non si conta di nuovo e si dice com'è.
+      if (!data.giaTuo) trackRiderOrderAccepted(data.id);
       qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
-      toast.success('Ordine assegnato a te!');
+      toast.success(data.giaTuo ? 'Questo ordine è già tuo.' : 'Ordine assegnato a te!');
       router.push(`/rider/orders/${data.id}`);
     },
     // R04-007 — Un «Accetta» perso perché l'ordine non si può più prendere: esce subito
@@ -427,6 +444,11 @@ export default function RiderDashboardPage() {
       return next;
     },
     onSuccess: (next) => {
+      // R04-015 — La scrittura è riuscita: lo stato nuovo è quello vero. Si mette subito nella scheda,
+      // poi si rilegge: se la rilettura cade la scheda non torna sul vecchio stato.
+      qc.setQueryData<{ online: boolean; zones: string[] }>(queryKeys.rider.pref, (prima) =>
+        prima ? { ...prima, online: next } : prima,
+      );
       qc.invalidateQueries({ queryKey: queryKeys.rider.pref });
       toast.success(next ? 'Sei online! Ora ricevi le consegne disponibili.' : 'Sei offline.');
     },
@@ -544,10 +566,10 @@ export default function RiderDashboardPage() {
           ['Consegne', today ? String(today.count) : '—'],
           ['Rating', rating && rating.count > 0 ? rating.avg.toFixed(1).replace('.', ',') : '—'],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-cream-300 bg-surface-0 px-3 py-2.5 text-center">
+          <Card key={label} variant="surface" radius="lg" padding="none" className="px-3 py-2.5 text-center">
             <p className="font-serif text-[17px] font-extrabold text-ink-900">{value}</p>
             <p className="text-[10px] font-bold uppercase tracking-[0.03em] text-ink-400">{label}</p>
-          </div>
+          </Card>
         ))}
       </div>
 
@@ -666,13 +688,13 @@ export default function RiderDashboardPage() {
 
           <SectionLabel>Ordini disponibili ({available.length})</SectionLabel>
           {available.length === 0 && bachecaGuasta ? null : available.length === 0 ? (
-            <div className="rounded-xl border border-cream-300 bg-surface-0 p-8 text-center text-sm text-ink-500">
+            <Card variant="surface" radius="xl" padding="none" className="p-8 text-center text-sm text-ink-500">
               Nessun ordine pronto al momento. Riprova tra un po'.
-            </div>
+            </Card>
           ) : (
             <div className="flex flex-col gap-2.5">
               {available.map((o) => (
-                <div key={o.id} className="rounded-xl border border-cream-300 bg-surface-0 p-3.5">
+                <Card key={o.id} variant="surface" radius="xl" padding="none" className="p-3.5">
                   <div className="mb-2 flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <Badge variant="new" icon={Package}>Pronto</Badge>
@@ -706,7 +728,7 @@ export default function RiderDashboardPage() {
                       Accetta
                     </Button>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           )}
@@ -718,7 +740,7 @@ export default function RiderDashboardPage() {
               <div className="flex flex-col gap-2.5">
                 {/* R20-002 — Niente più opacity-75: targhetta e compenso scendevano sotto 4,5:1. */}
                 {inPrep.map((o) => (
-                  <div key={o.id} className="rounded-xl border border-cream-300 bg-surface-0 p-3.5">
+                  <Card key={o.id} variant="surface" radius="xl" padding="none" className="p-3.5">
                     <div className="mb-2 flex items-center justify-between">
                       <Badge variant="local" icon={ChefHat}>In preparazione</Badge>
                       <span className="font-bold text-olive-700">{formatPrice(compensoConsegnaEuro(o))}</span>
@@ -729,7 +751,7 @@ export default function RiderDashboardPage() {
                       small
                     />
                     <RigaFascia ordine={o} />
-                  </div>
+                  </Card>
                 ))}
               </div>
             </div>
@@ -737,7 +759,7 @@ export default function RiderDashboardPage() {
         </div>
       ) : statoOnline !== 'offline' ? null : (
         <div className="px-4">
-          <div className="rounded-xl border border-cream-300 bg-surface-0 px-5 py-8 text-center">
+          <Card variant="surface" radius="xl" padding="none" className="px-5 py-8 text-center">
             <span className="mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full bg-olive-50">
               <Power size={26} className="text-olive-600" aria-hidden />
             </span>
@@ -747,7 +769,7 @@ export default function RiderDashboardPage() {
               Gestisci orari e zone nella pagina{' '}
               <Link href="/rider/availability" className="text-olive-700 underline">Turni</Link>.
             </p>
-          </div>
+          </Card>
         </div>
       )}
     </div>
