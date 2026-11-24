@@ -40,6 +40,12 @@ type EsitoProdotto = { productId: string; esito: 'applicato' | 'saltato'; motivo
 /** Quante chiamate al filtro dei contenuti partono insieme. */
 const FILTRI_INSIEME = 5;
 
+/** I motivi dei saltati «di passaggio», quelli che lasciano il lavoro ripetibile. */
+const MOTIVI_DI_PASSAGGIO = new Set([
+  'filtro dei contenuti non disponibile: riprova più tardi',
+  'scrittura non riuscita',
+]);
+
 /** Come Promise.allSettled, ma al massimo `quanti` lavori alla volta. */
 async function aGruppi<T, R>(
   voci: T[],
@@ -120,15 +126,30 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     .order('name');
   // Revisione S10 — Una lettura caduta non deve chiudere il lavoro: si rimette
   // «pronto» e si dice di riprovare (come in catalog-apply-bulk).
-  const rimettiPronto = () =>
-    admin
+  // 24/11/2026 (R01-001) — E l'errore si legge: prima nessuno lo guardava, il
+  // lavoro restava «applicato» e la risposta diceva «puoi riprovare». Il 23505 e'
+  // la 640 (un solo lavoro aperto per negozio): nel frattempo il negozio ha
+  // avviato un altro lavoro, e questo non puo' piu' tornare pronto. Torna il
+  // perche', o null se e' tornato pronto.
+  const rimettiPronto = async (): Promise<string | null> => {
+    const { error } = await admin
       .from('catalog_ai_jobs')
       .update({ status: 'ready', updated_at: new Date().toISOString() })
       .eq('id', job.id)
       .eq('seller_id', user.id);
+    if (!error) return null;
+    logger.error('catalog-batch apply: lavoro non rimesso pronto', { jobId: job.id, sellerId: user.id, status: error.code });
+    return error.code === '23505'
+      ? 'nel frattempo hai avviato un altro lavoro sul catalogo, e questo non può più tornare pronto da ripetere'
+      : 'non sono riuscito a rimettere il lavoro pronto da ripetere';
+  };
   if (erroreCategorie) {
-    await rimettiPronto();
-    return ApiErrors.unavailable('Non riesco a leggere le categorie in questo momento. Riprova fra poco: non ho cambiato niente.');
+    const nonRimesso = await rimettiPronto();
+    return ApiErrors.unavailable(
+      nonRimesso
+        ? `Non riesco a leggere le categorie in questo momento e non ho cambiato niente, ma ${nonRimesso}.`
+        : 'Non riesco a leggere le categorie in questo momento. Riprova fra poco: non ho cambiato niente.',
+    );
   }
   const categories = (categoriesData ?? []) as CategoryRow[];
 
@@ -184,8 +205,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         .eq('seller_id', user.id)
         .in('id', ids);
       if (erroreProdotti) {
-        await rimettiPronto();
-        return ApiErrors.unavailable('Non riesco a leggere il catalogo in questo momento. Riprova fra poco: non ho cambiato niente.');
+        const nonRimesso = await rimettiPronto();
+        return ApiErrors.unavailable(
+          nonRimesso
+            ? `Non riesco a leggere il catalogo in questo momento e non ho cambiato niente, ma ${nonRimesso}.`
+            : 'Non riesco a leggere il catalogo in questo momento. Riprova fra poco: non ho cambiato niente.',
+        );
       }
       const current = new Map((rows ?? []).map((r) => [(r as { id: string }).id, r as unknown as ProductRow]));
 
@@ -341,12 +366,24 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // Ripetere riscrive anche i prodotti gia' entrati con lo stesso testo (una
   // riga di audit in piu' e il filtro rifatto): e' il prezzo per non buttare il
   // lavoro pagato.
-  if (ripetibile) await rimettiPronto();
+  let avviso: string | undefined;
+  if (ripetibile) {
+    const nonRimesso = await rimettiPronto();
+    if (nonRimesso) {
+      // R01-001 — Il lavoro resta chiuso: i saltati «di passaggio» non si
+      // ripetono piu' da qui, e si dice perche' invece di «riprova».
+      ripetibile = false;
+      avviso = nonRimesso;
+      for (const e of esiti) {
+        if (e.esito === 'saltato' && e.motivo && MOTIVI_DI_PASSAGGIO.has(e.motivo)) e.motivo = `${e.motivo.split(':')[0]}: ${nonRimesso}`;
+      }
+    }
+  }
 
   const saltati = esiti.filter((e) => e.esito === 'saltato').length;
   if (saltati > 0) {
     logger.warn('catalog-batch apply: prodotti saltati', { jobId: job.id, sellerId: user.id, saltati, ripetibile });
   }
   logger.info('catalog-batch applied', { jobId: job.id, operation: job.operation, applied });
-  return NextResponse.json({ ok: true, applied, saltati, ripetibile, esiti });
+  return NextResponse.json({ ok: true, applied, saltati, ripetibile, esiti, ...(avviso ? { avviso } : {}) });
 });
