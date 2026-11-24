@@ -383,14 +383,25 @@ export const FRASE_CONDIZIONI =
  * Lo scontrino di partenza è una stima dell'AD per tipo di attività (24/11), non un dato: sulla
  * pagina il titolare lo cambia col suo, e i conti si rifanno.
  */
-export const SCONTRINO_DI_PARTENZA: Record<TipoAttivita, { centesimi: number; cosa: string }> = {
-  negozio: { centesimi: 1_500, cosa: 'scontrini' },
-  bar: { centesimi: 300, cosa: 'colazioni' },
-  ristorante: { centesimi: 2_500, cosa: 'coperti' },
-  artigiano: { centesimi: 2_000, cosa: 'scontrini' },
-  servizi: { centesimi: 3_000, cosa: 'clienti' },
-  altro: { centesimi: 1_500, cosa: 'scontrini' },
+export const SCONTRINO_DI_PARTENZA: Record<TipoAttivita, { centesimi: number; cosa: string; una: string }> = {
+  negozio: { centesimi: 1_500, cosa: 'scontrini', una: 'scontrino' },
+  bar: { centesimi: 300, cosa: 'colazioni', una: 'colazione' },
+  ristorante: { centesimi: 2_500, cosa: 'coperti', una: 'coperto' },
+  artigiano: { centesimi: 2_000, cosa: 'scontrini', una: 'scontrino' },
+  servizi: { centesimi: 3_000, cosa: 'clienti', una: 'cliente' },
+  altro: { centesimi: 1_500, cosa: 'scontrini', una: 'scontrino' },
 };
+
+/**
+ * La frase del pareggio sotto un piano: «Circa 17 € al giorno: l'incasso di 6 colazioni in più al
+ * giorno». Sotto i 10 € al giorno si scrivono i centesimi (con 33 centesimi «circa 0 €» era falso),
+ * e con 1 si usa il singolare (collaudo, 24/11).
+ */
+export function frasePareggio(p: Pareggio, tipo: TipoAttivita): { alGiorno: string; quanti: string } {
+  const unita = SCONTRINO_DI_PARTENZA[tipo];
+  const alGiorno = p.alGiornoCentesimi >= 1_000 ? `${Math.round(p.alGiornoCentesimi / 100)} €` : formatPriceFromCents(p.alGiornoCentesimi);
+  return { alGiorno, quanti: `${p.quanti} ${p.quanti === 1 ? unita.una : unita.cosa}` };
+}
 
 /** I giorni su cui si divide il canone: un mese di calendario. */
 export const GIORNI_DEL_MESE = 30;
@@ -424,13 +435,16 @@ export function cosaCiGuadagni(righe: readonly VoceMancante[], tipo: TipoAttivit
   const oggi: string[] = [];
   const foto = righe.find((r) => r.id === 'foto_video');
   if (foto) oggi.push(`Chi apre la tua vetrina su MyCity oggi trova questo: ${foto.perche[0].charAt(0).toLowerCase()}${foto.perche[0].slice(1)}`);
-  if (righe.some((r) => r.id === 'sito_web')) oggi.push('Chi ti cerca per nome su internet non trova una pagina tua.');
+  // Solo il fatto letto dai dati: manca l'indirizzo di un sito suo. Non «non trova una pagina tua»:
+  // la vetrina MyCity è già nella mappa del sito per Google, e spesso ci sono i social (collaudo, 24/11).
+  if (righe.some((r) => r.id === 'sito_web')) oggi.push('Non hai ancora un sito tutto tuo, con il tuo nome.');
   if (righe.some((r) => r.id === 'google_maps')) {
     oggi.push(`Chi cerca «${CERCA_VICINO[tipo]}» vede prima le schede Google complete di orari e foto: se la tua non lo è, vede gli altri.`);
   }
   return {
     oggi: oggi.slice(0, 3),
-    conNoi: 'Con l’abbonamento le foto, i post, il sito e la scheda Google li facciamo noi, ogni mese. Tu resti al bancone; ai clienti che arrivano pensa MyCity.',
+    // Vera per tutte e tre le fasce: «ogni mese» vale solo per il Premium (collaudo, 24/11).
+    conNoi: 'Con l’abbonamento foto, post, sito e scheda Google li facciamo noi: quanto spesso, lo dice il piano che scegli. Tu resti al bancone; ai clienti che arrivano pensa MyCity.',
   };
 }
 

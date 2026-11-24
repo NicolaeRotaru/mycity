@@ -141,7 +141,7 @@ function postNumero(i: number, nome: string, tipo: TipoAttivita, mese: number): 
     { formato: 'Storia', tema: 'Le novità', esempio: `Cosa c’è di nuovo ${c.luogo} questa settimana? Ve lo mostriamo qui, prima di tutti.` },
     { formato: 'Reel', tema: 'Una giornata in 30 secondi', esempio: `Dall’apertura alla chiusura: una giornata da ${nome} in 30 secondi.` },
     { formato: 'Post foto', tema: 'La domanda che ci fate più spesso', esempio: `La domanda che ci fate più spesso ${c.luogo}, e la nostra risposta.` },
-    { formato: 'Carosello', tema: `${Stagione} a casa tua`, esempio: `${Stagione} con ${nome}: ordina dalla vetrina MyCity e te lo portiamo noi.` },
+    { formato: 'Carosello', tema: 'Il tema del mese, a domicilio', esempio: `${Stagione}: ordina dalla vetrina MyCity di ${nome} e te lo portiamo noi.` },
   ];
   return rotazione[i % rotazione.length];
 }

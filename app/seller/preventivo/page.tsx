@@ -18,6 +18,7 @@ import {
   SERVIZI_AGENZIA,
   canonePrimoMese,
   cosaCiGuadagni,
+  frasePareggio,
   pareggio,
   type Abbonamento,
 } from '@/lib/agenzia/preventivo';
@@ -189,7 +190,11 @@ export default function PreventivoAgenziaPage() {
               />
               <span aria-hidden>€</span>
             </span>
-            <span id="scontrino-nota" className="text-xs text-ink-500">È una stima: scrivi il tuo e i conti sotto ogni piano si rifanno.</span>
+            <span id="scontrino-nota" className="text-xs text-ink-500">
+              {pareggio(p.prezzi[fascia] ?? 30_000, scontrinoCentesimi)
+                ? 'È una stima: scrivi il tuo e i conti sotto ogni piano si rifanno.'
+                : 'Scrivi uno scontrino in euro, per esempio 3,50, per vedere i conti.'}
+            </span>
           </div>
           <fieldset className="mt-4 grid gap-3 sm:grid-cols-3" disabled={!!inviato}>
             <legend className="sr-only">Abbonamento</legend>
@@ -219,11 +224,14 @@ export default function PreventivoAgenziaPage() {
                   <span id={`fascia-${id}-nome`} className="font-serif text-xl font-bold text-ink-900">{f.nome}</span>
                   <span id={`fascia-${id}-prezzo`} className="text-lg font-semibold text-ink-900">{scriviCanone(p.prezzi[id])}</span>
                   {primo !== null && <span className="text-xs font-semibold text-olive-800">Il primo mese {formatPriceFromCents(primo)}</span>}
-                  {pari && (
-                    <span className="mt-2 rounded-lg bg-white px-2 py-1.5 text-xs text-ink-800">
-                      Circa <strong>{Math.round(pari.alGiornoCentesimi / 100)} € al giorno</strong>: l’incasso di <strong>{pari.quanti} {partenza.cosa} in più</strong> al giorno.
-                    </span>
-                  )}
+                  {pari && (() => {
+                    const frase = frasePareggio(pari, p.tipoAttivita);
+                    return (
+                      <span className="mt-2 rounded-lg bg-white px-2 py-1.5 text-xs text-ink-800">
+                        Circa <strong>{frase.alGiorno} al giorno</strong>: l’incasso di <strong>{frase.quanti} in più</strong> al giorno.
+                      </span>
+                    );
+                  })()}
                   <span className="mt-2 text-xs text-ink-600">{f.perChi}</span>
                   <ul id={`fascia-${id}-servizi`} className="mt-3 space-y-1.5 text-xs text-ink-700">
                     {SERVIZI_AGENZIA.map((s) => (

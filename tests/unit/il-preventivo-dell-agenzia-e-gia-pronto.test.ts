@@ -10,6 +10,7 @@ import {
   SCONTRINO_DI_PARTENZA,
   canonePrimoMese,
   cosaCiGuadagni,
+  frasePareggio,
   pareggio,
   NOME_AGENZIA_DI_RISERVA,
   costruisciPreventivo,
@@ -190,11 +191,17 @@ describe('le condizioni e il pareggio (24/11/2026)', () => {
 
   it('il pareggio dice gli euro al giorno e quanti scontrini in più, arrotondati in su', () => {
     // bar, colazione da 3 €: 300 € → 10 €/giorno → 4 colazioni; 500 € → 16,67 → 6; 999 € → 33,30 → 12
-    expect(SCONTRINO_DI_PARTENZA.bar).toEqual({ centesimi: 300, cosa: 'colazioni' });
+    expect(SCONTRINO_DI_PARTENZA.bar).toEqual({ centesimi: 300, cosa: 'colazioni', una: 'colazione' });
     expect(pareggio(30000, 300)).toEqual({ alGiornoCentesimi: 1000, quanti: 4 });
     expect(pareggio(50000, 300)).toEqual({ alGiornoCentesimi: 1667, quanti: 6 });
     expect(pareggio(99900, 300)).toEqual({ alGiornoCentesimi: 3330, quanti: 12 });
     expect(pareggio(50000, 2500)).toEqual({ alGiornoCentesimi: 1667, quanti: 1 });
+  });
+
+  it('la frase del pareggio usa il singolare con 1 e i centesimi sotto i 10 € al giorno', () => {
+    expect(frasePareggio({ alGiornoCentesimi: 1667, quanti: 6 }, 'bar')).toEqual({ alGiorno: '17 €', quanti: '6 colazioni' });
+    expect(frasePareggio({ alGiornoCentesimi: 1667, quanti: 1 }, 'bar').quanti).toBe('1 colazione');
+    expect(frasePareggio({ alGiornoCentesimi: 33, quanti: 1 }, 'ristorante').alGiorno).toMatch(/^0,33\s€$/);
   });
 
   it('senza canone o con uno scontrino non valido il pareggio non si scrive', () => {
@@ -214,11 +221,16 @@ describe('cosa ci guadagni: solo frasi vere', () => {
     const g = cosaCiGuadagni(cosaManca(VUOTA), 'bar');
     expect(g.oggi).toEqual([
       'Chi apre la tua vetrina su MyCity oggi trova questo: la copertina della vetrina non ha nessuna foto del locale.',
-      'Chi ti cerca per nome su internet non trova una pagina tua.',
+      'Non hai ancora un sito tutto tuo, con il tuo nome.',
       'Chi cerca «bar vicino a me» vede prima le schede Google complete di orari e foto: se la tua non lo è, vede gli altri.',
     ]);
     // nessun «X volte», nessuna percentuale: al 24/11 non ci sono dati per dirlo
     expect([...g.oggi, g.conNoi].join(' ')).not.toMatch(/\d+\s*(volte|%)/);
+  });
+
+  it('non dice «non ti trova nessuno» a chi ha i social, e non promette «ogni mese» a tutte le fasce (collaudo, 24/11)', () => {
+    const g = cosaCiGuadagni(cosaManca({ ...VUOTA, socials: { instagram: 'barroma', facebook: 'barroma' } }), 'bar');
+    expect([...g.oggi, g.conNoi].join(' ')).not.toMatch(/non trova una pagina|ogni mese/);
   });
 
   it('a una vetrina completa non dice che manca qualcosa', () => {
