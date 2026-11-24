@@ -5,8 +5,9 @@
  * 23/11/2026 — Nicola: «è dentro preventivo, ma ogni servizio ha la sua voce dentro il menu»,
  * e il nome del partner «si vedrà solo dentro i servizi offerti ai venditori» (dal 24/11 è SDG Agenzia).
  *
- *  · nel menu del venditore c'è il gruppo «Servizi», con una voce per ogni servizio del listino e
- *    «Abbonamento» (24/11/2026: «Il tuo preventivo» e «Scheda Google» non ci sono più);
+ *  · nel menu del venditore c'è il gruppo «Servizi», con una voce per ogni servizio del listino
+ *    (24/11/2026: «Il tuo preventivo» e «Scheda Google» non ci sono più; la sera «Abbonamento» è
+ *    sceso in fondo al menu, sotto il nome del negozio, come su Claude);
  *  · dentro un servizio si accende la voce di quel servizio;
  *  · ogni servizio nomina il partner SDG Agenzia; il menu no;
  *  · un indirizzo che non è di nessun servizio non apre una pagina vuota.
@@ -78,9 +79,9 @@ afterEach(() => {
 });
 
 describe('il menu del venditore', () => {
-  it('ha una voce per ogni servizio del listino, e «Abbonamento» (24/11: niente più «Il tuo preventivo»)', async () => {
+  it('ha una voce per ogni servizio del listino (24/11: niente più «Il tuo preventivo», e «Abbonamento» sta sotto il nome)', async () => {
     const r = await monta(SellerShell, createElement('p', null, 'x'));
-    const attesi = [...SERVIZI_AGENZIA.map((id) => `/seller/servizi/${SLUG_SERVIZIO[id]}`), '/seller/abbonamento'];
+    const attesi = SERVIZI_AGENZIA.map((id) => `/seller/servizi/${SLUG_SERVIZIO[id]}`);
     for (const href of attesi) {
       expect(r.querySelector(`a[href="${href}"]`), `manca la voce ${href}`).not.toBeNull();
     }
@@ -104,11 +105,12 @@ describe('il menu del venditore', () => {
     expect(accese).toEqual(['/seller/servizi/social']);
   });
 
-  it('sulla pagina Abbonamento si accende «Abbonamento»', async () => {
+  it('sulla pagina Abbonamento nessuna voce dei servizi si accende: l abbonamento sta sotto il nome', async () => {
     stato.pathname = '/seller/abbonamento';
     const r = await monta(SellerShell, createElement('p', null, 'x'));
-    const accese = Array.from(r.querySelectorAll('a[aria-current="page"]')).map((a) => a.getAttribute('href'));
-    expect(accese).toEqual(['/seller/abbonamento']);
+    const accese = Array.from(r.querySelectorAll('nav a[aria-current="page"]')).map((a) => a.getAttribute('href'));
+    expect(accese).toEqual([]);
+    expect(r.querySelector('nav a[href="/seller/abbonamento"]')).toBeNull();
   });
 });
 

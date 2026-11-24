@@ -1,4 +1,4 @@
-import { BadgeCheck, Globe, Share2, TrendingUp, Video, type LucideIcon } from 'lucide-react';
+import { Globe, Share2, TrendingUp, Video, type LucideIcon } from 'lucide-react';
 import { LISTINO, SERVIZI_AGENZIA, type ServizioAgenzia } from '@/lib/agenzia/preventivo';
 import { PERCORSO_ABBONAMENTO, hrefServizio } from '@/lib/agenzia/indirizzi-servizi';
 
@@ -10,6 +10,10 @@ import { PERCORSO_ABBONAMENTO, hrefServizio } from '@/lib/agenzia/indirizzi-serv
  * servizio, nell'ordine del listino, e in fondo «Abbonamento», la pagina dove si sceglie e si
  * paga. Le voci dei servizi nascono da SERVIZI_AGENZIA: un servizio nuovo nel listino ha la sua
  * voce senza toccare il menu.
+ *
+ * 24/11/2026, sera — Nicola: «usa la tecnica di Claude: lo metti nelle impostazioni, però è sempre
+ * visibile». «Abbonamento» esce dal gruppo: sta in fondo al menu, sotto il nome del negozio col
+ * piano scritto («Piano Business»), e nel Profilo (components/seller/MenuAccount.tsx).
  */
 
 const ICONE: Record<ServizioAgenzia, LucideIcon> = {
@@ -32,10 +36,11 @@ export { PERCORSO_ABBONAMENTO, hrefServizio };
 
 export type VoceDelMenu = { href: string; icon: LucideIcon; label: string };
 
-export const VOCI_SERVIZI: VoceDelMenu[] = [
-  ...SERVIZI_AGENZIA.map((id) => ({ href: hrefServizio(id), icon: ICONE[id], label: ETICHETTE_SERVIZI[id] })),
-  { href: PERCORSO_ABBONAMENTO, icon: BadgeCheck, label: 'Abbonamento' },
-];
+export const VOCI_SERVIZI: VoceDelMenu[] = SERVIZI_AGENZIA.map((id) => ({
+  href: hrefServizio(id),
+  icon: ICONE[id],
+  label: ETICHETTE_SERVIZI[id],
+}));
 
 /** Il titolo intero del servizio, per la pagina. */
 export const titoloServizio = (id: ServizioAgenzia) => LISTINO[id].titolo;

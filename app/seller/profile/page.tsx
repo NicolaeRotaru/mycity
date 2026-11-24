@@ -15,6 +15,7 @@ import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
 import type { StoreHours } from '@/lib/store-hours';
 import VendorForm, { type VendorFormData } from '@/components/VendorForm';
 import GestisciAbbonamento from '@/components/seller/GestisciAbbonamento';
+import PianoNelProfilo from '@/components/seller/PianoNelProfilo';
 import PushNotificationOptIn from '@/components/PushNotificationOptIn';
 import DatiPerIBonifici from '@/components/seller/DatiPerIBonifici';
 import CanaliDelNegozio from '@/components/seller/CanaliDelNegozio';
@@ -128,6 +129,10 @@ export default function SellerProfilePage() {
       <div className="bg-olive-50 border border-olive-200 rounded-lg p-4 text-olive-800 text-sm flex items-center gap-2">
         <CheckCircle2 size={16} aria-hidden className="shrink-0" /> Negozio attivo · I tuoi prodotti sono visibili nel marketplace
       </div>
+
+      {/* 24/11/2026 — Nicola: «lo metti nelle impostazioni, però è sempre visibile». Il piano sta
+          qui, in cima alle impostazioni, e in fondo al menu sotto il nome del negozio. */}
+      <PianoNelProfilo />
 
       {/* 5/11/2026 (S08) — Le notifiche sul telefono si accendevano solo dalle impostazioni del
           cliente, che dal pannello del negozio non si raggiungono: un nuovo ordine arrivava

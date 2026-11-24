@@ -9,7 +9,8 @@
  * social. E gestione di social dentro è compreso anche Google Maps», e poi «la sezione abbonamento
  * deve essere nella home page, nel dashboard del venditore… e le voci dei servizi mettili in alto».
  *
- *  · il gruppo «Servizi» è il secondo del menu, con Foto e video, Sito web, Gestione social, Abbonamento;
+ *  · il gruppo «Servizi» è il secondo del menu, con Foto e video, Sito web, Gestione social (dalla
+ *    sera del 24/11 «Abbonamento» sta in fondo al menu, sotto il nome del negozio, come su Claude);
  *  · i servizi sono tre, e la gestione social comprende la scheda Google Maps;
  *  · i vecchi indirizzi /seller/preventivo… portano ai nuovi, anche dal portiere vero;
  *  · la dashboard ha il riquadro «Abbonamento» nei tre stati (da scegliere, attivo, pagamento non riuscito);
@@ -107,23 +108,24 @@ afterEach(() => {
 });
 
 describe('il menu: «Servizi» è il secondo gruppo, coi servizi in alto', () => {
-  it('dopo Dashboard, Ordini e Prodotti e prima di «Crescita», con le quattro voci in ordine', async () => {
+  it('dopo Dashboard, Ordini e Prodotti e prima di «Crescita», con le voci dei servizi in ordine', async () => {
     const r = await monta(SellerShell, null, createElement('p', null, 'x'));
     const testi = Array.from(r.querySelectorAll('nav *')).filter((n) => n.children.length === 0).map((n) => n.textContent?.trim() ?? '');
     const indice = (t: string) => testi.indexOf(t);
     expect(indice('Prodotti')).toBeGreaterThan(-1);
     expect(indice('Servizi')).toBeGreaterThan(indice('Prodotti'));
     expect(indice('Crescita')).toBeGreaterThan(indice('Servizi'));
-    const voci = ['Foto e video', 'Sito web', 'Gestione social', 'Abbonamento'].map(indice);
+    const voci = ['Foto e video', 'Sito web', 'Gestione social', 'Analisi del business'].map(indice);
     expect(voci.every((i) => i > indice('Servizi') && i < indice('Crescita')), `voci: ${voci}`).toBe(true);
     expect([...voci].sort((a, b) => a - b)).toEqual(voci);
     expect(testi).not.toContain('Il tuo preventivo');
     expect(testi).not.toContain('Scheda Google');
+    expect(testi).not.toContain('Abbonamento'); // sta sotto il nome del negozio (MenuAccount)
   });
 
   it('le voci portano alle pagine nuove', async () => {
     const r = await monta(SellerShell, null, createElement('p', null, 'x'));
-    for (const href of ['/seller/servizi/foto-video', '/seller/servizi/sito-web', '/seller/servizi/social', '/seller/servizi/analisi', '/seller/abbonamento']) {
+    for (const href of ['/seller/servizi/foto-video', '/seller/servizi/sito-web', '/seller/servizi/social', '/seller/servizi/analisi']) {
       expect(r.querySelector(`a[href="${href}"]`), href).not.toBeNull();
     }
     expect(r.querySelector('a[href^="/seller/preventivo"]')).toBeNull();
