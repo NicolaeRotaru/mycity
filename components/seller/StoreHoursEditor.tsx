@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import { Plus, X } from 'lucide-react';
 import { orariImpostati, type StoreHours, type HoursInterval } from '@/lib/store-hours';
 import { DAYS, erroreDelleFasce, prossimaFascia } from './orari-validi';
@@ -14,10 +15,14 @@ interface Props {
 
 /** Editor visuale degli orari di apertura (più fasce/giorno per la pausa pranzo). */
 export default function StoreHoursEditor({ value, onChange }: Props) {
+  // 24/11/2026 — Il valore «senza orari» da cui questo editor ha riempito la settimana (vedi sotto):
+  // serve a tornarci quando il negoziante annulla con la X tutte le fasce che ha aggiunto.
+  const senzaOrari = useRef<StoreHours | null>(null);
   // 31/10/2026 — Si scrive sempre la settimana intera: un giorno mai toccato diventa «chiuso» (lista
   // vuota), come lo mostra già questo editor. Prima restava assente, e chi chiudeva tutti i giorni
   // per le ferie salvava una settimana a metà, che il sito leggeva «orari mai impostati» = sempre aperto.
   const setDay = (key: keyof StoreHours, intervals: HoursInterval[]) => {
+    if (orariImpostati(value) === null) senzaOrari.current = value;
     const settimana: StoreHours = {};
     for (const d of DAYS) settimana[d.key] = value[d.key] ?? [];
     onChange({ ...value, ...settimana, [key]: intervals });
@@ -26,7 +31,16 @@ export default function StoreHoursEditor({ value, onChange }: Props) {
     setDay(key, [...(value[key] ?? []), prossimaFascia(value[key])]);
   };
   const removeInterval = (key: keyof StoreHours, idx: number) => {
-    setDay(key, (value[key] ?? []).filter((_, i) => i !== idx));
+    const resto = (value[key] ?? []).filter((_, i) => i !== idx);
+    // 24/11/2026 — Negozio senza orari: «+ orario» e poi la X è un annullare. Tolta l'ultima fascia
+    // della settimana si torna a «senza orari», non a sette giorni vuoti (= chiuso sempre).
+    // «Chiudi» resta un chiudere: la settimana chiusa per le ferie la scrive lui.
+    const tuttaVuota = DAYS.every((d) => (d.key === key ? resto : value[d.key] ?? []).length === 0);
+    if (tuttaVuota && senzaOrari.current) {
+      onChange(senzaOrari.current);
+      return;
+    }
+    setDay(key, resto);
   };
   const setTime = (key: keyof StoreHours, idx: number, pos: 0 | 1, time: string) => {
     const cur = (value[key] ?? []).map((iv) => [...iv] as HoursInterval);
