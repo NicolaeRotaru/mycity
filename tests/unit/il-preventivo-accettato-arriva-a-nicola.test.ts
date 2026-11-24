@@ -96,7 +96,7 @@ describe('GET /api/seller/preventivo', () => {
     const { data } = (await r.json()) as { data: { attivita: string; tipoAttivita: string; righe: { id: string; perche: string[] }[] } };
     expect(data.attivita).toBe('Bar Roma');
     expect(data.tipoAttivita).toBe('bar');
-    expect(data.righe.map((x) => x.id)).toEqual(['foto_video', 'sito_web', 'social']);
+    expect(data.righe.map((x) => x.id)).toEqual(['foto_video', 'sito_web', 'social', 'analisi']);
     expect(data.righe[0].perche).toContain('1 prodotto è senza foto, su 2 in catalogo.');
   });
 
@@ -185,7 +185,7 @@ describe('POST /api/seller/preventivo', () => {
     expect(corpo.contatti).toEqual({ email: 'bar@esempio.it', telefono: '3331234567' });
     expect(corpo.socials).toEqual({ instagram: 'barroma' });
     expect(corpo.abbonamento).toMatchObject({ id: 'base', nome: 'Base', canoneMeseCentesimi: 30000 });
-    expect(corpo.manca.map((v: { id: string }) => v.id)).toEqual(['foto_video', 'sito_web', 'social']);
+    expect(corpo.manca.map((v: { id: string }) => v.id)).toEqual(['foto_video', 'sito_web', 'social', 'analisi']);
   });
 
   it('un indirizzo n8n non https non riceve niente, e il cliente ha comunque il suo «ricevuto»', async () => {

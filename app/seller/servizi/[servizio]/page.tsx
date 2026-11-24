@@ -10,7 +10,16 @@ import { Button } from '@/components/ui/Button';
 import { ABBONAMENTI, FASCE, FRASE_PARTNER, LISTINO, servizioDaSlug } from '@/lib/agenzia/preventivo';
 import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
-import { CHIAVE_PREVENTIVO, CHIAVE_SCHEDA, leggiPreventivoAgenzia, leggiSchedaDelNegozio, scriviCanone } from '@/components/seller/preventivo-agenzia';
+import AnalisiDelBusiness from '@/components/seller/AnalisiDelBusiness';
+import {
+  CHIAVE_BOZZA_AD,
+  CHIAVE_PREVENTIVO,
+  CHIAVE_SCHEDA,
+  leggiBozzaDellAd,
+  leggiPreventivoAgenzia,
+  leggiSchedaDelNegozio,
+  scriviCanone,
+} from '@/components/seller/preventivo-agenzia';
 
 /**
  * UN SERVIZIO, CON LA SUA VOCE NEL MENU — 23/11/2026, rifatto il 24/11/2026.
@@ -22,6 +31,8 @@ import { CHIAVE_PREVENTIVO, CHIAVE_SCHEDA, leggiPreventivoAgenzia, leggiSchedaDe
  *  · cosa ricevi, già pronto (la bozza del sito, il piano dei post con la scheda Google, i formati);
  *  · com'è compreso in Base, Business e Premium, solo da leggere;
  *  · un solo pulsante, «Scegli l'abbonamento», che porta alla pagina Abbonamento.
+ * L'analisi del business (24/11/2026) al posto di «cosa ricevi» mostra la sua analisi già pronta e
+ * il modulo «I tuoi canali»; la pagina «Sito web» mostra la bozza scritta dall'AD, quando c'è.
  *
  * Il «perché» e i canoni arrivano dal calcolo del server (/api/seller/preventivo): la pagina non
  * decide niente. Se il servizio non manca (per esempio il sito c'è già), lo dice.
@@ -33,6 +44,8 @@ export default function PaginaDelServizio() {
 
   const { data: p, isLoading, isError, refetch } = useQuery({ queryKey: CHIAVE_PREVENTIVO, queryFn: leggiPreventivoAgenzia });
   const { data: scheda } = useQuery({ queryKey: CHIAVE_SCHEDA, queryFn: leggiSchedaDelNegozio });
+  // 24/11/2026 — La bozza del sito scritta dall'AD, se c'è: la pagina «Sito web» mostra quella.
+  const { data: bozzaAd } = useQuery({ queryKey: CHIAVE_BOZZA_AD, queryFn: leggiBozzaDellAd, enabled: id === 'sito_web' });
   const voce = LISTINO[id];
   const riga = p?.righe.find((r) => r.id === id) ?? null;
   const giaAPosto = !!p && !riga && p.giaAPosto.includes(id);
@@ -80,8 +93,12 @@ export default function PaginaDelServizio() {
         </section>
       )}
 
-      {/* Cosa ricevi, già pronto: si vede anche prima di sceglierlo (Nicola, 23/11). */}
-      {p && !giaAPosto && <AnteprimaServizio id={id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} scheda={scheda} />}
+      {/* Cosa ricevi, già pronto: si vede anche prima di sceglierlo (Nicola, 23/11). L'analisi del
+          business (24/11) è la sua analisi vera, coi canali da scrivere. */}
+      {p && id === 'analisi' && <AnalisiDelBusiness scheda={scheda} />}
+      {p && !giaAPosto && id !== 'analisi' && (
+        <AnteprimaServizio id={id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} scheda={scheda} bozzaAd={bozzaAd} />
+      )}
 
       {p && (
         <section className="mt-4 rounded-2xl border border-cream-300 bg-white p-5 sm:p-6 shadow-warm" aria-labelledby="compreso-nei-piani">

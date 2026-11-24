@@ -21,6 +21,7 @@ import { FASCE, ABBONAMENTI, FRASE_PARTNER } from '@/lib/agenzia/preventivo';
 const RADICE = path.resolve(__dirname, '../..');
 const MIGRAZIONE = readFileSync(path.join(RADICE, 'migrations/707_sdg_agenzia_nel_marketplace.sql'), 'utf8');
 const MIGRAZIONE_710 = readFileSync(path.join(RADICE, 'migrations/710_gli_abbonamenti_di_sdg_dicono_i_servizi_a_tre.sql'), 'utf8');
+const MIGRAZIONE_711 = readFileSync(path.join(RADICE, 'migrations/711_l_analisi_del_business_e_la_bozza_del_sito.sql'), 'utf8');
 
 const abbonamento = (p: Partial<ProdottoDelCatalogo> = {}): ProdottoDelCatalogo => ({
   id: ID_PRODOTTO_SDG.base, name: 'Abbonamento Base — 300 € al mese', price: 300,
@@ -119,13 +120,22 @@ describe('i tre prodotti dicono quello che dice il listino', () => {
 
   // 24/11/2026 — Servizi da 4 a 3 (la scheda Google dentro la gestione social) e «si attiva dalla
   // pagina Abbonamento»: la 710 riscrive le descrizioni, che devono essere quelle del listino.
-  it('la migrazione 710 scrive le descrizioni di oggi, coi servizi a 3', () => {
-    const sql = MIGRAZIONE_710.replace(/''/g, "'");
+  it('la migrazione 710 riscrive le descrizioni coi servizi a 3, senza la scheda Google a sé', () => {
+    expect(MIGRAZIONE_710).not.toContain('Scheda Google su Maps:');
+    expect(MIGRAZIONE_710).toContain('Gestione dei social e di Google Maps:');
+    expect(MIGRAZIONE_710).toContain(`p.seller_id = '${SDG_SELLER_ID}'::uuid`);
+  });
+
+  // 24/11/2026 sera — L'analisi del business è il quarto servizio: la 711 riscrive le descrizioni,
+  // che devono essere quelle del listino di oggi (sempre l'ultima migrazione che le scrive).
+  it('la migrazione 711 scrive le descrizioni di oggi, con l analisi del business', () => {
+    const sql = MIGRAZIONE_711.replace(/''/g, "'");
     for (const p of PRODOTTI_SDG) {
       expect(sql).toContain(`('${p.id}'::uuid, '${p.descrizione}')`);
+      expect(p.descrizione).toContain('· Analisi del business:');
       expect(p.descrizione).not.toContain('Scheda Google su Maps:');
       expect(p.descrizione).not.toContain('preventivo');
     }
-    expect(MIGRAZIONE_710).toContain(`p.seller_id = '${SDG_SELLER_ID}'::uuid`);
+    expect(MIGRAZIONE_711).toContain(`p.seller_id = '${SDG_SELLER_ID}'::uuid`);
   });
 });
