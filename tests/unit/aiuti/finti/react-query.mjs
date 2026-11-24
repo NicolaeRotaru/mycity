@@ -77,13 +77,18 @@ export const useMutation = (opzioni) => {
     // vede cosa la pagina rilegge e cosa dice dopo un errore. Le promesse in volo finiscono in
     // `__MUTAZIONI_IN_VOLO__` (se è un array), da aspettare. Chi non la accende non vede niente.
     if (globalThis.__MUTAZIONI_VERE__ && opzioni?.mutationFn) {
+      // 24/11/2026 — Solo un errore di `mutationFn` va in `onError`. Un errore DENTRO `onSuccess` è
+      // un difetto della pagina: deve emergere (la promessa in volo si rompe), non diventare «non
+      // riuscito» e passare inosservato in una prova che guarda il messaggio d'errore.
       const volo = (async () => {
+        let esito;
         try {
-          const esito = await opzioni.mutationFn(variabili);
-          await opzioni.onSuccess?.(esito, variabili);
+          esito = await opzioni.mutationFn(variabili);
         } catch (e) {
           await opzioni.onError?.(e, variabili);
+          return;
         }
+        await opzioni.onSuccess?.(esito, variabili);
       })();
       if (Array.isArray(globalThis.__MUTAZIONI_IN_VOLO__)) globalThis.__MUTAZIONI_IN_VOLO__.push(volo);
     }
