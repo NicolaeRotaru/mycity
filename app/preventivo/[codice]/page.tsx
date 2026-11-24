@@ -133,7 +133,7 @@ export default async function PreventivoDalLink({
         </ul>
       </section>
 
-      <OffertaSuMisura offerta={p.offerta} />
+      <OffertaSuMisura offerta={p.offerta} fascia={p.consigliato} />
 
       <section className="mt-6" aria-labelledby="abbonamenti">
         <h2 id="abbonamenti" className="text-lg font-bold text-ink-900">I tre abbonamenti</h2>

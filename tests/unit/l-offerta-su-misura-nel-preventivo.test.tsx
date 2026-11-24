@@ -12,12 +12,14 @@
  *  · ogni proposta dice da quale abbonamento è compresa, secondo il listino (video e risposte alle
  *    recensioni dal Business);
  *  · nel link col codice solo i dati confermati;
- *  · la pagina Abbonamento la mostra e segna cosa la fascia scelta non comprende; l'avviso a Nicola dice cosa fare.
+ *  · per abbonamento (Nicola, 24/11 sera: «il servizio deve essere anche in base all'abbonamento»): stessi
+ *    dati, cosa facciamo con la fascia scelta, e in breve cosa aggiunge quella sopra; quantità solo da FASCE;
+ *  · l'avviso a Nicola dice cosa fare nella fascia scelta.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { offertaSuMisura, proposteDi, type DatiPerLOfferta } from '@/lib/agenzia/offerta-su-misura';
+import { cosaInFascia, inPiuSalendo, offertaSuMisura, proposteDi, testoOffertaPerAvviso, type DatiPerLOfferta } from '@/lib/agenzia/offerta-su-misura';
 import { SchedaInArrivo, soloConfermati } from '@/lib/agenzia/scheda-cliente';
 import { riassumiPageSpeed, leggiAnalisiCanali } from '@/lib/agenzia/analisi';
 import { costruisciPreventivo, leggiImpostazioniAgenzia, testoAvvisoPreventivo } from '@/lib/agenzia/preventivo';
@@ -77,10 +79,15 @@ describe('le proposte nascono dai dati veri', () => {
     expect(per('foto-copertina').perche).toContain('ha 1 foto del locale');
     expect(per('video-presentazione').daFascia).toBe('business');
     expect(per('sito-prenota').cosa).toContain('Prenota');
-    expect(per('sito-veloce').perche).toContain('42 su 100');
-    expect(per('sito-veloce').fonte).toBe('Google PageSpeed Insights');
-    expect(per('sito-google').perche).toContain('Manca la descrizione');
-    expect(per('social-costanza').cosa).toBe('Da 3 a 8 post al mese su Instagram, preparati e pubblicati da noi');
+    expect(per('sito-rifatto').perche).toContain('42 su 100');
+    expect(per('sito-rifatto').perche).toContain('Manca la descrizione');
+    expect(per('sito-rifatto').fonte).toBe('Google PageSpeed Insights');
+    expect(cosaInFascia(per('sito-rifatto'), 'base')).toContain('in una pagina');
+    expect(cosaInFascia(per('foto-prodotti'), 'base')).toBe('Fotografiamo i prodotti principali fra i 12 senza foto, nella sessione di foto all’avvio');
+    expect(cosaInFascia(per('foto-prodotti'), 'business')).toContain('ogni tre mesi');
+    expect(cosaInFascia(per('social-costanza'), 'base')).toBe('Da 3 a 8 post al mese su Instagram, preparati e pubblicati da noi');
+    expect(cosaInFascia(per('social-costanza'), 'business')).toContain('Da 3 a 12 post al mese');
+    expect(cosaInFascia(per('social-costanza'), 'premium')).toContain('Da 3 a 20 post al mese');
     expect(per('social-costanza').perche).toContain('812 persone');
     expect(per('social-facebook').perche).toContain('non l’abbiamo trovata');
     expect(per('social-idee').cosa).toContain('il laboratorio alle 6 del mattino');
@@ -90,7 +97,11 @@ describe('le proposte nascono dai dati veri', () => {
     expect(per('google-recensioni').perche).toContain('128 recensioni e 4,6 stelle');
     expect(per('google-recensioni').daFascia).toBe('business');
     expect(per('google-orari').perche).toContain('Lun–Sab 7.00–19.30');
-    expect(per('analisi-ogni-mese').daFascia).toBe('business');
+    expect(cosaInFascia(per('analisi'), 'base')).toContain('all’avvio');
+    expect(cosaInFascia(per('analisi'), 'business')).toContain('ogni mese');
+    expect(cosaInFascia(per('analisi'), 'premium')).toContain('un incontro al mese');
+    expect(cosaInFascia(per('video-presentazione'), 'base')).toBeNull();
+    expect(cosaInFascia(per('google-recensioni'), 'base')).toBeNull();
     expect(o.domande).toEqual(['Fate torte su ordinazione?']);
     // chi ha già il sito non si vede proporre un sito nuovo; chi ha la scheda Google non si vede proporre di crearla
     expect(ids(PIENA)).not.toContain('sito-nuovo');
@@ -102,9 +113,9 @@ describe('le proposte nascono dai dati veri', () => {
 
   it('senza scheda e senza analisi: niente numeri dei canali né del sito, solo quello che dice la vetrina', () => {
     const o = offertaSuMisura(VUOTA);
-    expect(o.proposte.map((x) => x.id)).toEqual(['foto-copertina', 'video-presentazione', 'sito-nuovo', 'social-apertura', 'google-scheda', 'analisi-avvio']);
+    expect(o.proposte.map((x) => x.id)).toEqual(['foto-copertina', 'video-presentazione', 'sito-nuovo', 'social-apertura', 'google-scheda', 'analisi']);
     const testo = JSON.stringify(o);
-    expect(testo).not.toMatch(/su 100|recension|follower|persone ti seguono/);
+    expect(testo).not.toMatch(/su 100|\d+ recension|follower|persone ti seguono|stelle/);
     expect(o.domande).toEqual([]);
   });
 
@@ -124,6 +135,29 @@ describe('le proposte nascono dai dati veri', () => {
     expect(tutto).not.toContain('prenota');
     expect(tutto).not.toContain('128');
     expect(pubblica.domande).toEqual([]);
+  });
+
+  it('le correzioni del collaudo: niente cali spacciati per aumenti, niente Facebook mai scritto, niente telefoni', () => {
+    // chi pubblica già 30 post al mese non si vede promettere «da 30 a 8»
+    const tanti = leggiAnalisiCanali({ tipo: 'analisi-canali', id_attivita: ID, fatta_il: '2026-11-24T09:00:00Z', canali: { instagram: { stato: 'fatta', numeri: { post_ultimi_30_giorni: 30 } } } });
+    expect(ids({ ...PIENA, canali: tanti })).not.toContain('social-costanza');
+    const dieci = leggiAnalisiCanali({ tipo: 'analisi-canali', id_attivita: ID, fatta_il: '2026-11-24T09:00:00Z', canali: { instagram: { stato: 'fatta', numeri: { post_ultimi_30_giorni: 10 } } } });
+    const c = offertaSuMisura({ ...PIENA, canali: dieci }).proposte.find((x) => x.id === 'social-costanza')!;
+    expect(c.daFascia).toBe('business');
+    expect(cosaInFascia(c, 'base')).toBeNull();
+    // Facebook non scritto dal titolare: niente «la pagina che ci hai scritto»
+    const soloIg = { ...PIENA, dati: { ...PIENA.dati, socials: { instagram: 'oradelgusto' } } };
+    expect(ids(soloIg)).not.toContain('social-facebook');
+    // telefoni nelle idee e negli orari non escono
+    const conTelefoni = SchedaInArrivo.parse({
+      tipo: 'scheda-cliente', id_attivita: ID,
+      campi: { orari: { valore: 'Lun–Ven 7.00–20.00, info 333 1234567', stato: 'da_confermare', fonte: 'https://example.org' } },
+      analisi: { idee_contenuti: ['Chiama Mario al 3331234567 per il reel'] },
+    });
+    const t = JSON.stringify(offertaSuMisura({ ...VUOTA, scheda: conTelefoni }));
+    expect(t).not.toMatch(/333 ?1234567/);
+    // l'analisi di un sito senza il sito scritto non fa proporre di rifarlo
+    expect(ids({ ...PIENA, dati: { ...PIENA.dati, socials: {} } })).not.toContain('sito-rifatto');
   });
 
   it('proposteDi dà solo quelle del servizio', () => {
@@ -149,27 +183,41 @@ describe('dove si vede', () => {
     return radice;
   }
 
-  it('con la fascia scelta, segna le proposte che quella fascia non comprende', async () => {
+  it('col Base: cosa facciamo per lui col Base, e sotto cosa aggiunge il Business', async () => {
     const o = offertaSuMisura(PIENA);
     const r = await monta(createElement(OffertaSuMisura, { offerta: o, fascia: 'base' }));
-    expect(r.textContent).toContain('La tua offerta su misura');
-    expect(r.querySelector('[data-testid="offerta-riepilogo"]')?.textContent).toContain('tutto è compreso dal Business');
-    const video = r.querySelector('[data-proposta="video-presentazione"]')!;
-    expect(video.textContent).toContain('Dal Business');
-    expect(video.textContent).toContain('non nel Base');
-    expect(r.querySelector('[data-proposta="foto-prodotti"]')!.textContent).toContain('In tutti gli abbonamenti');
+    expect(r.textContent).toContain('La tua offerta su misura, col Base');
+    expect(r.querySelector('[data-proposta="foto-prodotti"]')!.textContent).toContain('prodotti principali');
+    expect(r.querySelector('[data-proposta="social-costanza"]')!.textContent).toContain('Da 3 a 8 post al mese');
+    // il video non è nel Base: non c'è fra le cose comprese, c'è fra quelle in più col Business
+    expect(r.querySelector('[data-proposta="video-presentazione"]')).toBeNull();
+    const inPiu = r.querySelector('[data-testid="offerta-in-piu"]')!;
+    expect(inPiu.textContent).toContain('Col Business, in più per te');
+    expect(inPiu.querySelector('[data-in-piu="video-presentazione"]')).not.toBeNull();
+    expect(inPiu.querySelector('[data-in-piu="social-costanza"]')!.textContent).toContain('12 post al mese');
+    expect(inPiu.querySelector('[data-in-piu="google-recensioni"]')).not.toBeNull();
     expect(r.textContent).toContain('Al primo incontro ti chiediamo');
+  });
+
+  it('col Premium: tutto compreso, coi ritmi del Premium, e niente «in più»', async () => {
+    const o = offertaSuMisura(PIENA);
+    const r = await monta(createElement(OffertaSuMisura, { offerta: o, fascia: 'premium' }));
+    expect(r.querySelector('[data-proposta="analisi"]')!.textContent).toContain('ogni settimana');
+    expect(r.querySelector('[data-proposta="social-costanza"]')!.textContent).toContain('20 post al mese');
+    expect(r.querySelector('[data-testid="offerta-in-piu"]')).toBeNull();
+    expect(inPiuSalendo(o, 'premium')).toBeNull();
   });
 
   it('nella pagina di un servizio solo le sue proposte, senza riepilogo', async () => {
     const o = offertaSuMisura(PIENA);
-    const r = await monta(createElement(OffertaSuMisura, { offerta: o, servizi: ['foto_video'], completa: false, titolo: 'Cosa facciamo per te, su misura' }));
+    const r = await monta(createElement(OffertaSuMisura, { offerta: o, fascia: 'business', servizi: ['foto_video'], completa: false, titolo: 'Cosa facciamo per te, col Business' }));
     expect(Array.from(r.querySelectorAll('[data-proposta]')).map((x) => x.getAttribute('data-proposta'))).toEqual(['foto-prodotti', 'foto-copertina', 'video-presentazione']);
     expect(r.querySelector('[data-testid="offerta-riepilogo"]')).toBeNull();
+    expect(r.querySelector('[data-testid="offerta-in-piu"]')!.textContent).toContain('ogni mese');
   });
 
   it('senza offerta non si disegna niente', async () => {
-    const r = await monta(createElement(OffertaSuMisura, { offerta: undefined }));
+    const r = await monta(createElement(OffertaSuMisura, { offerta: undefined, fascia: 'base' }));
     expect(r.textContent).toBe('');
   });
 
@@ -179,8 +227,8 @@ describe('dove si vede', () => {
       impostazioni: leggiImpostazioniAgenzia({}), adesso: new Date('2026-11-24T10:00:00Z'), scelto: 'base',
     });
     p.offerta = offertaSuMisura(PIENA);
-    const testo = testoAvvisoPreventivo(p, null);
-    expect(testo).toContain('Da fare per lui: Fotografiamo i tuoi 12 prodotti senza foto');
+    const testo = testoAvvisoPreventivo(p, null) + testoOffertaPerAvviso(p.offerta, 'base');
+    expect(testo).toContain('Da fare per lui col Base: Fotografiamo i prodotti principali fra i 12 senza foto');
     expect(testo).not.toContain('Giriamo');
     vi.restoreAllMocks();
   });

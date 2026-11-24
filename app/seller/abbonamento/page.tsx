@@ -180,7 +180,7 @@ export default function PaginaAbbonamento() {
 
         {/* L'offerta su misura (24/11): le cose precise che facciamo per lui, coi suoi dati; la fascia
             scelta segna quelle che comprende. */}
-        <OffertaSuMisura offerta={p.offerta} fascia={fascia} />
+        <OffertaSuMisura offerta={p.offerta} fascia={p.attivo?.fascia ?? fascia} />
 
         {/* I tre abbonamenti: tutti comprendono tutti i servizi, cambia quanto (Nicola, 24/11). */}
         <section className="mt-6" aria-labelledby="le-tre-fasce">

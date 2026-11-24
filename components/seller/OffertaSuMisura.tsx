@@ -1,20 +1,22 @@
-import { Check, Sparkles } from 'lucide-react';
+import { ArrowUpRight, Check, Sparkles } from 'lucide-react';
 import { ABBONAMENTI, FASCE, LISTINO, SERVIZI_AGENZIA, type Abbonamento } from '@/lib/agenzia/preventivo';
-import type { OffertaSuMisura as Offerta, Proposta } from '@/lib/agenzia/offerta-su-misura';
+import { cosaInFascia, inPiuSalendo, type OffertaSuMisura as Offerta, type Proposta } from '@/lib/agenzia/offerta-su-misura';
 
 /**
- * L'OFFERTA SU MISURA — 24/11/2026. Le cose precise che facciamo per questo negozio, coi suoi dati
- * (lib/agenzia/offerta-su-misura.ts). Nella pagina Abbonamento (tutte, con la fascia scelta che
- * segna cosa comprende), nella pagina di ogni servizio (solo le sue) e nel link col codice.
- * Niente hook: si disegna anche sul server.
+ * L'OFFERTA SU MISURA, PER ABBONAMENTO — 24/11/2026.
+ *
+ * Nicola: «sulla base dei dati che hai recuperato sul cliente devi trovare esattamente tutte le cose che
+ * possiamo offrirgli» e, la sera, «il servizio deve essere anche in base all'abbonamento che hanno
+ * scelto». Quindi: le cose precise che facciamo per QUESTO negozio con la fascia che guarda (quella
+ * scelta, o quella attiva, o quella consigliata), e sotto, in breve, cosa aggiunge la fascia sopra.
+ * I dati sono gli stessi; cambia quanto facciamo, solo come dice `FASCE` (lib/agenzia/offerta-su-misura.ts).
+ * Niente hook: si disegna anche sul server (il link col codice).
  */
-
-const ORDINE: Record<Abbonamento, number> = { base: 0, business: 1, premium: 2 };
 
 type Props = {
   offerta: Offerta | null | undefined;
-  /** La fascia che il titolare sta guardando: le proposte che non comprende si dicono «dal Business». */
-  fascia?: Abbonamento | null;
+  /** La fascia di cui si mostra l'offerta. */
+  fascia: Abbonamento;
   /** Solo le proposte di questi servizi (la pagina di un servizio). Assente: tutte, divise per servizio. */
   servizi?: readonly Proposta['servizio'][];
   titolo?: string;
@@ -22,55 +24,69 @@ type Props = {
   completa?: boolean;
 };
 
-export default function OffertaSuMisura({ offerta, fascia, servizi, titolo = 'La tua offerta su misura', completa = true }: Props) {
-  const scelte = (offerta?.proposte ?? []).filter((x) => !servizi || servizi.includes(x.servizio));
-  if (!offerta || scelte.length === 0) return null;
-  const gruppi = SERVIZI_AGENZIA.filter((s) => scelte.some((x) => x.servizio === s));
+export default function OffertaSuMisura({ offerta, fascia, servizi, titolo, completa = true }: Props) {
+  if (!offerta) return null;
+  const delServizio = (x: Proposta) => !servizi || servizi.includes(x.servizio);
+  const comprese = offerta.proposte.filter((x) => delServizio(x) && cosaInFascia(x, fascia) !== null);
+  const salendo = inPiuSalendo(offerta, fascia);
+  const inPiu = (salendo?.voci ?? []).filter((v) => {
+    const x = offerta.proposte.find((p) => p.id === v.id);
+    return x ? delServizio(x) : false;
+  });
+  if (comprese.length === 0 && inPiu.length === 0) return null;
+  const gruppi = SERVIZI_AGENZIA.filter((s) => comprese.some((x) => x.servizio === s));
+  const piuServizi = !servizi || servizi.length > 1;
 
   return (
-    <section aria-labelledby="offerta-su-misura" className="mt-4 rounded-xl border-2 border-primary-200 bg-primary-50/40 p-4 sm:p-5">
+    <section aria-labelledby="offerta-su-misura" data-fascia={fascia} className="mt-4 rounded-xl border-2 border-primary-200 bg-primary-50/40 p-4 sm:p-5">
       <h2 id="offerta-su-misura" className="inline-flex items-center gap-2 font-serif text-lg font-bold text-ink-900">
-        <Sparkles size={18} className="text-primary-700" aria-hidden /> {titolo}
+        <Sparkles size={18} className="text-primary-700" aria-hidden /> {titolo ?? `La tua offerta su misura, col ${FASCE[fascia].nome}`}
       </h2>
       <p className="mt-1 text-sm text-ink-700">
-        Le cose che faremo per te, una per una, prese da quello che sappiamo già della tua attività. Tu non devi fare niente: le facciamo noi.
+        Le cose che faremo per te col {FASCE[fascia].nome}, una per una, prese da quello che sappiamo già della tua attività. Tu non devi fare niente: le facciamo noi.
       </p>
 
       {completa && (
-        <p className="mt-2 text-sm text-ink-800" data-testid="offerta-riepilogo">
-          {ABBONAMENTI.map((f) => `${FASCE[f].nome}: ${offerta.perFascia[f]} su ${offerta.proposte.length}`).join(' · ')}
-          {offerta.tuttoCon && <> — <span className="font-semibold">tutto è compreso dal {FASCE[offerta.tuttoCon].nome}</span></>}
+        <p className="mt-2 text-xs text-ink-600" data-testid="offerta-riepilogo">
+          Per te: {ABBONAMENTI.map((f) => `${FASCE[f].nome} ${offerta.perFascia[f]} ${offerta.perFascia[f] === 1 ? 'cosa' : 'cose'}`).join(' · ')}
         </p>
       )}
 
       <div className="mt-3 space-y-3">
         {gruppi.map((s) => (
           <div key={s}>
-            {!servizi || servizi.length > 1 ? <h3 className="text-xs font-bold uppercase tracking-wide text-ink-700">{LISTINO[s].titolo}</h3> : null}
+            {piuServizi && <h3 className="text-xs font-bold uppercase tracking-wide text-ink-700">{LISTINO[s].titolo}</h3>}
             <ul className="mt-1 space-y-2">
-              {scelte.filter((x) => x.servizio === s).map((x) => {
-                const compresa = !fascia || ORDINE[x.daFascia] <= ORDINE[fascia];
-                return (
-                  <li key={x.id} data-proposta={x.id} className={`rounded-lg border bg-white p-3 ${compresa ? 'border-cream-200' : 'border-dashed border-cream-300 opacity-80'}`}>
-                    <p className="flex items-start gap-1.5 text-sm font-semibold text-ink-900">
-                      <Check size={16} className={`mt-0.5 shrink-0 ${compresa ? 'text-olive-700' : 'text-ink-300'}`} aria-hidden />
-                      <span>{x.cosa}</span>
-                    </p>
-                    <p className="mt-0.5 pl-[22px] text-xs text-ink-600">{x.perche}</p>
-                    <p className="mt-1 pl-[22px] text-[11px] text-ink-500">
-                      <span className={`mr-1 rounded-full px-1.5 py-px font-bold ${x.daFascia === 'base' ? 'bg-olive-100 text-olive-800' : 'bg-amber-100 text-amber-800'}`}>
-                        {x.daFascia === 'base' ? 'In tutti gli abbonamenti' : `Dal ${FASCE[x.daFascia].nome}`}
-                      </span>
-                      {fascia && !compresa && <span className="mr-1 font-semibold text-amber-800">non nel {FASCE[fascia].nome} ·</span>}
-                      fonte: {x.fonte}
-                    </p>
-                  </li>
-                );
-              })}
+              {comprese.filter((x) => x.servizio === s).map((x) => (
+                <li key={x.id} data-proposta={x.id} className="rounded-lg border border-cream-200 bg-white p-3">
+                  <p className="flex items-start gap-1.5 text-sm font-semibold text-ink-900">
+                    <Check size={16} className="mt-0.5 shrink-0 text-olive-700" aria-hidden />
+                    <span>{cosaInFascia(x, fascia)}</span>
+                  </p>
+                  <p className="mt-0.5 pl-[22px] text-xs text-ink-600">{x.perche}</p>
+                  <p className="mt-1 pl-[22px] text-[11px] text-ink-500">fonte: {x.fonte}</p>
+                </li>
+              ))}
             </ul>
           </div>
         ))}
+        {comprese.length === 0 && (
+          <p className="rounded-lg border border-dashed border-cream-300 bg-white p-3 text-sm text-ink-600">
+            Col {FASCE[fascia].nome}, per questo servizio non abbiamo ancora dati abbastanza per una proposta precisa: la facciamo insieme al primo incontro.
+          </p>
+        )}
       </div>
+
+      {salendo && inPiu.length > 0 && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="offerta-in-piu">
+          <p className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-amber-900">
+            <ArrowUpRight size={14} aria-hidden /> Col {FASCE[salendo.fascia].nome}, in più per te
+          </p>
+          <ul className="mt-1 list-disc pl-5 text-sm text-ink-800">
+            {inPiu.map((v) => <li key={v.id} data-in-piu={v.id}>{v.cosa}</li>)}
+          </ul>
+        </div>
+      )}
 
       {completa && offerta.domande.length > 0 && (
         <div className="mt-3">

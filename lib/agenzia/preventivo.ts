@@ -551,8 +551,5 @@ export function testoAvvisoPreventivo(p: Preventivo, telefono: string | null): s
   const contatto = telefono ? ` Telefono: ${telefono}.` : '';
   const primo = canonePrimoMese(p.prezzi[fascia]);
   const primoMese = primo ? `, il primo mese ${formatPriceFromCents(primo)}` : '';
-  // L'offerta su misura (24/11/2026): Nicola sa subito cosa fare per lui, nella fascia scelta.
-  const fattibili = (p.offerta?.proposte ?? []).filter((x) => ABBONAMENTI.indexOf(x.daFascia) <= ABBONAMENTI.indexOf(fascia));
-  const offerta = fattibili.length ? ` Da fare per lui: ${fattibili.slice(0, 8).map((x) => x.cosa).join('; ')}.` : '';
-  return `${p.attivita} sceglie l'abbonamento ${FASCE[fascia].nome} (${scriviCanone(p.prezzi[fascia])}${primoMese}), preventivo ${p.numero}.${manca}${contatto}${offerta}`;
+  return `${p.attivita} sceglie l'abbonamento ${FASCE[fascia].nome} (${scriviCanone(p.prezzi[fascia])}${primoMese}), preventivo ${p.numero}.${manca}${contatto}`;
 }
