@@ -1,13 +1,13 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-24 12:50",
+  "aggiornato": "2026-11-24 13:35",
   "finita": true,
-  "testa": "0689079cc5f48d83ccf0adf853fcf2ea8ed0c002",
+  "testa": "62bbaf4c38ebb688c1ecf11b9d1ff1fbbfc554fe",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "0689079cc5f48d83ccf0adf853fcf2ea8ed0c002",
-    "nota": "typecheck, lint e 2051 file di prova (12540 casi) verdi. Sul commit 841befd4 il verify era rosso per 3 casi in 2 prove esistenti che si aspettano «rider»: tolto con il revert 5a60c8ee."
+    "testa": "62bbaf4c38ebb688c1ecf11b9d1ff1fbbfc554fe",
+    "nota": "typecheck, lint e 2050 file di prova (12538 casi) verdi sulla testa di codice, dopo i revert chiesti dalla regia (R01-008; prove comuni e codice di R01-004)."
   },
   "voci": [
     {
@@ -171,7 +171,7 @@
       "prova_file": [
         "tests/sql/rls/riparazione-r01-domanda-avvisa-il-negozio.test.sql"
       ],
-      "prova_comando": "psql -d <db di prova ricostruito con tests/sql/harness/apply.sh> -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r01-domanda-avvisa-il-negozio.test.sql",
+      "prova_comando": "tests/sql/harness/apply.sh mycity_test && psql -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r01-domanda-avvisa-il-negozio.test.sql",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
@@ -195,7 +195,7 @@
       "prova_file": [
         "tests/sql/rls/riparazione-r01-risposta-avvisa-chi-chiede.test.sql"
       ],
-      "prova_comando": "psql -d <db di prova ricostruito con tests/sql/harness/apply.sh> -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r01-risposta-avvisa-chi-chiede.test.sql",
+      "prova_comando": "tests/sql/harness/apply.sh mycity_test && psql -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r01-risposta-avvisa-chi-chiede.test.sql",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
@@ -233,27 +233,22 @@
     {
       "id": "R01-004",
       "chiave": "ai-endpoints|con l'ai dei negozi spenta al lancio, l'allarme sul conto condiviso della spesa ai può arrivare lo stesso ogni sei ore",
-      "esito": "riparato",
-      "commit": "4f04b5793ea754c23323648b43fc94507c579040",
-      "file_toccati": [
-        "lib/ai/tettoSpesa.ts",
-        "tests/unit/riparazione-r04-allarme-ripiego.test.ts",
-        "tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts"
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r04-allarme-ripiego.test.ts",
+          "modifica": "Prova comune (serve la firma di Nicola): aggiungere il vi.mock di @/lib/funzioni-al-lancio con AI_NEGOZI_ACCESA=true, 2 righe, come nel diff completo in nota."
+        },
+        {
+          "file": "tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts",
+          "modifica": "Prova comune (serve la firma di Nicola): lo stesso vi.mock di @/lib/funzioni-al-lancio con AI_NEGOZI_ACCESA=true, 2 righe, come nel diff completo in nota."
+        },
+        {
+          "file": "lib/ai/tettoSpesa.ts, tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts, tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts",
+          "modifica": "Insieme alle due prove comuni, rimettere la regola: allarmiTettoSpesaAiPerIlCron torna [] (e toglie l inizio del guasto ricordato) anche quando AI_NEGOZI_ACCESA è false, con la sua prova nuova e il caso dell AI spenta nella prova di R01-005. Tutto nel diff completo in nota, che si applica pulito sulla testa del ramo (git apply)."
+        }
       ],
-      "prova_file": [
-        "tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4f04b5793ea754c23323648b43fc94507c579040^ --file lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "allarmiTettoSpesaAiPerIlCron restituisce [] quando AI_NEGOZI_ACCESA (lib/funzioni-al-lancio.ts) è false: niente sonda, niente righe. Dichiarato: toccate due prove esistenti che importano per nome lib/ai/tettoSpesa.ts, aggiungendo solo un vi.mock che le fa girare con l'AI accesa (il loro caso implicito); nessuna asserzione cambiata. Soglie e importi non toccati. Prove comuni cambiate (guardia «prove_comuni», serve la firma di Nicola): tests/unit/riparazione-r04-allarme-ripiego.test.ts e tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts, solo un vi.mock di lib/funzioni-al-lancio.ts con AI_NEGOZI_ACCESA=true perché il loro caso è l AI accesa e, senza, la nuova regola le spegnerebbe. Su richiesta della regia la modifica sta da sola nel commit 0689079c (solo prove; il 701826dd le riporta prima come sulla base): se la firma non arriva, si toglie 0689079c e le due modifiche passano come diff.",
-      "verificato_da": "revisore B (subagente, modello grande): prova e rimessa (uscita 0); le due prove comuni verdi e non indebolite (solo il vi.mock, nessuna asserzione cambiata); tetto, soglie e importi identici alla base."
+      "nota": "La correzione c era (commit 4f04b5793ea754c23323648b43fc94507c579040, prova nuova tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts, rimessa uscita 0, confermata dal revisore B), ma con l AI dei negozi spenta al lancio fa cadere 3 casi in due prove comuni (riparazione-r04-allarme-ripiego, riparazione-r13-allarme-tetto-dal-cron), che senza un vi.mock girano con il valore vero del flag. La firma di Nicola per toccarle non è arrivata: come chiesto dalla regia, sul ramo sono tolte sia le modifiche alle due prove (revert 8190e7c5 del commit 0689079c) sia il codice (62bbaf4c, che toglie anche il caso dell AI spenta dalla prova di R01-005). Da applicare sul ramo unito prima di npm run verify, tutto insieme (5 file):\n\ndiff --git a/lib/ai/tettoSpesa.ts b/lib/ai/tettoSpesa.ts\nindex 53beaa59..a712225d 100644\n--- a/lib/ai/tettoSpesa.ts\n+++ b/lib/ai/tettoSpesa.ts\n@@ -1,6 +1,7 @@\n // lib/ai/tettoSpesa.ts\n import { logger } from '@/lib/logger';\n import { getAdminSupabase } from '@/lib/supabase/server';\n+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';\n import {\n   RIPIEGO_TOLLERATO_MINUTI as TOLLERANZA_RIPIEGO_MINUTI,\n   allarmiTettoSpesaAi as allarmiDelTetto,\n@@ -480,8 +481,11 @@ export async function allarmiTettoSpesaAiPerIlCron(opzioni: {\n   // 22/11/2026 (R13-004) — Il cron la chiama a ogni giro (ogni 5 minuti). Senza\n   // tetto configurato non c'e' niente da dire (allarmiDelTetto torna vuoto): niente\n   // sonda, niente righe in operational_alert_log, niente errori nel registro.\n-  // Senza tetto l'inizio di un guasto ricordato si toglie: nessuno lo guarda piu'.\n-  if (!(tettoEur > 0)) {\n+  // Con l'AI dei negozi spenta (lib/funzioni-al-lancio.ts) lib/ai/client.ts ferma ogni chiamata\n+  // al modello: spendere e' impossibile, e l'allarme sul conto condiviso sarebbe solo rumore\n+  // sull'unico canale degli allarmi. Niente sonda e niente righe, come senza tetto.\n+  // In tutti e due i casi l'inizio di un guasto ricordato si toglie: nessuno lo guarda piu'.\n+  if (!(tettoEur > 0) || !AI_NEGOZI_ACCESA) {\n     await dimenticaInizioGuasto();\n     return [];\n   }\ndiff --git a/tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts b/tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts\nnew file mode 100644\nindex 00000000..2cda2a16\n--- /dev/null\n+++ b/tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts\n@@ -0,0 +1,83 @@\n+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';\n+\n+/**\n+ * Il cron degli avvisi chiama l'allarme del tetto di spesa AI a ogni giro. La funzione usciva solo\n+ * se mancava il tetto, non se l'AI dei negozi era spenta: con AI_GLOBAL_DAILY_BUDGET_EUR impostata e\n+ * il conto condiviso che non risponde partiva l'allarme ogni sei ore, mentre lib/ai/client.ts\n+ * fermava ogni chiamata al modello (spendere era impossibile). Rumore sull'unico canale degli allarmi.\n+ *\n+ * Qui: tetto impostato, conto condiviso muto da due ore (ricordato nel database), e l'interruttore\n+ * dell'AI dei negozi spento o acceso.\n+ */\n+\n+const finti = vi.hoisted(() => ({\n+  aiAccesa: false,\n+  righe: new Map<string, string>(),\n+  rpc: [] as string[],\n+}));\n+\n+vi.mock('@/lib/funzioni-al-lancio', async (originale) => {\n+  const vero = (await originale()) as Record<string, unknown>;\n+  return {\n+    ...vero,\n+    get AI_NEGOZI_ACCESA() {\n+      return finti.aiAccesa;\n+    },\n+  };\n+});\n+vi.mock('@/lib/logger', () => ({\n+  logger: { info: vi.fn(), spesa: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },\n+}));\n+vi.mock('@/lib/supabase/server', () => ({\n+  getAdminSupabase: () => ({\n+    rpc: async (nome: string) => {\n+      finti.rpc.push(nome);\n+      return { data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } };\n+    },\n+    // operational_alert_log finta: solo le colonne vere, alert_key e last_sent_at.\n+    from: () => ({\n+      upsert: (riga: { alert_key: string; last_sent_at: string }, o?: { ignoreDuplicates?: boolean }) => {\n+        const scritta = !(o?.ignoreDuplicates && finti.righe.has(riga.alert_key));\n+        if (scritta) finti.righe.set(riga.alert_key, riga.last_sent_at);\n+        const esito = { data: scritta ? [{ alert_key: riga.alert_key }] : [], error: null };\n+        return Object.assign(Promise.resolve(esito), { select: async () => esito });\n+      },\n+      update: () => ({ eq: () => ({ lt: () => ({ select: async () => ({ data: [], error: null }) }) }) }),\n+      select: () => ({\n+        eq: (_c: string, k: string) => ({\n+          maybeSingle: async () => ({ data: finti.righe.has(k) ? { last_sent_at: finti.righe.get(k) } : null, error: null }),\n+        }),\n+      }),\n+      delete: () => ({ eq: async (_c: string, k: string) => { finti.righe.delete(k); return { error: null }; } }),\n+    }),\n+  }),\n+}));\n+\n+import { allarmiTettoSpesaAiPerIlCron, CHIAVE_RIPIEGO_DA, __azzeraRipiegoSpesaAi } from '@/lib/ai/tettoSpesa';\n+\n+describe('con l AI dei negozi spenta l allarme del tetto di spesa AI non parte', () => {\n+  beforeEach(() => {\n+    __azzeraRipiegoSpesaAi();\n+    finti.righe.clear();\n+    finti.rpc.length = 0;\n+    vi.useFakeTimers();\n+    vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));\n+    // Il conto condiviso non risponde dalle 10: due ore, oltre l'ora di tolleranza.\n+    finti.righe.set(CHIAVE_RIPIEGO_DA, '2026-11-24T10:00:00.000Z');\n+  });\n+  afterEach(() => vi.useRealTimers());\n+\n+  it('AI spenta, tetto impostato, conto muto da due ore: nessun allarme e nessuna sonda', async () => {\n+    finti.aiAccesa = false;\n+    const allarmi = await allarmiTettoSpesaAiPerIlCron({ tettoEur: 20 });\n+    expect(allarmi, 'con l AI spenta spendere e impossibile: l allarme e solo rumore').toEqual([]);\n+    expect(finti.rpc, 'con l AI spenta il conto condiviso non si sonda').toEqual([]);\n+  });\n+\n+  it('CONTROLLO: AI accesa, stesso guasto: l allarme parte', async () => {\n+    finti.aiAccesa = true;\n+    const allarmi = await allarmiTettoSpesaAiPerIlCron({ tettoEur: 20 });\n+    expect(allarmi).toHaveLength(1);\n+    expect(allarmi[0].detail).toMatch(/non risponde da 120 min/);\n+  });\n+});\ndiff --git a/tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts b/tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts\nindex 572454a9..78f66e69 100644\n--- a/tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts\n+++ b/tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts\n@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';\n  * L'allarme del tetto di spesa AI conta i minuti del guasto da una riga di operational_alert_log\n  * ('ai-tetto-condiviso:ripiego-da'), scritta al primo giro che trova il conto condiviso muto e\n  * tolta quando torna a rispondere. La pulizia della memoria degli allarmi non la tocca, e la si\n- * leggeva senza limite d'eta'; l'uscita senza tetto non la toglieva. Rimasta da\n+ * leggeva senza limite d'eta'; l'uscita senza tetto (o con l'AI spenta) non la toglieva. Rimasta da\n  * un guasto vecchio, al primo guasto nuovo di cinque minuti l'allarme diceva «non risponde da tre\n  * giorni».\n  *\n@@ -12,9 +12,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';\n  */\n \n const finti = vi.hoisted(() => ({\n+  aiAccesa: true,\n   righe: new Map<string, string>(),\n }));\n \n+vi.mock('@/lib/funzioni-al-lancio', async (originale) => {\n+  const vero = (await originale()) as Record<string, unknown>;\n+  return {\n+    ...vero,\n+    get AI_NEGOZI_ACCESA() {\n+      return finti.aiAccesa;\n+    },\n+  };\n+});\n vi.mock('@/lib/logger', () => ({\n   logger: { info: vi.fn(), spesa: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },\n }));\n@@ -54,6 +64,7 @@ async function giro(tettoEur = 20) {\n describe('l allarme del tetto non conta i minuti da una riga di un guasto vecchio', () => {\n   beforeEach(() => {\n     finti.righe.clear();\n+    finti.aiAccesa = true;\n     vi.useFakeTimers();\n     vi.setSystemTime(ADESSO);\n   });\n@@ -73,12 +84,18 @@ describe('l allarme del tetto non conta i minuti da una riga di un guasto vecchi\n     expect(dopo[0].detail).toMatch(/non risponde da 120 min/);\n   });\n \n-  it('un giro senza tetto toglie l inizio del guasto ricordato', async () => {\n+  it('un giro senza tetto o con l AI spenta toglie l inizio del guasto ricordato', async () => {\n     finti.righe.set(CHIAVE_RIPIEGO_DA, oreFa(20));\n     expect(await giro(0)).toEqual([]);\n     expect(finti.righe.has(CHIAVE_RIPIEGO_DA), 'l uscita senza tetto lascia la riga del guasto').toBe(false);\n \n-    // Tornato il tetto, il primo guasto di cinque minuti non suona.\n+    finti.righe.set(CHIAVE_RIPIEGO_DA, oreFa(20));\n+    finti.aiAccesa = false;\n+    expect(await giro()).toEqual([]);\n+    expect(finti.righe.has(CHIAVE_RIPIEGO_DA), 'l uscita con l AI spenta lascia la riga del guasto').toBe(false);\n+\n+    // Tornati tetto e AI, il primo guasto di cinque minuti non suona.\n+    finti.aiAccesa = true;\n     expect(await giro()).toHaveLength(0);\n     vi.setSystemTime(ADESSO.getTime() + 5 * 60_000);\n     expect(await giro()).toHaveLength(0);\ndiff --git a/tests/unit/riparazione-r04-allarme-ripiego.test.ts b/tests/unit/riparazione-r04-allarme-ripiego.test.ts\nindex 99a01730..24e95066 100644\n--- a/tests/unit/riparazione-r04-allarme-ripiego.test.ts\n+++ b/tests/unit/riparazione-r04-allarme-ripiego.test.ts\n@@ -11,6 +11,8 @@ const rpcMock = vi.fn();\n vi.mock('@/lib/logger', () => ({\n   logger: { info: vi.fn(), spesa: vi.fn(), warn: vi.fn(), error: vi.fn() },\n }));\n+// Con l'AI dei negozi spenta l'allarme del tetto tace (lib/ai/tettoSpesa.ts): qui la si prova accesa.\n+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as object), AI_NEGOZI_ACCESA: true }));\n const registro = vi.hoisted(() => ({ righe: new Map<string, string>() }));\n vi.mock('@/lib/supabase/server', () => ({\n   getAdminSupabase: () => ({\ndiff --git a/tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts b/tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts\nindex 8cc0a691..cf1d000e 100644\n--- a/tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts\n+++ b/tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts\n@@ -22,6 +22,8 @@ vi.mock('@/lib/analytics/sentry', () => ({ captureError: vi.fn() }));\n vi.mock('@/lib/api/middleware', () => ({ withCronAuth: (g: (r: unknown) => unknown) => (r: unknown) => g(r) }));\n vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true, id: 'x' })) }));\n vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));\n+// Con l'AI dei negozi spenta l'allarme del tetto tace (lib/ai/tettoSpesa.ts): qui la si prova accesa.\n+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as object), AI_NEGOZI_ACCESA: true }));\n \n type Chiamata = { m: string; a: unknown[] };\n type Riga = { alert_key: string; last_sent_at: string };\n"
     },
     {
       "id": "R01-005",
@@ -276,7 +271,7 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Una riga 'ai-tetto-condiviso:ripiego-da' più vecchia di 24 ore viene riscritta da adesso, come la cura suggerita; il giro senza tetto o con l'AI spenta cancella quella riga (best-effort). Prova con orologio finto: riga di 3 giorni, uscite che la tolgono, e guasti veri di 2 e 23 ore che restano contati.",
-      "cosa_resta": "Il riscrivere «da adesso» la riga più vecchia di 24 ore rende uguali un guasto vecchio rimasto lì e un guasto vero ancora in corso da più di 24 ore: con un errore non permanente che dura (per esempio 42501 o i timeout) l allarme tace circa un ora al giorno e i minuti ripartono da zero (lib/ai/tettoSpesa.ts:511). Le cancellazioni all uscita senza tetto o con l AI spenta bastano già per il caso della voce: la cura è togliere il tetto delle 24 ore e tenere le cancellazioni. Non fatta per il tetto di spesa del giro.",
+      "cosa_resta": "Il riscrivere «da adesso» la riga più vecchia di 24 ore rende uguali un guasto vecchio rimasto lì e un guasto vero ancora in corso da più di 24 ore: con un errore non permanente che dura (per esempio 42501 o i timeout) l allarme tace circa un ora al giorno e i minuti ripartono da zero (lib/ai/tettoSpesa.ts:511). Le cancellazioni all uscita senza tetto o con l AI spenta bastano già per il caso della voce: la cura è togliere il tetto delle 24 ore e tenere le cancellazioni. Non fatta per il tetto di spesa del giro. Nota: il commit 62bbaf4c ha tolto dalla prova di R01-005 il solo caso dell AI spenta (va con R01-004); la rimessa rifatta dopo, con --base c6e10d31^, esce 0.",
       "verificato_da": "revisore B (subagente, modello grande): prova e rimessa (uscita 0), poi una prova usa e getta con guasto continuo non permanente e cron ogni 5 minuti per 26 ore: alle 24 ore tace per 13 giri e poi dice 115 minuti."
     },
     {
@@ -395,8 +390,8 @@
   "conto": {
     "subagenti": 5,
     "agenti": 5,
-    "nota": "3 subagenti che riparano (2 modello grande, 1 sonnet) e 2 revisori (modello grande); nessun giro di correzione: la spesa è arrivata alla soglia di consegna (22,94 $ su 35) e il ramo è stato messo in ordine con mosse meccaniche (revert del commit di R01-008, prove comuni di R01-004 isolate)."
+    "nota": "3 subagenti che riparano (2 modello grande, 1 sonnet) e 2 revisori (modello grande); nessun giro di correzione: la spesa è arrivata alla soglia di consegna. Il ramo è stato messo in ordine con mosse meccaniche su indicazione della regia: revert del commit di R01-008, e revert delle due prove comuni e del codice di R01-004."
   },
   "costo_usd": 22.94,
-  "costo_nota": "usage.cost_usd di get_session senza id, letto prima della consegna: è il valore all ultimo turno chiuso, il turno di consegna aggiunge poco."
+  "costo_nota": "usage.cost_usd di get_session senza id, letto prima della consegna: è il valore all ultimo turno chiuso; il turno di consegna (solo comandi git e verify) aggiunge poco."
 }
