@@ -1,13 +1,13 @@
 {
  "sessione": "R03",
- "aggiornato": "2026-11-24 12:20",
- "finita": false,
- "testa": "24b217dc80ee4283789aed42baaea08237994597",
+ "aggiornato": "2026-11-24 12:35",
+ "finita": true,
+ "testa": "8defebc41cf1a3bc50cc820db2420384a2a2b543",
  "verifica": {
   "comando": "npm run verify",
-  "esito": "",
-  "testa": "",
-  "nota": ""
+  "esito": "verde",
+  "testa": "8defebc41cf1a3bc50cc820db2420384a2a2b543",
+  "nota": "tsc + eslint + vitest: 2046 file passati (1 saltato, preesistente), 12535 prove, uscita 0, 7 min 15 s"
  },
  "voci": [
   {
@@ -65,31 +65,130 @@
      "modifica": "riga 718: il tipo del parametro diventa `avvisiFermi: Array<{ id: string; userId: string; tappa?: TappaAvviso; forsePartita?: true }>`; riga 735: `for (const { id: idAvviso, userId, tappa, forsePartita } of avvisiFermi) {`; riga 758: la prima frase del corpo diventa `(forsePartita ? \"Una spiegazione dell'attesa per la cancellazione non risulta partita per email: una notte prima è stata spedita ma il registro non l'ha segnata, quindi può essere arrivata. \" : \"Una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. \") +` (il resto del corpo, il titolo e l'id dell'allarme restano uguali). La riga 520 (`uno.emailBloccateAvvisi.map((x) => ({ ...x, tappa: dovuti[i].tappa }))`) porta già il campo."
     }
    ],
-   "verificato_da": ""
+   "verificato_da": "revisore R03 (subagente generico, modello piccolo): righe vecchie senza segnaIlNo danno gli esiti di prima; errore nello scrivere email_fallita in try/catch non blocca il giro; la notte resta rossa; 44 file / 360 prove verdi. Parziale confermato: l'allarme in app/api/cron/process-deletions/route.ts non legge ancora forsePartita (serve_file_altrui)."
   },
   {
    "id": "R03-003",
-   "chiave": "architettura|il parametro propostail di negoziopuoservire non lo passa nessuno"
+   "chiave": "architettura|il parametro propostail di negoziopuoservire non lo passa nessuno",
+   "esito": "parziale",
+   "insieme_a": "R03-006",
+   "cosa_ho_fatto": "motivoFasciaRifiutata ora accetta propostaIl (4° argomento) e lo passa a negozioPuoServire, che già contava «domani» da lì: prima il parametro non scendeva a nessuno. Prova con orologio finto: proposta lunedì 23:59, giudicata martedì 00:01, negozio aperto solo martedì → passa; senza propostaIl → rifiutata.",
+   "cosa_resta": "Dal lato mio il parametro ora scende fino a negozioPuoServire. Nessuna rotta lo passa ancora: i contanti non ne hanno bisogno (riportano l'etichetta), la carta sì (vedi R03-006). Anche il webhook degli ordini pagati con la carta (lib/stripe/webhook/ordini.ts:292) chiama motivoFasciaRifiutata senza propostaIl.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/stripe/checkout/route.ts",
+     "modifica": "aggiungere allo schema `delivery_date: z.string().max(40).optional().nullable()` come nei contanti e, nella chiamata a motivoFasciaRifiutata (riga ~522), passare come 4° argomento (dopo `undefined`) un Date di Roma del giorno della cassa ricavato da delivery_date (mezzogiorno di quel giorno, in ora di Roma, come romeNow)"
+    },
+    {
+     "file": "app/checkout/page.tsx",
+     "modifica": "mandare delivery_date (il giorno di Roma della fascia scelta, come già per i contanti) anche nella richiesta alla rotta della carta"
+    },
+    {
+     "file": "lib/stripe/webhook/ordini.ts",
+     "modifica": "riga 292, chiamata a motivoFasciaRifiutata: passare come 4° argomento il momento della proposta preso dal server, non dal cliente (la data di creazione della sessione di checkout, new Date(session.created * 1000), oppure il delivery_date che la rotta della carta metterà nei metadata), così un pagamento confermato dopo mezzanotte giudica la fascia «Domani» sul giorno in cui la cassa l'ha proposta"
+    }
+   ],
+   "commit": "fd05bc7181e4529f5c1470de36d70bece47271ee",
+   "file_toccati": [
+    "lib/quando-arriva.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r03-fascia-domani-proposta.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r03-fascia-domani-proposta.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base fd05bc7181e4529f5c1470de36d70bece47271ee^ --file lib/quando-arriva.ts --prove tests/unit/riparazione-r03-fascia-domani-proposta.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "verificato_da": "revisore R03 (subagente generico, modello piccolo): senza il 4° argomento motivoFasciaRifiutata si comporta come prima; 120 file / 914 prove verdi. Parziale confermato: nessun chiamante passa ancora propostaIl (carta e webhook non miei, in serve_file_altrui); propostaIl oggi non arriva dal cliente, quindi nessuna apertura; chi lo collegherà deve prenderlo dal server."
   },
   {
    "id": "R03-004",
-   "chiave": "architettura|da controllare sui dati: un negozio che oggi ha salvato 7 giorni vuoti diventa chiuso sempre appena esce la modifica"
+   "chiave": "architettura|da controllare sui dati: un negozio che oggi ha salvato 7 giorni vuoti diventa chiuso sempre appena esce la modifica",
+   "esito": "non_codice",
+   "nota": "Il codice (lib/store-hours.ts:267-275) è coerente con la regola dichiarata nel commento del 31/10: 7 giorni scritti e tutti vuoti = chiuso sempre. L'editor (components/seller/StoreHoursEditor.tsx:20-23) scrive sempre tutti e sette i giorni a ogni modifica. Nicola deve contare sul database i negozi in questa situazione e decidere se vanno avvisati. Query di SOLA LETTURA, da lanciare lui (non lanciata): SELECT id, store_name FROM profiles WHERE jsonb_typeof(store_hours) = 'object' AND (SELECT count(*) FROM jsonb_each(store_hours) e WHERE jsonb_typeof(e.value) = 'array') >= 4 AND NOT EXISTS (SELECT 1 FROM jsonb_each(store_hours) e WHERE jsonb_typeof(e.value) = 'array' AND jsonb_array_length(e.value) > 0);  (con >= 7 invece di >= 4 sono i soli «sette vuoti»; la differenza con >= 4 sono già i casi di R03-005 con 4-6 giorni)."
   },
   {
    "id": "R03-005",
-   "chiave": "architettura|ferie salvate con l'editor di prima su 3 giorni o meno: il negozio resta aperto a qualunque ora"
+   "chiave": "architettura|ferie salvate con l'editor di prima su 3 giorni o meno: il negozio resta aperto a qualunque ora",
+   "esito": "scelta_di_nicola",
+   "domanda": "Un negozio con 1-3 giorni salvati e tutti vuoti (lo scrisse l'editor di prima toccando solo quei giorni) è «chiuso» o «orari non impostati»? Abbassare la soglia di 4 giorni (lib/store-hours.ts:265) chiuderebbe anche chi ha premuto «Chiudi» su un giorno solo, che oggi resta aperto per scelta dichiarata.",
+   "nota": "Nessuna modifica: è una regola di business, non un difetto di codice."
   },
   {
    "id": "R03-006",
-   "chiave": "architettura|una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo"
+   "chiave": "architettura|una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo",
+   "esito": "parziale",
+   "insieme_a": "R03-003",
+   "cosa_ho_fatto": "motivoFasciaRifiutata ora accetta propostaIl (4° argomento) e lo passa a negozioPuoServire, che già contava «domani» da lì: prima il parametro non scendeva a nessuno. Prova con orologio finto: proposta lunedì 23:59, giudicata martedì 00:01, negozio aperto solo martedì → passa; senza propostaIl → rifiutata.",
+   "cosa_resta": "La rotta dei contanti (app/api/orders/cod/route.ts) copre già il caso riportando l'etichetta al giorno della cassa (fasciaDelGiornoDellaRichiesta, da delivery_date), quindi non ha bisogno di propostaIl. Resta la rotta della carta, che non riceve delivery_date né passa propostaIl. Anche il webhook degli ordini pagati con la carta (lib/stripe/webhook/ordini.ts:292) chiama motivoFasciaRifiutata senza propostaIl.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/stripe/checkout/route.ts",
+     "modifica": "aggiungere allo schema `delivery_date: z.string().max(40).optional().nullable()` come nei contanti e, nella chiamata a motivoFasciaRifiutata (riga ~522), passare come 4° argomento (dopo `undefined`) un Date di Roma del giorno della cassa ricavato da delivery_date (mezzogiorno di quel giorno, in ora di Roma, come romeNow)"
+    },
+    {
+     "file": "app/checkout/page.tsx",
+     "modifica": "mandare delivery_date (il giorno di Roma della fascia scelta, come già per i contanti) anche nella richiesta alla rotta della carta"
+    },
+    {
+     "file": "lib/stripe/webhook/ordini.ts",
+     "modifica": "riga 292, chiamata a motivoFasciaRifiutata: passare come 4° argomento il momento della proposta preso dal server, non dal cliente (la data di creazione della sessione di checkout, new Date(session.created * 1000), oppure il delivery_date che la rotta della carta metterà nei metadata), così un pagamento confermato dopo mezzanotte giudica la fascia «Domani» sul giorno in cui la cassa l'ha proposta"
+    }
+   ],
+   "commit": "fd05bc7181e4529f5c1470de36d70bece47271ee",
+   "file_toccati": [
+    "lib/quando-arriva.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r03-fascia-domani-proposta.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r03-fascia-domani-proposta.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base fd05bc7181e4529f5c1470de36d70bece47271ee^ --file lib/quando-arriva.ts --prove tests/unit/riparazione-r03-fascia-domani-proposta.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "verificato_da": "revisore R03 (subagente generico, modello piccolo): senza il 4° argomento motivoFasciaRifiutata si comporta come prima; 120 file / 914 prove verdi. Parziale confermato: nessun chiamante passa ancora propostaIl (carta e webhook non miei, in serve_file_altrui); propostaIl oggi non arriva dal cliente, quindi nessuna apertura; chi lo collegherà deve prenderlo dal server."
   },
   {
    "id": "R03-007",
-   "chiave": "architettura|gli strumenti degli sviluppatori portano altre 19 falle note, 10 alte, ma nessuna arriva al sito"
+   "chiave": "architettura|gli strumenti degli sviluppatori portano altre 19 falle note, 10 alte, ma nessuna arriva al sito",
+   "esito": "scelta_di_nicola",
+   "domanda": "Le 8 falle di soli strumenti di sviluppo (Storybook e il suo builder webpack5: webpack-dev-middleware <7.4.5 alta, @storybook/builder-webpack5 e @storybook/nextjs alte; e a cascata browserify-sign, create-ecdh, crypto-browserify, elliptic, node-polyfill-webpack-plugin basse) non hanno correzione in npm: le accettiamo finché Storybook non esce con una versione che le chiude, o togliamo/sostituiamo @storybook/nextjs?",
+   "nota": "npm audit di oggi: 18 totali (5 basse, 9 medie, 4 alte), di cui 10 nel sito (npm audit --omit=dev: 9 medie, 1 alta = zod) e 8 solo di sviluppo. `npm audit fix --dry-run` (/tmp/r03-l2-fix.json) lascia IDENTICO il conto (18) e cambia solo aggiornamenti minori di Storybook/webpack (10.6.7→10.6.8 ecc.) più 194 pacchetti binari opzionali di altre piattaforme nel lockfile: non chiude nessun avviso, quindi non l'ho applicato. I numeri della voce (19/10) erano di un'altra data. Prova: comando npm audit prima/dopo, rimessa non applicabile a un lockfile (rimessa null).",
+   "rimessa": null,
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "prova_comando": "npm audit --json; npm audit --omit=dev --json; npm audit fix --dry-run --json",
+   "copre_tutta_la_voce": false,
+   "commit": null,
+   "file_toccati": [],
+   "prova_file": [],
+   "verificato_da": ""
   },
   {
    "id": "R03-008",
-   "chiave": "architettura|zod, resend, @sentry/nextjs, minimatch e glob, librerie che vanno nel sito, hanno 10 avvisi pubblici di npm audit (zod alto) che si chiudono solo con aggiornamenti che rompono"
+   "chiave": "architettura|zod, resend, @sentry/nextjs, minimatch e glob, librerie che vanno nel sito, hanno 10 avvisi pubblici di npm audit (zod alto) che si chiudono solo con aggiornamenti che rompono",
+   "esito": "scelta_di_nicola",
+   "domanda": "Autorizzi i salti di versione maggiore di zod (3.25.76→4.6.7, alto), resend (3.5.0→6.39.0, chiude anche @react-email/render, editorconfig, glob, js-beautify, minimatch) e @sentry/nextjs (10.78.0→11.x, chiude @sentry/bundler-plugins e @sentry/webpack-plugin), che cambiano API e come gira il sito, oppure restiamo e li accettiamo (zod: memoria su collezioni enormi; gli altri: avvisi moderati su strumenti di build)?",
+   "nota": "Da /tmp/r03-l2-audit-prod.json (10 avvisi: 9 medi, 1 alto). Versione di oggi → prima che chiude: zod 3.25.76 → 4.6.7 (major); resend 3.5.0 → 6.39.0 (major, per via di @react-email/render e a cascata editorconfig, glob, js-beautify, minimatch); @sentry/nextjs 10.78.0 → 11.x (major, ultima 11.17.0; il package.json ha ^10.53.1 e non la raggiunge); minimatch (7.0.0-11.0.0, via resend e Sentry) e glob (9.0.0-14.0.1) si chiudono con i salti di resend e Sentry. Nessun aggiornamento compatibile (stessa major) chiude un avviso: niente applicato. Nessun commit; prova = comando npm audit, rimessa null.",
+   "rimessa": null,
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "prova_comando": "npm audit --omit=dev --json",
+   "copre_tutta_la_voce": false,
+   "commit": null,
+   "file_toccati": [],
+   "prova_file": [],
+   "verificato_da": ""
   },
   {
    "id": "R03-009",
@@ -250,13 +349,13 @@
    "copre_tutta_la_voce": true,
    "cosa_ho_fatto": "Migrazione 840: un trigger BEFORE INSERT su orders, solo per la veloce in contanti a domicilio, prende un lucchetto (pg_advisory_xact_lock) e ferma con 23514 + segno veloce_senza_fattorino_libero la veloce che supera i fattorini accesi (stessa regola di contaFattoriniOnline/contaVelociInCorso: una per fattorino, per cliente, ultime 3 ore); la rotta dei contanti trasforma quel rifiuto nel 409 «non c'è un fattorino libero» con la merce rimessa, invece di un 500. Ordini non veloci, ritiro e veloci con la carta escono subito dal controllo: le prove (SQL e rotta) hanno il caso esplicito «un ordine non veloce passa come prima».",
    "nota": "La migrazione non è applicata (lo decide Nicola): finché non c'è, la rotta si comporta come prima. Provata anche a mano con due sessioni psql insieme sul Postgres locale: la seconda aspetta il commit della prima e si ferma. Le veloci pagate con la carta nascono nel webhook dopo il pagamento e non si fermano qui (contano però fra le consegne in corso): la corsa fra due veloci con la carta resta fuori da questa voce (riga in nuovi_difetti_visti). Se la regola della veloce cambia nel codice (fascia, stati, 3 ore, una per fattorino) va cambiata anche nella 840.",
-   "verificato_da": ""
+   "verificato_da": "revisore R03 (subagente generico, modello piccolo, mandato di smentire): harness locale 220 migrazioni + run.sh verdi con la 840; prova SQL sua sullo stesso db: ordine non veloce (fascia «Oggi…» e fascia nulla) nasce col fattorino occupato, veloce con la carta nasce, insert di due righe con due clienti → la seconda 23514, carrello di due righe dello stesso cliente passa; regola SQL confrontata con lib/ordini/consegna-veloce.ts (stati, 3 ore, fattorini approvati e accesi); lato rotta rollback + restore_stock + credito e 409; 93 file / 650 prove verdi. Regge."
   },
   {
    "id": "R03-013",
    "chiave": "qa-flussi|il logger oscura solo le chiavi del contesto, non il testo del messaggio né un contesto stringa",
    "esito": "riparato",
-   "commit": "24b217dc80ee4283789aed42baaea08237994597",
+   "commit": "8defebc41cf1a3bc50cc820db2420384a2a2b543",
    "file_toccati": [
     "lib/logger.ts"
    ],
@@ -269,16 +368,20 @@
    "rimessa": {
     "esito": "regge",
     "uscita": 0,
-    "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 24b217dc80ee4283789aed42baaea08237994597^ --file lib/logger.ts --prove tests/unit/riparazione-r03-logger-testo.test.ts --json"
+    "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 24b217dc^ --file lib/logger.ts --prove tests/unit/riparazione-r03-logger-testo.test.ts --json"
    },
    "copre_tutta_la_voce": true,
-   "cosa_ho_fatto": "Aggiunto in lib/logger.ts un filtro sul testo (oscuraTesto): email con la scansione lineare già usata per il filmato (testoSenzaEmail), poi IBAN, codice fiscale, JWT e numeri da 9 cifre in su (anche con spazi/punti/trattini, mai attaccati a lettere o trattini; senza lookbehind, il logger gira anche nel browser). Si applica al messaggio di info/spesa/warn/error, a un contesto stringa ({detail}), a ogni valore stringa del contesto, al messaggio e alla pila di un Error nel contesto, alla frase passata come errore prima di Sentry e all'avviso del browser. La prova guarda console, captureException del server e captureMessage del browser, e che date, uuid e id Stripe restino leggibili.",
+   "cosa_ho_fatto": "Il primo commit (24b217dc) introduce oscuraTesto: email, IBAN, codice fiscale, JWT e telefoni si oscurano nel messaggio, nel contesto stringa, nei valori del contesto, negli Error e verso Sentry. Il secondo (8defebc4, giro di correzione chiesto dal revisore) restringe la regola numerica alla forma del telefono, così timestamp, numeri d'ordine, id nei percorsi, date con ora e versioni restano leggibili; niente lookbehind, regex a costo lineare.",
    "nota": "Un oggetto Error passato come primo argomento va ancora a Sentry intero (captureException(err)): il suo message non si riscrive per non toccare l'oggetto di chi chiama; la riga di log e l'extra sono già oscurati. Nomi e vie scritti dentro una frase non si riconoscono dalla forma: per quelli resta la regola delle chiavi.",
-   "verificato_da": ""
+   "verificato_da": "revisore R03 (subagente generico, modello piccolo): sul primo commit uuid/id Stripe/date ISO intatti, 100k caratteri ostili sotto 7 ms, nessun lookbehind, annidati/array/null senza crash; trovato che la regola delle 9+ cifre oscurava timestamp, id negli URL e date con ora → giro di correzione 8defebc4 (subagente nuovo) con quei casi nella prova. Dopo la correzione il capo squadra R03 ha sondato altre 9 varianti (+39 06…, 333 1234567, 333.123.4567 oscurati; ISO con millisecondi, pi_…, importo 1.250.000,00, cap 00184, ordine #13 cifre, «12:30 del 24-11-2026» leggibili): tutte come attese.",
+   "commit_prima": "24b217dc80ee4283789aed42baaea08237994597"
   },
   {
    "id": "R03-014",
-   "chiave": "qa-flussi|le prove unitarie montano i componenti con react 18.3.1, ma il sito gira con il react 19.2 di next"
+   "chiave": "qa-flussi|le prove unitarie montano i componenti con react 18.3.1, ma il sito gira con il react 19.2 di next",
+   "esito": "scelta_di_nicola",
+   "domanda": "Portare react/react-dom a 19.x nel package.json (cambia il React di tutto il sito, anche fuori dall'app router, e di Storybook/Sentry che oggi usano 18.3.1) oppure far usare alle prove il React interno di next (19.2.0-canary) con un alias in vitest.config.ts?",
+   "nota": "Controllato senza cambiare niente: package.json:51-52 react e react-dom ^18.2.0 (installato 18.3.1, usato dalle prove e dai pacchetti fuori da next); next 15.5.29 accetta ^18.2.0 o ^19 come peer e porta dentro di sé React 19.2.0-canary-0bdb9206-20250818 (node_modules/next/dist/compiled/react), usato solo dall'app router; vitest.config.ts non ha alias per react."
   }
  ],
  "nuovi_difetti_visti": [
@@ -288,11 +391,28 @@
    "severita": "minore",
    "file": "app/api/stripe/checkout/route.ts:530",
    "descrizione": "La rotta della carta decide la veloce con veloceSiPuo prima della sessione Stripe; l'ordine nasce nel webhook dopo il pagamento e lì non si può più rifiutare. Il lucchetto della 840 vale solo per i contanti: due veloci con la carta (o una con la carta dopo una in contanti già decisa) possono ancora nascere insieme con un fattorino solo. Servirebbe una prenotazione del fattorino prima del pagamento."
+  },
+  {
+   "titolo": "Un contesto circolare passato al logger fa lanciare un errore invece di scrivere la riga",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "lib/logger.ts (line(), JSON.stringify)",
+   "descrizione": "redact restituisce l'oggetto com'è oltre il limite di profondità, e JSON.stringify in line() lancia TypeError su un riferimento circolare: la riga di log si perde e l'errore sale a chi chiama. Preesistente, fuori dalla voce del logger."
   }
  ],
- "domande_per_nicola": [],
+ "domande_per_nicola": [
+  "R03-012: applicare la migrazione 840 (lucchetto sulle veloci in contanti)? Finché non è applicata la rotta si comporta come prima.",
+  "R03-005: un negozio con 1-3 giorni salvati, tutti vuoti, con l'editor di prima: «chiuso» o «orari non impostati»?",
+  "R03-004: contare sul database (in sola lettura, lo fai tu) i negozi con 7 giorni vuoti salvati, prima che esca la regola «7 vuoti = chiuso sempre».",
+  "R03-007: accettare gli 8 avvisi di solo sviluppo (Storybook, webpack-dev-middleware, polyfill di node) finché Storybook non li chiude, o togliere/sostituire @storybook/nextjs?",
+  "R03-008: saltare di major zod (3→4), resend (3→6) e @sentry/nextjs (10→11) per chiudere i 10 avvisi che vanno nel sito? Ogni salto rompe qualcosa e va provato.",
+  "R03-014: portare react/react-dom a 19 nel package.json (cambia il React di tutto il sito, Storybook e Sentry compresi) o dare alle prove il react interno di next con un alias in vitest.config.ts?",
+  "R03-002: tenere la seconda spedizione la notte dopo per un'email partita ma non segnata (scelta del 27/10, «meglio due volte che nessuna»)?"
+ ],
  "conto": {
-  "agenti": 1,
-  "nota": "lotto 1: 1 subagente (modello grande)"
- }
+  "agenti": 4,
+  "nota": "4 subagenti su 6: lotto 1 (modello grande), lotto 2 (piccolo), revisore (piccolo, per stare nel tetto), correzione R03-013 (piccolo). Nessun Workflow, niente ultracode. Spesa letta con get_session prima della consegna: 18,73 $ (tetto 35, soglia 24).",
+  "subagenti": 4
+ },
+ "costo_usd": 18.73
 }
