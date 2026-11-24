@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AlertTriangle, Check, CheckCircle2, CreditCard, Send, TrendingUp } from 'lucide-react';
+import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
@@ -122,7 +123,7 @@ export default function PaginaAbbonamento() {
       <SellerPageTitle
         eyebrow="Servizi"
         title="Scegli il tuo abbonamento"
-        sub={`Per ${p.attivita} · ${descriviAttivita(p.tipoAttivita)}. Foto e video, sito web e gestione dei social con Google Maps: tutti e tre in ogni abbonamento.`}
+        sub={`Per ${p.attivita} · ${descriviAttivita(p.tipoAttivita)}. Foto e video, sito web, gestione dei social con Google Maps e analisi del business: tutti e quattro in ogni abbonamento.`}
       />
       <p className="-mt-2 mb-4 text-sm font-semibold text-primary-700">{FRASE_PARTNER}</p>
       {/* Le pagine dei servizi, per chi vuole rileggere cosa riceve prima di scegliere (collaudo del 24/11). */}
@@ -176,6 +177,10 @@ export default function PaginaAbbonamento() {
           )}
           <p className="mt-2 text-sm font-semibold text-ink-900">{guadagni.conNoi}</p>
         </section>
+
+        {/* L'offerta su misura (24/11): le cose precise che facciamo per lui, coi suoi dati; la fascia
+            scelta segna quelle che comprende. */}
+        <OffertaSuMisura offerta={p.offerta} fascia={fascia} />
 
         {/* I tre abbonamenti: tutti comprendono tutti i servizi, cambia quanto (Nicola, 24/11). */}
         <section className="mt-6" aria-labelledby="le-tre-fasce">

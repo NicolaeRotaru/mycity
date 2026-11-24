@@ -32,6 +32,7 @@
 
 import type { TipoAttivita } from './tipi-attivita';
 import { formatPriceFromCents } from '@/lib/format';
+import type { OffertaSuMisura } from './offerta-su-misura';
 
 /**
  * Nell'ordine del menu «Servizi» (Nicola, 24/11/2026: «foto e video, sito e social, gestione di social»).
@@ -359,6 +360,11 @@ export type Preventivo = {
   attivo: AbbonamentoAttivo | null;
   /** Il primo mese a metà vale una volta per negozio: falso se ha già avuto un abbonamento dei servizi. */
   primoMeseScontato: boolean;
+  /**
+   * L'offerta su misura (24/11/2026): le cose precise che facciamo per questo negozio, dai suoi dati
+   * (lib/agenzia/offerta-su-misura.ts). La aggiunge chi legge il preventivo dal database.
+   */
+  offerta?: OffertaSuMisura;
 };
 
 export type AbbonamentoAttivo = { fascia: Abbonamento; stato: 'active' | 'past_due'; rinnovoIl: string | null };
@@ -545,5 +551,8 @@ export function testoAvvisoPreventivo(p: Preventivo, telefono: string | null): s
   const contatto = telefono ? ` Telefono: ${telefono}.` : '';
   const primo = canonePrimoMese(p.prezzi[fascia]);
   const primoMese = primo ? `, il primo mese ${formatPriceFromCents(primo)}` : '';
-  return `${p.attivita} sceglie l'abbonamento ${FASCE[fascia].nome} (${scriviCanone(p.prezzi[fascia])}${primoMese}), preventivo ${p.numero}.${manca}${contatto}`;
+  // L'offerta su misura (24/11/2026): Nicola sa subito cosa fare per lui, nella fascia scelta.
+  const fattibili = (p.offerta?.proposte ?? []).filter((x) => ABBONAMENTI.indexOf(x.daFascia) <= ABBONAMENTI.indexOf(fascia));
+  const offerta = fattibili.length ? ` Da fare per lui: ${fattibili.slice(0, 8).map((x) => x.cosa).join('; ')}.` : '';
+  return `${p.attivita} sceglie l'abbonamento ${FASCE[fascia].nome} (${scriviCanone(p.prezzi[fascia])}${primoMese}), preventivo ${p.numero}.${manca}${contatto}${offerta}`;
 }
