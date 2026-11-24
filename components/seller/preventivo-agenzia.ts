@@ -169,3 +169,14 @@ export async function analizzaIlSito(): Promise<{ sito: RisultatoSito; giaFattaO
   }
   return corpo.data;
 }
+
+/* ───────────── 24/11/2026 — La pagella del negozio (la logica del flusso 18) ───────────── */
+
+export const CHIAVE_PAGELLA = ['seller', 'pagella'] as const;
+
+export async function leggiPagella(): Promise<import('@/lib/agenzia/pagella').Pagella> {
+  const r = await fetch('/api/seller/pagella', { cache: 'no-store' });
+  const corpo = (await r.json().catch(() => null)) as { ok?: boolean; data?: import('@/lib/agenzia/pagella').Pagella; error?: { message?: string } } | null;
+  if (!r.ok || !corpo?.ok || !corpo.data) throw new Error(corpo?.error?.message ?? 'Non sono riuscito a preparare la pagella.');
+  return corpo.data;
+}

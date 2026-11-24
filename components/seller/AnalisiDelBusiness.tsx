@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, Gauge, Lightbulb, Store, Users } from 'lucide-react';
+import { AlertTriangle, ClipboardCheck, Clock, Gauge, Lightbulb, Store, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
 import CanaliDelNegozio from '@/components/seller/CanaliDelNegozio';
@@ -18,7 +18,8 @@ import {
   type Voto,
 } from '@/lib/agenzia/analisi';
 import { haCanali } from '@/lib/agenzia/canali';
-import { CHIAVE_ANALISI, CHIAVE_CANALI, analizzaIlSito, leggiAnalisiDelNegozio, leggiCanali } from '@/components/seller/preventivo-agenzia';
+import { CHIAVE_ANALISI, CHIAVE_CANALI, CHIAVE_PAGELLA, analizzaIlSito, leggiAnalisiDelNegozio, leggiCanali, leggiPagella } from '@/components/seller/preventivo-agenzia';
+import type { Pagella } from '@/lib/agenzia/pagella';
 
 /**
  * L'ANALISI DEL BUSINESS, GIÀ PRONTA DENTRO LA PAGINA DEL SERVIZIO — 24/11/2026.
@@ -74,6 +75,7 @@ export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente 
   const qc = useQueryClient();
   const { data: analisi } = useQuery({ queryKey: CHIAVE_ANALISI, queryFn: leggiAnalisiDelNegozio });
   const { data: canali } = useQuery({ queryKey: CHIAVE_CANALI, queryFn: leggiCanali });
+  const { data: pagella, isError: pagellaNonLetta } = useQuery({ queryKey: CHIAVE_PAGELLA, queryFn: leggiPagella });
   const attivita = analisiDellAttivita(scheda);
   const sito = analisi?.sito ?? null;
   const haSito = Boolean((canali?.website ?? '').trim());
@@ -96,6 +98,12 @@ export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente 
       <p className="mt-0.5 text-xs text-ink-500">
         Già pronta con quello che sappiamo oggi. Usiamo solo fonti pubbliche e gratuite; dove un’analisi non c’è ancora, te lo diciamo.
       </p>
+
+      <Blocco icona={ClipboardCheck} titolo="La tua pagella su MyCity">
+        {pagella ? <PagellaDelNegozio p={pagella} /> : (
+          <NonAncora>{pagellaNonLetta ? 'Non sono riuscito a preparare la pagella: riprova fra poco.' : 'Sto preparando la pagella…'}</NonAncora>
+        )}
+      </Blocco>
 
       <Blocco icona={Store} titolo="La tua attività">
         {attivita ? (
@@ -203,5 +211,56 @@ export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente 
         <CanaliDelNegozio />
       </div>
     </section>
+  );
+}
+
+/**
+ * LA PAGELLA (24/11/2026): a che punto è il negozio per arrivare al primo incasso, coi conti del flusso 18
+ * (lib/agenzia/pagella.ts). Un numero che non si è potuto leggere si dice «non misurato», mai zero.
+ */
+const euro = (v: number) => v.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
+const conta = (v: number | null) => (v === null ? 'non misurato' : v.toLocaleString('it-IT'));
+
+function PagellaDelNegozio({ p }: { p: Pagella }) {
+  const n = p.numeri;
+  const caselle: Array<[string, string]> = [
+    ['Prodotti in vendita', conta(n.prodottiInVendita)],
+    ['Ordini negli ultimi 30 giorni', conta(n.ordini30g)],
+    ['Incassato negli ultimi 30 giorni', n.incasso30g === null ? 'non misurato' : euro(n.incasso30g)],
+    ['Scontrino medio', n.scontrinoMedio30g === null ? (n.ordini30g === null ? 'non misurato' : '—') : euro(n.scontrinoMedio30g)],
+    ['Clienti', n.clienti === null ? 'non misurato' : `${conta(n.clienti)}${n.clientiTornati ? `, ${conta(n.clientiTornati)} tornati` : ''}`],
+    ['Recensioni', n.recensioni === null ? 'non misurato' : n.recensioni === 0 ? 'nessuna' : `${conta(n.recensioni)}, media ${n.votoMedio?.toLocaleString('it-IT')} su 5`],
+  ];
+  return (
+    <div data-testid="pagella">
+      <p className="text-sm text-ink-700">
+        {p.stato && <><span className="font-semibold text-ink-900">Il tuo negozio:</span> {p.stato}. </>}
+        {p.puoIncassareConCarta !== null && (p.puoIncassareConCarta ? 'Puoi incassare con la carta.' : 'Non puoi ancora incassare con la carta.')}
+      </p>
+      <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {caselle.map(([titolo, valore]) => (
+          <li key={titolo} className="rounded-lg border border-cream-200 bg-white p-2">
+            <p className="text-[11px] text-ink-500">{titolo}</p>
+            <p className={`text-sm font-bold ${valore === 'non misurato' ? 'text-ink-400' : 'text-ink-900'}`}>{valore}</p>
+          </li>
+        ))}
+      </ul>
+      {p.avvisi.length > 0 ? (
+        <ul className="mt-3 space-y-2">
+          {p.avvisi.map((a) => (
+            <li key={a.id} data-avviso={a.id} className={`rounded-lg border p-2 ${a.colore === 'rosso' ? 'border-secondary-200 bg-secondary-50' : 'border-amber-200 bg-amber-50'}`}>
+              <p className="inline-flex items-start gap-1.5 text-sm font-semibold text-ink-900">
+                <AlertTriangle size={15} className={`mt-0.5 shrink-0 ${a.colore === 'rosso' ? 'text-secondary-700' : 'text-amber-700'}`} aria-hidden /> {a.titolo}
+              </p>
+              <p className="pl-[21px] text-xs text-ink-700">{a.cosaFare}</p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-olive-800">Niente da sistemare: il tuo negozio è in ordine.</p>
+      )}
+      {p.nonMisurato.length > 0 && <p className="mt-2 text-[11px] text-ink-500">Non misurato: {p.nonMisurato.join('; ')}.</p>}
+      <p className="mt-1 text-[11px] text-ink-500">Calcolata adesso dai dati del tuo negozio su MyCity.</p>
+    </div>
   );
 }

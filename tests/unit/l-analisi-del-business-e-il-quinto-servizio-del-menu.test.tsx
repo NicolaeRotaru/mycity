@@ -174,6 +174,26 @@ describe('la pagina dell analisi è un anteprima già pronta', () => {
     expect(t).toContain('Google PageSpeed Insights');
   });
 
+  it('la pagella del flusso 18 sta in cima: i conti, gli avvisi, e «non misurato» dove manca il dato', async () => {
+    const { pagella } = await import('@/lib/agenzia/pagella');
+    stato.dati.pagella = pagella({
+      profilo: { role: 'seller', approval_status: 'pending', approval_requested_at: '2026-11-21T12:00:00Z' },
+      prodotti: { righe: [{ status: 'available', images: [], price: 3 }] },
+      ordini: null,
+      recensioni: { righe: [] },
+      confronto: null,
+      adesso: new Date('2026-11-24T12:00:00Z'),
+    });
+    const r = await monta(PaginaDelServizio);
+    const box = r.querySelector('[data-testid="pagella"]')!;
+    expect(box.textContent).toContain('Il tuo negozio: in verifica');
+    expect(box.textContent).toContain('Ordini negli ultimi 30 giorni');
+    expect(box.textContent).toContain('non misurato');
+    expect(box.querySelector('[data-avviso="in-verifica"]')!.textContent).toContain('da 3 giorni');
+    expect(box.querySelector('[data-avviso="senza-foto"]')).not.toBeNull();
+    expect(box.textContent).toContain('Non misurato: i tuoi ordini: non letti');
+  });
+
   it('quando i canali sono appena salvati dice che l analisi è in corso', async () => {
     stato.dati.canali = { instagram: 'oradelgusto' };
     stato.dati['analisi-del-negozio'] = { sito: null, canali: null, canaliRichiestiIl: '2026-11-24T10:00:00Z' };
