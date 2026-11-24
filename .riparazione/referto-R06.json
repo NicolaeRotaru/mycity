@@ -1,0 +1,325 @@
+{
+  "sessione": "R06",
+  "aggiornato": "2026-11-24 12:36",
+  "finita": true,
+  "testa": "a9cf358f4b1cb180163a736837d669b2848e33d9",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "a9cf358f4b1cb180163a736837d669b2848e33d9",
+    "nota": "typecheck pulito, lint 0 errori (122 avvisi già presenti), 2048 file di prova passati e 1 saltato (12535 prove). Testa presa con git rev-parse HEAD nello stesso comando."
+  },
+  "voci": [
+    {
+      "id": "R06-001",
+      "chiave": "deploy-sre|il sorvegliante legge il conto degli errori da upstash senza un tempo massimo",
+      "esito": "riparato",
+      "commit": "c938e9ab529b5de29ea973e659033711d7dd4ae7",
+      "file_toccati": [
+        "app/api/cron/operational-alerts/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-upstash-tempo-massimo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-upstash-tempo-massimo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base c938e9ab529b5de29ea973e659033711d7dd4ae7^ --file app/api/cron/operational-alerts/route.ts --prove tests/unit/riparazione-r06-upstash-tempo-massimo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La lettura del conto errori da Upstash ha un AbortController con tempo massimo di 5 secondi (azzerato nel finally): se Upstash tace, il giro prosegue con «controllo saltato».",
+      "verificato_da": "revisore 1 (subagente diverso): prova e 13 prove del sorvegliante verdi, prova rimessa uscita 0, 5 varianti (risposta pronta, errore di rete, 500, json rotto, corpo che non arriva): timer pulito nel finally, il giro continua con «controllo saltato»."
+    },
+    {
+      "id": "R06-002",
+      "chiave": "deploy-sre|l'avviso «registratore degli errori acceso solo sul server» resta finché non si rifà il deploy",
+      "esito": "non_codice",
+      "nota": "Nicola: dopo aver messo NEXT_PUBLIC_SENTRY_DSN su Vercel rifare un deploy, perché la variabile entra nel pacchetto del browser solo alla build; l'avviso lo dice già («rifai il deploy») e lo stato si legge a ogni giro (app/api/cron/operational-alerts/route.ts, dentro POST). Il registro stesso: «è una nota, non un errore di logica».",
+      "verificato_da": "capo squadra: testo intero del registro («il testo dell'avviso dice già «rifai il deploy»: è una nota, non un errore di logica»); lotto B: lo stato si legge già a ogni giro dentro POST. Non rivisto da un revisore separato perché non c'è codice cambiato."
+    },
+    {
+      "id": "R06-003",
+      "chiave": "deploy-sre|nel freno della veloce, un carrello di più negozi con un ordine scaduto si comporta in modo diverso secondo l'ordine in cui il database rende gli ordini",
+      "esito": "gia_riparato_prima",
+      "prova": "lib/ordini/veloce-non-confermata.ts:500-504 sulla base guarda la scadenza di OGNI ordine nuovo del carrello (daSpostare.find), non solo del primo letto: commit a652438a del 22/11, già nella base. La prova esistente tests/unit/riparazione-r09-freno-ordine-di-ieri.test.ts:211-226 rende lo stesso carrello misto nei due ordini e chiede lo stesso esito: npx vitest run tests/unit/riparazione-r09-freno-ordine-di-ieri.test.ts --reporter=dot → 6 passate sulla base 5b8c786c.",
+      "verificato_da": "revisore 1: sulla base :500-504 daSpostare.find guarda ogni ordine del carrello (a652438a prima della base); riparazione-r09-freno-ordine-di-ieri.test.ts:211-226 verde, rossa con a652438a^; la ricerca (oggi :898-905) è ancora senza .order ma l'esito non dipende più dall'ordine delle righe."
+    },
+    {
+      "id": "R06-004",
+      "chiave": "deploy-sre|senza la 181 ogni apertura della chat o delle recensioni del negozio scrive un avviso nel registro",
+      "esito": "parziale",
+      "commit": "af03703c28b440073aacf80fceb375d082b55d9e",
+      "file_toccati": [
+        "lib/queries/seller-public-profiles.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-avviso-senza-la-181-una-volta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-avviso-senza-la-181-una-volta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base af03703c28b440073aacf80fceb375d082b55d9e^ --file lib/queries/seller-public-profiles.ts --prove tests/unit/riparazione-r06-avviso-senza-la-181-una-volta.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "In fetchNomiDeiClienti l'avviso «funzione nomi_dei_clienti_del_negozio assente» si scrive una volta per processo (una bandierina del modulo), non a ogni chiamata; il ripiego legge gli ordini a ogni chiamata come prima, e un guasto vero della funzione o della lettura degli ordini resta nel registro ogni volta. Nota: oggi chat e recensioni del negozio chiamano la funzione da sé, con un loro avviso a ogni apertura (file non miei, vedi R06-010 serve_file_altrui e nuovi_difetti_visti).",
+      "verificato_da": "revisore 2 (subagente diverso): prova e prova rimessa uscita 0, un guasto vero si registra ancora ogni volta (:354, :368, :372); ma chat e recensioni chiamano la funzione da sé, quindi in produzione l'avviso resta: parziale.",
+      "cosa_resta": "In produzione l'avviso a ogni apertura viene da lib/queries/controparte-della-chat.ts:53 e app/seller/reviews/page.tsx:61, che chiamano nomi_dei_clienti_del_negozio da sé con un loro logger.warn: la correzione in fetchNomiDeiClienti arriva lì solo con le modifiche in serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "app/seller/reviews/page.tsx",
+          "modifica": "righe 55-65: sostituire tutto il blocco (la const nomi della riga 55, la chiamata supabase.rpc('nomi_dei_clienti_del_negozio', { p_ids: autori }), il logger.warn della riga 61 e il ciclo su trovati fino alla } della riga 65) con `const nomi = await fetchNomiDeiClienti(supabase, autori);`; aggiungere `import { fetchNomiDeiClienti } from '@/lib/queries/seller-public-profiles';` e togliere `import { logger }` della riga 16 se resta inutile."
+        },
+        {
+          "file": "lib/queries/controparte-della-chat.ts",
+          "modifica": "righe 45-55: il corpo di nomiDeiClienti diventa `return fetchNomiDeiClienti(supa, ids);`; aggiungere fetchNomiDeiClienti all'import da '@/lib/queries/seller-public-profiles' della riga 2 (LettoreChat è compatibile: tsc verde)."
+        }
+      ]
+    },
+    {
+      "id": "R06-005",
+      "chiave": "deploy-sre|il readme nomina la variabile di google analytics con il nome vecchio",
+      "esito": "riparato",
+      "commit": "dc5f926db77db0c8a6d0d50174f0393a0173d8fd",
+      "file_toccati": [
+        "README.md"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-readme-variabile-ga.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-readme-variabile-ga.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base dc5f926db77db0c8a6d0d50174f0393a0173d8fd^ --file README.md --prove tests/unit/riparazione-r06-readme-variabile-ga.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "README.md:82 ora dice NEXT_PUBLIC_GA_MEASUREMENT_ID, la variabile che components/GoogleAnalytics.tsx legge davvero.",
+      "verificato_da": "revisore 2: prova rimessa uscita 0; NEXT_PUBLIC_GA_MEASUREMENT_ID è letto da components/GoogleAnalytics.tsx:10, lib/env.ts:96, lib/analytics/server.ts:61 e scritto in .env.example:112; il nome vecchio non c'è più nel deposito."
+    },
+    {
+      "id": "R06-006",
+      "chiave": "deploy-sre|con una destinazione che ha una cartella dentro il secchio, lo storico predefinito finisce nello stesso secchio della copia senza avviso e la notte resta verde",
+      "esito": "riparato",
+      "commit": "2a5750bceb1a3d40e937a65d18ec873571dacbee",
+      "file_toccati": [
+        "scripts/backup-db.sh"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-storico-secchio-diverso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-storico-secchio-diverso.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo /home/user/mycity --base 2a5750bceb1a3d40e937a65d18ec873571dacbee^ --file scripts/backup-db.sh --prove tests/unit/riparazione-r06-storico-secchio-diverso.test.ts --json (a testa a1c222e7, copre anche la correzione a1c222e7; sul solo a1c222e7^ uscita 0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il caso «b2:mycity-foto/copie» era già chiuso sulla base; restava la stessa destinazione scritta con la barra iniziale («b2:/mycity-foto/copie», «b2://…»), che per rclone su B2/S3 è lo stesso secchio e dava lo storico «b2:/mycity-foto/copie-storico» con la notte verde. Ora lo script legge il tipo del remote da `rclone listremotes --long` (nessuna rete, nessuna chiave) e su un remote a secchi toglie le barre iniziali prima di ricavare lo storico: «b2:mycity-foto-storico/copie». Alias e remote cifrati: vedi la voce insieme. Giro di correzione chiesto dal collaudo (commit a1c222e75e21870d40ffe8f4cd6b1ad8b6d2caaa): anche oracleobjectstorage, qingstor, storj (e tardigrade) sono remote a secchi, con un caso di prova per ciascuno.",
+      "insieme_a": [
+        "R06-007"
+      ],
+      "verificato_da": "revisore 1 (subagente diverso): prove su backup-db.sh verdi (84/84), prova rimessa uscita 0, derivazione vecchia/nuova confrontata su 24 destinazioni × 4 risposte di rclone listremotes (normale, errore, vuota, 20.000 righe), nessuna morte nuova con set -euo pipefail; trovati i secchi di oracle/qingstor/storj scoperti, chiusi nel giro di correzione (20 prove backup-db verdi, 173/173). Nota: l'esempio della voce («b2:mycity-foto/copie») era già giusto sulla base (97574519); la correzione chiude la barra iniziale e gli alias."
+    },
+    {
+      "id": "R06-007",
+      "chiave": "deploy-sre|con una destinazione cifrata che ha una cartella, lo storico predefinito cade ancora nello stesso secchio sotto la cifratura",
+      "esito": "riparato",
+      "commit": "2a5750bceb1a3d40e937a65d18ec873571dacbee",
+      "file_toccati": [
+        "scripts/backup-db.sh"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-storico-secchio-diverso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-storico-secchio-diverso.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2a5750bceb1a3d40e937a65d18ec873571dacbee^ --file scripts/backup-db.sh --prove tests/unit/riparazione-r06-storico-secchio-diverso.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con lo stesso tipo letto da `rclone listremotes --long`, una destinazione su un remote che ne avvolge un altro (crypt, alias, chunker, compress, hasher, cache, union, combine) non ha più uno storico predefinito: senza STORAGE_SYNC_STORICO la notte è rossa (uscita 5) e il messaggio dice la causa e cosa impostare, come già per «cifrata:» alla radice (regola del 20/11: lo storico mai nel secchio della copia). Con STORAGE_SYNC_STORICO impostato la copia parte come prima; se il tipo non si legge vale il testo come prima.",
+      "insieme_a": [
+        "R06-006"
+      ],
+      "verificato_da": "revisore 1: prove su backup-db.sh verdi (84/84), prova rimessa uscita 0, derivazione vecchia/nuova confrontata su 24 destinazioni × 4 risposte di rclone listremotes: crypt/alias con cartella → uscita 5 con la causa, con STORAGE_SYNC_STORICO la copia parte."
+    },
+    {
+      "id": "R06-008",
+      "chiave": "deploy-sre|il ritorno indietro può ancora scegliere il rilascio sbagliato in due casi rari: un solo altro commit negli ultimi 20 rilasci, o un dominio che non dice il suo commit",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "scripts/prova-di-fumo.mjs",
+          "modifica": "Righe della base 5b8c786c toccate: 267-272, 300-354, 364-370. Diff unificato esatto contro la base (parte del commit 99c4faf1):\ndiff --git a/scripts/prova-di-fumo.mjs b/scripts/prova-di-fumo.mjs\nindex ecbf7618..972ce643 100644\n--- a/scripts/prova-di-fumo.mjs\n+++ b/scripts/prova-di-fumo.mjs\n@@ -267,6 +267,8 @@ export function commitDelRilascio(rilascio) {\n  *   · se il dominio non si sa, si sceglie solo quando c'e' un candidato solo\n  *     (un commit solo). Con due o piu' commit diversi e' tirare a indovinare,\n  *     e la risposta giusta e' nessun indirizzo: il ritorno si fa a mano.\n+ *     (24/11/2026: sapendo il commit che esce, anche con un candidato solo\n+ *     nessun indirizzo — vedi sotto.)\n  *\n  * 1/11/2026 (ondata 9) — IL SECONDO PUNTO TORNAVA AL RILASCIO GIA' SCARTATO.\n  * Prima diceva «prima c'era l'ultimo rilascio di un altro commit, si torna a\n@@ -300,55 +302,40 @@ function indirizzoDiProduzione(rilascio) {\n  * @returns {string | null}\n  */\n export function rilascioDaTornare(rispostaDeiRilasci, { commitCheEsce = '', sulDominio = null } = {}) {\n-  const elenco = Array.isArray(rispostaDeiRilasci?.deployments) ? rispostaDeiRilasci.deployments : [];\n   const daScartare = String(commitCheEsce ?? '').trim().toLowerCase();\n-  const candidati = [];\n-  // I commit di tutti i rilasci di produzione pronti, nell'ordine dell'elenco (dal piu' recente),\n-  // compresi quelli del commit che esce: servono alla regola del dominio non letto, sotto.\n-  const commitDeiPronti = [];\n-  for (const rilascio of elenco) {\n-    const indirizzo = indirizzoDiProduzione(rilascio);\n-    if (!indirizzo) continue;\n-    const commit = commitDelRilascio(rilascio);\n-    commitDeiPronti.push(commit);\n-    if (daScartare && commit === daScartare) continue;\n-    candidati.push({ indirizzo, commit });\n-  }\n-\n   const deiClienti = indirizzoDiProduzione(sulDominio);\n   // Sul dominio un altro commit: e' quello che usano i clienti, si torna li'.\n   // Sul dominio il commit che esce: chi c'era prima non si sa piu', e la\n-  // risposta e' nessun indirizzo (mai `candidati[0]`: puo' essere un\n+  // risposta e' nessun indirizzo (mai il primo dell'elenco: puo' essere un\n   // rilascio gia' tolto perche' rotto).\n   // 12/11/2026 (R07-011) — un dominio che non dice il suo commit non e' «un altro\n   // commit»: '' e' diverso da qualunque sha, e il dominio veniva preso per buono\n-  // anche quando era proprio il rilascio rotto che esce. Senza commit, nessun\n-  // indirizzo (R02-005, sotto).\n+  // anche quando era proprio il rilascio rotto che esce.\n   const commitDeiClienti = commitDelRilascio(sulDominio);\n-  if (deiClienti && (!daScartare || (commitDeiClienti && commitDeiClienti !== daScartare))) return deiClienti;\n-  // 21/11/2026 (R02-005, scelta di Nicola) — il dominio si legge ma dice il\n-  // commit che esce, oppure non dice il suo commit: dove fossero i clienti prima\n-  // non si sa piu'. Nell'elenco degli ultimi 20 rilasci anche un solo altro\n-  // commit puo' essere un rilascio gia' tolto perche' rotto, e quello dei\n-  // clienti puo' stare piu' indietro. Nessun indirizzo: il ritorno si fa a mano.\n-  // La regola dell'elenco qui sotto resta solo per quando il dominio non si\n-  // legge affatto (la scena di ogni giorno: in cima il commit che esce, sotto\n-  // quello di prima).\n-  if (deiClienti) return null;\n-\n-  // 21/11/2026 (R02-008) — il dominio non si legge: la regola dell'elenco vale solo se il commit\n-  // che esce compare AL PIU' UNA VOLTA fra i rilasci di produzione pronti, e se compare e' il\n-  // primo. Il commit che esce gia' rilasciato piu' volte (o non in cima) vuol dire che un ritorno\n-  // indietro puo' essere gia' passato di qui: Y uscito, riportato a X perche' rotto, Y di nuovo\n-  // fuori. In [Y, Y, X] X puo' essere proprio il rilascio tolto, e dove siano i clienti non si sa\n-  // piu'. Nessun indirizzo: il ritorno si fa a mano. La scena di ogni giorno [Y, X] non cambia.\n-  if (daScartare) {\n-    const volte = commitDeiPronti.filter((commit) => commit === daScartare).length;\n-    if (volte > 1 || (volte === 1 && commitDeiPronti[0] !== daScartare)) return null;\n+  if (deiClienti && commitDeiClienti && commitDeiClienti !== daScartare) return deiClienti;\n+  // 24/11/2026 — Decisione della regia: nei due casi dubbi nessun indirizzo, e il\n+  // ritorno indietro si fa a mano (la strada che c'e' gia').\n+  //  · Il dominio risponde ma non dice il suo commit: nessun indirizzo SEMPRE,\n+  //    anche quando il commit che esce non si sa. Prima, senza il commit che\n+  //    esce, quel dominio si prendeva per buono, e poteva essere proprio il\n+  //    rilascio che esce, messo li' dal rilascio automatico di Vercel.\n+  //  · Il dominio non si legge: l'elenco degli ultimi 20 rilasci non distingue un\n+  //    rilascio vivo da uno gia' tolto perche' rotto, e anche quando dice un solo\n+  //    altro commit quello puo' essere proprio il rilascio tolto (X rotto,\n+  //    riportato a W che e' fuori dai 20; esce Y: l'elenco dice [Y, X]). Prima,\n+  //    con un solo altro commit, si tornava li'. Adesso, sapendo il commit che\n+  //    esce (il lavoro di rilascio lo passa sempre), l'elenco non sceglie piu'.\n+  if (deiClienti || daScartare) return null;\n+\n+  // Senza il commit che esce (mai nel lavoro di rilascio) resta la regola di prima:\n+  // si sceglie solo quando l'elenco dice un commit solo. Un rilascio senza commit\n+  // conta come un commit a se': non si sa se e' lo stesso di un altro.\n+  const elenco = Array.isArray(rispostaDeiRilasci?.deployments) ? rispostaDeiRilasci.deployments : [];\n+  const candidati = [];\n+  for (const rilascio of elenco) {\n+    const indirizzo = indirizzoDiProduzione(rilascio);\n+    if (indirizzo) candidati.push({ indirizzo, commit: commitDelRilascio(rilascio) });\n   }\n-\n-  // Un rilascio senza commit conta come un commit a se': non si sa se e' lo\n-  // stesso di un altro.\n   const commitDiversi = new Set(candidati.map((c, i) => c.commit || `senza-commit-${i}`));\n   return commitDiversi.size === 1 ? candidati[0].indirizzo : null;\n }\n@@ -364,7 +351,7 @@ export function motivoSenzaRilascio(sulDominio) {\n   if (indirizzoDiProduzione(sulDominio)) {\n     return \"Non so quale rilascio usano i clienti adesso: il dominio ha risposto, ma dice il commit che sta uscendo o non dice il suo commit, e chi c'era prima non si sa piu'. Non scelgo a caso dove tornare indietro.\";\n   }\n-  return \"Non so quale rilascio usano i clienti adesso: il dominio non ha risposto con un rilascio di produzione pronto, e dall'elenco non si capisce (non c'e' un solo commit diverso da quello che sta uscendo, oppure quello che esce e' gia' stato rilasciato piu' volte o non e' il piu' recente). Non scelgo a caso dove tornare indietro.\";\n+  return \"Non so quale rilascio usano i clienti adesso: il dominio non ha risposto con un rilascio di produzione pronto, e l'elenco dei rilasci non dice quale e' vivo (anche un solo altro commit puo' essere un rilascio gia' tolto perche' rotto). Non scelgo a caso dove tornare indietro.\";\n }\n \n /**\n"
+        },
+        {
+          "file": "tests/unit/il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts",
+          "modifica": "Righe della base 5b8c786c toccate: 27-36, 39-44, 51-58. Diff unificato esatto contro la base (parte del commit 99c4faf1):\ndiff --git a/tests/unit/il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts b/tests/unit/il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts\nindex dc461dce..896bf737 100644\n--- a/tests/unit/il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts\n+++ b/tests/unit/il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts\n@@ -27,10 +27,14 @@ const ELENCO = {\n \n describe('il ritorno indietro non torna sullo stesso commit che sta uscendo', () => {\n   it('il passo di rilascio si segna come posto dove tornare il rilascio del commit di prima', () => {\n+    // 24/11/2026 — Il curl finto da' la stessa risposta all'elenco e al dominio: qui il dominio\n+    // dice il commit di prima (prima la prova lasciava il dominio non letto, e col dominio non\n+    // letto adesso la risposta e' nessun indirizzo: vedi la prova qui sotto).\n+    const elencoEDominio = { ...ELENCO, ...ELENCO.deployments[1], readyState: 'READY' };\n     const esito = esegui(passo('Rilascia in produzione'), {\n       env: { ...SEGRETI_FINTI, COMMIT: COMMIT_CHE_ESCE },\n       uscitaDeploy: USCITA_VERA_DEL_DEPLOY,\n-      rispostaApi: JSON.stringify(ELENCO),\n+      rispostaApi: JSON.stringify(elencoEDominio),\n     });\n \n     expect(\n@@ -39,6 +43,17 @@ describe('il ritorno indietro non torna sullo stesso commit che sta uscendo', ()\n     ).toBe('https://mycity-commit-di-prima.vercel.app');\n   });\n \n+  it('col dominio non letto il passo non si segna nessun posto: il commit di prima puo essere un rilascio gia tolto', () => {\n+    const esito = esegui(passo('Rilascia in produzione'), {\n+      env: { ...SEGRETI_FINTI, COMMIT: COMMIT_CHE_ESCE },\n+      uscitaDeploy: USCITA_VERA_DEL_DEPLOY,\n+      rispostaApi: JSON.stringify(ELENCO),\n+    });\n+\n+    expect(esito.output.precedente, 'mai il rilascio dello stesso commit, e senza il dominio nessun ritorno al buio').toBe('');\n+    expect(esito.stdout).toMatch(/::warning::/);\n+  });\n+\n   it('se in produzione c e solo il commit che esce, non inventa un posto dove tornare', () => {\n     const soloLui = { deployments: [ELENCO.deployments[0]] };\n     expect(rilascioDaTornare(soloLui, { commitCheEsce: COMMIT_CHE_ESCE })).toBeNull();\n@@ -51,8 +66,9 @@ describe('il ritorno indietro non torna sullo stesso commit che sta uscendo', ()\n     expect(esito.stdout.trim()).toBe('');\n   });\n \n-  it('un rilascio di cui l elenco non dice il commit resta un posto buono, come prima', () => {\n+  it('col dominio non letto neanche un rilascio di cui l elenco non dice il commit e un posto dove tornare; senza il commit che esce resta la regola di prima', () => {\n     const senzaCommit = { deployments: [{ url: 'mycity-senza-commit.vercel.app', target: 'production', readyState: 'READY' }] };\n-    expect(rilascioDaTornare(senzaCommit, { commitCheEsce: COMMIT_CHE_ESCE })).toBe('https://mycity-senza-commit.vercel.app');\n+    expect(rilascioDaTornare(senzaCommit, { commitCheEsce: COMMIT_CHE_ESCE })).toBeNull();\n+    expect(rilascioDaTornare(senzaCommit)).toBe('https://mycity-senza-commit.vercel.app');\n   });\n });\n"
+        },
+        {
+          "file": "tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts",
+          "modifica": "Righe della base 5b8c786c toccate: 8-13, 37-44. Diff unificato esatto contro la base (parte del commit 99c4faf1):\ndiff --git a/tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts b/tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts\nindex 1249f86e..c8cbfa0d 100644\n--- a/tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts\n+++ b/tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts\n@@ -8,6 +8,9 @@ import { rilascioDaTornare } from '@/scripts/prova-di-fumo.mjs';\n  * In tutti e due chi usavano i clienti prima non si sa: nessun indirizzo, il\n  * ritorno si fa a mano. Quando il dominio non si legge affatto resta la regola\n  * dell'elenco (la scena di ogni giorno).\n+ * 24/11/2026 — Non piu': col dominio non letto e il commit che esce noto anche un\n+ * solo altro commit puo' essere il rilascio gia' tolto, e la risposta e' nessun\n+ * indirizzo (decisione della regia, prova riparazione-r06-ritorno-indietro-casi-dubbi).\n  */\n const ESCE = '3333333333333333333333333333333333333333';\n const ROTTO = '1111111111111111111111111111111111111111';\n@@ -37,8 +40,8 @@ describe('R02-005 · il ritorno indietro non tira a indovinare nei due casi rari\n     expect(rilascioDaTornare(elenco, { commitCheEsce: ESCE, sulDominio: dominio(PRIMA) })).toBe('https://mycity-sul-dominio.vercel.app');\n   });\n \n-  it('il dominio non si legge: resta la regola dell elenco, un solo altro commit e quello', () => {\n+  it('il dominio non si legge: neanche un solo altro commit nell elenco e un posto dove tornare (puo essere il rilascio gia tolto)', () => {\n     const elenco = { deployments: [rilascio(ESCE, 'esce'), rilascio(PRIMA, 'prima')] };\n-    expect(rilascioDaTornare(elenco, { commitCheEsce: ESCE })).toBe('https://mycity-prima.vercel.app');\n+    expect(rilascioDaTornare(elenco, { commitCheEsce: ESCE })).toBeNull();\n   });\n });\n"
+        },
+        {
+          "file": "tests/unit/riparazione-r02-ritorno-indietro-commit-ripetuto.test.ts",
+          "modifica": "Righe della base 5b8c786c toccate: 11-16, 55-66, 68-74. Diff unificato esatto contro la base (parte del commit 99c4faf1):\ndiff --git a/tests/unit/riparazione-r02-ritorno-indietro-commit-ripetuto.test.ts b/tests/unit/riparazione-r02-ritorno-indietro-commit-ripetuto.test.ts\nindex b72aa9fb..24fdf7f2 100644\n--- a/tests/unit/riparazione-r02-ritorno-indietro-commit-ripetuto.test.ts\n+++ b/tests/unit/riparazione-r02-ritorno-indietro-commit-ripetuto.test.ts\n@@ -11,6 +11,9 @@ import { rilascioDaTornare } from '@/scripts/prova-di-fumo.mjs';\n  * dell'elenco vale solo se il commit che esce compare al piu' una volta fra i rilasci di\n  * produzione pronti, e se compare e' il primo; altrimenti nessun indirizzo (ritorno a mano).\n  * La scena di ogni giorno [Y, X] resta com'era: si torna a X.\n+ * 24/11/2026 — Non piu': anche in [Y, X] X puo' essere il rilascio gia' tolto (riportato a W,\n+ * fuori dai 20 dell'elenco), e col dominio non letto la risposta e' nessun indirizzo (decisione\n+ * della regia, prova riparazione-r06-ritorno-indietro-casi-dubbi).\n  *\n  * In piu' il messaggio di `--rilascio-di-adesso` diceva sempre «il dominio non ha risposto»,\n  * anche quando aveva risposto.\n@@ -55,12 +58,10 @@ describe('R02-008 · col dominio non letto, il commit che esce gia\\' rilasciato\n     expect(rilascioDaTornare(elenco, { commitCheEsce: Y })).toBeNull();\n   });\n \n-  it('[Y, X] col dominio non letto (la scena di ogni giorno): si torna a X, come prima', () => {\n+  it('[Y, X] col dominio non letto (la scena di ogni giorno): nessun indirizzo, X puo\\' essere il rilascio gia\\' tolto', () => {\n     const elenco = { deployments: [rilascio(Y, 'y-esce'), rilascio(X, 'x-prima')] };\n-    expect(rilascioDaTornare(elenco, { commitCheEsce: Y })).toBe('https://mycity-x-prima.vercel.app');\n-    expect(rilascioDaTornare(elenco, { commitCheEsce: Y, sulDominio: { error: { code: 'forbidden' } } })).toBe(\n-      'https://mycity-x-prima.vercel.app',\n-    );\n+    expect(rilascioDaTornare(elenco, { commitCheEsce: Y })).toBeNull();\n+    expect(rilascioDaTornare(elenco, { commitCheEsce: Y, sulDominio: { error: { code: 'forbidden' } } })).toBeNull();\n   });\n \n   it('da riga di comando, [Y, Y, X] senza dominio: nessun indirizzo e il messaggio dice che il dominio non ha detto chi serve', () => {\n@@ -68,7 +69,7 @@ describe('R02-008 · col dominio non letto, il commit che esce gia\\' rilasciato\n     expect(esito.status).not.toBe(0);\n     expect(esito.stdout.trim()).toBe('');\n     expect(esito.stderr).toMatch(/il dominio non ha risposto con un rilascio di produzione pronto/);\n-    expect(esito.stderr).toMatch(/gia' stato rilasciato piu' volte/);\n+    expect(esito.stderr).toMatch(/anche un solo altro commit puo' essere un rilascio gia' tolto/);\n   });\n \n   it('da riga di comando, il dominio ha risposto col commit che esce: il messaggio non dice «non ha risposto»', () => {\n"
+        },
+        {
+          "file": "tests/unit/riparazione-r06-ritorno-indietro-casi-dubbi.test.ts",
+          "modifica": "File nuovo (95 righe). Diff unificato esatto contro la base (parte del commit 99c4faf1):\ndiff --git a/tests/unit/riparazione-r06-ritorno-indietro-casi-dubbi.test.ts b/tests/unit/riparazione-r06-ritorno-indietro-casi-dubbi.test.ts\nnew file mode 100644\nindex 00000000..2cc6436c\n--- /dev/null\n+++ b/tests/unit/riparazione-r06-ritorno-indietro-casi-dubbi.test.ts\n@@ -0,0 +1,95 @@\n+import { afterEach, describe, expect, it, vi } from 'vitest';\n+import { spawnSync } from 'node:child_process';\n+import { join } from 'node:path';\n+import { rilascioDaTornare } from '@/scripts/prova-di-fumo.mjs';\n+\n+/**\n+ * R06-008 — Il ritorno indietro poteva ancora scegliere il rilascio sbagliato in due casi rari.\n+ *  · A: il dominio non si legge e fra i 20 rilasci letti c'e' un solo altro commit. Veniva scelto,\n+ *    anche quando era il rilascio rotto gia' tolto (X rotto, riportato a W che sta fuori dai 20;\n+ *    esce Y, e l'elenco dice [Y, X]).\n+ *  · E: il dominio risponde ma non porta lo sha. Senza il commit che esce veniva preso per buono,\n+ *    anche quando ci stava gia' il rilascio che esce.\n+ * Decisione della regia: in tutti e due la risposta e' «nessuno», e il ritorno indietro si fa a mano\n+ * (la strada che c'e' gia'). Elenchi di rilasci finti, nessuna rete: nessuna chiamata a Vercel.\n+ */\n+const Y = '3333333333333333333333333333333333333333'; // il commit che esce\n+const X = '1111111111111111111111111111111111111111'; // l'unico altro commit dell'elenco\n+const W = '2222222222222222222222222222222222222222';\n+\n+const rilascio = (commit: string | null, nome: string) => ({\n+  uid: `dpl_${nome}`,\n+  url: `mycity-${nome}.vercel.app`,\n+  target: 'production',\n+  readyState: 'READY',\n+  meta: commit ? { githubCommitSha: commit } : {},\n+});\n+const Y_X = { deployments: [rilascio(Y, 'y-esce'), rilascio(X, 'x-forse-tolto')] };\n+\n+function rilascioDiAdesso(elenco: unknown, env: Record<string, string>) {\n+  return spawnSync(process.execPath, [join(process.cwd(), 'scripts/prova-di-fumo.mjs'), '--rilascio-di-adesso'], {\n+    input: JSON.stringify(elenco),\n+    env: { ...process.env, COMMIT_CHE_ESCE: '', RILASCIO_SUL_DOMINIO: '', ...env },\n+    encoding: 'utf8',\n+  });\n+}\n+\n+afterEach(() => vi.restoreAllMocks());\n+\n+describe('R06-008 · A: il dominio non si legge e nell\\'elenco c\\'e\\' un solo altro commit', () => {\n+  const nonLetti: Array<[string, unknown]> = [\n+    ['nessuna risposta', null],\n+    ['un errore', { error: { code: 'forbidden', message: 'Not authorized' } }],\n+    ['ancora in costruzione', { ...rilascio(W, 'sul-dominio'), readyState: 'BUILDING' }],\n+  ];\n+  for (const [come, sulDominio] of nonLetti) {\n+    it(`[Y, X] col dominio che da' ${come}: nessun indirizzo, X puo' essere il rilascio gia' tolto`, () => {\n+      const fetchFinto = vi.spyOn(globalThis, 'fetch');\n+      expect(rilascioDaTornare(Y_X, { commitCheEsce: Y, sulDominio })).toBeNull();\n+      expect(fetchFinto).not.toHaveBeenCalled();\n+    });\n+  }\n+\n+  it('[X, X, X] senza il commit che esce nell\\'elenco: nessun indirizzo nemmeno qui', () => {\n+    const soloX = { deployments: [rilascio(X, 'x1'), rilascio(X, 'x2'), rilascio(X, 'x3')] };\n+    expect(rilascioDaTornare(soloX, { commitCheEsce: Y })).toBeNull();\n+  });\n+\n+  it('da riga di comando: nessun indirizzo, uscita non zero, e il messaggio dice perche\\'', () => {\n+    const esito = rilascioDiAdesso(Y_X, { COMMIT_CHE_ESCE: Y });\n+    expect(esito.stdout.trim(), 'il lavoro di rilascio si segnerebbe X come posto dove tornare').toBe('');\n+    expect(esito.status).not.toBe(0);\n+    expect(esito.stderr).toMatch(/il dominio non ha risposto/);\n+  });\n+});\n+\n+describe('R06-008 · E: il dominio risponde ma non dice il suo commit', () => {\n+  const senzaSha = { ...rilascio(null, 'sul-dominio') };\n+\n+  it('senza il commit che esce: nessun indirizzo (poteva essere proprio il rilascio che esce)', () => {\n+    expect(rilascioDaTornare(Y_X, { sulDominio: senzaSha })).toBeNull();\n+    expect(rilascioDaTornare({ deployments: [] }, { sulDominio: senzaSha })).toBeNull();\n+  });\n+\n+  it('col commit che esce: nessun indirizzo, come gia\\' prima', () => {\n+    expect(rilascioDaTornare(Y_X, { commitCheEsce: Y, sulDominio: senzaSha })).toBeNull();\n+  });\n+\n+  it('da riga di comando, senza COMMIT_CHE_ESCE: nessun indirizzo e il messaggio dice che il dominio ha risposto', () => {\n+    const esito = rilascioDiAdesso(Y_X, { RILASCIO_SUL_DOMINIO: JSON.stringify(senzaSha) });\n+    expect(esito.stdout.trim()).toBe('');\n+    expect(esito.status).not.toBe(0);\n+    expect(esito.stderr).toMatch(/il dominio ha risposto/);\n+  });\n+});\n+\n+describe('R06-008 · controprove: quello che il dominio dice chiaramente non cambia', () => {\n+  it('il dominio dice un altro commit: si torna li\\'', () => {\n+    expect(rilascioDaTornare(Y_X, { commitCheEsce: Y, sulDominio: rilascio(W, 'sul-dominio') })).toBe('https://mycity-sul-dominio.vercel.app');\n+    expect(rilascioDaTornare(Y_X, { sulDominio: rilascio(W, 'sul-dominio') })).toBe('https://mycity-sul-dominio.vercel.app');\n+  });\n+\n+  it('il dominio dice il commit che esce: nessun indirizzo', () => {\n+    expect(rilascioDaTornare(Y_X, { commitCheEsce: Y, sulDominio: rilascio(Y, 'sul-dominio') })).toBeNull();\n+  });\n+});\n"
+        }
+      ],
+      "nota": "Riparazione fatta e collaudata, poi tolta dal ramo su richiesta della regia (commit di revert a9cf358f) perché tocca la prova comune tests/unit/il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts (usata da più sessioni, guardia «prove_comuni»), la cui firma di Nicola non è arrivata. Cosa fa: rilascioDaTornare in scripts/prova-di-fumo.mjs risponde «nessuno» (si torna indietro a mano) nei due casi dubbi della voce: (A) dominio non letto col commit che esce noto, anche con un solo altro commit nell'elenco; (E) dominio che risponde senza sha. Il caso normale (dominio letto che dice un altro commit) non cambia. Va riapplicata tutta insieme (cinque file), perché la versione di prima della prova comune e delle due prove r02 fissano la regola vecchia: col codice nuovo la prova comune di prima dà 2 rosse su 3. Come: `git cherry-pick 99c4faf19c64951e57a97b8ec5ff18bad7f565f0` sul ramo unito (oppure `git apply` del diff qui sotto); il diff è identico al netto di 99c4faf1, mentre 9d452b01 e 1ab7ef98 (la stessa modifica della prova comune isolata in un commit) si annullano a vicenda. Prova da rilanciare: npx vitest run tests/unit/riparazione-r06-ritorno-indietro-casi-dubbi.test.ts tests/unit/il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts tests/unit/riparazione-r02-ritorno-indietro-commit-ripetuto.test.ts --reporter=dot; prova rimessa che reggeva (uscita 0): prova-rimessa.mjs --base 99c4faf1^ --file scripts/prova-di-fumo.mjs --prove tests/unit/riparazione-r06-ritorno-indietro-casi-dubbi.test.ts.",
+      "verificato_da": "revisore 1: prova nuova e 10 prove che usano scripts/prova-di-fumo.mjs verdi (68/68), prova rimessa uscita 0, confronto vecchio/nuovo di rilascioDaTornare su 39.996 casi finti: caso normale identico, nessuna scelta nuova, le sole differenze diventano «nessuno» (casi A ed E); le 3 prove esistenti modificate importano lo script e non sono indebolite."
+    },
+    {
+      "id": "R06-009",
+      "chiave": "deploy-sre|con il rilascio automatico acceso il ritorno indietro automatico non scatta quasi mai",
+      "esito": "scelta_di_nicola",
+      "domanda": "Il ritorno indietro automatico deve scattare: spegniamo il rilascio automatico di Vercel su main (vercel.json:6-10, \"git.deploymentEnabled.main\": false) così online va solo il lavoro dopo la CI, oppure lasciamo Vercel acceso e facciamo scegliere al ritorno indietro il rilascio prima di quello uscito? Tutte e due cambiano come il sito va online.",
+      "nota": "Il difetto c'è ancora sulla base: vercel.json:6-10 ha \"git\": {\"deploymentEnabled\": {\"main\": true}}; il dominio dice già il commit che esce quando parte il lavoro dopo la CI, e rilascioDaTornare risponde «nessuno» (scripts/prova-di-fumo.mjs, anche dopo il commit del ritorno indietro di questo lotto). File non toccato.",
+      "verificato_da": "revisore: non applicabile (scelta di Nicola, file non toccato)."
+    },
+    {
+      "id": "R06-010",
+      "chiave": "frontend-ux|il cliente legge «il tuo rider» e il negozio legge «cliente» al posto dei nomi, perché le due strade nuove per i nomi non esistono nel database vero",
+      "esito": "non_codice",
+      "nota": "Nicola: applicare nel database vero la migrazione 164 (vista nomi_pubblici, solo authenticated; va con la 161 o dopo) e la 181 (funzione nomi_dei_clienti_del_negozio, solo authenticated), già nel deposito. Per il nome del fattorino non c'è un ripiego sicuro nel codice: fetchNomiPubblici (lib/queries/seller-public-profiles.ts:253-281) senza la 164 ripiega su profiles, che in produzione dà solo la propria riga, e nessuna tabella che cliente o negozio leggono già porta il nome del fattorino; leggerlo con la chiave di servizio mostrerebbe più dati di prima. Per il negozio il ripiego senza la 181 esiste già (fetchNomiDeiClienti, :315), ma la chat e le recensioni non lo usano: vedi serve_file_altrui, che riporta i nomi dei clienti anche prima della 181 (il fattorino resta generico fino alla 164). Lo stato del database vero non l'ho guardato (divieto): il codice della base dipende ancora da 164 e 181.",
+      "serve_file_altrui": [
+        {
+          "file": "app/seller/reviews/page.tsx",
+          "modifica": "righe 55-65: sostituire tutto il blocco (la const nomi della riga 55, la chiamata supabase.rpc('nomi_dei_clienti_del_negozio', { p_ids: autori }), il logger.warn della riga 61 e il ciclo su trovati fino alla } della riga 65) con `const nomi = await fetchNomiDeiClienti(supabase, autori);`; aggiungere `import { fetchNomiDeiClienti } from '@/lib/queries/seller-public-profiles';` e togliere `import { logger }` della riga 16 se resta inutile."
+        },
+        {
+          "file": "lib/queries/controparte-della-chat.ts",
+          "modifica": "righe 45-55: il corpo di nomiDeiClienti diventa `return fetchNomiDeiClienti(supa, ids);`; aggiungere fetchNomiDeiClienti all'import da '@/lib/queries/seller-public-profiles' della riga 2 (LettoreChat è compatibile: tsc verde)."
+        },
+        {
+          "file": "tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts",
+          "modifica": "righe 210-219 e 237-242: con le due modifiche sopra, senza la 181 esce il nome del ripiego (es. «Maria Rossi») e non più «Cliente»: aggiornare quelle attese (4 prove), senza indebolirle."
+        }
+      ],
+      "verificato_da": "revisore 2: tesi verificata sul codice (nessuna tabella letta dal cliente porta il nome del fattorino; per il negozio il ripiego c'è ma i chiamanti non lo usano); modifiche altrui applicate per prova in una copia separata: tsc verde, 4 prove esistenti da aggiornare (sotto)."
+    },
+    {
+      "id": "R06-011",
+      "chiave": "frontend-ux|nel ripiego dei nomi dei clienti il limite di 1000 ordini vale per tutti gli id insieme",
+      "esito": "riparato",
+      "commit": "41ecd312bef214204ec79d7019d548be708c91a9",
+      "file_toccati": [
+        "lib/queries/seller-public-profiles.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-ripiego-nomi-mille-ordini.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-ripiego-nomi-mille-ordini.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 41ecd312bef214204ec79d7019d548be708c91a9^ --file lib/queries/seller-public-profiles.ts --prove tests/unit/riparazione-r06-ripiego-nomi-mille-ordini.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel ripiego senza la 181, quando la lettura degli ordini riempie il tetto di 1000 righe, fetchNomiDeiClienti rilegge gli ordini dei soli id che non sono usciti, finché tutti escono o le righe finiscono: un cliente con mille ordini recenti non nasconde più gli altri. Con pochi ordini resta una lettura sola.",
+      "verificato_da": "revisore 2: prova e prove vicine verdi, prova rimessa uscita 0; il ciclo finisce sempre (a ogni giro esce o toglie almeno un id); il filtro per negozio resta quello delle regole del database, nessun dato nuovo esposto. Nota: fetchNomiDeiClienti oggi non ha chiamanti nel sito (vedi la voce R06-010)."
+    },
+    {
+      "id": "R06-012",
+      "chiave": "qa-flussi|la risalita dei genitori delle categorie non ha un tetto",
+      "esito": "serve_file_altrui",
+      "prova": "Nel mio file il tetto c'è già sulla base 5b8c786c: lib/category-attributes.ts:285 (PROFONDITA_MASSIMA_CATEGORIE = 20) e :305-310 (insieme dei visti, passi++ < tetto). Ma la voce («un cerchio già presente bloccherebbe il modulo prodotto») resta aperta in components/seller/ProductForm.tsx:353-361 (resolveTop, while (cur?.parent_id) senza tetto né visti): con A→B→A gira per sempre a ogni disegno.",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/ProductForm.tsx",
+          "modifica": "In resolveTop (righe 353-361) stesso modello di lib/category-attributes.ts: costante PROFONDITA_MASSIMA_CATEGORIE = 20, insieme dei visti, uscita se il padre è già visto. Diff esatto contro dc5f926d (tsc verde):\ndiff --git a/components/seller/ProductForm.tsx b/components/seller/ProductForm.tsx\nindex ca36933c..101b3d2d 100644\n--- a/components/seller/ProductForm.tsx\n+++ b/components/seller/ProductForm.tsx\n@@ -72,6 +72,9 @@ import {\n } from '@/lib/products/variants';\n import { leggiPrezzo } from '@/app/seller/products/import/csv';\n \n+/** R06-012 — Quanti padri si risalgono al massimo (come PROFONDITA_MASSIMA_CATEGORIE in lib/category-attributes.ts). */\n+const PROFONDITA_MASSIMA_CATEGORIE = 20;\n+\n /**\n  * R02-021 — Perché questi assi non entrano nei tetti di lib/products/variants.ts, o `null` se entrano.\n  * `reconcileVariants` (via buildCombinations) taglia in silenzio quello che sta sopra: assi oltre\n@@ -352,9 +355,15 @@ export default function ProductForm({\n   const topCategories = useMemo(() => categories.filter((c) => !c.parent_id), [categories]);\n   const resolveTop = (catId: string): string => {\n     let cur = categories.find((c) => c.id === catId);\n-    while (cur?.parent_id) {\n+    // R06-012 — stesso modello di getAttributesForCategory (R18-014): un tetto di passi e l'insieme\n+    // dei già visti, perché un cerchio nei dati (A→B→A, o una categoria genitore di sé stessa) non\n+    // faccia girare il modulo per sempre a ogni disegno.\n+    const visti = new Set<string>([cur?.id ?? '']);\n+    let passi = 0;\n+    while (cur?.parent_id && passi++ < PROFONDITA_MASSIMA_CATEGORIE) {\n       const parent = categories.find((c) => c.id === cur!.parent_id);\n-      if (!parent) break;\n+      if (!parent || visti.has(parent.id)) break;\n+      visti.add(parent.id);\n       cur = parent;\n     }\n     return cur?.id ?? '';\n"
+        }
+      ],
+      "verificato_da": "revisore 2: letta la base, cercati tutti i cicli sui genitori, simulato resolveTop con un cerchio (gira per sempre); diff provato in una copia separata dal giro di correzione, tsc verde."
+    },
+    {
+      "id": "R06-013",
+      "chiave": "qa-flussi|l'aiutante di prova accendi, con la suspense, rende vuoto in silenzio un componente che resta sospeso per sempre: una prova che controlla un'assenza può passare senza aver provato niente",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/schermo.ts",
+          "modifica": "Riga 24: Suspense con un segnaposto visibile al posto di fallback: null; attendi() fallisce con un messaggio chiaro se resta [data-aiuto-sospeso] dopo 20 giri; opzione accendi(c, p, { permettiSospeso: true }) per chi aspetta davvero un componente sospeso; sospeso() nel ritorno di accendi. Con la modifica le 282 prove che usano l'aiutante restano verdi (1723/1723). Diff esatto contro dc5f926d:\ndiff --git a/tests/unit/aiuti/schermo.ts b/tests/unit/aiuti/schermo.ts\nindex 9f30807e..93e61fef 100644\n--- a/tests/unit/aiuti/schermo.ts\n+++ b/tests/unit/aiuti/schermo.ts\n@@ -12,16 +12,36 @@ type Schermo = {\n   radice: HTMLElement;\n   agisci: (azione: () => void) => void;\n   smonta: () => void;\n+  /** Quanti segnaposto di «sospeso» ci sono ora sullo schermo (0 = il componente si è disegnato). */\n+  sospeso: () => number;\n };\n \n-export function accendi(componente: unknown, proprieta: Record<string, unknown> = {}): Schermo {\n+/** Il segno che il componente è ancora sospeso (un import pigro, una promessa che non torna). */\n+const SOSPESO = '[data-aiuto-sospeso]';\n+\n+type Opzioni = { permettiSospeso?: boolean };\n+let permettiSospesoDaAccendi = false;\n+\n+function controllaNonSospeso(doc: Document, dove: string) {\n+  const n = doc.querySelectorAll(SOSPESO).length;\n+  if (n > 0 && !permettiSospesoDaAccendi) {\n+    throw new Error(\n+      `Lo schermo e' ancora sospeso ${dove} (${n} segnaposto [data-aiuto-sospeso]): il componente non si e' mai disegnato, ` +\n+        `e una prova che controlla un'assenza passerebbe senza aver provato niente. ` +\n+        `Se la prova aspetta davvero un componente sospeso, usa accendi(componente, props, { permettiSospeso: true }).`,\n+    );\n+  }\n+}\n+\n+export function accendi(componente: unknown, proprieta: Record<string, unknown> = {}, opzioni: Opzioni = {}): Schermo {\n+  permettiSospesoDaAccendi = opzioni.permettiSospeso === true;\n   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;\n   const radice = document.createElement('div');\n   document.body.appendChild(radice);\n   let root: Root;\n   void act(() => {\n     root = createRoot(radice);\n-    root.render(createElement(Suspense, { fallback: null }, createElement(componente as ComponentType<Record<string, unknown>>, proprieta)));\n+    root.render(createElement(Suspense, { fallback: createElement('span', { 'data-aiuto-sospeso': '' }) }, createElement(componente as ComponentType<Record<string, unknown>>, proprieta)));\n   });\n   return {\n     doc: document,\n@@ -31,6 +51,7 @@ export function accendi(componente: unknown, proprieta: Record<string, unknown>\n         azione();\n       });\n     },\n+    sospeso: () => document.querySelectorAll(SOSPESO).length,\n     smonta: () => {\n       void act(() => {\n         root.unmount();\n@@ -46,6 +67,13 @@ export async function attendi(): Promise<void> {\n     await Promise.resolve();\n     await Promise.resolve();\n   });\n+  // Un import pigro puo' chiedere qualche giro in piu': si da' un po' di tempo prima di dire che e' sospeso per sempre.\n+  for (let giro = 0; giro < 20 && document.querySelector(SOSPESO); giro++) {\n+    await act(async () => {\n+      await new Promise((ok) => setTimeout(ok, 0));\n+    });\n+  }\n+  controllaNonSospeso(document, 'dopo attendi()');\n }\n \n /** Un clic vero, quello che fa partire onClick di React. */\n"
+        }
+      ],
+      "verificato_da": "revisore 1: difetto confermato con una prova temporanea (componente sospeso per sempre → prova d'assenza verde a vuoto); la prima proposta non bastava (serve un controllo automatico); la nuova provata in una copia separata: 282 file di prova verdi, e un componente mai risolto fa fallire attendi()."
+    },
+    {
+      "id": "R06-014",
+      "chiave": "stati-ui|dopo un errore su un solo canale, la pagina delle segnalazioni dice che l'esito non è partito né a chi ha segnalato né al venditore",
+      "esito": "riparato",
+      "commit": "653f3e0950675f2ce7404c430f7fc14e358f2648",
+      "file_toccati": [
+        "app/admin/segnalazioni/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-segnalazioni-canale.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-segnalazioni-canale.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo /home/user/mycity --base 653f3e0950675f2ce7404c430f7fc14e358f2648^ --file app/admin/segnalazioni/page.tsx --prove tests/unit/riparazione-r06-segnalazioni-canale.test.tsx --json (a testa a1c222e7, copre anche la correzione ab9366ee; sul solo ab9366ee^ uscita 0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina legge dal corpo della risposta quali canali sono 'fallita' (email o notifica a chi ha segnalato, avviso al venditore) e li nomina nel messaggio; senza dettaglio resta il testo di prima. Giro di correzione chiesto dal collaudo (commit ab9366ee42908bb29f3dff5c4b6df3999ab1cd5c): con più canali caduti il messaggio dice «rimandare solo quelli», con uno solo resta «quello»; la prova ha un caso in più.",
+      "verificato_da": "revisore 2 (subagente diverso): prova e prova rimessa uscita 0, campi letti dalla rotta verificati (app/api/segnalazioni/route.ts:235-240), casi tutti/uno/nessuno/senza dettaglio; trovato il singolare con più canali, corretto nel giro di correzione e riprovato (11 prove della pagina verdi, 40/40)."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "chat e recensioni del negozio, senza la 181, scrivono un avviso a ogni apertura e non usano il ripiego dei nomi",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "lib/queries/controparte-della-chat.ts:53",
+      "descrizione": "lib/queries/controparte-della-chat.ts:53 e app/seller/reviews/page.tsx:61 chiamano direttamente nomi_dei_clienti_del_negozio con un loro logger.warn; fetchNomiDeiClienti (che ha il ripiego e l'avviso una volta sola) oggi non ha chiamanti nel sito. La cura è nei serve_file_altrui di R06-010."
+    },
+    {
+      "titolo": "senza la 164 la lettura dei nomi pubblici scrive «vista nomi_pubblici assente» a ogni chiamata",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "lib/queries/seller-public-profiles.ts:266",
+      "descrizione": "Lo stesso rumore della voce sulla 181, ma per la vista della 164 in fetchNomiPubblici: fuori dalla voce, non toccato."
+    },
+    {
+      "titolo": "la guida al backup non dice che con un remote cifrato o alias lo storico va impostato a mano",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "docs/backup-restore.md:224-232",
+      "descrizione": "Dopo la correzione della copia cifrata, con un remote crypt/alias/union e una cartella la notte è rossa finché STORAGE_SYNC_STORICO non è impostata; la guida non lo dice."
+    }
+  ],
+  "domande_per_nicola": [
+    "R06-008: firmare la modifica alla prova comune tests/unit/il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts: con la firma la regia riapplica il diff della voce (cherry-pick di 99c4faf1) sul ramo unito, altrimenti la voce va nel giro di correzione.",
+    "R06-009: il ritorno indietro automatico deve scattare? Spegniamo il rilascio automatico di Vercel su main (vercel.json, git.deploymentEnabled.main: false) così online va solo il lavoro dopo la CI, oppure lasciamo Vercel acceso e facciamo scegliere al ritorno indietro il rilascio prima di quello uscito? Tutte e due cambiano come il sito va online.",
+    "R06-007: se la copia delle foto in produzione usa una destinazione cifrata o alias con una cartella e STORAGE_SYNC_STORICO non è impostata, dalla notte dopo l'unione la copia si ferma rossa (uscita 5) finché non la imposti: va impostata prima di unire.",
+    "R06-010: applicare nel database vero le migrazioni 164 (vista nomi_pubblici) e 181 (funzione nomi_dei_clienti_del_negozio), già nel deposito: senza, il cliente legge «Il tuo rider» e il negozio «Cliente».",
+    "R06-002: dopo aver messo NEXT_PUBLIC_SENTRY_DSN su Vercel rifare un deploy: la variabile entra nel pacchetto del browser solo alla build."
+  ],
+  "conto": {
+    "agenti": 5,
+    "costo_usd": 19.97,
+    "nota": "usage.cost_usd di get_session letto dopo il verify finale (19,97 $), prima del commit del referto. Lotto A (modello grande, 8 voci), lotto B (modello piccolo, 6 voci), 2 revisori in parallelo (modello grande, 6 voci ciascuno, in copie separate), 1 giro di correzione (modello piccolo). Regia: session_01R8112PV6Phn3WXaFfB7G85 (regia terza).",
+    "subagenti": 5
+  }
+}

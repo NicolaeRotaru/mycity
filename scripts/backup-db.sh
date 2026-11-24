@@ -34,7 +34,11 @@
 #                           assoluto resta com'e': "nas:/mnt/x" diventa
 #                           "nas:/mnt/x-storico"; un remote alla radice,
 #                           "cifrata:", non ha default e la notte e' rossa
-#                           finche' non la si imposta). Vedi in
+#                           finche' non la si imposta; cosi' anche un remote
+#                           crypt o alias con una cartella, "cifrata:copie",
+#                           che sta nel secchio di un altro remote; su B2 e
+#                           S3 "b2:/mycity-foto/copie" vale come senza la
+#                           barra). Vedi in
 #                           fondo, R180 secondo giro: senza, la copia e' uno
 #                           specchio e ripete la cancellazione invece di
 #                           proteggerla.
@@ -324,13 +328,35 @@ done
 # con la barra iniziale ("nas:/mnt/x-storico"). Se non c'e' niente dopo i due punti (remote usato
 # alla radice, "cifrata:" o "cifrata:/"), il predefinito non esiste: la notte e' rossa finche' non
 # si imposta STORAGE_SYNC_STORICO.
+#
+# 24/11/2026 — Il tipo del remote, letto da `rclone listremotes --long` (solo nomi e tipi della
+# configurazione: nessuna rete, nessuna chiave), decide due casi che il solo testo non dice:
+#  - su un remote a secchi (B2, S3, ...) le barre iniziali non contano: "b2:/mycity-foto/copie" e' il
+#    secchio mycity-foto, e lo storico dava "b2:/mycity-foto/copie-storico", lo stesso secchio, notte verde;
+#  - un remote che ne avvolge un altro (crypt, alias, ...) scrive dentro il secchio di quello: lo storico
+#    "cifrata:copie-storico" cadeva nello stesso secchio della copia, sotto la cifratura. Lo script non
+#    vede quel secchio, quindi non c'e' un predefinito: la notte e' rossa finche' non si imposta
+#    STORAGE_SYNC_STORICO.
+# Se il tipo non si legge, vale il testo, come prima.
 STORICO_SENZA_SECCHIO=""
+STORICO_PERCHE="non c'e' un secchio da cui partire"
 STORICO_PREDEFINITO="${DEST_PULITA}-storico"
 if [[ "$DEST_PULITA" == *:* ]]; then
   _remote="${DEST_PULITA%%:*}"
   _resto="${DEST_PULITA#*:}"
+  _tipo_remote=""
+  if command -v rclone >/dev/null 2>&1; then
+    _tipo_remote="$(rclone listremotes --long 2>/dev/null | awk -v r="${_remote}:" '$1 == r { print ($2 == "google" ? $2 " " $3 " " $4 : $2); exit }' || true)"
+  fi
+  case "$_tipo_remote" in
+    s3|b2|swift|azureblob|"google cloud storage"|oracleobjectstorage|qingstor|storj|tardigrade)
+      while [[ "$_resto" == /* ]]; do _resto="${_resto#/}"; done ;;
+  esac
   _secchio="${_resto%%/*}"
-  if [[ "$_resto" == /* ]]; then
+  if [[ "$_tipo_remote" =~ ^(alias|crypt|chunker|compress|hasher|cache|union|combine)$ ]]; then
+    STORICO_SENZA_SECCHIO=1
+    STORICO_PERCHE="e' un remote ${_tipo_remote}, che scrive dentro il secchio di un altro remote: lo storico predefinito (${DEST_PULITA}-storico) cadrebbe nello stesso secchio della copia"
+  elif [[ "$_resto" == /* ]]; then
     : # percorso assoluto: resta "<destinazione>-storico"
   elif [[ -z "$_secchio" ]]; then
     STORICO_SENZA_SECCHIO=1
@@ -533,7 +559,7 @@ elif ! command -v rclone >/dev/null 2>&1; then
   exit 4
 else
   if [[ -n "$STORICO_SENZA_SECCHIO" && -z "${STORAGE_SYNC_STORICO:-}" ]]; then
-    echo "[backup] esito-foto: fallita — dalla destinazione (${DESTINAZIONE_FOTO}) non si ricava il secchio dello storico: non c'e' un secchio da cui partire. Imposta STORAGE_SYNC_STORICO su un secchio diverso da quello della copia. Stanotte la copia delle foto non parte." >&2
+    echo "[backup] esito-foto: fallita — dalla destinazione (${DESTINAZIONE_FOTO}) non si ricava il secchio dello storico: ${STORICO_PERCHE}. Imposta STORAGE_SYNC_STORICO su un secchio diverso da quello della copia. Stanotte la copia delle foto non parte." >&2
     riepilogo_lavoro "❌ **Le foto non sono state copiate: manca il secchio dello storico** — dalla destinazione non si ricava un secchio diverso da quello della copia. Imposta \`STORAGE_SYNC_STORICO\`."
     exit 5
   fi

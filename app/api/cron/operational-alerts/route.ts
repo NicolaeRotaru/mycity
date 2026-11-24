@@ -63,14 +63,21 @@ type ErroriDelSito =
   | { configurato: true; letti: false }
   | { configurato: true; letti: true; conteggio: number };
 
+// R06-001 — Upstash che non risponde non tiene appeso il giro: dopo questo tempo si arrende e il
+// sorvegliante dice «controllo saltato», come per ogni altra lettura fallita.
+const ATTESA_MASSIMA_UPSTASH_MS = 5_000;
+
 async function erroriDelSitoRecenti(adesso: number): Promise<ErroriDelSito> {
   const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
   const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
   if (!url || !token) return { configurato: false };
   const ambiente = process.env.VERCEL_ENV || process.env.NODE_ENV || 'sconosciuto';
   const chiave = (ms: number) => `mc:errori-del-sito:${ambiente}:${new Date(ms).toISOString().slice(0, 13)}`;
+  const freno = new AbortController();
+  const scatto = setTimeout(() => freno.abort(), ATTESA_MASSIMA_UPSTASH_MS);
   try {
     const res = await fetch(`${url}/pipeline`, {
+      signal: freno.signal,
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify([['GET', chiave(adesso - 60 * 60_000)], ['GET', chiave(adesso)]]),
@@ -82,6 +89,8 @@ async function erroriDelSitoRecenti(adesso: number): Promise<ErroriDelSito> {
     return { configurato: true, letti: true, conteggio: righe.reduce((somma, r) => somma + (Number(r?.result) || 0), 0) };
   } catch {
     return { configurato: true, letti: false };
+  } finally {
+    clearTimeout(scatto);
   }
 }
 
