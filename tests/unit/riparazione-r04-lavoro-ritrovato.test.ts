@@ -28,8 +28,6 @@ vi.mock('@/lib/supabase/server', () => ({
               filtri.push({ col: c, val: stati });
               return { order: () => ({ limit: () => Promise.resolve({ data: aperti, error: null }) }) };
             },
-            // R09-006 R09-007: senza lavori aperti la rotta guarda l'ultimo lavoro del negozio.
-            order: () => ({ limit: () => Promise.resolve({ data: aperti, error: null }) }),
             single: () => Promise.resolve({ data: null, error: null }),
           };
         },

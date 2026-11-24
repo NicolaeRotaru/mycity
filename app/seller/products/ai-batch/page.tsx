@@ -347,8 +347,7 @@ function CatalogTab() {
       const data = (await authedFetch(`/api/ai/catalog-batch/status?jobId=${encodeURIComponent(jobId)}`)) as Job;
       setJob(data);
       // Un lavoro chiuso non si ripropone alla prossima apertura (anche «fallito»: R04-005).
-      // Salvo quello chiuso con «chiedi all'assistenza»: resta ricordato, cosi' il pulsante non torna.
-      if (lavoroChiuso(data.status) && puoAvviareLavoro(data)) ricordaLavoro(null);
+      if (lavoroChiuso(data.status)) ricordaLavoro(null);
     } catch (err) {
       // R04-013 (revisione) — Un lavoro ricordato che il server non riconosce
       // (cancellato, o di un altro account su questo browser) si dimentica, e
@@ -372,7 +371,7 @@ function CatalogTab() {
       const data = (await authedFetch('/api/ai/catalog-batch/status')) as Job | null;
       if (data && data.id) {
         setJob(data);
-        if (lavoroChiuso(data.status) && puoAvviareLavoro(data)) ricordaLavoro(null);
+        if (lavoroChiuso(data.status)) ricordaLavoro(null);
         else ricordaLavoro(String(data.id));
       }
     } catch { /* niente da riprendere adesso */ }
@@ -486,11 +485,7 @@ function CatalogTab() {
             <button
               key={o.key}
               type="button"
-              onClick={() => {
-                setOperation(o.key);
-                // Un lavoro chiuso con «chiedi all'assistenza» non si azzera col clic: il pulsante non torna.
-                setJob((j) => (j && lavoroChiuso(j.status) && !puoAvviareLavoro(j) ? j : null));
-              }}
+              onClick={() => { setOperation(o.key); setJob(null); }}
               disabled={lavoroInCorso(job?.status)}
               className={`rounded-xl border p-3.5 text-left transition-colors disabled:opacity-50 ${
                 active ? 'border-primary-400 bg-primary-50' : 'border-cream-300 bg-white hover:bg-cream-50'
