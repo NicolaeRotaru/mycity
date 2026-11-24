@@ -33,7 +33,7 @@ let lettura: { data: StatoRichiesta; isLoading: boolean; isError: boolean } = {
   isError: false,
 };
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }), usePathname: () => '/seller/dashboard' }));
 vi.mock('@/lib/supabase/client', () => ({ supabase: {} }));
 vi.mock('@/components/seller/SellerShell', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-prova="cruscotto">{children}</div>,

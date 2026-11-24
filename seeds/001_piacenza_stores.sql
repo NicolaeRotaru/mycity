@@ -425,4 +425,15 @@ BEGIN
 
 END $$;
 
+-- 24/11/2026 (migrazione 709, modalità demo) — I negozi della semina sono «già online»: senza questa
+-- riga sarebbero in demo (nessun abbonamento ai servizi) e non si vedrebbero sul marketplace di prova.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'visibile_senza_abbonamento') THEN
+    PERFORM set_config('mycity.allow_profile_write', '1', true);
+    UPDATE public.profiles SET visibile_senza_abbonamento = true WHERE id IN (SELECT u.id FROM auth.users u WHERE u.email LIKE '%@piacenza-demo.local') AND role = 'seller' AND is_approved;
+  END IF;
+END $$;
+
 NOTIFY pgrst, 'reload schema';

@@ -35,7 +35,7 @@ const stato = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/api/middleware', () => ({
-  withSellerAuthRateLimit: (_o: unknown, gestore: (ctx: Record<string, unknown>) => unknown) =>
+  withSellerAnchePendingRateLimit: (_o: unknown, gestore: (ctx: Record<string, unknown>) => unknown) =>
     (req: Request) => gestore({ user: { id: 'negozio-1', email: 'oradelgusto@esempio.it' }, profile: {}, req, params: {} }),
 }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));

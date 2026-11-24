@@ -21,7 +21,7 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('33333333-3333-3333-3333-333333333333', 'cliente@test.it',  '{"role":"buyer"}');
 
 UPDATE public.profiles
-   SET is_approved = true, approval_status = 'approved', store_name = 'Farmacia del Corso',
+   SET is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved', store_name = 'Farmacia del Corso',
        store_address = 'Corso Vittorio Emanuele 1', store_lat = 45.05, store_lng = 9.69
  WHERE id = '11111111-1111-1111-1111-111111111111';
 

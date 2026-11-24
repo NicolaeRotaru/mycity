@@ -22,7 +22,7 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('e0140000-0000-0000-0000-000000000001', 'forno-r08-014@test.it', '{"role":"seller"}');
 
 UPDATE public.profiles
-   SET is_approved = true, approval_status = 'approved', store_name = 'Forno R08',
+   SET is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved', store_name = 'Forno R08',
        store_site = '{"version":1,"theme":"classic","pages":[
          {"id":"home","slug":"","title":"Home","visibility":"public","sections":[]},
          {"id":"feste","slug":"ordini-per-le-feste","title":"Ordini per le feste","visibility":"hidden",

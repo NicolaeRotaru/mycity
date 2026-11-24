@@ -18,7 +18,7 @@ import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react
 type Esito = { data: Record<string, unknown> | null; error: { message: string; code: string } | null };
 let esitoProfilo: Esito = { data: null, error: null };
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }), usePathname: () => '/seller/dashboard' }));
 vi.mock('next-intl', () => ({
   useTranslations: () => (k: string) => ({ retry: 'Riprova', back: 'Indietro', generic: 'Errore' } as Record<string, string>)[k] ?? k,
 }));

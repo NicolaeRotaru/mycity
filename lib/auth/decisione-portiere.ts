@@ -245,6 +245,9 @@ export type AccessoArea = { azione: 'entra' } | { azione: 'rimanda'; verso: stri
 /** La pagina dove un negozio non ancora approvato vede l'attesa o il rifiuto. */
 export const PAGINA_ATTESA_NEGOZIO = '/seller/dashboard';
 
+/** Il preventivo dei servizi: aperto anche al negozio in revisione (modalità demo, 24/11/2026). */
+export const PERCORSO_PREVENTIVO = '/seller/preventivo';
+
 /**
  * ONDATA 10 — «RUOLO SBAGLIATO» E «NON ANCORA APPROVATO» NON SONO LA STESSA COSA.
  *
@@ -277,5 +280,9 @@ export function decidiAccessoArea(stato: {
   if (role === 'admin' || approved) return { azione: 'entra' };
   const percorso = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   if (role === 'seller' && percorso === PAGINA_ATTESA_NEGOZIO) return { azione: 'entra' };
+  // 24/11/2026 — Modalità demo: il preventivo (e il pagamento dell'abbonamento) si apre anche a chi è
+  // in revisione. Il layout lo mostra solo a chi è «in attesa»; le rotte lo ricontrollano
+  // (withSellerAnchePendingRateLimit). Rifiutati e sospesi vedono la loro schermata.
+  if (role === 'seller' && (percorso === PERCORSO_PREVENTIVO || percorso.startsWith(`${PERCORSO_PREVENTIVO}/`))) return { azione: 'entra' };
   return fuori;
 }

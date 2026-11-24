@@ -25,7 +25,7 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('a3333333-3333-3333-3333-333333333333', 'votante2@test.it', '{"role":"buyer"}');
 
 UPDATE public.profiles
-   SET is_approved = true, approval_status = 'approved', role = 'seller',
+   SET is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved', role = 'seller',
        store_name = 'Bottega quattro'
  WHERE id = 'a1111111-1111-1111-1111-111111111111';
 

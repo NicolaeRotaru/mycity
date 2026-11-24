@@ -535,6 +535,38 @@ export function withSellerAuthRateLimit(opts: AuthRateLimitOpts, handler: Generi
 }
 
 /**
+ * 24/11/2026 — MODALITÀ DEMO: IL PREVENTIVO ANCHE PER IL NEGOZIO IN REVISIONE.
+ *
+ * Come `withSellerAuthRateLimit`, ma lascia passare anche il venditore non ancora approvato la cui
+ * richiesta è «in attesa» (approval_status 'pending'): deve poter vedere il suo preventivo e pagare
+ * l'abbonamento ai servizi mentre lo staff lo verifica (per esempio Ora del Gusto dopo aver accettato
+ * dal link). Rifiutati e sospesi restano fuori. Si usa SOLO sulle rotte del preventivo.
+ */
+export function withSellerAnchePendingRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
+  return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
+    const auth = await authenticate(req, ctx);
+    if (!auth.ok) return auth.response;
+    const { profile } = auth;
+    let ammesso = profile.role === 'admin' || (profile.role === 'seller' && profile.is_approved);
+    if (!ammesso && profile.role === 'seller') {
+      const { getAdminSupabase } = await import('@/lib/supabase/server');
+      const { data, error } = await getAdminSupabase().from('profiles').select('approval_status').eq('id', auth.user.id).single();
+      if (error && error.code !== 'PGRST116') {
+        return ApiErrors.unavailable('Servizio temporaneamente non disponibile. Riprova fra poco.');
+      }
+      ammesso = (data as { approval_status?: string | null } | null)?.approval_status === 'pending';
+    }
+    if (!ammesso) return ApiErrors.forbidden('Solo seller approvati, in attesa di approvazione, o admin');
+    const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
+    if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
+    return handler({
+      user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente,
+      params: await risolviParametri(ctx),
+    });
+  }) as RottaDiNext;
+}
+
+/**
  * Wrapper: richiede auth + role 'admin'.
  */
 export function withAdminAuth(handler: GenericHandler) {

@@ -31,7 +31,7 @@ INSERT INTO esiti SELECT '① 23:30 del 30/11 a Piacenza è ancora novembre',
 INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('e3220000-0000-0000-0000-000000000001', 'forno-322@test.it', '{"role":"seller"}'),
   ('e3220000-0000-0000-0000-000000000003', 'maria-322@test.it', '{"role":"buyer"}');
-UPDATE public.profiles SET is_approved = true, approval_status = 'approved', store_name = 'AAA Forno 322'
+UPDATE public.profiles SET is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved', store_name = 'AAA Forno 322'
  WHERE id = 'e3220000-0000-0000-0000-000000000001';
 
 -- Il voto come lo scrive la pagina: col mese di Piacenza di adesso.

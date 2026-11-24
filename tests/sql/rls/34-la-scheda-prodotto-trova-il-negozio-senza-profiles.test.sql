@@ -52,7 +52,7 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('33333333-3333-3333-3333-333333333333', 'cliente@test.it', '{"role":"buyer"}');
 
 UPDATE public.profiles
-   SET is_approved = true, approval_status = 'approved', store_name = 'Pane Quotidiano',
+   SET is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved', store_name = 'Pane Quotidiano',
        store_address = 'Via Roma 1', store_phone = '0523000000', store_logo = 'logo.png',
        store_description = 'Forno a legna', offers_express = true,
        store_hours = '{"lun":"7-13"}'::jsonb,
