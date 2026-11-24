@@ -553,7 +553,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
       )}
       {codiceIllegibile && (
         <div role="alert" className="bg-white border border-secondary-200 rounded-xl p-4 text-sm text-ink-700 flex flex-wrap items-center justify-between gap-2">
-          <span>Non riesco a leggere il codice di ritiro per il fattorino.</span>
+          <span>Non riesco a leggere il codice di ritiro per il rider.</span>
           <Button variant="secondary" onClick={() => { void letturaCodice.refetch(); }}>Riprova</Button>
         </div>
       )}
@@ -568,8 +568,8 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
               </p>
               <p className="text-sm text-primary-100">
                 {pickupCode!.verified_at
-                  ? 'Codice già usato dal fattorino per ritirare.'
-                  : 'Mostra questo codice (o il QR) al fattorino quando viene a ritirare l\'ordine.'}
+                  ? 'Codice già usato dal rider per ritirare.'
+                  : 'Mostra questo codice (o il QR) al rider quando viene a ritirare l\'ordine.'}
               </p>
             </div>
             <div className="bg-white p-2 rounded-lg shrink-0">
@@ -616,19 +616,19 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
       )}
       {order.delivery_status === 'READY' && !order.rider_id && !order.pickup_in_store && (
         <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-800 flex items-center gap-2">
-          <Clock size={16} aria-hidden className="shrink-0" /> In attesa che un fattorino prenda in carico questo ordine.
+          <Clock size={16} aria-hidden className="shrink-0" /> In attesa che un rider prenda in carico questo ordine.
         </div>
       )}
       {order.rider_id && order.delivery_status !== 'DELIVERED' && (
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 text-sm text-primary-800 flex items-center gap-2">
-          <Bike size={16} aria-hidden className="shrink-0" /> <span>Fattorino <strong>{order.rider?.full_name ?? 'assegnato'}</strong> sta gestendo la consegna.</span>
+          <Bike size={16} aria-hidden className="shrink-0" /> <span>Rider <strong>{order.rider?.full_name ?? 'assegnato'}</strong> sta gestendo la consegna.</span>
         </div>
       )}
       {/* CONTANTI: avviso incasso al rider */}
       {cod && order.delivery_status !== 'CANCELED' && (
         <div className="bg-olive-50 border border-olive-200 rounded-xl p-4 text-sm text-olive-800 flex items-center gap-2">
           <Banknote size={16} aria-hidden className="shrink-0 text-olive-700" />
-          <span>Il fattorino incassa <strong>{formatPrice(order.total_price)}</strong> in contanti alla consegna.</span>
+          <span>Il rider incassa <strong>{formatPrice(order.total_price)}</strong> in contanti alla consegna.</span>
         </div>
       )}
       {/* CLIENTE + INDIRIZZO */}
