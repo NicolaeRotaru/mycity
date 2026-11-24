@@ -106,6 +106,14 @@ describe('R10-010 — un social sbagliato non ferma il resto della vetrina', () 
     const dati = onSubmit.mock.calls[0][0] as { storeCustomization: { tagline?: string; socials?: Record<string, string> } };
     expect(dati.storeCustomization.tagline).toBe('Pane fresco dal 1962');
     expect(dati.storeCustomization.socials?.instagram).toBe('vecchio');
+    // R12-003 — «Il resto è salvato» si legge quando il salvataggio è riuscito: il genitore lo dice con salvataggioRiuscito.
+    await act(async () => {
+      accesi[accesi.length - 1].render(createElement(VendorForm, {
+        onSubmit, mode: 'branding', salvataggioRiuscito: 1,
+        defaultValues: { storeName: 'Pane', storeDescription: 'Forno di quartiere', storeCustomization: { socials: { instagram: 'vecchio' } } },
+      } as never));
+    });
+    await aspetta();
     expect(radice.textContent).toContain('Il resto è salvato');
     expect(radice.querySelector('#social-instagram-errore')?.textContent ?? '').not.toBe('');
   });
