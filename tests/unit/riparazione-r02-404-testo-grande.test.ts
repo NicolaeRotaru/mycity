@@ -21,7 +21,8 @@ describe('R02-006 — il numero 404 non allarga la pagina a 280 px', () => {
   it('sullo schermo stretto il numero è più piccolo di text-7xl e cresce solo da sm in su', () => {
     const c = classi(m![1]);
     expect(c, 'text-7xl senza prefisso: a 280 px col testo al 200% esce di 5 px').not.toContain('text-7xl');
-    expect(c).toContain('text-6xl');
+    // R08-004 — Sotto sm il numero parte da 3,75rem (come text-6xl) ma non supera un quarto della larghezza.
+    expect(c).toContain('text-[length:min(3.75rem,25vw)]');
     expect(c).toContain('sm:text-7xl');
     expect(c).toContain('md:text-9xl');
   });

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
@@ -148,10 +149,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // la 640 (un solo lavoro aperto per negozio): nel frattempo il negozio ha
   // avviato un altro lavoro, e questo non puo' piu' tornare pronto. Torna il
   // perche', o null se e' tornato pronto.
-  const rimettiPronto = async (): Promise<string | null> => {
+  const rimettiPronto = async (risultati?: unknown[]): Promise<string | null> => {
     const { error } = await admin
       .from('catalog_ai_jobs')
-      .update({ status: 'ready', updated_at: new Date().toISOString() })
+      .update({ status: 'ready', updated_at: new Date().toISOString(), ...(risultati ? { results: risultati } : {}) })
       .eq('id', job.id)
       .eq('seller_id', user.id);
     if (!error) return null;
@@ -177,6 +178,9 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // Un salto «di passaggio» (filtro caduto, scrittura non riuscita) lascia il
   // lavoro ripetibile: il lavoro pagato non si butta per un guasto di un attimo.
   let ripetibile = false;
+  // R08-001 — Chi ha avuto dal filtro un verdetto VERO di blocco in questo giro: se il lavoro torna
+  // pronto, il verdetto e la sua impronta restano nei risultati e al giro dopo non si ripaga.
+  const bloccatiDalFiltro = new Map<string, { impronta: string; motivo: string }>();
 
   if (job.operation === 'moderate') {
     // "Applica" = metti in bozza i prodotti segnalati (de-pubblica).
@@ -253,39 +257,69 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       // R01-003 — Un testo che e' gia' quello del catalogo non e' nuovo e non si rifiltra:
       // cosi' un lavoro rimandato riparte da chi e' rimasto fuori, invece di rifare sempre i
       // primi e lasciare fuori gli stessi.
+      // R08-001 — Ma un testo uguale non vuol dire «niente di nuovo»: se la proposta lo ripete con
+      // tag, categoria o altro che cambiano davvero, quello si scrive, e il testo gia' in catalogo
+      // (magari vietato) passa dal filtro come tutto il resto. Quel che cambia lo dice
+      // `resolveAiPatch`, lo stesso che poi scrive.
       const testoNuovo = (v: unknown, attuale: string | null, massimo: number) =>
         typeof v === 'string' && testoDelPatch(v, massimo) !== attuale;
-      const daFiltrare = results.filter((r) => {
+      const cambiaQualcosaDiAltro = (r: CatalogJobResult, row: ProductRow): boolean => {
+        const { update } = resolveAiPatch({
+          patch: senzaCampiEconomici(r.patch ?? {}),
+          current: { attributes: row.attributes ?? null, category_id: row.category_id, has_variants: row.has_variants, price: row.price },
+          categories,
+        });
+        const attuale = row as unknown as Record<string, unknown>;
+        return Object.entries(update).some(
+          ([k, v]) => k !== 'name' && k !== 'description' && k in attuale && JSON.stringify(v) !== JSON.stringify(attuale[k]),
+        );
+      };
+      const daFiltrareTutti = results.filter((r) => {
         if (!r.patch || Object.keys(r.patch).length === 0) return false;
         const row = current.get(r.product_id);
         if (!row) return false;
         const patch = r.patch as Record<string, unknown>;
         return (
           testoNuovo(patch.name, row.name, MAX_NOME_PRODOTTO) ||
-          testoNuovo(patch.description, row.description, MAX_DESCRIZIONE_PRODOTTO)
+          testoNuovo(patch.description, row.description, MAX_DESCRIZIONE_PRODOTTO) ||
+          ((typeof patch.name === 'string' || typeof patch.description === 'string') && cambiaQualcosaDiAltro(r, row))
         );
       });
+      // R08-001 — Chi e' gia' stato BLOCCATO dal filtro (verdetto vero, non un errore o un tempo scaduto)
+      // con la stessa proposta non si rifiltra e non si ripaga: resta bloccato col suo motivo, e il tempo
+      // va a chi non e' ancora controllato. Se la proposta cambia, l'impronta non torna e si rifiltra.
+      const testoPerIlFiltro = (r: CatalogJobResult) => {
+        const row = current.get(r.product_id) as ProductRow;
+        const patch = r.patch as Record<string, unknown>;
+        return {
+          name: typeof patch.name === 'string' ? patch.name : (row.name ?? ''),
+          description: typeof patch.description === 'string' ? patch.description : (row.description ?? ''),
+        };
+      };
+      const improntaDi = (r: CatalogJobResult) =>
+        createHash('sha1').update(JSON.stringify([testoPerIlFiltro(r), r.patch])).digest('hex');
+      const bloccoRicordato = (r: CatalogJobResult): string | null => {
+        const m = (r as CatalogJobResult & { filtro_bloccato?: { impronta?: unknown; motivo?: unknown } }).filtro_bloccato;
+        return m && typeof m.motivo === 'string' && m.impronta === improntaDi(r) ? m.motivo : null;
+      };
+      const daFiltrare = daFiltrareTutti.filter((r) => bloccoRicordato(r) === null);
       // S10 (5/11/2026) — Prima partivano fino a duecento chiamate tutte
       // insieme: una raffica di «troppe richieste» faceva scartare come
       // vietati anche i prodotti puliti. Adesso al massimo FILTRI_INSIEME alla
       // volta, e un filtro caduto non si chiama «vietato».
-      const verdetti = await aGruppi(daFiltrare, FILTRI_INSIEME, (r) => {
-        const row = current.get(r.product_id) as ProductRow;
-        const patch = r.patch as Record<string, unknown>;
-        return classifyProductPolicy(
-          {
-            name: typeof patch.name === 'string' ? patch.name : (row.name ?? ''),
-            description:
-              typeof patch.description === 'string'
-                ? patch.description
-                : (row.description ?? ''),
-          },
-          'catalog-batch-apply-policy',
-        );
-      }, inizio + FILTRI_ENTRO_MS);
+      const verdetti = await aGruppi(
+        daFiltrare,
+        FILTRI_INSIEME,
+        (r) => classifyProductPolicy(testoPerIlFiltro(r), 'catalog-batch-apply-policy'),
+        inizio + FILTRI_ENTRO_MS,
+      );
       // Chi non passa — o su cui il filtro e' caduto — non si scrive: nel
       // dubbio si nega, come fa il filtro stesso quando risponde.
       const bloccati = new Map<string, string>();
+      for (const r of daFiltrareTutti) {
+        const ricordato = bloccoRicordato(r);
+        if (ricordato !== null) bloccati.set(r.product_id, ricordato);
+      }
       daFiltrare.forEach((r, i) => {
         const esito = verdetti[i];
         if (!esito) {
@@ -297,7 +331,9 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
           bloccati.set(r.product_id, 'filtro dei contenuti non disponibile: riprova più tardi');
           ripetibile = true;
         } else if (!esito.value.allowed) {
-          bloccati.set(r.product_id, `bloccato dal filtro dei contenuti${esito.value.reason ? `: ${esito.value.reason}` : ''}`);
+          const motivo = `bloccato dal filtro dei contenuti${esito.value.reason ? `: ${esito.value.reason}` : ''}`;
+          bloccati.set(r.product_id, motivo);
+          bloccatiDalFiltro.set(r.product_id, { impronta: improntaDi(r), motivo });
         }
       });
       if (bloccati.size > 0) {
@@ -395,11 +431,19 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // Il lavoro e' gia' segnato «applicato» dalla prenotazione. Se qualcosa e'
   // saltato per un guasto di passaggio torna «pronto», cosi' si puo' ripetere.
   // Ripetere riscrive anche i prodotti gia' entrati con lo stesso testo (una
-  // riga di audit in piu' e il filtro rifatto): e' il prezzo per non buttare il
+  // riga di audit in piu'; il filtro si rifa' solo per chi ha qualcosa di nuovo da scrivere): e' il prezzo per non buttare il
   // lavoro pagato.
   let avviso: string | undefined;
   if (ripetibile) {
-    const nonRimesso = await rimettiPronto();
+    // R08-001 — Il lavoro torna pronto portandosi dietro il verdetto di chi il filtro ha bloccato davvero.
+    const risultatiMarcati =
+      bloccatiDalFiltro.size > 0
+        ? (Array.isArray(job.results) ? job.results : []).map((r) => {
+            const m = bloccatiDalFiltro.get(r.product_id);
+            return m ? { ...r, filtro_bloccato: m } : r;
+          })
+        : undefined;
+    const nonRimesso = await rimettiPronto(risultatiMarcati);
     if (nonRimesso) {
       // R01-001 — Il lavoro resta chiuso: i saltati «di passaggio» non si
       // ripetono piu' da qui, e si dice perche' invece di «riprova».

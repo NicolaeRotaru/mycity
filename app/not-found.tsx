@@ -33,7 +33,10 @@ export const metadata: Metadata = {
 export default function NotFound() {
   return (
     <div className="container mx-auto px-6 py-20 max-w-2xl text-center min-h-[70vh] flex flex-col items-center justify-center">
-      <p className="font-serif text-6xl sm:text-7xl md:text-9xl font-extrabold text-primary-700 leading-none tracking-[-0.02em] mb-2">
+      {/* R08-004 — Sotto sm il numero non supera mai il quarto della larghezza: con il testo al 200%
+          «404» (120 px) stava nella finestra solo perche' usciva dal padding. Da 360 px col testo normale
+          resta 3,75rem, com'era. */}
+      <p className="font-serif text-[length:min(3.75rem,25vw)] sm:text-7xl md:text-9xl font-extrabold text-primary-700 leading-none tracking-[-0.02em] mb-2">
         404
       </p>
       <h1 className="font-serif text-2xl md:text-3xl font-extrabold text-ink-900 mt-2 mb-3">
@@ -43,21 +46,25 @@ export default function NotFound() {
         La pagina che cerchi non esiste o è stata spostata. Ma i negozi di Piacenza sono sempre qui.
       </p>
 
-      <div className="flex items-center justify-center gap-3 flex-wrap mb-10">
-        <Button href="/" size="lg"><span className="inline-flex items-center gap-2"><Home size={20} aria-hidden /> Torna alla home</span></Button>
-        <Button href="/stores" variant="secondary" size="lg"><span className="inline-flex items-center gap-2"><Store size={20} aria-hidden /> Esplora i negozi</span></Button>
-        <Button href="/search" variant="secondary" size="lg"><span className="inline-flex items-center gap-2"><Search size={20} aria-hidden /> Cerca prodotti</span></Button>
+      {/* R08-004 — I bottoni non superano mai il contenitore: max-w-full e il testo va a capo anche dentro
+          una parola, centrato. Da sm in su la larghezza naturale resta quella di prima. */}
+      <div className="flex items-center justify-center gap-3 flex-wrap mb-10 max-w-full">
+        <Button href="/" size="lg" className="max-w-full"><span className="inline-flex max-w-full items-center gap-2 text-center [overflow-wrap:anywhere]"><Home size={20} className="shrink-0" aria-hidden /> Torna alla home</span></Button>
+        <Button href="/stores" variant="secondary" size="lg" className="max-w-full"><span className="inline-flex max-w-full items-center gap-2 text-center [overflow-wrap:anywhere]"><Store size={20} className="shrink-0" aria-hidden /> Esplora i negozi</span></Button>
+        <Button href="/search" variant="secondary" size="lg" className="max-w-full"><span className="inline-flex max-w-full items-center gap-2 text-center [overflow-wrap:anywhere]"><Search size={20} className="shrink-0" aria-hidden /> Cerca prodotti</span></Button>
       </div>
 
-      <div className="bg-white border border-cream-300 rounded-2xl p-6 text-left">
+      <div className="bg-white border border-cream-300 rounded-2xl p-6 text-left max-w-full">
         <h2 className="font-bold text-ink-900 mb-3">Link utili</h2>
-        <ul className="grid sm:grid-cols-2 gap-2 text-sm">
-          <li><Link href="/faq" className="inline-flex items-center gap-2 text-primary-700 hover:underline"><BookOpen size={16} className="shrink-0" aria-hidden /> Domande frequenti</Link></li>
-          <li><Link href="/help" className="inline-flex items-center gap-2 text-primary-700 hover:underline"><Lightbulb size={16} className="shrink-0" aria-hidden /> Centro assistenza</Link></li>
-          <li><Link href="/contact" className="inline-flex items-center gap-2 text-primary-700 hover:underline"><Mail size={16} className="shrink-0" aria-hidden /> Contattaci</Link></li>
-          <li><Link href="/near" className="inline-flex items-center gap-2 text-primary-700 hover:underline"><MapPin size={16} className="shrink-0" aria-hidden /> Negozi vicino a te</Link></li>
-          <li><Link href="/orders" className="inline-flex items-center gap-2 text-primary-700 hover:underline"><Package size={16} className="shrink-0" aria-hidden /> I miei ordini</Link></li>
-          <li><Link href="/cart" className="inline-flex items-center gap-2 text-primary-700 hover:underline"><ShoppingCart size={16} className="shrink-0" aria-hidden /> Carrello</Link></li>
+        {/* R08-004 — Le voci vanno a capo anche dentro una parola lunga (overflow-wrap:anywhere abbassa
+            anche la larghezza minima): il riquadro resta dentro la pagina col testo molto grande. */}
+        <ul className="grid sm:grid-cols-2 gap-2 text-sm [overflow-wrap:anywhere]">
+          <li><Link href="/faq" className="inline-flex max-w-full items-center gap-2 text-primary-700 hover:underline"><BookOpen size={16} className="shrink-0" aria-hidden /> Domande frequenti</Link></li>
+          <li><Link href="/help" className="inline-flex max-w-full items-center gap-2 text-primary-700 hover:underline"><Lightbulb size={16} className="shrink-0" aria-hidden /> Centro assistenza</Link></li>
+          <li><Link href="/contact" className="inline-flex max-w-full items-center gap-2 text-primary-700 hover:underline"><Mail size={16} className="shrink-0" aria-hidden /> Contattaci</Link></li>
+          <li><Link href="/near" className="inline-flex max-w-full items-center gap-2 text-primary-700 hover:underline"><MapPin size={16} className="shrink-0" aria-hidden /> Negozi vicino a te</Link></li>
+          <li><Link href="/orders" className="inline-flex max-w-full items-center gap-2 text-primary-700 hover:underline"><Package size={16} className="shrink-0" aria-hidden /> I miei ordini</Link></li>
+          <li><Link href="/cart" className="inline-flex max-w-full items-center gap-2 text-primary-700 hover:underline"><ShoppingCart size={16} className="shrink-0" aria-hidden /> Carrello</Link></li>
         </ul>
       </div>
     </div>

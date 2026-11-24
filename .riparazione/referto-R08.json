@@ -1,0 +1,193 @@
+{
+  "sessione": "R08",
+  "aggiornato": "2026-11-24 17:50",
+  "finita": true,
+  "testa": "5470d9a12ff2536f9f86b307691fc0477668947e",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "5470d9a12ff2536f9f86b307691fc0477668947e",
+    "nota": "typecheck, lint e 2092 file di prove (12688 prove) verdi, 1 saltato già prima; lo SHA preso con git rev-parse HEAD nello stesso comando"
+  },
+  "voci": [
+    {
+      "id": "R08-002",
+      "chiave": "ai-endpoints|l'allarme del tetto di spesa ai può dire «non risponde da tre giorni» al primo guasto di cinque minuti",
+      "esito": "riparato",
+      "commit": "5725d5fb389b6a72236ce866c0c639fbbfb004c2",
+      "file_toccati": [
+        "lib/ai/tettoSpesa.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-allarme-tetto-riga-vecchia.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-allarme-tetto-riga-vecchia.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5725d5fb389b6a72236ce866c0c639fbbfb004c2^ --file lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r08-allarme-tetto-riga-vecchia.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Rimessa solo la cancellazione best-effort della riga ai-tetto-condiviso:ripiego-da quando il giro esce senza tetto, senza il limite delle 24 ore che il collaudo aveva bocciato. Con orologio finto: riga di 3 giorni tolta, il primo guasto vero dopo dice 90 minuti invece di oltre 4000; un guasto continuo con cron ogni 5 minuti per 26 ore dice 1560 minuti, senza azzeramenti.",
+      "verificato_da": "revisore (subagente, modello grande): prova e rimessa rilanciate (0), 22 file di prove vicine verdi; varianti tetto 0/NaN/negativo, cancellazione che fallisce (il giro non lancia), guasto continuo 26 h con cron ogni 5 min = 1560 min senza azzeramenti. Verdetto: regge."
+    },
+    {
+      "id": "R08-001",
+      "chiave": "ai-endpoints|la conformità dei prodotti (classifyproductpolicy) non ha un tempo suo e i lavori sul catalogo la chiamano in 40 giri di fila",
+      "esito": "riparato",
+      "commit": "5470d9a12ff2536f9f86b307691fc0477668947e",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/apply/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-catalogo-rimandati.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-catalogo-rimandati.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6159065f3a486620e36d7bdb11059c2883d82c82^ --file app/api/ai/catalog-batch/apply/route.ts --prove tests/unit/riparazione-r08-catalogo-rimandati.test.ts --json",
+        "nota": "base = genitore del primo commit della voce: toglie tutta la correzione (due commit)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base c erano già il limite dei 70 s, il rimandalo e il tempo proprio del filtro (lib/ai/moderation.ts: 10 s senza ritentativi). Due commit. 6159065f: tag o categoria nuovi con testo uguale al catalogo passano dal filtro, corretto il commento sul filtro rifatto. 5470d9a1 (giro di correzione dopo il revisore): chi il filtro ha bloccato davvero (allowed:false) porta nei risultati del lavoro filtro_bloccato {impronta sha1 di testo effettivo + patch, motivo}; con la stessa proposta il blocco resta col suo motivo senza richiamare né ripagare il filtro e conta come esito finale, se la proposta o il testo in catalogo cambiano si rifiltra; errori e tempi scaduti del fornitore e scritture fallite non lasciano segni. Prova: 50 bloccati in testa su 200 col fornitore a 9,5 s escono da «pronto» in al massimo 7 giri, ogni bloccato chiama il filtro una volta sola, le 150 righe pulite sono scritte; scrittura fallita scritta al giro dopo; fornitore caduto non lascia blocchi; proposta cambiata si rifiltra.",
+      "commit_della_voce": [
+        "6159065f3a486620e36d7bdb11059c2883d82c82",
+        "5470d9a12ff2536f9f86b307691fc0477668947e"
+      ],
+      "verificato_da": "revisore (subagente, modello grande) sul primo commit: tag/categoria nuovi con testo vietato passano dal filtro, ma i bloccati venivano ripagati a ogni giro → parziale; giro di correzione 5470d9a1 riletto dal capo squadra R08 (diff: il ricordo vale solo per allowed:false, solo blocca e non lascia mai passare, i segni vecchi restano perché la mappa conserva i risultati già marcati), rimessa 0 e 16 file di prove vicine verdi (123 prove). La correzione non è stata rivista da un secondo subagente: il tetto di 3 era raggiunto."
+    },
+    {
+      "id": "R08-007",
+      "chiave": "stati-ui|con la proposta di «genera con ai» aperta, le correzioni fatte a mano nel frattempo si perdono premendo «usa questa»",
+      "esito": "riparato",
+      "commit": "0f3683ca0682e1b04eedfa9a5c96f8bbb9d1e347",
+      "file_toccati": [
+        "components/seller/ProductForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-genera-con-ai-correzioni.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-genera-con-ai-correzioni.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0f3683ca0682e1b04eedfa9a5c96f8bbb9d1e347^ --file components/seller/ProductForm.tsx --prove tests/unit/riparazione-r08-genera-con-ai-correzioni.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il testo di confronto si ricorda quando si preme «Genera», non quando arriva la risposta. Prova montando ProductForm con l AI accesa solo nella prova: fetch in attesa, correzione a mano durante l attesa, «Usa questa» chiede conferma; con no la correzione resta, con sì entra la proposta; senza correzioni nessuna conferma.",
+      "verificato_da": "revisore (subagente, modello grande): prova e rimessa (0), 50 file di prove vicine verdi; in Chromium Invio e Spazio passano dal capture dell involucro display:contents, il bottone disabilitato durante l attesa non manda click, layout invariato. Verdetto: regge."
+    },
+    {
+      "id": "R08-006",
+      "chiave": "qa-flussi|la risalita dei genitori delle categorie non ha un tetto",
+      "esito": "gia_riparato_prima",
+      "prova": "Sulla base d000e3b0: lib/category-attributes.ts:285 PROFONDITA_MASSIMA_CATEGORIE = 20 e 303-310 insieme dei visti; components/seller/ProductForm.tsx:356-367 resolveTop ha già l insieme viste (while (cur?.parent_id && !viste.has(cur.id)) { viste.add(cur.id); … }), entrato col commit f30bed1c: con A→B→A il giro si ferma alla prima categoria già vista, in al massimo tante iterazioni quante sono le categorie. Il diff della scheda era scritto contro un commit precedente.",
+      "verificato_da": "capo squadra R08: letto components/seller/ProductForm.tsx:356-367 sulla base (insieme viste, uscita alla prima già vista) e lib/category-attributes.ts:285-310. Esito confermato."
+    },
+    {
+      "id": "R08-003",
+      "chiave": "frontend-ux|una vetrina lasciata aperta oltre mezzanotte continua a mostrare l'annuncio del giorno prima finché la pagina non si ridisegna",
+      "esito": "riparato",
+      "commit": "8b06537efc05d427c2a2f6af24f6bd55c979067e",
+      "file_toccati": [
+        "app/store/[id]/[slug]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-annuncio-pagine-su-misura.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-annuncio-pagine-su-misura.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8b06537efc05d427c2a2f6af24f6bd55c979067e^ --file app/store/[id]/[slug]/page.tsx --prove tests/unit/riparazione-r08-annuncio-pagine-su-misura.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina su misura del negozio ([slug]) ha lo stesso meccanismo della pagina principale (che reggeva già): giorno di Piacenza in uno stato ricontrollato ogni minuto, hook prima dei ritorni anticipati, timer spento allo smontaggio. Prova con orologio finto: «Chi siamo» alle 23:58 del 24/11 con annuncio fino al 24 lo mostra, tre minuti dopo non più.",
+      "verificato_da": "revisore (subagente, modello grande): prova e rimessa (0), 23 file vicini verdi; 22:59:30Z→23:00:30Z (mezzanotte a Roma) l annuncio sparisce, un timer solo e 0 dopo lo smontaggio, hook prima dei ritorni anticipati; l annuncio compare solo in app/store/[id]/page.tsx e [slug]/page.tsx. Verdetto: regge."
+    },
+    {
+      "id": "R08-005",
+      "chiave": "performance-percepita|il traduttore degli errori di zod entra in ogni pagina passando dal piede del sito",
+      "esito": "riparato",
+      "commit": "0332a24eada963e4cea3a547a302269f00269f30",
+      "file_toccati": [
+        "lib/zod-i18n.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-frasi-zod-una-copia.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-frasi-zod-una-copia.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0332a24eada963e4cea3a547a302269f00269f30^ --file lib/zod-i18n.ts --prove tests/unit/riparazione-r08-frasi-zod-una-copia.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base lib/errors.ts prende già le frasi da lib/zod-frasi.ts (senza Zod). Tolta da lib/zod-i18n.ts la seconda copia di TIPI_IN_ITALIANO, quanti e FRASI_ZOD: ora import e re-export da ./zod-frasi, con gli stessi export. Prova: FRASI_ZOD di zod-i18n è lo stesso oggetto di zod-frasi; la rimessa cade sul comportamento (uscita 0).",
+      "verificato_da": "revisore (subagente, modello grande): prova e rimessa (0), 57 file vicini verdi, tsc 0; frasi identiche byte per byte alla base, setErrorMap invariato, l unico export FRASI_ZOD resta riesportato. Verdetto: regge."
+    },
+    {
+      "id": "R08-004",
+      "chiave": "layout-responsive|la pagina 404 a 280 px col testo al 200% esce di 5 px",
+      "esito": "riparato",
+      "commit": "2d4d29301e79861e0dd9dc7ddefb18afc16e3a67",
+      "file_toccati": [
+        "app/not-found.tsx",
+        "tests/unit/riparazione-r02-404-testo-grande.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-404-dentro-il-riquadro.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-404-dentro-il-riquadro.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 04bc5217053f02539fcc70e1d278ca5dbd1ccfb5^ --file app/not-found.tsx --prove tests/unit/riparazione-r08-404-dentro-il-riquadro.test.ts --json",
+        "nota": "base = genitore del primo commit della voce: toglie tutta la correzione (due commit)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Due commit. 04bc5217, misurato in Chromium a 280 px con radice 32 px: «404» da 19,1-260,9 (29 px oltre il contenitore 48-232) a 69,5-210,5; riquadro «Link utili» da 5,1-274,9 a 48-232; scrollWidth 280; sopra sm invariato. Cura: numero min(3.75rem,25vw) sotto sm, overflow-wrap:anywhere sull elenco, max-w-full sulle voci. 2d4d2930 (giro di correzione dopo il revisore): i tre bottoni (Torna alla home, Esplora i negozi, Cerca prodotti) con max-w-full, testo centrato che va a capo e icona shrink-0: a 280/r32 da 25,3-254,7 a 48-232, a 320/r32 da 45,3-274,7 a 48-272; a 360/16, 640 e 1024 posizioni identiche alla base. Prova esistente tests/unit/riparazione-r02-404-testo-grande.test.ts aggiornata al nuovo nome della classe del numero (legge app/not-found.tsx per nome; vieta ancora text-7xl senza prefisso, sm:text-7xl e md:text-9xl restano).",
+      "commit_della_voce": [
+        "04bc5217053f02539fcc70e1d278ca5dbd1ccfb5",
+        "2d4d29301e79861e0dd9dc7ddefb18afc16e3a67"
+      ],
+      "verificato_da": "revisore (subagente, modello grande) sul primo commit, misurato in Chromium coi font veri: «404» e «Link utili» dentro il contenitore, R02 non indebolita, ma i tre bottoni 28 px oltre il padding → parziale; giro di correzione 2d4d2930 riletto dal capo squadra R08 (Button unisce className e non ha nowrap), rimessa 0. La misura dei bottoni dopo la correzione è fatta con HTML statico dei soli bottoni e font di sistema (il confronto base/dopo è omogeneo); non rivista da un secondo subagente: il tetto di 3 era raggiunto."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il controllo del tetto di spesa AI gira anche con l AI dei negozi spenta",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "lib/ai/tettoSpesa.ts (allarmiTettoSpesaAiPerIlCron)",
+      "descrizione": "Sulla base tettoSpesa.ts non guarda AI_NEGOZI_ACCESA: il cron fa la sonda anche con l AI spenta. Il tentativo vecchio cancellava la riga di ripiego anche in quel caso; qui la cancellazione c è all uscita senza tetto. Se serve l uscita anticipata con l AI spenta è una scelta a parte."
+    },
+    {
+      "titolo": "Zod nel piede del sito: da riverificare con l analisi del pacchetto",
+      "dimensione": "performance-percepita",
+      "severita": "minore",
+      "file": "components/hooks/useBranding.ts, lib/site-branding.ts",
+      "descrizione": "Il collaudo dell onda 1 diceva che Zod entra nel piede da useBranding → lib/site-branding.ts:2. Sulla base d000e3b0 lib/site-branding.ts non importa più zod (resta solo un commento alla riga 46). Non misurato con un analisi del pacchetto."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 3,
+    "subagenti": 3,
+    "costo_usd": 10.36,
+    "nota": "lotto unico su sonnet, revisore sul modello grande, giro di correzione su sonnet (riserva); costo letto da get_session prima della consegna"
+  }
+}

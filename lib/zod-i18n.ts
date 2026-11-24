@@ -17,44 +17,10 @@ import { z } from 'zod';
  * niente). Le frasi stanno qui sotto, una volta sola.
  */
 
-/** I tipi di Zod detti come li direbbe una persona: «serve un numero», non «Atteso number». */
-const TIPI_IN_ITALIANO: Record<string, string> = {
-  string: 'un testo',
-  number: 'un numero',
-  integer: 'un numero intero',
-  bigint: 'un numero',
-  float: 'un numero',
-  boolean: 'sì o no',
-  date: 'una data',
-  array: 'un elenco',
-  object: 'un gruppo di dati',
-};
-
-const quanti = (n: number | bigint, uno: string, tanti: string) => (Number(n) === 1 ? `1 ${uno}` : `${n} ${tanti}`);
-
-export const FRASI_ZOD = {
-  obbligatorio: 'Campo obbligatorio',
-  tipo: (atteso: string) => `Valore non valido: serve ${TIPI_IN_ITALIANO[atteso] ?? 'un valore diverso'}`,
-  almenoCaratteri: (n: number | bigint) => (Number(n) === 1 ? 'Campo obbligatorio' : `Almeno ${quanti(n, 'carattere', 'caratteri')}`),
-  massimoCaratteri: (n: number | bigint) => `Massimo ${quanti(n, 'carattere', 'caratteri')}`,
-  minimo: (n: number | bigint) => `Valore minimo: ${n}`,
-  massimo: (n: number | bigint) => `Valore massimo: ${n}`,
-  // Giro di correzione (R24-019) — Il limite escluso: positive() rifiuta lo 0, che non è
-  // «Valore minimo: 0».
-  maggioreDi: (n: number | bigint) => `Deve essere maggiore di ${n}`,
-  minoreDi: (n: number | bigint) => `Deve essere minore di ${n}`,
-  massimoElementi: (n: number | bigint) => `Massimo ${quanti(n, 'elemento', 'elementi')}`,
-  almenoElementi: (n: number | bigint) => `Seleziona almeno ${quanti(n, 'elemento', 'elementi')}`,
-  email: 'Email non valida',
-  url: 'URL non valido',
-  uuid: 'ID non valido',
-  formato: 'Formato non valido',
-  scelta: 'Valore non valido: scegline uno fra quelli proposti',
-  // R04-003 — i quattro casi che restavano in inglese («Invalid input», «Unrecognized key(s)…»).
-  // Non nominano le chiavi interne: al cliente non dicono niente.
-  valoreNonValido: 'Valore non valido',
-  campiInPiu: (n: number) => (n === 1 ? 'C’è un campo che non serve qui' : `Ci sono ${n} campi che non servono qui`),
-};
+// R08-005 — Le frasi stanno in lib/zod-frasi (senza Zod): lib/errors.ts le legge da li' e non deve
+// portarsi dietro Zod. Qui una copia sola, la stessa, riesportata per chi le prende da questo file.
+import { FRASI_ZOD } from './zod-frasi';
+export { FRASI_ZOD };
 
 z.setErrorMap((issue, ctx) => {
   switch (issue.code) {
