@@ -8,11 +8,13 @@
  * email .local. Lo stesso UUID lo crea la migrazione 707.
  *
  * I SUOI PRODOTTI NON SI COMPRANO COL CARRELLO. Un abbonamento non è un ordine con
- * la consegna: si attiva dal preventivo del negozio (/seller/preventivo), che paga
+ * la consegna: si attiva dalla pagina Abbonamento del negozio (/seller/abbonamento), che paga
  * con Stripe in abbonamento. Il carrello, la cassa con la carta e quella in contanti
  * li rifiutano (`validaRigaDelCarrello`, lib/ordini/valida-carrello.ts), e la pagina
- * prodotto al posto di «Aggiungi al carrello» porta al preventivo.
+ * prodotto al posto di «Aggiungi al carrello» porta alla pagina Abbonamento.
  */
+import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
+
 export const SDG_SELLER_ID = '11111111-1111-1111-1111-5d9000000001';
 
 export const SDG_STORE_NAME = 'SDG Agenzia';
@@ -24,14 +26,14 @@ export function eDiSdg(sellerId: string | null | undefined): boolean {
 
 /**
  * Dove porta il pulsante di un abbonamento nella pagina prodotto: chi ha un negozio
- * va al suo preventivo, dove sceglie e paga; chi non lo ha, prima si iscrive.
+ * va alla sua pagina Abbonamento, dove sceglie e paga; chi non lo ha, prima si iscrive.
  */
 export function doveSiAttivaLAbbonamento(chiGuardaEUnNegozio: boolean): { href: string; testo: string } {
   return chiGuardaEUnNegozio
-    ? { href: '/seller/preventivo', testo: 'Attiva dal tuo preventivo' }
+    ? { href: PERCORSO_ABBONAMENTO, testo: 'Scegli l’abbonamento dal tuo negozio' }
     : { href: '/sell', testo: 'Iscrivi la tua attività per attivarlo' };
 }
 
 /** Il messaggio di chi prova a mettere un abbonamento nel carrello o in cassa. */
 export const MESSAGGIO_ABBONAMENTO_NON_IN_CARRELLO =
-  'è un abbonamento ai servizi: non si compra col carrello, si attiva dal preventivo del tuo negozio.';
+  'è un abbonamento ai servizi: non si compra col carrello, si attiva dalla pagina Abbonamento del tuo negozio.';

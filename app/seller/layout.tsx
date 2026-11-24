@@ -15,7 +15,10 @@ import { Store, Mail, Home, Pencil, X, PauseCircle, Clock, ArrowLeft } from 'luc
 // 31/8/2026 (R037) — La commissione qui non si ribatte a mano: viene da dove la
 // tratteniamo davvero, cosi' il giorno che cambia questa pagina non resta indietro.
 import { FRASE_PREZZO_NEGOZI } from '@/app/seller/earnings/commissione';
-import { PERCORSO_PREVENTIVO, percorsoInRevisione } from '@/lib/auth/decisione-portiere';
+import { percorsoInRevisione } from '@/lib/auth/decisione-portiere';
+import { PERCORSO_ABBONAMENTO, hrefServizio } from '@/lib/agenzia/indirizzi-servizi';
+import { SERVIZI_AGENZIA } from '@/lib/agenzia/preventivo';
+import { ETICHETTE_SERVIZI } from '@/components/seller/servizi-nel-menu';
 
 /**
  * Ondata 10 — lo stato della richiesta del negozio, letto davvero.
@@ -221,7 +224,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     );
   }
 
-  // 24/11/2026 — Modalità demo: chi è in attesa di approvazione vede il suo preventivo e paga
+  // 24/11/2026 — Modalità demo: chi è in attesa di approvazione vede i servizi, sceglie e paga
   // l'abbonamento, senza il resto del pannello (le rotte lo ricontrollano sul server).
   if (isPending && richiestaInviata && percorsoInRevisione(pathname)) {
     return (
@@ -231,7 +234,13 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           non si vede niente finché non è approvato e attivo.{' '}
           <Link href="/seller/products" className="font-semibold underline">I tuoi prodotti</Link>
           {' · '}
-          <Link href={PERCORSO_PREVENTIVO} className="font-semibold underline">Il preventivo</Link>
+          <Link href={PERCORSO_ABBONAMENTO} className="font-semibold underline">L’abbonamento</Link>
+          {SERVIZI_AGENZIA.map((id) => (
+            <span key={id}>
+              {' · '}
+              <Link href={hrefServizio(id)} className="font-semibold underline">{ETICHETTE_SERVIZI[id]}</Link>
+            </span>
+          ))}
           {' · '}
           <Link href="/seller/dashboard" className="font-semibold underline">Pagina d’attesa</Link>
         </p>
@@ -254,7 +263,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
             {isPending && richiestaInviata && <Button href="/seller/products">Prepara i tuoi prodotti</Button>}
-            {isPending && richiestaInviata && <Button href={PERCORSO_PREVENTIVO}>Il tuo preventivo dei servizi</Button>}
+            {isPending && richiestaInviata && <Button href={PERCORSO_ABBONAMENTO}>Scegli l’abbonamento</Button>}
             <Button href="/sell" variant="secondary" icon={Pencil}>Modifica richiesta</Button>
             <Button href="/?shop=1" icon={Home}>Vai al marketplace</Button>
             <Button href="/contact" variant="secondary" icon={Mail}>Contatti</Button>

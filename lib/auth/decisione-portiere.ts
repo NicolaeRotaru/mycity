@@ -28,6 +28,7 @@
  */
 
 import type { ProfileRole } from '@/lib/shopping-access';
+import { PERCORSO_ABBONAMENTO, PERCORSO_SERVIZI } from '@/lib/agenzia/indirizzi-servizi';
 
 /**
  * Quanto il portiere aspetta, al massimo, una risposta.
@@ -245,15 +246,14 @@ export type AccessoArea = { azione: 'entra' } | { azione: 'rimanda'; verso: stri
 /** La pagina dove un negozio non ancora approvato vede l'attesa o il rifiuto. */
 export const PAGINA_ATTESA_NEGOZIO = '/seller/dashboard';
 
-/** Il preventivo dei servizi: aperto anche al negozio in revisione (modalità demo, 24/11/2026). */
-export const PERCORSO_PREVENTIVO = '/seller/preventivo';
-
 /**
- * Le parti del pannello aperte al negozio in revisione (modalità demo, 24/11/2026): il preventivo, e i
- * prodotti, che prepara subito (Nicola: «Sì, li prepara subito») e restano invisibili finché il
- * negozio non è in vetrina.
+ * Le parti del pannello aperte al negozio in revisione (modalità demo, 24/11/2026): la pagina
+ * Abbonamento (dove sceglie e paga), le pagine dei servizi e i prodotti, che prepara subito
+ * (Nicola: «Sì, li prepara subito») e restano invisibili finché il negozio non è in vetrina.
+ * Il vecchio /seller/preventivo non serve più qui: il portiere lo rimanda ai nuovi indirizzi prima
+ * di guardare chi è (lib/agenzia/indirizzi-servizi.ts).
  */
-export const PERCORSI_IN_REVISIONE = [PERCORSO_PREVENTIVO, '/seller/products'] as const;
+export const PERCORSI_IN_REVISIONE = [PERCORSO_ABBONAMENTO, PERCORSO_SERVIZI, '/seller/products'] as const;
 
 /** Dentro i prodotti, le pagine fatte solo di strumenti che si attivano con l'approvazione (collaudo del 24/11). */
 const PERCORSI_SOLO_DA_APPROVATO = ['/seller/products/ai-batch'] as const;
@@ -296,7 +296,7 @@ export function decidiAccessoArea(stato: {
   if (role === 'admin' || approved) return { azione: 'entra' };
   const percorso = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   if (role === 'seller' && percorso === PAGINA_ATTESA_NEGOZIO) return { azione: 'entra' };
-  // 24/11/2026 — Modalità demo: il preventivo (col pagamento) e i prodotti si aprono anche a chi è
+  // 24/11/2026 — Modalità demo: l'abbonamento (col pagamento), i servizi e i prodotti si aprono anche a chi è
   // in revisione. Il layout lo mostra solo a chi è «in attesa»; le rotte lo ricontrollano
   // (withSellerAnchePendingRateLimit). Rifiutati e sospesi vedono la loro schermata.
   if (role === 'seller' && percorsoInRevisione(percorso)) return { azione: 'entra' };

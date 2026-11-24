@@ -39,7 +39,7 @@ export const GET = withSellerAnchePendingRateLimit(
       return apiSuccess(preventivo, { headers: { 'Cache-Control': 'no-store' } });
     } catch (errore) {
       logger.error('[preventivo] non preparato', { userId: user.id, errore: String(errore) });
-      return ApiErrors.internal('Non sono riuscito a preparare il preventivo. Riprova fra un momento.');
+      return ApiErrors.internal('Non sono riuscito a leggere la tua vetrina per i servizi. Riprova fra un momento.');
     }
   },
 );
@@ -67,7 +67,7 @@ export const POST = withSellerAnchePendingRateLimit(
       letti = await leggiPreventivo(user.id, scelto);
     } catch (errore) {
       logger.error('[preventivo] non riletto all accettazione', { userId: user.id, errore: String(errore) });
-      return ApiErrors.internal('Non sono riuscito a inviare il preventivo. Riprova fra un momento.');
+      return ApiErrors.internal('Non sono riuscito a inviare la richiesta. Riprova fra un momento.');
     }
     const { preventivo, telefono, socials } = letti;
 
@@ -87,7 +87,7 @@ export const POST = withSellerAnchePendingRateLimit(
       // Senza l'avviso nessuno saprebbe che il cliente ha accettato: meglio dirgli di riprovare
       // che fargli credere che lo richiameremo.
       logger.error('[preventivo] avviso agli amministratori non scritto', { userId: user.id, errore: String(errore) });
-      return ApiErrors.internal('Non sono riuscito a inviare il preventivo. Riprova fra un momento.');
+      return ApiErrors.internal('Non sono riuscito a inviare la richiesta. Riprova fra un momento.');
     }
 
     const flusso = avviso === 'gia-mandato'

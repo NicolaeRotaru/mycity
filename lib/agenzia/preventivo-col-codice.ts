@@ -5,6 +5,7 @@ import { accessoDopoIlPreventivoTemplate } from '@/lib/email/templates';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { env } from '@/lib/env';
 import { FASCE, type Abbonamento } from '@/lib/agenzia/preventivo';
+import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import { campiPerIlProfilo, leggiSchedaSalvata } from '@/lib/agenzia/scheda-cliente';
 
 /**
@@ -134,7 +135,7 @@ export async function accettaPreventivoColCodice(input: {
 
   let accessoInviato = false;
   try {
-    const link = await admin.auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: `${env.appUrl()}/seller/preventivo` } });
+    const link = await admin.auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: `${env.appUrl()}${PERCORSO_ABBONAMENTO}` } });
     const azione = (link.data as { properties?: { action_link?: string } } | null)?.properties?.action_link;
     if (link.error || !azione) throw new Error(link.error?.message ?? 'link senza indirizzo');
     const posta = accessoDopoIlPreventivoTemplate({ negozio: preventivo.nomeAttivita, link: azione });

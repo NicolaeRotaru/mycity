@@ -77,7 +77,8 @@ export async function apriCassaServizi({ sellerId, email, fascia, ritorno, chiav
   /**
    * Un pezzo in più per la chiave di idempotenza di Stripe: la strada del link col codice ci mette
    * l'impronta di email e indirizzi di ritorno, perché la stessa chiave con parametri diversi Stripe
-   * la rifiuta (collaudo del 24/11). La dashboard non lo passa: la sua chiave resta quella di prima.
+   * la rifiuta (collaudo del 24/11). La dashboard passa «abbonamento» dal 24/11, quando il suo indirizzo
+   * di ritorno è passato da /seller/preventivo a /seller/abbonamento.
    */
   chiaveExtra?: string;
 }): Promise<NextResponse> {

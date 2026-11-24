@@ -5,9 +5,9 @@
  * 23/11/2026 — Nicola: «è dentro preventivo, ma ogni servizio ha la sua voce dentro il menu»,
  * e il nome del partner «si vedrà solo dentro i servizi offerti ai venditori» (dal 24/11 è SDG Agenzia).
  *
- *  · nel menu del venditore c'è il gruppo «Preventivo», con il preventivo intero e una voce per
- *    ogni servizio del listino;
- *  · dentro un servizio si accende la voce di quel servizio, non anche «Il tuo preventivo»;
+ *  · nel menu del venditore c'è il gruppo «Servizi», con una voce per ogni servizio del listino e
+ *    «Abbonamento» (24/11/2026: «Il tuo preventivo» e «Scheda Google» non ci sono più);
+ *  · dentro un servizio si accende la voce di quel servizio;
  *  · ogni servizio nomina il partner SDG Agenzia; il menu no;
  *  · un indirizzo che non è di nessun servizio non apre una pagina vuota.
  */
@@ -47,7 +47,7 @@ vi.mock('@/components/hooks/useProfile', () => ({
 vi.mock('@/components/hooks/useBottomSheetA11y', () => ({ useBottomSheetA11y: () => undefined }));
 
 import SellerShell from '@/components/seller/SellerShell';
-import ServizioDelPreventivoPage from '@/app/seller/preventivo/[servizio]/page';
+import ServizioDelPreventivoPage from '@/app/seller/servizi/[servizio]/page';
 import { costruisciPreventivo, leggiImpostazioniAgenzia } from '@/lib/agenzia/preventivo';
 
 const accesi: Root[] = [];
@@ -77,19 +77,18 @@ afterEach(() => {
 });
 
 describe('il menu del venditore', () => {
-  it('ha il preventivo intero e una voce per ogni servizio del listino', async () => {
+  it('ha una voce per ogni servizio del listino, e «Abbonamento» (24/11: niente più «Il tuo preventivo»)', async () => {
     const r = await monta(SellerShell, createElement('p', null, 'x'));
-    const attesi = ['/seller/preventivo', ...SERVIZI_AGENZIA.map((id) => `/seller/preventivo/${SLUG_SERVIZIO[id]}`)];
+    const attesi = [...SERVIZI_AGENZIA.map((id) => `/seller/servizi/${SLUG_SERVIZIO[id]}`), '/seller/abbonamento'];
     for (const href of attesi) {
       expect(r.querySelector(`a[href="${href}"]`), `manca la voce ${href}`).not.toBeNull();
     }
     expect(r.textContent).toContain('Foto e video');
     expect(r.textContent).toContain('Gestione social');
     expect(r.textContent).toContain('Sito web');
-    expect(r.textContent).toContain('Scheda Google');
+    expect(r.textContent).not.toContain('Scheda Google');
     expect(r.textContent).not.toContain('Logo e grafica'); // tolto il 23/11
-    expect(r.textContent).toContain('Il tuo preventivo');
-    // Nicola, 23/11: «la voce preventivo, chiamala servizi»
+    expect(r.textContent).not.toContain('Il tuo preventivo');
     const gruppi = Array.from(r.querySelectorAll('*')).filter((n) => n.children.length === 0).map((n) => n.textContent?.trim());
     expect(gruppi).toContain('Servizi');
     expect(gruppi).not.toContain('Preventivo');
@@ -98,18 +97,17 @@ describe('il menu del venditore', () => {
   });
 
   it('dentro un servizio si accende solo la voce di quel servizio', async () => {
-    stato.pathname = '/seller/preventivo/social';
+    stato.pathname = '/seller/servizi/social';
     const r = await monta(SellerShell, createElement('p', null, 'x'));
     const accese = Array.from(r.querySelectorAll('a[aria-current="page"]')).map((a) => a.getAttribute('href'));
-    expect(accese).toContain('/seller/preventivo/social');
-    expect(accese).not.toContain('/seller/preventivo');
+    expect(accese).toEqual(['/seller/servizi/social']);
   });
 
-  it('sulla pagina del preventivo intero si accende «Il tuo preventivo»', async () => {
-    stato.pathname = '/seller/preventivo';
+  it('sulla pagina Abbonamento si accende «Abbonamento»', async () => {
+    stato.pathname = '/seller/abbonamento';
     const r = await monta(SellerShell, createElement('p', null, 'x'));
     const accese = Array.from(r.querySelectorAll('a[aria-current="page"]')).map((a) => a.getAttribute('href'));
-    expect(accese).toContain('/seller/preventivo');
+    expect(accese).toEqual(['/seller/abbonamento']);
   });
 });
 
@@ -125,7 +123,7 @@ describe('la pagina di un servizio', () => {
     expect(r.textContent).toMatch(/Premium · 999,00\s€ al mese/);
     expect(r.textContent).toContain('Una sessione di foto e video ogni mese.');
     expect(r.textContent).not.toMatch(/da 50,00/);
-    expect(r.querySelector('a[href="/seller/preventivo"]')?.textContent).toContain('Scegli l');
+    expect(r.querySelector('a[href="/seller/abbonamento"]')?.textContent).toContain('Scegli l');
   });
 
   it('ogni servizio nomina il partner SDG Agenzia, e nessuno nomina più scattiDG', async () => {
@@ -196,8 +194,8 @@ describe('cosa ricevi, già pronto dentro il servizio', () => {
     expect(r.textContent).toContain('Sottotitoli');
   });
 
-  it('la scheda Google mostra come apparirà su Maps, col nome e la categoria', async () => {
-    stato.slug = 'scheda-google';
+  it('la gestione social mostra anche come apparirà la scheda su Maps, col nome e la categoria', async () => {
+    stato.slug = 'social';
     const r = await monta(ServizioDelPreventivoPage);
     const scheda = r.querySelector('[aria-label="La tua scheda su Google Maps"]');
     expect(scheda, 'anteprima della scheda non mostrata').toBeTruthy();
@@ -207,19 +205,9 @@ describe('cosa ricevi, già pronto dentro il servizio', () => {
     expect(r.textContent).toContain('È compreso in tutti e tre gli abbonamenti');
   });
 
-  it('il preventivo intero mostra le quattro anteprime, e non ha più il logo', async () => {
-    const { default: PreventivoAgenziaPage } = await import('@/app/seller/preventivo/page');
-    const r = await monta(PreventivoAgenziaPage);
-    expect(r.textContent).toContain('I formati che ricevi');
-    expect(r.textContent).toContain('Il piano editoriale di novembre 2026');
-    expect(r.textContent).toContain('La bozza del tuo sito');
-    expect(r.textContent).toContain('La tua scheda su Google Maps');
-    expect(r.textContent).not.toContain('Logo e grafica');
-  });
-
-  it('il preventivo intero mostra le tre fasce, parte dal Business consigliato e accetta la fascia scelta', async () => {
-    const { default: PreventivoAgenziaPage } = await import('@/app/seller/preventivo/page');
-    const r = await monta(PreventivoAgenziaPage);
+  it('la pagina Abbonamento mostra le tre fasce, parte dal Business consigliato e accetta la fascia scelta', async () => {
+    const { default: PaginaAbbonamento } = await import('@/app/seller/abbonamento/page');
+    const r = await monta(PaginaAbbonamento);
     const radio = [...r.querySelectorAll<HTMLInputElement>('input[name="abbonamento"]')];
     expect(radio.map((x) => x.value)).toEqual(['base', 'business', 'premium']);
     expect(radio.find((x) => x.checked)?.value).toBe('business'); // vetrina vuota: mancano foto e sito
@@ -230,7 +218,7 @@ describe('cosa ricevi, già pronto dentro il servizio', () => {
     expect(r.textContent).toContain('Preferisco essere richiamato');
     expect(r.textContent).toContain('I servizi li realizza SDG Agenzia, il partner di MyCity');
     // in cima «Cosa ci guadagni»; sotto ogni piano il primo mese e il pareggio in colazioni
-    expect(r.textContent!.indexOf('Cosa ci guadagni')).toBeLessThan(r.textContent!.indexOf('Cosa manca alla tua vetrina'));
+    expect(r.textContent!.indexOf('Cosa ci guadagni')).toBeLessThan(r.textContent!.indexOf('Base, Business o Premium'));
     expect(r.textContent).toMatch(/Il primo mese 250,00\s€/);
     expect(r.textContent).toContain('l’incasso di 6 colazioni in più');
     expect(r.textContent).toContain('disdici quando vuoi, con 30 giorni di preavviso');

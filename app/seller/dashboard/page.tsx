@@ -22,8 +22,7 @@ import { useProfile } from '@/components/hooks/useProfile';
 import StoreAvatar from '@/components/StoreAvatar';
 import SellerHealthScore from '@/components/seller/SellerHealthScore';
 import SellerOnboardingChecklist from '@/components/seller/SellerOnboardingChecklist';
-import PreventivoAgenziaCard from '@/components/seller/PreventivoAgenziaCard';
-import BannerModalitaDemo from '@/components/seller/BannerModalitaDemo';
+import RiquadroAbbonamento from '@/components/seller/RiquadroAbbonamento';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
@@ -311,6 +310,11 @@ export default function SellerDashboard() {
 
   return (
     <div className="space-y-7">
+      {/* ===== Abbonamento: da scegliere, o pagamento da sistemare — primo blocco (24/11/2026) =====
+          Nicola: «la sezione abbonamento deve essere nella home page, nel dashboard del venditore».
+          Prende il posto dell'avviso della modalità demo e del riquadro del preventivo. */}
+      <RiquadroAbbonamento posizione="cima" />
+
       {/* ===== HERO ===== */}
       <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-700 via-primary-600 to-secondary-700 text-white shadow-warm-lg">
         <div className="absolute -top-16 -right-10 w-64 h-64 rounded-full bg-white/10 blur-2xl" aria-hidden />
@@ -380,6 +384,9 @@ export default function SellerDashboard() {
         </div>
       </section>
 
+      {/* ===== Abbonamento attivo: più piccolo, dopo i numeri del giorno (24/11/2026) ===== */}
+      <RiquadroAbbonamento posizione="dopo-numeri" />
+
       {/* ===== Rientro da Stripe: quello che Stripe ha risposto davvero =====
           Il messaggio a comparsa sparisce dopo qualche secondo. Se i pagamenti
           non sono attivi il negoziante deve poterlo rileggere, e sapere dove si
@@ -411,14 +418,8 @@ export default function SellerDashboard() {
         </section>
       )}
 
-      {/* ===== Modalità demo: la vetrina non si vede finché non c'è un abbonamento (24/11/2026) ===== */}
-      <BannerModalitaDemo />
-
       {/* ===== Onboarding (si nasconde da solo al 100%) ===== */}
       <SellerOnboardingChecklist />
-
-      {/* ===== Il preventivo dell'agenzia: cosa manca alla vetrina, già pronto (22/11/2026) ===== */}
-      <PreventivoAgenziaCard />
 
       {/* ===== Quello che non sono riuscito a leggere =====
           Il trattino su una targhetta dice «questo numero no», ma solo a chi la

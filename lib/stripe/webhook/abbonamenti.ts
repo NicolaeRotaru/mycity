@@ -15,6 +15,7 @@
  * Nessuna logica è cambiata in questo spostamento: le prove esistenti sul
  * webhook sono la dimostrazione che non si è rotto niente.
  */
+import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import type Stripe from 'stripe';
 import { getStripe } from '@/lib/stripe/client';
 import { getAdminSupabase } from '@/lib/supabase/server';
@@ -306,7 +307,7 @@ export async function fatturaServiziRifiutata(subscriptionId: string | null): Pr
       user_id: (data as { seller_id: string }).seller_id,
       title: '⚠️ Pagamento dell’abbonamento non riuscito',
       body: 'Non siamo riusciti ad addebitare l’abbonamento dei servizi di questo mese. Scrivici dall’Aiuto e lo sistemiamo insieme.',
-      link: '/seller/preventivo',
+      link: PERCORSO_ABBONAMENTO,
     }),
     'avviso pagamento abbonamento servizi non riuscito',
   );

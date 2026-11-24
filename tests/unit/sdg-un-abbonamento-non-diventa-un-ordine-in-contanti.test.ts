@@ -5,7 +5,7 @@ import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
  * 24/11/2026 — UN ABBONAMENTO DI SDG AGENZIA NON DIVENTA UN ORDINE IN CONTANTI.
  *
  * I tre abbonamenti ai servizi sono prodotti nella vetrina di SDG (migrazione 707), ma non si
- * comprano col carrello: si attivano dal preventivo e si pagano in abbonamento Stripe. Questa prova
+ * comprano col carrello: si attivano dalla pagina Abbonamento e si pagano in abbonamento Stripe. Questa prova
  * percorre la cassa in contanti fino in fondo e diventa rossa se una riga di SDG entra in un ordine,
  * da sola o in mezzo alla spesa di un altro negozio. Il finto del database è quello di
  * contanti-la-chiave-si-prende-prima.test.ts.
@@ -281,7 +281,7 @@ describe('la cassa in contanti e gli abbonamenti di SDG', () => {
     const res = await esegui([{ sellerId: SDG, items: [{ productId: ABBONAMENTO_BASE, quantity: 1 }], shippingCents: 0 }]);
     expect(res.status).toBe(400);
     const corpo = JSON.stringify(await res.json());
-    expect(corpo).toContain('preventivo');
+    expect(corpo).toContain('pagina Abbonamento');
     expect(inseriti, 'è nato un ordine con un abbonamento di SDG').toHaveLength(0);
     expect(righeOrdine).toHaveLength(0);
     expect(rpcCalls.filter((c) => c.name === 'reserve_stock')).toHaveLength(0);

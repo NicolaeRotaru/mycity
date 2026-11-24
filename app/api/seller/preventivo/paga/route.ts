@@ -6,6 +6,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { env } from '@/lib/env';
 import { ABBONAMENTI } from '@/lib/agenzia/preventivo';
+import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import { apriCassaServizi } from '@/lib/agenzia/cassa-servizi';
 
 export const runtime = 'nodejs';
@@ -63,7 +64,11 @@ export const POST = withSellerAnchePendingRateLimit(
       sellerId: user.id,
       email: user.email,
       fascia,
-      ritorno: { pagato: `${env.appUrl()}/seller/preventivo?pagato=1`, annullato: `${env.appUrl()}/seller/preventivo?pagato=0` },
+      ritorno: { pagato: `${env.appUrl()}${PERCORSO_ABBONAMENTO}?pagato=1`, annullato: `${env.appUrl()}${PERCORSO_ABBONAMENTO}?pagato=0` },
+      // 24/11/2026 — Il ritorno è cambiato (da /seller/preventivo a /seller/abbonamento): una chiave
+      // nuova, così Stripe non rifiuta la cassa nuova perché ha la stessa chiave di una vecchia con
+      // un altro indirizzo di ritorno (collaudo del 24/11).
+      chiaveExtra: 'abbonamento',
     });
   },
 );

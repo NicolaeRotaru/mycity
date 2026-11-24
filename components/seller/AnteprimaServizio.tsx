@@ -13,10 +13,10 @@ import {
 } from '@/lib/agenzia/contenuti-servizi';
 
 /**
- * COSA RICEVI — l'anteprima di un servizio, dentro il preventivo e dentro la pagina del
- * servizio (Nicola, 23/11/2026). Sito → la bozza del sito col nome del cliente; social → il
- * piano editoriale del mese con esempi; foto e video → i formati e i lavori di editing;
- * scheda Google → come apparirà su Maps e cosa sistemiamo.
+ * COSA RICEVI — l'anteprima di un servizio, dentro la pagina del servizio (Nicola, 23/11/2026).
+ * Sito → la bozza del sito col nome del cliente; social → il piano editoriale del mese con esempi
+ * e, dal 24/11/2026, come apparirà la scheda su Google Maps, che è dentro la gestione social;
+ * foto e video → i formati e i lavori di editing.
  * I contenuti li calcola `lib/agenzia/contenuti-servizi.ts`: qui si disegna soltanto.
  */
 
@@ -25,8 +25,14 @@ type Props = { id: ServizioAgenzia; nome: string; tipo: TipoAttivita; giorno: st
 
 export default function AnteprimaServizio({ id, nome, tipo, giorno, scheda }: Props) {
   if (id === 'sito_web') return <BozzaDelSito nome={nome} tipo={tipo} scheda={scheda} />;
-  if (id === 'social') return <PianoDelMese nome={nome} tipo={tipo} giorno={giorno} scheda={scheda} />;
-  if (id === 'google_maps') return <SchedaSuMaps nome={nome} tipo={tipo} />;
+  if (id === 'social') {
+    return (
+      <>
+        <PianoDelMese nome={nome} tipo={tipo} giorno={giorno} scheda={scheda} />
+        <SchedaSuMaps nome={nome} tipo={tipo} />
+      </>
+    );
+  }
   return <FormatiFotoVideo />;
 }
 
