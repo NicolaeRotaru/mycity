@@ -204,6 +204,22 @@ function tuttiAnnullati(ordini: Array<{ delivery_status?: unknown }> | null | un
   return !!ordini && ordini.length > 0 && ordini.every((o) => o.delivery_status === 'CANCELED');
 }
 
+/**
+ * 24/11/2026 (R03-012) — DUE VELOCI NELLO STESSO ISTANTE CON UN FATTORINO SOLO.
+ *
+ * `veloceSiPuo` legge i fattorini liberi PRIMA dell'inserimento: due clienti insieme leggevano
+ * tutti e due «un fattorino libero» e nascevano due veloci. L'ultima parola adesso è del database
+ * (migrazione 840): mette in fila le veloci in contanti e ferma quella che non ha più un fattorino
+ * libero con 23514 e il segno `veloce_senza_fattorino_libero`. È un «no» col suo motivo (409),
+ * non un guasto (500). Gli ordini che non sono veloci non arrivano mai qui.
+ */
+const VELOCE_SENZA_FATTORINO_LIBERO =
+  "Adesso non c'è un fattorino libero per la consegna veloce. Scegli una fascia oraria: la consegna arriva quando la scegli tu.";
+function eLaVeloceSenzaFattorinoLibero(errore: unknown): boolean {
+  const e = errore as { code?: unknown; hint?: unknown } | null | undefined;
+  return e?.code === '23514' && e?.hint === 'veloce_senza_fattorino_libero';
+}
+
 function ordineDiPrimaAnnullato(): Promise<NextResponse> {
   return conLaChiaveLiberata(
     ApiErrors.conflict(
@@ -1004,6 +1020,8 @@ export const POST = withAuthRateLimit(
     // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso (e
     // ancora per un quarto d'ora), almeno un fattorino approvato, con l'interruttore acceso e libero (non ha
     // già in mano tutte le veloci che può portare). La stessa decisione della cassa (`veloceSiPuo`).
+    // 24/11/2026 (R03-012) — Due invii insieme leggono lo stesso fattorino libero: l'ultima parola è
+    // del database all'inserimento (migrazione 840, `eLaVeloceSenzaFattorinoLibero`).
     if (consegnaVeloce) {
       const veloce = veloceSiPuo({
         adesso: romeNow(),
@@ -1680,6 +1698,11 @@ export const POST = withAuthRateLimit(
               userId: user.id, creditoCents: walletAppliedCents, ref: walletRef, message: errCreditoGruppo.message,
             });
           }
+        }
+        // R03-012 — Il database ha fermato la veloce: il fattorino libero l'ha preso un altro invio.
+        if (eLaVeloceSenzaFattorinoLibero(orderErr)) {
+          logger.warn('[cod] veloce fermata dal database: nessun fattorino libero', { userId: user.id, sellerId: g.sellerId });
+          return esciERilascia(ApiErrors.conflict(VELOCE_SENZA_FATTORINO_LIBERO));
         }
         logger.error(orderErr ?? new Error('cod-order-insert-null'), { context: 'cod-order-insert', sellerId: g.sellerId });
         return esciERilascia(ApiErrors.internal('Errore nella creazione ordine.'));
