@@ -1,6 +1,6 @@
 {
   "sessione": "R12",
-  "aggiornato": "2026-11-24 18:50",
+  "aggiornato": "2026-11-24 18:55",
   "finita": true,
   "testa": "2549d2c876def9840b159926aadc78ea2a4b30b4",
   "verifica": {
@@ -43,7 +43,7 @@
     {
       "id": "R12-002",
       "chiave": "architettura|la prova sull'export elenca ancora cod_reconciliations fra le tabelle escluse",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "d39c12e634f62a9bb086d8d8707e2850f93cde3b",
       "file_toccati": [
         "tests/unit/scarica-i-miei-dati-non-salta-nessuna-tabella.test.ts"
@@ -62,7 +62,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Ho tolto cod_reconciliations da FUORI_DALL_EXPORT e aggiunto il caso «una tabella esclusa non è anche nell export»: sulla base trova ['cod_reconciliations']. 5 prove verdi.",
-      "verificato_da": "subagente revisore (sonnet): prova verde, voce coperta com'è scritta; rimessa fatta a mano dal capo squadra, rossa sulla base"
+      "verificato_da": "subagente revisore (sonnet): prova verde, voce coperta com'è scritta; rimessa fatta a mano dal capo squadra, rossa sulla base",
+      "cosa_resta": "La modifica è fatta ed è verde. Manca solo la prova rimessa del programma: correzione e prova sono lo stesso file, e prova-rimessa.mjs esce con 2. A mano regge: sulla base il caso nuovo è rosso. Per farla diventare riparato serve una prova separata che legga il file di prova come testo. Non l'ho scritta perché la spesa ha passato i 3 $."
     },
     {
       "id": "R12-003",
@@ -163,6 +164,8 @@
   "domande_per_nicola": [],
   "conto": {
     "agenti": 2,
-    "nota": "1 subagente sonnet ha riparato il lotto unico di 5 voci, 1 subagente sonnet ha smentito. Spesa a 2,69 $ prima del verify: nessun giro di correzione."
-  }
+    "subagenti": 2,
+    "nota": "1 subagente sonnet ha riparato il lotto unico di 5 voci, 1 subagente sonnet ha smentito. Spesa oltre i 3 $ prima della consegna: chiuso senza altri giri."
+  },
+  "costo_usd": 3.07
 }
