@@ -12,7 +12,7 @@ import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ibanValido, normalizzaIban } from '@/app/sell/iban';
 import { MAX_DETTAGLIO_ATTIVITA, TIPI_ATTIVITA, descriviAttivita } from '@/lib/agenzia/tipi-attivita';
-import { inviaNuovaAttivitaAlFlusso } from '@/lib/agenzia/flusso-n8n';
+import { inviaNuovaAttivitaAlFlusso } from '@/lib/agenzia/nuovo-cliente-n8n';
 
 export const runtime = 'nodejs';
 
