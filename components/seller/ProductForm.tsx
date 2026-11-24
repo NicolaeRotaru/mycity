@@ -352,7 +352,11 @@ export default function ProductForm({
   const topCategories = useMemo(() => categories.filter((c) => !c.parent_id), [categories]);
   const resolveTop = (catId: string): string => {
     let cur = categories.find((c) => c.id === catId);
-    while (cur?.parent_id) {
+    // R07-012 — Se le categorie formano un cerchio (A dentro B dentro A) il giro si ferma alla
+    // prima già vista: prima il modulo restava appeso.
+    const viste = new Set<string>();
+    while (cur?.parent_id && !viste.has(cur.id)) {
+      viste.add(cur.id);
       const parent = categories.find((c) => c.id === cur!.parent_id);
       if (!parent) break;
       cur = parent;
