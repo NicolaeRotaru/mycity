@@ -9,6 +9,7 @@ import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
 import { sizedImage } from '@/lib/image-url';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import { fileColTipoGiusto, mappaAccept, tipiScrittiPerUmani } from '@/lib/storage/casella-di-caricamento';
 import { useTranslations } from 'next-intl';
 
 interface Props {
@@ -51,11 +52,7 @@ const StoreMediaManager = ({ value, onChange, onUploadingChange }: Props) => {
      * I video gia' caricati restano visibili e rimovibili qui sotto: si smette di accettarne di
      * nuovi, non si butta via quello che c'e'.
      */
-    accept: {
-      'image/jpeg': ['.jpg', '.jpeg'],
-      'image/png': ['.png'],
-      'image/webp': ['.webp'],
-    },
+    accept: mappaAccept(),
     multiple: true,
     // Senza questa riga il file rifiutato spariva in silenzio, che e' il modo peggiore di dire di no.
     onDropRejected: (rifiutati) => {
@@ -63,7 +60,7 @@ const StoreMediaManager = ({ value, onChange, onUploadingChange }: Props) => {
       toast.error(
         video
           ? 'Qui vanno solo foto: il video della vetrina per ora non si puo\' caricare.'
-          : 'Formato non accettato: servono foto in JPG, PNG o WEBP.',
+          : `Formato non accettato: servono foto in ${tipiScrittiPerUmani()}.`,
       );
     },
     onDrop: async (files) => {
@@ -75,7 +72,8 @@ const StoreMediaManager = ({ value, onChange, onUploadingChange }: Props) => {
         const next = [...value];
         let entrati = 0;
         let scartati = 0;
-        for (const file of files) {
+        for (const grezzo of files) {
+          const file = fileColTipoGiusto(grezzo);
           const isVideo = file.type.startsWith('video/');
           const isImage = file.type.startsWith('image/');
           if (!isVideo && !isImage) { scartati++; continue; }
