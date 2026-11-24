@@ -73,13 +73,15 @@ export const useMutation = (opzioni) => {
   const annota = (variabili) => {
     if (Array.isArray(globalThis.__MUTAZIONI__)) globalThis.__MUTAZIONI__.push(variabili);
     // 5/11/2026 (S04) — Se la prova accende `globalThis.__MUTAZIONI_VERE__`, la scrittura gira
-    // davvero: `mutationFn`, poi `onSuccess` o `onError`, come farebbe react-query. Così una prova
+    // davvero: `mutationFn`, poi `onSuccess` o `onError` (vedi sotto dove il finto differisce). Così una prova
     // vede cosa la pagina rilegge e cosa dice dopo un errore. Le promesse in volo finiscono in
     // `__MUTAZIONI_IN_VOLO__` (se è un array), da aspettare. Chi non la accende non vede niente.
     if (globalThis.__MUTAZIONI_VERE__ && opzioni?.mutationFn) {
-      // 24/11/2026 — Solo un errore di `mutationFn` va in `onError`. Un errore DENTRO `onSuccess` è
-      // un difetto della pagina: deve emergere (la promessa in volo si rompe), non diventare «non
-      // riuscito» e passare inosservato in una prova che guarda il messaggio d'errore.
+      // 24/11/2026 — Qui il finto è VOLUTAMENTE PIÙ SEVERO di react-query vero, che chiama `onError`
+      // anche quando è `onSuccess` a lanciare. Nel finto solo un errore di `mutationFn` va in
+      // `onError`; un errore DENTRO `onSuccess` è un difetto della pagina: deve emergere (la promessa
+      // in volo si rompe), non diventare «non riuscito» e passare inosservato in una prova che guarda
+      // il messaggio d'errore.
       const volo = (async () => {
         let esito;
         try {
