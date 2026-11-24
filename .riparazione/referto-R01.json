@@ -51,7 +51,9 @@
       "chiave": "stati-ui|a riga chiusa con il motivo «chiedi all'assistenza» il pulsante «avvia» resta",
       "esito": "riparato",
       "commit": "5d00555c53a9546b4f34906e2bd0b42f8ea39c44",
-      "insieme_a": "R01-016",
+      "insieme_a": [
+        "R01-016"
+      ],
       "file_toccati": [
         "lib/ai/statoLavoroCatalogo.ts"
       ],
@@ -74,7 +76,9 @@
       "chiave": "stati-ui|sotto un lavoro sul catalogo chiuso che dice di chiedere all'assistenza prima di ripartire, il pulsante «avvia sul catalogo» resta lì",
       "esito": "riparato",
       "commit": "5d00555c53a9546b4f34906e2bd0b42f8ea39c44",
-      "insieme_a": "R01-015",
+      "insieme_a": [
+        "R01-015"
+      ],
       "file_toccati": [
         "lib/ai/statoLavoroCatalogo.ts"
       ],
