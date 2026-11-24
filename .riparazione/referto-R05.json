@@ -295,6 +295,8 @@
   ],
   "conto": {
     "agenti": 5,
-    "nota": "2 subagenti riparatori (lotto 1 modello grande, lotto 2 sonnet), 2 revisori col mandato di smentire, 1 giro di correzione. Spesa letta da get_session prima della verifica: 18,14 $."
-  }
+    "nota": "2 subagenti riparatori (lotto 1 modello grande, lotto 2 sonnet), 2 revisori col mandato di smentire, 1 giro di correzione. Spesa letta da get_session prima della verifica: 18,14 $. costo_usd = usage.cost_usd di get_session senza id letto alla consegna (aggiornato all ultimo turno chiuso: il turno della consegna non è ancora contato).",
+    "subagenti": 5
+  },
+  "costo_usd": 18.14
 }
