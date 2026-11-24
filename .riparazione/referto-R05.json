@@ -1,0 +1,302 @@
+{
+  "sessione": "R05",
+  "aggiornato": "2026-11-24 13:25",
+  "finita": true,
+  "testa": "634548714b1b922c17e4c74c2a71619c9da0cae5",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "634548714b1b922c17e4c74c2a71619c9da0cae5",
+    "nota": "typecheck + lint + test: 2050 file di prova, 12539 prove verdi in 481 s, sull ultimo commit di codice."
+  },
+  "voci": [
+    {
+      "id": "R05-008",
+      "chiave": "microcopy|la campanella «ordine pronto» dice ancora «un rider passa a prenderlo a breve», mentre pagina ed email ora dicono fattorino",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "migrations/832 (la migrazione dell'altro riparatore sulla campanella «ordine pronto»)",
+          "modifica": "nei due testi «un rider passa a prenderlo…» scrivere «un fattorino passa a prenderlo…»: chiesto dalla regia nella stessa migrazione"
+        }
+      ],
+      "nota": "Decisione della regia (24/11): la funzione della campanella «ordine pronto» la ridefinisce già un altro riparatore; due migrazioni sulla stessa funzione si cancellerebbero a vicenda, quindi niente migrazione 861 qui."
+    },
+    {
+      "id": "R05-013",
+      "chiave": "qa-flussi|il finto di react-query mette mutationfn e onsuccess nello stesso try: un errore in onsuccess finisce in onerror e nasconde difetti nelle prove",
+      "esito": "riparato",
+      "commit": "0b996fe50f27337bf85b7193bfbe1178429b4be3",
+      "file_toccati": [
+        "tests/unit/aiuti/finti/react-query.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-finto-mutazioni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-finto-mutazioni.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0b996fe50f27337bf85b7193bfbe1178429b4be3^ --file tests/unit/aiuti/finti/react-query.mjs --prove tests/unit/riparazione-r05-finto-mutazioni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Solo un errore di mutationFn va in onError; un errore dentro onSuccess ora rompe la promessa in volo e onError non viene chiamato. Le 11 prove che usano il finto sono verdi (con la voce del setQueriesData, vedi nota). Nota: react-query vero 5.x chiama onError anche quando onSuccess lancia; il finto ora è volutamente più severo, come chiede la voce, per non nascondere difetti. Commento corretto nel commit 634548714b1b922c17e4c74c2a71619c9da0cae5 (solo commento, nessun cambio di comportamento; 5 file / 15 prove del finto verdi).",
+      "verificato_da": "revisore A (subagente generico, mandato di smentire, worktree separata): prova e rimessa rilanciate (uscita 0); 24 file di prova che usano il finto verdi col finto vecchio e nuovo; confrontato con @tanstack/query-core 5.100.14 col MutationObserver vero: il vero chiama onError anche se onSuccess lancia, quindi il finto ora è volutamente più severo (commento corretto nel giro di correzione)."
+    },
+    {
+      "id": "R05-014",
+      "chiave": "qa-flussi|il finto di react-query non ha setqueriesdata",
+      "esito": "riparato",
+      "commit": "214616a895828a48ce214f2499df39d885303732",
+      "file_toccati": [
+        "tests/unit/aiuti/finti/react-query.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-finto-setqueriesdata.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-finto-setqueriesdata.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 214616a895828a48ce214f2499df39d885303732^ --file tests/unit/aiuti/finti/react-query.mjs --prove tests/unit/riparazione-r05-finto-setqueriesdata.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "setQueriesData come nell'API vera: filtro con queryKey a prefisso (o exact) e predicate, aggiorna tutte le domande che corrispondono, undefined le lascia com'erano, torna [queryKey, dato][]; memoria accesa con globalThis.__CACHE_QUERY__. Senza questa, la correzione del try separato fa diventare rossa una prova esistente delle notifiche (TypeError setQueriesData is not a function nell'onSuccess di app/notifications/page.tsx): il difetto nascosto era nel finto.",
+      "verificato_da": "revisore A (subagente generico, mandato di smentire, worktree separata): prova e rimessa rilanciate (uscita 0). Differenze minori dal vero, fuori dalla voce: exact confronta JSON.stringify senza ordinare le chiavi; setQueryData non scrive nella memoria; useQuery riscrive la memoria a ogni giro."
+    },
+    {
+      "id": "R05-001",
+      "chiave": "dati-analytics|strutturasenzaindirizzi in caso di eccezione lascia passare il valore originale",
+      "esito": "riparato",
+      "commit": "bc409062aa2b6b232c12e564f874ea2fee063f7f",
+      "file_toccati": [
+        "lib/analytics/filmato-senza-dati-personali.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-struttura-in-eccezione.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-struttura-in-eccezione.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base bc409062aa2b6b232c12e564f874ea2fee063f7f^ --file lib/analytics/filmato-senza-dati-personali.ts --prove tests/unit/riparazione-r05-struttura-in-eccezione.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In eccezione strutturaSenzaIndirizzi ora torna VALORE_NASCOSTO ('***'), come a fine budget, e non più l'originale. La prova forza l'eccezione con un getter che lancia e con un Proxy revocato; le 68 prove che importano analytics sono verdi.",
+      "verificato_da": "revisore A (subagente generico, mandato di smentire, worktree separata): prova e rimessa rilanciate (uscita 0), 68 prove analytics verdi; in eccezione torna «***»."
+    },
+    {
+      "id": "R05-002",
+      "chiave": "dati-analytics|le visite al prodotto si contano con due regole diverse: posthog conta ogni nuova scheda, il database una per persona all'ora",
+      "esito": "gia_riparato_prima",
+      "prova": "lib/analytics/visita-prodotto.ts:102-116 frenoOrario (localStorage condiviso fra le schede, finestra di 1 ora come product_views_dedup della 119/810); components/ProductViewTracker.tsx:75 lo usa e :123 annuncia solo se il database ha preso la riga (count !== 0). La prova esistente tests/unit/riparazione-r02-visita-una-all-ora.test.ts («due schede in dieci minuti: un annuncio solo; dopo un'ora: un altro») è verde 4/4 sulla base.",
+      "verificato_da": "revisore A (subagente generico, mandato di smentire, worktree separata): sulla base il freno è orario e condiviso fra le schede (localStorage), l impronta degli anonimi vive un ora e PostHog non annuncia se il database scarta la visita (visita-prodotto.ts:52, ProductViewTracker.tsx:107-123); due dispositivi provati da tests/unit/riparazione-r08-visita-come-il-database.test.tsx."
+    },
+    {
+      "id": "R05-003",
+      "chiave": "dati-analytics|il traguardo «venditore più votato» guarda solo le recensioni ai prodotti, mai quelle al negozio",
+      "esito": "riparato",
+      "commit": "a3415aa0b9b467c1c9700f104396c25c893c41ab",
+      "file_toccati": [
+        "migrations/860_il_traguardo_top_rated_conta_anche_le_recensioni_al_negozio.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r05-traguardo-votato.test.sql"
+      ],
+      "prova_comando": "bash tests/sql/harness/apply.sh r05_prova && psql -q -X -d r05_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r05-traguardo-votato.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base a3415aa0b9b467c1c9700f104396c25c893c41ab^ --file migrations/860_il_traguardo_top_rated_conta_anche_le_recensioni_al_negozio.sql --prove tests/sql/rls/riparazione-r05-traguardo-votato.test.sql --sql r05_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La definizione in uso era ancora quella della 032. La 860 la ridefinisce: conteggio e media del venditore contano le recensioni ai prodotti più quelle in store_reviews, e la stessa funzione gira anche AFTER INSERT su store_reviews. Nessuna funzione nuova, permessi invariati. Prova SQL a 4 casi, 3 rossi sulla base; suite tests/sql verde. Migrazione da applicare: decide Nicola.",
+      "verificato_da": "revisore A (subagente generico, mandato di smentire, worktree separata): 860 applicata in locale: EXECUTE solo a service_role, SECURITY DEFINER con search_path=public; un cliente inserisce la recensione al negozio e il traguardo scatta; niente doppio sblocco né doppia notifica; media su tutte le recensioni insieme; rimessa --sql uscita 0; suite SQL intera verde."
+    },
+    {
+      "id": "R05-012",
+      "chiave": "qa-flussi|un negoziante senza orari che preme «+ orario» e poi la x salva sette giorni vuoti, cioè chiuso sempre",
+      "esito": "parziale",
+      "commit": "e8e798e9c2f4aa5c424cf6bb41c97a822c2efb53",
+      "file_toccati": [
+        "components/seller/StoreHoursEditor.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-orari-piu-e-x.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-orari-piu-e-x.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 08b97c2a4d659cc9ebb24a070de461430bf35ec0^ --file components/seller/StoreHoursEditor.tsx --prove tests/unit/riparazione-r05-orari-piu-e-x.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Due commit sulla voce: 08b97c2a fa ricordare all editor, in un useRef, il valore «senza orari» di partenza: se la X toglie l ultima fascia torna a «senza orari» invece di salvare sette giorni vuoti. e8e798e9 (giro di correzione chiesto dal collaudo) fa azzerare quel ricordo dal pulsante «Chiudi», scelta esplicita: la sequenza «+ orario» lunedì, «Chiudi», «+ orario» martedì, X torna a dare la settimana chiusa. Un negozio che ha già gli orari e toglie l ultima fascia ha la settimana chiusa, come prima. La prova ha 4 casi; quello del collaudo cade su 08b97c2a.",
+      "cosa_resta": "Il caso «salva e poi toglie l ultima fascia senza ricaricare» dà ancora {} (senza orari) invece della settimana chiusa: l editor riceve solo value e onChange e VendorForm non gli manda un segnale dopo il salvataggio. Modifica esatta in components/VendorForm.tsx:443 (file non di R05): da `<StoreHoursEditor value={hours} onChange={setHours} />` a `<StoreHoursEditor key={salvataggioRiuscito} value={hours} onChange={setHours} />`; il rimontaggio dopo un salvataggio riuscito azzera il ricordo. Cambiare un ora (setTime) non azzera il ricordo.",
+      "serve_file_altrui": [
+        {
+          "file": "components/VendorForm.tsx",
+          "modifica": "riga 443: `<StoreHoursEditor value={hours} onChange={setHours} />` → `<StoreHoursEditor key={salvataggioRiuscito} value={hours} onChange={setHours} />`"
+        }
+      ],
+      "verificato_da": "revisore A (subagente generico, mandato di smentire) sul primo commit: PARZIALE, trovata la sequenza con «Chiudi» che dava {}; giro di correzione fatto da un subagente nuovo (e8e798e9), rimessa uscita 0; R05 ha rilanciato le 20 prove r05 (76 verdi). Il giro di correzione non ha avuto un secondo revisore avversario."
+    },
+    {
+      "id": "R05-009",
+      "chiave": "performance|zod intero nel pacchetto comune per la validazione del marchio",
+      "esito": "parziale",
+      "commit": "4ad1d73b4b35c8028687e94ef6990c10633cb590",
+      "file_toccati": [
+        "lib/site-branding.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-marchio-senza-zod.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-marchio-senza-zod.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4ad1d73b4b35c8028687e94ef6990c10633cb590^ --file lib/site-branding.ts --prove tests/unit/riparazione-r05-marchio-senza-zod.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Tolto l'import di zod: brandingSchema è ora un oggetto con safeParse scritto a mano (trim, limiti 60/20/220, massimo 5 voci, valori di partenza, campi sconosciuti scartati, stessa forma {success,data|error.issues[].message}), così i due chiamanti in app/admin/branding e app/api/admin/branding non cambiano. I casi accettati/rifiutati passano anche sulla base; sulla base cade solo il controllo «non importa zod». I messaggi d'errore sono frasi italiane fisse.",
+      "cosa_resta": "zod arriva ancora nel pacchetto comune per un altra strada, montata in ogni pagina: components/Footer.tsx:17 → components/NewsletterForm.tsx:10 → lib/errors.ts:17 → lib/zod-i18n.ts:1. La validazione del marchio non lo porta più, ma il guadagno sul pacchetto resta zero finché lib/errors.ts (non di R05) importa zod-i18n.",
+      "verificato_da": "revisore B (subagente generico, mandato di smentire, worktree separata): 200 mila valori a caso confrontati fra lo schema zod della base e il safeParse nuovo: nessuna differenza su esito e dati (solo Date/Map come gruppo, che da JSON non arrivano); chiamanti invariati; bundle esbuild di lib/site-branding.ts senza zod; rimessa uscita 0; tsc pulito. Trovata la seconda strada di zod dal piede: voce tornata parziale."
+    },
+    {
+      "id": "R05-010",
+      "chiave": "qa-flussi|un cliente che esiste già non ha una strada da solo per diventare fattorino",
+      "esito": "parziale",
+      "commit": "ea05d1137cda1cecefc87b0a3ac734a25569e46e",
+      "file_toccati": [
+        "app/help/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-aiuto-cliente-rider.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-aiuto-cliente-rider.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base ea05d1137cda1cecefc87b0a3ac734a25569e46e^ --file app/help/page.tsx --prove tests/unit/riparazione-r05-aiuto-cliente-rider.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La scheda «Diventa rider» del centro assistenza ora porta a /lavora-con-noi (prima a /contact) e sotto la griglia c'è una riga per chi ha già un account cliente, con il link al modulo contatti e l'email dell'account.",
+      "cosa_resta": "Una strada automatica per un account cliente esistente non c'è: /sign-up?role=rider crea un account nuovo e /rider è protetto dal ruolo in middleware.ts. Serve una pagina o una rotta API che metta il profilo esistente in «fattorino in attesa di approvazione» (con la guardia sui profili della migrazione 119), fuori dai file di R05.",
+      "verificato_da": "revisore B (subagente generico, mandato di smentire, worktree separata): /lavora-con-noi esiste e porta a /sign-up?role=rider; la riga per il cliente registrato porta a /contact con l oggetto «Voglio diventare rider»; nessuna rotta o RPC promuove da sola un account esistente: il cosa_resta è vero. Rimessa uscita 0."
+    },
+    {
+      "id": "R05-005",
+      "chiave": "layout-responsive|in «vicino a te» col testo al 200% a 320 px il selettore elenco/mappa allarga la pagina a 360 px",
+      "esito": "gia_riparato_prima",
+      "prova": "app/near/page.tsx:333 ha già il selettore con 'inline-flex w-fit max-w-full flex-wrap' (commit efe92beb del 22/11) con prova esistente tests/unit/riparazione-r16-nome-lungo.test.tsx:98; misurato con Playwright a 320 px e radice a 32 px: scrollWidth 320, nessun allargamento.",
+      "verificato_da": "revisore B (subagente generico, mandato di smentire, worktree separata): misurato sulla base a 280, 320 e 360 px col testo al 200%: la pagina non si allarga."
+    },
+    {
+      "id": "R05-006",
+      "chiave": "layout-responsive|sul tablet col testo al 200% «dichiarazione accessibilità» esce dal piede e la pagina scorre di lato",
+      "esito": "gia_riparato_prima",
+      "prova": "components/Footer.tsx:150 COLONNE_A_CAPO ('[&>div]:min-w-0 [&_a]:[overflow-wrap:anywhere] …') applicata alla griglia md:grid-cols-5 a riga 203; il commento a riga 146 nomina proprio «Dichiarazione accessibilità».",
+      "verificato_da": "revisore B (subagente generico, mandato di smentire, worktree separata): misurato sulla base a 768 e 800 px col testo al 200%: pagina larga quanto lo schermo; senza COLONNE_A_CAPO andrebbe a 794 e 810 px."
+    },
+    {
+      "id": "R05-007",
+      "chiave": "layout-responsive|col testo al 200% le schede negozio tagliano «nuovo negozio» e «chiuso ora»",
+      "esito": "riparato",
+      "commit": "c14a867d47845b59edeb7510e77450eab81c8a69",
+      "file_toccati": [
+        "components/StorePreviewCard.tsx",
+        "components/StoreListRow.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-schede-negozio-badge-a-capo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-schede-negozio-badge-a-capo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base c14a867d47845b59edeb7510e77450eab81c8a69^ --file components/StorePreviewCard.tsx,components/StoreListRow.tsx --prove tests/unit/riparazione-r05-schede-negozio-badge-a-capo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "A 320 px col testo al 200% il segnalino «Chiuso ora» usciva a 201 px contro il bordo scheda a 144 ed era tagliato da overflow-hidden. Aggiunti max-w-full e [overflow-wrap:anywhere] ai segnalini di stato e a «Nuovo negozio»/«Nuovo» in entrambe le schede; con la correzione resta a 111 px dentro la scheda (misurato con Playwright). Il truncate del nome negozio, che la voce non nomina, non è toccato.",
+      "verificato_da": "revisore B (subagente generico, mandato di smentire, worktree separata): misurato in Chromium col testo al 200%: sulla base «Chiuso ora» esce a 177 px contro il bordo a 144 (320 px) e «Nuovo negozio» è tagliato a 280 px; con la correzione nessun segnalino esce da 280 a 1280 px; rimessa uscita 0."
+    },
+    {
+      "id": "R05-011",
+      "chiave": "qa-flussi|il pannello della home suggerisce ancora «i più amati / prodotti che vanno forte»",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "lib/home-site.ts",
+          "modifica": "riga 75, costante HOME_SECTION_CATALOG, voce popularProducts: description «Griglia dei prodotti più amati» → «Fila degli ultimi prodotti arrivati dai negozi» e label «Prodotti popolari» → «Appena arrivati» (entrambe mostrate dal pannello in components/admin/home/HomeSectionsEditor.tsx:69-70), così il pannello non suggerisce più «i più amati». Nessuna prova esistente dipende dal testo vecchio."
+        }
+      ],
+      "nota": "La parte nel file della voce (components/admin/home/HomeSectionConfigForm.tsx, segnaposto) è già stata chiusa da R15-012 (commit 77822274, prova tests/unit/riparazione-r15-pannello-home-segnaposto.test.ts): oggi dice «Appena arrivati» / «Ultimi arrivati dai negozi». Il pannello però mostra ancora «più amati» dalla descrizione in lib/home-site.ts:75, che non è di R05.",
+      "verificato_da": "revisore B (subagente generico, mandato di smentire, worktree separata): grep confermato: «amati» resta solo in lib/home-site.ts:75; corretti nome della costante e aggiunta l etichetta nella modifica proposta. Il revisore avrebbe chiuso la voce come gia_riparato_prima: tenuto serve_file_altrui perché il sintomo nel pannello resta."
+    },
+    {
+      "id": "R05-004",
+      "chiave": "immagini-media|next.config.js ammette ancora le immagini di placehold.co, che il sito non usa più",
+      "esito": "scelta_di_nicola",
+      "domanda": "placehold.co è ancora usato dai seed (240 righe in seeds/001_piacenza_stores.sql) e ammesso in middleware.ts (CSP img-src), lib/indirizzo-immagine-ammesso.ts:34, lib/immagine-categoria.ts:47, lib/image-url.ts e lib/foto-mancante.ts: lo togliamo dappertutto insieme (seed ripuliti e prima un controllo tuo che il database vero non abbia più immagini placehold.co), o lo lasciamo ammesso?",
+      "nota": "Togliere solo next.config.js:51 lascerebbe incoerenti CSP ed elenchi degli host, e romperebbe le immagini dei seed che passano da next/image. Verificato con grep sul ramo.",
+      "verificato_da": "R05 (capo squadra): grep sul ramo, placehold.co presente in middleware.ts, lib/image-url.ts, lib/indirizzo-immagine-ammesso.ts, lib/foto-mancante.ts, lib/immagine-categoria.ts, seeds/001_piacenza_stores.sql, stories/StoreAvatar.stories.tsx."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il cancello del filmato in eccezione lascia passare il filmato originale",
+      "dimensione": "dati-analytics",
+      "severita": "minore",
+      "file": "lib/analytics/filmato-senza-dati-personali.ts:261",
+      "descrizione": "filmatoSenzaDatiPersonali, se va in eccezione, torna datiDelFilmato non ripulito (scelta scritta nel commento: la seconda rete è /search fuori dalle pagine filmabili). La voce R05-001 non lo nomina, quindi non è stato toccato."
+    },
+    {
+      "titolo": "La pulizia delle proprietà degli eventi PostHog, in eccezione, lascia passare le proprietà originali",
+      "dimensione": "dati-analytics",
+      "severita": "minore",
+      "file": "components/posthog.tsx:306-308",
+      "descrizione": "Stessa porta che nel dubbio apre di R05-001, un livello sopra: con un oggetto che lancia mentre lo si legge, l evento parte senza pulizia. Scatta solo con oggetti anomali. File non di R05."
+    },
+    {
+      "titolo": "Zod arriva in ogni pagina dal modulo newsletter del piede",
+      "dimensione": "performance",
+      "severita": "minore",
+      "file": "lib/errors.ts:17",
+      "descrizione": "components/Footer.tsx:17 → components/NewsletterForm.tsx:10 → lib/errors.ts:17 → lib/zod-i18n.ts:1 portano zod intero nel pacchetto comune; togliere zod-i18n da lib/errors.ts (o caricare la newsletter a parte) chiude anche il guadagno che R05-009 cercava."
+    },
+    {
+      "titolo": "Col testo al 200% il voto del negozio nella scheda resta tagliato",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/StorePreviewCard.tsx:124",
+      "descrizione": "Il voto «★ 4,5 (128)» è un inline-flex senza a capo: a 280, 320 e 360 px col testo al 200% esce dalla scheda (176 px contro il bordo a 144 su 320) e viene tagliato. La voce R05-007 nomina solo «Nuovo negozio» e «Chiuso ora», quindi non è stato toccato."
+    }
+  ],
+  "domande_per_nicola": [
+    "R05-004: placehold.co si toglie da tutto il sito (seed, CSP, elenchi host, next.config) dopo un tuo controllo che il database vero non lo usi più, o resta ammesso?",
+    "R05-003: la migrazione 860 conta le recensioni al negozio solo dalla prossima recensione in poi; vuoi un ricalcolo una tantum del traguardo «venditore più votato» per i venditori che già lo meritano (dà punti e notifiche)?"
+  ],
+  "conto": {
+    "agenti": 5,
+    "nota": "2 subagenti riparatori (lotto 1 modello grande, lotto 2 sonnet), 2 revisori col mandato di smentire, 1 giro di correzione. Spesa letta da get_session prima della verifica: 18,14 $. costo_usd = usage.cost_usd di get_session senza id letto alla consegna (aggiornato all ultimo turno chiuso: il turno della consegna non è ancora contato).",
+    "subagenti": 5
+  },
+  "costo_usd": 18.14
+}
