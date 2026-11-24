@@ -148,10 +148,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // la 640 (un solo lavoro aperto per negozio): nel frattempo il negozio ha
   // avviato un altro lavoro, e questo non puo' piu' tornare pronto. Torna il
   // perche', o null se e' tornato pronto.
-  const rimettiPronto = async (): Promise<string | null> => {
+  const rimettiPronto = async (risultati?: unknown[]): Promise<string | null> => {
     const { error } = await admin
       .from('catalog_ai_jobs')
-      .update({ status: 'ready', updated_at: new Date().toISOString() })
+      .update({ status: 'ready', updated_at: new Date().toISOString(), ...(risultati ? { results: risultati } : {}) })
       .eq('id', job.id)
       .eq('seller_id', user.id);
     if (!error) return null;
@@ -177,6 +177,8 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // Un salto «di passaggio» (filtro caduto, scrittura non riuscita) lascia il
   // lavoro ripetibile: il lavoro pagato non si butta per un guasto di un attimo.
   let ripetibile = false;
+  // R08-001 — Chi ha avuto un verdetto del filtro e non e' stato scritto: al giro dopo passa per ultimo.
+  const guardatiENonScritti = new Set<string>();
 
   if (job.operation === 'moderate') {
     // "Applica" = metti in bozza i prodotti segnalati (de-pubblica).
@@ -253,18 +255,40 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       // R01-003 — Un testo che e' gia' quello del catalogo non e' nuovo e non si rifiltra:
       // cosi' un lavoro rimandato riparte da chi e' rimasto fuori, invece di rifare sempre i
       // primi e lasciare fuori gli stessi.
+      // R08-001 — Ma un testo uguale non vuol dire «niente di nuovo»: se la proposta lo ripete con
+      // tag, categoria o altro che cambiano davvero, quello si scrive, e il testo gia' in catalogo
+      // (magari vietato) passa dal filtro come tutto il resto. Quel che cambia lo dice
+      // `resolveAiPatch`, lo stesso che poi scrive.
       const testoNuovo = (v: unknown, attuale: string | null, massimo: number) =>
         typeof v === 'string' && testoDelPatch(v, massimo) !== attuale;
-      const daFiltrare = results.filter((r) => {
+      const cambiaQualcosaDiAltro = (r: CatalogJobResult, row: ProductRow): boolean => {
+        const { update } = resolveAiPatch({
+          patch: senzaCampiEconomici(r.patch ?? {}),
+          current: { attributes: row.attributes ?? null, category_id: row.category_id, has_variants: row.has_variants, price: row.price },
+          categories,
+        });
+        const attuale = row as unknown as Record<string, unknown>;
+        return Object.entries(update).some(
+          ([k, v]) => k !== 'name' && k !== 'description' && k in attuale && JSON.stringify(v) !== JSON.stringify(attuale[k]),
+        );
+      };
+      const daFiltrareTutti = results.filter((r) => {
         if (!r.patch || Object.keys(r.patch).length === 0) return false;
         const row = current.get(r.product_id);
         if (!row) return false;
         const patch = r.patch as Record<string, unknown>;
         return (
           testoNuovo(patch.name, row.name, MAX_NOME_PRODOTTO) ||
-          testoNuovo(patch.description, row.description, MAX_DESCRIZIONE_PRODOTTO)
+          testoNuovo(patch.description, row.description, MAX_DESCRIZIONE_PRODOTTO) ||
+          ((typeof patch.name === 'string' || typeof patch.description === 'string') && cambiaQualcosaDiAltro(r, row))
         );
       });
+      // R08-001 — Chi il filtro l'ha gia' guardato in un giro precedente e non e' stato scritto
+      // (bloccato, o scartato dopo il filtro) resta con il testo diverso dal catalogo: se andasse
+      // sempre in testa verrebbe ripagato a ogni giro e la coda non verrebbe mai controllata. Passa
+      // per ultimo; l'ordine fra gli altri resta quello del lavoro.
+      const giaGuardato = (r: CatalogJobResult) => (r as CatalogJobResult & { filtro_gia_chiesto?: boolean }).filtro_gia_chiesto === true;
+      const daFiltrare = [...daFiltrareTutti.filter((r) => !giaGuardato(r)), ...daFiltrareTutti.filter(giaGuardato)];
       // S10 (5/11/2026) — Prima partivano fino a duecento chiamate tutte
       // insieme: una raffica di «troppe richieste» faceva scartare come
       // vietati anche i prodotti puliti. Adesso al massimo FILTRI_INSIEME alla
@@ -308,6 +332,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         });
       }
 
+      const controllati = new Set<string>();
+      daFiltrare.forEach((r, i) => {
+        if (verdetti[i]?.status === 'fulfilled') controllati.add(r.product_id);
+      });
       for (const r of results) {
         const bloccato = bloccati.get(r.product_id);
         if (bloccato) {
@@ -389,17 +417,26 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
           if (voce) void writeAudit(voce);
         }
       }
+      const scritti = new Set(esiti.filter((e) => e.esito === 'applicato').map((e) => e.productId));
+      for (const id of controllati) if (!scritti.has(id)) guardatiENonScritti.add(id);
     }
   }
 
   // Il lavoro e' gia' segnato «applicato» dalla prenotazione. Se qualcosa e'
   // saltato per un guasto di passaggio torna «pronto», cosi' si puo' ripetere.
   // Ripetere riscrive anche i prodotti gia' entrati con lo stesso testo (una
-  // riga di audit in piu' e il filtro rifatto): e' il prezzo per non buttare il
+  // riga di audit in piu'; il filtro si rifa' solo per chi ha qualcosa di nuovo da scrivere): e' il prezzo per non buttare il
   // lavoro pagato.
   let avviso: string | undefined;
   if (ripetibile) {
-    const nonRimesso = await rimettiPronto();
+    // R08-001 — Il lavoro torna pronto portandosi dietro chi il filtro l'ha gia' guardato senza scriverlo.
+    const risultatiMarcati =
+      guardatiENonScritti.size > 0
+        ? (Array.isArray(job.results) ? job.results : []).map((r) =>
+            guardatiENonScritti.has(r.product_id) ? { ...r, filtro_gia_chiesto: true } : r,
+          )
+        : undefined;
+    const nonRimesso = await rimettiPronto(risultatiMarcati);
     if (nonRimesso) {
       // R01-001 — Il lavoro resta chiuso: i saltati «di passaggio» non si
       // ripetono piu' da qui, e si dice perche' invece di «riprova».
