@@ -13,7 +13,7 @@
  * «http://…» no: chiediamo l'indirizzo sicuro, quello che Google mostra.
  */
 
-const SUFFISSI_NON_PUBBLICI = /\.(?:local|localhost|lan|home|internal|intranet|corp|test|example|invalid|onion|arpa)$/i;
+const SUFFISSI_NON_PUBBLICI = /\.(?:local|localhost|localdomain|lan|home|internal|intranet|corp|svc|test|example|invalid|onion|arpa)$/i;
 const LUNGHEZZA_MASSIMA = 300;
 
 function urlDi(v: string): URL | null {

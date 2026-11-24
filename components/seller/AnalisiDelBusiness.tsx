@@ -34,6 +34,15 @@ const COLORE_VOTO: Record<Voto, string> = {
   migliorabile: 'bg-amber-100 text-amber-800',
   male: 'bg-secondary-100 text-secondary-800',
 };
+/** Il nome del sito di un link, o `null` se il link non si legge: un dato storto non fa cadere la pagina. */
+function dominio(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
 const PAROLA_VOTO: Record<Voto, string> = { bene: 'Bene', migliorabile: 'Da migliorare', male: 'Da sistemare' };
 
 function Blocco({ icona: Icona, titolo, children }: { icona: typeof Store; titolo: string; children: React.ReactNode }) {
@@ -134,7 +143,7 @@ export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente 
                   {(a.fonte || a.letto_il) && (
                     <p className="mt-1 text-[11px] text-ink-500">
                       {a.letto_il ? `Letto il ${dataItaliana(a.letto_il)}` : `Analisi del ${dataItaliana(analisi!.canali!.fatta_il)}`}
-                      {a.fonte && <> · fonte: <a href={a.fonte} target="_blank" rel="noopener noreferrer nofollow" className="underline">{new URL(a.fonte).hostname.replace(/^www\./, '')}</a></>}
+                      {a.fonte && dominio(a.fonte) && <> · fonte: <a href={a.fonte} target="_blank" rel="noopener noreferrer nofollow" className="underline">{dominio(a.fonte)}</a></>}
                     </p>
                   )}
                 </li>
@@ -170,7 +179,7 @@ export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente 
             </ul>
             <Elenco titolo="Cosa sistemare" voci={sito.daSistemare} />
             <p className="mt-2 text-[11px] text-ink-500">
-              {new URL(sito.url).hostname.replace(/^www\./, '')}, letto da Google PageSpeed Insights il {dataItaliana(sito.fatta_il)}, come lo vede chi usa il telefono.
+              {dominio(sito.url) ?? 'Il tuo sito'}, letto da Google PageSpeed Insights il {dataItaliana(sito.fatta_il)}, come lo vede chi usa il telefono.
             </p>
           </>
         ) : (

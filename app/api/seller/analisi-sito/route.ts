@@ -3,7 +3,7 @@ import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { indirizzoWebPubblico } from '@/lib/indirizzi-pubblici';
-import { indirizzoPageSpeed, leggiRisultatoSito, riassumiPageSpeed, sitoDaRifare } from '@/lib/agenzia/analisi';
+import { indirizzoPageSpeed, inizioDelGiornoDiPiacenza, leggiRisultatoSito, riassumiPageSpeed, sitoDaRifare } from '@/lib/agenzia/analisi';
 
 export const runtime = 'nodejs';
 // Google PageSpeed impiega anche 30–40 secondi a leggere un sito lento.
@@ -17,7 +17,7 @@ export const maxDuration = 60;
  * pubblico) e tiene da parte il risultato in `analisi_negozi.sito` (migrazione 711), in parole
  * semplici: velocità, farsi trovare su Google, facile da usare per tutti.
  *
- * Tetto: una volta al giorno per negozio (giorno di Piacenza). Prima di allora si risponde col
+ * Tetto: un tentativo al giorno per negozio (giorno di Piacenza), riuscito o no. Prima si risponde col
  * risultato già tenuto da parte, senza richiamare Google. La chiave di Google è facoltativa
  * (`PAGESPEED_API_KEY`, anch'essa gratuita): senza, Google concede meno richieste al giorno.
  */
@@ -47,8 +47,24 @@ export const POST = withSellerAnchePendingRateLimit({ name: 'seller-analisi-sito
   if (giaFatto && giaFatto.url === sito && !sitoDaRifare(salvata?.sito_il, adesso)) {
     return apiSuccess({ sito: giaFatto, giaFattaOggi: true }, { headers: { 'Cache-Control': 'no-store' } });
   }
-  // Un altro sito, ma oggi Google l'ha già chiamato per questo negozio: il tetto vale lo stesso.
-  if (!sitoDaRifare(salvata?.sito_il, adesso)) {
+  // IL TETTO, CONTATO SUI TENTATIVI (collaudo del 24/11): anche un tentativo andato male conta, e due
+  // richieste insieme non chiamano Google due volte. Prima la riga del negozio, se non c'è; poi una sola
+  // scrittura che segna il tentativo solo se l'ultimo è di un giorno prima: se non segna niente, oggi
+  // Google è già stato chiamato (anche per un altro sito).
+  const seNonC = await admin.from('analisi_negozi').upsert({ id_attivita: user.id }, { onConflict: 'id_attivita', ignoreDuplicates: true });
+  const tentativo = seNonC.error
+    ? seNonC
+    : await admin
+        .from('analisi_negozi')
+        .update({ sito_tentato_il: adesso.toISOString() })
+        .eq('id_attivita', user.id)
+        .or(`sito_tentato_il.is.null,sito_tentato_il.lt.${inizioDelGiornoDiPiacenza(adesso)}`)
+        .select('id_attivita');
+  if (tentativo.error) {
+    logger.error('[analisi-sito] tentativo non segnato', { userId: user.id, message: tentativo.error.message });
+    return ApiErrors.unavailable('Non sono riuscito a preparare l’analisi. Riprova fra poco.');
+  }
+  if (!((tentativo.data as unknown[] | null) ?? []).length) {
     return ApiErrors.rateLimited(3600, 'Il sito si può analizzare una volta al giorno: riprova domani.');
   }
 

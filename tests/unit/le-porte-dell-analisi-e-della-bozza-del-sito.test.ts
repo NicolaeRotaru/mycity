@@ -23,6 +23,8 @@ const db = vi.hoisted(() => ({
   upsert: [] as Array<{ tabella: string; riga: Record<string, unknown> }>,
   update: [] as Array<{ tabella: string; valori: Record<string, unknown> }>,
   utente: { id: '0de1905e-7000-4000-8000-000000000001' },
+  /** Il tentativo di oggi è già segnato: la scrittura condizionata non trova la riga. */
+  tentatoOggi: false,
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -42,7 +44,17 @@ vi.mock('@/lib/supabase/server', () => ({
         select: () => q, eq: () => q, in: () => q, not: () => q, order: () => q, limit: () => q,
         maybeSingle: () => { q.singola = true; return q; },
         upsert: async (riga: Record<string, unknown>) => { db.upsert.push({ tabella, riga }); return { error: null }; },
-        update: (valori: Record<string, unknown>) => ({ eq: async () => { db.update.push({ tabella, valori }); return { error: null }; } }),
+        update: (valori: Record<string, unknown>) => {
+          const u: Record<string, unknown> = {
+            eq: () => u, or: () => u, select: () => u,
+            then: (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) => {
+              const scrive = !(tabella === 'analisi_negozi' && 'sito_tentato_il' in valori && db.tentatoOggi);
+              if (scrive) db.update.push({ tabella, valori });
+              return Promise.resolve({ data: scrive ? [{}] : [], error: null }).then(ok, ko);
+            },
+          };
+          return u;
+        },
         then: (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) =>
           Promise.resolve(q.singola ? { data: db.singola[tabella] ?? null, error: null } : { data: db.righe[tabella] ?? [], error: null }).then(ok, ko),
       };
@@ -57,6 +69,7 @@ beforeEach(() => {
   db.singola = {};
   db.upsert = [];
   db.update = [];
+  db.tentatoOggi = false;
   process.env.N8N_SCHEDA_CLIENTE_SEGRETO = 'segreto-n8n';
   process.env.AD_BOZZA_SITO_SEGRETO = 'segreto-ad';
 });
@@ -162,7 +175,7 @@ describe('/api/seller/analisi-sito', () => {
     expect(u.origin + u.pathname).toBe('https://www.googleapis.com/pagespeedonline/v5/runPagespeed');
     expect(u.searchParams.get('url')).toBe('https://www.oradelgusto.it/');
     expect(u.searchParams.get('strategy')).toBe('mobile');
-    const salvato = db.upsert.find((x) => x.tabella === 'analisi_negozi')!.riga.sito as Record<string, unknown>;
+    const salvato = db.upsert.find((x) => x.tabella === 'analisi_negozi' && 'sito' in x.riga)!.riga.sito as Record<string, unknown>;
     expect(salvato).toMatchObject({ velocita: 42, seo: 91, accessibilita: 77, secondiPerVedere: 5.2, fonte: 'Google PageSpeed Insights' });
     expect(salvato.daSistemare).toEqual([
       'Manca la descrizione che Google mostra sotto il nome del sito.',
@@ -184,8 +197,21 @@ describe('/api/seller/analisi-sito', () => {
     expect(f).not.toHaveBeenCalled();
     // E cambiando il sito lo stesso giorno, il tetto vale lo stesso.
     db.singola.profiles = { role: 'seller', store_customization: { socials: { website: 'https://altro-sito.it' } } };
+    db.tentatoOggi = true;
     expect((await analizza()).status).toBe(429);
     expect(f).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('anche un tentativo andato male conta: il secondo dello stesso giorno non richiama Google (collaudo)', async () => {
+    db.singola.profiles = { role: 'seller', store_customization: { socials: { website: 'https://www.oradelgusto.it' } } };
+    const f = vi.fn(async () => new Response('{}', { status: 500 }));
+    vi.stubGlobal('fetch', f);
+    expect((await analizza()).status).toBe(502);
+    expect(db.update.some((u) => u.tabella === 'analisi_negozi' && 'sito_tentato_il' in u.valori)).toBe(true);
+    db.tentatoOggi = true; // il tentativo è segnato nel database
+    expect((await analizza()).status).toBe(429);
+    expect(f).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
 
@@ -254,6 +280,9 @@ describe('/api/agenzia/analisi-canali', () => {
     expect((await manda({ ...ANALISI, canali: { instagram: { stato: 'bellissimo' } } })).status).toBe(400);
     expect((await manda({ ...ANALISI, canali: { instagram: { stato: 'fatta', fonte: 'javascript:alert(1)' } } })).status).toBe(400);
     expect((await manda({ ...ANALISI, canali: { linkedin: { stato: 'fatta' } } })).status).toBe(400);
+    // Una fonte che non è un indirizzo vero farebbe cadere la pagina del negozio (collaudo).
+    expect((await manda({ ...ANALISI, canali: { instagram: { stato: 'fatta', fonte: 'https://' } } })).status).toBe(400);
+    expect((await manda({ ...ANALISI, canali: { instagram: { stato: 'fatta', fonte: 'https://a b' } } })).status).toBe(400);
     expect((await manda({ ...ANALISI, id_attivita: '11111111-1111-1111-1111-5d9000000001' })).status).toBe(400);
     db.singola.profiles = null;
     expect((await manda(ANALISI)).status).toBe(404);
@@ -267,7 +296,8 @@ describe('/api/agenzia/analisi-canali', () => {
     ];
     db.righe.profiles = [{
       id: NEGOZIO, role: 'seller', store_name: 'Ora del Gusto', business_type: 'bar', store_address: 'Via Roma 10, Piacenza',
-      store_customization: { socials: { instagram: 'oradelgusto', whatsapp: '+393331234567', website: '' } },
+      // Il sito salvato dal site builder con un indirizzo interno non arriva a n8n (collaudo).
+      store_customization: { socials: { instagram: 'oradelgusto', whatsapp: '+393331234567', website: 'http://169.254.169.254/' } },
     }];
     const { GET } = await import('@/app/api/agenzia/analisi-canali/route');
     const r = await GET(richiesta('https://mycity.example/api/agenzia/analisi-canali', 'GET', undefined, { 'x-mycity-segreto': 'segreto-n8n' }));
@@ -322,6 +352,9 @@ describe('/api/agenzia/bozza-sito', () => {
     expect(r.status).toBe(400);
     expect((await r.json()).error.message).toContain('prezzi');
     expect((await manda({ ...BOZZA, sottotitolo: 'Caffè a 1 euro' })).status).toBe(400);
+    // Gli orari scritti col punto non sono prezzi (collaudo).
+    expect((await manda({ ...BOZZA, sezioni: { ...BOZZA.sezioni, dove_siamo: testo('Ci trovi in via Roma 10: aperti dalle 8.30 alle 19.30, dal lunedì al sabato.') } })).status).toBe(200);
+    db.upsert = [];
     expect((await manda({ ...BOZZA, sezioni: { ...BOZZA.sezioni, contatti: { testo: 'Telefono e WhatsApp a un tocco dal telefono.', stato: 'confermato' } } })).status).toBe(400);
     const { contatti: _tolta, ...tre } = BOZZA.sezioni;
     expect((await manda({ ...BOZZA, sezioni: tre })).status).toBe(400);
@@ -340,7 +373,7 @@ describe('/api/agenzia/bozza-sito', () => {
 
   it('GET dà all AD i negozi senza sito che aspettano la bozza, senza telefono e senza prezzi', async () => {
     db.righe.profiles = [
-      { id: NEGOZIO, role: 'seller', store_name: 'Ora del Gusto', business_type: 'bar', store_address: 'Via Roma 10', store_description: 'Bar e pasticceria', store_customization: { socials: {} }, approval_status: null },
+      { id: NEGOZIO, role: 'seller', store_name: 'Ora del Gusto', business_type: 'bar', store_address: 'Via Roma 10', store_description: 'Bar e pasticceria, chiamate Mario al 333 765 4321', store_customization: { socials: {} }, approval_status: null },
       { id: 'c0000000-0000-4000-8000-000000000003', role: 'seller', store_name: 'Ha già il sito', store_customization: { socials: { website: 'https://hagia.it' } } },
       { id: '11111111-1111-1111-1111-5d9000000001', role: 'seller', store_name: 'SDG Agenzia', store_customization: {} },
     ];
@@ -352,6 +385,7 @@ describe('/api/agenzia/bozza-sito', () => {
         campi: {
           telefono: { valore: '333 1234567', stato: 'confermato', fonte: 'https://example.org' },
           orari: { valore: 'Lun–Sab 7.30–19.30', stato: 'da_confermare', fonte: 'https://example.org' },
+          link_prenotazione: { valore: 'https://wa.me/393331234567', stato: 'confermato', fonte: 'https://example.org' },
           menu_testo: { valore: 'Brioche alla crema\nCappuccino 1,50 €', stato: 'da_confermare', fonte: null },
         },
       },
@@ -366,6 +400,7 @@ describe('/api/agenzia/bozza-sito', () => {
     expect(n.dati.prodotti).toEqual(['Torta di mele']);
     expect(n.dati.prodotti_tipici).toEqual(['Brioche alla crema']);
     expect(Object.keys(n.dati.campi_della_scheda)).toEqual(['orari']);
-    expect(JSON.stringify(corpo)).not.toMatch(/333 1234567|1,50|1,20/);
+    expect(n.dati.descrizione).toBe('Bar e pasticceria, chiamate Mario al [telefono]');
+    expect(JSON.stringify(corpo)).not.toMatch(/333 1234567|3331234567|765 4321|1,50|1,20/);
   });
 });

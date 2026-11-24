@@ -1,5 +1,5 @@
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { aspettaLaBozza, type InAttesa } from './bozza-sito-ad';
+import { aspettaLaBozza, senzaPrezzoTranneOrari, type InAttesa } from './bozza-sito-ad';
 import { leggiSchedaSalvata, prodottiTipici, senzaPrezzo, vociSenzaPrezzo } from './scheda-cliente';
 
 /**
@@ -100,12 +100,17 @@ function datiPubblici(p: Record<string, unknown>, grezza: unknown): NonNullable<
   for (const [nome, c] of Object.entries(scheda?.campi ?? {})) {
     if (nome === 'telefono' || nome === 'menu_testo') continue;
     const valore = typeof c.valore === 'string' ? c.valore.trim() : '';
-    if (!valore || !senzaPrezzo(valore.replace(/\d{1,2}[.:]\d{2}/g, ''))) continue; // gli orari hanno «8.30»: non sono prezzi
+    if (!valore || !senzaPrezzoTranneOrari(valore)) continue; // gli orari hanno «8.30»: non sono prezzi
+    // Un link WhatsApp o un numero lungo può essere il cellulare del titolare: all'AD non va.
+    if (/wa\.me|whatsapp|\+?\d[\d\s.-]{7,}\d/i.test(valore.replace(/\b\d{1,2}[.:]\d{2}\b/g, ' '))) continue;
     campi[nome] = { valore: valore.slice(0, 600), stato: c.stato, fonte: c.fonte ?? null };
   }
   return {
     indirizzo: (p.store_address as string | null) ?? null,
-    descrizione: typeof p.store_description === 'string' && senzaPrezzo(p.store_description) ? p.store_description.slice(0, 1500) : null,
+    descrizione: typeof p.store_description === 'string' && senzaPrezzo(p.store_description)
+      // Un telefono o un'email scritti nella descrizione non escono: possono essere del titolare.
+      ? p.store_description.replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[email]').replace(/\+?\d[\d\s.-]{7,}\d/g, '[telefono]').slice(0, 1500)
+      : null,
     prodotti: [],
     prodotti_tipici: prodottiTipici(scheda, 12),
     campi_della_scheda: campi,

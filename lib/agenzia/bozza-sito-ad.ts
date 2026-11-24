@@ -31,7 +31,9 @@ export const TITOLI_SEZIONI: Record<SezioneBozza, string> = {
 };
 
 const SENZA_PREZZI = 'non deve contenere prezzi (li scrive il titolare)';
-const testoBozza = (min: number, max: number) => z.string().trim().min(min).max(max).refine(senzaPrezzo, SENZA_PREZZI);
+/** Gli orari («dalle 8.30 alle 19.30») non sono prezzi: si tolgono prima del controllo (collaudo, 24/11). */
+export const senzaPrezzoTranneOrari = (t: string) => senzaPrezzo(t.replace(/\b\d{1,2}[.:]\d{2}\b/g, ' '));
+const testoBozza = (min: number, max: number) => z.string().trim().min(min).max(max).refine(senzaPrezzoTranneOrari, SENZA_PREZZI);
 
 const Sezione = z.object({
   testo: testoBozza(20, 1200),

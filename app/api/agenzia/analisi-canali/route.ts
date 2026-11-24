@@ -5,7 +5,7 @@ import { CorpoTroppoGrande, jsonRichiesta } from '@/lib/api/corpo';
 import { portaColSegreto } from '@/lib/api/porta-col-segreto';
 import { logger } from '@/lib/logger';
 import { AnalisiCanaliInArrivo, leggiAnalisiCanali } from '@/lib/agenzia/analisi';
-import { canaliDaiSocial, haCanali } from '@/lib/agenzia/canali';
+import { canaliValidi, haCanali } from '@/lib/agenzia/canali';
 import { PREFISSO_DI_SISTEMA } from '@/lib/agenzia/bozza-sito-ad';
 
 export const runtime = 'nodejs';
@@ -62,9 +62,9 @@ export async function GET(req: Request): Promise<NextResponse> {
   const richieste = daFare.flatMap((r) => {
     const p = perId.get(r.id_attivita);
     if (!p || p.role !== 'seller') return [];
-    const canali = canaliDaiSocial((p.store_customization as { socials?: Record<string, string> } | null)?.socials);
-    if (!haCanali(canali)) return [];
-    const pieni = Object.fromEntries(Object.entries(canali).filter(([, v]) => (v ?? '').trim()));
+    // Ricontrollati qui: un indirizzo interno salvato da un'altra strada non arriva a n8n.
+    const pieni = canaliValidi((p.store_customization as { socials?: Record<string, string> } | null)?.socials);
+    if (!haCanali(pieni)) return [];
     return [{
       id_attivita: r.id_attivita,
       nome: (p.store_name as string | null) ?? null,

@@ -64,7 +64,13 @@ export type CanaleAnalizzato = (typeof CANALI_ANALIZZATI)[number];
 // Facebook senza la revisione di Meta nemmeno, Google Places aspetta la decisione di Nicola sui costi).
 export const STATI_ANALISI_CANALE = ['fatta', 'non_trovato', 'privato', 'non_disponibile', 'errore'] as const;
 
-const fonteHttps = z.string().trim().max(500).regex(/^https:\/\//i, 'la fonte è un indirizzo https');
+const fonteHttps = z.string().trim().max(500).refine((v) => {
+  try {
+    return new URL(v).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}, 'la fonte è un indirizzo https');
 const intero = z.number().int().min(0).max(100_000_000);
 const voci = z.array(z.string().trim().max(240)).max(6);
 
@@ -272,6 +278,20 @@ export function sitoDaRifare(ultimaIl: string | null | undefined, adesso: Date):
   const ultima = new Date(ultimaIl);
   if (Number.isNaN(ultima.getTime())) return true;
   return giornoDiPiacenza(ultima) !== giornoDiPiacenza(adesso);
+}
+
+/**
+ * L'istante in cui comincia il giorno di Piacenza di `adesso` (mezzanotte a Roma, ora solare o legale).
+ * Serve al tetto di un tentativo al giorno: un tentativo prima di questo istante è di ieri.
+ */
+export function inizioDelGiornoDiPiacenza(adesso: Date): string {
+  const giorno = giornoDiPiacenza(adesso);
+  for (const fuso of ['+01:00', '+02:00']) {
+    const mezzanotte = new Date(`${giorno}T00:00:00${fuso}`);
+    const minutoPrima = new Date(mezzanotte.getTime() - 60_000);
+    if (giornoDiPiacenza(mezzanotte) === giorno && giornoDiPiacenza(minutoPrima) !== giorno) return mezzanotte.toISOString();
+  }
+  return new Date(`${giorno}T00:00:00+01:00`).toISOString();
 }
 
 /* ───────────────────────── in comune ───────────────────────── */

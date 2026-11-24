@@ -66,6 +66,22 @@ export function canaliDaiSocial(socials: StoreCustomization['socials'] | null | 
   return Object.fromEntries(CANALI.map((c) => [c, typeof s[c] === 'string' ? (s[c] as string) : ''])) as Canali;
 }
 
+/**
+ * I canali salvati, ricontrollati uno per uno (collaudo del 24/11): i social della vetrina si scrivono
+ * anche dal site builder, che per il sito accetta qualunque URL. Quello che non passa si lascia fuori.
+ */
+export function canaliValidi(socials: StoreCustomization['socials'] | null | undefined): Canali {
+  const salvati = canaliDaiSocial(socials);
+  const fuori: Canali = {};
+  for (const c of CANALI) {
+    const v = (salvati[c] ?? '').trim();
+    if (!v) continue;
+    const esito = controllaCanali({ [c]: v });
+    if (esito.ok && esito.canali[c]) fuori[c] = esito.canali[c];
+  }
+  return fuori;
+}
+
 /** Vero se il titolare ha scritto almeno un canale. */
 export const haCanali = (c: Canali) => CANALI.some((k) => (c[k] ?? '').trim().length > 0);
 

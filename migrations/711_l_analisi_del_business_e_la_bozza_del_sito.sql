@@ -7,7 +7,8 @@
 -- COSA FA.
 --  1. analisi_negozi — una riga per negozio con le tre analisi che non stanno nella scheda di n8n:
 --     · sito / sito_il: il risultato di Google PageSpeed (gratuito), già in parole semplici; il server
---       lo rifà al massimo una volta al giorno (app/api/seller/analisi-sito);
+--       lo rifà al massimo una volta al giorno (app/api/seller/analisi-sito); sito_tentato_il segna
+--       ogni tentativo, anche quelli andati male, perché il tetto valga davvero;
 --     · canali / canali_il: l'analisi di social e scheda Google che manda n8n dai dati pubblici
 --       (app/api/agenzia/analisi-canali), con data e fonte di ogni canale;
 --     · canali_richiesti_il: quando il titolare ha cambiato i suoi canali, cioè quando n8n deve rifare.
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS public.analisi_negozi (
   id_attivita uuid PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
   sito jsonb CHECK (sito IS NULL OR (jsonb_typeof(sito) = 'object' AND octet_length(sito::text) <= 20000)),
   sito_il timestamptz,
+  sito_tentato_il timestamptz,
   canali jsonb CHECK (canali IS NULL OR (jsonb_typeof(canali) = 'object' AND octet_length(canali::text) <= 80000)),
   canali_il timestamptz,
   canali_richiesti_il timestamptz,
