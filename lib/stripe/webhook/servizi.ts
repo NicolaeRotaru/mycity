@@ -43,6 +43,18 @@ export async function handleServiziSubscription(session: Stripe.Checkout.Session
   }
   const { subscription_status: stato, subscription_renews_at: rinnovo } = await statoDaStripe(subscriptionId);
   const admin = getAdminSupabase();
+  // Dal collaudo del 24/11 — DUE ABBONAMENTI PAGATI. Se il negozio ne ha già un altro in corso, questo
+  // si registra lo stesso (i soldi sono arrivati) ma si avvisa: niente si annulla da solo, il
+  // doppione va disdetto e rimborsato a mano, come per la vetrina (R33-008).
+  const { data: altri, error: erroreAltri } = await admin
+    .from('abbonamenti_servizi')
+    .select('stripe_subscription_id')
+    .eq('seller_id', sellerId)
+    .in('stato', ['active', 'past_due'])
+    .neq('stripe_subscription_id', subscriptionId)
+    .limit(5);
+  if (erroreAltri) throw new Error(`[stripe] abbonamenti dei servizi non letti: ${erroreAltri.message}`);
+  const doppione = (altri ?? []).length > 0 && stato !== 'canceled';
   scritturaObbligatoria(
     await admin.from('abbonamenti_servizi').upsert(
       {
@@ -59,6 +71,30 @@ export async function handleServiziSubscription(session: Stripe.Checkout.Session
     ),
     'attivazione abbonamento dei servizi',
   );
+  if (doppione) {
+    logger.error('[stripe] abbonamento dei servizi doppio: niente annullato, va disdetto e rimborsato a mano', { sellerId, subscriptionId });
+    try {
+      await notifyAdmins(
+        `Abbonamento servizi DOPPIO: ${session.metadata?.negozio || sellerId}`,
+        `Il negozio ha un secondo abbonamento dei servizi (${FASCE[fascia].nome}, ${subscriptionId}) oltre a quello già in corso. Disdici il doppione su Stripe e rimborsalo.`,
+        '/admin/users',
+        { unaVoltaPer: `abbonamento-servizi-doppio:${subscriptionId}` },
+      );
+    } catch (err) {
+      logger.error('[stripe] avviso abbonamento servizi doppio non scritto', { subscriptionId, err });
+    }
+    scritturaFacoltativa(
+      await admin.from('notifications').insert({
+        category: 'order',
+        user_id: sellerId,
+        title: '⚠️ Hai due abbonamenti ai servizi',
+        body: 'Risultano due abbonamenti ai servizi. Non devi fare niente: lo togliamo noi e ti rimborsiamo quello in più.',
+        link: '/seller/preventivo',
+      }),
+      'avviso abbonamento servizi doppio',
+    );
+    return;
+  }
   if (stato !== 'active') return;
 
   const nome = FASCE[fascia].nome;

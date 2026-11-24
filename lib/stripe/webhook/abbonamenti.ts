@@ -305,7 +305,7 @@ export async function fatturaServiziRifiutata(subscriptionId: string | null): Pr
       category: 'order',
       user_id: (data as { seller_id: string }).seller_id,
       title: '⚠️ Pagamento dell’abbonamento non riuscito',
-      body: 'Non siamo riusciti ad addebitare l’abbonamento dei servizi di questo mese. Aggiorna il metodo di pagamento o scrivici.',
+      body: 'Non siamo riusciti ad addebitare l’abbonamento dei servizi di questo mese. Scrivici dall’Aiuto e lo sistemiamo insieme.',
       link: '/seller/preventivo',
     }),
     'avviso pagamento abbonamento servizi non riuscito',

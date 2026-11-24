@@ -336,6 +336,8 @@ export type Preventivo = {
   scelto: Abbonamento | null;
   /** L'abbonamento dei servizi già pagato (24/11/2026), se c'è: la pagina lo mostra invece della cassa. */
   attivo: AbbonamentoAttivo | null;
+  /** Il primo mese a metà vale una volta per negozio: falso se ha già avuto un abbonamento dei servizi. */
+  primoMeseScontato: boolean;
 };
 
 export type AbbonamentoAttivo = { fascia: Abbonamento; stato: 'active' | 'past_due'; rinnovoIl: string | null };
@@ -474,8 +476,10 @@ export function costruisciPreventivo(opzioni: {
   scelto?: Abbonamento;
   /** L'abbonamento dei servizi già attivo, letto dal server. */
   attivo?: AbbonamentoAttivo | null;
+  /** Falso se il negozio ha già avuto un abbonamento dei servizi. Assente = vero. */
+  primoMeseScontato?: boolean;
 }): Preventivo {
-  const { idAttivita, nomeAttivita, tipoAttivita, dati, impostazioni, adesso, scelto, attivo } = opzioni;
+  const { idAttivita, nomeAttivita, tipoAttivita, dati, impostazioni, adesso, scelto, attivo, primoMeseScontato } = opzioni;
   const mancanti = cosaManca(dati);
   const righe: RigaPreventivo[] = mancanti.map((v) => ({
     ...v,
@@ -498,6 +502,7 @@ export function costruisciPreventivo(opzioni: {
     perche_consigliato: consigliato.perche,
     scelto: scelto ?? null,
     attivo: attivo ?? null,
+    primoMeseScontato: primoMeseScontato ?? true,
   };
 }
 

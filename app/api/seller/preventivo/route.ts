@@ -56,7 +56,8 @@ function abbonamentoAttivo(r: { data: unknown; error: { message: string } | null
     logger.warn('[preventivo] abbonamento dei servizi non letto', { message: r.error.message });
     return null;
   }
-  const riga = (r.data as Array<{ fascia: string; stato: string; rinnovo_il: string | null }> | null)?.[0];
+  const riga = (r.data as Array<{ fascia: string; stato: string; rinnovo_il: string | null }> | null)
+    ?.find((x) => x.stato === 'active' || x.stato === 'past_due');
   if (!riga || !(ABBONAMENTI as readonly string[]).includes(riga.fascia)) return null;
   if (riga.stato !== 'active' && riga.stato !== 'past_due') return null;
   return { fascia: riga.fascia as Abbonamento, stato: riga.stato, rinnovoIl: riga.rinnovo_il };
@@ -82,9 +83,8 @@ async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento): Promis
       .from('abbonamenti_servizi')
       .select('fascia, stato, rinnovo_il')
       .eq('seller_id', idAttivita)
-      .in('stato', ['active', 'past_due'])
       .order('creato_il', { ascending: false })
-      .limit(1),
+      .limit(20),
   ]);
   if (profilo.error) throw new Error(`profilo non letto: ${profilo.error.message}`);
   if (!profilo.data) throw new Error('profilo non trovato');
@@ -126,6 +126,8 @@ async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento): Promis
     adesso: new Date(),
     scelto,
     attivo: abbonamentoAttivo(abbonamento),
+    // Chi ha già avuto un abbonamento dei servizi non ha più il primo mese a metà (lo rifiuta anche la cassa).
+    primoMeseScontato: abbonamento.error ? true : ((abbonamento.data as unknown[] | null) ?? []).length === 0,
   });
   const telefono = (p.store_phone as string | null) || (p.phone as string | null) || null;
   return { preventivo, telefono, socials };

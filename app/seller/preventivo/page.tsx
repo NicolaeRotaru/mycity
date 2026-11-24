@@ -139,7 +139,7 @@ export default function PreventivoAgenziaPage() {
           <p className="text-sm text-ink-700 mt-1">
             {p.attivo.stato === 'active'
               ? `Lo realizza ${REALIZZATI_DA}: ti contattiamo per fissare l’incontro nel locale. Per cambiarlo o disdirlo scrivici.`
-              : 'Aggiorna il metodo di pagamento o scrivici: lo sistemiamo insieme.'}
+              : 'Scrivici dall’Aiuto: sistemiamo insieme il pagamento.'}
           </p>
         </div>
       ) : ritorno === 'pagato' ? (
@@ -249,7 +249,7 @@ export default function PreventivoAgenziaPage() {
             {ABBONAMENTI.map((id) => {
               const f = FASCE[id];
               const attivo = fascia === id;
-              const primo = canonePrimoMese(p.prezzi[id]);
+              const primo = p.primoMeseScontato ? canonePrimoMese(p.prezzi[id]) : null;
               const pari = pareggio(p.prezzi[id], scontrinoCentesimi);
               return (
                 <label
@@ -296,7 +296,7 @@ export default function PreventivoAgenziaPage() {
             })}
           </fieldset>
           <ul className="mt-4 space-y-1.5 text-sm text-ink-800">
-            <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-olive-700" aria-hidden /> {FRASE_CONDIZIONI}</li>
+            <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-olive-700" aria-hidden /> {p.primoMeseScontato ? FRASE_CONDIZIONI : FRASE_CONDIZIONI.replace(' Il primo mese costa la metà.', '')}</li>
             <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-olive-700" aria-hidden /> {RESOCONTO_MENSILE}</li>
           </ul>
           <p className="mt-3 text-xs text-ink-500">
@@ -333,7 +333,7 @@ export default function PreventivoAgenziaPage() {
               {p.prezzi[fascia] ? (
                 <Button onClick={() => paga.mutate(fascia)} loading={paga.isPending} disabled={accetta.isPending} icon={CreditCard}>
                   Paga e attiva il {FASCE[fascia].nome}
-                  {canonePrimoMese(p.prezzi[fascia]) ? ` · il primo mese ${formatPriceFromCents(canonePrimoMese(p.prezzi[fascia])!)}` : ''}
+                  {p.primoMeseScontato && canonePrimoMese(p.prezzi[fascia]) ? ` · il primo mese ${formatPriceFromCents(canonePrimoMese(p.prezzi[fascia])!)}` : ''}
                 </Button>
               ) : null}
               <button
