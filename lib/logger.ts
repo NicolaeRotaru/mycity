@@ -45,9 +45,8 @@ const PII_KEYS =
  * 'mario@x.it')` mandava l'indirizzo in chiaro nei log e a Sentry. Adesso ogni testo passa da qui
  * — il messaggio, un contesto stringa, i valori stringa del contesto, il messaggio e la pila di un
  * Error messo nel contesto — e quello che si riconosce dalla forma diventa `[redacted]`: email,
- * IBAN, codice fiscale, gettoni (JWT) e numeri lunghi (telefono, carta: da 9 cifre in su, anche
- * con spazi, punti o trattini in mezzo; mai un pezzo di un identificativo, che ha lettere o
- * trattini attaccati). Un nome o una via scritti in una frase non si riconoscono dalla forma: per
+ * IBAN, codice fiscale, gettoni (JWT) e numeri di telefono (dalla forma, non «9 cifre qualunque»:
+ * timestamp, id, date e versioni restano leggibili). Un nome o una via scritti in una frase non si riconoscono dalla forma: per
  * quelli resta la regola delle chiavi.
  */
 const DATI_NEL_TESTO: Array<[forma: RegExp, sostituto: string]> = [
@@ -57,7 +56,14 @@ const DATI_NEL_TESTO: Array<[forma: RegExp, sostituto: string]> = [
   [/\beyJ[\w-]+\.[\w-]+\.[\w-]+/g, '[redacted]'],
   // Telefono o carta: il carattere prima si cattura e si rimette (niente lookbehind: Safari prima
   // della 16.4 non lo legge, e il logger gira anche nel browser).
-  [/(^|[^\w-])\+?\d(?:[ .-]?\d){8,18}(?![\w-])/g, '$1[redacted]'],
+  // Solo la FORMA di un telefono italiano: prefisso facoltativo (+39, 0039, +), poi un cellulare (3xx,
+  // 9-10 cifre) o un fisso (0x.., 9-11 cifre), con spazi/punti/trattini fra gruppi tipici. Non
+  // attaccato a lettere, cifre, `/`, `:`, `_`, `-`: così restano leggibili timestamp, id in URL,
+  // date e versioni. Scelta: un numero nudo di 9-11 cifre che inizia con 3 o 0 è ambiguo, e si oscura.
+  [
+    /(^|[^\w/:-])(?:(?:\+|00)39[ .-]?|\+)?(?:3\d{2}[ .-]?\d{3}[ .-]?\d{3,4}|0\d{1,3}[ .-]?\d{3,4}[ .-]?\d{3,4})(?![\w/:-])/g,
+    '$1[redacted]',
+  ],
 ];
 
 function oscuraTesto(testo: string): string {

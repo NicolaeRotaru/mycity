@@ -99,4 +99,36 @@ describe('R03-013 il logger oscura anche il testo', () => {
     expect(tutto).toContain('11111111-1111-1111-1111-111111111111');
     expect(tutto).toContain('pi_3N123456789012345');
   });
+  it('R03-013 giro 13: timestamp, id, date e versioni restano leggibili', async () => {
+    const logger = await caricaLogger();
+    const casi = [
+      'ts 1732449123456',
+      'ordine 20261124001234',
+      'importo 1250000000',
+      '/api/orders/123456789/cod',
+      '2026-11-24 12:30:00',
+      'v 1.2.3.4.5.6.7.8.9.10',
+    ];
+    for (const c of casi) logger.info(c);
+    const tutto = righe.join('\n');
+    for (const c of casi) expect(tutto, c).toContain(c);
+  });
+
+  it('R03-013 giro 13: i telefoni nel testo restano oscurati', async () => {
+    const logger = await caricaLogger();
+    const tel = ['+39 333 123 4567', '3331234567', '333-123-4567', '0039 333 1234567', '06 1234 5678'];
+    for (const t of tel) logger.info(`chiama ${t} ora`);
+    const tutto = righe.join('\n');
+    for (const t of tel) expect(tutto, t).not.toContain(t);
+    expect(tutto).toContain('chiama [redacted] ora');
+  });
+
+  it('R03-013 giro 13: 100k caratteri di cifre e trattini si filtrano in fretta', async () => {
+    const logger = await caricaLogger();
+    const ostile = '3-0 1'.repeat(20000);
+    const t0 = performance.now();
+    logger.info(ostile);
+    logger.info('1-'.repeat(50000));
+    expect(performance.now() - t0).toBeLessThan(50);
+  });
 });
