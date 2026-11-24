@@ -119,7 +119,7 @@ function TabellaFormati({ formati }: { formati: FormatoMedia[] }) {
 
 function FormatiFotoVideo() {
   return (
-    <Riquadro icona={Sparkles} titolo="I formati che ricevi" nota="Quanti scatti e quanti video ogni mese lo fissiamo insieme, dentro la fascia di prezzo.">
+    <Riquadro icona={Sparkles} titolo="I formati che ricevi" nota="Quanti scatti e quanti video ogni mese lo dice il tuo abbonamento: Base, Business o Premium.">
       <h4 className="mb-2 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-ink-700">
         <Camera size={14} aria-hidden /> Foto
       </h4>

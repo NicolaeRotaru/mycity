@@ -8,29 +8,24 @@
  * preventivo/demo» — quindi il cliente non lo chiede: lo trova pronto, calcolato
  * dai suoi dati.
  *
- * I servizi e i prezzi sono di Nicola, 22/11/2026:
- *  · sito web professionale — 500 €;
- *  · gestione automatica dei social (il flusso n8n, «già pronto, basta
- *    collegarlo») — 300 € al mese;
- *  · foto e video, con riprese, scatti, montaggio e ritocco — da 50 a 300 € al
- *    mese, secondo quanto serve;
- *  · scheda Google su Maps (23/11) — nessun prezzo detto: «su richiesta»;
- *  · logo e grafica — TOLTO dal preventivo il 23/11/2026 (Nicola: «togli sezione di
- *    logo e grafica»).
- * (La vetrina sul marketplace, 50 € al mese, non è una voce del preventivo: il
- * preventivo la mostra con la frase unica dei prezzi dei negozi, che segue
- * l'interruttore dell'abbonamento.)
+ * I servizi sono quattro: foto e video (scattiDG), gestione automatica dei social (il
+ * flusso n8n), sito web professionale, scheda Google su Maps. Il logo è stato tolto il 23/11.
+ *
+ * Dal 24/11/2026 non si vendono più uno per uno: Nicola, «l'abbonamento comprende tutti i
+ * servizi ma in modi diversi» — tre fasce, Base 300 €, Business 500 €, Premium 999 € al mese,
+ * solo canone e niente percentuale sul venduto. Ogni fascia comprende tutti e quattro i
+ * servizi più la vetrina; cambia quanto (`FASCE`).
  *
  * Tutto quello che si decide sta qui, in funzioni senza rete:
  *  · `cosaManca()` guarda i dati dell'attività e dice quali servizi servono e
  *    perché, con il numero vero (es. «12 prodotti sono senza foto»);
- *  · `costruisciPreventivo()` mette le voci in forma di preventivo: numero,
- *    data, prezzi, totali una tantum e al mese;
+ *  · `costruisciPreventivo()` mette tutto in forma di preventivo: numero, data,
+ *    cosa manca, i canoni delle tre fasce e quella che consigliamo;
  *  · `leggiImpostazioniAgenzia()` legge da `site_settings.agenzia` chi firma il
- *    preventivo e i prezzi che Nicola vuole cambiare, senza rifare il sito.
+ *    preventivo e i canoni che Nicola vuole cambiare, senza rifare il sito.
  *
  * Lo stesso calcolo gira sul server quando il cliente accetta: il server non si
- * fida delle voci mandate dal browser.
+ * fida della fascia mandata dal browser: la rilegge dal listino.
  */
 
 import type { TipoAttivita } from './tipi-attivita';
@@ -62,53 +57,101 @@ export function servizioDaSlug(slug: string): ServizioAgenzia | null {
  */
 export const FOTO_LOCALE_CONSIGLIATE = 3;
 
-/** Un servizio si paga una volta, oppure ogni mese. */
-export type Cadenza = 'una_tantum' | 'mese';
-
-/** Un prezzo in centesimi: fisso quando `da` e `a` coincidono, altrimenti una fascia. */
-export type Prezzo = { da: number; a: number };
+/** Le tre fasce dell'abbonamento, dalla più leggera alla più completa (Nicola, 24/11/2026). */
+export const ABBONAMENTI = ['base', 'business', 'premium'] as const;
+export type Abbonamento = (typeof ABBONAMENTI)[number];
 
 type VoceListino = {
   titolo: string;
-  /** Cosa comprende, detto senza promettere numeri che nessuno ha fissato. */
+  /** Cosa comprende il servizio, detto in generale: quanto, lo dice la fascia. */
   descrizione: string;
-  cadenza: Cadenza;
   /** Chi fa il lavoro quando non è MyCity: il cliente lo legge sulla voce, Nicola nell'avviso. */
   partner?: string;
-  /** Il prezzo detto da Nicola il 22/11/2026; `null` = su richiesta. */
-  prezzo: Prezzo | null;
 };
-
-const fisso = (centesimi: number): Prezzo => ({ da: centesimi, a: centesimi });
 
 export const LISTINO: Record<ServizioAgenzia, VoceListino> = {
   foto_video: {
     titolo: 'Foto e video',
     descrizione: 'Scatti e riprese nel tuo locale, con ritocco e montaggio: le foto della copertina, dei prodotti e i video per vetrina e social.',
-    cadenza: 'mese',
-    prezzo: { da: 5_000, a: 30_000 },
     // Nicola, 23/11: «scattiDG è l'azienda partner a cui MyCity si affida per foto/video making/editing».
     partner: 'scattiDG',
   },
   social: {
     titolo: 'Gestione automatica dei social',
     descrizione: 'I post sui tuoi social li prepariamo e li pubblichiamo noi, in automatico, con le foto della tua vetrina.',
-    cadenza: 'mese',
-    prezzo: fisso(30_000),
   },
   sito_web: {
     titolo: 'Sito web professionale',
     descrizione: 'Un sito tutto tuo, con il tuo nome, che porta i clienti alla tua vetrina MyCity.',
-    cadenza: 'una_tantum',
-    prezzo: fisso(50_000),
   },
-  // Nicola, 23/11/2026: «aggiungi solo la 1» — la scheda su Google Maps. Nessun prezzo detto:
-  // «su richiesta» finché non lo scrive in site_settings.agenzia.prezzi.google_maps.
   google_maps: {
     titolo: 'Scheda Google su Maps',
     descrizione: 'Creiamo o sistemiamo la tua scheda su Google Maps: categoria giusta, orari, foto e il collegamento alla tua vetrina MyCity. Chi cerca vicino a te ti trova.',
-    cadenza: 'una_tantum',
-    prezzo: null,
+  },
+};
+
+type Fascia = {
+  nome: string;
+  /** Il canone di Nicola (24/11/2026), in centesimi al mese. */
+  prezzoMese: number;
+  /** Per chi è, in una frase. */
+  perChi: string;
+  /** Come ogni servizio è compreso in questa fascia: tutti ci sono, cambia quanto. */
+  servizi: Record<ServizioAgenzia, string>;
+  /** La vetrina e l'assistenza, che non sono voci del «cosa manca» ma fanno parte del canone. */
+  vetrina: string;
+  assistenza: string;
+};
+
+/**
+ * I TRE ABBONAMENTI — 24/11/2026.
+ *
+ * Nicola: «adesso l'abbonamento comprende tutti i servizi ma in modi diversi, perché ci sono 3
+ * abbonamenti: base 300€/mese, business 500€/mese e premium 999€/mese», e alla domanda sul 10%:
+ * «solo canone, niente 10%». I prezzi sono suoi. Come si divide ogni servizio fra le fasce è una
+ * proposta dell'AD dello stesso giorno, da confermare con Nicola: si cambia qui, in un posto solo.
+ * Prima di questa data ogni servizio aveva il suo prezzo (sito 500 €, social 300 € al mese, foto e
+ * video da 50 a 300 € al mese): non si vendono più uno per uno.
+ */
+export const FASCE: Record<Abbonamento, Fascia> = {
+  base: {
+    nome: 'Base',
+    prezzoMese: 30_000,
+    perChi: 'Per essere online e vendere da subito, con un aiuto costante ma leggero.',
+    servizi: {
+      foto_video: 'Una sessione di foto all’avvio: copertina e prodotti principali.',
+      social: '8 post al mese, preparati e pubblicati da noi.',
+      sito_web: 'Un sito di una pagina col tuo nome, collegato alla vetrina.',
+      google_maps: 'Scheda creata o sistemata all’avvio.',
+    },
+    vetrina: 'Vetrina su MyCity con ordini, consegna e ritiro in negozio.',
+    assistenza: 'Su WhatsApp, risposta entro 24 ore lavorative.',
+  },
+  business: {
+    nome: 'Business',
+    prezzoMese: 50_000,
+    perChi: 'Per crescere ogni settimana: più contenuti, più clienti che ti trovano.',
+    servizi: {
+      foto_video: 'Foto all’avvio e una nuova sessione ogni tre mesi, più un video al mese.',
+      social: '12 post al mese, 3 a settimana, con 2 video brevi.',
+      sito_web: 'Un sito completo di più pagine, col tuo nome.',
+      google_maps: 'Scheda sistemata, più le risposte alle recensioni scritte da noi.',
+    },
+    vetrina: 'Vetrina su MyCity con ordini, consegna e ritiro in negozio, in evidenza nella tua categoria una settimana al mese.',
+    assistenza: 'Su WhatsApp, risposta entro 4 ore lavorative.',
+  },
+  premium: {
+    nome: 'Premium',
+    prezzoMese: 99_900,
+    perChi: 'Il servizio completo: foto e video ogni mese, un referente tutto tuo.',
+    servizi: {
+      foto_video: 'Una sessione di foto e video ogni mese.',
+      social: '20 post al mese, 4 video brevi e le storie.',
+      sito_web: 'Un sito completo, aggiornato da noi ogni mese.',
+      google_maps: 'Scheda curata ogni mese: foto nuove, post e risposte alle recensioni.',
+    },
+    vetrina: 'Vetrina su MyCity con ordini, consegna e ritiro in negozio, in home page due settimane al mese.',
+    assistenza: 'Un referente tutto tuo e una visita nel locale ogni mese.',
   },
 };
 
@@ -119,57 +162,51 @@ export const LISTINO: Record<ServizioAgenzia, VoceListino> = {
  */
 export const NOME_AGENZIA_DI_RISERVA = 'MyCity';
 
-/** Un prezzo oltre questo (in centesimi: 10.000 €) è un errore di battitura, non un listino. */
+/** Un canone oltre questo (in centesimi: 10.000 € al mese) è un errore di battitura, non un listino. */
 const PREZZO_MASSIMO_CENTESIMI = 1_000_000;
 
 export type ImpostazioniAgenzia = {
   nome: string;
-  /** `null` = su richiesta. */
-  prezzi: Record<ServizioAgenzia, Prezzo | null>;
+  /** Il canone di ogni fascia in centesimi al mese; `null` = su richiesta. */
+  prezzi: Record<Abbonamento, number | null>;
 };
 
 /**
- * Lo 0 non è un prezzo (collaudo del 23/11): con lo 0 il cliente leggeva «Sito web
- * professionale: 0,00 €». Nessuna voce del listino è gratis; uno 0 scritto per sbaglio
- * nelle impostazioni diventa «su richiesta».
+ * Lo 0 non è un prezzo (collaudo del 23/11): con lo 0 il cliente leggeva «0,00 €».
+ * Uno 0 scritto per sbaglio nelle impostazioni diventa «su richiesta».
  */
 const centesimiValidi = (v: unknown): v is number =>
   typeof v === 'number' && Number.isInteger(v) && v > 0 && v <= PREZZO_MASSIMO_CENTESIMI;
 
 /**
- * Un prezzo scritto in `site_settings.agenzia.prezzi.<servizio>`:
- *  · assente → vale il listino di Nicola;
+ * Un canone scritto in `site_settings.agenzia.abbonamenti.<fascia>`:
+ *  · assente → vale il prezzo di Nicola;
  *  · `null` → su richiesta;
- *  · un numero di centesimi → prezzo fisso;
- *  · `{ "da": …, "a": … }` → fascia.
- * Qualunque altra cosa (zero, negativo, testo, `da` più alto di `a`) diventa «su
- * richiesta»: meglio nessun prezzo che un prezzo sbagliato davanti a un cliente.
+ *  · un numero di centesimi → quel canone.
+ * Qualunque altra cosa (zero, negativo, testo, decimali) diventa «su richiesta»: meglio
+ * nessun prezzo che un prezzo sbagliato davanti a un cliente. La vecchia chiave `prezzi`
+ * (un prezzo per servizio, fino al 23/11) si ignora.
  */
-function leggiPrezzo(v: unknown, diListino: Prezzo | null): Prezzo | null {
+function leggiCanone(v: unknown, diListino: number): number | null {
   if (v === undefined) return diListino;
-  if (centesimiValidi(v)) return fisso(v);
-  if (v && typeof v === 'object') {
-    const { da, a } = v as { da?: unknown; a?: unknown };
-    if (centesimiValidi(da) && centesimiValidi(a) && da <= a) return { da, a };
-  }
-  return null;
+  return centesimiValidi(v) ? v : null;
 }
 
 export function leggiImpostazioniAgenzia(grezzo: unknown): ImpostazioniAgenzia {
-  const g = (grezzo && typeof grezzo === 'object' ? grezzo : {}) as { nome?: unknown; prezzi?: unknown };
+  const g = (grezzo && typeof grezzo === 'object' ? grezzo : {}) as { nome?: unknown; abbonamenti?: unknown };
   const nome = typeof g.nome === 'string' && g.nome.trim().length >= 2 ? g.nome.trim().slice(0, 80) : NOME_AGENZIA_DI_RISERVA;
-  const scritti = (g.prezzi && typeof g.prezzi === 'object' ? g.prezzi : {}) as Record<string, unknown>;
+  const scritti = (g.abbonamenti && typeof g.abbonamenti === 'object' ? g.abbonamenti : {}) as Record<string, unknown>;
   const prezzi = Object.fromEntries(
-    SERVIZI_AGENZIA.map((id) => [id, leggiPrezzo(scritti[id], LISTINO[id].prezzo)]),
-  ) as Record<ServizioAgenzia, Prezzo | null>;
+    ABBONAMENTI.map((id) => [id, leggiCanone(scritti[id], FASCE[id].prezzoMese)]),
+  ) as Record<Abbonamento, number | null>;
   return { nome, prezzi };
 }
 
-/** Tutti i prezzi «su richiesta»: quando le impostazioni non si leggono per un guasto. */
+/** Tutti i canoni «su richiesta»: quando le impostazioni non si leggono per un guasto. */
 export function impostazioniSenzaPrezzi(): ImpostazioniAgenzia {
   return {
     nome: NOME_AGENZIA_DI_RISERVA,
-    prezzi: Object.fromEntries(SERVIZI_AGENZIA.map((id) => [id, null])) as Record<ServizioAgenzia, Prezzo | null>,
+    prezzi: Object.fromEntries(ABBONAMENTI.map((id) => [id, null])) as Record<Abbonamento, number | null>,
   };
 }
 
@@ -261,14 +298,11 @@ export function cosaManca(d: DatiAttivita): VoceMancante[] {
 export type RigaPreventivo = VoceMancante & {
   titolo: string;
   descrizione: string;
-  cadenza: Cadenza;
   partner?: string;
-  /** `null` = su richiesta. */
-  prezzo: Prezzo | null;
 };
 
-/** Il totale di una cadenza: la somma dei prezzi noti, e i titoli delle voci su richiesta. */
-export type Totale = { da: number; a: number; suRichiesta: string[] };
+/** Sopra questo numero di prodotti in catalogo consigliamo il Premium: tante schede, tante foto. */
+export const PRODOTTI_PER_IL_PREMIUM = 150;
 
 export type Preventivo = {
   numero: string;
@@ -277,14 +311,30 @@ export type Preventivo = {
   agenzia: string;
   attivita: string;
   tipoAttivita: TipoAttivita;
+  /** Cosa manca alla vetrina, col perché: tutto è compreso in ogni abbonamento. */
   righe: RigaPreventivo[];
   /** Quello che è già a posto: nel preventivo si vede anche questo. */
   giaAPosto: ServizioAgenzia[];
-  /** `null` se nessuna voce si paga una volta sola. */
-  totaleUnaTantum: Totale | null;
-  /** `null` se nessuna voce si paga al mese. */
-  totaleMensile: Totale | null;
+  /** Il canone di ogni fascia in centesimi al mese; `null` = su richiesta. */
+  prezzi: Record<Abbonamento, number | null>;
+  /** La fascia che consigliamo guardando la vetrina, e perché. */
+  consigliato: Abbonamento;
+  perche_consigliato: string;
+  /** La fascia scelta dal cliente quando accetta; `null` mentre guarda. */
+  scelto: Abbonamento | null;
 };
+
+/** La fascia consigliata dai dati: il catalogo grande va sul Premium, una vetrina da rifare sul Business. */
+export function fasciaConsigliata(d: DatiAttivita, righe: VoceMancante[]): { id: Abbonamento; perche: string } {
+  if (d.prodotti.length >= PRODOTTI_PER_IL_PREMIUM) {
+    return { id: 'premium', perche: `Hai ${d.prodotti.length} prodotti in catalogo: con foto e video ogni mese li teniamo tutti in ordine.` };
+  }
+  const daRifare = righe.filter((r) => r.id === 'foto_video' || r.id === 'sito_web').map((r) => LISTINO[r.id].titolo.toLowerCase());
+  if (daRifare.length > 0) {
+    return { id: 'business', perche: `Alla tua vetrina mancano ${daRifare.join(' e ')}: il Business li fa e li tiene aggiornati.` };
+  }
+  return { id: 'base', perche: 'La tua vetrina è già in ordine: il Base basta per tenerla viva.' };
+}
 
 /** Il giorno di oggi a Piacenza, AAAA-MM-GG (un preventivo fatto alle 00:30 è di oggi, non di ieri). */
 export function giornoDiPiacenza(adesso: Date): string {
@@ -301,18 +351,6 @@ export function numeroPreventivo(idAttivita: string, giorno: string): string {
   return `P-${giorno.replace(/-/g, '')}-${sigla}`;
 }
 
-/** Somma le righe di una cadenza. */
-export function sommaRighe(righe: RigaPreventivo[]): Totale | null {
-  if (righe.length === 0) return null;
-  return righe.reduce<Totale>(
-    (t, r) =>
-      r.prezzo
-        ? { ...t, da: t.da + r.prezzo.da, a: t.a + r.prezzo.a }
-        : { ...t, suRichiesta: [...t.suRichiesta, r.titolo] },
-    { da: 0, a: 0, suRichiesta: [] },
-  );
-}
-
 export function costruisciPreventivo(opzioni: {
   idAttivita: string;
   nomeAttivita: string;
@@ -320,23 +358,18 @@ export function costruisciPreventivo(opzioni: {
   dati: DatiAttivita;
   impostazioni: ImpostazioniAgenzia;
   adesso: Date;
-  /**
-   * Le voci che il cliente ha tenuto, quando accetta. Una voce scelta che non manca
-   * davvero non entra: decide `cosaManca`, non il browser. Assente = tutte.
-   */
-  scelte?: readonly ServizioAgenzia[];
+  /** La fascia scelta dal cliente, quando accetta. Assente = sta ancora guardando. */
+  scelto?: Abbonamento;
 }): Preventivo {
-  const { idAttivita, nomeAttivita, tipoAttivita, dati, impostazioni, adesso, scelte } = opzioni;
-  const tutteLeMancanti = cosaManca(dati);
-  const mancanti = scelte ? tutteLeMancanti.filter((v) => scelte.includes(v.id)) : tutteLeMancanti;
+  const { idAttivita, nomeAttivita, tipoAttivita, dati, impostazioni, adesso, scelto } = opzioni;
+  const mancanti = cosaManca(dati);
   const righe: RigaPreventivo[] = mancanti.map((v) => ({
     ...v,
     titolo: LISTINO[v.id].titolo,
     descrizione: LISTINO[v.id].descrizione,
-    cadenza: LISTINO[v.id].cadenza,
     ...(LISTINO[v.id].partner ? { partner: LISTINO[v.id].partner } : {}),
-    prezzo: impostazioni.prezzi[v.id],
   }));
+  const consigliato = fasciaConsigliata(dati, mancanti);
   const giorno = giornoDiPiacenza(adesso);
   return {
     numero: numeroPreventivo(idAttivita, giorno),
@@ -345,40 +378,29 @@ export function costruisciPreventivo(opzioni: {
     attivita: nomeAttivita.trim() || 'La tua attività',
     tipoAttivita,
     righe,
-    giaAPosto: SERVIZI_AGENZIA.filter((id) => !tutteLeMancanti.some((v) => v.id === id)),
-    totaleUnaTantum: sommaRighe(righe.filter((r) => r.cadenza === 'una_tantum')),
-    totaleMensile: sommaRighe(righe.filter((r) => r.cadenza === 'mese')),
+    giaAPosto: SERVIZI_AGENZIA.filter((id) => !mancanti.some((v) => v.id === id)),
+    prezzi: impostazioni.prezzi,
+    consigliato: consigliato.id,
+    perche_consigliato: consigliato.perche,
+    scelto: scelto ?? null,
   };
 }
 
-const DOPO_IL_PREZZO: Record<Cadenza, string> = { una_tantum: '', mese: ' al mese' };
-
-/** «500,00 €», «300,00 € al mese», «da 50,00 a 300,00 € al mese», «su richiesta». */
-export function scriviPrezzo(prezzo: Prezzo | null, cadenza: Cadenza): string {
-  if (!prezzo) return 'su richiesta';
-  if (prezzo.da === prezzo.a) return `${formatPriceFromCents(prezzo.da)}${DOPO_IL_PREZZO[cadenza]}`;
-  return `da ${formatPriceFromCents(prezzo.da)} a ${formatPriceFromCents(prezzo.a)}${DOPO_IL_PREZZO[cadenza]}`;
-}
-
-/** Un totale: la parte coi prezzi, più «+ Sito web professionale su richiesta» per le voci senza prezzo. */
-export function scriviTotale(t: Totale, cadenza: Cadenza): string {
-  const conPrezzo = t.da > 0 || t.a > 0 ? scriviPrezzo({ da: t.da, a: t.a }, cadenza) : '';
-  const senza = t.suRichiesta.length > 0 ? `${t.suRichiesta.join(', ')} su richiesta` : '';
-  if (conPrezzo && senza) return `${conPrezzo} + ${senza}`;
-  return conPrezzo || senza || 'su richiesta';
+/** «300,00 € al mese», oppure «su richiesta». */
+export function scriviCanone(centesimi: number | null): string {
+  return centesimi ? `${formatPriceFromCents(centesimi)} al mese` : 'su richiesta';
 }
 
 /**
  * Il testo dell'avviso che arriva a Nicola quando il cliente accetta: chi, quale preventivo,
- * quali voci e quanto (una volta / al mese), e il telefono per richiamare.
+ * quale abbonamento e a quanto, cosa manca alla vetrina, e il telefono per richiamare.
  */
 export function testoAvvisoPreventivo(p: Preventivo, telefono: string | null): string {
-  // Il partner tra parentesi: Nicola sa subito chi chiamare per foto e video.
-  const voci = p.righe.map((r) => (r.partner ? `${r.titolo} (${r.partner})` : r.titolo)).join(', ');
-  const totali = [
-    p.totaleUnaTantum ? `una volta ${scriviTotale(p.totaleUnaTantum, 'una_tantum')}` : '',
-    p.totaleMensile ? `ogni mese ${scriviTotale(p.totaleMensile, 'mese')}` : '',
-  ].filter(Boolean).join('; ');
+  const fascia = p.scelto ?? p.consigliato;
+  const manca = p.righe.length > 0
+    // Il partner tra parentesi: Nicola sa subito chi chiamare per foto e video.
+    ? ` Alla vetrina mancano: ${p.righe.map((r) => (r.partner ? `${r.titolo} (${r.partner})` : r.titolo)).join(', ')}.`
+    : '';
   const contatto = telefono ? ` Telefono: ${telefono}.` : '';
-  return `${p.attivita} vuole il preventivo ${p.numero}: ${voci}.${totali ? ` Totale: ${totali}.` : ''}${contatto}`;
+  return `${p.attivita} sceglie l'abbonamento ${FASCE[fascia].nome} (${scriviCanone(p.prezzi[fascia])}), preventivo ${p.numero}.${manca}${contatto}`;
 }

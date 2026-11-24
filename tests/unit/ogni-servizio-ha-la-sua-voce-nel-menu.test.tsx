@@ -114,13 +114,18 @@ describe('il menu del venditore', () => {
 });
 
 describe('la pagina di un servizio', () => {
-  it('foto e video nomina scattiDG, e mostra prezzo e perché', async () => {
+  it('foto e video nomina scattiDG, mostra il perché e come è compreso nei tre abbonamenti', async () => {
     stato.slug = 'foto-video';
     const r = await monta(ServizioDelPreventivoPage);
     expect(r.textContent).toContain('scattiDG');
-    expect(r.textContent).toMatch(/da 50,00\s€ a 300,00\s€ al mese/);
     expect(r.textContent).toContain('Nella vetrina non c’è nessun video.');
-    expect(r.textContent).toContain('Lo voglio: contattatemi');
+    // 24/11/2026: il servizio non si vende più da solo, è dentro le tre fasce
+    expect(r.textContent).toMatch(/Base · 300,00\s€ al mese/);
+    expect(r.textContent).toMatch(/Business · 500,00\s€ al mese/);
+    expect(r.textContent).toMatch(/Premium · 999,00\s€ al mese/);
+    expect(r.textContent).toContain('Una sessione di foto e video ogni mese.');
+    expect(r.textContent).not.toMatch(/da 50,00/);
+    expect(r.querySelector('a[href="/seller/preventivo"]')?.textContent).toContain('Scegli l');
   });
 
   it('gli altri servizi non nominano scattiDG', async () => {
@@ -194,7 +199,7 @@ describe('cosa ricevi, già pronto dentro il servizio', () => {
     expect(scheda!.textContent).toContain('Bar Roma');
     expect(scheda!.textContent).toContain('Bar · Piacenza');
     expect(scheda!.textContent).toContain('vetrina MyCity');
-    expect(r.textContent).toContain('su richiesta'); // nessun prezzo deciso da Nicola
+    expect(r.textContent).toContain('È compreso in tutti e tre gli abbonamenti');
   });
 
   it('il preventivo intero mostra le quattro anteprime, e non ha più il logo', async () => {
@@ -207,12 +212,15 @@ describe('cosa ricevi, già pronto dentro il servizio', () => {
     expect(r.textContent).not.toContain('Logo e grafica');
   });
 
-  it('togliendo la spunta, l anteprima di quella voce sparisce', async () => {
+  it('il preventivo intero mostra le tre fasce, parte dal Business consigliato e accetta la fascia scelta', async () => {
     const { default: PreventivoAgenziaPage } = await import('@/app/seller/preventivo/page');
     const r = await monta(PreventivoAgenziaPage);
-    const casella = r.querySelector<HTMLInputElement>('#voce-sito_web')!;
-    await act(async () => { casella.click(); });
-    expect(r.textContent).not.toContain('La bozza del tuo sito');
-    expect(r.textContent).toContain('Il piano editoriale di novembre 2026');
+    const radio = [...r.querySelectorAll<HTMLInputElement>('input[name="abbonamento"]')];
+    expect(radio.map((x) => x.value)).toEqual(['base', 'business', 'premium']);
+    expect(radio.find((x) => x.checked)?.value).toBe('business'); // vetrina vuota: mancano foto e sito
+    expect(r.textContent).toContain('Ti consigliamo il Business.');
+    await act(async () => { radio[2].click(); });
+    expect(r.textContent).toContain('Accetto il Premium: contattatemi');
   });
+
 });

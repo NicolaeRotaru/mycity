@@ -6,13 +6,13 @@ import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import {
-  SERVIZI_AGENZIA,
+  ABBONAMENTI,
   costruisciPreventivo,
   leggiImpostazioniAgenzia,
   impostazioniSenzaPrezzi,
   testoAvvisoPreventivo,
+  type Abbonamento,
   type Preventivo,
-  type ServizioAgenzia,
 } from '@/lib/agenzia/preventivo';
 import { tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
 import { inviaAlFlusso } from '@/lib/agenzia/flusso-n8n';
@@ -25,11 +25,12 @@ export const runtime = 'nodejs';
  * 22/11/2026 — Nicola: la dashboard del cliente mostra «il preventivo di quello
  * che gli manca», già pronto. Il calcolo è uno solo (`lib/agenzia/preventivo.ts`)
  * e gira qui, sul server, con i dati letti dal database: il browser mostra il
- * preventivo, non lo decide. Quando il cliente accetta, manda solo QUALI voci
- * tiene; quantità, prezzi e «manca davvero?» li ricalcola il server.
+ * preventivo, non lo decide. Quando il cliente accetta, manda solo QUALE
+ * abbonamento sceglie (24/11/2026: Base, Business o Premium); canone e «cosa
+ * manca» li ricalcola il server.
  *
  * Quello che succede all'accettazione:
- *  · un avviso agli amministratori, una volta sola per giorno e per scelta
+ *  · un avviso agli amministratori, una volta sola per giorno e per fascia
  *    (due clic di fila non mandano due avvisi);
  *  · se Nicola l'ha collegato, il flusso n8n dell'agenzia (`lib/agenzia/flusso-n8n.ts`).
  * Nessun addebito: i prezzi sono quelli del listino e il pagamento lo concorda
@@ -44,7 +45,7 @@ const TETTO_PRODOTTI = 2000;
 
 type Letti = { preventivo: Preventivo; telefono: string | null; socials: unknown };
 
-async function leggiPreventivo(idAttivita: string, scelte?: readonly ServizioAgenzia[]): Promise<Letti> {
+async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento): Promise<Letti> {
   const admin = getAdminSupabase();
   const [profilo, prodotti, impostazioni] = await Promise.all([
     admin
@@ -98,7 +99,7 @@ async function leggiPreventivo(idAttivita: string, scelte?: readonly ServizioAge
       ? colonnaAncoraAssente ? leggiImpostazioniAgenzia(null) : impostazioniSenzaPrezzi()
       : leggiImpostazioniAgenzia(impostazioni.data?.agenzia),
     adesso: new Date(),
-    scelte,
+    scelto,
   });
   const telefono = (p.store_phone as string | null) || (p.phone as string | null) || null;
   return { preventivo, telefono, socials };
@@ -118,7 +119,7 @@ export const GET = withSellerAuthRateLimit(
 );
 
 const Accettazione = z.object({
-  scelte: z.array(z.enum(SERVIZI_AGENZIA)).min(1, 'Scegli almeno una voce del preventivo').max(SERVIZI_AGENZIA.length),
+  abbonamento: z.enum(ABBONAMENTI, { message: 'Scegli uno dei tre abbonamenti' }),
 });
 
 export const POST = withSellerAuthRateLimit(
@@ -133,24 +134,21 @@ export const POST = withSellerAuthRateLimit(
     }
     const esito = Accettazione.safeParse(corpo);
     if (!esito.success) return ApiErrors.invalidRequest(esito.error.issues[0]?.message ?? 'Dati non validi');
-    const scelte = [...new Set(esito.data.scelte)];
+    const scelto = esito.data.abbonamento;
 
     let letti: Letti;
     try {
-      letti = await leggiPreventivo(user.id, scelte);
+      letti = await leggiPreventivo(user.id, scelto);
     } catch (errore) {
       logger.error('[preventivo] non riletto all accettazione', { userId: user.id, errore: String(errore) });
       return ApiErrors.internal('Non sono riuscito a inviare il preventivo. Riprova fra un momento.');
     }
     const { preventivo, telefono, socials } = letti;
-    if (preventivo.righe.length === 0) {
-      return ApiErrors.conflict('Le voci scelte non mancano più alla tua vetrina: ricarica la pagina.');
-    }
 
-    // Una volta per giorno e per scelta: lo stesso clic ripetuto non manda due avvisi.
+    // Una volta per giorno e per fascia: lo stesso clic ripetuto non manda due avvisi.
     // L'id intero dell'attività: due negozi con le stesse prime sei cifre hanno lo stesso numero
     // breve, e senza l'id il secondo avviso sarebbe scambiato per un doppione (collaudo, 23/11).
-    const chiave = `preventivo-agenzia:${user.id}:${preventivo.numero}:${preventivo.righe.map((r) => r.id).join('+')}`;
+    const chiave = `preventivo-agenzia:${user.id}:${preventivo.numero}:${scelto}`;
     let avviso: Awaited<ReturnType<typeof notifyAdmins>>;
     try {
       avviso = await notifyAdmins(
@@ -170,6 +168,6 @@ export const POST = withSellerAuthRateLimit(
       ? 'spento'
       : await inviaAlFlusso(preventivo, { idAttivita: user.id, email: user.email ?? null, telefono, socials });
 
-    return apiSuccess({ numero: preventivo.numero, giaInviato: avviso === 'gia-mandato', flusso });
+    return apiSuccess({ numero: preventivo.numero, abbonamento: scelto, giaInviato: avviso === 'gia-mandato', flusso });
   },
 );

@@ -6,9 +6,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  *
  *  · il preventivo si calcola sul server, coi prodotti e la vetrina veri;
  *  · «non ho letto i prodotti» non diventa «non manca niente»;
- *  · all'accettazione il browser manda solo QUALI voci: una voce che non manca
- *    non entra, e se non resta niente lo dice;
- *  · l'avviso a Nicola parte una volta sola, con le voci e il telefono;
+ *  · all'accettazione il browser manda solo QUALE abbonamento (24/11/2026: Base,
+ *    Business o Premium): il canone lo rilegge il server;
+ *  · l'avviso a Nicola parte una volta sola, con la fascia, il canone e il telefono;
  *  · se l'avviso non si scrive, il cliente non legge «ricevuto»;
  *  · il flusso n8n parte solo se Nicola l'ha collegato, e solo in https.
  */
@@ -93,13 +93,14 @@ describe('GET /api/seller/preventivo', () => {
   });
 
   it('prima della migrazione 703 vale il listino; con un altro guasto di lettura tutto è «su richiesta»', async () => {
-    type R = { data: { righe: { id: string; prezzo: unknown }[] } };
+    type R = { data: { prezzi: Record<string, number | null>; consigliato: string } };
     stato.erroreImpostazioni = { code: '42703', message: 'column site_settings.agenzia does not exist' };
     const prima = (await (await chiama('GET')).json()) as R;
-    expect(prima.data.righe.find((x) => x.id === 'sito_web')?.prezzo).toEqual({ da: 50000, a: 50000 });
+    expect(prima.data.prezzi).toEqual({ base: 30000, business: 50000, premium: 99900 });
+    expect(prima.data.consigliato).toBe('business'); // mancano foto e sito
     stato.erroreImpostazioni = { code: '57014', message: 'canceling statement due to statement timeout' };
     const guasto = (await (await chiama('GET')).json()) as R;
-    expect(guasto.data.righe.every((x) => x.prezzo === null)).toBe(true);
+    expect(Object.values(guasto.data.prezzi).every((x) => x === null)).toBe(true);
   });
 
   it('se i prodotti non si leggono non dice «a posto»: dice che non è riuscito', async () => {
@@ -109,52 +110,52 @@ describe('GET /api/seller/preventivo', () => {
 });
 
 describe('POST /api/seller/preventivo', () => {
-  it('l avviso arriva a Nicola una volta sola, con le voci scelte e il telefono', async () => {
-    const r = await chiama('POST', { scelte: ['sito_web', 'social'] });
+  it('l avviso arriva a Nicola una volta sola, con la fascia scelta, il canone e il telefono', async () => {
+    const r = await chiama('POST', { abbonamento: 'business' });
     expect(r.status).toBe(200);
+    expect(((await r.json()) as { data: { abbonamento: string } }).data.abbonamento).toBe('business');
     expect(stato.avvisi).toHaveLength(1);
     expect(stato.avvisi[0].titolo).toBe('Preventivo accettato: Bar Roma');
-    expect(stato.avvisi[0].corpo).toContain('Gestione automatica dei social, Sito web professionale');
+    expect(stato.avvisi[0].corpo).toMatch(/sceglie l'abbonamento Business \(500,00\s€ al mese\)/);
     expect(stato.avvisi[0].corpo).toContain('3331234567');
-    expect(stato.avvisi[0].corpo).toMatch(/Totale: una volta 500,00\s€; ogni mese 300,00\s€ al mese/);
     // l'id intero dell'attività è nella chiave: due negozi con le stesse prime 6 cifre non si scambiano
-    expect(stato.avvisi[0].opzioni.unaVoltaPer).toMatch(/^preventivo-agenzia:a1b2c3d4-0000:P-\d{8}-A1B2C3:social\+sito_web$/);
+    expect(stato.avvisi[0].opzioni.unaVoltaPer).toMatch(/^preventivo-agenzia:a1b2c3d4-0000:P-\d{8}-A1B2C3:business$/);
     expect(stato.avvisi[0].opzioni.almenoUnDestinatario).toBe(true);
   });
 
-  it('una voce che non manca non entra; se non resta niente lo dice e non avvisa', async () => {
-    stato.profilo = { ...stato.profilo, store_customization: { socials: { instagram: 'barroma', website: 'https://barroma.it' } } };
-    const r = await chiama('POST', { scelte: ['sito_web'] });
-    expect(r.status).toBe(409);
-    expect(stato.avvisi).toHaveLength(0);
+  it('il canone lo decide il server: un prezzo mandato dal browser non conta', async () => {
+    stato.agenzia = { abbonamenti: { premium: 120000 } };
+    const r = await chiama('POST', { abbonamento: 'premium', prezzo: 1 });
+    expect(r.status).toBe(200);
+    expect(stato.avvisi[0].corpo).toMatch(/Premium \(1\.?200,00\s€ al mese\)/);
   });
 
-  it('una voce fuori listino o nessuna voce: richiesta rifiutata', async () => {
-    expect((await chiama('POST', { scelte: ['caffe_gratis'] })).status).toBe(400);
-    expect((await chiama('POST', { scelte: ['logo'] })).status).toBe(400); // il logo non è più nel preventivo (23/11)
-    expect((await chiama('POST', { scelte: [] })).status).toBe(400);
+  it('una fascia fuori listino, le vecchie voci o niente: richiesta rifiutata', async () => {
+    expect((await chiama('POST', { abbonamento: 'gold' })).status).toBe(400);
+    expect((await chiama('POST', { scelte: ['social'] })).status).toBe(400); // i servizi non si chiedono più uno per uno (24/11)
+    expect((await chiama('POST', {})).status).toBe(400);
     expect(stato.avvisi).toHaveLength(0);
   });
 
   it('se l avviso non si scrive, il cliente non legge «ricevuto»', async () => {
     stato.esitoAvviso = new Error('nessun amministratore');
-    expect((await chiama('POST', { scelte: ['social'] })).status).toBe(500);
+    expect((await chiama('POST', { abbonamento: 'base' })).status).toBe(500);
   });
 
   it('il flusso n8n è spento finché Nicola non lo collega', async () => {
     const spia = vi.fn();
     globalThis.fetch = spia as unknown as typeof fetch;
-    const r = await chiama('POST', { scelte: ['social'] });
+    const r = await chiama('POST', { abbonamento: 'base' });
     expect(((await r.json()) as { data: { flusso: string } }).data.flusso).toBe('spento');
     expect(spia).not.toHaveBeenCalled();
   });
 
-  it('collegato, il flusso n8n riceve le voci, i contatti e il segreto', async () => {
+  it('collegato, il flusso n8n riceve l abbonamento, cosa manca, i contatti e il segreto', async () => {
     process.env.N8N_PREVENTIVO_WEBHOOK_URL = 'https://n8n.esempio.it/webhook/preventivo';
     process.env.N8N_PREVENTIVO_SEGRETO = 'segreto-di-prova';
     const spia = vi.fn(async () => new Response('{}', { status: 200 }));
     globalThis.fetch = spia as unknown as typeof fetch;
-    const r = await chiama('POST', { scelte: ['social'] });
+    const r = await chiama('POST', { abbonamento: 'base' });
     expect(((await r.json()) as { data: { flusso: string } }).data.flusso).toBe('inviato');
     const [indirizzo, opzioni] = spia.mock.calls[0] as unknown as [string, RequestInit];
     expect(indirizzo).toBe('https://n8n.esempio.it/webhook/preventivo');
@@ -163,14 +164,15 @@ describe('POST /api/seller/preventivo', () => {
     expect(corpo.tipo).toBe('preventivo-accettato');
     expect(corpo.contatti).toEqual({ email: 'bar@esempio.it', telefono: '3331234567' });
     expect(corpo.socials).toEqual({ instagram: 'barroma' });
-    expect(corpo.voci.map((v: { id: string }) => v.id)).toEqual(['social']);
+    expect(corpo.abbonamento).toMatchObject({ id: 'base', nome: 'Base', canoneMeseCentesimi: 30000 });
+    expect(corpo.manca.map((v: { id: string }) => v.id)).toEqual(['foto_video', 'social', 'sito_web', 'google_maps']);
   });
 
   it('un indirizzo n8n non https non riceve niente, e il cliente ha comunque il suo «ricevuto»', async () => {
     process.env.N8N_PREVENTIVO_WEBHOOK_URL = 'http://n8n.esempio.it/webhook';
     const spia = vi.fn();
     globalThis.fetch = spia as unknown as typeof fetch;
-    const r = await chiama('POST', { scelte: ['social'] });
+    const r = await chiama('POST', { abbonamento: 'base' });
     expect(r.status).toBe(200);
     expect(spia).not.toHaveBeenCalled();
   });
@@ -180,7 +182,7 @@ describe('POST /api/seller/preventivo', () => {
     stato.esitoAvviso = 'gia-mandato';
     const spia = vi.fn(async () => new Response('{}', { status: 200 }));
     globalThis.fetch = spia as unknown as typeof fetch;
-    const r = await chiama('POST', { scelte: ['social'] });
+    const r = await chiama('POST', { abbonamento: 'base' });
     expect(((await r.json()) as { data: { giaInviato: boolean } }).data.giaInviato).toBe(true);
     expect(spia).not.toHaveBeenCalled();
   });

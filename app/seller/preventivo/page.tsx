@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -8,9 +8,8 @@ import { Check, CheckCircle2, Printer, Send } from 'lucide-react';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
-import { LISTINO, sommaRighe, type ServizioAgenzia } from '@/lib/agenzia/preventivo';
+import { ABBONAMENTI, FASCE, LISTINO, SERVIZI_AGENZIA, type Abbonamento } from '@/lib/agenzia/preventivo';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
-import { FRASE_PREZZO_NEGOZI } from '@/app/seller/earnings/commissione';
 import { hrefServizio } from '@/components/seller/servizi-nel-menu';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import {
@@ -18,42 +17,37 @@ import {
   CHIAVE_PREVENTIVO,
   dataLeggibile,
   leggiPreventivoAgenzia,
-  scriviPrezzo,
-  scriviTotale,
+  scriviCanone,
 } from '@/components/seller/preventivo-agenzia';
 
 /**
- * IL PREVENTIVO GIÀ PRONTO — 22/11/2026.
+ * IL PREVENTIVO GIÀ PRONTO — 22/11/2026, coi tre abbonamenti dal 24/11/2026.
  *
  * Nicola: «deve già essere creato prima, in formato preventivo/demo». Il cliente
  * apre questa pagina e trova un preventivo vero, con numero e data, fatto dai
- * suoi dati: cosa manca alla vetrina, perché, quanto. Toglie le voci che non
- * gli interessano, preme «Accetto» e MyCity lo richiama. Si stampa o si
- * salva in PDF dal pulsante (il menu e i pulsanti non escono sulla carta).
+ * suoi dati: cosa manca alla vetrina e perché. Poi i tre abbonamenti — Base,
+ * Business, Premium — che comprendono tutti i servizi in misura diversa (Nicola,
+ * 24/11). Ne sceglie uno (parte già scelto quello che consigliamo), preme
+ * «Accetto» e MyCity lo richiama. Si stampa o si salva in PDF dal pulsante.
  *
- * Niente si paga qui: accettare manda la richiesta a MyCity, che conferma
- * prezzi e tempi e concorda il pagamento. I prezzi sono quelli di Nicola
- * (22/11/2026); dove non c'è un prezzo, la voce dice «su richiesta».
+ * Niente si paga qui: accettare manda la richiesta a MyCity, che conferma e
+ * concorda il pagamento.
  */
 export default function PreventivoAgenziaPage() {
   const { data: p, isLoading, isError, error, refetch } = useQuery({
     queryKey: CHIAVE_PREVENTIVO,
     queryFn: leggiPreventivoAgenzia,
   });
-  const [scelte, setScelte] = useState<Set<ServizioAgenzia>>(new Set());
+  const [scelto, setScelto] = useState<Abbonamento | null>(null);
   const [inviato, setInviato] = useState<string | null>(null);
 
-  // Appena arriva il preventivo, tutte le voci sono scelte: il cliente toglie, non aggiunge.
+  // Appena arriva il preventivo, è scelto l'abbonamento che consigliamo: il cliente può cambiarlo.
   useEffect(() => {
-    if (p) setScelte(new Set(p.righe.map((r) => r.id)));
+    if (p) setScelto((prima) => prima ?? p.consigliato);
   }, [p]);
 
-  const righeScelte = useMemo(() => (p ? p.righe.filter((r) => scelte.has(r.id)) : []), [p, scelte]);
-  const totaleUnaTantum = sommaRighe(righeScelte.filter((r) => r.cadenza === 'una_tantum'));
-  const totaleMensile = sommaRighe(righeScelte.filter((r) => r.cadenza === 'mese'));
-
   const accetta = useMutation({
-    mutationFn: () => accettaPreventivo(righeScelte.map((r) => r.id)),
+    mutationFn: (fascia: Abbonamento) => accettaPreventivo(fascia),
     onSuccess: (numero) => {
       setInviato(numero);
       toast.success('Preventivo inviato: ti ricontattiamo noi.');
@@ -80,13 +74,7 @@ export default function PreventivoAgenziaPage() {
     );
   }
 
-  const cambia = (id: ServizioAgenzia) =>
-    setScelte((prima) => {
-      const dopo = new Set(prima);
-      if (dopo.has(id)) dopo.delete(id);
-      else dopo.add(id);
-      return dopo;
-    });
+  const fascia = scelto ?? p.consigliato;
 
   return (
     <div className="max-w-3xl">
@@ -94,7 +82,7 @@ export default function PreventivoAgenziaPage() {
         <SellerPageTitle
           eyebrow="Servizi"
           title="Il tuo preventivo è pronto"
-          sub="L'abbiamo preparato guardando la tua vetrina: cosa manca, perché, e cosa possiamo fare noi."
+          sub="L'abbiamo preparato guardando la tua vetrina: cosa manca, perché, e l'abbonamento che fa per te."
         />
       </div>
 
@@ -116,80 +104,87 @@ export default function PreventivoAgenziaPage() {
           </dl>
         </header>
 
+        {/* Cosa manca alla vetrina: il perché del preventivo, col numero vero. */}
         {p.righe.length === 0 ? (
-          <div className="py-8 text-center">
-            <CheckCircle2 size={40} className="mx-auto text-olive-700" aria-hidden />
-            <p className="mt-3 font-semibold text-ink-900">Alla tua vetrina non manca niente.</p>
-            <p className="text-sm text-ink-600">Se vuoi qualcosa in più, scrivici.</p>
+          <div className="py-6 text-center">
+            <CheckCircle2 size={36} className="mx-auto text-olive-700" aria-hidden />
+            <p className="mt-2 font-semibold text-ink-900">Alla tua vetrina non manca niente.</p>
+            <p className="text-sm text-ink-600">Con un abbonamento la teniamo viva noi, ogni mese.</p>
           </div>
         ) : (
-          <>
-            <p className="mt-5 text-sm text-ink-600 print:hidden">
-              Togli la spunta alle voci che non ti interessano: il totale si aggiorna.
-            </p>
-            <ul className="mt-3 divide-y divide-cream-200">
-              {p.righe.map((r) => {
-                const scelta = scelte.has(r.id);
-                return (
-                  <li key={r.id} className={`py-4 flex items-start gap-3 ${scelta ? '' : 'opacity-50 print:hidden'}`}>
-                    <input
-                      id={`voce-${r.id}`}
-                      type="checkbox"
-                      checked={scelta}
-                      onChange={() => cambia(r.id)}
-                      disabled={!!inviato}
-                      className="mt-1.5 h-4 w-4 accent-primary-700 print:hidden"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <label htmlFor={`voce-${r.id}`} className="block cursor-pointer">
-                        <span className="block font-semibold text-ink-900">{r.titolo}</span>
-                        {r.partner && <span className="block text-xs font-semibold text-primary-700">con {r.partner}, il partner di MyCity per foto e video</span>}
-                        <span className="block text-sm text-ink-600">{r.descrizione}</span>
-                      </label>
-                      {/* L'elenco sta fuori dall'etichetta: dentro un <label> va solo testo. */}
-                      <p className="text-xs text-ink-500 mt-1">Perché te lo proponiamo:</p>
-                      <ul className="list-disc pl-4 text-xs text-ink-600">
-                        {r.perche.map((frase) => <li key={frase}>{frase}</li>)}
-                      </ul>
-                      {/* Cosa ricevi, già pronto: la bozza del sito, il piano del mese, i formati (Nicola, 23/11). */}
-                      {scelta && <AnteprimaServizio id={r.id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} />}
-                      {/* Ogni servizio ha anche la sua pagina, con la sua voce nel menu. */}
-                      <Link href={hrefServizio(r.id)} className="mt-1 inline-block text-xs font-semibold text-primary-700 underline underline-offset-2 print:hidden">
-                        Apri il servizio
-                      </Link>
-                    </div>
-                    <div className="text-right shrink-0 max-w-[40%]">
-                      <p className="text-xs text-ink-500">{r.cadenza === 'mese' ? 'ogni mese' : 'una volta'}</p>
-                      <p className="font-semibold text-ink-900">{scriviPrezzo(r.prezzo, r.cadenza)}</p>
-                    </div>
-                  </li>
-                );
-              })}
+          <section className="mt-5">
+            <h2 className="font-serif text-lg font-bold text-ink-900">Cosa manca alla tua vetrina</h2>
+            <ul className="mt-2 divide-y divide-cream-200">
+              {p.righe.map((r) => (
+                <li key={r.id} className="py-4">
+                  <p className="font-semibold text-ink-900">{r.titolo}</p>
+                  {r.partner && <p className="text-xs font-semibold text-primary-700">con {r.partner}, il partner di MyCity per foto e video</p>}
+                  <p className="text-sm text-ink-600">{r.descrizione}</p>
+                  <ul className="mt-1 list-disc pl-4 text-xs text-ink-600">
+                    {r.perche.map((frase) => <li key={frase}>{frase}</li>)}
+                  </ul>
+                  {/* Cosa ricevi, già pronto: la bozza del sito, il piano del mese, i formati (Nicola, 23/11). */}
+                  <AnteprimaServizio id={r.id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} />
+                  <Link href={hrefServizio(r.id)} className="mt-1 inline-block text-xs font-semibold text-primary-700 underline underline-offset-2 print:hidden">
+                    Apri il servizio
+                  </Link>
+                </li>
+              ))}
             </ul>
-
-            <div className="mt-2 border-t-2 border-ink-900 pt-4 space-y-1 text-right">
-              {totaleUnaTantum && (
-                <p className="text-ink-900"><span className="text-ink-600">Una volta sola:</span> <strong>{scriviTotale(totaleUnaTantum, 'una_tantum')}</strong></p>
-              )}
-              {totaleMensile && (
-                <p className="text-ink-900"><span className="text-ink-600">Ogni mese:</span> <strong>{scriviTotale(totaleMensile, 'mese')}</strong></p>
-              )}
-              {!totaleUnaTantum && !totaleMensile && <p className="text-ink-600">Nessuna voce scelta.</p>}
-            </div>
-
-            <p className="mt-4 text-xs text-ink-500">
-              {righeScelte.some((r) => r.id === 'foto_video') && 'Per foto e video il prezzo dipende da quanto serve: lo fissiamo insieme prima di iniziare. '}
-              {righeScelte.some((r) => !r.prezzo) && 'Le voci «su richiesta» te le confermiamo prima di iniziare. '}
-              Accettare non ti fa pagare niente adesso.
-            </p>
-          </>
+          </section>
         )}
 
-        {/* La vetrina sul marketplace: la frase unica dei prezzi dei negozi, che segue
-            l'interruttore dell'abbonamento (oggi: nessun canone finché non incassi). */}
-        <section className="mt-6 rounded-xl border border-cream-200 p-4">
-          <h2 className="text-sm font-bold text-ink-900">La tua vetrina su MyCity</h2>
-          <p className="mt-1 text-sm text-ink-700">{FRASE_PREZZO_NEGOZI}</p>
+        {/* I tre abbonamenti: tutti comprendono tutti i servizi, cambia quanto (Nicola, 24/11). */}
+        <section className="mt-6">
+          <h2 className="font-serif text-lg font-bold text-ink-900">Scegli il tuo abbonamento</h2>
+          <p className="mt-1 text-sm text-ink-600">
+            Tutti e tre comprendono tutti i servizi e la vetrina su MyCity: cambia quanto ne facciamo per te.
+          </p>
+          <p className="mt-2 text-sm text-ink-700">
+            <strong>Ti consigliamo il {FASCE[p.consigliato].nome}.</strong> {p.perche_consigliato}
+          </p>
+          <fieldset className="mt-4 grid gap-3 sm:grid-cols-3" disabled={!!inviato}>
+            <legend className="sr-only">Abbonamento</legend>
+            {ABBONAMENTI.map((id) => {
+              const f = FASCE[id];
+              const attivo = fascia === id;
+              return (
+                <label
+                  key={id}
+                  className={`relative flex cursor-pointer flex-col rounded-xl border-2 p-4 focus-within:ring-2 focus-within:ring-primary-500 ${attivo ? 'border-primary-700 bg-cream-50' : 'border-cream-200 print:hidden'}`}
+                >
+                  <input
+                    type="radio"
+                    name="abbonamento"
+                    value={id}
+                    checked={attivo}
+                    onChange={() => setScelto(id)}
+                    className="sr-only"
+                  />
+                  {id === p.consigliato && (
+                    <span className="mb-1 self-start rounded-full bg-olive-700 px-2 py-0.5 text-[11px] font-bold text-white">Consigliato</span>
+                  )}
+                  <span className="font-serif text-xl font-bold text-ink-900">{f.nome}</span>
+                  <span className="text-lg font-semibold text-ink-900">{scriviCanone(p.prezzi[id])}</span>
+                  <span className="mt-1 text-xs text-ink-600">{f.perChi}</span>
+                  <ul className="mt-3 space-y-1.5 text-xs text-ink-700">
+                    {SERVIZI_AGENZIA.map((s) => (
+                      <li key={s}>
+                        <span className="font-semibold text-ink-900">{LISTINO[s].titolo}:</span> {f.servizi[s]}
+                      </li>
+                    ))}
+                    <li><span className="font-semibold text-ink-900">Vetrina:</span> {f.vetrina}</li>
+                    <li><span className="font-semibold text-ink-900">Assistenza:</span> {f.assistenza}</li>
+                  </ul>
+                  {attivo && <Check size={18} className="absolute right-3 top-3 text-primary-700" aria-hidden />}
+                </label>
+              );
+            })}
+          </fieldset>
+          <p className="mt-4 text-xs text-ink-500">
+            {Object.values(p.prezzi).some((v) => !v) && 'I canoni «su richiesta» te li confermiamo prima di iniziare. '}
+            Accettare non ti fa pagare niente adesso: ti richiamiamo per fissare l’inizio.
+          </p>
         </section>
 
         {p.giaAPosto.length > 0 && (
@@ -212,19 +207,12 @@ export default function PreventivoAgenziaPage() {
             <p className="font-semibold text-ink-900 inline-flex items-center gap-2">
               <CheckCircle2 size={18} className="text-olive-700" aria-hidden /> Ricevuto: preventivo {inviato}
             </p>
-            <p className="text-sm text-ink-700 mt-1">Ti ricontattiamo noi per fissare il servizio. Non devi fare altro.</p>
+            <p className="text-sm text-ink-700 mt-1">Abbonamento {FASCE[fascia].nome}. Ti ricontattiamo noi per fissare l’inizio. Non devi fare altro.</p>
           </div>
         ) : (
-          p.righe.length > 0 && (
-            <Button
-              onClick={() => accetta.mutate()}
-              disabled={righeScelte.length === 0}
-              loading={accetta.isPending}
-              icon={Send}
-            >
-              Accetto: contattatemi
-            </Button>
-          )
+          <Button onClick={() => accetta.mutate(fascia)} loading={accetta.isPending} icon={Send}>
+            Accetto il {FASCE[fascia].nome}: contattatemi
+          </Button>
         )}
         <button
           type="button"
