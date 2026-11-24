@@ -24,20 +24,22 @@ const lettura = <T,>(r: Esito<T>): Lettura<T> => (r.error ? null : { righe: r.da
 
 export const GET = withSellerAnchePendingRateLimit({ name: 'seller-pagella', max: 20, windowMs: 60_000 }, async ({ user }) => {
   const admin = getAdminSupabase();
-  const [profilo, prodotti, ordini, confronto] = await Promise.all([
+  const [profilo, prodotti, ordini, confronto, recensioni] = await Promise.all([
     admin
       .from('profiles')
       .select('role, approval_status, approval_requested_at, approved_at, created_at, stripe_charges_enabled, stripe_payouts_enabled, store_logo, store_media, store_description, store_hours, store_address')
       .eq('id', user.id)
       .maybeSingle(),
-    admin.from('products').select('id, status, images, price, stock', { count: 'exact' }).eq('seller_id', user.id).limit(TETTO),
+    admin.from('products').select('status, images, price, stock', { count: 'exact' }).eq('seller_id', user.id).limit(TETTO),
     admin
       .from('orders')
-      .select('payment_status, delivery_status, created_at, user_id, total_price, payment_method, payout_at, canceled_at', { count: 'exact' })
+      .select('payment_status, delivery_status, created_at, user_id, total_price, payment_method, payout_at, canceled_at, delivered_at', { count: 'exact' })
       .eq('seller_id', user.id)
       .order('created_at', { ascending: false })
       .limit(TETTO),
-    admin.from('products').select('seller_id').eq('status', 'available').neq('seller_id', user.id).limit(TETTO_CONFRONTO),
+    admin.from('products').select('seller_id', { count: 'exact' }).eq('status', 'available').neq('seller_id', user.id).limit(TETTO_CONFRONTO),
+    // Le recensioni del negozio (store_reviews): quelle che il titolare vede e a cui risponde, come nel flusso 18.
+    admin.from('store_reviews').select('rating', { count: 'exact' }).eq('store_id', user.id).limit(TETTO),
   ]);
   if (profilo.error) {
     logger.error('[pagella] profilo non letto', { userId: user.id, message: profilo.error.message });
@@ -45,24 +47,22 @@ export const GET = withSellerAnchePendingRateLimit({ name: 'seller-pagella', max
   }
   if ((profilo.data as { role?: string } | null)?.role !== 'seller') return ApiErrors.forbidden('La pagella è dei negozi.');
 
-  // Le recensioni sono dei prodotti: si leggono per i prodotti del negozio (al massimo i primi 500).
-  const idProdotti = ((prodotti.data ?? []) as { id: string }[]).map((p) => p.id).slice(0, 500);
-  const recensioni: Esito<{ rating: number | null }> = prodotti.error
-    ? { data: null, error: { message: 'prodotti non letti' } }
-    : idProdotti.length
-      ? ((await admin.from('reviews').select('rating').in('product_id', idProdotti).limit(TETTO)) as Esito<{ rating: number | null }>)
-      : { data: [], error: null };
-
-  // I negozi di sistema (MyCity, SDG) non entrano nel confronto, come nel flusso 18.
+  // I negozi di sistema (MyCity, SDG) non entrano nel confronto, come nel flusso 18. Se le righe sono più
+  // del tetto, il conteggio è parziale e la pagella lo dice.
+  const righeConfronto = ((confronto.data ?? []) as { seller_id: string | null }[]);
   const confrontoPulito: Esito<{ seller_id: string | null }> = confronto.error
     ? { data: null, error: confronto.error }
-    : { data: ((confronto.data ?? []) as { seller_id: string | null }[]).filter((r) => !String(r.seller_id ?? '').startsWith(PREFISSO_DI_SISTEMA)), error: null };
+    : {
+        data: righeConfronto.filter((r) => !String(r.seller_id ?? '').startsWith(PREFISSO_DI_SISTEMA)),
+        error: null,
+        count: typeof confronto.count === 'number' && confronto.count > righeConfronto.length ? confronto.count : null,
+      };
 
   const risultato = pagella({
     profilo: profilo.data as never,
     prodotti: lettura(prodotti as unknown as Esito<never>),
     ordini: lettura(ordini as unknown as Esito<never>),
-    recensioni: lettura(recensioni),
+    recensioni: lettura(recensioni as unknown as Esito<never>),
     confronto: lettura(confrontoPulito),
     adesso: new Date(),
   });

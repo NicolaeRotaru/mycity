@@ -29,7 +29,7 @@ const BASE: DatiPagella = {
       { payment_status: 'PAID', delivery_status: 'DELIVERED', created_at: giorni(3), user_id: 'u1', total_price: 20, payment_method: 'card', payout_at: giorni(2) },
       { payment_status: 'PAID', delivery_status: 'DELIVERED', created_at: giorni(10), user_id: 'u1', total_price: 10, payment_method: 'cod' },
       { payment_status: 'PAID', delivery_status: 'PENDING', created_at: ore(3), user_id: 'u2', total_price: 30, payment_method: 'card' },
-      { payment_status: 'PAID', delivery_status: 'DELIVERED', created_at: ore(30), user_id: 'u3', total_price: 15, payment_method: 'card' },
+      { payment_status: 'PAID', delivery_status: 'DELIVERED', created_at: ore(40), delivered_at: ore(30), user_id: 'u3', total_price: 15, payment_method: 'card' },
       { payment_status: 'FAILED', delivery_status: 'PENDING', created_at: giorni(1), user_id: 'u4', total_price: 99 },
     ],
   },
@@ -41,7 +41,7 @@ const BASE: DatiPagella = {
 describe('i conti del flusso 18', () => {
   it('prodotti, ordini, incasso, scontrino, clienti tornati, recensioni e confronto', () => {
     const p = pagella(BASE);
-    expect(p.stato).toBe('approvata');
+    expect(p.stato).toBe('approvato');
     expect(p.puoIncassareConCarta).toBe(true);
     expect(p.numeri).toEqual({
       prodottiInVendita: 2,
@@ -61,11 +61,19 @@ describe('i conti del flusso 18', () => {
 
   it('gli avvisi con le soglie del 18, detti al titolare', () => {
     const ids = pagella(BASE).avvisi.map((a) => a.id);
-    // pagato con carta da 30 ore senza trasferimento → rosso; ordine aperto da 3 ore → fermo
+    // consegnato da 30 ore, pagato con carta, senza trasferimento → rosso; ordine aperto da 3 ore → fermo
     expect(ids).toEqual(['payout-bloccato', 'senza-foto', 'senza-prezzo', 'ordini-fermi', 'recensioni-basse']);
     const rosso = pagella(BASE).avvisi[0];
     expect(rosso.colore).toBe('rosso');
-    expect(rosso.titolo).toContain('i soldi non ti sono ancora arrivati');
+    expect(rosso.titolo).toContain('i soldi non ti sono ancora stati trasferiti');
+  });
+
+  it('niente rosso falso: un ordine pagato ma non ancora consegnato, o consegnato da meno di 24 ore, non è un soldo mancato', () => {
+    const p = pagella({ ...BASE, ordini: { righe: [
+      { payment_status: 'PAID', delivery_status: 'PENDING', created_at: ore(40), total_price: 10, payment_method: 'card' },
+      { payment_status: 'PAID', delivery_status: 'DELIVERED', created_at: ore(40), delivered_at: ore(5), total_price: 10, payment_method: 'card' },
+    ] } });
+    expect(p.avvisi.map((a) => a.id)).not.toContain('payout-bloccato');
   });
 
   it('una tabella che non si legge è «non misurato», mai zero; e non accende avvisi', () => {
@@ -76,7 +84,7 @@ describe('i conti del flusso 18', () => {
     expect(p.numeri.recensioni).toBeNull();
     expect(p.avvisi.map((a) => a.id)).not.toContain('nessun-prodotto');
     expect(p.avvisi.map((a) => a.id)).not.toContain('fermo-da-giorni');
-    expect(p.nonMisurato).toEqual(['i tuoi prodotti: non letti', 'i tuoi ordini: non letti', 'le tue recensioni: non letti']);
+    expect(p.nonMisurato).toEqual(['i tuoi prodotti: non letti', 'i tuoi ordini: non letti', 'le tue recensioni: non lette']);
   });
 
   it('un negozio nuovo: in verifica, niente prodotti, vetrina da completare, carta non pronta', () => {
@@ -157,6 +165,9 @@ describe('/api/seller/pagella', () => {
     expect(ordini.filtri).toContain('seller_id=negozio-1');
     expect(ordini.colonne).not.toMatch(/delivery_full_name|delivery_phone|delivery_address|delivery_notes/);
     expect(db.letture.find((l) => l.tabella === 'profiles')!.colonne).not.toMatch(/phone|email|iban|full_name/);
+    // le recensioni sono quelle del negozio (store_reviews), come nel flusso 18 e nella pagina Recensioni
+    expect(db.letture.find((l) => l.tabella === 'store_reviews')!.filtri).toContain('store_id=negozio-1');
+    expect(db.letture.some((l) => l.tabella === 'reviews')).toBe(false);
   });
 
   it('chi non è un negozio non ha la pagella', async () => {

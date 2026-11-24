@@ -51,6 +51,7 @@ export type OrdinePerPagella = {
   payment_method?: string | null;
   payout_at?: string | null;
   canceled_at?: string | null;
+  delivered_at?: string | null;
 };
 export type RecensionePerPagella = { rating?: number | null };
 
@@ -102,7 +103,8 @@ const pieno = (v: unknown): boolean => {
 };
 const euro = (v: number) => Math.round(v * 100) / 100;
 
-const STATI: Record<string, string> = { pending: 'in verifica', approved: 'approvata', rejected: 'non approvata', suspended: 'sospesa' };
+// Al maschile: «Il tuo negozio è approvato» (collaudo, 24/11).
+const STATI: Record<string, string> = { pending: 'in verifica', approved: 'approvato', rejected: 'non approvato', suspended: 'sospeso' };
 
 export function pagella(d: DatiPagella): Pagella {
   const ADESSO = d.adesso.getTime();
@@ -168,9 +170,12 @@ export function pagella(d: DatiPagella): Pagella {
   // ---- gli avvisi: le sentinelle del 18, dette al titolare ----
   const avvisi: Avviso[] = [];
   const suona = (id: string, colore: Avviso['colore'], titolo: string, cosaFare: string) => avvisi.push({ id, colore, titolo, cosaFare });
-  const pagatiSenzaSoldi = se(d.ordini, (r) => r.filter((o) => pagato(o) && o.payment_method !== 'cod' && !o.payout_at && piuVecchio(o.created_at, ORE_PAYOUT * ORA)).length);
+  // Il trasferimento parte solo a ordine consegnato (lib/stripe/payout.ts): si conta dalla consegna, non
+  // dal pagamento. Diverso dal 18, che lo legge Nicola: qui lo legge il titolare, e un rosso falso spaventa.
+  const pagatiSenzaSoldi = se(d.ordini, (r) =>
+    r.filter((o) => pagato(o) && o.payment_method !== 'cod' && o.delivery_status === 'DELIVERED' && !o.payout_at && piuVecchio(o.delivered_at, ORE_PAYOUT * ORA)).length);
   if (pagatiSenzaSoldi) {
-    suona('payout-bloccato', 'rosso', `${pagatiSenzaSoldi} ${pagatiSenzaSoldi === 1 ? 'ordine pagato' : 'ordini pagati'} con la carta da più di ${ORE_PAYOUT} ore, e i soldi non ti sono ancora arrivati`, 'Scrivici dall’Aiuto: controlliamo noi il trasferimento.');
+    suona('payout-bloccato', 'rosso', `${pagatiSenzaSoldi} ${pagatiSenzaSoldi === 1 ? 'ordine consegnato' : 'ordini consegnati'} da più di ${ORE_PAYOUT} ore, pagati con la carta, e i soldi non ti sono ancora stati trasferiti`, 'Scrivici dall’Aiuto: controlliamo noi il trasferimento.');
   }
   if (p?.role === 'seller' && p.approval_status === 'pending') {
     const giorni = giorniDa(p.approval_requested_at || p.created_at);
@@ -211,10 +216,11 @@ export function pagella(d: DatiPagella): Pagella {
 
   const nonMisurato: string[] = [];
   const NOMI = { prodotti: 'i tuoi prodotti', ordini: 'i tuoi ordini', recensioni: 'le tue recensioni', confronto: 'il confronto con gli altri negozi' } as const;
+  const NON_LETTI = { prodotti: 'non letti', ordini: 'non letti', recensioni: 'non lette', confronto: 'non letto' } as const;
   if (!p) nonMisurato.push('la scheda del tuo negozio');
   for (const k of Object.keys(NOMI) as (keyof typeof NOMI)[]) {
     const l = d[k];
-    if (!l) nonMisurato.push(`${NOMI[k]}: non letti`);
+    if (!l) nonMisurato.push(`${NOMI[k]}: ${NON_LETTI[k]}`);
     else if (l.totale !== undefined && l.totale > l.righe.length) nonMisurato.push(`${NOMI[k]}: contati i primi ${l.righe.length} su ${l.totale}`);
   }
 
