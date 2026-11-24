@@ -61,7 +61,7 @@ const aspetta = async (giri: number) => {
   for (let i = 0; i < giri; i++) await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
 };
 
-async function monta() {
+async function monta(props: Record<string, unknown> = {}) {
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
   (globalThis as Record<string, unknown>).IntersectionObserver = class { observe() {} unobserve() {} disconnect() {} };
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -70,7 +70,7 @@ async function monta() {
   const root = createRoot(radice);
   montate.push(() => root.unmount());
   await act(async () => {
-    root.render(createElement(QueryClientProvider, { client }, createElement(ProductGrid, { limit: 4 } as never)));
+    root.render(createElement(QueryClientProvider, { client }, createElement(ProductGrid, { limit: 4, ...props } as never)));
   });
   await aspetta(60);
   return {
@@ -115,5 +115,25 @@ describe('R04-010 · il giro da solo della griglia ha un tetto di pagine', () =>
     expect(mondo.finestre).toEqual([[0, 3], [4, 7], [8, 11]]);
     expect(g.nomi()).toEqual(['Pane 8']);
     expect(g.pulsante()).toBeUndefined();
+  });
+
+  it('fermi al tetto con altre pagine non dice «0 prodotti» a chi scrive il conteggio; con prodotti arrivati sì il numero', async () => {
+    mondo.finestre = [];
+    mondo.perFinestra = () => paginaCon(0, 4);
+    const onCount = vi.fn();
+    const g = await monta({ onCount });
+    expect(g.testo).toContain('Ancora nessun prodotto da mostrare');
+    expect(onCount, 'sopra «…ma ce ne sono altre» la pagina scriverebbe «0 prodotti»').not.toHaveBeenCalledWith(0);
+    mondo.perFinestra = ([da]) => paginaCon(2, 4, da);
+    await g.premi(g.pulsante() as HTMLElement);
+    expect(onCount).toHaveBeenLastCalledWith(2);
+  });
+
+  it('pagine finite e niente da mostrare: lo zero è vero e si dice', async () => {
+    mondo.finestre = [];
+    mondo.perFinestra = () => paginaCon(0, 2);
+    const onCount = vi.fn();
+    await monta({ onCount });
+    expect(onCount).toHaveBeenLastCalledWith(0);
   });
 });

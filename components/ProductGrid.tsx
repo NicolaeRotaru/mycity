@@ -531,10 +531,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
 
   // Con la lettura in errore il conteggio non si sa: non si dichiara «0 prodotti» sopra
   // il messaggio d'errore.
+  // R04-010 — Nemmeno con zero a schermo e altre pagine da leggere (anche fermi al tetto, sopra
+  // «…ma ce ne sono altre»): senza il conteggio del database lo zero non è vero.
+  const contoNonSiSa = vuotaMaCeNeSonoAltre && totaleVero == null;
   useEffect(() => {
-    if (!onCount || caricando || inErrore || totaleInAttesa) return;
+    if (!onCount || caricando || inErrore || totaleInAttesa || contoNonSiSa) return;
     onCount(totaleVero ?? filtered.length);
-  }, [onCount, caricando, inErrore, filtered.length, totaleVero, totaleInAttesa]);
+  }, [onCount, caricando, inErrore, filtered.length, totaleVero, totaleInAttesa, contoNonSiSa]);
 
   // Funnel: emette `search_performed` (PostHog + GA4) quando una ricerca
   // testuale si risolve. Solo in contesto ricerca (prop `search` valorizzata),
