@@ -110,7 +110,8 @@ export default function StoreHoursEditor({ value, onChange }: Props) {
               {!closed && (
                 <button
                   type="button"
-                  onClick={() => setDay(d.key, [])}
+                  // 24/11/2026 — «Chiudi» è una scelta: da qui la X non riporta più a «senza orari».
+                  onClick={() => { senzaOrari.current = null; setDay(d.key, []); }}
                   className="text-xs text-ink-400 hover:text-rose-600"
                 >
                   Chiudi

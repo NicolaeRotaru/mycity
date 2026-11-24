@@ -47,6 +47,7 @@ function apri(iniziale: StoreHours) {
     ultimo: () => ultimo,
     piuOrario: (giorno: string) => premi([...riga(giorno).querySelectorAll('button')].find((b) => b.textContent?.includes('orario'))),
     togliFascia: (giorno: string) => premi(riga(giorno).querySelector('button[aria-label="Rimuovi orario"]') ?? undefined),
+    chiudi: (giorno: string) => premi([...riga(giorno).querySelectorAll('button')].find((b) => b.textContent === 'Chiudi')),
     avvisoSenzaOrari: () => !!box!.querySelector('p[role="note"]'),
   };
 }
@@ -72,6 +73,18 @@ describe('«+ orario» e poi la X, da un negozio senza orari', () => {
     expect(e.ultimo().mon).toEqual([]);
     e.togliFascia('Martedì');
     expect(orariImpostati(e.ultimo())).toBeNull();
+  });
+
+  it('dopo «Chiudi» (settimana chiusa voluta) la X non riporta più a «senza orari»', () => {
+    const e = apri({});
+    e.piuOrario('Lunedì');
+    e.chiudi('Lunedì');
+    const chiusa = { sun: [], mon: [], tue: [], wed: [], thu: [], fri: [], sat: [] };
+    expect(e.ultimo()).toEqual(chiusa);
+    e.piuOrario('Martedì');
+    e.togliFascia('Martedì');
+    expect(e.ultimo(), 'la settimana chiusa scelta con «Chiudi» è diventata «ordini a ogni ora»').toEqual(chiusa);
+    expect(orariImpostati(e.ultimo())).not.toBeNull();
   });
 
   it('un negozio che gli orari li ha e toglie l\'ultima fascia: settimana chiusa, come prima', () => {
