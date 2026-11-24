@@ -36,7 +36,8 @@ function nomePubblico(host: string): boolean {
   const pezzi = h.split('.');
   if (pezzi.length < 2) return false;
   if (!/^[a-z]{2,24}$/.test(pezzi[pezzi.length - 1]) && !/^xn--[a-z0-9-]{2,59}$/.test(pezzi[pezzi.length - 1])) return false;
-  return pezzi.every((p) => /^(?!-)[a-z0-9-]{1,63}(?<!-)$/.test(p));
+  // Ogni pezzo: lettere, cifre e trattini, ma non all'inizio né alla fine (senza «guarda indietro»: Safari vecchi).
+  return pezzi.every((p) => /^[a-z0-9-]{1,63}$/.test(p) && !p.startsWith('-') && !p.endsWith('-'));
 }
 
 /** L'indirizzo pubblico in forma pulita (https, senza «#…»), o `null` se non si può salvare. */
