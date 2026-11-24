@@ -323,7 +323,8 @@ AS $function$
            SELECT MAX(sp.discount_percent)
              FROM public.seller_promotions sp
             WHERE sp.seller_id = pr.seller_id
-              AND public.negozio_in_vetrina(pr.seller_id)
+              -- il proprietario vede i suoi sconti nell'anteprima, come vede le sue promo
+              AND (public.negozio_in_vetrina(pr.seller_id) OR pr.seller_id = (SELECT auth.uid()))
               AND sp.status = 'active'
               AND sp.starts_at <= now()
               AND sp.ends_at   >= now()
@@ -335,6 +336,68 @@ AS $function$
          ), 0)::int AS discount_percent
     FROM public.products pr
    WHERE pr.id = ANY(p_products);
+$function$;
+
+
+-- 7) Lo stato della richiesta lo scrive solo il server (dal ricollaudo del 24/11) ---------------
+-- La guardia dei profili (119, ultima in 400) lasciava al negozio approval_status e
+-- approval_requested_at: un negozio rifiutato si rimetteva «in attesa» dal browser e, con la
+-- modalità demo, arrivava al preventivo e alla cassa. Tutte le scritture vere di quei due campi
+-- passano già dal server con la chiave di servizio (/api/seller/apply, il preventivo col codice,
+-- la moderazione dell'admin): dal browser non li scrive nessuno. Si tolgono dall'elenco; il resto
+-- della guardia è identico.
+CREATE OR REPLACE FUNCTION public.enforce_profile_update_rules()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  is_priv boolean := public.is_admin()
+    OR coalesce((SELECT auth.jwt() ->> 'role'), '') = 'service_role'
+    OR coalesce(current_setting('mycity.allow_profile_write', true), '') = '1';
+  consentiti constant text[] := ARRAY[
+    'full_name','phone','address','city','zip',
+    'public_avatar_url','public_bio','public_handle','public_profile_enabled',
+    'email_marketing','notif_promos','notif_groups','notif_newsletter','notif_order_updates',
+    'store_name','store_lat','store_lng','store_phone','store_address','store_description',
+    'store_logo','store_hours','store_media','store_site','store_customization','offers_express',
+    'rider_is_online','rider_zones','rider_schedule',
+    'tos_accepted_at','privacy_accepted_at','data_accuracy_confirmed_at',
+    'deletion_requested_at',
+    'legal_first_name','legal_last_name','legal_birth_date','legal_fiscal_code',
+    'legal_residence_addr','legal_residence_city','legal_residence_zip',
+    'rider_vehicle_type','rider_vehicle_plate','rider_license_expires_on','rider_insurance_expires_on',
+    'billing_card_last',
+    'is_approved',
+    'updated_at'
+  ];
+BEGIN
+  IF is_priv THEN
+    RETURN NEW;
+  END IF;
+
+  IF (to_jsonb(NEW) - consentiti) IS DISTINCT FROM (to_jsonb(OLD) - consentiti) THEN
+    RAISE EXCEPTION 'profiles: campo riservato non modificabile' USING ERRCODE = '42501';
+  END IF;
+
+  IF NEW.is_approved = true AND OLD.is_approved IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'profiles: approvazione riservata allo staff' USING ERRCODE = '42501';
+  END IF;
+
+  -- 400 — Un negozio sospeso non cambia il proprio stato: né «in attesa» né vuoto.
+  IF OLD.approval_status = 'suspended'
+     AND NEW.approval_status IS DISTINCT FROM OLD.approval_status THEN
+    RAISE EXCEPTION 'profiles: la sospensione la toglie solo lo staff' USING ERRCODE = '42501';
+  END IF;
+
+  IF NEW.approval_status IS DISTINCT FROM OLD.approval_status
+     AND coalesce(NEW.approval_status, '') NOT IN ('pending', '') THEN
+    RAISE EXCEPTION 'profiles: stato approvazione riservato allo staff' USING ERRCODE = '42501';
+  END IF;
+
+  RETURN NEW;
+END;
 $function$;
 
 COMMIT;

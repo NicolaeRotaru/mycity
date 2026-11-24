@@ -80,6 +80,18 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN esito := 'negato';
   END;
   INSERT INTO esiti VALUES ('il negozio non si mette da solo visibile_senza_abbonamento', esito = 'negato', esito);
+  BEGIN
+    UPDATE public.profiles SET approval_status = 'pending' WHERE id = 'd7091111-1111-1111-1111-111111111111';
+    esito := 'scritto';
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN esito := 'negato';
+  END;
+  INSERT INTO esiti VALUES ('il negozio non si riscrive da sé lo stato della richiesta', esito = 'negato', esito);
+  BEGIN
+    UPDATE public.profiles SET approval_requested_at = now() WHERE id = 'd7091111-1111-1111-1111-111111111111';
+    esito := 'scritto';
+  EXCEPTION WHEN insufficient_privilege THEN esito := 'negato';
+  END;
+  INSERT INTO esiti VALUES ('il negozio non si riscrive da sé la data della richiesta', esito = 'negato', esito);
 END $$;
 RESET ROLE;
 RESET request.jwt.claims;
@@ -92,7 +104,7 @@ BEGIN
       'senza abbonamento, ' || r.chi || ': ' || r.cosa,
       CASE
         WHEN r.cosa LIKE '%storic%' THEN r.quanti = 1                         -- chi era già online resta
-        WHEN r.chi = 'il negozio' AND r.cosa IN ('prodotto demo', 'vetrina demo', 'storie demo', 'promo demo') THEN r.quanti = 1  -- si vede da sé
+        WHEN r.chi = 'il negozio' AND r.cosa IN ('prodotto demo', 'vetrina demo', 'storie demo', 'promo demo', 'sconto demo') THEN r.quanti = 1  -- si vede da sé
         ELSE r.quanti = 0                                                      -- il resto del mondo no
       END,
       r.quanti || ' righe');
