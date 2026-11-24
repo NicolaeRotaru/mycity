@@ -16,14 +16,34 @@
  */
 
 import type { TipoAttivita } from './tipi-attivita';
+import { datoDi, prodottiTipici, senzaValuta, valoreConfermato, vociSenzaPrezzo, type SchedaCliente } from './scheda-cliente';
+
+/*
+ * 24/11/2026 — CON LA SCHEDA DI N8N, LA BOZZA E IL PIANO DIVENTANO QUELLI DI QUEL LOCALE.
+ *
+ * Quando n8n ha mandato la scheda del cliente (lib/agenzia/scheda-cliente.ts), la bozza del sito
+ * usa l'indirizzo, gli orari, il telefono, il sito e i prodotti tipici veri, e il piano dei post
+ * parla dei suoi prodotti e delle idee trovate per lui. Dove un dato manca resta il testo generico
+ * di prima. Solo frasi vere: un dato non ancora confermato dal titolare si segna «da confermare».
+ * Orari e contatti nei post solo se confermati: un post li direbbe in pubblico.
+ */
 
 /* ───────────────────────────── SITO WEB: la bozza ───────────────────────────── */
 
-export type SezioneSito = { titolo: string; testo: string };
+export type SezioneSito = {
+  titolo: string;
+  testo: string;
+  /** Vero se il testo usa un dato della scheda che il titolare non ha ancora confermato. */
+  daConfermare?: boolean;
+  /** Vero se il testo viene dalla scheda del locale, non dal modello generico. */
+  dalLocale?: boolean;
+};
 
 export type BozzaSito = {
   /** Un indirizzo suggerito, da verificare se è libero: «panequotidiano.it». */
   indirizzo: string;
+  /** Vero se l'indirizzo è quello del sito che il locale ha già (dalla scheda di n8n). */
+  indirizzoEsistente?: boolean;
   nome: string;
   sottotitolo: string;
   /** Il pulsante principale della pagina: porta alla vetrina MyCity. */
@@ -60,19 +80,63 @@ export function indirizzoSuggerito(nome: string): string {
   return `${base || 'latuaattivita'}.it`;
 }
 
-export function bozzaSito(nome: string, tipo: TipoAttivita): BozzaSito {
+const elencoUmano = (voci: string[]) =>
+  voci.length <= 1 ? voci.join('') : `${voci.slice(0, -1).join(', ')} e ${voci[voci.length - 1]}`;
+
+/** Il nome del sito senza «https://» e «www.»: «oradelgusto.it». `null` se non è un indirizzo. */
+function dominioDi(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).hostname.replace(/^www\./, '') || null;
+  } catch {
+    return null;
+  }
+}
+
+export function bozzaSito(nome: string, tipo: TipoAttivita, scheda?: SchedaCliente | null): BozzaSito {
   const n = nome.trim() || 'La tua attività';
+  // «È l'indirizzo del sito che hai già» è una frase che afferma: solo col sito confermato.
+  const dominio = dominioDi(valoreConfermato(scheda, 'sito_ufficiale'));
+  const prodotti = prodottiTipici(scheda, 5);
+  const menu = datoDi(scheda, 'menu_testo');
+  const indirizzo = datoDi(scheda, 'indirizzo');
+  // Gli orari hanno cifre per forza: si scartano solo se nominano una moneta («aperitivo 5€»).
+  const orariGrezzi = datoDi(scheda, 'orari');
+  const orari = orariGrezzi && senzaValuta(orariGrezzi.valore) ? orariGrezzi : null;
+  const telefono = datoDi(scheda, 'telefono');
+  const prenota = datoDi(scheda, 'link_prenotazione');
+  const punti = vociSenzaPrezzo(scheda?.analisi?.punti_di_forza, 3);
+
+  const chiSiamo: SezioneSito = punti.length
+    ? { titolo: 'Chi siamo', testo: `La storia di ${n}, scritta con te. Da dove partire, da quello che abbiamo trovato: ${elencoUmano(punti)}.`, daConfermare: true, dalLocale: true }
+    : { titolo: 'Chi siamo', testo: `La storia di ${n}, chi ci lavora e perché i clienti tornano. La scriviamo insieme a te.` };
+  const cosaOffriamo: SezioneSito = prodotti.length
+    ? { titolo: 'Cosa offriamo', testo: `Da ${n} trovi ${elencoUmano(prodotti)}. I prodotti arrivano dalla tua vetrina MyCity e si aggiornano da soli.`, daConfermare: !menu?.confermato, dalLocale: true }
+    : { titolo: 'Cosa offriamo', testo: 'I prodotti arrivano dalla tua vetrina MyCity e si aggiornano da soli: li cambi in un posto, cambiano anche qui.' };
+  const doveSiamo: SezioneSito = indirizzo || orari
+    ? {
+        titolo: 'Dove siamo e orari',
+        testo: [indirizzo ? `Ci trovi in ${indirizzo.valore}.` : 'La mappa per arrivare.', orari ? `Orari: ${orari.valore}.` : 'Gli orari di apertura e i giorni di chiusura.'].join(' '),
+        daConfermare: Boolean((indirizzo && !indirizzo.confermato) || (orari && !orari.confermato)),
+        dalLocale: true,
+      }
+    : { titolo: 'Dove siamo e orari', testo: 'La mappa per arrivare, gli orari di apertura e i giorni di chiusura.' };
+  const contatti: SezioneSito = telefono || prenota
+    ? {
+        titolo: 'Contatti',
+        testo: [telefono ? `Telefono ${telefono.valore}.` : null, prenota ? 'Il pulsante per prenotare, col tuo sistema di oggi.' : null, 'WhatsApp e i tuoi social, a un tocco.'].filter(Boolean).join(' '),
+        daConfermare: Boolean((telefono && !telefono.confermato) || (prenota && !prenota.confermato)),
+        dalLocale: true,
+      }
+    : { titolo: 'Contatti', testo: 'Telefono, WhatsApp e i tuoi social, a un tocco dal telefono del cliente.' };
+
   return {
-    indirizzo: indirizzoSuggerito(n),
+    indirizzo: dominio ?? indirizzoSuggerito(n),
+    indirizzoEsistente: Boolean(dominio),
     nome: n,
     sottotitolo: SOTTOTITOLO[tipo],
-    invito: INVITO[tipo],
-    sezioni: [
-      { titolo: 'Chi siamo', testo: `La storia di ${n}, chi ci lavora e perché i clienti tornano. La scriviamo insieme a te.` },
-      { titolo: 'Cosa offriamo', testo: 'I prodotti arrivano dalla tua vetrina MyCity e si aggiornano da soli: li cambi in un posto, cambiano anche qui.' },
-      { titolo: 'Dove siamo e orari', testo: 'La mappa per arrivare, gli orari di apertura e i giorni di chiusura.' },
-      { titolo: 'Contatti', testo: 'Telefono, WhatsApp e i tuoi social, a un tocco dal telefono del cliente.' },
-    ],
+    invito: prenota && tipo !== 'negozio' ? 'Prenota' : INVITO[tipo],
+    sezioni: [chiSiamo, cosaOffriamo, doveSiamo, contatti],
   };
 }
 
@@ -87,6 +151,8 @@ export type PostDelPiano = {
   tema: string;
   /** Un esempio di testo: quello vero lo scrive il flusso automatico. */
   esempio: string;
+  /** Vero se il post nasce dai dati del locale (prodotti, idee, orari della scheda). */
+  dalLocale?: boolean;
 };
 
 export type PianoEditoriale = {
@@ -125,7 +191,7 @@ const NOMI_MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
 export const POST_NEL_PIANO = 12;
 
 /** I 12 contenuti del mese, tutti diversi: prodotto, persone, vetrina, clienti e stagione. */
-function postNumero(i: number, nome: string, tipo: TipoAttivita, mese: number): Omit<PostDelPiano, 'data'> {
+function postNumero(i: number, nome: string, tipo: TipoAttivita, mese: number, scheda?: SchedaCliente | null): Omit<PostDelPiano, 'data'> {
   const c = COSA[tipo];
   const stagione = TEMA_DEL_MESE[mese];
   const Stagione = `${stagione.charAt(0).toUpperCase()}${stagione.slice(1)}`;
@@ -143,11 +209,40 @@ function postNumero(i: number, nome: string, tipo: TipoAttivita, mese: number): 
     { formato: 'Post foto', tema: 'La domanda che ci fate più spesso', esempio: `La domanda che ci fate più spesso ${c.luogo}, e la nostra risposta.` },
     { formato: 'Carosello', tema: 'Il tema del mese, a domicilio', esempio: `${Stagione}: ordina dalla vetrina MyCity di ${nome} e te lo portiamo noi.` },
   ];
-  return rotazione[i % rotazione.length];
+  const base = rotazione[i % rotazione.length];
+  return conIDatiDelLocale(i, base, nome, c.luogo, scheda) ?? base;
+}
+
+/**
+ * Il post col dato vero del locale, se la scheda ce l'ha: i prodotti tipici nei post sul prodotto
+ * (1°, 8° e 12°, solo da un menu confermato), le idee trovate da n8n (senza prezzi) al posto di tre temi generici (5°, 9° e 11°), gli orari
+ * confermati nella storia delle novità. Senza il dato, `null`: resta il post generico.
+ */
+function conIDatiDelLocale(
+  i: number,
+  base: Omit<PostDelPiano, 'data'>,
+  nome: string,
+  luogo: string,
+  scheda?: SchedaCliente | null,
+): Omit<PostDelPiano, 'data'> | null {
+  if (!scheda) return null;
+  // Un post esce in pubblico: i prodotti solo da un menu confermato, le idee senza prezzi.
+  const prodotti = prodottiTipici(scheda, 8, true);
+  const idee = vociSenzaPrezzo(scheda.analisi?.idee_contenuti, 3);
+  const orariConfermati = valoreConfermato(scheda, 'orari');
+  const orari = orariConfermati && senzaValuta(orariConfermati) ? orariConfermati : null;
+  const prodotto = (k: number) => prodotti[k % prodotti.length];
+  if (prodotti.length && i === 0) return { ...base, tema: `Il prodotto in primo piano: ${prodotto(0)}`, esempio: `Oggi vi presentiamo ${prodotto(0)}. Lo trovate ${luogo} e sulla nostra vetrina MyCity.`, dalLocale: true };
+  if (prodotti.length && i === 7) return { ...base, tema: `Le mani al lavoro: ${prodotto(1)}`, esempio: `Come nasce ${prodotto(1)} da ${nome}: le mani al lavoro, da vicino.`, dalLocale: true };
+  if (prodotti.length && i === 11) return { ...base, tema: `${prodotto(2)}, a domicilio`, esempio: `Voglia di ${prodotto(2)}? Ordina dalla vetrina MyCity di ${nome} e te lo portiamo noi.`, dalLocale: true };
+  const posto = [4, 8, 10].indexOf(i);
+  if (posto >= 0 && idee[posto]) return { ...base, tema: idee[posto].slice(0, 80), esempio: `${idee[posto]} — da ${nome}.`, dalLocale: true };
+  if (i === 8 && orari) return { ...base, tema: 'Siamo aperti', esempio: `Vi aspettiamo ${luogo}: ${orari}.`, dalLocale: true };
+  return null;
 }
 
 /** Il piano del mese del preventivo: 3 post a settimana dal primo del mese, fino a 12 post. */
-export function pianoEditoriale(nome: string, tipo: TipoAttivita, giorno: string): PianoEditoriale {
+export function pianoEditoriale(nome: string, tipo: TipoAttivita, giorno: string, scheda?: SchedaCliente | null): PianoEditoriale {
   const [anno, mese] = giorno.split('-').map(Number);
   const m = (Number.isInteger(mese) && mese >= 1 && mese <= 12 ? mese : 1) - 1;
   const a = Number.isInteger(anno) ? anno : 2026;
@@ -157,7 +252,7 @@ export function pianoEditoriale(nome: string, tipo: TipoAttivita, giorno: string
   for (let g = 1; g <= giorniNelMese && post.length < POST_NEL_PIANO; g++) {
     const data = new Date(Date.UTC(a, m, g));
     if (!GIORNI_DI_PUBBLICAZIONE.includes(data.getUTCDay())) continue;
-    post.push({ data: data.toISOString().slice(0, 10), ...postNumero(post.length, n, tipo, m) });
+    post.push({ data: data.toISOString().slice(0, 10), ...postNumero(post.length, n, tipo, m, scheda) });
   }
   return { mese: `${NOMI_MESI[m]} ${a}`, post };
 }

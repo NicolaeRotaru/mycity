@@ -31,6 +31,8 @@ import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import {
   accettaPreventivo,
   CHIAVE_PREVENTIVO,
+  CHIAVE_SCHEDA,
+  leggiSchedaDelNegozio,
   dataLeggibile,
   leggiPreventivoAgenzia,
   pagaAbbonamento,
@@ -55,6 +57,8 @@ export default function PreventivoAgenziaPage() {
     queryKey: CHIAVE_PREVENTIVO,
     queryFn: leggiPreventivoAgenzia,
   });
+  // 24/11/2026 — La scheda del locale (da n8n): la bozza del sito e il piano dei post la usano.
+  const { data: scheda } = useQuery({ queryKey: CHIAVE_SCHEDA, queryFn: leggiSchedaDelNegozio });
   const [scelto, setScelto] = useState<Abbonamento | null>(null);
   const [inviato, setInviato] = useState<string | null>(null);
   // Lo scontrino medio per il pareggio, in euro come lo scrive il titolare: parte dalla stima per tipo.
@@ -205,7 +209,7 @@ export default function PreventivoAgenziaPage() {
                     {r.perche.map((frase) => <li key={frase}>{frase}</li>)}
                   </ul>
                   {/* Cosa ricevi, già pronto: la bozza del sito, il piano del mese, i formati (Nicola, 23/11). */}
-                  <AnteprimaServizio id={r.id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} />
+                  <AnteprimaServizio id={r.id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} scheda={scheda} />
                   <Link href={hrefServizio(r.id)} className="mt-1 inline-block text-xs font-semibold text-primary-700 underline underline-offset-2 print:hidden">
                     Apri il servizio
                   </Link>

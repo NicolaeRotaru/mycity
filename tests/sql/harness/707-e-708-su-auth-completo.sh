@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 24/11/2026 — La 707 (SDG Agenzia) gira anche su un auth.users completo, come su Supabase vero.
+# 24/11/2026 — La 707 (SDG Agenzia) e la 708 (Ora del Gusto) girano anche su un auth.users
+# completo, come su Supabase vero.
 # =============================================================================
-# Uso:  tests/sql/harness/sdg-707-su-auth-completo.sh [nome_database]
+# Uso:  tests/sql/harness/707-e-708-su-auth-completo.sh [nome_database]
 # Il database di prova ha un auth.users ridotto: la 707 lì prende il ramo corto. Questa prova
 # aggiunge le colonne di GoTrue (come riparazione-r12-le-semine-girano.sh), toglie l'utente di SDG
 # e riesegue la 707 due volte: deve prendere il ramo completo, coi token '' (mai NULL: GoTrue si
@@ -34,13 +35,15 @@ CREATE TABLE IF NOT EXISTS auth.identities (
   email text GENERATED ALWAYS AS (lower(identity_data->>'email')) STORED,
   UNIQUE (provider_id, provider)
 );
-DELETE FROM auth.users WHERE id = '11111111-1111-1111-1111-5d9000000001';
+DELETE FROM auth.users WHERE id IN ('11111111-1111-1111-1111-5d9000000001', '0de1905e-7000-4000-8000-000000000001');
 SQL
 
 for giro in 1 2; do
-  if ! out="$(psql -X -q -d "$DB" -v ON_ERROR_STOP=1 -f "$ROOT/migrations/707_sdg_agenzia_nel_marketplace.sql" 2>&1)"; then
-    echo "✗ giro $giro: la 707 si ferma:"; echo "$out" | grep -E "ERROR|DETAIL" | head -3; exit 1
-  fi
+  for m in 707_sdg_agenzia_nel_marketplace 708_ora_del_gusto_e_il_preventivo_con_il_codice; do
+    if ! out="$(psql -X -q -d "$DB" -v ON_ERROR_STOP=1 -f "$ROOT/migrations/$m.sql" 2>&1)"; then
+      echo "✗ giro $giro: $m si ferma:"; echo "$out" | grep -E "ERROR|DETAIL" | head -3; exit 1
+    fi
+  done
 done
 
 psql -X -q -At -d "$DB" -v ON_ERROR_STOP=1 <<'SQL'
@@ -64,6 +67,18 @@ BEGIN
   IF n <> 3 THEN RAISE EXCEPTION 'abbonamenti in vetrina: % (attesi 3)', n; END IF;
   SELECT count(*) INTO n FROM public.profiles WHERE id = u.id AND is_approved AND approval_status = 'approved';
   IF n <> 1 THEN RAISE EXCEPTION 'profilo di SDG non approvato'; END IF;
+
+  -- Ora del Gusto: ramo completo, token '' e blocco a una data vera finché il titolare non accetta.
+  SELECT * INTO u FROM auth.users WHERE id = '0de1905e-7000-4000-8000-000000000001';
+  IF u.id IS NULL OR u.instance_id IS NULL THEN RAISE EXCEPTION 'utente di Ora del Gusto non creato col ramo completo'; END IF;
+  IF u.confirmation_token IS NULL OR u.recovery_token IS NULL OR u.email_change IS NULL THEN RAISE EXCEPTION 'Ora del Gusto: un token è NULL'; END IF;
+  IF u.banned_until IS NULL OR u.banned_until = 'infinity'::timestamptz OR u.banned_until < now() + interval '99 years' THEN
+    RAISE EXCEPTION 'Ora del Gusto: blocco sbagliato: %', u.banned_until;
+  END IF;
+  SELECT count(*) INTO n FROM public.profiles WHERE id = u.id AND NOT is_approved AND approval_status IS NULL AND business_type = 'bar';
+  IF n <> 1 THEN RAISE EXCEPTION 'Ora del Gusto non è in modalità preventivo'; END IF;
+  SELECT count(*) INTO n FROM public.preventivi_con_codice WHERE seller_id = u.id;
+  IF n <> 1 THEN RAISE EXCEPTION 'codici di Ora del Gusto: % (atteso 1)', n; END IF;
 END $$;
 SQL
-echo "✓ la 707 gira su auth.users completo, due volte"
+echo "✓ la 707 e la 708 girano su auth.users completo, due volte"
