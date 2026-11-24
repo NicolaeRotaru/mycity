@@ -1,0 +1,218 @@
+{
+ "sessione": "R09",
+ "aggiornato": "2026-11-24 17:58",
+ "finita": true,
+ "testa": "10f73a8c8cf527d0d0b63922194f53293a91906c",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "10f73a8c8cf527d0d0b63922194f53293a91906c",
+  "nota": "typecheck, lint e 2092 file di prova (12686 test) verdi, 1 saltato già sulla base; guardia-ramo verde"
+ },
+ "voci": [
+  {
+   "id": "R09-001",
+   "chiave": "architettura|email partita ma non segnata: la notte dopo riparte, e se fallisce l'allarme dice «non partita» per un'email già arrivata",
+   "esito": "parziale",
+   "commit": "b82b9190107702a1663f30ac24da04f776182b4c",
+   "file_toccati": [
+    "app/api/cron/process-deletions/route.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r09-allarme-forse-partita.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-allarme-forse-partita.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b82b9190107702a1663f30ac24da04f776182b4c^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r09-allarme-forse-partita.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "avvisaUnaVoltaPerAvviso legge forsePartita (già portato dalla riga che chiama) e, in quel caso, l'allarme dice «non risulta partita… può essere arrivata» invece di «non è partita per email». Prova sulla rotta vera con notti a orologio finto.",
+   "cosa_resta": "La seconda spedizione della notte dopo resta voluta (scelta del 27/10, \"meglio due volte che nessuna\"): un giro caduto a metà non si distingue da una partita non segnata; toglierla è una scelta di Nicola.",
+   "verificato_da": "revisore A (subagente generico, sonnet, copia separata): prova e rimessa rilanciate (uscita 0), 298 prove su process-deletions verdi; forsePartita arriva alla rotta (map con tappa) e la destrutturazione per giro non mescola avvisi misti; titolo e id invariati; seconda spedizione non toccata (parziale confermato)."
+  },
+  {
+   "id": "R09-002",
+   "chiave": "deploy-sre|senza la 181 ogni apertura della chat o delle recensioni del negozio scrive un avviso nel registro",
+   "esito": "riparato",
+   "commit": "5381741c7e426fb6a4ccf047807a74cf0d99ca9f",
+   "file_toccati": [
+    "lib/queries/controparte-della-chat.ts",
+    "app/seller/reviews/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r09-avviso-chat-recensioni.test.ts",
+    "tests/unit/riparazione-r09-avviso-recensioni.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-avviso-chat-recensioni.test.ts tests/unit/riparazione-r09-avviso-recensioni.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5381741c7e426fb6a4ccf047807a74cf0d99ca9f^ --file lib/queries/controparte-della-chat.ts,app/seller/reviews/page.tsx --prove tests/unit/riparazione-r09-avviso-chat-recensioni.test.ts,tests/unit/riparazione-r09-avviso-recensioni.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Scelta la strada che mantiene «Cliente»: nomiDeiClienti della chat (ora esportata, con etichetta '[chat]' o '[recensioni]') scrive l'avviso «funzione assente» (PGRST202/42883) una volta per processo e per pagina con un Set del modulo; un guasto vero resta a ogni chiamata; il ritorno resta la mappa vuota. La pagina recensioni passa da lì (nessun nome in più; un'eccezione dell'rpc ora dà mappa vuota invece di rompere la lettura). Il controllo PGRST202/42883 è copiato e non esportato da seller-public-profiles.ts perché un nome nuovo esportato dal file fa cadere la rimessa per la struttura (uscita 3). Prove: chat via conInsegnaDelNegozio e pagina recensioni montata davvero. tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts verde e non modificata.",
+   "verificato_da": "revisore A (subagente generico, sonnet, copia separata): prove r09 e rimessa rilanciate (uscita 0), 10 file di prova su chat/recensioni/nomi (69 test) verdi, i-nomi-dei-clienti-che-il-negozio-vede intatta e verde; nessun nome nuovo: errore = mappa vuota = «Cliente»; un'eccezione dell'rpc ora dà «Cliente» invece di spegnere le recensioni, come dice il commento della pagina."
+  },
+  {
+   "id": "R09-003",
+   "chiave": "frontend-ux|altri campi brevi del sito del negozio tagliano ancora in silenzio con maxlength",
+   "insieme_a": [
+    "R09-004"
+   ],
+   "esito": "riparato",
+   "commit": "a504c89cbd5cb8e3f20a022916638b5d3e5259e2",
+   "file_toccati": [
+    "components/seller/site/GalleryFields.tsx",
+    "components/seller/site/MenuEditor.tsx",
+    "components/seller/site/PageEditor.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r09-campi-brevi.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-campi-brevi.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a504c89cbd5cb8e3f20a022916638b5d3e5259e2^ --file components/seller/site/GalleryFields.tsx,components/seller/site/MenuEditor.tsx,components/seller/site/PageEditor.tsx --prove tests/unit/riparazione-r09-campi-brevi.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Tolti i maxLength da titolo e descrizione della galleria, etichetta del menu, titolo/titolo SEO/descrizione SEO della pagina; sotto il campo compare «Troppo lungo: N caratteri su T. Accorcialo, così si salva.» come nel banner (tetti 120/120/30/60/70/180 = quelli di lib/store-site.ts). SectionConfigForm.tsx e CollectionFields.tsx erano già senza maxLength (restano solo commenti).",
+   "verificato_da": "revisore B (subagente generico, sonnet, copia separata): prova 4/4 e rimessa (uscita 0); grep: nessun maxLength resta nel costruttore della vetrina; tetti uguali a lib/store-site.ts, conteggio trim().length come lo schema; caso al tetto senza errore; id aria unici; 3 prove vicine verdi."
+  },
+  {
+   "id": "R09-004",
+   "chiave": "frontend-ux|il costruttore della vetrina ha ancora campi brevi che tagliano in silenzio",
+   "insieme_a": [
+    "R09-003"
+   ],
+   "esito": "riparato",
+   "commit": "a504c89cbd5cb8e3f20a022916638b5d3e5259e2",
+   "file_toccati": [
+    "components/seller/site/GalleryFields.tsx",
+    "components/seller/site/MenuEditor.tsx",
+    "components/seller/site/PageEditor.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r09-campi-brevi.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-campi-brevi.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a504c89cbd5cb8e3f20a022916638b5d3e5259e2^ --file components/seller/site/GalleryFields.tsx,components/seller/site/MenuEditor.tsx,components/seller/site/PageEditor.tsx --prove tests/unit/riparazione-r09-campi-brevi.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Tolti i maxLength da titolo e descrizione della galleria, etichetta del menu, titolo/titolo SEO/descrizione SEO della pagina; sotto il campo compare «Troppo lungo: N caratteri su T. Accorcialo, così si salva.» come nel banner (tetti 120/120/30/60/70/180 = quelli di lib/store-site.ts). SectionConfigForm.tsx e CollectionFields.tsx erano già senza maxLength (restano solo commenti).",
+   "verificato_da": "revisore B (subagente generico, sonnet, copia separata): prova 4/4 e rimessa (uscita 0); grep: nessun maxLength resta nel costruttore della vetrina; tetti uguali a lib/store-site.ts, conteggio trim().length come lo schema; caso al tetto senza errore; id aria unici; 3 prove vicine verdi."
+  },
+  {
+   "id": "R09-005",
+   "chiave": "qa-flussi|il pannello della home suggerisce ancora «i più amati / prodotti che vanno forte»",
+   "esito": "riparato",
+   "commit": "1a6d53c68048148043ccdbee1ce20a994455f3ea",
+   "file_toccati": [
+    "lib/home-site.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r09-pannello-home.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-pannello-home.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1a6d53c68048148043ccdbee1ce20a994455f3ea^ --file lib/home-site.ts --prove tests/unit/riparazione-r09-pannello-home.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "HOME_SECTION_CATALOG popularProducts ora dice «Appena arrivati» / «Fila degli ultimi prodotti arrivati dai negozi»; HomeSectionConfigForm era già chiuso, nessun altro testo con amati/vanno forte nei file toccati.",
+   "verificato_da": "revisore A (subagente generico, sonnet, copia separata): prova e rimessa (uscita 0); nel pannello non restano «amati», «vanno forte», «più venduti»; la fila ordina per created_at decrescente, quindi «Appena arrivati» non mente."
+  },
+  {
+   "id": "R09-006",
+   "chiave": "stati-ui|a riga chiusa con il motivo «chiedi all'assistenza» il pulsante «avvia» resta",
+   "insieme_a": [
+    "R09-007"
+   ],
+   "esito": "riparato",
+   "commit": "d695062a533ca7913c42689d6ac1caa3bab38cbd",
+   "file_toccati": [
+    "app/api/ai/catalog-batch/status/route.ts",
+    "app/seller/products/ai-batch/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r09-pulsante-dopo-assistenza.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-pulsante-dopo-assistenza.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d695062a533ca7913c42689d6ac1caa3bab38cbd^ --file app/api/ai/catalog-batch/status/route.ts,app/seller/products/ai-batch/page.tsx --prove tests/unit/riparazione-r09-pulsante-dopo-assistenza.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Pagina: il clic su una scheda operazione tiene un lavoro chiuso con «chiedi all'assistenza» (regola puoAvviareLavoro già esistente), e poll/riprendiUltimo non lo dimenticano con ricordaLavoro(null). Rotta di stato senza jobId: se non ci sono lavori aperti restituisce l'ultimo lavoro DEL VENDITORE se è chiuso con quel motivo, altrimenti null. La rotta di avvio non si tocca (decisione della regia). Ho esteso il finto database di tests/unit/riparazione-r04-lavoro-ritrovato.test.ts (aggiunto order() dopo eq(), perché la rotta ora fa una seconda lettura): nessuna asserzione cambiata. Seguito in 10f73a8c: la guardia del ramo era rossa perché d695062a aveva ritoccato il finto database di una prova esistente di un'altra sessione (riparazione-r04-lavoro-ritrovato); la prova è tornata com'era e la seconda lettura della rotta di stato sta in un try/catch (una lettura che non riesce risponde «nessun lavoro», come prima, con un avviso nel registro). Rimessa rifatta sulla testa con la base prima di d695062a.",
+   "verificato_da": "revisore B (subagente generico, sonnet, copia separata): prova + r04-lavoro-ritrovato 10/10 e rimessa (uscita 0), 15 file di prove vicine (131 test) verdi; la rotta filtra sempre per seller_id e guarda solo l'ultimo lavoro (created_at desc, limit 1), la seconda lettura in errore non rompe la risposta; clic sulla scheda e ricordaLavoro(null) non perdono il lavoro vietato; start non toccata. Dopo il seguito 10f73a8c: prova r09 + r04 (intatta) + r01 15/15 verdi, rimessa uscita 0, guardia-ramo verde, verify verde (riprovato dal capo squadra, non dal revisore).",
+   "commit_seguito": "10f73a8c8cf527d0d0b63922194f53293a91906c"
+  },
+  {
+   "id": "R09-007",
+   "chiave": "stati-ui|sotto un lavoro sul catalogo chiuso che dice di chiedere all'assistenza prima di ripartire, il pulsante «avvia sul catalogo» resta lì",
+   "insieme_a": [
+    "R09-006"
+   ],
+   "esito": "riparato",
+   "commit": "d695062a533ca7913c42689d6ac1caa3bab38cbd",
+   "file_toccati": [
+    "app/api/ai/catalog-batch/status/route.ts",
+    "app/seller/products/ai-batch/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r09-pulsante-dopo-assistenza.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-pulsante-dopo-assistenza.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d695062a533ca7913c42689d6ac1caa3bab38cbd^ --file app/api/ai/catalog-batch/status/route.ts,app/seller/products/ai-batch/page.tsx --prove tests/unit/riparazione-r09-pulsante-dopo-assistenza.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Pagina: il clic su una scheda operazione tiene un lavoro chiuso con «chiedi all'assistenza» (regola puoAvviareLavoro già esistente), e poll/riprendiUltimo non lo dimenticano con ricordaLavoro(null). Rotta di stato senza jobId: se non ci sono lavori aperti restituisce l'ultimo lavoro DEL VENDITORE se è chiuso con quel motivo, altrimenti null. La rotta di avvio non si tocca (decisione della regia). Ho esteso il finto database di tests/unit/riparazione-r04-lavoro-ritrovato.test.ts (aggiunto order() dopo eq(), perché la rotta ora fa una seconda lettura): nessuna asserzione cambiata. Seguito in 10f73a8c: la guardia del ramo era rossa perché d695062a aveva ritoccato il finto database di una prova esistente di un'altra sessione (riparazione-r04-lavoro-ritrovato); la prova è tornata com'era e la seconda lettura della rotta di stato sta in un try/catch (una lettura che non riesce risponde «nessun lavoro», come prima, con un avviso nel registro). Rimessa rifatta sulla testa con la base prima di d695062a.",
+   "verificato_da": "revisore B (subagente generico, sonnet, copia separata): prova + r04-lavoro-ritrovato 10/10 e rimessa (uscita 0), 15 file di prove vicine (131 test) verdi; la rotta filtra sempre per seller_id e guarda solo l'ultimo lavoro (created_at desc, limit 1), la seconda lettura in errore non rompe la risposta; clic sulla scheda e ricordaLavoro(null) non perdono il lavoro vietato; start non toccata. Dopo il seguito 10f73a8c: prova r09 + r04 (intatta) + r01 15/15 verdi, rimessa uscita 0, guardia-ramo verde, verify verde (riprovato dal capo squadra, non dal revisore).",
+   "commit_seguito": "10f73a8c8cf527d0d0b63922194f53293a91906c"
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "anche i campi brevi delle categorie nel pannello admin tagliano in silenzio con maxlength",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "app/admin/categories/page.tsx:72",
+   "descrizione": "Visto dal revisore B: maxLength su campi brevi alle righe 72-74, 83 e 150-152 di app/admin/categories/page.tsx, fuori dal costruttore della vetrina e fuori dai file di R09; stessa cura di BannerFields.tsx (messaggio «Troppo lungo» sotto il campo) se il tetto viene dallo schema."
+  }
+ ],
+ "domande_per_nicola": [
+  "R09-001: la notte dopo l'avviso per la cancellazione si rispedisce se il registro non ha segnato la partenza (scelta del 27/10, «meglio due volte che nessuna»): la teniamo così o si toglie, rischiando zero email per un avviso dovuto per legge?",
+  "R09-006/007: la rotta di avvio deve rifiutare (409) un nuovo lavoro sul catalogo quando l'ultimo è chiuso con «chiedi all'assistenza»? Oggi lo blocca solo il pulsante; sul server servirebbe anche un modo per l'assistenza di sbloccare il negozio."
+ ],
+ "conto": {
+  "agenti": 3,
+  "subagenti": 3,
+  "costo_usd": 3.46,
+  "nota": "1 subagente che ripara (sonnet, ripreso una volta per R09-002 con un'altra strada), 2 revisori (sonnet) in parallelo su copie separate; costo letto da get_session (usage.cost_usd 3.4645) prima della consegna; il seguito di R09-006/007 (10f73a8c) l'ha fatto il capo squadra, al tetto dei subagenti. get_session dà ancora 3,46 $ con updated_at fermo alle 16:31: il numero può essere indietro."
+ },
+ "costo_usd": 3.46
+}

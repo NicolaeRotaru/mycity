@@ -37,11 +37,28 @@ export type LettoreChat = LettoreVista & {
 };
 
 /**
+ * La funzione non esiste ancora (migrazione non applicata): PostgREST dice PGRST202, Postgres 42883.
+ * Stesso controllo di seller-public-profiles.ts, copiato e non esportato da li' perche' li' un nome nuovo
+ * esportato farebbe cadere la prova rimessa per la struttura e non per il comportamento.
+ */
+function funzioneNonAncoraCreata(errore: unknown): boolean {
+  const code = (errore as { code?: string } | null)?.code;
+  return code === 'PGRST202' || code === '42883';
+}
+
+/** Le pagine che hanno gia' scritto l'avviso «funzione assente» in questo processo. */
+const avvisiSenzaLaFunzioneDati = new Set<string>();
+
+/**
  * I nomi dei clienti che chi guarda ha davanti, per id. Se la funzione non
  * risponde (o non c'è ancora, prima della 181) la mappa è vuota e vale il
  * ripiego «Cliente»: il nome è un dettaglio, i messaggi no.
  */
-async function nomiDeiClienti(supa: LettoreChat, ids: string[]): Promise<Map<string, string>> {
+export async function nomiDeiClienti(
+  supa: LettoreChat,
+  ids: string[],
+  etichetta: '[chat]' | '[recensioni]' = '[chat]',
+): Promise<Map<string, string>> {
   const unici = [...new Set(ids)];
   if (unici.length === 0) return new Map();
   try {
@@ -50,7 +67,13 @@ async function nomiDeiClienti(supa: LettoreChat, ids: string[]): Promise<Map<str
     const righe = (data ?? []) as Array<{ id: string; full_name: string | null }>;
     return new Map(righe.filter((r) => !!r.full_name).map((r) => [r.id, r.full_name as string]));
   } catch (e) {
-    logger.warn('[chat] nomi dei clienti non letti: conversazioni mostrate con «Cliente»', e);
+    // R09-002 — Finche' manca la funzione (migrazione 181) l'avviso si scrive una volta per processo e per
+    // pagina, non a ogni apertura; un guasto vero resta nel registro ogni volta.
+    if (funzioneNonAncoraCreata(e)) {
+      if (avvisiSenzaLaFunzioneDati.has(etichetta)) return new Map();
+      avvisiSenzaLaFunzioneDati.add(etichetta);
+    }
+    logger.warn(`${etichetta} nomi dei clienti non letti: mostrati con «Cliente»`, e);
     return new Map();
   }
 }

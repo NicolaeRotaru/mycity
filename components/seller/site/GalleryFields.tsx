@@ -18,6 +18,20 @@ import {
 } from '@/lib/storage/casella-di-caricamento';
 import { uploadSiteImage } from './ImageUpload';
 
+
+/**
+ * R09-003 R09-004 — Niente `maxLength` sui campi brevi: il browser tagliava in silenzio quello che si
+ * incollava oltre il tetto. Il testo resta intero e, oltre il tetto che lo schema rifiuta al salvataggio
+ * (`lib/store-site.ts`), l'errore lo dice sotto il campo. Si conta come lo schema
+ * (`z.string().trim().max(n)`); stessa funzione di `BannerFields.tsx`.
+ */
+function sopraIlTetto(valore: string | undefined, max: number): string | undefined {
+  const n = (valore ?? '').trim().length;
+  return n > max
+    ? `Troppo lungo: ${n.toLocaleString('it-IT')} caratteri su ${max.toLocaleString('it-IT')}. Accorcialo, così si salva.`
+    : undefined;
+}
+
 type GallerySec = Extract<SiteSection, { type: 'gallery' }>;
 type Cfg = GallerySec['config'];
 type Item = Cfg['items'][number];
@@ -96,7 +110,7 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
       <Input
         label="Titolo (opzionale)"
         value={c.heading ?? ''}
-        maxLength={120}
+        error={sopraIlTetto(c.heading, 120)}
         onChange={(e) => set({ heading: e.target.value })}
       />
       {items.length > 0 && (
@@ -116,12 +130,16 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
               </div>
               <input
                 value={it.alt ?? ''}
-                maxLength={120}
                 onChange={(e) => setItem(i, { alt: e.target.value })}
                 placeholder="Descrizione"
                 aria-label={`Descrizione dell'immagine ${i + 1}`}
+                aria-invalid={sopraIlTetto(it.alt, 120) ? true : undefined}
+                aria-describedby={sopraIlTetto(it.alt, 120) ? `galleria-alt-${i}-error` : undefined}
                 className="w-full border border-cream-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-700"
               />
+              {sopraIlTetto(it.alt, 120) && (
+                <p id={`galleria-alt-${i}-error`} role="alert" className="text-xs font-medium text-secondary-600">{sopraIlTetto(it.alt, 120)}</p>
+              )}
             </div>
           ))}
         </div>

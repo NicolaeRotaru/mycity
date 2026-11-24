@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/Button';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { RatingStars } from '@/components/ui/RatingStars';
 import { queryKeys } from '@/lib/queries/keys';
-import { logger } from '@/lib/logger';
+import { nomiDeiClienti } from '@/lib/queries/controparte-della-chat';
 import { friendlyError } from '@/lib/errors';
 
 type Review = {
@@ -52,16 +52,12 @@ export default function SellerReviewsPage() {
       if (error) throw error;
       type StoreReviewRow = { id: string; user_id: string; rating: number; comment: string | null; created_at: string; order_id: string; seller_reply: string | null; seller_reply_at: string | null };
       const righe = (data ?? []) as unknown as StoreReviewRow[];
-      const nomi = new Map<string, string>();
+      let nomi = new Map<string, string>();
       const autori = [...new Set(righe.map((r) => r.user_id).filter(Boolean))];
       if (autori.length > 0) {
-        // Un nome che non arriva (funzione giù, o non ancora applicata) non spegne le
-        // recensioni: si legge «Cliente», come per chi non ha messo il nome.
-        const { data: trovati, error: erroreNomi } = await supabase.rpc('nomi_dei_clienti_del_negozio', { p_ids: autori });
-        if (erroreNomi) logger.warn('[recensioni] nomi dei clienti non letti: recensioni mostrate con «Cliente»', erroreNomi);
-        for (const n of (trovati ?? []) as Array<{ id: string; full_name: string | null }>) {
-          if (n.full_name) nomi.set(n.id, n.full_name);
-        }
+        // Un nome che non arriva (funzione giu', o non ancora applicata) non spegne le recensioni: si
+        // legge «Cliente». L'avviso per la funzione assente si scrive una volta sola.
+        nomi = await nomiDeiClienti(supabase, autori, '[recensioni]');
       }
       return righe.map(({ user_id, ...r }) => ({
         ...r,
