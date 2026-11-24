@@ -73,9 +73,9 @@ const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
               <span className="font-normal text-ink-400">({reviews.count})</span>
             </span>
           ) : (
-            <span className="text-ink-400">Nuovo</span>
+            <span className="max-w-full text-ink-400 [overflow-wrap:anywhere]">Nuovo</span>
           )}
-          <span className={`inline-flex items-center gap-1.5 font-semibold ${open ? 'text-olive-700' : 'text-ink-400'}`}>
+          <span className={`inline-flex max-w-full items-center gap-1.5 font-semibold [overflow-wrap:anywhere] ${open ? 'text-olive-700' : 'text-ink-400'}`}>
             <span className={`inline-block h-1.5 w-1.5 rounded-full ${open ? 'bg-olive-600' : 'bg-ink-300'}`} />
             {/* 5/11/2026 — «Chiuso» accanto a «consegna oggi» senza dire quando riapre si leggeva
                 come una contraddizione: si dice l'ora. */}

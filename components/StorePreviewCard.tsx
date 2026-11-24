@@ -127,12 +127,12 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
               <span className="font-normal text-ink-400">({reviews.count})</span>
             </span>
           ) : (
-            <span className="text-ink-400">Nuovo negozio</span>
+            <span className="text-ink-400 [overflow-wrap:anywhere]">Nuovo negozio</span>
           )}
         </div>
 
         {/* Un solo stato chiaro */}
-        <span className={`mt-2 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${open ? 'bg-olive-100 text-olive-700' : 'bg-ink-100 text-ink-500'}`}>
+        <span className={`mt-2 inline-flex w-fit max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold [overflow-wrap:anywhere] ${open ? 'bg-olive-100 text-olive-700' : 'bg-ink-100 text-ink-500'}`}>
           <span className={`inline-block h-1.5 w-1.5 rounded-full ${open ? 'animate-pulse-soft bg-olive-600' : 'bg-ink-400'}`} />
           {stato}
         </span>
