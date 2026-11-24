@@ -349,7 +349,7 @@ if [[ "$DEST_PULITA" == *:* ]]; then
     _tipo_remote="$(rclone listremotes --long 2>/dev/null | awk -v r="${_remote}:" '$1 == r { print ($2 == "google" ? $2 " " $3 " " $4 : $2); exit }' || true)"
   fi
   case "$_tipo_remote" in
-    s3|b2|swift|azureblob|"google cloud storage")
+    s3|b2|swift|azureblob|"google cloud storage"|oracleobjectstorage|qingstor|storj|tardigrade)
       while [[ "$_resto" == /* ]]; do _resto="${_resto#/}"; done ;;
   esac
   _secchio="${_resto%%/*}"

@@ -39,7 +39,7 @@ function mondoConTipi(tipi: Record<string, string>) {
   return m
 }
 
-const TIPI = { src: 's3', b2: 'b2', cifrata: 'crypt', archivio: 'alias', nas: 'sftp', altra: 'b2' }
+const TIPI = { src: 's3', b2: 'b2', cifrata: 'crypt', archivio: 'alias', nas: 'sftp', altra: 'b2', oci: 'oracleobjectstorage', qing: 'qingstor', sj: 'storj' }
 
 describe('R06-006 · una destinazione su B2 scritta con la barra iniziale', () => {
   it('"b2:/mycity-foto/copie": lo storico va in "b2:mycity-foto-storico/copie", non dentro mycity-foto', () => {
@@ -65,6 +65,17 @@ describe('R06-006 · una destinazione su B2 scritta con la barra iniziale', () =
     const r = m.lancia({ STORAGE_SYNC_SOURCE: 'src:', STORAGE_SYNC_DEST: 'b2://mycity-foto/copie', STORAGE_SYNC_BUCKETS: 'products' })
     expect(r.uscita).toBe(0)
     expect(r.out).toContain('storico in b2:mycity-foto-storico/copie;')
+  })
+
+  it.each(['oci', 'qing', 'sj'])('"%s:/secchio/dir" (oracleobjectstorage, qingstor, storj): lo storico va nel secchio accanto, non in quello della copia', (remote) => {
+    const m = mondoConTipi(TIPI)
+    m.file('src:products', 'a.jpg')
+    m.file(`${remote}:secchio/dir/products`, 'cancellata.jpg')
+    m.cartella(`${remote}:secchio-storico`)
+    const r = m.lancia({ STORAGE_SYNC_SOURCE: 'src:', STORAGE_SYNC_DEST: `${remote}:/secchio/dir`, STORAGE_SYNC_BUCKETS: 'products' })
+    expect(r.uscita).toBe(0)
+    expect(r.out).toContain(`storico in ${remote}:secchio-storico/dir;`)
+    expect(elenco(join(m.radice, remote, 'secchio-storico'))).toEqual(['dir/T1/products/cancellata.jpg'])
   })
 
   it('controprova: un percorso assoluto su sftp ("nas:/mnt/x") resta "nas:/mnt/x-storico"', () => {
