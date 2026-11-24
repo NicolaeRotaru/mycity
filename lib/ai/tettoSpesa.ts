@@ -453,6 +453,23 @@ export async function sondaContoCondiviso(
  */
 export const CHIAVE_RIPIEGO_DA = 'ai-tetto-condiviso:ripiego-da';
 
+/**
+ * Quanto vale la riga dell'inizio del guasto. La pulizia della memoria degli allarmi (660) non la
+ * tocca, e prima la si leggeva senza limite d'eta': rimasta da un guasto vecchio (un giro uscito
+ * senza tetto o con l'AI spenta, una cancellazione non riuscita), al primo guasto nuovo l'allarme
+ * suonava subito con i minuti contati da allora. Piu' vecchia di cosi' non si crede: si riscrive.
+ */
+const RIGA_DEL_GUASTO_VALE_MS = 24 * 60 * 60_000;
+
+/** I giri che non guardano il conto non ne ricordano il guasto: chi riguarda riparte da capo. */
+async function dimenticaInizioGuasto(): Promise<void> {
+  try {
+    await getAdminSupabase().from('operational_alert_log').delete().eq('alert_key', CHIAVE_RIPIEGO_DA);
+  } catch {
+    // Se non si cancella, la riga vecchia la scarta il limite d'eta' qui sopra.
+  }
+}
+
 export async function allarmiTettoSpesaAiPerIlCron(opzioni: {
   tettoEur?: number;
   copieAttese?: number;
@@ -464,11 +481,14 @@ export async function allarmiTettoSpesaAiPerIlCron(opzioni: {
   // 22/11/2026 (R13-004) — Il cron la chiama a ogni giro (ogni 5 minuti). Senza
   // tetto configurato non c'e' niente da dire (allarmiDelTetto torna vuoto): niente
   // sonda, niente righe in operational_alert_log, niente errori nel registro.
-  if (!(tettoEur > 0)) return [];
   // Con l'AI dei negozi spenta (lib/funzioni-al-lancio.ts) lib/ai/client.ts ferma ogni chiamata
   // al modello: spendere e' impossibile, e l'allarme sul conto condiviso sarebbe solo rumore
   // sull'unico canale degli allarmi. Niente sonda e niente righe, come senza tetto.
-  if (!AI_NEGOZI_ACCESA) return [];
+  // In tutti e due i casi l'inizio di un guasto ricordato si toglie: nessuno lo guarda piu'.
+  if (!(tettoEur > 0) || !AI_NEGOZI_ACCESA) {
+    await dimenticaInizioGuasto();
+    return [];
+  }
   const copieAttese = opzioni.copieAttese ?? copie(process.env.AI_COPIE_ATTESE);
   const primo = await sondaContoCondiviso(opzioni.quando);
   try {
@@ -485,9 +505,14 @@ export async function allarmiTettoSpesaAiPerIlCron(opzioni: {
       .select('last_sent_at')
       .eq('alert_key', CHIAVE_RIPIEGO_DA)
       .maybeSingle();
-    const da = data && typeof (data as { last_sent_at?: unknown }).last_sent_at === 'string'
+    let da = data && typeof (data as { last_sent_at?: unknown }).last_sent_at === 'string'
       ? Date.parse((data as { last_sent_at: string }).last_sent_at)
       : NaN;
+    if (Number.isFinite(da) && Date.now() - da > RIGA_DEL_GUASTO_VALE_MS) {
+      const ora = new Date().toISOString();
+      await admin.from('operational_alert_log').upsert({ alert_key: CHIAVE_RIPIEGO_DA, last_sent_at: ora }, { onConflict: 'alert_key' });
+      da = Date.parse(ora);
+    }
     const conto = Number.isFinite(da) ? await sondaContoCondiviso(opzioni.quando, da) : primo;
     return allarmi(conto, { tettoEur, copieAttese });
   } catch {
