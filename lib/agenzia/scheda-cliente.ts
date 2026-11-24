@@ -85,17 +85,24 @@ export function datoDi(scheda: SchedaCliente | null | undefined, campo: string):
 }
 
 /**
- * Un testo che dice un prezzo: «1,50 €», «2 euro», «€ 3», «1,5», «3.50». Si scarta la riga intera:
- * i prezzi li scrive il negoziante. In una riga di MENU vale anche un numero da solo in fondo
- * («Brioche 2»), che in un'idea per un post («sfornata alle 7») non è un prezzo.
- * (Collaudo del 24/11: «Cornetto 1,5» e «Brioche 2» passavano.)
+ * I PREZZI NON ENTRANO MAI (li scrive il negoziante). Due collaudi del 24/11 hanno trovato forme
+ * che passavano («1,5», «Brioche 2», «EUR 2», «euro 3», «Brioche:2», «2.-», «4 E»): la regola ora
+ * è larga apposta, e scartare una frase buona costa meno che pubblicarne una con un prezzo.
+ *  · VALUTA: il simbolo o la parola della moneta, in qualunque posizione;
+ *  · NUMERO_DA_PREZZO: un numero coi decimali o col trattino («1,50», «3.5», «2.-») o seguito da «E».
+ * Nelle righe del MENU basta una cifra qualsiasi per scartare la riga (vedi prodottiTipici).
  */
-const HA_UN_PREZZO = /\d+([.,]\d{1,2})?\s*(€|euro|eur\b)|€|\b\d+[.,]\d{1,2}\b/i;
-const NUMERO_IN_FONDO = /\s\d{1,3}\s*$/;
+const VALUTA = /€|\b(eur|euro|euri|chf)\b|\beur\d/i;
+const NUMERO_DA_PREZZO = /\d+[.,]\d{1,2}\b|\d+[.,]-|\d\s?E\b/;
+
+/** Vero se il testo non nomina una moneta: si usa sugli orari, che hanno cifre e punti per forza. */
+export function senzaValuta(testo: string): boolean {
+  return !VALUTA.test(testo);
+}
 
 /** Vero se il testo non dice un prezzo: solo così entra in un post, nel sito o nel profilo. */
 export function senzaPrezzo(testo: string): boolean {
-  return !HA_UN_PREZZO.test(testo);
+  return !VALUTA.test(testo) && !NUMERO_DA_PREZZO.test(testo);
 }
 
 /** Le voci dell'analisi (punti di forza, idee) ripulite: niente vuoti, niente prezzi. */
@@ -126,8 +133,12 @@ export function prodottiTipici(scheda: SchedaCliente | null | undefined, quanti 
   const visti = new Set<string>();
   const voci: string[] = [];
   for (const riga of menu.split(/\r?\n|;/)) {
-    const voce = riga.replace(/^[\s\-–—•·*\d.)]+/, '').replace(/\s+/g, ' ').trim();
-    if (voce.length < 3 || voce.length > 80 || !senzaPrezzo(voce) || NUMERO_IN_FONDO.test(riga)) continue;
+    // Si guarda la riga com'è arrivata, prima di ripulirla: ripulendo, «1,50 Brioche» diventava «,50 Brioche».
+    // Il numero d'elenco in testa («1. Brioche», «- Brioche») non conta; qualunque altra cifra sì.
+    const senzaElenco = riga.replace(/^\s*(\d{1,2}[.)]\s+|[-–—•·*]\s*)/, '');
+    if (/\d/.test(senzaElenco) || VALUTA.test(senzaElenco)) continue;
+    const voce = senzaElenco.replace(/\s+/g, ' ').trim();
+    if (voce.length < 3 || voce.length > 80 || /^[,.:;]/.test(voce)) continue;
     const chiave = voce.toLowerCase();
     if (visti.has(chiave)) continue;
     visti.add(chiave);
@@ -142,12 +153,14 @@ export function prodottiTipici(scheda: SchedaCliente | null | undefined, quanti 
  * li reggono. Gli orari arrivano come testo e il profilo li vuole a giorni: restano nella scheda,
  * li sistema il titolare. Un campo assente non cancella quello che c'è già.
  */
-export function campiPerIlProfilo(scheda: SchedaCliente | null | undefined): { store_address?: string; store_phone?: string } {
-  const fuori: { store_address?: string; store_phone?: string } = {};
+export function campiPerIlProfilo(scheda: SchedaCliente | null | undefined): { store_address?: string } {
+  // Solo l'indirizzo del locale, che per un negozio è pubblico per natura. Il telefono no: per il
+  // modulo 12 «confermato» vuol dire «trovato scritto in una fonte», non «confermato dal titolare»
+  // (sessione n8n, 24/11), e un numero trovato in rete può essere il cellulare del titolare. Resta
+  // nella scheda, e lo conferma lui dalla sua dashboard.
+  const fuori: { store_address?: string } = {};
   const indirizzo = valoreConfermato(scheda, 'indirizzo');
-  if (indirizzo) fuori.store_address = indirizzo.slice(0, 300);
-  const telefono = valoreConfermato(scheda, 'telefono');
-  if (telefono && /^[+\d][\d\s./-]{5,24}$/.test(telefono)) fuori.store_phone = telefono;
+  if (indirizzo && senzaValuta(indirizzo)) fuori.store_address = indirizzo.slice(0, 300);
   return fuori;
 }
 

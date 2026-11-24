@@ -16,7 +16,7 @@
  */
 
 import type { TipoAttivita } from './tipi-attivita';
-import { datoDi, prodottiTipici, valoreConfermato, vociSenzaPrezzo, type SchedaCliente } from './scheda-cliente';
+import { datoDi, prodottiTipici, senzaValuta, valoreConfermato, vociSenzaPrezzo, type SchedaCliente } from './scheda-cliente';
 
 /*
  * 24/11/2026 — CON LA SCHEDA DI N8N, LA BOZZA E IL PIANO DIVENTANO QUELLI DI QUEL LOCALE.
@@ -100,7 +100,9 @@ export function bozzaSito(nome: string, tipo: TipoAttivita, scheda?: SchedaClien
   const prodotti = prodottiTipici(scheda, 5);
   const menu = datoDi(scheda, 'menu_testo');
   const indirizzo = datoDi(scheda, 'indirizzo');
-  const orari = datoDi(scheda, 'orari');
+  // Gli orari hanno cifre per forza: si scartano solo se nominano una moneta («aperitivo 5€»).
+  const orariGrezzi = datoDi(scheda, 'orari');
+  const orari = orariGrezzi && senzaValuta(orariGrezzi.valore) ? orariGrezzi : null;
   const telefono = datoDi(scheda, 'telefono');
   const prenota = datoDi(scheda, 'link_prenotazione');
   const punti = vociSenzaPrezzo(scheda?.analisi?.punti_di_forza, 3);
@@ -227,7 +229,8 @@ function conIDatiDelLocale(
   // Un post esce in pubblico: i prodotti solo da un menu confermato, le idee senza prezzi.
   const prodotti = prodottiTipici(scheda, 8, true);
   const idee = vociSenzaPrezzo(scheda.analisi?.idee_contenuti, 3);
-  const orari = valoreConfermato(scheda, 'orari');
+  const orariConfermati = valoreConfermato(scheda, 'orari');
+  const orari = orariConfermati && senzaValuta(orariConfermati) ? orariConfermati : null;
   const prodotto = (k: number) => prodotti[k % prodotti.length];
   if (prodotti.length && i === 0) return { ...base, tema: `Il prodotto in primo piano: ${prodotto(0)}`, esempio: `Oggi vi presentiamo ${prodotto(0)}. Lo trovate ${luogo} e sulla nostra vetrina MyCity.`, dalLocale: true };
   if (prodotti.length && i === 7) return { ...base, tema: `Le mani al lavoro: ${prodotto(1)}`, esempio: `Come nasce ${prodotto(1)} da ${nome}: le mani al lavoro, da vicino.`, dalLocale: true };

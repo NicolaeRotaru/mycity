@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { campiPerIlProfilo, datoDi, prodottiTipici, SchedaInArrivo, valoreConfermato, type SchedaCliente } from '@/lib/agenzia/scheda-cliente';
+import { campiPerIlProfilo, datoDi, prodottiTipici, SchedaInArrivo, senzaPrezzo, valoreConfermato, type SchedaCliente } from '@/lib/agenzia/scheda-cliente';
 
 /**
  * 24/11/2026 — LA SCHEDA DEL CLIENTE CHE MANDA N8N (Lavoro 2).
@@ -34,7 +34,9 @@ describe('la scheda: cosa è vero e cosa va confermato', () => {
     expect(datoDi(scheda, 'sito_ufficiale')).toBeNull();
   });
 
-  it('nel profilo va solo il confermato: l indirizzo sì, il telefono da confermare no', () => {
+  it('nel profilo va solo l indirizzo confermato; il telefono mai, nemmeno «confermato» (per n8n vuol dire «trovato in una fonte»)', () => {
+    const conTelefono = schedaDiProva({ telefono: { valore: '333 1234567', stato: 'confermato', fonte: 'https://example.org' } });
+    expect(campiPerIlProfilo(conTelefono)).toEqual({});
     expect(campiPerIlProfilo(scheda)).toEqual({ store_address: 'Via Roma 10, Piacenza' });
     expect(campiPerIlProfilo(null)).toEqual({});
   });
@@ -42,6 +44,25 @@ describe('la scheda: cosa è vero e cosa va confermato', () => {
   it('i prodotti tipici vengono dal menu, senza prezzi e senza doppioni', () => {
     expect(prodottiTipici(scheda)).toEqual(['Brioche alla crema', 'Torta di mele']);
     expect(prodottiTipici(scheda, 8, true)).toEqual([]);
+  });
+
+  it('nessuna forma di prezzo passa dal menu (i casi trovati dai due collaudi)', () => {
+    const menu = [
+      'Brioche:2', 'Cornetto euro 2 cad', '1,50 Brioche', '2,00 Cornetto', '3 euro Spremuta', 'Caffè 1.-', 'Spritz 4 E',
+      'Tiramisù EUR2', 'Cornetto 1,5', 'Brioche 2', 'Caffè 1.20', 'Cappuccino € 1', 'Ginseng 1€', 'Orzo CHF 3',
+      '1. Torta di mele', '- Cannoli siciliani', 'Crostata della casa',
+    ].join('\n');
+    const s = schedaDiProva({ menu_testo: { valore: menu, stato: 'confermato', fonte: null } });
+    expect(prodottiTipici(s, 30, true)).toEqual(['Torta di mele', 'Cannoli siciliani', 'Crostata della casa']);
+  });
+
+  it('nelle frasi (idee, punti di forza) le monete e i numeri da prezzo si riconoscono; un orario no', () => {
+    for (const t of ['Colazione a EUR 5', 'Caffè a euro 1', 'Promo euro 3 il lunedì', 'Aperitivo 8 euro', 'a soli 3,50€', 'Spritz 4 E', 'Cornetti 1,5']) {
+      expect(senzaPrezzo(t), t).toBe(false);
+    }
+    for (const t of ['La brioche appena sfornata alle 7', 'Il dehors al tramonto', 'Tre generazioni di pasticceri']) {
+      expect(senzaPrezzo(t), t).toBe(true);
+    }
   });
 
   it('una scheda senza tipo giusto, con un id non valido o una fonte che non è un indirizzo web è rifiutata', () => {

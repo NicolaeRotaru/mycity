@@ -118,7 +118,8 @@ export async function apriCassaServizi({ sellerId, email, fascia, ritorno, chiav
     // Una cassa ancora aperta: della stessa fascia e allo stesso prezzo si ridà; di un'altra si chiude.
     const aperte = await stripe.checkout.sessions.list({ customer: cliente, status: 'open', limit: 10 });
     for (const a of aperte.data.filter((x) => x.metadata?.kind === KIND_SERVIZI)) {
-      if (a.metadata?.fascia === fascia && a.metadata?.canone_centesimi === String(canone) && a.url) {
+      // Si riusa solo se torna allo stesso posto: una cassa della dashboard non va bene per il link, e viceversa.
+      if (a.metadata?.fascia === fascia && a.metadata?.canone_centesimi === String(canone) && a.success_url === ritorno.pagato && a.url) {
         return NextResponse.json({ ok: true, data: { url: a.url } }, { status: 200 });
       }
       await stripe.checkout.sessions.expire(a.id);

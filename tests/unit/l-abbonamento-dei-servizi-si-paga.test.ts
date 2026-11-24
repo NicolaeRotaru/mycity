@@ -24,7 +24,7 @@ const stato = vi.hoisted(() => ({
   clienti: [] as { id: string; metadata: Record<string, string> }[],
   clientiCreati: [] as Record<string, unknown>[],
   abbonamentiStripe: [] as { status: string }[],
-  casseAperte: [] as { id: string; url: string; metadata: Record<string, string> }[],
+  casseAperte: [] as { id: string; url: string; success_url?: string; metadata: Record<string, string> }[],
   casseChiuse: [] as string[],
   altriAttivi: [] as unknown[],
   scritture: [] as { tabella: string; tipo: string; valori: unknown; filtro?: [string, unknown] }[],
@@ -192,7 +192,8 @@ describe('la cassa dell abbonamento dei servizi', () => {
 
   it('una cassa aperta della stessa fascia si ridà; una di un altra fascia si chiude prima di aprirne una nuova (collaudo)', async () => {
     stato.clienti = [{ id: 'cus_servizi', metadata: { kind: 'servizi_subscription', seller_id: 'negozio-1' } }];
-    stato.casseAperte = [{ id: 'cs_vecchia', url: 'https://checkout.stripe.com/c/pay/cs_vecchia', metadata: { kind: 'servizi_subscription', fascia: 'business', canone_centesimi: '50000' } }];
+    // 24/11 — Stripe ridà anche l'indirizzo di ritorno: si riusa solo una cassa che torna allo stesso posto.
+    stato.casseAperte = [{ id: 'cs_vecchia', url: 'https://checkout.stripe.com/c/pay/cs_vecchia', success_url: 'https://www.mycity-marketplace.com/seller/preventivo?pagato=1', metadata: { kind: 'servizi_subscription', fascia: 'business', canone_centesimi: '50000' } }];
     const r = await paga({ abbonamento: 'business' });
     expect(((await r.json()) as { data: { url: string } }).data.url).toBe('https://checkout.stripe.com/c/pay/cs_vecchia');
     expect(stato.sessioni).toHaveLength(0);
@@ -200,6 +201,15 @@ describe('la cassa dell abbonamento dei servizi', () => {
     expect(stato.casseChiuse).toEqual(['cs_vecchia']);
     expect((stato.sessioni[0] as Record<string, any>).customer).toBe('cus_servizi');
     expect(stato.clientiCreati).toHaveLength(0); // il cliente dei servizi si riusa
+  });
+
+  it('una cassa aperta dal link col codice non si ridà nella dashboard: si chiude e se ne apre una nuova (collaudo del 24/11)', async () => {
+    stato.clienti = [{ id: 'cus_servizi', metadata: { kind: 'servizi_subscription', seller_id: 'negozio-1' } }];
+    stato.casseAperte = [{ id: 'cs_link', url: 'https://checkout.stripe.com/c/pay/cs_link', success_url: 'https://www.mycity-marketplace.com/preventivo/abc?pagato=1', metadata: { kind: 'servizi_subscription', fascia: 'business', canone_centesimi: '50000' } }];
+    const r = await paga({ abbonamento: 'business' });
+    expect(((await r.json()) as { data: { url: string } }).data.url).not.toBe('https://checkout.stripe.com/c/pay/cs_link');
+    expect(stato.casseChiuse).toEqual(['cs_link']);
+    expect(stato.sessioni).toHaveLength(1);
   });
 
   it('un abbonamento dei servizi già in corso su Stripe ferma la cassa (collaudo: due schede, due abbonamenti)', async () => {

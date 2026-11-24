@@ -99,10 +99,11 @@ export async function accettaPreventivoColCodice(input: {
     await admin.from('preventivi_con_codice').update({ stato: 'aperto', fascia_scelta: null, accettato_il: null, condizioni_accettate_il: null }).eq('codice', codice);
     const giaUsata = /already|exists|registered|email_exists/i.test(`${utente.error.message} ${(utente.error as { code?: string }).code ?? ''}`);
     logger.warn('[preventivo-codice] email non collegata', { sellerId: id, giaUsata, message: utente.error.message });
-    // Lo stesso messaggio nei due casi: non si deve poter scoprire da qui se un'email è già su MyCity (collaudo del 24/11).
+    // Stesso messaggio e stesso codice (409) nei due casi: non si deve poter scoprire da qui se un'email
+    // è già su MyCity (collaudi del 24/11). Il log, che legge solo chi gestisce il sito, li distingue.
     return giaUsata
       ? { ok: false, motivo: 'EMAIL_GIA_USATA', messaggio: 'Non sono riuscito a collegare questa email. Prova con un’altra, oppure scrivici e lo sistemiamo noi.' }
-      : { ok: false, motivo: 'GUASTO', messaggio: 'Non sono riuscito a collegare questa email. Prova con un’altra, oppure scrivici e lo sistemiamo noi.' };
+      : { ok: false, motivo: 'EMAIL_GIA_USATA', messaggio: 'Non sono riuscito a collegare questa email. Prova con un’altra, oppure scrivici e lo sistemiamo noi.' };
   }
 
   // 2) Il profilo coi soli dati confermati della scheda di n8n, e in revisione.

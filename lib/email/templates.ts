@@ -1113,13 +1113,13 @@ export function accessoDopoIlPreventivoTemplate(args: { negozio: string; link: s
     <p style="margin:0 0 12px;line-height:1.6">Hai accettato il preventivo dei servizi di MyCity, realizzati da SDG Agenzia, il partner di MyCity. Da qui entri nel tuo account: mentre controlliamo i dati del negozio vedi a che punto è; quando è approvato trovi la tua pagina, l'abbonamento e i dati del locale da controllare.</p>
     <p style="margin:0 0 12px;line-height:1.6">Se non hai ancora pagato l'abbonamento, lo paghi dallo stesso link del preventivo che ti abbiamo mandato.</p>
     <p style="margin:0 0 12px;line-height:1.6">I dati che abbiamo trovato in rete li vedi con la loro fonte: in pubblico va solo quello che confermi tu. Prezzi e allergeni li scrivi sempre tu.</p>
-    <p style="margin:24px 0">${btn(args.link, 'Entra nella tua pagina')}</p>
+    <p style="margin:24px 0">${btn(args.link, 'Entra nel tuo account')}</p>
     <p style="margin:0 0 12px;line-height:1.6;font-size:13px">Il pulsante vale una volta sola. Dopo, entri da «Accedi» con questa email.</p>
   `;
   return {
-    subject: `Entra nella pagina di ${args.negozio} su MyCity`,
-    html: shell('Entra nella tua pagina', body),
-    text: `Hai accettato il preventivo dei servizi di MyCity. Entra nella pagina del tuo negozio da qui (vale una volta sola): ${args.link}`,
+    subject: `${args.negozio}: entra nel tuo account MyCity`,
+    html: shell('Entra nel tuo account', body),
+    text: `Hai accettato il preventivo dei servizi di MyCity. Entra nel tuo account da qui (vale una volta sola): ${args.link}`,
   };
 }
 

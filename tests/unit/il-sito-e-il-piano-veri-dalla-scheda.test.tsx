@@ -108,6 +108,12 @@ describe('mai prezzi, mai frasi non vere (collaudo del 24/11)', () => {
     expect(tutto).toContain('il dehors in piazza');
   });
 
+  it('gli orari con un prezzo dentro non entrano né nel sito né nei post', () => {
+    const s = scheda({ orari: { valore: 'Lun-Ven 7-20, aperitivo 5€', stato: 'confermato', fonte: null } });
+    const tutto = [...bozzaSito('Bar X', 'bar', s).sezioni.map((x) => x.testo), ...pianoEditoriale('Bar X', 'bar', '2026-12-01', s).post.map((p) => p.esempio)].join(' ');
+    expect(tutto).not.toContain('5€');
+  });
+
   it('un menu non confermato non entra nei post (che sono pubblici)', () => {
     const piano = pianoEditoriale('Ora del Gusto', 'bar', '2026-12-01', SPORCA);
     expect(piano.post.map((p) => p.esempio).join(' ')).not.toContain('Torta di mele');
