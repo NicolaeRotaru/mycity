@@ -84,6 +84,7 @@ function risposta(tabella: string, operazione: string): unknown {
   if (tabella === 'profiles' && operazione === 'select') {
     return { data: [{ id: 'cliente-1', full_name: 'Maria Rossi', email_marketing: true }], error: null };
   }
+  if (tabella === 'abandoned_carts' && operazione === 'update') return { data: { user_id: 'cliente-1' }, error: null };
   return { data: [], error: null };
 }
 
