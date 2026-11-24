@@ -6,6 +6,19 @@ import { newId, MAX_MENU_LINKS, type StoreSite, type MenuLink } from '@/lib/stor
 
 type Target = MenuLink['target'];
 
+/**
+ * R09-003 R09-004 — Niente `maxLength` sui campi brevi: il browser tagliava in silenzio quello che si
+ * incollava oltre il tetto. Il testo resta intero e, oltre il tetto che lo schema rifiuta al salvataggio
+ * (`lib/store-site.ts`), l'errore lo dice sotto il campo. Si conta come lo schema
+ * (`z.string().trim().max(n)`); stessa funzione di `BannerFields.tsx`.
+ */
+function sopraIlTetto(valore: string | undefined, max: number): string | undefined {
+  const n = (valore ?? '').trim().length;
+  return n > max
+    ? `Troppo lungo: ${n.toLocaleString('it-IT')} caratteri su ${max.toLocaleString('it-IT')}. Accorcialo, così si salva.`
+    : undefined;
+}
+
 /** Editor del menu di navigazione: abilita + lista link (home / pagina / esterno). */
 export default function MenuEditor({ site, onChange }: { site: StoreSite; onChange: (s: StoreSite) => void }) {
   const menu = site.menu;
@@ -58,7 +71,7 @@ export default function MenuEditor({ site, onChange }: { site: StoreSite; onChan
                 <span className="text-xs font-medium text-ink-500 flex-1">Link {i + 1}</span>
                 <button type="button" onClick={() => remove(i)} aria-label="Rimuovi link" className="text-ink-400 hover:text-red-600"><Trash2 size={14} aria-hidden /></button>
               </div>
-              <Input label="Etichetta" value={l.label} maxLength={30} onChange={(e) => setLink(i, { label: e.target.value })} placeholder="Es. Chi siamo" />
+              <Input label="Etichetta" value={l.label} error={sopraIlTetto(l.label, 30)} onChange={(e) => setLink(i, { label: e.target.value })} placeholder="Es. Chi siamo" />
               <Select label="Collega a" value={l.target.kind} onChange={(e) => setKind(i, e.target.value)}>
                 <option value="home">Home della vetrina</option>
                 <option value="page">Una pagina del sito</option>
