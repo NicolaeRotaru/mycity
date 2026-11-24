@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { toast } from 'sonner';
 import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { eDiSdg } from '@/lib/products/sdgSeller';
 
 /**
  * /shared-cart — pagina destinazione del ShareCartButton.
@@ -220,7 +221,8 @@ function SharedCartInner() {
       if (!product) continue;
       const stock = product.stock ?? Infinity;
       const qty = Math.min(item.quantity, stock);
-      if (qty < 1) continue;
+      // 24/11/2026 — Un abbonamento di SDG non entra nel carrello: non si conta fra gli aggiunti.
+      if (qty < 1 || eDiSdg(product.seller_id)) continue;
       addToCart({
         id: product.id,
         name: product.name,

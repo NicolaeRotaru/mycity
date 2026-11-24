@@ -1,6 +1,7 @@
 'use client';
 
 import { addToCart, clearCart, getCart, type CartItem } from '@/lib/cart';
+import { eDiSdg } from '@/lib/products/sdgSeller';
 import { sceltaDialog } from '@/components/ConfirmDialog';
 import { toast } from 'sonner';
 
@@ -194,7 +195,7 @@ async function eseguiRiordino(validi: ArticoloDaRiordinare[], impronta: string, 
   const { prezzi, nonInVendita } = await prodottiDiAdesso(validi.map((a) => a.productId));
   // Il carrello si svuota solo se c'è qualcosa da metterci: se tutto l'ordine è finito, la
   // spesa che c'era resta dov'è.
-  const daAggiungere = validi.filter((a) => !nonInVendita?.has(a.productId)).length;
+  const daAggiungere = validi.filter((a) => !nonInVendita?.has(a.productId) && !eDiSdg(a.sellerId)).length;
   if (sostituisci && carrelloAttuale.length > 0 && daAggiungere > 0) clearCart();
   let aggiunti = 0;
   let prezziCambiati = 0;
@@ -202,7 +203,8 @@ async function eseguiRiordino(validi: ArticoloDaRiordinare[], impronta: string, 
 
   for (const a of validi) {
     // R08-012 — un prodotto che oggi non è in vendita non entra: si conta fra i «non più disponibili».
-    if (nonInVendita?.has(a.productId)) {
+    // 24/11/2026 — Un abbonamento di SDG non torna nel carrello (lib/products/sdgSeller.ts): si conta fra i non disponibili.
+    if (nonInVendita?.has(a.productId) || eDiSdg(a.sellerId)) {
       finiti += 1;
       continue;
     }
