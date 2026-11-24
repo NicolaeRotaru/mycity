@@ -70,7 +70,8 @@ export default function SellPage() {
 
       // 25/11/2026 — La data di nascita qui non si chiede più (modulo corto, Nicola): la maggiore età
       // si dichiara nella spunta dei dati. Il freno vero resta sul database (migrazione 156) e sulla
-      // rotta del titolare, dove la data si scrive dopo l'approvazione.
+      // rotta del titolare: la data si scrive subito dopo l'invio, sotto «Richiesta in valutazione»,
+      // e senza quella lo staff non approva (lib/admin/regole-approvazione.ts).
 
       /**
        * 31/10/2026 (ondata 4) — LA RICHIESTA LA SCRIVE IL SERVER.

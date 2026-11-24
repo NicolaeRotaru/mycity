@@ -5,12 +5,13 @@ import { toast } from 'sonner';
 import { UserRound } from 'lucide-react';
 
 /**
- * 25/11/2026 — «Dati del titolare» nel Profilo del negozio.
+ * 25/11/2026 — «Dati del titolare»: nella pagina d'attesa di /sell e nel Profilo del negozio.
  *
  * Il modulo di iscrizione (/sell) adesso chiede solo il minimo per riconoscere
  * l'attività (Nicola: «lascia il minimo indispensabile»). Nome, cognome, codice
- * fiscale, data di nascita e residenza di chi firma si scrivono qui, dopo
- * l'approvazione. Salva la rotta del server (PATCH /api/seller/titolare), che
+ * fiscale, data di nascita e residenza di chi firma si scrivono qui: subito dopo
+ * l'invio (pagina «Richiesta in valutazione» di /sell, e senza questi lo staff non
+ * approva) e poi dal Profilo. Salva la rotta del server (PATCH /api/seller/titolare), che
  * controlla anche la maggiore età. Restano privati: il cliente non li vede.
  */
 export type DatiTitolare = {

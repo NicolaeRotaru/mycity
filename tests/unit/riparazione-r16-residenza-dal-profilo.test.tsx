@@ -23,6 +23,7 @@ const stato = vi.hoisted(() => ({
   profilo: null as Record<string, unknown> | null,
   valoriDelModulo: null as Record<string, unknown> | null,
   inizialiTitolare: null as Record<string, unknown> | null,
+  quandoSalvati: null as null | (() => void),
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }), usePathname: () => '/seller/profile' }));
@@ -47,8 +48,9 @@ vi.mock('@/components/SellerApplicationForm', () => ({
   },
 }));
 vi.mock('@/components/seller/DatiDelTitolare', () => ({
-  default: (p: { iniziali: Record<string, unknown> }) => {
+  default: (p: { iniziali: Record<string, unknown>; quandoSalvati?: () => void }) => {
     stato.inizialiTitolare = p.iniziali;
+    stato.quandoSalvati = p.quandoSalvati ?? null;
     return createElement('form', { 'data-prova': 'dati-del-titolare' });
   },
 }));
@@ -133,5 +135,18 @@ describe('R16-010 · la residenza non si precompila con l’indirizzo del profil
     expect(radice.querySelector('[data-prova="dati-del-titolare"]'), 'la pagina d’attesa non chiede i dati del titolare').not.toBeNull();
     expect(radice.textContent).toContain('Ultimo passo');
     expect(stato.inizialiTitolare).toMatchObject({ legalResidenceAddr: '', legalResidenceCity: '', legalResidenceZip: '' });
+  });
+
+  it('salvati i dati di chi firma, la riga «Ultimo passo» sparisce', async () => {
+    stato.profilo = { role: 'seller', approval_status: 'pending', approval_requested_at: '2026-11-25T08:00:00Z' };
+    const radice = await monta('@/app/sell/page');
+    expect(radice.textContent).toContain('Ultimo passo');
+    stato.profilo = {
+      ...stato.profilo,
+      legal_first_name: 'Mario', legal_last_name: 'Rossi', legal_fiscal_code: 'RSSMRA80E05G535X', legal_birth_date: '1980-05-05',
+    };
+    expect(stato.quandoSalvati, 'il riquadro non avvisa la pagina quando ha salvato').toBeTypeOf('function');
+    await act(async () => { stato.quandoSalvati!(); await new Promise((r) => setTimeout(r, 60)); });
+    expect(radice.textContent, 'la pagina chiede ancora i dati appena salvati').not.toContain('Ultimo passo');
   });
 });

@@ -266,7 +266,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           </p>
           {isPending && richiestaInviata && (
             <p className="text-sm text-ink-600 mb-4 max-w-md mx-auto">
-              Per approvare ci servono anche i dati di chi firma per l&apos;attività: li scrivi da «Dati di chi firma».
+              Se non l&apos;hai ancora fatto, scrivi i dati di chi firma per l&apos;attività: senza quelli non possiamo approvare.
             </p>
           )}
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">

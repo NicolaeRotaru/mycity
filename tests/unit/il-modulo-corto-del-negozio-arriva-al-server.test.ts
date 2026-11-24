@@ -193,6 +193,19 @@ describe('i buchi trovati dal collaudo del 25/11', () => {
   });
 });
 
+describe('il secondo collaudo del 25/11', () => {
+  it('un negozio in attesa che scrive chi firma la prima volta: lo staff lo sa e può riprovare', async () => {
+    stato.profilo = { role: 'seller', approval_status: 'pending', store_name: 'Bar Roma' };
+    expect((await chiama(salvaTitolare, {
+      legalFirstName: 'Mario', legalLastName: 'Rossi', legalFiscalCode: 'RSSMRA80E05G535X', legalBirthDate: '1980-05-05',
+      legalResidenceAddr: 'Via Roma 1', legalResidenceCity: 'Piacenza', legalResidenceZip: '29121',
+    }, 'PATCH')).status).toBe(200);
+    expect(stato.avvisi).toHaveLength(1);
+    expect(stato.avvisi[0][0]).toBe('Dati del titolare inseriti');
+    expect(stato.avvisi[0][1]).toContain('ora si può approvare');
+  });
+});
+
 describe('lo staff non approva un negozio senza sapere chi firma', async () => {
   const { motivoPerNonApprovare } = await import('@/lib/admin/regole-approvazione');
   const negozio = { role: 'seller', approval_status: 'pending', business_vat_number: '01234567897' };
@@ -208,6 +221,12 @@ describe('lo staff non approva un negozio senza sapere chi firma', async () => {
   it('basta che manchi la data di nascita: è quella che ferma i minorenni', () => {
     const { legal_birth_date: _tolta, ...senzaData } = titolare;
     expect(motivoPerNonApprovare({ ...negozio, ...senzaData }, 'approve', '2026-11-25')).toMatch(/titolare \(data di nascita\)/);
+  });
+
+  it('alla riattivazione il motivo non manda il negozio sospeso su /sell, che per lui è chiuso', () => {
+    const motivo = motivoPerNonApprovare({ ...negozio, approval_status: 'suspended', approved_by: null }, 'reactivate', '2026-11-25');
+    expect(motivo).toContain('mancano i dati del titolare');
+    expect(motivo).not.toContain('/sell');
   });
 
   it('coi dati del titolare si approva', () => {

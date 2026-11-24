@@ -200,7 +200,11 @@ export function motivoPerNonApprovare(
     ];
     const mancaDelTitolare = titolare.filter(([c]) => !presente(p[c])).map(([, nome]) => nome);
     if (mancaDelTitolare.length > 0) {
-      return `${verbo}: mancano i dati del titolare (${mancaDelTitolare.join(', ')}). Il negoziante li scrive su /sell, sotto «Richiesta in valutazione», ${prima}.`;
+      // Secondo collaudo: un negozio sospeso non apre /sell né la rotta del titolare, quindi da solo
+      // non li può scrivere. Il messaggio non lo manda in un posto che per lui è chiuso.
+      return azione === 'reactivate'
+        ? `${verbo}: mancano i dati del titolare (${mancaDelTitolare.join(', ')}). Da sospeso il negozio non li può scrivere: chiedili al negoziante e falli inserire ${prima}.`
+        : `${verbo}: mancano i dati del titolare (${mancaDelTitolare.join(', ')}). Il negoziante li scrive su /sell, sotto «Richiesta in valutazione», ${prima}.`;
     }
   }
 

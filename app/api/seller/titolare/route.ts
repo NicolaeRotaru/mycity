@@ -17,7 +17,8 @@ export const runtime = 'nodejs';
  * riconoscere l'attività: tipo, nome, indirizzo, partita IVA, telefono. Nome,
  * cognome, codice fiscale, data di nascita e residenza del titolare non si
  * chiedono più lì, e nessun'altra pagina li chiedeva: senza questa rotta non si
- * sarebbero più potuti scrivere. Si scrivono dal Profilo del negozio
+ * sarebbero più potuti scrivere. Si scrivono subito dopo l'invio, nella pagina
+ * «Richiesta in valutazione» di /sell, e poi dal Profilo del negozio
  * (components/seller/DatiDelTitolare), con gli stessi controlli che aveva
  * l'iscrizione, compresa la maggiore età (condizioni d'uso, punto 3; il vincolo
  * vero resta sul database, migrazione 156).
@@ -111,6 +112,22 @@ export const PATCH = withAuthRateLimit(
     const cambiati = Object.keys(nuovi).filter(
       (k) => String(att[k] ?? '').trim() !== '' && String(att[k] ?? '').trim() !== nuovi[k].trim(),
     );
+    // 25/11/2026 (secondo collaudo) — Un negozio in attesa che li scrive la prima volta: lo staff
+    // aveva trovato «mancano i dati del titolare» all'approvazione, e senza avviso non sa quando
+    // riprovare. La promessa delle 48 ore conta da lì.
+    const primaVoltaInAttesa =
+      att.approval_status === 'pending' && Object.keys(nuovi).some((k) => String(att[k] ?? '').trim() === '');
+    if (primaVoltaInAttesa) {
+      try {
+        await notifyAdmins(
+          'Dati del titolare inseriti',
+          `${att.store_name ?? 'Un negozio in attesa'} ha scritto i dati di chi firma: ora si può approvare da Utenti.`,
+          '/admin/users',
+        );
+      } catch (errore) {
+        logger.error('[seller-titolare] avviso dei dati inseriti non partito', { userId: user.id, errore });
+      }
+    }
     if (cambiati.length > 0) {
       try {
         await notifyAdmins(
