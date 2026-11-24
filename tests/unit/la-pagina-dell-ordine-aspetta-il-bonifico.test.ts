@@ -316,7 +316,7 @@ describe('dopo le rotte vere: la pagina dice il bonifico, con la cifra dei conta
   }, 60000);
 });
 
-describe('sui contanti, «Paghi al rider» solo se l ordine aspetta ancora i soldi', () => {
+describe('sui contanti, «Paghi al fattorino» solo se l ordine aspetta ancora i soldi', () => {
   it('IL CASO CHE ROMPEVA — ordine annullato: niente «Paghi 40,00 € in contanti»', async () => {
     // Annullando, lib/ordini/annulla.ts scrive CANCELED e porta un pagamento PENDING a FAILED.
     for (const payment_status of ['PENDING', 'FAILED']) {
@@ -345,7 +345,7 @@ describe('sui contanti, «Paghi al rider» solo se l ordine aspetta ancora i sol
     const testo = await cosaLeggeIlCliente(maglione({
       delivery_status: 'OUT_FOR_DELIVERY', delivered_at: null, payment_status: 'PENDING', cash_confirmed_at: null,
     }));
-    expect(testo).toContain('Paghi 40,00 € in contanti al rider alla consegna.');
+    expect(testo).toContain('Paghi 40,00 € in contanti al fattorino alla consegna.');
   }, 60000);
 
   it('ordine misto in consegna e non pagato (20 € di credito, 30 in contanti): «Paghi 30,00 €», mai il lordo di 50', async () => {
@@ -365,7 +365,7 @@ describe('sui contanti, «Paghi al rider» solo se l ordine aspetta ancora i sol
 
     const testo = await cosaLeggeIlCliente(ordine());
 
-    expect(testo).toContain('Paghi 30,00 € in contanti al rider alla consegna.');
+    expect(testo).toContain('Paghi 30,00 € in contanti al fattorino alla consegna.');
     expect(testo, 'la pagina chiede il lordo, credito compreso').not.toContain('Paghi 50,00');
   }, 60000);
 
