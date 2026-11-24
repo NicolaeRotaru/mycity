@@ -319,6 +319,7 @@
   "conto": {
     "agenti": 5,
     "costo_usd": 19.97,
-    "nota": "usage.cost_usd di get_session letto dopo il verify finale (19,97 $), prima del commit del referto. Lotto A (modello grande, 8 voci), lotto B (modello piccolo, 6 voci), 2 revisori in parallelo (modello grande, 6 voci ciascuno, in copie separate), 1 giro di correzione (modello piccolo). Regia: session_01R8112PV6Phn3WXaFfB7G85 (regia terza)."
+    "nota": "usage.cost_usd di get_session letto dopo il verify finale (19,97 $), prima del commit del referto. Lotto A (modello grande, 8 voci), lotto B (modello piccolo, 6 voci), 2 revisori in parallelo (modello grande, 6 voci ciascuno, in copie separate), 1 giro di correzione (modello piccolo). Regia: session_01R8112PV6Phn3WXaFfB7G85 (regia terza).",
+    "subagenti": 5
   }
 }
