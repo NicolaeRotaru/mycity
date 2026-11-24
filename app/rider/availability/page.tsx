@@ -221,7 +221,7 @@ export default function RiderAvailabilityPage() {
 
       {/* Zone preferite */}
       <div className="px-4 pb-4">
-        <p className="mb-1 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">Zone preferite</p>
+        <p className="mb-1 text-[13px] font-bold uppercase tracking-label text-ink-700">Zone preferite</p>
         <p className="mb-3 text-xs text-ink-500">Ricevi prima le consegne in queste zone. Max 6.</p>
         <div className="flex flex-col gap-2">
           {SUGGESTED_ZONES.map((z) => {
@@ -275,7 +275,7 @@ export default function RiderAvailabilityPage() {
 
       {/* Orari preferiti (promemoria personale) */}
       <div className="px-4 pb-4">
-        <p className="mb-2.5 flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">
+        <p className="mb-2.5 flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-label text-ink-700">
           <Calendar size={15} aria-hidden /> Orari preferiti
         </p>
         <Card variant="bordered" padding="md">
@@ -338,7 +338,7 @@ export default function RiderAvailabilityPage() {
 
       {/* Orari di punta */}
       <div className="px-4 pb-4">
-        <p className="mb-2.5 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">Orari di punta</p>
+        <p className="mb-2.5 text-[13px] font-bold uppercase tracking-label text-ink-700">Orari di punta</p>
         <Card variant="flat" padding="md" className="border border-primary-100 bg-primary-50">
           <div className="flex items-start gap-2.5">
             <TrendingUp size={18} className="shrink-0 text-primary-700" aria-hidden />

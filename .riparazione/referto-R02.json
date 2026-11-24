@@ -1,0 +1,436 @@
+{
+  "sessione": "R02",
+  "aggiornato": "2026-11-24 12:55",
+  "finita": true,
+  "testa": "d84fe94326f3b401929128266b6a98a5070c8c97",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "d84fe94326f3b401929128266b6a98a5070c8c97",
+    "nota": "2050 file e 12537 prove verdi, lint 0 errori (122 avvisi). Prova SQL tests/sql/rls/48 righe 97-98 rossa per la 832, attesa: la cambia la regista all unione (serve_file_altrui in R02-009)."
+  },
+  "voci": [
+    {
+      "id": "R02-012",
+      "chiave": "qa-flussi|il nome del negozio non ha un tetto nel database: dal modulo del negozio si salva direttamente nella tabella dei profili",
+      "esito": "riparato",
+      "commit": "af9d3bb0",
+      "file_toccati": [
+        "migrations/830_il_nome_del_negozio_ha_un_tetto_anche_nel_database.sql",
+        "components/seller/site/StoreDetailsEditor.tsx",
+        "tests/sql/rls/riparazione-r02-nome-negozio-con-tetto.test.sql",
+        "tests/unit/riparazione-r02-nome-negozio-con-tetto.test.ts"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r02-nome-negozio-con-tetto.test.sql",
+        "tests/unit/riparazione-r02-nome-negozio-con-tetto.test.ts"
+      ],
+      "prova_comando": "bash tests/sql/harness/apply.sh mycity_test && psql -X -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r02-nome-negozio-con-tetto.test.sql ; npx vitest run tests/unit/riparazione-r02-nome-negozio-con-tetto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base af9d3bb0^ --file migrations/830_il_nome_del_negozio_ha_un_tetto_anche_nel_database.sql --prove tests/sql/rls/riparazione-r02-nome-negozio-con-tetto.test.sql --sql r02_rimessa_nome_negozio --json (uscita 0) ; timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base af9d3bb0^ --file components/seller/site/StoreDetailsEditor.tsx --prove tests/unit/riparazione-r02-nome-negozio-con-tetto.test.ts --json (uscita 0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Migrazione 830: trigger BEFORE INSERT OR UPDATE OF store_name su profiles che rifiuta (23514) un nome oltre 80 caratteri quando nasce o cambia, come il tetto del modulo e della domanda d'iscrizione. Il modulo «Dettagli negozio» salva il nome con trim(), cioe' quello su cui VendorForm conta gli 80 caratteri.",
+      "nota": "Trigger e non CHECK NOT VALID: tests/sql/rls/14-le-porte-di-servizio-sono-chiuse.test.sql vieta i vincoli NOT VALID, e un CHECK varrebbe per ogni UPDATE della riga (un profilo vecchio col nome lungo non si potrebbe piu' scrivere, nemmeno dai pagamenti); un CHECK validato fallirebbe la migrazione o costringerebbe ad accorciare nomi veri. Le due rimesse girano separate perche' una prova SQL e una vitest non stanno nello stesso comando.",
+      "verificato_da": "collaudo (modello grande, copia a parte e Postgres locale r02_collaudo): profilo vecchio di 84 caratteri aggiornabile, 80 emoji passano, 81 «è» respinte, nome nullo, ruolo authenticated; nessuna funzione SQL scrive store_name; regge"
+    },
+    {
+      "id": "R02-005",
+      "chiave": "api-backend|la pulizia degli allarmi tiene esattamente 24 ore, senza margine, e non ha un indice su last_sent_at",
+      "esito": "riparato",
+      "commit": "eb3a949b",
+      "file_toccati": [
+        "migrations/831_la_pulizia_degli_allarmi_tiene_un_margine.sql",
+        "tests/sql/rls/riparazione-r02-allarmi-col-margine.test.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r02-allarmi-col-margine.test.sql"
+      ],
+      "prova_comando": "bash tests/sql/harness/apply.sh mycity_test && psql -X -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r02-allarmi-col-margine.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base eb3a949b^ --file migrations/831_la_pulizia_degli_allarmi_tiene_un_margine.sql --prove tests/sql/rls/riparazione-r02-allarmi-col-margine.test.sql --sql r02_rimessa_allarmi --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Migrazione 831: operational_alert_log_toglie_le_vecchie ridefinita uguale alla 660 ma con soglia 24 ore e 30 minuti (mezz'ora sopra l'attesa piu' lunga letta dal sito), piu' indice operational_alert_log_last_sent_at_idx su last_sent_at. La prova SQL controlla che righe di 24h01 e 24h10 restino, che 24h45 e 3 giorni se ne vadano, e che l'indice ci sia.",
+      "nota": "Margine di mezz'ora e non di ore: la prova esistente tests/sql/rls/riparazione-r04-allarmi.test.sql pretende che una riga di 25 ore se ne vada, e resta verde. Mezz'ora copre lo sfasamento di secondi fra gli orologi descritto nel registro.",
+      "verificato_da": "collaudo (modello grande, copia a parte e Postgres locale r02_collaudo): funzione identica alla 660 tranne la soglia (permessi, search_path, trigger), indice idempotente, con la 660 la prova è rossa, r04-allarmi verde; regge"
+    },
+    {
+      "id": "R02-009",
+      "chiave": "microcopy|la campanella «ordine pronto» dice la fascia senza il giorno",
+      "esito": "riparato",
+      "commit": "7ff5361d91bd4baf024da081bd806b2c0f8a1486",
+      "file_toccati": [
+        "migrations/832_l_ordine_pronto_dice_anche_il_giorno.sql",
+        "tests/sql/rls/riparazione-r02-ordine-pronto-col-giorno.test.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r02-ordine-pronto-col-giorno.test.sql"
+      ],
+      "prova_comando": "bash tests/sql/harness/apply.sh mycity_test && psql -X -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r02-ordine-pronto-col-giorno.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3cf71891^ --file migrations/832_l_ordine_pronto_dice_anche_il_giorno.sql --prove tests/sql/rls/riparazione-r02-ordine-pronto-col-giorno.test.sql --sql r02_rimessa_ordine_pronto --json (uscita 0) ; timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7ff5361d^ --file migrations/832_l_ordine_pronto_dice_anche_il_giorno.sql --prove tests/sql/rls/riparazione-r02-ordine-pronto-col-giorno.test.sql --sql r02_rimessa_assegnato --json (uscita 0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Commit 3cf71891: la migrazione 832 ridefinisce notify_buyer_on_order_status partendo dalla 321: nella campanella «Ordine pronto» a domicilio il giorno della fascia (oggi/domani a Piacenza; senza giorno se la fascia è passata o l etichetta è ignota) e «fattorino» al posto di «rider». Commit 7ff5361d: anche il ramo ASSIGNED dice fattorino (al cliente «Un fattorino ha preso il tuo ordine», «Il fattorino passa a prendere l ordine #… e te lo porta.»; al negozio «Fattorino assegnato», «Un fattorino passa a prendere l ordine #…»). Prova SQL con date fisse: 11 controlli verdi.",
+      "nota": "nella stessa migrazione anche rider → fattorino, chiesto dalla regia. Il lavoro si allarga per coerenza alla campanella ASSIGNED della stessa funzione (decisione della regia), compreso il testo al negozio «Un fattorino passa a prendere…». Unica prova altrui rossa: tests/sql/rls/48 righe 97-98 (la cambia la regista all unione); nessuna prova unit legge le frasi ASSIGNED.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/sql/rls/48-i-difetti-minori-del-database.test.sql",
+          "modifica": "Unico controllo rosso, righe 97-98 (provato su una copia: con questo diff il file è tutto verde).\n-97 SELECT 'ordine pronto da consegnare: «un rider passa a prenderlo», senza faccina (2090, 982)',\n+97 SELECT 'ordine pronto da consegnare: «un fattorino passa a prenderlo», senza faccina (2090, 982)',\n-98        bool_and(body LIKE '%un rider passa a prenderlo%' AND title = 'Ordine pronto'), string_agg(title || ' | ' || body, ' / ')\n+98        bool_and(body LIKE '%un fattorino passa a prenderlo%' AND title = 'Ordine pronto'), string_agg(title || ' | ' || body, ' / ')"
+        }
+      ],
+      "verificato_da": "collaudo (modello grande, copia a parte e Postgres locale r02_collaudo): diff dei corpi 321→832 senza rami persi; 12 casi (23:59, mezzanotte, etichette ignote, fascia nulla, ritiro invariato, READY dopo ASSIGNED); nella 48 rosse solo le righe 97-98 attese; regge"
+    },
+    {
+      "id": "R02-002",
+      "chiave": "api-backend|se lo stesso guasto della pulizia dei dati vecchi torna dopo essere stato letto, gli amministratori non ricevono più l'allarme",
+      "esito": "riparato",
+      "commit": "3eb95a76",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts",
+        "tests/unit/riparazione-r02-allarme-ritenzione-torna.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-allarme-ritenzione-torna.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-allarme-ritenzione-torna.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3eb95a76^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r02-allarme-ritenzione-torna.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nella rotta, la notte in cui potature.fallite e' 0 una nuova chiudiGliAllarmiDellaRitenzione toglie (DELETE) le notifiche «Dati vecchi non cancellati» di ogni amministratore: il guasto e' finito, e se torna l'identificativo ricavato dalla chiave e' libero e l'allarme si riscrive. Con il guasto che dura (anche letto) resta un allarme solo. Prova con orologio finto e il finto giro notturno: rifiutata, letta, sistemata, rifiutata dopo 30 giorni → allarme nuovo da leggere; controprova sul guasto continuo; gli altri avvisi non si toccano.",
+      "nota": "Ho scelto la prima cura del registro (chiudere la riga quando le pulizie tornano a riuscire). «Chiudere» qui vuol dire togliere la riga, non segnarla letta: l'identificativo e' fisso e una riga letta bloccherebbe ancora l'allarme nuovo. Un allarme non ancora letto di un guasto gia' sistemato sparisce dal pannello: il guasto resta nella notte rossa e in Sentry.",
+      "verificato_da": "collaudo (modello grande, copia a parte e Postgres locale r02_collaudo): DELETE fallita e lanciata: il giro risponde 200; avvisi di non admin restano; filtro per user_id e titolo; regge"
+    },
+    {
+      "id": "R02-001",
+      "chiave": "api-backend|la chiusura dello «scrivile tu» gira dopo il tetto delle email e non ha un suo tetto di tempo",
+      "esito": "riparato",
+      "commit": "afafbd74",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts",
+        "tests/unit/riparazione-r02-chiusura-con-tetto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-chiusura-con-tetto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-chiusura-con-tetto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base afafbd74^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r02-chiusura-con-tetto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuovo TETTO_CHIUSURE_MS = 280 s dall'inizio del giro, separato da TETTO_EMAIL_MS (240 s) e dopo il suo caso peggiore (+2 attese della posta): chiudiGliAllarmiDelleEmailPartite e chiudiGliAllarmiDiChiNonAspettaPiu ricevono l'inizio del giro e, passato il tetto, smettono di leggere e chiudere (logger.warn); i rimasti li chiude la notte dopo. Prova con orologio finto (ogni scrittura di un allarme = 1 s): 400 allarmi aperti, notte senza lista e notte con le email oltre il loro tetto: la risposta arriva prima dei 300 s, una parte si chiude, la notte dopo il resto.",
+      "verificato_da": "collaudo (modello grande, copia a parte e Postgres locale r02_collaudo): maxDuration 300 in vercel.json (20 s di margine), tetto misurato dall inizio del giro, prova rossa col tetto a 9,999 s; regge (la prova non sorveglia il margine: verde anche a 295 s)"
+    },
+    {
+      "id": "R02-004",
+      "chiave": "api-backend|l'invio subito delle notifiche push prende le righe guardando solo pushed_at, e può correre col giro del cron",
+      "esito": "parziale",
+      "commit": "83533b47",
+      "file_toccati": [
+        "lib/push/subito.ts",
+        "tests/unit/riparazione-r02-push-subito-e-il-giro.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-push-subito-e-il-giro.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-push-subito-e-il-giro.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 83533b47^ --file lib/push/subito.ts --prove tests/unit/riparazione-r02-push-subito-e-il-giro.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Commit 83533b47: in lib/push/subito.ts l invio subito ridà al giro solo le righe che hanno ancora la sua presa (.eq(pushed_at, presa)), così non cancella il segno di un giro che l ha già mandata. La presa vera nel giro del cron (a6bee2db, rimessa uscita 0) è stata tolta in d84fe943.",
+      "cosa_resta": "La presa nel giro del cron: un giro che ha letto la campanella prima della presa dell invio subito la manda comunque (doppia push). La correzione è pronta nel commit a6bee2db di questo ramo, ma fa diventare rosse 19 prove esistenti in 5 file, i cui finti non reggono .is/.select dopo update().in(); due di quei file (le-notifiche-non-chiedono-al-database-una-volta-per-notifica, le-notifiche-push-non-restano-appese-ne-arrivano-in-ritardo) leggono anche lib/logger.ts, file di un altra sessione dell onda. Per l unione: i 5 diff dei finti qui sotto, poi git cherry-pick a6bee2db.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/send-push/route.ts (file di R02)",
+          "modifica": "All unione, DOPO i finti qui sotto: riapplicare il commit a6bee2db di questo ramo (git cherry-pick a6bee2db: il giro prende in carico le righe con update({pushed_at: nowIso}).in(ids).is(\"pushed_at\", null).select(...), lavora solo le prese, ridà le non gestite con .eq(\"pushed_at\", nowIso); prova tests/unit/riparazione-r02-giro-prende-in-carico.test.ts, rimessa uscita 0)."
+        },
+        {
+          "file": "tests/unit/api-cron-send-push.test.ts",
+          "modifica": "Il finto di update().in() deve reggere la presa (is/select/eq senza segnare, then che segna). Diff esatto:\ndiff --git a/tests/unit/api-cron-send-push.test.ts b/tests/unit/api-cron-send-push.test.ts\nindex 01279396..bb538eb7 100644\n--- a/tests/unit/api-cron-send-push.test.ts\n+++ b/tests/unit/api-cron-send-push.test.ts\n@@ -51,4 +51,14 @@ vi.mock('@supabase/supabase-js', () => ({\n           if (b._update) {\n-            for (const v of valori) marked.push(v);\n-            return Promise.resolve({ error: null });\n+            // La presa del giro (`.is().select()`) ridà le righe prese e la restituzione (`.eq()`)\n+            // rimette pushed_at vuoto: nessuna delle due segna. Segna la scrittura finale, attesa da sola.\n+            const scrittura = {\n+              is: () => scrittura,\n+              select: () => Promise.resolve({ data: pending.filter((n) => valori.includes(n.id)), error: null }),\n+              eq: () => Promise.resolve({ error: null }),\n+              then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {\n+                for (const v of valori) marked.push(v);\n+                return Promise.resolve({ error: null }).then(ok, ko);\n+              },\n+            };\n+            return scrittura;\n           }"
+        },
+        {
+          "file": "tests/unit/le-notifiche-non-chiedono-al-database-una-volta-per-notifica.test.ts",
+          "modifica": "Il finto di update().in() deve reggere la presa (is/select/eq senza segnare, then che segna). Diff esatto:\ndiff --git a/tests/unit/le-notifiche-non-chiedono-al-database-una-volta-per-notifica.test.ts b/tests/unit/le-notifiche-non-chiedono-al-database-una-volta-per-notifica.test.ts\nindex 6d22b39a..73c2cf73 100644\n--- a/tests/unit/le-notifiche-non-chiedono-al-database-una-volta-per-notifica.test.ts\n+++ b/tests/unit/le-notifiche-non-chiedono-al-database-una-volta-per-notifica.test.ts\n@@ -65,3 +65,12 @@ function tabella(nome: string) {\n     in: (_c: string, valori: string[]) => {\n-      if (inAggiornamento) return Promise.resolve({ error: null });\n+      if (inAggiornamento) {\n+        // La presa del giro continua con `.is().select()` e ridà le righe prese; la restituzione con `.eq()`.\n+        const scrittura = {\n+          is: () => scrittura,\n+          eq: () => Promise.resolve({ error: null }),\n+          select: () => Promise.resolve({ data: inSospeso.filter((n) => valori.includes(n.id)), error: null }),\n+          then: (ok: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(ok),\n+        };\n+        return scrittura;\n+      }\n       filtroUtenti = valori;"
+        },
+        {
+          "file": "tests/unit/le-notifiche-push-non-restano-appese-ne-arrivano-in-ritardo.test.ts",
+          "modifica": "Il finto di update().in() deve reggere la presa (is/select/eq senza segnare, then che segna). Diff esatto:\ndiff --git a/tests/unit/le-notifiche-push-non-restano-appese-ne-arrivano-in-ritardo.test.ts b/tests/unit/le-notifiche-push-non-restano-appese-ne-arrivano-in-ritardo.test.ts\nindex b12a819c..9f1619af 100644\n--- a/tests/unit/le-notifiche-push-non-restano-appese-ne-arrivano-in-ritardo.test.ts\n+++ b/tests/unit/le-notifiche-push-non-restano-appese-ne-arrivano-in-ritardo.test.ts\n@@ -64,3 +64,12 @@ function tabella() {\n     in: (_c: string, valori: string[]) => {\n-      if (inAggiornamento) return Promise.resolve({ error: null });\n+      if (inAggiornamento) {\n+        // La presa del giro continua con `.is().select()` e ridà le righe prese; la restituzione con `.eq()`.\n+        const scrittura = {\n+          is: () => scrittura,\n+          eq: () => Promise.resolve({ error: null }),\n+          select: () => Promise.resolve({ data: inSospeso.filter((n) => valori.includes(n.id)), error: null }),\n+          then: (ok: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(ok),\n+        };\n+        return scrittura;\n+      }\n       filtroUtenti = valori;"
+        },
+        {
+          "file": "tests/unit/minori-s03-push.test.ts",
+          "modifica": "Il finto di update().in() deve reggere la presa (is/select/eq senza segnare, then che segna). Diff esatto:\ndiff --git a/tests/unit/minori-s03-push.test.ts b/tests/unit/minori-s03-push.test.ts\nindex 9bc7c3cf..ccf88e31 100644\n--- a/tests/unit/minori-s03-push.test.ts\n+++ b/tests/unit/minori-s03-push.test.ts\n@@ -39,10 +39,23 @@ vi.mock('@/lib/supabase/server', () => ({\n         update: () => ((b._update = true), b),\n-        in: async (_c: string, valori: string[]) => {\n-          if (b._update) { segnate.push(...valori); return { error: null }; }\n+        in: (_c: string, valori: string[]) => {\n+          // La presa del giro (`.is().select()`) ridà le righe prese e la restituzione (`.eq()`) non segna:\n+          // segna solo la scrittura finale, attesa da sola.\n+          if (b._update) {\n+            const scrittura = {\n+              is: () => scrittura,\n+              select: async () => ({ data: pending.filter((n) => valori.includes(n.id as string)), error: null }),\n+              eq: async () => ({ error: null }),\n+              then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {\n+                segnate.push(...valori);\n+                return Promise.resolve({ error: null }).then(ok, ko);\n+              },\n+            };\n+            return scrittura;\n+          }\n           if (tabella === 'push_subscriptions') {\n-            return erroreIscrizioni\n+            return Promise.resolve(erroreIscrizioni\n               ? { data: null, error: { message: 'canceling statement due to statement timeout' } }\n-              : { data: valori.map((u) => ({ id: `s-${u}`, user_id: u, endpoint: 'e', p256dh: 'p', auth: 'a' })), error: null };\n+              : { data: valori.map((u) => ({ id: `s-${u}`, user_id: u, endpoint: 'e', p256dh: 'p', auth: 'a' })), error: null });\n           }\n-          return { data: [], error: null };\n+          return Promise.resolve({ data: [], error: null });\n         },"
+        },
+        {
+          "file": "tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts",
+          "modifica": "Il finto di update().in() deve reggere la presa (is/select/eq senza segnare, then che segna). Diff esatto:\ndiff --git a/tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts b/tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts\nindex 03128336..8325c5ef 100644\n--- a/tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts\n+++ b/tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts\n@@ -34,6 +34,19 @@ vi.mock('@/lib/supabase/server', () => ({\n         update: () => ((b._update = true), b),\n-        in: async (_c: string, valori: string[]) => {\n-          if (b._update) { segnate.push(...valori); return { error: null }; }\n-          if (tabella === 'push_subscriptions') return { data: valori.map((u) => ({ id: `s-${u}`, user_id: u, endpoint: 'e', p256dh: 'p', auth: 'a' })), error: null };\n-          return { data: [], error: null };\n+        in: (_c: string, valori: string[]) => {\n+          // La presa del giro (`.is().select()`) ridà le righe prese e la restituzione (`.eq()`) non segna:\n+          // segna solo la scrittura finale, attesa da sola.\n+          if (b._update) {\n+            const scrittura = {\n+              is: () => scrittura,\n+              select: async () => ({ data: tutte.filter((r) => valori.includes(r.id as string)), error: null }),\n+              eq: async () => ({ error: null }),\n+              then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {\n+                segnate.push(...valori);\n+                return Promise.resolve({ error: null }).then(ok, ko);\n+              },\n+            };\n+            return scrittura;\n+          }\n+          if (tabella === 'push_subscriptions') return Promise.resolve({ data: valori.map((u) => ({ id: `s-${u}`, user_id: u, endpoint: 'e', p256dh: 'p', auth: 'a' })), error: null });\n+          return Promise.resolve({ data: [], error: null });\n         },"
+        }
+      ],
+      "verificato_da": "non collaudata a parte: della voce resta sul ramo solo 83533b47 (rimessa uscita 0), le sue prove sono verdi nel verify",
+      "nota": "Commit della voce sul ramo: 83533b47 (tenuto), a6bee2db (presa nel giro), d84fe943 (presa tolta). Diff dei finti provato su una copia: le 5 prove tornano verdi con a6bee2db."
+    },
+    {
+      "id": "R02-003",
+      "chiave": "api-backend|il freno sulla rotta regge per 3 interruttori su 9: ai, newsletter, classifica e caricamento da file stanno solo nelle pagine",
+      "esito": "gia_riparato_prima",
+      "commit": "",
+      "file_toccati": [],
+      "prova": "Sulla base 5b8c786c: app/api/newsletter/route.ts:12 importa NEWSLETTER_ACCESA e :52 `if (!NEWSLETTER_ACCESA) return ApiErrors.unavailable(...)` (dal commit 244d664f del 5/11); delle 18 rotte app/api/ai/* 15 leggono AI_NEGOZI_ACCESA in testa (es. app/api/ai/description/route.ts:50), translate legge TRADUCI_ACCESO (:68), copilot e catalog-chat passano da getAnthropic, che con AI_NEGOZI_ACCESA spento lancia AiConfigError (lib/ai/client.ts:217); il caricamento da file lo rifiuta app/api/seller/products/import/route.ts:36. La classifica inviti non ha una rotta: la pagina legge la vista referral_leaderboard dal browser, eccezione scritta in lib/funzioni-al-lancio.ts:26-28. Comando: npx vitest run tests/unit/le-funzioni-spente-le-ferma-la-rotta-anche-a-mano.test.ts tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts --reporter=dot → 16/16 verdi (newsletter spenta: 503, nessun accesso al database, nessuna email).",
+      "prova_comando": "npx vitest run tests/unit/le-funzioni-spente-le-ferma-la-rotta-anche-a-mano.test.ts tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts --reporter=dot",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Controllato sulla base: newsletter, AI e caricamento da file hanno gia' il freno nella rotta, con le prove verdi; nessuna modifica.",
+      "nota": "Resta solo la classifica inviti, che non ha una rotta: la vista referral_leaderboard si legge da chiunque abbia un account (SELECT ad authenticated) anche a interruttore spento. Se Nicola la vuole chiusa anche nel database finche' CLASSIFICA_INVITI_ACCESA e' false, e' una migrazione (REVOKE SELECT sulla vista) da decidere: e' fra le domande.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-013",
+      "chiave": "qa-flussi|una migrazione che aggiunge una colonna non si può consegnare da sola: i tipi generati vanno rigenerati nello stesso commit",
+      "esito": "non_codice",
+      "commit": "",
+      "file_toccati": [],
+      "cosa_ho_fatto": "Nessuna modifica. Non e' un difetto del codice: le due prove r11 fanno bene a pretendere lib/database.types.ts uguale all'uscita di scripts/gen-db-types.mjs sulle migrazioni del disco. Il difetto era nella divisione dei file fra le sessioni (nessuno aveva lib/database.types.ts). Controllato alla testa del ramo, con le migrazioni 830-832 di questo lotto: generatore rilanciato in una copia → lib/database.types.ts identico; npx vitest run tests/unit/riparazione-r11-tipi-che-possono-restare-vuoti.test.ts tests/unit/riparazione-r11-viste-nei-tipi.test.ts → 17/17 verdi. Le due prove r11 leggono lib/database.types.ts per nome ma non c'era niente da cambiare.",
+      "prova": "La scheda di questa onda (normali/schede/R02.md:70) mette gia' lib/database.types.ts fra i file di R02, cioe' di chi ha una fascia di migrazioni: la regola e' gia' applicata in questa onda. Generatore rilanciato sulle migrazioni del disco alla testa del ramo: file identico.",
+      "nota": "Regola per la regista quando scrive le schede: chi ha una fascia di migrazioni e aggiunge una colonna (o una vista o una tabella) riceve anche lib/database.types.ts e lo rigenera con `node scripts/gen-db-types.mjs` nello stesso commit della migrazione. Se due sessioni della stessa onda aggiungono colonne, il file va a una sola, o l'unione lo rigenera sulle migrazioni unite.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-011",
+      "chiave": "qa-flussi|le zone del fattorino dicono «salvate» prima dell'esito",
+      "esito": "gia_riparato_prima",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": null,
+      "prova_comando": null,
+      "prova_tipo": "comando",
+      "prova_eseguita": false,
+      "rimessa": null,
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nessuna modifica: sulla base «Preferenze salvate» compare solo dopo l'esito buono (save() -> persist().then(ok), toast.success dopo il controllo di ok; con errore toast.error e ripristino); le zone cambiano stato solo se persist({rider_zones}) risponde vero.",
+      "cosa_resta": null,
+      "serve_file_altrui": null,
+      "prova": "app/rider/availability/page.tsx:127-131 (`void persist(patch).then((ok) => { if (!ok) {setAvail(prima); return;} if (!silent) toast.success('Preferenze salvate') })`), :106 toast.error su errore, :141-145 zone applicate solo se persist() vero; coperto da tests/unit/riparazione-r11-zone-dopo-l-esito.test.tsx",
+      "domanda": null,
+      "nota": null,
+      "verificato_da": "collaudo sonnet: nella base app/rider/availability/page.tsx:121-131 il toast «Preferenze salvate» parte solo dentro persist(...).then(ok) dopo l esito buono; un solo toast.success"
+    },
+    {
+      "id": "R02-008",
+      "chiave": "microcopy|lo stesso invio del lotto ai rimasto senza risposta dice «scartalo e avviane un altro» a 3 minuti e «chiedi all'assistenza prima di avviarne un altro» a 24 ore",
+      "esito": "scelta_di_nicola",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": null,
+      "prova_comando": null,
+      "prova_tipo": "comando",
+      "prova_eseguita": false,
+      "rimessa": null,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessuna modifica. La meta lato 24 ore e gia allineata (lib/ai/statoLavoroCatalogo.ts non dice piu «Puoi avviarne un altro» se il motivo dice di chiedere all'assistenza). Resta il riquadro a 3 minuti (app/seller/products/ai-batch/page.tsx:541-544, «Scartalo e avviane un altro») che da il consiglio opposto a status/route.ts:128.",
+      "cosa_resta": null,
+      "serve_file_altrui": null,
+      "prova": null,
+      "domanda": "Per un invio del lotto AI rimasto senza risposta (puo essere partito ed essere pagato) a 3 minuti il negozio deve poter scartarlo e riavviare subito (come ora), oppure gli diciamo «chiedi all'assistenza prima di avviarne un altro» come a 24 ore?",
+      "nota": "Il rischio e lo stesso (lotto pagato due volte); scegliere il consiglio e una regola di business non scritta nella voce. Scartare e l'unico modo oggi per sbloccare il negozio (cancel/route.ts).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-006",
+      "chiave": "layout-responsive|la pagina 404 a 280 px col testo al 200% esce di 5 px",
+      "esito": "parziale",
+      "commit": "a1f878c950d90d063c9d791cd385c6b1c89cf321",
+      "file_toccati": [
+        "app/not-found.tsx",
+        "tests/unit/riparazione-r02-404-testo-grande.test.ts"
+      ],
+      "prova_file": "tests/unit/riparazione-r02-404-testo-grande.test.ts",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-404-testo-grande.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base HEAD^ --file app/not-found.tsx --prove tests/unit/riparazione-r02-404-testo-grande.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Misurato in Chromium a 280 px con radice 32px: a sforare (285 px) era il numero «404» (text-7xl). Ora text-6xl sotto sm, sm:text-7xl, md:text-9xl; rimisurato 280 e 360 px: nessuno scorrimento laterale. Prova leggera sulle classi.",
+      "cosa_resta": "Lo scorrimento laterale è chiuso (scrollWidth 280 a 280 px con radice 32 px, misurato in Chromium col vero Fraunces 800), ma il «404» (242 px) sta nella finestra solo perché il flex lo centra oltre il padding px-6, e nel riquadro «Link utili» le voci con icona (es. «Centro assistenza») sporgono dal bordo del riquadro di circa 86 px (stima a mano, non misurato). La prova controlla le classi, non la larghezza.",
+      "serve_file_altrui": null,
+      "prova": null,
+      "domanda": null,
+      "nota": null,
+      "verificato_da": "collaudo sonnet: misura in Chromium prima (testo 290 px, pagina 285 px) e dopo (testo 242 px, nessuno scorrimento); stima dei bottoni e dei Link utili → parziale"
+    },
+    {
+      "id": "R02-007",
+      "chiave": "layout-responsive|la home a 320 px col testo al 200% scorre ancora di lato di 18 px",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": null,
+      "prova_comando": null,
+      "prova_tipo": "comando",
+      "prova_eseguita": false,
+      "rimessa": null,
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nessuna modifica: il titolo del passo ha gia flex-wrap sulla riga, min-w-0 grow basis-24 break-words sull'h3 e margine della scheda min(1.5rem,7vw). Misurato in Chromium (radice 32px) su /come-funziona che rende lo stesso HowItWorks: a 320 e 280 px nessun elemento della sezione esce dalla finestra (h3 «Ricevi e paghi alla consegna» a destra 264 px su 320).",
+      "cosa_resta": null,
+      "serve_file_altrui": [
+        {
+          "file": "components/home-sections/HomeSectionRenderer.tsx:115",
+          "modifica": "il contenitore dell hero col cerchio decorativo «absolute -top-20 -right-20 w-[500px] h-[500px]» deve tagliare quello che esce (overflow-hidden sul contenitore relativo), così il cerchio non allarga la pagina a 320 px"
+        },
+        {
+          "file": "components/store-sections/CollectionSection.tsx",
+          "modifica": "lo scheletro di caricamento del carosello («w-40 shrink-0 snap-start sm:w-44») deve stare in un contenitore «min-w-0 overflow-x-auto» come il carosello con i dati, così le schede finte scorrono dentro e non allargano la pagina"
+        }
+      ],
+      "domanda": null,
+      "nota": "components/home/HowItWorks.tsx è già a posto sulla base (riga 77 flex flex-wrap, h3 min-w-0 grow basis-24 break-words), confermato dal collaudo. Ma la home «/» a 320 px col testo al 200% scorre ancora di lato: misurata in Chromium senza dati, larghezza di scorrimento 378 px, per il cerchio dell hero e gli scheletri dei caroselli. Con dati veri non misurata: i 18 px del registro potrebbero venire da lì.",
+      "verificato_da": "collaudo sonnet: base di HowItWorks.tsx confermata pulita; riserva: la home intera non misurata dal collaudo"
+    },
+    {
+      "id": "R02-015",
+      "chiave": "tipografia|otto spaziature diverse per la stessa etichetta maiuscola",
+      "esito": "parziale",
+      "commit": "f983ad5a3b142ba475fdb551065465d2cd88a212",
+      "file_toccati": [
+        "components/home/HowItWorks.tsx",
+        "app/rider/availability/page.tsx",
+        "tests/unit/riparazione-r02-etichette-maiuscole-lotto2.test.ts"
+      ],
+      "prova_file": "tests/unit/riparazione-r02-etichette-maiuscole-lotto2.test.ts",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-etichette-maiuscole-lotto2.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base HEAD^ --file components/home/HowItWorks.tsx,app/rider/availability/page.tsx --prove tests/unit/riparazione-r02-etichette-maiuscole-lotto2.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nei miei file: HowItWorks `uppercase tracking-wider` -> `tracking-label`; rider/availability tre etichette `tracking-[0.03em]` -> `tracking-label`. tailwind.config.ts gia dichiara label 0.04em (e wide 0.04em), nessuna modifica.",
+      "cosa_resta": "52 file fuori dal lotto hanno ancora etichette `uppercase` con tracking-wide / tracking-wider / tracking-widest / tracking-[0.03|0.05|0.06|0.08em]",
+      "serve_file_altrui": [
+        {
+          "file": "app/category/[slug]/page.tsx,app/admin/activity/page.tsx,app/admin/users/page.tsx,app/admin/orders/[id]/page.tsx,app/admin/funnel/page.tsx,app/admin/disputes/page.tsx,app/admin/today/page.tsx,app/admin/products/page.tsx,app/admin/coupons/page.tsx,app/admin/payouts/page.tsx,app/seller/orders/[id]/page.tsx,app/seller/customers/page.tsx,app/seller/earnings/page.tsx,app/seller/promotions/page.tsx,app/seller/preventivo/page.tsx,app/profile/loyalty/page.tsx,app/profile/returns/page.tsx,app/profile/achievements/page.tsx,app/profile/gift-cards/page.tsx,app/profile/referral/page.tsx,app/rider/history/page.tsx,app/rider/orders/[id]/page.tsx,app/rider/profile/page.tsx,app/rider/page.tsx,app/rider/help/page.tsx,app/favorites/page.tsx,app/come-funziona/page.tsx,components/LiveActivityFeed.tsx,components/admin/AdminUI.tsx,components/admin/home/HomeSectionsEditor.tsx,components/admin/RimborsiDaDividere.tsx,components/ui/QualityMarks.tsx,components/seller/VoiceProductButton.tsx,components/seller/QuickAiTools.tsx,components/seller/ImproveAllPanel.tsx,components/seller/AnteprimaServizio.tsx,components/seller/PreventivoAgenziaCard.tsx,components/seller/site/PageSectionsEditor.tsx,components/seller/site/PageListEditor.tsx,components/seller/SellerHealthScore.tsx,components/seller/SellerPageTitle.tsx,components/StoreProductExplorer.tsx,components/store-sections/HoursSection.tsx,components/account/AccountSidebar.tsx,components/home-sections/HomeSectionRenderer.tsx,components/home-sections/ReorderRail.tsx,components/CollectionHeader.tsx,components/SearchBar.tsx,components/home/PromoDeals.tsx,components/home/TrendingNow.tsx,components/products/VendutoDa.tsx,components/SponsoredCarousel.tsx,components/MobileAccountSheet.tsx",
+          "modifica": "su ogni riga con `uppercase`: `tracking-wide`, `tracking-wider`, `tracking-widest`, `tracking-[0.03em]`, `tracking-[0.05em]`, `tracking-[0.06em]`, `tracking-[0.08em]` -> `tracking-label` (prova di riferimento: tests/unit/riparazione-r02-etichette-maiuscole-lotto2.test.ts, da estendere con i file)"
+        }
+      ],
+      "prova": null,
+      "domanda": null,
+      "nota": null,
+      "verificato_da": "collaudo sonnet: nei due file nessuna etichetta uppercase con altra spaziatura; tracking-label in tailwind.config.ts:164; prove verdi"
+    },
+    {
+      "id": "R02-014",
+      "chiave": "qa-flussi|una prova del promemoria del carrello resta verde solo per caso",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": null,
+      "prova_comando": null,
+      "prova_tipo": "comando",
+      "prova_eseguita": false,
+      "rimessa": null,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessuna modifica: il file di prova non importa ne legge per nome nessuno dei 5 file del lotto (usa solo import dinamici di lib/stripe e app/api/cron/abandoned-carts). Verificata la cura in locale (poi ripristinata, albero pulito): con la riga sotto la prova resta verde per ragione vera.",
+      "cosa_resta": null,
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/le-email-d-ordine-escono-senza-il-tasto-per-smettere.test.ts",
+          "modifica": "aggiungere PRIMA della riga 87 (`  return { data: [], error: null };`, fine di risposta()) la riga: `  if (tabella === 'abandoned_carts' && operazione === 'update') return { data: { user_id: 'cliente-1' }, error: null };` Cosi la rivendicazione del carrello (route.ts:188-194, maybeSingle) rende una riga vera e non {data: []} (vettore vuoto = «vero» per caso). Provato: 3/3 verdi. Cambiare maybeSingle/single (righe 98-99) per rendere null sul vuoto lo manderebbe rosso per via di quella stessa rivendicazione, quindi serve questa riga."
+        }
+      ],
+      "prova": null,
+      "domanda": null,
+      "nota": null,
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-010",
+      "chiave": "qa-flussi|in un commento del cron delle notifiche resta l'id di un'altra sessione",
+      "esito": "riparato",
+      "commit": "2930b8aa172da8e443a63b839feb4481b65e2dbf",
+      "file_toccati": [
+        "app/api/cron/send-push/route.ts",
+        "tests/unit/riparazione-r02-commento-senza-id.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-commento-senza-id.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r02-commento-senza-id.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2930b8aa^ --file app/api/cron/send-push/route.ts --prove tests/unit/riparazione-r02-commento-senza-id.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Alla riga 10 tolto il codice di sessione fra parentesi dopo la data; il resto della nota è uguale. Prova leggera: la nota c è ancora e non contiene codici di voce o di sessione (regex, senza scrivere l id).",
+      "nota": "Il file ha ancora codici vecchi in altri commenti (righe 41, 46, 75, 128 circa): la voce non li nomina.",
+      "verificato_da": "collaudo sonnet: rimesso l id nel commento su una copia, la prova cade (1 fallita); senza id passa"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "il nome del negozio nel pannello admin non ha il tetto di 80 caratteri: oltre, il database lo rifiuta col messaggio generico",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/admin/users/page.tsx:1023",
+      "descrizione": "Con la migrazione 830 un nome oltre 80 caratteri salvato dal pannello admin torna «Il valore inserito non è valido.»: al campo manca maxLength 80 come nel modulo del negozio."
+    },
+    {
+      "titolo": "la campanella «ordine assegnato» dice ancora rider al cliente e al negozio",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "migrations/832_l_ordine_pronto_dice_anche_il_giorno.sql (ramo ASSIGNED di notify_buyer_on_order_status)",
+      "descrizione": "«Un rider ha preso il tuo ordine», «Il rider passa a prendere…», al negozio «Rider assegnato»: la funzione ora vive nella 832."
+    },
+    {
+      "titolo": "un tetto del nome negozio respinto dal database esce col messaggio generico «Il valore inserito non è valido.»",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "lib/errors.ts:23",
+      "descrizione": "Il codice 23514 del trigger della migrazione 830 arriva all utente come messaggio generico: servirebbe «Il nome del negozio può avere al massimo 80 caratteri»."
+    }
+  ],
+  "domande_per_nicola": [
+    "R02-008: a 3 minuti senza risposta il negozio deve poter scartare il lotto AI e avviarne un altro subito (come oggi), oppure gli diciamo «chiedi all assistenza prima di avviarne un altro» come a 24 ore? Il rischio è un lotto pagato due volte; oggi scartare è l unico modo di sbloccarsi.",
+    "R02-003: la classifica inviti spenta va chiusa anche nel database (togliere il SELECT sulla vista referral_leaderboard agli utenti con account finché CLASSIFICA_INVITI_ACCESA è false)? Oggi la frena solo la pagina, per un eccezione scritta in lib/funzioni-al-lancio.ts:26-28.",
+    "R02-002: la notte in cui le pulizie tornano a riuscire, gli allarmi «Dati vecchi non cancellati» si tolgono dal pannello, anche quelli non ancora letti. Va bene, o vanno tenuti nello storico (servirebbe un identificativo diverso per ogni guasto)?"
+  ],
+  "conto": {
+    "agenti": 5,
+    "nota": "3 subagenti che riparano (lotto 1 e 3 sul modello grande, lotto 2 sul piccolo) e 2 collaudi (grande sulle voci dei dati, piccolo sulle leggere). Spesa letta da get_session senza id alla consegna: 24,64 $ (passata la soglia dei 24 $ durante il collaudo, che era il lotto in corso).",
+    "subagenti": 5
+  },
+  "costo_usd": 24.64
+}
