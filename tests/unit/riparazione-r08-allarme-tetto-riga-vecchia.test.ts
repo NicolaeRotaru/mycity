@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
  * R08-002. L'allarme del tetto di spesa AI conta i minuti del guasto da una riga di operational_alert_log
  * ('ai-tetto-condiviso:ripiego-da'), scritta al primo giro che trova il conto condiviso muto e
  * tolta quando torna a rispondere. La pulizia della memoria degli allarmi non la tocca, e la si
- * leggeva senza limite d'eta'; l'uscita senza tetto non la toglieva. Rimasta da
+ * leggeva senza limite d'eta'; l'uscita senza tetto (o con l'AI spenta) non la toglieva. Rimasta da
  * un guasto vecchio, al primo guasto nuovo di cinque minuti l'allarme diceva «non risponde da tre
  * giorni».
  *
@@ -12,9 +12,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
  */
 
 const finti = vi.hoisted(() => ({
+  aiAccesa: true,
   righe: new Map<string, string>(),
 }));
 
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => {
+  const vero = (await originale()) as Record<string, unknown>;
+  return {
+    ...vero,
+    get AI_NEGOZI_ACCESA() {
+      return finti.aiAccesa;
+    },
+  };
+});
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), spesa: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -55,6 +65,7 @@ async function giro(tettoEur = 20) {
 describe('R08-002 l allarme del tetto non ripete i minuti di un guasto vecchio', () => {
   beforeEach(() => {
     finti.righe.clear();
+    finti.aiAccesa = true;
     vi.useFakeTimers();
     vi.setSystemTime(ADESSO);
   });
@@ -64,6 +75,13 @@ describe('R08-002 l allarme del tetto non ripete i minuti di un guasto vecchio',
     finti.righe.set(CHIAVE_RIPIEGO_DA, oreFa(72));
     expect(await giro(0)).toEqual([]);
     expect(finti.righe.has(CHIAVE_RIPIEGO_DA), 'il giro senza tetto lascia la riga del guasto').toBe(false);
+
+    // Con l'AI dei negozi spenta l'uscita toglie la riga allo stesso modo.
+    finti.righe.set(CHIAVE_RIPIEGO_DA, oreFa(72));
+    finti.aiAccesa = false;
+    expect(await giro()).toEqual([]);
+    expect(finti.righe.has(CHIAVE_RIPIEGO_DA), 'il giro con l AI spenta lascia la riga del guasto').toBe(false);
+    finti.aiAccesa = true;
 
     // Tetto di nuovo configurato: primo guasto, cinque minuti dopo ancora niente.
     expect(await giro()).toHaveLength(0);
