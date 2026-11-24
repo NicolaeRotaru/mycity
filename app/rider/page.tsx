@@ -370,6 +370,14 @@ export default function RiderDashboardPage() {
         // R04-007 — Già preso da un altro, o non più pronto (annullato, tornato in preparazione).
         if (esito?.motivo === 'GIA_PRESO') throw new OrdineNonPiuPrendibile('Ordine già preso da un altro rider');
         if (esito?.motivo === 'NON_PIU_DISPONIBILE') {
+          // R04-011 — `prendi_ordine` (661) risponde così anche quando l'ordine è GIÀ di chi chiama: un
+          // doppio tocco su «Accetta», o la presa fatta da un'altra scheda. Prima di dire «non è più
+          // disponibile» si guarda se è già suo (gli ordini suoi il fattorino li legge): se sì, è suo.
+          const { data: { user: io } } = await supabase.auth.getUser();
+          const { data: giaMio } = io
+            ? await supabase.from('orders').select('id').eq('id', orderId).eq('rider_id', io.id).maybeSingle()
+            : { data: null };
+          if ((giaMio as { id?: string } | null)?.id === orderId) return { id: orderId, giaTuo: true };
           throw new OrdineNonPiuPrendibile('Questo ordine non è più disponibile: non è più tra quelli pronti da prendere');
         }
         throw new Error(
@@ -384,7 +392,7 @@ export default function RiderDashboardPage() {
               : "Non siamo riusciti a prendere l'ordine. Riprova.",
         );
       }
-      const data2 = { id: esito.id };
+      const data2 = { id: esito.id, giaTuo: false };
 
       // #44 — Qui c'era una chiamata a `notify()` dal browser. Non ha mai
       // funzionato: la tabella delle notifiche non ha nessuna regola che
@@ -395,9 +403,10 @@ export default function RiderDashboardPage() {
       return data2;
     },
     onSuccess: (data) => {
-      trackRiderOrderAccepted(data.id);
+      // R04-011 — Un ordine già suo non è una presa nuova: non si conta di nuovo e si dice com'è.
+      if (!data.giaTuo) trackRiderOrderAccepted(data.id);
       qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
-      toast.success('Ordine assegnato a te!');
+      toast.success(data.giaTuo ? 'Questo ordine è già tuo.' : 'Ordine assegnato a te!');
       router.push(`/rider/orders/${data.id}`);
     },
     // R04-007 — Un «Accetta» perso perché l'ordine non si può più prendere: esce subito
