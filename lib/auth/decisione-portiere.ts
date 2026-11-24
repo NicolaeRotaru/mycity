@@ -255,8 +255,12 @@ export const PERCORSO_PREVENTIVO = '/seller/preventivo';
  */
 export const PERCORSI_IN_REVISIONE = [PERCORSO_PREVENTIVO, '/seller/products'] as const;
 
+/** Dentro i prodotti, le pagine fatte solo di strumenti che si attivano con l'approvazione (collaudo del 24/11). */
+const PERCORSI_SOLO_DA_APPROVATO = ['/seller/products/ai-batch'] as const;
+
 export function percorsoInRevisione(pathname: string): boolean {
   const p = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  if (PERCORSI_SOLO_DA_APPROVATO.some((base) => p === base || p.startsWith(`${base}/`))) return false;
   return PERCORSI_IN_REVISIONE.some((base) => p === base || p.startsWith(`${base}/`));
 }
 

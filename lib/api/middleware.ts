@@ -501,7 +501,12 @@ export function withSellerAuth(handler: GenericHandler) {
     if (!auth.ok) return auth.response;
     const { profile } = auth;
     if (profile.role !== 'admin' && (profile.role !== 'seller' || !profile.is_approved)) {
-      return ApiErrors.forbidden('Solo seller approvati o admin');
+      // 24/11/2026 (modalità demo) — Il negozio in verifica prepara i prodotti, ma gli strumenti in più
+      // (intelligenza artificiale, importazione da link, foto lette in automatico) si attivano con
+      // l'approvazione: lo si dice in chiaro invece di un «vietato».
+      return ApiErrors.forbidden(profile.role === 'seller'
+        ? 'Questa funzione si attiva quando il tuo negozio è approvato. Intanto puoi scrivere i prodotti a mano o caricarli da file.'
+        : 'Solo seller approvati o admin');
     }
     return handler({
       user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente,
@@ -523,7 +528,12 @@ export function withSellerAuthRateLimit(opts: AuthRateLimitOpts, handler: Generi
     if (!auth.ok) return auth.response;
     const { profile } = auth;
     if (profile.role !== 'admin' && (profile.role !== 'seller' || !profile.is_approved)) {
-      return ApiErrors.forbidden('Solo seller approvati o admin');
+      // 24/11/2026 (modalità demo) — Il negozio in verifica prepara i prodotti, ma gli strumenti in più
+      // (intelligenza artificiale, importazione da link, foto lette in automatico) si attivano con
+      // l'approvazione: lo si dice in chiaro invece di un «vietato».
+      return ApiErrors.forbidden(profile.role === 'seller'
+        ? 'Questa funzione si attiva quando il tuo negozio è approvato. Intanto puoi scrivere i prodotti a mano o caricarli da file.'
+        : 'Solo seller approvati o admin');
     }
     const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);

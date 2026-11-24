@@ -22,7 +22,7 @@ const supaUtente = {
 };
 vi.mock('@/lib/api/middleware', () => ({
   withSellerAnchePendingRateLimit: (_o: unknown, h: (a: unknown) => unknown) => (req: unknown) =>
-    h({ req, user: { id: 'negozio-1' }, supaUtente, params: {} }),
+    h({ req, user: { id: 'negozio-1' }, profile: { role: 'seller', is_approved: true }, supaUtente, params: {} }),
 }));
 
 async function manda(righe: unknown[]) {

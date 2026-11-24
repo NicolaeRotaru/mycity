@@ -22,8 +22,8 @@
 --     shop_of_month_leaderboard, live_activity_public, nomi_pubblici;
 --   · search_products_smart e active_promo_products;
 --   · le storie, le promozioni e product_active_discounts (dal collaudo del 24/11).
--- Non cambia negozio_approvato: la usa il salvataggio dei prodotti (405), e un negozio in demo i suoi
--- prodotti li prepara. Il negozio stesso vede sempre i suoi prodotti (regola «Sellers can view their
+-- Non cambia negozio_approvato. Il salvataggio dei prodotti (405) usa negozio_puo_preparare (punto 8):
+-- un negozio in demo, e anche uno in verifica, i suoi prodotti li prepara. Il negozio stesso vede sempre i suoi prodotti (regola «Sellers can view their
 -- own products») e la sua riga nella vista seller_public_profiles, per l'anteprima.
 --
 -- «SOLO PER I NUOVI», SENZA ID SCRITTI A MANO: la colonna profiles.visibile_senza_abbonamento nasce
@@ -480,7 +480,7 @@ BEGIN
   END IF;
 
   -- Chi chiama: la chiave di servizio (la rotta dell'amministrazione), oppure un
-  -- negozio approvato o un amministratore, che deve essere il proprietario.
+  -- negozio approvato o in verifica con la richiesta mandata (709), o un amministratore, che deve essere il proprietario.
   IF NOT v_servizio THEN
     IF v_chi IS NULL THEN
       RAISE EXCEPTION 'prodotto_non_tuo' USING ERRCODE = '42501';
