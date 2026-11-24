@@ -16,6 +16,7 @@ import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { cn } from '@/lib/cn';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
@@ -104,6 +105,15 @@ function DeliveryRoute({ store, cust, small }: { store: string; cust: string; sm
       </div>
     </div>
   );
+}
+
+/** Il riquadro «Sei online / Sei offline»: offline è una card, online è un fondo pieno a gradiente (non una card). */
+function RiquadroOnline({ online, children }: { online: boolean; children: React.ReactNode }) {
+  const classi = 'flex items-center justify-between px-5 py-[18px]';
+  if (online) {
+    return <div className={cn(classi, 'rounded-2xl bg-gradient-to-br from-olive-600 to-olive-700 text-white shadow-warm')}>{children}</div>;
+  }
+  return <Card variant="surface" radius="2xl" padding="none" className={cn(classi, 'text-ink-900')}>{children}</Card>;
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -519,18 +529,12 @@ export default function RiderDashboardPage() {
         ) : statoOnline === 'non-so' ? (
           // R04-011 — La prima lettura sta ancora arrivando: non si dice «Sei offline» e non si
           // offre l'interruttore finché lo stato non si sa.
-          <div aria-live="polite" className="rounded-2xl border border-cream-300 bg-surface-0 px-5 py-[18px] text-ink-900">
+          <Card variant="surface" radius="2xl" padding="none" aria-live="polite" className="px-5 py-[18px] text-ink-900">
             <p className="font-serif text-[18px] font-extrabold">Controllo se sei online…</p>
             <p className="mt-0.5 text-xs text-ink-500">Un momento: sto leggendo il tuo stato.</p>
-          </div>
+          </Card>
         ) : (
-        <div
-          className={`flex items-center justify-between rounded-2xl px-5 py-[18px] ${
-            online
-              ? 'bg-gradient-to-br from-olive-600 to-olive-700 text-white shadow-warm'
-              : 'border border-cream-300 bg-surface-0 text-ink-900'
-          }`}
-        >
+        <RiquadroOnline online={online}>
           <div>
             <p className="font-serif text-[18px] font-extrabold">{online ? 'Sei online' : 'Sei offline'}</p>
             <p className={`mt-0.5 text-xs ${online ? 'text-white/85' : 'text-ink-500'}`}>
@@ -554,7 +558,7 @@ export default function RiderDashboardPage() {
               style={{ left: online ? '35px' : '3px' }}
             />
           </button>
-        </div>
+        </RiquadroOnline>
         )}
       </div>
 

@@ -1,0 +1,165 @@
+{
+  "sessione": "R10",
+  "aggiornato": "2026-11-24 17:45",
+  "finita": true,
+  "testa": "47f644ba5b097bd0e7454e2d9884cbe02a00bc8d",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "47f644ba5b097bd0e7454e2d9884cbe02a00bc8d",
+    "nota": "typecheck, lint e vitest: 2090 file di prova verdi e 1 saltato, 12690 prove verdi"
+  },
+  "voci": [
+    {
+      "id": "R10-001",
+      "chiave": "coerenza-brand|la primitiva card è usata in 10 file, mentre 141 card sono ridisegnate a mano con quattro raggi diversi",
+      "esito": "parziale",
+      "commit": "47f644ba5b097bd0e7454e2d9884cbe02a00bc8d",
+      "file_toccati": [
+        "app/rider/page.tsx",
+        "components/ui/Card.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-card-a-mano.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-card-a-mano.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 47f644ba5b097bd0e7454e2d9884cbe02a00bc8d^ --file app/rider/page.tsx,components/ui/Card.tsx --prove tests/unit/riparazione-r10-card-a-mano.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Card passa il resto delle prop HTML (aria-live, id, role) al div; in rider il riquadro «controllo se sei online» e quello offline sono Card (online resta un fondo a gradiente, non una card).",
+      "verificato_da": "revisore (subagente sonnet): confronto riquadro per riquadro delle classi risultanti (stesso insieme; cn è un join senza twMerge); in Card il resto delle prop va al div, e as, className e children non cambiano; tsc 0; prova e rimessa rilanciate (uscita 0). Verdetto: regge, la voce resta parziale per i riquadri dei file di altre sessioni.",
+      "cosa_resta": "Restano a mano: link ordine in corso di rider (bordo accent-2: cn non unisce classi in conflitto), le caselle dei numeri di about:128 (r03-chi-siamo-testo-grande legge il markup 'min-w-0 bg-white…' e r21-chi-siamo-riquadro la sorgente: convertirle li romperebbe), i due riquadri a gradiente di about (decorazione). Circa 125 riquadri a mano nei file di altre sessioni di app/ e components/, da convertire con lo schema Card variant bordered|quiet|surface + radius xl/2xl/lg da chi possiede quei file."
+    },
+    {
+      "id": "R10-002",
+      "chiave": "frontend-ux|un negozio senza nome ha metadati indicizzabili mentre la sua pagina risponde «non trovato»",
+      "esito": "riparato",
+      "commit": "f4a0858692ab78108a20604e1e8a4a53c8a8b539",
+      "file_toccati": [
+        "app/store/[id]/[slug]/layout.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-pagina-negozio-senza-nome.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-pagina-negozio-senza-nome.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f4a0858692ab78108a20604e1e8a4a53c8a8b539^ --file app/store/[id]/[slug]/layout.tsx --prove tests/unit/riparazione-r10-pagina-negozio-senza-nome.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "generateMetadata della pagina su misura usa la stessa condizione del guscio (nome vuoto/null compreso) e da noindex senza canonico; la chiave robots si omette invece di essere undefined.",
+      "verificato_da": "revisore (subagente sonnet): condizione di [slug]/layout.tsx:35 identica a quella del notFound() del guscio; prova e rimessa rilanciate (uscita 0); provati a mano nome null e '', pagina nascosta (noindex esplicito), slug inesistente, negozio normale (canonico, niente chiave robots). Un nome di soli spazi resta indicizzabile, coerente col guscio che non lo manda in 404. Verdetto: regge."
+    },
+    {
+      "id": "R10-003",
+      "chiave": "frontend-ux|altri percorsi di facebook non elencati possono essere salvati come nome del profilo",
+      "esito": "parziale",
+      "commit": "963b5384ce657ae77d1905786b26d46df2455972",
+      "file_toccati": [
+        "lib/store-customization.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-facebook-altri-percorsi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-facebook-altri-percorsi.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 963b5384ce657ae77d1905786b26d46df2455972^ --file lib/store-customization.ts --prove tests/unit/riparazione-r10-facebook-altri-percorsi.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Aggiunti all'elenco composer, creatorstudio, messenger, unsupportedbrowser, checkpoint, crisisresponse, community, developers (gli altri della lista c'erano gia); il nome di Facebook scritto a mano non ammette piu il trattino basso, come nel link (Instagram e TikTok lo tengono).",
+      "verificato_da": "revisore (subagente sonnet): prova e rimessa rilanciate (uscita 0); passano ancora Nome-Cognome-123456789012345, ?mibextid, /about, Pane.Quotidiano, pane-quotidiano; gli otto percorsi nuovi sono respinti anche con maiuscole e m.facebook.com; Instagram e TikTok ammettono ancora il trattino basso; il messaggio del trattino basso scritto a mano è chiaro. Verdetto: parziale, come dichiarato.",
+      "cosa_resta": "Un percorso di una parola sconosciuto non si distingue da un nome vero senza chiedere a Facebook: resta salvabile come nome.",
+      "domanda": "Nicola: lasciare cosi, oppure mostrare al negoziante un avviso «controlla che sia il nome della pagina»?",
+      "nota": "Effetto da sapere: un nome Facebook già salvato col trattino basso viene scartato in lettura da salvaQuelloCheVale (lib/store-customization.ts, circa :244-262) e sparisce dalla vetrina senza avviso. Facebook non ammette il trattino basso nei nomi, quindi quel link portava a una pagina che non esiste."
+    },
+    {
+      "id": "R10-004",
+      "chiave": "layout-responsive|la home a 320 px col testo al 200% scorre ancora di lato di 18 px",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_tipo": "comando",
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessuna modifica: sulla base HowItWorks e' gia a posto, il contenitore hero di HomeSectionRenderer:114 ha gia overflow-hidden (cerchio incluso) e lo scheletro di CollectionSection e' una griglia, non un carosello con w-40 shrink-0; nessun altro carosello/scheletro nei miei file.",
+      "cosa_resta": null,
+      "prova": "components/home-sections/HomeSectionRenderer.tsx:114 'relative overflow-hidden'; components/store-sections/CollectionSection.tsx:68-72 scheletro 'grid grid-cols-2…'",
+      "nota": "Le due modifiche scritte dal giro di prima ci sono già sulla base d000e3b0: components/home-sections/HomeSectionRenderer.tsx:114 la sezione dell hero è «relative overflow-hidden» e contiene il cerchio da 500 px; components/store-sections/CollectionSection.tsx:70 lo scheletro è una griglia grid-cols-2 (niente schede w-40 shrink-0), e il carosello con i dati a :110 è già overflow-x-auto. components/home/HowItWorks.tsx: flex-wrap e h3 min-w-0 grow basis-24 break-words. Nessun commit. Il revisore, leggendo components/home/ e components/home-sections/, ha trovato la causa probabile dei 18 px nella sezione «Riordina» (ReorderRail.tsx:198 e :229), che compare solo coi dati veri: per questo la misura senza chiavi non la vede. La misura della home intera non si è potuta fare: il server locale parte, ma senza chiavi Supabase la home rende la pagina d'errore (320 su 320, che non vale).",
+      "serve_file_altrui": [
+        {
+          "file": "components/home-sections/ReorderRail.tsx",
+          "modifica": "Riga 198: la riga delle miniature dei prodotti abituali `<div className=\"flex gap-1.5\">` (fino a 5 miniature h-11 w-11 shrink-0: a 320 px con la radice a 32 px sono circa 488 px) diventa `<div className=\"flex flex-wrap gap-1.5\">`. Riga 229: la riga delle miniature dell'ordine `<div className=\"flex items-center gap-1.5\">` (fino a 4 miniature h-12 w-12 shrink-0, circa 420 px) diventa `<div className=\"flex min-w-0 flex-wrap items-center gap-1.5\">`. Poi misurare la home con dati finti a 320 px col testo al 200%: document.documentElement.scrollWidth deve essere 320."
+        }
+      ],
+      "verificato_da": "revisore (subagente sonnet): affermazioni sul codice confermate (HomeSectionRenderer.tsx:114, CollectionSection.tsx:68-72 e :110, HowItWorks); letti tutti i componenti della home: ShopOfMonthHero, HeroStoreCard e StoriesCarousel reggono, ReorderRail.tsx:198 e :229 sforano a 320 px con la radice a 32 px."
+    },
+    {
+      "id": "R10-005",
+      "chiave": "qa-flussi|le maschere di caricamento delle foto accettano solo jpg, png e webp, mentre la porta e lo storage ne accettano sette",
+      "esito": "parziale",
+      "commit": "dc98170c79ddb186dd88f144b64061b92df125c8",
+      "file_toccati": [
+        "components/StoreMediaManager.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-foto-sette-tipi-media.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-foto-sette-tipi-media.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dc98170c79ddb186dd88f144b64061b92df125c8^ --file components/StoreMediaManager.tsx --prove tests/unit/riparazione-r10-foto-sette-tipi-media.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le altre tre caselle erano gia a posto sulla base; StoreMediaManager ora usa mappaAccept, tipiScrittiPerUmani e fileColTipoGiusto (sette tipi, avviso con HEIC e AVIF, HEIC a tipo vuoto caricato come image/heic).",
+      "verificato_da": "revisore (subagente sonnet): prova e rimessa rilanciate (uscita 0); secchio products e HEIC col tipo vuoto controllati; ImageUrlField, VendorForm, SellerApplicationForm, seller/site/ImageUpload e GalleryFields a posto; trovata components/seller/ProductImagesField.tsx:123 ancora a tre tipi, quindi la voce scende a parziale.",
+      "cosa_resta": "Le quattro caselle nominate dalla voce sono a posto (StoreMediaManager con questo commit; ImageUrlField, VendorForm e SellerApplicationForm già sulla base). Resta ferma a tre tipi la casella delle foto prodotto components/seller/ProductImagesField.tsx:123-127 (messaggio :137), che non è un mio file: vedi serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/ProductImagesField.tsx",
+          "modifica": "Aggiungere `import { ALLOWED_IMAGE_TYPES } from '@/lib/products/uploadImages';` e `import { ESTENSIONI_DEI_TIPI } from '@/lib/storage/casella-di-caricamento';`. Righe 123-127: sostituire `accept: { 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'], 'image/webp': ['.webp'] },` con `accept: Object.fromEntries(ALLOWED_IMAGE_TYPES.map((t) => [t, [...(ESTENSIONI_DEI_TIPI[t] ?? [])]])),` (i cinque tipi che l'upload delle foto prodotto ammette: HEIC/HEIF restano fuori di proposito, come in lib/products/uploadImages.ts:23-24). Riga 137: `'Formato non supportato (solo JPG, PNG, WEBP)'` diventa `'Formato non supportato (solo JPG, PNG, WEBP, GIF, AVIF)'`. Prova: react-dropzone finto che cattura accept (cinque tipi con .gif e .avif, senza heic) e l'avviso con GIF e AVIF."
+        }
+      ]
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Nel link facebook.com/nome_col_trattino_basso il primo messaggio che si legge è quello generico, «Scrivi solo il nome del profilo…», non quello del trattino basso",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "lib/store-customization.ts:158-165",
+      "descrizione": "Escono due messaggi, e il primo è il generico: chi ha incollato il link non capisce che il problema è il trattino basso."
+    },
+    {
+      "titolo": "La Card senza href scarta aria-label, e la Card con href non passa al Link il resto delle prop (id, role)",
+      "dimensione": "accessibilita",
+      "severita": "minore",
+      "file": "components/ui/Card.tsx:80-85",
+      "descrizione": "C'era già prima di questo giro: aria-label si perde sul div, e id e role si perdono sul Link."
+    }
+  ],
+  "domande_per_nicola": [
+    "R10-003: un percorso di Facebook di una parola che non conosciamo si salva ancora come nome della pagina. Lasciare così, oppure mostrare al negoziante un avviso «controlla che sia il nome della pagina»?"
+  ],
+  "conto": {
+    "agenti": 2,
+    "nota": "un lotto su sonnet, un revisore su sonnet; la riserva non è stata usata. Costo da get_session: usage.cost_usd 3.36 (letto alle 16:31 UTC)",
+    "subagenti": 2
+  },
+  "costo_usd": 3.36
+}
