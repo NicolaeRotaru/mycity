@@ -8,6 +8,7 @@ import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { INVIO_SENZA_RISPOSTA, pollBatch, streamBatchResults } from '@/lib/ai/batch';
+import { lavoroChiuso, puoAvviareLavoro } from '@/lib/ai/statoLavoroCatalogo';
 import { parseCatalogBatchEntry, stimaCostoLottoEur, type CatalogJobResult, type CatalogOperation } from '@/lib/ai/catalogBatch';
 
 /**
@@ -55,8 +56,19 @@ export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> =
       .order('created_at', { ascending: false })
       .limit(1);
     const ultimo = ((aperti ?? []) as JobRow[])[0];
-    if (!ultimo) return NextResponse.json(null);
-    return rispondiPerLavoro(admin, ultimo, user.id);
+    if (ultimo) return rispondiPerLavoro(admin, ultimo, user.id);
+    // R09-006 R09-007 — Nessun lavoro aperto: se l'ultimo lavoro del negozio e' chiuso con un motivo che
+    // vieta di ripartire senza chiedere all'assistenza, lo si restituisce, cosi' dopo un ricaricamento la
+    // pagina non rimette il pulsante «Avvia». Sempre e solo i lavori di questo venditore.
+    const { data: recenti } = await admin
+      .from('catalog_ai_jobs')
+      .select(COLONNE)
+      .eq('seller_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const chiuso = ((recenti ?? []) as JobRow[])[0];
+    if (chiuso && lavoroChiuso(chiuso.status) && !puoAvviareLavoro(chiuso)) return rispondiPerLavoro(admin, chiuso, user.id);
+    return NextResponse.json(null);
   }
 
   const { data } = await admin
