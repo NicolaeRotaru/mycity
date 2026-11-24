@@ -37,7 +37,8 @@ export const runtime = 'nodejs';
  *  · IL PRIMO MESE A METÀ UNA VOLTA SOLA: a chi ha già avuto un abbonamento dei servizi non si dà più.
  */
 
-export { BUONO_PRIMO_MESE } from '@/lib/agenzia/cassa-servizi';
+// Il nome del buono del primo mese sta in lib/agenzia/cassa-servizi.ts (BUONO_PRIMO_MESE): una rotta
+// di Next.js non può esportare altro che i suoi metodi e la configurazione, nemmeno rimandando.
 
 const Richiesta = z.object({ abbonamento: z.enum(ABBONAMENTI, { message: 'Scegli uno dei tre abbonamenti' }) });
 
