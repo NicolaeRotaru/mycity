@@ -50,3 +50,24 @@ export function dataLeggibile(giorno: string): string {
   if (!a || !m || !g) return giorno;
   return new Date(Date.UTC(a, m - 1, g, 12)).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
+
+/**
+ * «Paga e attiva» (24/11/2026) — manda solo la fascia; il server rilegge il canone e apre la cassa
+ * Stripe. Risponde con l'indirizzo della cassa, dove la pagina porta il negozio.
+ */
+export async function pagaAbbonamento(abbonamento: Abbonamento): Promise<string> {
+  const risposta = await fetch('/api/seller/preventivo/paga', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ abbonamento }),
+  });
+  const corpo = (await risposta.json().catch(() => null)) as
+    | { ok: true; data: { url: string } }
+    | { ok: false; error?: { message?: string } }
+    | null;
+  if (!risposta.ok || !corpo || corpo.ok !== true || !/^https:\/\//.test(corpo.data.url)) {
+    throw new Error((corpo && corpo.ok === false && corpo.error?.message) || 'Non sono riuscito ad aprire il pagamento. Riprova.');
+  }
+  return corpo.data.url;
+}
+

@@ -12,6 +12,7 @@ import {
   impostazioniSenzaPrezzi,
   testoAvvisoPreventivo,
   type Abbonamento,
+  type AbbonamentoAttivo,
   type Preventivo,
 } from '@/lib/agenzia/preventivo';
 import { tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
@@ -45,9 +46,25 @@ const TETTO_PRODOTTI = 2000;
 
 type Letti = { preventivo: Preventivo; telefono: string | null; socials: unknown };
 
+/**
+ * L'abbonamento dei servizi attivo, dalla lettura della tabella. Una lettura caduta, o la tabella
+ * che non c'è ancora (migrazione 706 non applicata), vale «nessuno»: la pagina mostra la cassa, e
+ * la cassa stessa si ferma se la tabella non si legge (`paga/route.ts`).
+ */
+function abbonamentoAttivo(r: { data: unknown; error: { message: string } | null }): AbbonamentoAttivo | null {
+  if (r.error) {
+    logger.warn('[preventivo] abbonamento dei servizi non letto', { message: r.error.message });
+    return null;
+  }
+  const riga = (r.data as Array<{ fascia: string; stato: string; rinnovo_il: string | null }> | null)?.[0];
+  if (!riga || !(ABBONAMENTI as readonly string[]).includes(riga.fascia)) return null;
+  if (riga.stato !== 'active' && riga.stato !== 'past_due') return null;
+  return { fascia: riga.fascia as Abbonamento, stato: riga.stato, rinnovoIl: riga.rinnovo_il };
+}
+
 async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento): Promise<Letti> {
   const admin = getAdminSupabase();
-  const [profilo, prodotti, impostazioni] = await Promise.all([
+  const [profilo, prodotti, impostazioni, abbonamento] = await Promise.all([
     admin
       .from('profiles')
       .select('*')
@@ -60,6 +77,14 @@ async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento): Promis
       .in('status', STATI_IN_CATALOGO)
       .limit(TETTO_PRODOTTI),
     admin.from('site_settings').select('agenzia').eq('id', 1).maybeSingle(),
+    // 24/11/2026 — L'abbonamento dei servizi già pagato, se c'è (migrazione 706).
+    admin
+      .from('abbonamenti_servizi')
+      .select('fascia, stato, rinnovo_il')
+      .eq('seller_id', idAttivita)
+      .in('stato', ['active', 'past_due'])
+      .order('creato_il', { ascending: false })
+      .limit(1),
   ]);
   if (profilo.error) throw new Error(`profilo non letto: ${profilo.error.message}`);
   if (!profilo.data) throw new Error('profilo non trovato');
@@ -100,6 +125,7 @@ async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento): Promis
       : leggiImpostazioniAgenzia(impostazioni.data?.agenzia),
     adesso: new Date(),
     scelto,
+    attivo: abbonamentoAttivo(abbonamento),
   });
   const telefono = (p.store_phone as string | null) || (p.phone as string | null) || null;
   return { preventivo, telefono, socials };

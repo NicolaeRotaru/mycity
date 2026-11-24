@@ -7,7 +7,7 @@ import { ArrowRight, Check } from 'lucide-react';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
-import { ABBONAMENTI, FASCE, LISTINO, servizioDaSlug } from '@/lib/agenzia/preventivo';
+import { ABBONAMENTI, FASCE, FRASE_PARTNER, LISTINO, servizioDaSlug } from '@/lib/agenzia/preventivo';
 import { HREF_PREVENTIVO } from '@/components/seller/servizi-nel-menu';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import { CHIAVE_PREVENTIVO, leggiPreventivoAgenzia, scriviCanone } from '@/components/seller/preventivo-agenzia';
@@ -18,7 +18,7 @@ import { CHIAVE_PREVENTIVO, leggiPreventivoAgenzia, scriviCanone } from '@/compo
  * Nicola: «è dentro preventivo, ma ogni servizio ha la sua voce dentro il menu». Questa è la
  * pagina di un servizio solo: cosa comprende, perché te lo proponiamo (dai dati veri della
  * vetrina) e come è compreso in ognuno dei tre abbonamenti (24/11/2026: non si vende più da
- * solo, il pulsante porta al preventivo intero per scegliere la fascia). Il nome di scattiDG compare solo dentro
+ * solo, il pulsante porta al preventivo intero per scegliere la fascia). Il nome di SDG Agenzia compare dentro
  * il servizio di foto e video, che è il suo.
  *
  * I canoni e il «perché» arrivano dallo stesso preventivo calcolato dal server: la pagina
@@ -38,11 +38,8 @@ export default function ServizioDelPreventivoPage() {
     <div className="max-w-2xl">
       <SellerPageTitle eyebrow="Servizi" title={voce.titolo} sub={voce.descrizione} />
 
-      {voce.partner && (
-        <p className="mb-4 text-sm font-semibold text-primary-700">
-          Lo fa {voce.partner}, l&apos;azienda partner a cui MyCity si affida per foto e video.
-        </p>
-      )}
+      {/* Il partner che realizza il servizio (Nicola, 24/11): nella pagina, non nel menu. */}
+      <p className="mb-4 text-sm font-semibold text-primary-700">{FRASE_PARTNER}</p>
 
       {isLoading && <LoadingState />}
 

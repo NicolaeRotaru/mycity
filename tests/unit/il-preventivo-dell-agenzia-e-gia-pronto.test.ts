@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   ABBONAMENTI,
   FASCE,
+  FRASE_PARTNER,
   FOTO_LOCALE_CONSIGLIATE,
   LISTINO,
   PRODOTTI_PER_IL_PREMIUM,
@@ -62,7 +63,9 @@ describe('i tre abbonamenti sono quelli di Nicola (24/11/2026)', () => {
     expect(DI_LISTINO.prezzi).toEqual({ base: 30000, business: 50000, premium: 99900 });
     expect(DI_LISTINO.nome).toBe(NOME_AGENZIA_DI_RISERVA);
     expect(NOME_AGENZIA_DI_RISERVA).toBe('MyCity'); // il preventivo lo firma MyCity (Nicola, 23/11)
-    expect(LISTINO.foto_video.partner).toBe('scattiDG'); // foto e video li fa il partner scattiDG
+    // 24/11: tutti i servizi li realizza SDG Agenzia, nominata una volta sola
+    expect(FRASE_PARTNER).toBe('I servizi li realizza SDG Agenzia, il partner di MyCity per foto, video, social e web.');
+    expect(SERVIZI_AGENZIA.every((id) => !('partner' in LISTINO[id]))).toBe(true);
     expect(SERVIZI_AGENZIA).not.toContain('logo' as never);
   });
 
@@ -176,7 +179,7 @@ describe('il preventivo', () => {
       dati: VUOTA, impostazioni: DI_LISTINO, adesso: ADESSO, scelto: 'premium',
     });
     expect(testoAvvisoPreventivo(p, '3331234567')).toMatch(
-      /^Bar Roma sceglie l'abbonamento Premium \(999,00\s€ al mese, il primo mese 499,50\s€\), preventivo P-20261122-A1B2C3\. Alla vetrina mancano: Foto e video \(scattiDG\), Gestione automatica dei social, Sito web professionale, Scheda Google su Maps\. Telefono: 3331234567\.$/,
+      /^Bar Roma sceglie l'abbonamento Premium \(999,00\s€ al mese, il primo mese 499,50\s€\), preventivo P-20261122-A1B2C3\. Alla vetrina mancano: Foto e video, Gestione automatica dei social, Sito web professionale, Scheda Google su Maps\. Telefono: 3331234567\.$/,
     );
   });
 });

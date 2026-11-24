@@ -21,6 +21,8 @@ const stato = vi.hoisted(() => ({
   erroreImpostazioni: null as null | { code: string; message: string },
   avvisi: [] as { titolo: string; corpo: string; opzioni: Record<string, unknown> }[],
   esitoAvviso: 'scritto' as 'scritto' | 'gia-mandato' | Error,
+  abbonamenti: [] as { fascia: string; stato: string; rinnovo_il: string | null }[],
+  erroreAbbonamenti: null as null | { code: string; message: string },
 }));
 
 vi.mock('@/lib/api/middleware', () => ({
@@ -42,7 +44,11 @@ vi.mock('@/lib/supabase/server', () => ({
       c.select = () => c;
       c.eq = () => c;
       c.in = () => c;
-      c.limit = async () => ({ data: stato.erroreProdotti ? null : stato.prodotti, error: stato.erroreProdotti });
+      c.order = () => c;
+      c.limit = async () =>
+        tabella === 'abbonamenti_servizi'
+          ? { data: stato.erroreAbbonamenti ? null : stato.abbonamenti, error: stato.erroreAbbonamenti }
+          : { data: stato.erroreProdotti ? null : stato.prodotti, error: stato.erroreProdotti };
       c.maybeSingle = async () =>
         tabella === 'profiles'
           ? { data: stato.profilo, error: null }
@@ -74,6 +80,8 @@ beforeEach(() => {
   stato.erroreImpostazioni = null;
   stato.avvisi = [];
   stato.esitoAvviso = 'scritto';
+  stato.abbonamenti = [];
+  stato.erroreAbbonamenti = null;
   delete process.env.N8N_PREVENTIVO_WEBHOOK_URL;
   delete process.env.N8N_PREVENTIVO_SEGRETO;
 });
@@ -101,6 +109,18 @@ describe('GET /api/seller/preventivo', () => {
     stato.erroreImpostazioni = { code: '57014', message: 'canceling statement due to statement timeout' };
     const guasto = (await (await chiama('GET')).json()) as R;
     expect(Object.values(guasto.data.prezzi).every((x) => x === null)).toBe(true);
+  });
+
+  it('mostra l abbonamento dei servizi già pagato; senza la tabella (706 non applicata) vale «nessuno»', async () => {
+    type R = { data: { attivo: unknown } };
+    stato.abbonamenti = [{ fascia: 'business', stato: 'active', rinnovo_il: '2026-12-24T10:00:00Z' }];
+    expect(((await (await chiama('GET')).json()) as R).data.attivo).toEqual({ fascia: 'business', stato: 'active', rinnovoIl: '2026-12-24T10:00:00Z' });
+    stato.abbonamenti = [{ fascia: 'gold', stato: 'active', rinnovo_il: null }];
+    expect(((await (await chiama('GET')).json()) as R).data.attivo).toBeNull();
+    stato.erroreAbbonamenti = { code: '42P01', message: 'relation "abbonamenti_servizi" does not exist' };
+    const r = await chiama('GET');
+    expect(r.status).toBe(200);
+    expect(((await r.json()) as R).data.attivo).toBeNull();
   });
 
   it('se i prodotti non si leggono non dice «a posto»: dice che non è riuscito', async () => {

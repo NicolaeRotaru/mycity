@@ -2,13 +2,13 @@
  * IL PREVENTIVO DI QUELLO CHE MANCA — già pronto quando il cliente apre la dashboard.
  *
  * 22/11/2026 — La dashboard di ogni attività iscritta mostra quello che le manca e
- * il preventivo di MyCity per farlo. Foto e video li fa scattiDG, l'azienda partner a
- * cui MyCity si affida per riprese, scatti, montaggio e ritocco (Nicola, 23/11);
- * social e sito web sono servizi di MyCity. Nicola: «deve già essere creato prima, in formato
+ * il preventivo di MyCity per farlo. I servizi sono di MyCity e li realizza SDG Agenzia,
+ * il partner di MyCity per foto, video, social e web (Nicola, 24/11: «sono servizi che
+ * offre mycity, ma tramite SDG»; fino al 23/11 il partner era nominato solo su foto e video). Nicola: «deve già essere creato prima, in formato
  * preventivo/demo» — quindi il cliente non lo chiede: lo trova pronto, calcolato
  * dai suoi dati.
  *
- * I servizi sono quattro: foto e video (scattiDG), gestione automatica dei social (il
+ * I servizi sono quattro: foto e video, gestione automatica dei social (il
  * flusso n8n), sito web professionale, scheda Google su Maps. Il logo è stato tolto il 23/11.
  *
  * Dal 24/11/2026 non si vendono più uno per uno: Nicola, «l'abbonamento comprende tutti i
@@ -73,8 +73,6 @@ export const LISTINO: Record<ServizioAgenzia, VoceListino> = {
   foto_video: {
     titolo: 'Foto e video',
     descrizione: 'Scatti e riprese nel tuo locale, con ritocco e montaggio: le foto della copertina, dei prodotti e i video per vetrina e social.',
-    // Nicola, 23/11: «scattiDG è l'azienda partner a cui MyCity si affida per foto/video making/editing».
-    partner: 'scattiDG',
   },
   social: {
     titolo: 'Gestione automatica dei social',
@@ -156,11 +154,20 @@ export const FASCE: Record<Abbonamento, Fascia> = {
 };
 
 /**
- * Chi firma il preventivo: MyCity. scattiDG è il partner che fa foto e video, e compare
- * sulla sua voce (Nicola, 23/11/2026). Vale finché `site_settings.agenzia.nome` non dice
+ * Chi firma il preventivo: MyCity. Il partner che realizza i servizi è SDG Agenzia
+ * (`REALIZZATI_DA`), nominato una volta per tutti i servizi (Nicola, 24/11/2026). Vale finché `site_settings.agenzia.nome` non dice
  * un altro nome: da lì si cambia senza rifare il sito.
  */
 export const NOME_AGENZIA_DI_RISERVA = 'MyCity';
+
+/**
+ * Chi realizza i servizi (Nicola, 24/11/2026): «sono servizi che offre mycity, ma tramite SDG».
+ * MyCity li vende e li incassa; li fa SDG Agenzia, la sua agenzia di web, marketing, foto e video.
+ */
+export const REALIZZATI_DA = 'SDG Agenzia';
+
+/** La riga che lo dice al negozio, uguale nel preventivo e in ogni servizio. Il menu non la porta. */
+export const FRASE_PARTNER = `I servizi li realizza ${REALIZZATI_DA}, il partner di MyCity per foto, video, social e web.`;
 
 /** Un canone oltre questo (in centesimi: 10.000 € al mese) è un errore di battitura, non un listino. */
 const PREZZO_MASSIMO_CENTESIMI = 1_000_000;
@@ -327,7 +334,11 @@ export type Preventivo = {
   perche_consigliato: string;
   /** La fascia scelta dal cliente quando accetta; `null` mentre guarda. */
   scelto: Abbonamento | null;
+  /** L'abbonamento dei servizi già pagato (24/11/2026), se c'è: la pagina lo mostra invece della cassa. */
+  attivo: AbbonamentoAttivo | null;
 };
+
+export type AbbonamentoAttivo = { fascia: Abbonamento; stato: 'active' | 'past_due'; rinnovoIl: string | null };
 
 /** La fascia consigliata dai dati: il catalogo grande va sul Premium, una vetrina da rifare sul Business. */
 export function fasciaConsigliata(d: DatiAttivita, righe: VoceMancante[]): { id: Abbonamento; perche: string } {
@@ -461,8 +472,10 @@ export function costruisciPreventivo(opzioni: {
   adesso: Date;
   /** La fascia scelta dal cliente, quando accetta. Assente = sta ancora guardando. */
   scelto?: Abbonamento;
+  /** L'abbonamento dei servizi già attivo, letto dal server. */
+  attivo?: AbbonamentoAttivo | null;
 }): Preventivo {
-  const { idAttivita, nomeAttivita, tipoAttivita, dati, impostazioni, adesso, scelto } = opzioni;
+  const { idAttivita, nomeAttivita, tipoAttivita, dati, impostazioni, adesso, scelto, attivo } = opzioni;
   const mancanti = cosaManca(dati);
   const righe: RigaPreventivo[] = mancanti.map((v) => ({
     ...v,
@@ -484,6 +497,7 @@ export function costruisciPreventivo(opzioni: {
     consigliato: consigliato.id,
     perche_consigliato: consigliato.perche,
     scelto: scelto ?? null,
+    attivo: attivo ?? null,
   };
 }
 

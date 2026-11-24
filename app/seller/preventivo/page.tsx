@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Check, CheckCircle2, Printer, Send, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, CreditCard, Printer, Send, TrendingUp } from 'lucide-react';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +13,8 @@ import {
   FASCE,
   FRASE_CONDIZIONI,
   LISTINO,
+  FRASE_PARTNER,
+  REALIZZATI_DA,
   RESOCONTO_MENSILE,
   SCONTRINO_DI_PARTENZA,
   SERVIZI_AGENZIA,
@@ -31,6 +33,7 @@ import {
   CHIAVE_PREVENTIVO,
   dataLeggibile,
   leggiPreventivoAgenzia,
+  pagaAbbonamento,
   scriviCanone,
 } from '@/components/seller/preventivo-agenzia';
 
@@ -61,6 +64,21 @@ export default function PreventivoAgenziaPage() {
   useEffect(() => {
     if (p) setScelto((prima) => prima ?? p.consigliato);
   }, [p]);
+
+  // Il ritorno dalla cassa Stripe: ?pagato=1 (pagato) o ?pagato=0 (annullato). Letto dall'indirizzo,
+  // senza useSearchParams, che chiederebbe un confine Suspense a tutta la pagina.
+  const [ritorno, setRitorno] = useState<'pagato' | 'annullato' | null>(null);
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get('pagato');
+    if (v === '1') setRitorno('pagato');
+    else if (v === '0') setRitorno('annullato');
+  }, []);
+
+  const paga = useMutation({
+    mutationFn: (f: Abbonamento) => pagaAbbonamento(f),
+    onSuccess: (url) => window.location.assign(url),
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Non sono riuscito ad aprire il pagamento. Riprova.'),
+  });
 
   const accetta = useMutation({
     mutationFn: (fascia: Abbonamento) => accettaPreventivo(fascia),
@@ -106,6 +124,36 @@ export default function PreventivoAgenziaPage() {
         />
       </div>
 
+      {/* Lo stato dell'abbonamento: già pagato, appena pagato, o pagamento annullato (24/11). */}
+      {p.attivo ? (
+        <div role="status" className={`mb-4 rounded-2xl border-2 p-4 print:hidden ${p.attivo.stato === 'active' ? 'border-olive-300 bg-olive-50' : 'border-amber-300 bg-amber-50'}`}>
+          {p.attivo.stato === 'active' ? (
+            <p className="font-semibold text-ink-900 inline-flex items-center gap-2">
+              <CheckCircle2 size={18} className="text-olive-700" aria-hidden /> Il tuo abbonamento {FASCE[p.attivo.fascia].nome} è attivo
+            </p>
+          ) : (
+            <p className="font-semibold text-ink-900 inline-flex items-center gap-2">
+              <AlertTriangle size={18} className="text-amber-700" aria-hidden /> Il pagamento del tuo abbonamento {FASCE[p.attivo.fascia].nome} non è riuscito
+            </p>
+          )}
+          <p className="text-sm text-ink-700 mt-1">
+            {p.attivo.stato === 'active'
+              ? `Lo realizza ${REALIZZATI_DA}: ti contattiamo per fissare l’incontro nel locale. Per cambiarlo o disdirlo scrivici.`
+              : 'Aggiorna il metodo di pagamento o scrivici: lo sistemiamo insieme.'}
+          </p>
+        </div>
+      ) : ritorno === 'pagato' ? (
+        <div role="status" className="mb-4 rounded-2xl border-2 border-olive-300 bg-olive-50 p-4 print:hidden">
+          <p className="font-semibold text-ink-900">Pagamento ricevuto, grazie!</p>
+          <p className="text-sm text-ink-700 mt-1">L’abbonamento si attiva in pochi secondi: ricarica la pagina fra un momento.</p>
+        </div>
+      ) : ritorno === 'annullato' ? (
+        <div role="status" className="mb-4 rounded-2xl border-2 border-cream-300 bg-cream-50 p-4 print:hidden">
+          <p className="font-semibold text-ink-900">Pagamento annullato</p>
+          <p className="text-sm text-ink-700 mt-1">Non ti abbiamo addebitato niente. Puoi riprovare quando vuoi.</p>
+        </div>
+      ) : null}
+
       <article className="rounded-2xl border border-cream-300 bg-white p-5 sm:p-8 shadow-warm print:shadow-none print:border-0 print:p-0">
         {/* Intestazione del documento */}
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-cream-200 pb-5">
@@ -115,6 +163,7 @@ export default function PreventivoAgenziaPage() {
             <p className="text-sm text-ink-600 mt-1">
               per <strong className="text-ink-900">{p.attivita}</strong> · {descriviAttivita(p.tipoAttivita)}
             </p>
+            <p className="text-xs font-semibold text-primary-700 mt-1">{FRASE_PARTNER}</p>
           </div>
           <dl className="text-sm text-right">
             <dt className="text-ink-500">Numero</dt>
@@ -151,7 +200,6 @@ export default function PreventivoAgenziaPage() {
               {p.righe.map((r) => (
                 <li key={r.id} className="py-4">
                   <p className="font-semibold text-ink-900">{r.titolo}</p>
-                  {r.partner && <p className="text-xs font-semibold text-primary-700">con {r.partner}, il partner di MyCity per foto e video</p>}
                   <p className="text-sm text-ink-600">{r.descrizione}</p>
                   <ul className="mt-1 list-disc pl-4 text-xs text-ink-600">
                     {r.perche.map((frase) => <li key={frase}>{frase}</li>)}
@@ -196,7 +244,7 @@ export default function PreventivoAgenziaPage() {
                 : 'Scrivi uno scontrino in euro, per esempio 3,50, per vedere i conti.'}
             </span>
           </div>
-          <fieldset className="mt-4 grid gap-3 sm:grid-cols-3" disabled={!!inviato}>
+          <fieldset className="mt-4 grid gap-3 sm:grid-cols-3" disabled={!!inviato || !!p.attivo}>
             <legend className="sr-only">Abbonamento</legend>
             {ABBONAMENTI.map((id) => {
               const f = FASCE[id];
@@ -253,7 +301,7 @@ export default function PreventivoAgenziaPage() {
           </ul>
           <p className="mt-3 text-xs text-ink-500">
             {Object.values(p.prezzi).some((v) => !v) && 'I canoni «su richiesta» te li confermiamo prima di iniziare. '}
-            Accettare non ti fa pagare niente adesso: ti richiamiamo per fissare l’inizio.
+            Il pagamento è con carta, sicuro con Stripe: ogni mese si rinnova da solo. Se preferisci parlarne prima, chiedi di essere richiamato: non paghi niente.
           </p>
         </section>
 
@@ -280,9 +328,24 @@ export default function PreventivoAgenziaPage() {
             <p className="text-sm text-ink-700 mt-1">Abbonamento {FASCE[fascia].nome}. Ti ricontattiamo noi per fissare l’inizio. Non devi fare altro.</p>
           </div>
         ) : (
-          <Button onClick={() => accetta.mutate(fascia)} loading={accetta.isPending} icon={Send}>
-            Accetto il {FASCE[fascia].nome}: contattatemi
-          </Button>
+          !p.attivo && (
+            <>
+              {p.prezzi[fascia] ? (
+                <Button onClick={() => paga.mutate(fascia)} loading={paga.isPending} disabled={accetta.isPending} icon={CreditCard}>
+                  Paga e attiva il {FASCE[fascia].nome}
+                  {canonePrimoMese(p.prezzi[fascia]) ? ` · il primo mese ${formatPriceFromCents(canonePrimoMese(p.prezzi[fascia])!)}` : ''}
+                </Button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => accetta.mutate(fascia)}
+                disabled={accetta.isPending || paga.isPending}
+                className="inline-flex items-center gap-2 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold disabled:opacity-60"
+              >
+                <Send size={18} aria-hidden /> Preferisco essere richiamato
+              </button>
+            </>
+          )
         )}
         <button
           type="button"

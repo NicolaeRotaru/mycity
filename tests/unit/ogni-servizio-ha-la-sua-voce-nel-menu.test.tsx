@@ -3,12 +3,12 @@
  */
 /**
  * 23/11/2026 — Nicola: «è dentro preventivo, ma ogni servizio ha la sua voce dentro il menu»,
- * e il nome di scattiDG «si vedrà solo dentro i servizi offerti ai venditori».
+ * e il nome del partner «si vedrà solo dentro i servizi offerti ai venditori» (dal 24/11 è SDG Agenzia).
  *
  *  · nel menu del venditore c'è il gruppo «Preventivo», con il preventivo intero e una voce per
  *    ogni servizio del listino;
  *  · dentro un servizio si accende la voce di quel servizio, non anche «Il tuo preventivo»;
- *  · la pagina di foto e video nomina scattiDG, quelle degli altri servizi no;
+ *  · ogni servizio nomina il partner SDG Agenzia; il menu no;
  *  · un indirizzo che non è di nessun servizio non apre una pagina vuota.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -94,7 +94,7 @@ describe('il menu del venditore', () => {
     expect(gruppi).toContain('Servizi');
     expect(gruppi).not.toContain('Preventivo');
     // il menu non nomina il partner: il suo nome sta dentro il servizio
-    expect(r.textContent).not.toContain('scattiDG');
+    expect(r.textContent).not.toContain('SDG Agenzia');
   });
 
   it('dentro un servizio si accende solo la voce di quel servizio', async () => {
@@ -114,10 +114,10 @@ describe('il menu del venditore', () => {
 });
 
 describe('la pagina di un servizio', () => {
-  it('foto e video nomina scattiDG, mostra il perché e come è compreso nei tre abbonamenti', async () => {
+  it('foto e video nomina il partner SDG Agenzia, mostra il perché e come è compreso nei tre abbonamenti', async () => {
     stato.slug = 'foto-video';
     const r = await monta(ServizioDelPreventivoPage);
-    expect(r.textContent).toContain('scattiDG');
+    expect(r.textContent).toContain('I servizi li realizza SDG Agenzia, il partner di MyCity');
     expect(r.textContent).toContain('Nella vetrina non c’è nessun video.');
     // 24/11/2026: il servizio non si vende più da solo, è dentro le tre fasce
     expect(r.textContent).toMatch(/Base · 300,00\s€ al mese/);
@@ -128,13 +128,15 @@ describe('la pagina di un servizio', () => {
     expect(r.querySelector('a[href="/seller/preventivo"]')?.textContent).toContain('Scegli l');
   });
 
-  it('gli altri servizi non nominano scattiDG', async () => {
-    for (const id of SERVIZI_AGENZIA.filter((x) => x !== 'foto_video')) {
+  it('ogni servizio nomina il partner SDG Agenzia, e nessuno nomina più scattiDG', async () => {
+    for (const id of SERVIZI_AGENZIA) {
       stato.slug = SLUG_SERVIZIO[id];
       const r = await monta(ServizioDelPreventivoPage);
-      expect(r.textContent, `la pagina ${id} nomina scattiDG`).not.toContain('scattiDG');
+      expect(r.textContent, `la pagina ${id}`).toContain('SDG Agenzia');
+      expect(r.textContent, `la pagina ${id}`).not.toContain('scattiDG');
     }
   });
+
 
   it('un servizio che c è già lo dice, senza prezzo né pulsante', async () => {
     stato.slug = 'sito-web';
@@ -223,7 +225,10 @@ describe('cosa ricevi, già pronto dentro il servizio', () => {
     expect(radio.find((x) => x.checked)?.value).toBe('business'); // vetrina vuota: mancano foto e sito
     expect(r.textContent).toContain('Ti consigliamo il Business.');
     await act(async () => { radio[2].click(); });
-    expect(r.textContent).toContain('Accetto il Premium: contattatemi');
+    // 24/11/2026: si paga subito (il primo mese a metà), oppure si chiede di essere richiamati
+    expect(r.textContent).toMatch(/Paga e attiva il Premium · il primo mese 499,50\s€/);
+    expect(r.textContent).toContain('Preferisco essere richiamato');
+    expect(r.textContent).toContain('I servizi li realizza SDG Agenzia, il partner di MyCity');
     // in cima «Cosa ci guadagni»; sotto ogni piano il primo mese e il pareggio in colazioni
     expect(r.textContent!.indexOf('Cosa ci guadagni')).toBeLessThan(r.textContent!.indexOf('Cosa manca alla tua vetrina'));
     expect(r.textContent).toMatch(/Il primo mese 250,00\s€/);
