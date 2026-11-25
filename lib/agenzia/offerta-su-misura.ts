@@ -355,12 +355,16 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
     const voti = sito ? [
       sito.velocita !== null ? `${sito.velocita} su 100 per la velocità dal telefono` : null,
       sito.seo !== null ? `${sito.seo} su 100 per farsi trovare su Google` : null,
+      sito.accessibilita !== null ? `${sito.accessibilita} su 100 per la facilità d’uso` : null,
     ].filter(Boolean) as string[] : [];
+    // Anche la facilità d'uso: il preventivo la mostra nella riga del sito, quindi conta per «fatto bene» (dal collaudo).
+    const difficile = !!sito && sito.accessibilita !== null && votoDi(sito.accessibilita) !== 'bene';
     // Per Google, detto com'è: i voti bassi uno per uno; se sono tutti buoni, che sono buoni.
     const perGoogle = [
       lento ? `Oggi Google gli dà ${sito!.velocita} su 100 per la velocità dal telefono${sito!.secondiPerVedere !== null ? `: la parte principale si vede dopo ${sito!.secondiPerVedere.toLocaleString('it-IT')} secondi` : ''}.` : null,
       googleMale ? `Per farsi trovare su Google gli dà ${sito!.seo} su 100.` : null,
-      !lento && !googleMale && voti.length ? `Per Google va già bene: gli dà ${elenco(voti)}.` : null,
+      difficile ? `Per la facilità d’uso gli dà ${sito!.accessibilita} su 100.` : null,
+      !lento && !googleMale && !difficile && voti.length ? `Per Google va già bene: gli dà ${elenco(voti)}.` : null,
       ...daSistemare,
     ].filter(Boolean) as string[];
     const nota = giudizioSito?.nota ? `${giudizioSito.nota.replace(/[.!?]?$/, '.')}` : null;
@@ -405,7 +409,7 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
       });
     } else {
       // Solo il pregio senza migliorie: non si rifà. «Fatto bene» solo se lo è anche per Google e a vederlo.
-      const bene = !lento && !googleMale && !googleSegnala && !aspettoDebole;
+      const bene = !lento && !googleMale && !difficile && !googleSegnala && !aspettoDebole;
       aggiungi({
         id: 'sito-valorizzato',
         servizio: 'sito_web',
@@ -431,10 +435,17 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
   //  · forte → nel Base e nel Business si tiene e si collega, la gestione solo nel Premium e solo con le migliorie dell'AD.
   // Senza l'analisi del canale nessuna frase su quel canale: resta la parte generale del servizio.
   const extra: Record<Abbonamento, string> = { base: ', preparati e pubblicati da noi', business: ' (3 a settimana), con 2 video brevi', premium: ', con 4 video brevi e le storie' };
+  // Da quale fascia parte la gestione di ogni profilo: le idee dei post e i video brevi partono dalla prima (dal collaudo:
+  // con un canale attivo o forte il Base non deve promettere i post, che lì si tiene e si collega e basta).
+  const gestioneDi: Array<Abbonamento | null> = [];
   for (const k of ['instagram', 'facebook', 'tiktok'] as const) {
     const c = canali?.canali[k];
     const livello = livelloSocial(c);
-    if (!c || !livello || livello === 'nessuno') continue;
+    // Un profilo scritto ma non letto (o privato): nessuna frase sul canale, la gestione resta quella generale (dal Base).
+    if (!c || !livello || livello === 'nessuno') {
+      if (pieno(dati.socials, k) || c?.stato === 'privato') gestioneDi.push('base');
+      continue;
+    }
     const nome = NOMI_SOCIAL[k];
     const post = c.giudizio?.post_al_mese ?? c.numeri?.post_ultimi_30_giorni ?? null;
     const video = c.giudizio?.video ?? null;
@@ -450,6 +461,7 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
           ? `Da ${post} a ${postAlMese(f)} post al mese su ${nome}${extra[f]}`
           : `Curiamo noi il tuo ${nome}: ${postAlMese(f)} post al mese${extra[f]}`;
     const perFascia = Object.fromEntries(ABBONAMENTI.map((f) => [f, da && ORDINE[f] >= ORDINE[da] ? gestione(f) : tenuto])) as Record<Abbonamento, string>;
+    gestioneDi.push(da);
     const visto = post !== null
       ? `Negli ultimi 30 giorni su ${nome} sono usciti ${post} post${video === false ? ', senza video' : video === true ? ', anche con video' : ''}${follower !== undefined ? `, con ${it(follower)} persone che ti seguono` : ''}.`
       : `${LIVELLO_SOCIAL_IN_PAROLE[livello]}${follower !== undefined ? ` Ti seguono ${it(follower)} persone.` : ''}`;
@@ -492,8 +504,12 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
       daFascia: 'base',
     });
   }
-  const idee = vociCitabili(scheda?.analisi?.idee_contenuti, 3);
-  const punti = vociCitabili(scheda?.analisi?.punti_di_forza, 3);
+  // Nessun profilo: la gestione parte dal Base (si aprono). Se no, dalla prima fascia che ne gestisce uno; `null` = nessuna.
+  const inizioGestione: Abbonamento | null = !gestioneDi.length
+    ? 'base'
+    : gestioneDi.reduce<Abbonamento | null>((min, f) => (f === null ? min : min === null || ORDINE[f] < ORDINE[min] ? f : min), null);
+  const idee = inizioGestione ? vociCitabili(scheda?.analisi?.idee_contenuti, 3) : [];
+  const punti = inizioGestione ? vociCitabili(scheda?.analisi?.punti_di_forza, 3) : [];
   if (idee.length) {
     aggiungi({
       id: 'social-idee',
@@ -501,7 +517,7 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
       cosa: `I primi post partono da qui: ${elenco(idee.map(minuscola))}`,
       perche: 'Sono le idee che abbiamo trovato guardando il tuo locale: le rivediamo insieme.',
       fonte: FONTE.scheda,
-      daFascia: 'base',
+      daFascia: inizioGestione ?? 'base',
     });
   } else if (punti.length) {
     aggiungi({
@@ -510,7 +526,7 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
       cosa: `Nei post raccontiamo quello che ti distingue: ${elenco(punti.map(minuscola))}`,
       perche: 'È quello che di te si legge già in rete: lo facciamo vedere di più.',
       fonte: FONTE.scheda,
-      daFascia: 'base',
+      daFascia: inizioGestione ?? 'base',
     });
   }
   if (idee.some((x) => /video|reel|dietro le quinte/i.test(x))) {
@@ -521,7 +537,7 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
       perFascia: { business: '2 video brevi al mese per Instagram e TikTok, girati nel tuo locale', premium: '4 video brevi al mese e le storie, girati nel tuo locale' },
       perche: 'Fra le idee trovate per te ci sono contenuti che rendono solo in video.',
       fonte: FONTE.scheda,
-      daFascia: 'business',
+      daFascia: inizioGestione === 'premium' ? 'premium' : 'business',
     });
   }
   // Google Maps, dentro la gestione dei social (Nicola, 24/11).

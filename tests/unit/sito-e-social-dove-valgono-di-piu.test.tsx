@@ -72,6 +72,15 @@ describe('1 · le frasi dicono il vero a occhio e per Google', () => {
     }
   });
 
+  it('nemmeno se è bassa la sola facilità d’uso, che il preventivo mostra nella riga del sito (dal collaudo)', () => {
+    const difficile = riassumiPageSpeed({ lighthouseResult: { categories: { performance: { score: 0.95 }, seo: { score: 0.95 }, accessibility: { score: 0.4 } }, audits: {} } }, 'https://www.esempio.it/', new Date('2026-11-25T09:00:00Z'));
+    for (const gi of [g({ livello: 'pregio' }), g({ livello: 'medio' }), null]) {
+      const t = testi(conSito(difficile, gi));
+      expect(t).not.toMatch(/fatto bene|va già bene/i);
+      expect(t).toContain('40 su 100');
+    }
+  });
+
   it('un sito di pregio lento lo dice: niente «fatto bene», e il voto di Google c’è', () => {
     const x = sitoDi(conSito(LENTO, g({ livello: 'pregio' })));
     expect(x.perche).not.toMatch(/fatto bene/i);
@@ -159,6 +168,31 @@ describe('3 · i livelli dei social', () => {
     expect(con.consiglia?.fascia).toBe('premium');
   });
 
+  it('i confini: 8 post è attivo, più di 12 senza video resta attivo', () => {
+    expect(livelloSocial(canali({ instagram: ig(7, false) }).canali.instagram)).toBe('debole');
+    expect(livelloSocial(canali({ instagram: ig(8, false) }).canali.instagram)).toBe('attivo');
+    expect(livelloSocial(canali({ instagram: ig(20, false) }).canali.instagram)).toBe('attivo');
+  });
+
+  it('con un canale forte (o attivo) il Base non promette i post né i video: le idee partono da dove parte la gestione (dal collaudo)', () => {
+    const scheda = SchedaInArrivo.parse({ tipo: 'scheda-cliente', id_attivita: ID, campi: {}, analisi: { idee_contenuti: ['Video dietro le quinte in cucina', 'La torta della domenica'] } });
+    const forte = offertaSuMisura({ ...conSocial(canali({ instagram: ig(20, true) })), scheda });
+    for (const id of ['social-idee', 'social-video-brevi']) expect(forte.proposte.some((x) => x.id === id), id).toBe(false);
+    const attivo = offertaSuMisura({ ...conSocial(canali({ instagram: ig(10, false) })), scheda });
+    expect(cosaInFascia(attivo.proposte.find((x) => x.id === 'social-idee')!, 'base')).toBeNull();
+    expect(cosaInFascia(attivo.proposte.find((x) => x.id === 'social-idee')!, 'business')).not.toBeNull();
+  });
+
+  it('un profilo privato conta come profilo: niente «nessun profilo»', () => {
+    const d = conSocial(canali({ instagram: { stato: 'privato', fonte: 'https://www.instagram.com/x' } }), null);
+    expect(offertaSuMisura(d).proposte.some((x) => x.id === 'social-apertura')).toBe(false);
+  });
+
+  it('senza sapere se risponde, le risposte alle recensioni non si offrono', () => {
+    const c = canali({ google: { stato: 'fatta', fonte: 'https://maps.google.com/?cid=1', numeri: { recensioni: 210 } } });
+    expect(offertaSuMisura(conSocial(c)).proposte.some((x) => x.id === 'google-recensioni')).toBe(false);
+  });
+
   it('senza analisi del canale: niente frasi sul canale oltre la parte generale', () => {
     expect(igDi(conSocial(null))).toBeUndefined();
   });
@@ -238,6 +272,8 @@ describe('i collegamenti: leggi-preventivo e bozze-in-attesa', () => {
     expect(JSON.stringify(preventivo)).not.toMatch(/Ci hai scritto|Ci hai dato \d/);
     // il sito si rifà dal Business: la pagina del servizio non dice «ce l'hai già»
     expect(preventivo.giaAPosto).not.toContain('sito_web');
+    // il consiglio arriva davvero nel preventivo letto: sito medio e Instagram attivo portano al Business
+    expect(preventivo.consigliato).toBe('business');
   });
 
   it('nel link, prima dell abbonamento, un sito della scheda non confermato non decide le frasi', async () => {
