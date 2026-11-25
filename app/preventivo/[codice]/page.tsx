@@ -4,12 +4,13 @@ import { notFound } from 'next/navigation';
 import { CheckCircle2 } from 'lucide-react';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { ABBONAMENTI, FASCE, FRASE_CONDIZIONI, FRASE_PARTNER, LISTINO, SERVIZI_AGENZIA, canonePrimoMese, scriviCanone } from '@/lib/agenzia/preventivo';
+import { FASCE, FRASE_PARTNER } from '@/lib/agenzia/preventivo';
 import { leggiPreventivo } from '@/lib/agenzia/leggi-preventivo';
 import { CODICE_VALIDO, leggiPreventivoColCodice } from '@/lib/agenzia/preventivo-col-codice';
 import { leggiSchedaSalvata, soloConfermati } from '@/lib/agenzia/scheda-cliente';
 import { leggiSchedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
+import AbbonamentiInBreve from '@/components/seller/AbbonamentiInBreve';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
 import AccettaDalLink from './AccettaDalLink';
@@ -138,30 +139,12 @@ export default async function PreventivoDalLink({
         </ul>
       </section>
 
-      <OffertaSuMisura offerta={p.offerta} fascia={p.consigliato} />
+      <OffertaSuMisura corta offerta={p.offerta} fascia={p.consigliato} />
       {/* 25/11/2026 — L'analisi del business dell'attività (Nicola): parte generale e parte specifica. */}
       <AnalisiAziendale corta analisi={p.analisiAziendale} fascia={p.consigliato} />
 
-      <section className="mt-6" aria-labelledby="abbonamenti">
-        <h2 id="abbonamenti" className="text-lg font-bold text-ink-900">I tre abbonamenti</h2>
-        <p className="mt-1 text-sm text-ink-600">Ognuno comprende tutti i servizi: cambia quanto. {FRASE_CONDIZIONI}</p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          {ABBONAMENTI.map((f) => (
-            <div key={f} className={`rounded-xl border-2 p-4 ${f === p.consigliato ? 'border-primary-600 bg-primary-50' : 'border-cream-200 bg-surface-0'}`}>
-              <p className="font-bold text-ink-900">{FASCE[f].nome}{f === p.consigliato ? ' · consigliato' : ''}</p>
-              <p className="mt-1 text-xl font-extrabold text-ink-900">{scriviCanone(p.prezzi[f])}</p>
-              {p.primoMeseScontato && p.prezzi[f] ? (
-                <p className="text-xs text-olive-700">Il primo mese {scriviCanone(canonePrimoMese(p.prezzi[f]))}</p>
-              ) : null}
-              <p className="mt-2 text-xs text-ink-600">{FASCE[f].perChi}</p>
-              <ul className="mt-2 space-y-1 text-xs text-ink-700">
-                {SERVIZI_AGENZIA.map((s) => <li key={s}><strong>{LISTINO[s].titolo}:</strong> {FASCE[f].servizi[s]}</li>)}
-              </ul>
-            </div>
-          ))}
-        </div>
-        {p.consigliato && <p className="mt-2 text-xs text-ink-600">Perché consigliamo {FASCE[p.consigliato].nome}: {p.perche_consigliato}</p>}
-      </section>
+      {/* 25/11/2026 — Nicola, 18:30: nel preventivo i servizi corti, una riga ciascuno, solo per la fascia guardata. */}
+      <AbbonamentiInBreve consigliato={p.consigliato} prezzi={p.prezzi} primoMeseScontato={p.primoMeseScontato} perche={p.perche_consigliato} />
 
       <AccettaDalLink codice={codice} consigliato={p.consigliato} prezzi={p.prezzi} primoMeseScontato={p.primoMeseScontato} />
     </Cornice>
