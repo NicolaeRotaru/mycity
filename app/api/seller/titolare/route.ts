@@ -96,7 +96,10 @@ export const PATCH = withAuthRateLimit(
       .update(nuovi)
       .eq('id', user.id)
       .eq('role', 'seller')
-      .neq('approval_status', 'suspended')
+      // 25/11/2026 — `neq` da solo escludeva i negozi con lo stato vuoto: in SQL
+      // NULL <> 'suspended' non è vero, quindi 0 righe e un 409 a ogni salvataggio.
+      // Stessa cura di /api/rider/anagrafica.
+      .or('approval_status.is.null,approval_status.neq.suspended')
       .select('id');
     if (error) {
       logger.error('[seller-titolare] dati non salvati', { userId: user.id, code: error.code, message: error.message });
