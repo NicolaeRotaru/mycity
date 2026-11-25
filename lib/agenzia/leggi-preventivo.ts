@@ -13,6 +13,7 @@ import { tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
 import { leggiSchedaSalvata, soloConfermati } from '@/lib/agenzia/scheda-cliente';
 import { leggiAnalisiCanali, leggiRisultatoSito, sitoInParole } from '@/lib/agenzia/analisi';
 import { leggiGiudizioSito, offertaSuMisura } from '@/lib/agenzia/offerta-su-misura';
+import { schedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
 
 /**
  * IL PREVENTIVO LETTO DAL DATABASE — una funzione sola per la dashboard (/api/seller/preventivo) e
@@ -137,7 +138,16 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
   // L'offerta su misura (24/11/2026): dalla vetrina, dalla scheda e dalle analisi. Un guasto qui non
   // ferma il preventivo: senza offerta la pagina mostra quello che mostrava prima.
   try {
-    const schedaIntera = schedaLetta.error ? null : leggiSchedaSalvata((schedaLetta.data as { scheda?: unknown } | null)?.scheda);
+    // 25/11/2026 — La scheda del cliente vale solo dopo l'abbonamento (Nicola): prima, dell'offerta su
+    // misura resta l'analisi (lib/agenzia/scheda-dopo-abbonamento.ts). Una lettura caduta vale «chiusa».
+    const aperta = schedaEPagellaAperte({
+      visibileSenzaAbbonamento: p.visibile_senza_abbonamento,
+      statiAbbonamenti: abbonamento.error ? [] : ((abbonamento.data as Array<{ stato?: unknown }> | null) ?? []).map((r) => r.stato),
+    });
+    const schedaIntera = schedaPerIlSito(
+      schedaLetta.error ? null : leggiSchedaSalvata((schedaLetta.data as { scheda?: unknown } | null)?.scheda),
+      aperta,
+    );
     preventivo.offerta = offertaSuMisura({
       nome: preventivo.attivita,
       tipo: preventivo.tipoAttivita,

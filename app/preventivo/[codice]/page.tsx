@@ -7,6 +7,7 @@ import { ABBONAMENTI, FASCE, FRASE_CONDIZIONI, FRASE_PARTNER, LISTINO, SERVIZI_A
 import { leggiPreventivo } from '@/lib/agenzia/leggi-preventivo';
 import { CODICE_VALIDO, leggiPreventivoColCodice } from '@/lib/agenzia/preventivo-col-codice';
 import { leggiSchedaSalvata, soloConfermati } from '@/lib/agenzia/scheda-cliente';
+import { leggiSchedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
@@ -88,14 +89,17 @@ export default async function PreventivoDalLink({
   let letti;
   let scheda = null;
   try {
-    const [l, s] = await Promise.all([
+    const admin = getAdminSupabase();
+    const [l, s, aperta] = await Promise.all([
       // Pubblico: l'offerta su misura usa solo i dati confermati, senza le analisi (24/11).
       leggiPreventivo(pc.sellerId, undefined, { pubblico: true }),
-      getAdminSupabase().from('schede_clienti').select('scheda').eq('id_attivita', pc.sellerId).maybeSingle(),
+      admin.from('schede_clienti').select('scheda').eq('id_attivita', pc.sellerId).maybeSingle(),
+      // 25/11/2026 — La scheda del cliente vale solo dopo l'abbonamento (Nicola).
+      leggiSchedaEPagellaAperte(admin, pc.sellerId),
     ]);
     letti = l;
     // Il link non è la pagina del negozio: qui solo i dati confermati, niente «da confermare» (collaudo del 24/11).
-    scheda = s.error ? null : soloConfermati(leggiSchedaSalvata(s.data?.scheda));
+    scheda = s.error ? null : soloConfermati(schedaPerIlSito(leggiSchedaSalvata(s.data?.scheda), aperta));
   } catch (e) {
     logger.error('[preventivo-codice] pagina: preventivo non preparato', { errore: String(e) });
     return <Cornice><p className="text-ink-700">Non riesco a preparare il preventivo in questo momento. Riprova fra qualche minuto.</p></Cornice>;

@@ -1,4 +1,6 @@
 import { NextResponse, after } from 'next/server';
+import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
+import { inviaNuovaAttivitaAlFlusso } from '@/lib/agenzia/nuovo-cliente-n8n';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta } from '@/lib/api/corpo';
@@ -56,5 +58,30 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
   logger.info('[nuova-attivita] attività iscritta', { id: fatto.id, nuova: fatto.nuova });
   if (fatto.sito) analizzaSitoDopoLaRisposta(admin, fatto.id, fatto.sito, after);
+  // 25/11/2026 — Nicola: per ogni attività che si iscrive l'analisi parte subito, da tutte e due le porte.
+  // Chi nasce dal modulo 12 va anche al flusso 16, come chi si iscrive da solo su /sell: il 16 fa la
+  // ricerca, manda al sito la scheda (che resta chiusa fino all'abbonamento, con l'analisi aperta) e
+  // prepara le bozze dei tre abbonamenti (flusso 19). Solo per un negozio nuovo, dopo la risposta:
+  // il 20 non aspetta. Spento finché Nicola non collega il 16 (lib/agenzia/nuovo-cliente-n8n.ts).
+  if (fatto.nuova) {
+    const a = esito.data;
+    const lavoro = async () => {
+      await inviaNuovaAttivitaAlFlusso({
+        idAttivita: fatto.id,
+        nome: a.nome,
+        tipo: a.tipo_attivita ?? null,
+        tipoDescritto: a.tipo_attivita ? descriviAttivita(a.tipo_attivita, a.dettaglio) : null,
+        indirizzo: a.indirizzo ?? null,
+        citta: a.citta ?? null,
+        descrizione: null,
+      });
+    };
+    // Fuori da una richiesta (le prove) `after` non c'è: si lancia e basta, come l'analisi del sito.
+    try {
+      after(lavoro);
+    } catch {
+      void lavoro();
+    }
+  }
   return NextResponse.json({ ok: true, id_attivita: fatto.id, nuova: fatto.nuova }, { status: fatto.nuova ? 201 : 200 });
 }

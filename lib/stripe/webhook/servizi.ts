@@ -20,6 +20,8 @@ import { notifyAdmins } from './comune';
 import { scritturaFacoltativa, scritturaObbligatoria } from './esito';
 import { handleSellerSubscription, statoDaStripe } from './abbonamenti';
 import { KIND_SERVIZI, KIND_VETRINA } from './tipi-abbonamento';
+import { alPrimoAbbonamentoPagato } from '@/lib/agenzia/abbonamento-attivo-n8n';
+import { schedaEPagellaAperte } from '@/lib/agenzia/scheda-dopo-abbonamento';
 
 export { KIND_SERVIZI };
 
@@ -97,6 +99,21 @@ export async function handleServiziSubscription(session: Stripe.Checkout.Session
     return;
   }
   if (stato !== 'active') return;
+
+  // 25/11/2026 — Nicola: la scheda del cliente e la pagella arrivano solo dopo l'abbonamento. Al PRIMO
+  // abbonamento pagato si aprono (lib/agenzia/abbonamento-attivo-n8n.ts). «Primo» = nessun altro
+  // abbonamento ai servizi pagato prima di questo. Una lettura caduta non ferma niente: si salta, e lo dice il log.
+  const precedenti = await admin
+    .from('abbonamenti_servizi')
+    .select('stato')
+    .eq('seller_id', sellerId)
+    .neq('stripe_subscription_id', subscriptionId)
+    .limit(20);
+  if (precedenti.error) {
+    logger.warn('[stripe] abbonamenti precedenti non letti: scheda e pagella non aperte da qui', { sellerId, message: precedenti.error.message });
+  } else if (!schedaEPagellaAperte({ visibileSenzaAbbonamento: false, statiAbbonamenti: (precedenti.data ?? []).map((r) => (r as { stato?: unknown }).stato) })) {
+    await alPrimoAbbonamentoPagato(admin, sellerId);
+  }
 
   const nome = FASCE[fascia].nome;
   const primo = canonePrimoMese(canone);

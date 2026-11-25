@@ -25,7 +25,8 @@ import type { Pagella } from '@/lib/agenzia/pagella';
  * L'ANALISI DEL BUSINESS, GIÀ PRONTA DENTRO LA PAGINA DEL SERVIZIO — 24/11/2026.
  *
  * Nicola: «quando dico preventivo intendo un'anteprima/demo già creata di tutte quelle cose». Qui il
- * titolare vede la sua analisi: l'attività (n8n, flusso 16, dalla scheda), i canali (social e scheda
+ * titolare vede la sua analisi, che parte subito all'iscrizione; la pagella sul marketplace solo dopo
+ * l'abbonamento (25/11/2026): l'attività (n8n, flusso 16, dalla scheda), i canali (social e scheda
  * Google, da n8n), il sito (Google PageSpeed). Dove un'analisi non c'è ancora la pagina lo dice e non
  * inventa niente. Sotto, «I tuoi canali», dove li scrive.
  */
@@ -75,7 +76,10 @@ export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente 
   const qc = useQueryClient();
   const { data: analisi } = useQuery({ queryKey: CHIAVE_ANALISI, queryFn: leggiAnalisiDelNegozio });
   const { data: canali } = useQuery({ queryKey: CHIAVE_CANALI, queryFn: leggiCanali });
-  const { data: pagella, isError: pagellaNonLetta } = useQuery({ queryKey: CHIAVE_PAGELLA, queryFn: leggiPagella });
+  // 25/11/2026 — La pagella arriva solo dopo l'abbonamento (Nicola): per chi è in demo `leggiPagella`
+  // dà `null` e il blocco non si mostra. Anche se la lettura non riesce non si mostra niente: meglio
+  // nessun blocco che uno davanti a chi è in demo.
+  const { data: pagella } = useQuery({ queryKey: CHIAVE_PAGELLA, queryFn: leggiPagella });
   const attivita = analisiDellAttivita(scheda);
   const sito = analisi?.sito ?? null;
   const haSito = Boolean((canali?.website ?? '').trim());
@@ -99,11 +103,11 @@ export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente 
         Già pronta con quello che sappiamo oggi. Usiamo solo fonti pubbliche e gratuite; dove un’analisi non c’è ancora, te lo diciamo.
       </p>
 
-      <Blocco icona={ClipboardCheck} titolo="La tua pagella su MyCity">
-        {pagella ? <PagellaDelNegozio p={pagella} /> : (
-          <NonAncora>{pagellaNonLetta ? 'Non sono riuscito a preparare la pagella: riprova fra poco.' : 'Sto preparando la pagella…'}</NonAncora>
-        )}
-      </Blocco>
+      {pagella && (
+        <Blocco icona={ClipboardCheck} titolo="La tua pagella su MyCity">
+          <PagellaDelNegozio p={pagella} />
+        </Blocco>
+      )}
 
       <Blocco icona={Store} titolo="La tua attività">
         {attivita ? (
