@@ -1,4 +1,4 @@
-import { SLUG_SERVIZIO, servizioDaSlug, type ServizioAgenzia } from './preventivo';
+import { ABBONAMENTI, SLUG_SERVIZIO, servizioDaSlug, type Abbonamento, type ServizioAgenzia } from './preventivo';
 
 /**
  * GLI INDIRIZZI DEI SERVIZI NELL'AREA DEL NEGOZIO — 24/11/2026.
@@ -20,6 +20,21 @@ export const PERCORSO_ABBONAMENTO = '/seller/abbonamento';
 export const PERCORSO_SERVIZI = '/seller/servizi';
 
 export const hrefServizio = (id: ServizioAgenzia) => `${PERCORSO_SERVIZI}/${SLUG_SERVIZIO[id]}`;
+
+/**
+ * 25/11/2026 — OGNI FASCIA APRE IL SUO PREVENTIVO. Nicola: «il link all'abbonamento sia il preventivo
+ * personalizzato in base all'azienda e all'abbonamento». Cliccando Base, Business o Premium si apre
+ * la pagina dell'abbonamento già su quella fascia: l'offerta su misura e il prezzo sono i suoi.
+ * `base` è l'inizio dell'indirizzo: /seller/abbonamento nel pannello, /preventivo/<codice>/abbonamento
+ * nella demo del link col codice.
+ */
+export const hrefFascia = (fascia: Abbonamento, base: string = PERCORSO_ABBONAMENTO) => `${base}?fascia=${fascia}`;
+
+/** La fascia scritta nell'indirizzo (?fascia=business), o `null` se non è una delle tre. */
+export function fasciaDaIndirizzo(valore: string | null | undefined): Abbonamento | null {
+  const v = (valore ?? '').trim().toLowerCase();
+  return (ABBONAMENTI as readonly string[]).includes(v) ? (v as Abbonamento) : null;
+}
 
 const VECCHIO_PREVENTIVO = '/seller/preventivo';
 
