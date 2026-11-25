@@ -11,8 +11,8 @@ import {
   type Preventivo,
 } from '@/lib/agenzia/preventivo';
 import { tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
-import { leggiSchedaSalvata, soloConfermati } from '@/lib/agenzia/scheda-cliente';
-import { analisiAziendale, leggiAnalisiCanali, leggiRisultatoSito, sitoInParole } from '@/lib/agenzia/analisi';
+import { leggiSchedaSalvata, sitoUfficialeDi, soloConfermati } from '@/lib/agenzia/scheda-cliente';
+import { analisiAziendale, leggiAnalisiCanali, leggiRisultatoSito, sitoInParole, statoAnalisiBusiness } from '@/lib/agenzia/analisi';
 import { leggiGiudizioSito, offertaSuMisura } from '@/lib/agenzia/offerta-su-misura';
 import { conLAnalisi, schedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
 
@@ -49,8 +49,9 @@ function abbonamentoAttivo(r: { data: unknown; error: { message: string } | null
 
 /**
  * `pubblico`: il preventivo si mostra fuori dalla pagina del negozio (il link col codice). L'offerta su
- * misura usa allora solo i dati confermati della scheda e nessuna analisi dei canali; il sito misurato da
- * Google PageSpeed e il giudizio dell’AD sul sito sì (Nicola, 25/11/2026: «sì, anche nel link»).
+ * misura usa allora solo i dati confermati della scheda; il sito misurato da Google PageSpeed e il giudizio
+ * dell’AD sul sito sì (Nicola, 25/11/2026: «sì, anche nel link»), e dal 25/11 sera anche l'analisi dei social
+ * (lettura di pagine pubbliche, con le fonti: `agenzia.social-come-il-sito`).
  */
 export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, opzioni: { pubblico?: boolean } = {}): Promise<Letti> {
   const admin = getAdminSupabase();
@@ -78,8 +79,8 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
     // Tutte e due facoltative: se non ci sono, o la tabella manca, l'offerta si fa con la vetrina.
     admin.from('schede_clienti').select('scheda').eq('id_attivita', idAttivita).maybeSingle(),
     // 25/11/2026 — Nel link pubblico entra il sito misurato da Google PageSpeed (Nicola: «sì, anche nel
-    // link»): è una misura di Google, non un dato da confermare. I canali restano solo nell'area del negozio.
-    admin.from('analisi_negozi').select(opzioni.pubblico ? 'sito' : 'sito, canali').eq('id_attivita', idAttivita).maybeSingle(),
+    // link»): è una misura di Google, non un dato da confermare. Dal 25/11 sera anche i social: sono pagine pubbliche.
+    admin.from('analisi_negozi').select('sito, canali').eq('id_attivita', idAttivita).maybeSingle(),
   ]);
   if (profilo.error) throw new Error(`profilo non letto: ${profilo.error.message}`);
   if (!profilo.data) throw new Error('profilo non trovato');
@@ -109,10 +110,21 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
   // sito misurato è un sito che esiste, anche se nei canali della vetrina non è ancora scritto.
   const analisi = analisiLetta.error ? null : (analisiLetta.data as { sito?: unknown; canali?: unknown } | null);
   const sitoMisurato = leggiRisultatoSito(analisi?.sito);
-  const socialsPerIlConto =
-    sitoMisurato && !(socials && typeof socials === 'object' && typeof (socials as Record<string, unknown>).website === 'string' && ((socials as Record<string, string>).website).trim())
-      ? { ...(socials && typeof socials === 'object' ? (socials as Record<string, unknown>) : {}), website: sitoMisurato.url }
-      : socials;
+  const canaliLetti = leggiAnalisiCanali(analisi?.canali);
+  // 25/11/2026 sera — Un sito noto conta come sito anche senza la misura di Google: oltre alla vetrina (dove lo
+  // scrive anche il modulo 12) e alla misura, quello che il flusso 16 ha trovato (`campi.sito_ufficiale`). E un
+  // profilo social trovato dall'analisi conta come profilo. Mai «non hai un sito» o «nessun profilo» se c'è.
+  const schedaLettaIntera = schedaLetta.error ? null : leggiSchedaSalvata((schedaLetta.data as { scheda?: unknown } | null)?.scheda);
+  const scritti = socials && typeof socials === 'object' ? (socials as Record<string, unknown>) : {};
+  const pieno = (k: string) => typeof scritti[k] === 'string' && (scritti[k] as string).trim().length > 0;
+  const aggiunte: Record<string, string> = {};
+  const sitoNoto = sitoMisurato?.url ?? sitoUfficialeDi(schedaLettaIntera);
+  if (!pieno('website') && sitoNoto) aggiunte.website = sitoNoto;
+  for (const k of ['instagram', 'facebook', 'tiktok'] as const) {
+    const c = canaliLetti?.canali[k];
+    if (!pieno(k) && c && (c.stato === 'fatta' || c.stato === 'privato') && c.fonte) aggiunte[k] = c.fonte;
+  }
+  const socialsPerIlConto = Object.keys(aggiunte).length ? { ...scritti, ...aggiunte } : socials;
   const sitoOggi = sitoMisurato
     ? [`Il tuo sito c’è, e Google l’ha misurato:`, ...sitoInParole(sitoMisurato).map((v) => `${v.titolo}: ${v.punteggio} su 100. ${v.frase}`)]
     : undefined;
@@ -145,10 +157,7 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
       visibileSenzaAbbonamento: p.visibile_senza_abbonamento,
       statiAbbonamenti: abbonamento.error ? [] : ((abbonamento.data as Array<{ stato?: unknown }> | null) ?? []).map((r) => r.stato),
     });
-    const schedaIntera = schedaPerIlSito(
-      schedaLetta.error ? null : leggiSchedaSalvata((schedaLetta.data as { scheda?: unknown } | null)?.scheda),
-      aperta,
-    );
+    const schedaIntera = schedaPerIlSito(schedaLettaIntera, aperta);
     preventivo.offerta = offertaSuMisura({
       nome: preventivo.attivita,
       tipo: preventivo.tipoAttivita,
@@ -161,7 +170,7 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
       // 25/11/2026 — Nicola: il preventivo si cuce sull'analisi, anche nel link. Nel link resta l'analisi
       // (punti di forza, idee, analisi del business con le sue fonti); dei campi solo quelli confermati.
       scheda: opzioni.pubblico ? conLAnalisi(soloConfermati(schedaIntera), schedaIntera) : schedaIntera,
-      canali: opzioni.pubblico ? null : leggiAnalisiCanali(analisi?.canali),
+      canali: canaliLetti,
       sito: sitoMisurato,
       // Il giudizio dell'AD sul sito vale anche nel link: è un parere su un sito pubblico, non un dato del titolare.
       giudizioSito: leggiGiudizioSito((schedaIntera?.analisi as Record<string, unknown> | undefined)?.giudizio_sito),
@@ -169,6 +178,8 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
     });
     // 25/11/2026 — L'analisi del business (Nicola): è analisi, quindi c'è anche in demo e nel link.
     preventivo.analisiAziendale = analisiAziendale(schedaIntera);
+    preventivo.analisiAziendaleStato = statoAnalisiBusiness(schedaIntera);
+    preventivo.canali = canaliLetti;
     // 25/11/2026 — Il consiglio tiene conto del sito e dell'analisi (Nicola, «ok sito»).
     const consiglio = consigliataDallOfferta({ id: preventivo.consigliato, perche: preventivo.perche_consigliato }, preventivo.offerta);
     preventivo.consigliato = consiglio.id;

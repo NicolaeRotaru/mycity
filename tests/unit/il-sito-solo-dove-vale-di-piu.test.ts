@@ -90,15 +90,18 @@ describe('A · la tabella dei livelli del sito', () => {
     for (const f of ['base', 'business', 'premium'] as const) expect(cosaInFascia(x, f)).not.toMatch(/Rifacciamo/);
   });
 
-  it('medio e a posto per Google: si tiene e si collega', () => {
-    expect(sitoDi(conSito(VELOCE, g({ livello: 'medio' }))).id).toBe('sito-valorizzato');
+  // 25/11/2026 sera, dal collaudo: la tabella non dipende da Google. Un medio a posto per Google si rifà comunque dal Business.
+  it('medio e a posto per Google: tenuto nel Base, rifatto dal Business', () => {
+    const x = sitoDi(conSito(VELOCE, g({ livello: 'medio' })));
+    expect(x.id).toBe('sito-rifatto');
+    expect(cosaInFascia(x, 'base')).toMatch(/^Colleghiamo/);
   });
 
   it('la bozza va a chi ha un sito solo se almeno un abbonamento lo rifà', () => {
-    expect(sitoDaRifareInQualcheFascia(LENTO, g({ livello: 'pregio' }))).toBe(false);
-    expect(sitoDaRifareInQualcheFascia(LENTO, null)).toBe(true);
-    expect(sitoDaRifareInQualcheFascia(VELOCE, g({ livello: 'medio' }))).toBe(false);
-    expect(sitoDaRifareInQualcheFascia(null, g({ livello: 'semplice' }))).toBe(true);
+    expect(sitoDaRifareInQualcheFascia(g({ livello: 'pregio' }))).toBe(false);
+    expect(sitoDaRifareInQualcheFascia(null)).toBe(true);
+    expect(sitoDaRifareInQualcheFascia(g({ livello: 'medio' }))).toBe(true);
+    expect(sitoDaRifareInQualcheFascia(g({ livello: 'semplice' }))).toBe(true);
     const negozio = { id: ID, ruolo: 'seller', sito: 'https://www.esempio.it', bozzaIl: null, schedaIl: null };
     expect(aspettaLaBozza({ ...negozio, sitoDaRifare: true })).toEqual({ aspetta: true, perche: 'sito_da_rifare' });
     expect(aspettaLaBozza({ ...negozio, sitoDaRifare: false })).toEqual({ aspetta: false });
@@ -149,7 +152,8 @@ describe('B · le opportunità dell analisi diventano proposte', () => {
   });
 
   it('con opportunità da seguire, il consiglio non resta sul Base', () => {
-    const o = offertaSuMisura({ ...conSito(VELOCE, g({ livello: 'medio' })), analisiAziendale: analisi });
+    // un sito di pregio senza migliorie non sposta il consiglio: lo sposta l'analisi
+    const o = offertaSuMisura({ ...conSito(VELOCE, g({ livello: 'pregio' })), analisiAziendale: analisi });
     const c = consigliataDallOfferta({ id: 'base', perche: 'La tua vetrina è già in ordine.' }, o);
     expect(c.id).toBe('business');
     expect(c.perche).toMatch(/opportunit/);

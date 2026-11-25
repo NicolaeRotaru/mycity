@@ -127,7 +127,7 @@ export default async function PreventivoDalLink({
 
       <OffertaSuMisura corta offerta={p.offerta} fascia={scelta} />
       {/* 25/11/2026 — L'analisi del business dell'attività (Nicola, mycity#330): corta, il dettaglio nella demo. */}
-      <AnalisiAziendale corta analisi={p.analisiAziendale} fascia={scelta} dettaglioHref={indirizziDemo(codice).servizio('analisi')} />
+      <AnalisiAziendale corta analisi={p.analisiAziendale} stato={p.analisiAziendaleStato} fascia={scelta} dettaglioHref={indirizziDemo(codice).servizio('analisi')} />
 
       {/* 25/11/2026 — Nicola, 18:30: nel preventivo i servizi corti, una riga ciascuno, solo per la fascia guardata. Ogni fascia apre il suo preventivo (#331). */}
       <AbbonamentiInBreve consigliato={p.consigliato} prezzi={p.prezzi} primoMeseScontato={p.primoMeseScontato} perche={p.perche_consigliato} scelta={scelta} hrefDi={(f) => hrefFascia(f, qui)} />

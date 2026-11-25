@@ -1,6 +1,6 @@
 import { ABBONAMENTI, FASCE, FOTO_LOCALE_CONSIGLIATE, PRODOTTI_PER_IL_PREMIUM, type Abbonamento, type DatiAttivita, type ServizioAgenzia } from './preventivo';
-import { datoDi, prodottiTipici, senzaPrezzo, vociSenzaPrezzo, type SchedaCliente } from './scheda-cliente';
-import { votoDi, type AnalisiAziendale, type AnalisiCanali, type RisultatoSito } from './analisi';
+import { datoDi, prodottiTipici, senzaPrezzo, sitoUfficialeDi, vociSenzaPrezzo, type SchedaCliente } from './scheda-cliente';
+import { LIVELLO_SOCIAL_IN_PAROLE, livelloSocial, votoDi, type AnalisiAziendale, type AnalisiCanali, type RisultatoSito } from './analisi';
 import type { TipoAttivita } from './tipi-attivita';
 
 /**
@@ -134,11 +134,13 @@ export function leggiGiudizioSito(grezzo: unknown): GiudizioSito | null {
 /** Il livello del sito: quello dell'AD, o «medio» se non l'ha guardato (mai rifare dal Base un sito non visto). */
 export const livelloDelSito = (g: GiudizioSito | null | undefined): LivelloSito => g?.livello ?? 'medio';
 
-/** Da quale fascia rifacciamo il sito che ha già, secondo la tabella di Nicola; `null` = non si rifà. */
-function rifattoDa(g: GiudizioSito | null | undefined, qualcosaDaRifare: boolean): Abbonamento | null {
+/**
+ * Da quale fascia rifacciamo il sito che ha già, secondo la tabella di Nicola; `null` = non si rifà.
+ * La tabella NON dipende dai voti di Google (25/11/2026 sera, dal collaudo): Google aggiunge solo il perché.
+ */
+function rifattoDa(g: GiudizioSito | null | undefined): Abbonamento | null {
   const livello = livelloDelSito(g);
   if (livello === 'semplice') return 'base';
-  if (!qualcosaDaRifare) return null;
   if (livello === 'medio') return 'business';
   return g?.migliorie ? 'premium' : null;
 }
@@ -149,16 +151,17 @@ function difettiDelSito(sito: RisultatoSito | null | undefined, g: GiudizioSito 
   const googleMale = !!sito && sito.seo !== null && votoDi(sito.seo) !== 'bene';
   const daSistemare = sito ? vociCitabili(sito.daSistemare, 2, 300) : [];
   const aspettoDebole = g?.aspetto === 'datato' || g?.aspetto === 'fai-da-te';
-  return { lento, googleMale, daSistemare, aspettoDebole, qualcuno: lento || googleMale || daSistemare.length > 0 || aspettoDebole };
+  // Google «segnala» solo se qualcosa per farsi trovare non va, o ci sono cose da sistemare: la velocità ha la sua frase.
+  return { lento, googleMale, daSistemare, aspettoDebole, googleSegnala: googleMale || daSistemare.length > 0 };
 }
 
 /**
  * Almeno un abbonamento rifà il sito che ha già: allora la bozza del sito va anche a lui (Nicola, «ok sito»).
- * Senza misura di Google e senza giudizio dell'AD non si sa niente: niente bozza.
+ * Si chiede solo per chi un sito ce l'ha (vetrina, modulo 12, misura di Google o `campi.sito_ufficiale`).
+ * Senza giudizio vale «medio», che il Business rifà: la bozza serve. Solo il pregio senza migliorie non la vuole.
  */
-export function sitoDaRifareInQualcheFascia(sito: RisultatoSito | null | undefined, g: GiudizioSito | null | undefined): boolean {
-  if (!sito && !g) return false;
-  return rifattoDa(g, difettiDelSito(sito, g).qualcuno) !== null;
+export function sitoDaRifareInQualcheFascia(g: GiudizioSito | null | undefined): boolean {
+  return rifattoDa(g) !== null;
 }
 
 const FONTE = {
@@ -168,12 +171,17 @@ const FONTE = {
   instagram: 'il tuo profilo Instagram',
   facebook: 'la tua pagina Facebook',
   google: 'la tua scheda Google Maps',
+  tiktok: 'il tuo profilo TikTok',
 } as const;
+const FONTE_SOCIAL = { instagram: FONTE.instagram, facebook: FONTE.facebook, tiktok: FONTE.tiktok } as const;
 
 /** I post al mese di ogni fascia, letti dal testo del listino (`FASCE`): se cambia lì, cambia qui. */
 // Calcolato quando serve, non quando il file si carica: preventivo.ts e questo file si importano a
 // vicenda, e a caricamento `FASCE` può non esserci ancora.
 export const postAlMese = (f: Abbonamento): number => Number(/(\d+) post al mese/.exec(FASCE[f].servizi.social)?.[1] ?? 0);
+/** I video brevi al mese di ogni fascia, letti allo stesso modo (il Base non ne ha). */
+export const videoAlMese = (f: Abbonamento): number => Number(/(\d+) video brevi/.exec(FASCE[f].servizi.social)?.[1] ?? 0);
+const NOMI_SOCIAL = { instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok' } as const;
 
 /** Un numero di telefono in un testo libero (n8n può averlo trovato in rete): può essere del titolare. */
 const TELEFONO = /\+?\d[\d\s./-]{7,}\d/;
@@ -272,7 +280,9 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
   }
 
   /* ─────────── SITO WEB ─────────── */
-  const haSito = pieno(dati.socials, 'website');
+  // 25/11/2026 sera — Un sito noto conta come sito, anche senza la misura di Google: scritto nella vetrina (o dal
+  // modulo 12, che lo scrive lì), misurato da Google, o trovato dal flusso 16 (`campi.sito_ufficiale`). Mai «non hai un sito».
+  const haSito = pieno(dati.socials, 'website') || !!sito || !!sitoUfficialeDi(scheda);
   const indirizzo = datoDi(scheda, 'indirizzo');
   const orariGrezzi = datoDi(scheda, 'orari');
   const orari = orariGrezzi && orariCitabili(orariGrezzi.valore) ? orariGrezzi : null;
@@ -321,24 +331,37 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
   // Il sito che ha già (25/11/2026: Google PageSpeed lo misura, l'AD dice com'è e quanto vale).
   // La tabella di Nicola («ok sito», 25/11): semplice → rifatto dal Base; medio → tenuto e collegato nel Base,
   // rifatto dal Business; pregio → tenuto nel Base e nel Business, rifatto solo nel Premium e solo con le
-  // migliorie scritte dall'AD. Senza giudizio vale «medio». Mai «sistemiamo il tuo sito di oggi» a metà.
-  if (haSito && (sito || giudizioSito)) {
-    const { lento, googleMale, daSistemare, aspettoDebole, qualcuno } = difettiDelSito(sito, giudizioSito);
+  // migliorie scritte dall'AD. Senza giudizio vale «medio». La tabella non guarda Google: Google dà solo il perché,
+  // e le frasi dicono il vero sia a occhio sia per Google (mai «fatto bene» accanto a un voto basso).
+  if (haSito) {
+    const { lento, googleMale, daSistemare, aspettoDebole, googleSegnala } = difettiDelSito(sito, giudizioSito);
+    const livello = livelloDelSito(giudizioSito);
+    const giudicato = !!giudizioSito?.livello;
+    // A occhio: l'aspetto se l'AD l'ha detto, se no il livello che ha scritto. Mai le due insieme (si contraddirebbero).
     const aOcchio = giudizioSito?.aspetto === 'datato'
       ? 'A vederlo, il sito sembra datato.'
       : giudizioSito?.aspetto === 'fai-da-te'
         ? 'A vederlo, il sito sembra fatto in casa.'
         : giudizioSito?.aspetto === 'curato'
           ? 'A vederlo, il sito è curato.'
-          : null;
+          : giudicato
+            ? { semplice: 'A vederlo, il sito è semplice.', medio: 'A vederlo, il sito è ordinato, ma senza funzioni particolari.', pregio: 'A vederlo, il sito è di pregio.' }[livello]
+            : null;
     const voti = sito ? [
       sito.velocita !== null ? `${sito.velocita} su 100 per la velocità dal telefono` : null,
       sito.seo !== null ? `${sito.seo} su 100 per farsi trovare su Google` : null,
     ].filter(Boolean) as string[] : [];
+    // Per Google, detto com'è: i voti bassi uno per uno; se sono tutti buoni, che sono buoni.
+    const perGoogle = [
+      lento ? `Oggi Google gli dà ${sito!.velocita} su 100 per la velocità dal telefono${sito!.secondiPerVedere !== null ? `: la parte principale si vede dopo ${sito!.secondiPerVedere.toLocaleString('it-IT')} secondi` : ''}.` : null,
+      googleMale ? `Per farsi trovare su Google gli dà ${sito!.seo} su 100.` : null,
+      !lento && !googleMale && voti.length ? `Per Google va già bene: gli dà ${elenco(voti)}.` : null,
+      ...daSistemare,
+    ].filter(Boolean) as string[];
     const nota = giudizioSito?.nota ? `${giudizioSito.nota.replace(/[.!?]?$/, '.')}` : null;
     const molte = giudizioSito?.pagine === 'molte';
-    const livello = livelloDelSito(giudizioSito);
-    const da = rifattoDa(giudizioSito, qualcuno);
+    const da = rifattoDa(giudizioSito);
+    const fonte = (lento || googleMale || daSistemare.length) ? FONTE.sito : giudizioSito ? FONTE.scheda : sito ? FONTE.sito : pieno(dati.socials, 'website') ? FONTE.vetrina : FONTE.scheda;
     // Tenuto e collegato: le stesse frasi di sempre, fascia per fascia.
     const tenuto: Record<Abbonamento, string> = {
       base: 'Colleghiamo il tuo sito alla vetrina MyCity: il pulsante «Ordina» porta i clienti ai tuoi prodotti',
@@ -347,73 +370,103 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
     };
     if (da) {
       const veloce = lento ? ', veloce dal telefono' : '';
+      // «Senza le cose che Google segnala» solo se Google segnala davvero qualcosa (dal collaudo).
+      const pulito = googleSegnala ? ', senza le cose che Google segnala' : '';
       const migliorie = livello === 'pregio' && giudizioSito?.migliorie ? `: ${minuscola(giudizioSito.migliorie.replace(/[.!?]$/, ''))}` : '';
       const rifatto: Record<Abbonamento, string> = {
         base: molte
           ? `Rifacciamo la pagina principale del tuo sito${veloce}, col tuo nome e il pulsante per ordinare dalla vetrina`
-          : `Rifacciamo il tuo sito in una pagina col tuo nome${veloce}, senza le cose che Google segnala`,
-        business: `Rifacciamo il tuo sito completo, di più pagine${veloce}, senza le cose che Google segnala`,
+          : `Rifacciamo il tuo sito in una pagina col tuo nome${veloce}${pulito}`,
+        business: `Rifacciamo il tuo sito completo, di più pagine${veloce}${pulito}`,
         premium: livello === 'pregio'
           ? `Rifacciamo il tuo sito${veloce}${migliorie}`
           : `Rifacciamo il tuo sito completo${veloce}, e lo aggiorniamo noi ogni mese`,
       };
       const perFascia = Object.fromEntries(ABBONAMENTI.map((f) => [f, ORDINE[f] >= ORDINE[da] ? rifatto[f] : tenuto[f]])) as Record<Abbonamento, string>;
+      const ragioni = [...perGoogle, aspettoDebole || !perGoogle.length ? aOcchio : null, nota].filter(Boolean) as string[];
       aggiungi({
         id: 'sito-rifatto',
         servizio: 'sito_web',
         cosa: rifatto[da],
         perFascia,
         perche: [
-          lento ? `Oggi Google gli dà ${sito!.velocita} su 100 per la velocità dal telefono${sito!.secondiPerVedere !== null ? `: la parte principale si vede dopo ${sito!.secondiPerVedere.toLocaleString('it-IT')} secondi` : ''}.` : null,
-          googleMale ? `Per farsi trovare su Google gli dà ${sito!.seo} su 100.` : null,
-          aspettoDebole ? aOcchio : null,
-          nota,
-          ...daSistemare,
+          ...(ragioni.length ? ragioni : ['Il tuo sito c’è.']),
           da !== 'base' ? `Col ${FASCE[da].nome} lo rifacciamo per intero; sotto lo teniamo e lo colleghiamo alla vetrina.` : null,
-        ].filter(Boolean).join(' ') || 'A vederlo, il sito è semplice: lo rifacciamo col tuo nome.',
-        fonte: (lento || googleMale || daSistemare.length) ? FONTE.sito : FONTE.scheda,
+        ].filter(Boolean).join(' '),
+        fonte,
         daFascia: 'base',
         consiglia: da === 'base' ? undefined : { fascia: da, perche: `il tuo sito lo rifacciamo dal ${FASCE[da].nome}, che lo fa per intero` },
       });
     } else {
+      // Solo il pregio senza migliorie: non si rifà. «Fatto bene» solo se lo è anche per Google e a vederlo.
+      const bene = !lento && !googleMale && !googleSegnala && !aspettoDebole;
       aggiungi({
         id: 'sito-valorizzato',
         servizio: 'sito_web',
         cosa: 'Teniamo il tuo sito com’è e lo facciamo lavorare per te',
         perFascia: tenuto,
         perche: [
-          qualcuno ? 'Il tuo sito è fatto bene: non lo rifacciamo, lo colleghiamo alla vetrina e lo facciamo crescere.' : `Il tuo sito è già fatto bene${voti.length ? `: Google gli dà ${elenco(voti)}` : ''}.`,
           aOcchio,
+          bene && voti.length ? `Il tuo sito è fatto bene: Google gli dà ${elenco(voti)}.` : null,
+          bene ? null : perGoogle.join(' ') || null,
           nota,
-          qualcuno ? null : 'Non lo rifacciamo: lo colleghiamo alla vetrina e lo facciamo crescere.',
+          'Non lo rifacciamo: lo colleghiamo alla vetrina e lo facciamo crescere.',
         ].filter(Boolean).join(' '),
-        fonte: sito ? FONTE.sito : FONTE.scheda,
+        fonte,
         daFascia: 'base',
       });
     }
   }
 
   /* ─────────── SOCIAL E GOOGLE MAPS ─────────── */
-  const ig = canali?.canali.instagram;
-  const postIg = ig?.stato === 'fatta' ? ig.numeri?.post_ultimi_30_giorni : undefined;
-  if (postIg !== undefined) {
-    // Solo le fasce che fanno DAVVERO più post di quanti ne esce già: «da 30 a 8» sarebbe un calo.
-    const sopra = ABBONAMENTI.filter((f) => postAlMese(f) > postIg);
-    const follower = ig?.numeri?.follower;
-    const extra: Record<Abbonamento, string> = { base: ', preparati e pubblicati da noi', business: ' (3 a settimana), con 2 video brevi', premium: ', con 4 video brevi e le storie' };
-    if (sopra.length) {
-      aggiungi({
-        id: 'social-costanza',
-        servizio: 'social',
-        cosa: `Da ${postIg} a ${postAlMese(sopra[0])} post al mese su Instagram${extra[sopra[0]]}`,
-        perFascia: Object.fromEntries(sopra.map((f) => [f, `Da ${postIg} a ${postAlMese(f)} post al mese su Instagram${extra[f]}`])),
-        perche: `Negli ultimi 30 giorni su Instagram sono usciti ${postIg} post${follower !== undefined ? `, con ${it(follower)} persone che ti seguono` : ''}.`,
-        fonte: FONTE.instagram,
-        daFascia: sopra[0],
-      });
-    }
+  // I social come il sito (Nicola, `agenzia.social-come-il-sito`, 25/11/2026), per ogni canale letto:
+  //  · debole → la gestione dal Base;
+  //  · attivo → nel Base si tiene e si collega, la gestione dalla prima fascia che fa più post o video di oggi;
+  //  · forte → nel Base e nel Business si tiene e si collega, la gestione solo nel Premium e solo con le migliorie dell'AD.
+  // Senza l'analisi del canale nessuna frase su quel canale: resta la parte generale del servizio.
+  const extra: Record<Abbonamento, string> = { base: ', preparati e pubblicati da noi', business: ' (3 a settimana), con 2 video brevi', premium: ', con 4 video brevi e le storie' };
+  for (const k of ['instagram', 'facebook', 'tiktok'] as const) {
+    const c = canali?.canali[k];
+    const livello = livelloSocial(c);
+    if (!c || !livello || livello === 'nessuno') continue;
+    const nome = NOMI_SOCIAL[k];
+    const post = c.giudizio?.post_al_mese ?? c.numeri?.post_ultimi_30_giorni ?? null;
+    const video = c.giudizio?.video ?? null;
+    const follower = c.numeri?.follower;
+    const migl = c.giudizio?.migliorie ?? null;
+    const faDiPiu = (f: Abbonamento) => (post !== null && postAlMese(f) > post) || (video === 'mai' && videoAlMese(f) > 0);
+    const da: Abbonamento | null = livello === 'debole' ? 'base' : livello === 'attivo' ? (ABBONAMENTI.filter((f) => f !== 'base').find(faDiPiu) ?? null) : migl ? 'premium' : null;
+    const tenuto = `Teniamo il tuo ${nome} com’è e lo colleghiamo alla vetrina`;
+    const gestione = (f: Abbonamento) =>
+      livello === 'forte'
+        ? `Seguiamo noi il tuo ${nome}: ${minuscola(migl!.replace(/[.!?]$/, ''))}`
+        : post !== null && postAlMese(f) > post
+          ? `Da ${post} a ${postAlMese(f)} post al mese su ${nome}${extra[f]}`
+          : `Curiamo noi il tuo ${nome}: ${postAlMese(f)} post al mese${extra[f]}`;
+    const perFascia = Object.fromEntries(ABBONAMENTI.map((f) => [f, da && ORDINE[f] >= ORDINE[da] ? gestione(f) : tenuto])) as Record<Abbonamento, string>;
+    const visto = post !== null
+      ? `Negli ultimi 30 giorni su ${nome} sono usciti ${post} post${video === 'mai' ? ', senza video' : video ? ', anche con video' : ''}${follower !== undefined ? `, con ${it(follower)} persone che ti seguono` : ''}.`
+      : `${LIVELLO_SOCIAL_IN_PAROLE[livello]}${follower !== undefined ? ` Ti seguono ${it(follower)} persone.` : ''}`;
+    aggiungi({
+      // Instagram tiene il nome di sempre: la proposta è la stessa, allargata ai livelli.
+      id: k === 'instagram' ? 'social-costanza' : `social-costanza-${k}`,
+      servizio: 'social',
+      cosa: da ? gestione(da) : tenuto,
+      perFascia,
+      perche: [
+        visto,
+        !da ? 'Non lo cambiamo: lo teniamo com’è e lo colleghiamo alla vetrina.' : da !== 'base' ? `Col ${FASCE[da].nome} lo seguiamo noi; sotto lo teniamo e lo colleghiamo alla vetrina.` : null,
+      ].filter(Boolean).join(' '),
+      fonte: FONTE_SOCIAL[k],
+      daFascia: 'base',
+      consiglia: da && da !== 'base'
+        ? { fascia: da, perche: livello === 'forte' ? `il tuo ${nome} è già forte: lo seguiamo noi solo col ${FASCE[da].nome}, con quello che ci aggiungiamo` : `il tuo ${nome} lo seguiamo noi dal ${FASCE[da].nome}, che fa più di quello che esce oggi` }
+        : undefined,
+    });
   }
-  const profili = (['instagram', 'facebook', 'tiktok'] as const).filter((k) => pieno(dati.socials, k));
+  // Un profilo trovato dall'analisi conta come profilo, anche se nella vetrina non è scritto: mai «nessun profilo».
+  const trovati = (['instagram', 'facebook', 'tiktok'] as const).filter((k) => ['fatta', 'privato'].includes(canali?.canali[k]?.stato ?? ''));
+  const profili = (['instagram', 'facebook', 'tiktok'] as const).filter((k) => pieno(dati.socials, k) || trovati.includes(k));
   if (profili.length === 0) {
     aggiungi({
       id: 'social-apertura',
@@ -487,13 +540,15 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
       aggiungi({ id: `google-sistema-${i}`, servizio: 'social', cosa: 'Sistemiamo la tua scheda Google', perche: oss, fonte: FONTE.google, daFascia: 'base' });
     }
     const recensioni = google.numeri?.recensioni;
-    if (recensioni !== undefined && recensioni > 0) {
+    // Dal Business, e solo se oggi il locale non risponde (Nicola, `agenzia.social-come-il-sito`): senza il giudizio non si sa.
+    const risponde = google.giudizio?.risposte_recensioni ?? null;
+    if (recensioni !== undefined && recensioni > 0 && (risponde === 'mai' || risponde === 'a_volte')) {
       aggiungi({
         id: 'google-recensioni',
         servizio: 'social',
         cosa: 'Rispondiamo noi alle recensioni su Google, con il tuo tono',
         perFascia: { premium: 'Rispondiamo noi alle recensioni su Google e curiamo la scheda ogni mese, con foto nuove e post' },
-        perche: `La tua scheda ha ${it(recensioni)} ${recensioni === 1 ? 'recensione' : 'recensioni'}${google.numeri?.valutazione !== undefined ? ` e ${google.numeri.valutazione.toLocaleString('it-IT', { maximumFractionDigits: 1 })} stelle su 5` : ''}: chi risponde viene scelto di più.`,
+        perche: `La tua scheda ha ${it(recensioni)} ${recensioni === 1 ? 'recensione' : 'recensioni'}${google.numeri?.valutazione !== undefined ? ` e ${google.numeri.valutazione.toLocaleString('it-IT', { maximumFractionDigits: 1 })} stelle su 5` : ''}, e oggi ${risponde === 'mai' ? 'nessuno risponde' : 'si risponde solo ogni tanto'}: chi risponde viene scelto di più.`,
         fonte: FONTE.google,
         // Le risposte alle recensioni partono dal Business (FASCE).
         daFascia: 'business',

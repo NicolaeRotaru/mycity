@@ -169,3 +169,14 @@ export function leggiSchedaSalvata(grezza: unknown): SchedaCliente | null {
   const esito = SchedaInArrivo.safeParse(grezza);
   return esito.success ? esito.data : null;
 }
+
+/**
+ * Il sito ufficiale che il flusso 16 ha trovato (25/11/2026 sera): un sito noto conta come sito, anche se la vetrina
+ * non lo dice. Solo un indirizzo web, e non una «proposta» né «nessuna»: quelle non dicono che il sito c'è.
+ */
+export function sitoUfficialeDi(scheda: SchedaCliente | null | undefined): string | null {
+  const c = scheda?.campi?.sito_ufficiale;
+  if (!c || c.stato === 'nessuna' || c.stato === 'proposta') return null;
+  const v = valoreDi(scheda, 'sito_ufficiale');
+  return v && /^https?:\/\/\S+$/i.test(v) ? v : null;
+}

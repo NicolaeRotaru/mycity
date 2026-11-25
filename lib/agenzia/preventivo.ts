@@ -378,6 +378,13 @@ export type Preventivo = {
    * parte specifica del servizio «Analisi del business» (lib/agenzia/analisi.ts, `analisiAziendale`).
    */
   analisiAziendale?: import('./analisi').AnalisiAziendale | null;
+  /** 25/11/2026 sera — Fatta, fatta senza fonti (l'AD non ha trovato niente in rete), o da fare. */
+  analisiAziendaleStato?: import('./analisi').StatoAnalisiBusiness;
+  /**
+   * 25/11/2026 sera — L'analisi dei canali (social e scheda Google), anche nel link (Nicola: i social nel link pubblico).
+   * È una lettura di pagine pubbliche, con la fonte di ognuna: per la pagina «Analisi» della demo.
+   */
+  canali?: import('./analisi').AnalisiCanali | null;
 };
 
 /**

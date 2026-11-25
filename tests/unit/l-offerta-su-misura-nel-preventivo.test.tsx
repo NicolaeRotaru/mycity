@@ -47,7 +47,8 @@ const canali = leggiAnalisiCanali({
   canali: {
     instagram: { stato: 'fatta', fonte: 'https://www.instagram.com/oradelgusto/', numeri: { follower: 812, post_ultimi_30_giorni: 3 } },
     facebook: { stato: 'non_trovato' },
-    google: { stato: 'fatta', fonte: 'https://maps.app.goo.gl/AbC123', numeri: { valutazione: 4.6, recensioni: 128 }, osservazioni: ['Mancano gli orari della domenica'] },
+    // 25/11/2026 sera — Le risposte alle recensioni si offrono solo se oggi il locale non risponde (giudizio dell'AD).
+    google: { stato: 'fatta', fonte: 'https://maps.app.goo.gl/AbC123', numeri: { valutazione: 4.6, recensioni: 128 }, osservazioni: ['Mancano gli orari della domenica'], giudizio: { risposte_recensioni: 'mai' } },
   },
 });
 const sito = riassumiPageSpeed(
@@ -140,13 +141,16 @@ describe('le proposte nascono dai dati veri', () => {
   });
 
   it('le correzioni del collaudo: niente cali spacciati per aumenti, niente Facebook mai scritto, niente telefoni', () => {
-    // chi pubblica già 30 post al mese non si vede promettere «da 30 a 8»
+    // chi pubblica già 30 post al mese non si vede promettere «da 30 a 8»: nessuna fascia fa di più, si tiene e si collega
     const tanti = leggiAnalisiCanali({ tipo: 'analisi-canali', id_attivita: ID, fatta_il: '2026-11-24T09:00:00Z', canali: { instagram: { stato: 'fatta', numeri: { post_ultimi_30_giorni: 30 } } } });
-    expect(ids({ ...PIENA, canali: tanti })).not.toContain('social-costanza');
+    const t30 = offertaSuMisura({ ...PIENA, canali: tanti }).proposte.find((x) => x.id === 'social-costanza')!;
+    expect(JSON.stringify(t30)).not.toMatch(/Da 30 a/);
+    expect(cosaInFascia(t30, 'premium')).toMatch(/^Teniamo/);
+    // 10 post al mese è «attivo» (25/11 sera, `agenzia.social-come-il-sito`): nel Base si tiene e si collega, il Business ne fa 12
     const dieci = leggiAnalisiCanali({ tipo: 'analisi-canali', id_attivita: ID, fatta_il: '2026-11-24T09:00:00Z', canali: { instagram: { stato: 'fatta', numeri: { post_ultimi_30_giorni: 10 } } } });
     const c = offertaSuMisura({ ...PIENA, canali: dieci }).proposte.find((x) => x.id === 'social-costanza')!;
-    expect(c.daFascia).toBe('business');
-    expect(cosaInFascia(c, 'base')).toBeNull();
+    expect(cosaInFascia(c, 'base')).toMatch(/^Teniamo/);
+    expect(cosaInFascia(c, 'business')).toBe('Da 10 a 12 post al mese su Instagram (3 a settimana), con 2 video brevi');
     // Facebook non scritto dal titolare: niente «la pagina che ci hai scritto»
     const soloIg = { ...PIENA, dati: { ...PIENA.dati, socials: { instagram: 'oradelgusto' } } };
     expect(ids(soloIg)).not.toContain('social-facebook');
@@ -158,8 +162,8 @@ describe('le proposte nascono dai dati veri', () => {
     });
     const t = JSON.stringify(offertaSuMisura({ ...VUOTA, scheda: conTelefoni }));
     expect(t).not.toMatch(/333 ?1234567/);
-    // l'analisi di un sito senza il sito scritto non fa proporre di rifarlo
-    expect(ids({ ...PIENA, dati: { ...PIENA.dati, socials: {} } })).not.toContain('sito-rifatto');
+    // 25/11/2026 sera — un sito misurato da Google è un sito che esiste, anche se nella vetrina non è scritto: mai «sito nuovo»
+    expect(ids({ ...PIENA, dati: { ...PIENA.dati, socials: {} } })).not.toContain('sito-nuovo');
   });
 
   it('proposteDi dà solo quelle del servizio', () => {
