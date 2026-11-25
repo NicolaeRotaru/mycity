@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
 import { Button } from '@/components/ui/Button';
 import { ABBONAMENTI, FASCE, REALIZZATI_DA, canonePrimoMese, type ServizioAgenzia } from '@/lib/agenzia/preventivo';
-import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
+import { PERCORSO_ABBONAMENTO, hrefFascia } from '@/lib/agenzia/indirizzi-servizi';
 import { inCimaAllaPagina, pulsantiServizi, statoRiquadro, TESTI_RIQUADRO, type StatoRiquadro } from '@/lib/agenzia/riquadro-abbonamento';
 import { ETICHETTE_SERVIZI } from '@/components/seller/servizi-nel-menu';
 import { CHIAVE_PREVENTIVO, leggiPreventivoAgenzia, scriviCanone } from '@/components/seller/preventivo-agenzia';
@@ -97,13 +97,23 @@ function DaScegliere({ stato, p, servizi }: {
           const primo = p.primoMeseScontato ? canonePrimoMese(p.prezzi[f]) : null;
           const consigliata = f === p.consigliato;
           return (
-            <li key={f} className={`rounded-xl border-2 bg-white p-3 ${consigliata ? 'border-primary-700' : 'border-cream-200'}`}>
-              <p className="flex flex-wrap items-center gap-2">
-                <span className="font-serif text-lg font-bold text-ink-900">{FASCE[f].nome}</span>
-                {consigliata && <span className="rounded-full bg-olive-700 px-2 py-0.5 text-[11px] font-bold text-white">Consigliato</span>}
-              </p>
-              <p className="text-sm font-semibold text-ink-900">{scriviCanone(p.prezzi[f])}</p>
-              {primo !== null && <p className="text-xs font-semibold text-olive-800">Il primo mese {formatPriceFromCents(primo)}</p>}
+            <li key={f}>
+              {/* 25/11/2026 — Ogni fascia apre il suo preventivo (Nicola: «in base all'azienda e all'abbonamento»). */}
+              <Link
+                href={hrefFascia(f)}
+                aria-label={`Il preventivo col ${FASCE[f].nome}: ${scriviCanone(p.prezzi[f])}${consigliata ? ', consigliato' : ''}`}
+                className={`block h-full rounded-xl border-2 bg-white p-3 transition-colors hover:border-primary-300 hover:bg-cream-50 ${consigliata ? 'border-primary-700' : 'border-cream-200'}`}
+              >
+                <p className="flex flex-wrap items-center gap-2">
+                  <span className="font-serif text-lg font-bold text-ink-900">{FASCE[f].nome}</span>
+                  {consigliata && <span className="rounded-full bg-olive-700 px-2 py-0.5 text-[11px] font-bold text-white">Consigliato</span>}
+                </p>
+                <p className="text-sm font-semibold text-ink-900">{scriviCanone(p.prezzi[f])}</p>
+                {primo !== null && <p className="text-xs font-semibold text-olive-800">Il primo mese {formatPriceFromCents(primo)}</p>}
+                <p className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-primary-700">
+                  Vedi il preventivo <ArrowRight size={12} aria-hidden />
+                </p>
+              </Link>
             </li>
           );
         })}

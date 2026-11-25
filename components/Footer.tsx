@@ -165,7 +165,8 @@ const Footer = () => {
 
   // Cockpit admin, shell seller e shell rider: footer globale nascosto (shell
   // standalone con chrome dedicata su /admin, /seller e /rider).
-  const areaPro = !!pathname && (pathname.startsWith('/admin') || pathname.startsWith('/seller') || pathname.startsWith('/rider'));
+  // 25/11/2026 — Anche il pannello demo del link col codice (/preventivo/<codice>).
+  const areaPro = !!pathname && (pathname.startsWith('/admin') || pathname.startsWith('/seller') || pathname.startsWith('/rider') || pathname.startsWith('/preventivo/'));
 
   // Stessa chiave e stessa domanda di CategoryBar: dove il piede si disegna, il
   // menu in alto ha già chiesto le categorie e la risposta è condivisa. Dove il

@@ -28,7 +28,7 @@ import {
 } from '@/lib/agenzia/preventivo';
 import { formatPriceFromCents } from '@/lib/format';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
-import { hrefServizio } from '@/lib/agenzia/indirizzi-servizi';
+import { fasciaDaIndirizzo, hrefServizio, PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import { ETICHETTE_SERVIZI } from '@/components/seller/servizi-nel-menu';
 import {
   accettaPreventivo,
@@ -65,10 +65,29 @@ export default function PaginaAbbonamento() {
   // Lo scontrino medio per il pareggio, in euro come lo scrive il titolare: parte dalla stima per tipo.
   const [scontrino, setScontrino] = useState<string | null>(null);
 
-  // Appena arrivano i dati, è scelto l'abbonamento che consigliamo: il cliente può cambiarlo.
+  // 25/11/2026 — La fascia arriva dall'indirizzo (?fascia=business): ogni fascia del riquadro in
+  // dashboard apre il suo preventivo. Senza fascia, o con una sconosciuta, vale quella che consigliamo.
+  // Letta dall'indirizzo come ?pagato, senza useSearchParams (vedi sotto).
+  const [dallIndirizzo, setDallIndirizzo] = useState<Abbonamento | null | undefined>(undefined);
   useEffect(() => {
-    if (p) setScelto((prima) => prima ?? p.consigliato);
-  }, [p]);
+    setDallIndirizzo(fasciaDaIndirizzo(new URLSearchParams(window.location.search).get('fascia')));
+  }, []);
+
+  // Appena arrivano i dati, è scelto l'abbonamento dell'indirizzo o quello che consigliamo: il cliente può cambiarlo.
+  useEffect(() => {
+    if (p && dallIndirizzo !== undefined) setScelto((prima) => prima ?? dallIndirizzo ?? p.consigliato);
+  }, [p, dallIndirizzo]);
+
+  // Cambiando fascia cambia anche l'indirizzo: il preventivo che si guarda si può rimandare o ricaricare.
+  const scegli = (f: Abbonamento) => {
+    setScelto(f);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('fascia', f);
+      url.searchParams.delete('pagato');
+      window.history.replaceState(window.history.state, '', `${PERCORSO_ABBONAMENTO}${url.search}`);
+    } catch { /* l'indirizzo resta com'era: la scelta vale lo stesso */ }
+  };
 
   // Il ritorno dalla cassa Stripe: ?pagato=1 (pagato) o ?pagato=0 (annullato). Letto dall'indirizzo,
   // senza useSearchParams, che chiederebbe un confine Suspense a tutta la pagina.
@@ -121,10 +140,12 @@ export default function PaginaAbbonamento() {
 
   return (
     <div className="max-w-3xl">
+      {/* 25/11/2026 — È il preventivo di questa attività con questa fascia (Nicola: «il link
+          all'abbonamento sia il preventivo personalizzato in base all'azienda e all'abbonamento»). */}
       <SellerPageTitle
-        eyebrow="Servizi"
-        title="Scegli il tuo abbonamento"
-        sub={`Per ${p.attivita} · ${descriviAttivita(p.tipoAttivita)}. Foto e video, sito web, gestione dei social con Google Maps e analisi del business: tutti e quattro in ogni abbonamento.`}
+        eyebrow={p.attivo ? 'Servizi' : `Preventivo · ${FASCE[fascia].nome}`}
+        title={p.attivo ? `Il tuo abbonamento ${FASCE[p.attivo.fascia].nome}` : `Il preventivo di ${p.attivita} col ${FASCE[fascia].nome}`}
+        sub={`${descriviAttivita(p.tipoAttivita)}. Cosa facciamo per te, quanto costa e come si attiva. Foto e video, sito web, gestione dei social con Google Maps e analisi del business: tutti e quattro in ogni abbonamento.`}
       />
       <p className="-mt-2 mb-4 text-sm font-semibold text-primary-700">{FRASE_PARTNER}</p>
       {/* Le pagine dei servizi, per chi vuole rileggere cosa riceve prima di scegliere (collaudo del 24/11). */}
@@ -231,7 +252,7 @@ export default function PaginaAbbonamento() {
                     name="abbonamento"
                     value={id}
                     checked={attivo}
-                    onChange={() => setScelto(id)}
+                    onChange={() => scegli(id)}
                     aria-labelledby={`fascia-${id}-nome fascia-${id}-prezzo`}
                     aria-describedby={`fascia-${id}-servizi`}
                     className="sr-only"

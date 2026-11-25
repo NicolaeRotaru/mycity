@@ -21,7 +21,11 @@ vi.mock('next/link', async () => {
   const { createElement: ce } = await import('react');
   return { default: ({ href, children, ...r }: Record<string, unknown>) => ce('a', { href: String(href), ...r }, children as never) };
 });
-vi.mock('@tanstack/react-query', () => ({ useQuery: () => ({ data: 0 }) }));
+vi.mock('@tanstack/react-query', () => ({
+  // La tendina delle notifiche legge una lista, il pallino un numero.
+  useQuery: (o: { queryKey: unknown[] }) => ({ data: o.queryKey.includes('list') ? [] : 0 }),
+  useQueryClient: () => ({ invalidateQueries: async () => undefined }),
+}));
 vi.mock('@/lib/supabase/client', () => ({ supabase: { auth: { signOut: async () => ({}) }, from: () => ({}) } }));
 vi.mock('@/components/hooks/useProfile', () => ({
   useProfile: () => ({ profile: { id: 's-1', role: 'seller', store_name: 'Forno' }, userEmail: 'f@f.it', isAuthenticated: true, isSeller: true }),

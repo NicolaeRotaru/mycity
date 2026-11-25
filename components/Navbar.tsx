@@ -250,7 +250,8 @@ export default function Navbar() {
   // Su /admin, /seller e /rider la navbar globale è nascosta: queste aree usano
   // il proprio shell dedicato (AdminSidebar / SellerShell / RiderShell con la
   // sua bottom tab bar).
-  if (pathname?.startsWith('/sign-in') || pathname?.startsWith('/sign-up') || pathname?.startsWith('/admin') || pathname?.startsWith('/seller') || pathname?.startsWith('/rider')) return null;
+  // 25/11/2026 — Anche il pannello demo del link col codice (/preventivo/<codice>) ha il suo guscio.
+  if (pathname?.startsWith('/sign-in') || pathname?.startsWith('/sign-up') || pathname?.startsWith('/admin') || pathname?.startsWith('/seller') || pathname?.startsWith('/rider') || pathname?.startsWith('/preventivo/')) return null;
 
   const role: Role =
     isAdmin ? 'admin' :

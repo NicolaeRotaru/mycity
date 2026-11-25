@@ -2,7 +2,7 @@
  * 25/11/2026 — IL PREVENTIVO CORTO, NELLA PAGINA VERA.
  *
  * Dal collaudo: la prova dei componenti non vedeva la pagina. Qui si monta `app/preventivo/[codice]/page.tsx`
- * intera, con dati finti al posto del database, e si guarda il testo che legge il cliente: nessun testo intero
+ * (dopo mycity#331: `app/preventivo/[codice]/abbonamento/page.tsx`) intera, con dati finti al posto del database, e si guarda il testo che legge il cliente: nessun testo intero
  * di `FASCE` (Nicola, 18:30: «corta e con lo stretto necessario»), e c'è ancora tutto quello che serve per
  * scegliere e pagare.
  */
@@ -26,29 +26,24 @@ vi.mock('@/lib/supabase/server', () => {
   catena.maybeSingle = async () => ({ data: null, error: null });
   return { getAdminSupabase: () => catena };
 });
-vi.mock('@/lib/agenzia/preventivo-col-codice', () => ({
-  CODICE_VALIDO: /^[A-Za-z0-9_-]+$/,
-  leggiPreventivoColCodice: async () => ({ stato: 'aperto', sellerId: ID, nomeAttivita: 'La Ragazzetta', fasciaScelta: null }),
-}));
-vi.mock('@/lib/agenzia/leggi-preventivo', () => ({
-  leggiPreventivo: async () => {
+vi.mock('@/lib/agenzia/demo-dal-link', () => ({
+  leggiDemoDalLink: async () => {
     const preventivo = costruisciPreventivo({
       idAttivita: ID, nomeAttivita: DATI.nome, tipoAttivita: DATI.tipo, dati: DATI.dati,
       impostazioni: leggiImpostazioniAgenzia({}), adesso: new Date('2026-11-25T10:00:00Z'),
     });
     preventivo.offerta = offertaSuMisura(DATI);
-    return { preventivo };
+    return { tipo: 'aperto', pc: { stato: 'aperto', sellerId: ID, nomeAttivita: DATI.nome, fasciaScelta: null }, preventivo, scheda: null };
   },
 }));
-vi.mock('@/lib/agenzia/scheda-dopo-abbonamento', () => ({ leggiSchedaEPagellaAperte: async () => false, schedaPerIlSito: (s: unknown) => s }));
 vi.mock('@/components/seller/AnteprimaServizio', () => ({ default: () => null }));
-vi.mock('@/app/preventivo/[codice]/AccettaDalLink', () => ({ default: () => <button type="button">Accetto</button> }));
-vi.mock('@/app/preventivo/[codice]/PagaDalLink', () => ({ default: () => null }));
+vi.mock('@/app/preventivo/[codice]/abbonamento/AccettaDalLink', () => ({ default: () => <button type="button">Accetto</button> }));
+vi.mock('@/app/preventivo/[codice]/abbonamento/PagaDalLink', () => ({ default: () => null }));
 
 describe('il preventivo dal link, montato', () => {
   it('nessun testo intero di FASCE; i prezzi, la fascia consigliata e le righe corte ci sono', async () => {
-    const { default: Pagina } = await import('@/app/preventivo/[codice]/page');
-    const el = await Pagina({ params: Promise.resolve({ codice: 'abc123' }), searchParams: Promise.resolve({}) });
+    const { default: Pagina } = await import('@/app/preventivo/[codice]/abbonamento/page');
+    const el = await Pagina({ params: Promise.resolve({ codice: 'a'.repeat(64) }), searchParams: Promise.resolve({}) });
     const html = renderToStaticMarkup(el);
     const testo = html.replace(/<[^>]+>/g, ' ').replace(/&#x27;|&#39;/g, '’').replace(/\s+/g, ' ');
     expect(testo).toContain('Il preventivo di La Ragazzetta');

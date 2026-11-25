@@ -26,10 +26,10 @@ export default function AbbonamentiInBreve({ consigliato, prezzi, primoMeseScont
   return (
     <section className="mt-6" aria-labelledby="abbonamenti">
       <h2 id="abbonamenti" className="text-lg font-bold text-ink-900">I tre abbonamenti</h2>
-      <p className="mt-1 text-sm text-ink-600">Ognuno comprende tutti i servizi: cambia quanto. {FRASE_CONDIZIONI}</p>
+      <p className="mt-1 text-sm text-ink-600">Ognuno comprende tutti i servizi: cambia quanto. {FRASE_CONDIZIONI}{hrefDi ? ' Tocca una fascia per vedere il suo preventivo.' : ''}</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
         {ABBONAMENTI.map((f) => {
-          const classe = `block rounded-xl border-2 p-4 ${f === guardata ? 'border-primary-600 bg-primary-50' : 'border-cream-200 bg-surface-0'}`;
+          const classe = `block rounded-xl border-2 p-4${hrefDi ? ' transition-colors hover:border-primary-300' : ''} ${f === guardata ? 'border-primary-600 bg-primary-50' : 'border-cream-200 bg-surface-0'}`;
           const dentro = (
             <>
               <p className="font-bold text-ink-900">{FASCE[f].nome}{f === consigliato ? ' · consigliato' : ''}</p>

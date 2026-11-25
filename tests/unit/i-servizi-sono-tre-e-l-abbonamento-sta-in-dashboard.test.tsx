@@ -312,16 +312,18 @@ describe('il riquadro «Abbonamento» in dashboard', () => {
   });
 });
 
-describe('nell area del negozio non resta la parola «preventivo»', () => {
-  it('menu, pagina Abbonamento, pagine dei servizi e riquadro in tutti gli stati', async () => {
+// 25/11/2026 — Nicola: «il link all'abbonamento sia il preventivo personalizzato in base all'azienda e
+// all'abbonamento». Da qui la pagina Abbonamento prima di abbonarsi, e le tre fasce del riquadro che
+// la aprono, SONO il preventivo e lo dicono. Resta vero il resto: menu, pagine dei servizi e stati
+// con l'abbonamento già fatto non parlano di preventivo.
+describe('nell area del negozio la parola «preventivo» sta solo dove c è da scegliere', () => {
+  it('menu, pagine dei servizi, pagina Abbonamento e riquadro ad abbonamento fatto: niente «preventivo»', async () => {
     const testi: string[] = [];
     testi.push((await monta(SellerShell, null, createElement('p', null, 'x'))).textContent ?? '');
-    testi.push((await monta(PaginaAbbonamento)).textContent ?? '');
     for (const id of SERVIZI_AGENZIA) {
       stato.slug = ({ foto_video: 'foto-video', sito_web: 'sito-web', social: 'social', analisi: 'analisi' } as const)[id];
       testi.push((await monta(PaginaDelServizio)).textContent ?? '');
     }
-    testi.push((await monta(RiquadroAbbonamento, { posizione: 'cima' })).textContent ?? '');
     stato.preventivo = vetrina({ fascia: 'business', stato: 'active', rinnovoIl: null });
     testi.push((await monta(PaginaAbbonamento)).textContent ?? '');
     testi.push((await monta(RiquadroAbbonamento, { posizione: 'dopo-numeri' })).textContent ?? '');
