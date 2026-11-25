@@ -90,8 +90,80 @@ const AnalisiCanale = z.object({
     .optional(),
   osservazioni: voci.optional(),
   consigli: voci.optional(),
+  // 25/11/2026 sera — Il giudizio dell'AD sul canale (flusso 16, N8N#16): si legge con indulgenza, un valore
+  // storto vale «non detto» e non fa respingere l'analisi intera.
+  giudizio: z.unknown().optional().transform((g) => leggiGiudizioCanale(g) ?? undefined),
 });
 export type AnalisiDiUnCanale = z.infer<typeof AnalisiCanale>;
+
+/**
+ * IL GIUDIZIO DELL'AD SU UN CANALE — 25/11/2026 sera (Nicola, `agenzia.social-come-il-sito`).
+ * Lo manda il flusso 16 dentro ogni canale di POST /api/agenzia/analisi-canali, nella forma di N8N#16:
+ * `livello` (semplice|medio|pregio), `post_al_mese`, `video` (spesso|a_volte|mai), `cura` (curato|datato|fai-da-te),
+ * `risposte_recensioni` (sempre|a_volte|mai), `migliorie` (10-240 caratteri, senza prezzi né telefoni).
+ */
+export type GiudizioCanale = {
+  livello: 'semplice' | 'medio' | 'pregio' | null;
+  post_al_mese: number | null;
+  video: 'spesso' | 'a_volte' | 'mai' | null;
+  cura: 'curato' | 'datato' | 'fai-da-te' | null;
+  risposte_recensioni: 'sempre' | 'a_volte' | 'mai' | null;
+  migliorie: string | null;
+};
+
+const tra = <T extends string>(v: unknown, elenco: readonly T[]): T | null => ((elenco as readonly unknown[]).includes(v) ? (v as T) : null);
+const TELEFONO_O_EMAIL = /[\w.+-]+@[\w-]+\.[\w.]+|\+?\d[\d\s./-]{7,}\d/;
+
+/** Il giudizio ripulito: valori fuori elenco = non detto; `null` se non resta niente. */
+export function leggiGiudizioCanale(grezzo: unknown): GiudizioCanale | null {
+  if (!grezzo || typeof grezzo !== 'object' || Array.isArray(grezzo)) return null;
+  const g = grezzo as Record<string, unknown>;
+  const post = typeof g.post_al_mese === 'number' && Number.isInteger(g.post_al_mese) && g.post_al_mese >= 0 && g.post_al_mese <= 100_000 ? g.post_al_mese : null;
+  const m = typeof g.migliorie === 'string' ? g.migliorie.replace(/\s+/g, ' ').trim() : '';
+  const fuori: GiudizioCanale = {
+    livello: tra(g.livello, ['semplice', 'medio', 'pregio'] as const),
+    post_al_mese: post,
+    video: tra(g.video, ['spesso', 'a_volte', 'mai'] as const),
+    cura: tra(g.cura, ['curato', 'datato', 'fai-da-te'] as const),
+    risposte_recensioni: tra(g.risposte_recensioni, ['sempre', 'a_volte', 'mai'] as const),
+    migliorie: m.length >= 10 && m.length <= 240 && senzaPrezzo(m) && !TELEFONO_O_EMAIL.test(m) ? m : null,
+  };
+  return Object.values(fuori).some((v) => v !== null) ? fuori : null;
+}
+
+/**
+ * I LIVELLI DEI SOCIAL — Nicola, `agenzia.social-come-il-sito` (25/11/2026), per ogni canale:
+ *  · nessuno: il profilo non c'è;
+ *  · debole: meno di 8 post al mese (o da 8 a 12, ma fatto in casa o datato);
+ *  · attivo: da 8 a 12 post al mese, curato;
+ *  · forte: più di 12 post al mese, con video.
+ * Il conto dei post viene dal giudizio dell'AD o dai numeri letti; senza conto vale il livello dell'AD
+ * (semplice → debole, medio → attivo, pregio → forte). `null`: l'analisi del canale manca, o non dice abbastanza.
+ * Dove un dato manca non si promuove: «più di 12 post» senza sapere dei video resta «attivo».
+ */
+export type LivelloSocial = 'nessuno' | 'debole' | 'attivo' | 'forte';
+export function livelloSocial(c: AnalisiDiUnCanale | null | undefined): LivelloSocial | null {
+  if (!c) return null;
+  if (c.stato === 'non_trovato') return 'nessuno';
+  if (c.stato !== 'fatta') return null;
+  const g = c.giudizio ?? null;
+  const post = g?.post_al_mese ?? c.numeri?.post_ultimi_30_giorni ?? null;
+  const conVideo = g?.video === 'spesso' || g?.video === 'a_volte';
+  const curaDebole = g?.cura === 'datato' || g?.cura === 'fai-da-te';
+  if (post === null) return g?.livello ? ({ semplice: 'debole', medio: 'attivo', pregio: 'forte' } as const)[g.livello] : null;
+  if (post < 8) return 'debole';
+  if (post > 12 && conVideo) return 'forte';
+  // Da 8 a 12 post ma fatto in casa o datato: la regola dice «curato» per l'attivo.
+  if (curaDebole && post <= 12) return 'debole';
+  return 'attivo';
+}
+
+export const LIVELLO_SOCIAL_IN_PAROLE: Record<LivelloSocial, string> = {
+  nessuno: 'Il profilo non c’è.',
+  debole: 'Oggi pubblica poco, o senza cura.',
+  attivo: 'Oggi è attivo e curato.',
+  forte: 'Oggi è forte: tanti post al mese, con video.',
+};
 
 /** Quello che manda n8n a POST /api/agenzia/analisi-canali (concordato con la sessione n8n). */
 export const AnalisiCanaliInArrivo = z.object({
@@ -364,4 +436,31 @@ export function analisiAziendale(scheda: SchedaCliente | null | undefined): Anal
     }),
   ) as AnalisiAziendale;
   return quante ? fuori : null;
+}
+
+/**
+ * I TRE STATI DELL'ANALISI DEL BUSINESS — 25/11/2026 sera.
+ *  · `fatta`: c'è almeno una frase con la sua fonte;
+ *  · `senza_fonti`: l'AD l'ha fatta (`analisi.business_fatta_il`, N8N#16) ma in rete non ha trovato niente da citare;
+ *  · `da_fare`: non è ancora arrivata.
+ * Senza il secondo stato, per un locale senza fonti (La Ragazzetta) il link diceva per sempre «la stiamo preparando».
+ */
+export type StatoAnalisiBusiness = 'fatta' | 'senza_fonti' | 'da_fare';
+export function statoAnalisiBusiness(scheda: SchedaCliente | null | undefined): StatoAnalisiBusiness {
+  if (analisiAziendale(scheda)) return 'fatta';
+  const il = (scheda?.analisi as Record<string, unknown> | undefined)?.business_fatta_il;
+  return typeof il === 'string' && !Number.isNaN(Date.parse(il)) ? 'senza_fonti' : 'da_fare';
+}
+export const ANALISI_SENZA_FONTI = 'In rete non abbiamo trovato informazioni pubbliche sul tuo locale: la facciamo con te al primo incontro.';
+
+/** Il giudizio dell'AD su un canale in parole, per la pagina «Analisi»: il livello, i video, le risposte. Vuoto senza analisi. */
+export function giudizioCanaleInParole(c: AnalisiDiUnCanale | null | undefined, canale: CanaleAnalizzato): string[] {
+  if (!c || c.stato !== 'fatta') return [];
+  const g = c.giudizio;
+  const livello = canale === 'google' ? null : livelloSocial(c);
+  return [
+    livello && livello !== 'nessuno' ? LIVELLO_SOCIAL_IN_PAROLE[livello] : null,
+    canale !== 'google' && g?.video ? { spesso: 'Usa spesso i video.', a_volte: 'Usa i video ogni tanto.', mai: 'Non usa i video.' }[g.video] : null,
+    g?.risposte_recensioni ? { sempre: 'Risponde sempre alle recensioni.', a_volte: 'Risponde alle recensioni solo ogni tanto.', mai: 'Non risponde alle recensioni.' }[g.risposte_recensioni] : null,
+  ].filter((x): x is string => !!x);
 }

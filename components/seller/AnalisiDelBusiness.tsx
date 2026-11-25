@@ -5,18 +5,17 @@ import { AlertTriangle, ClipboardCheck, Clock, Gauge, Lightbulb, Store, Users } 
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
 import CanaliDelNegozio from '@/components/seller/CanaliDelNegozio';
+import CanaliAnalizzati from '@/components/seller/CanaliAnalizzati';
 import AnalisiAziendale from '@/components/seller/AnalisiAziendale';
 import type { SchedaCliente } from '@/lib/agenzia/scheda-cliente';
 import {
   CANALI_ANALIZZATI,
-  NOMI_CANALI_ANALIZZATI,
-  STATO_CANALE_IN_PAROLE,
   analisiAziendale,
   analisiDellAttivita,
   dataItaliana,
-  numeriInParole,
   sitoDaRifare,
   sitoInParole,
+  statoAnalisiBusiness,
   type Voto,
 } from '@/lib/agenzia/analisi';
 import { haCanali } from '@/lib/agenzia/canali';
@@ -133,7 +132,7 @@ export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente 
       </Blocco>
 
       {/* 25/11/2026 — L'analisi del business dell'attività, come l'AD analizza MyCity come azienda (Nicola). */}
-      <AnalisiAziendale analisi={analisiAziendale(scheda)} />
+      <AnalisiAziendale analisi={analisiAziendale(scheda)} stato={statoAnalisiBusiness(scheda)} />
 
       <Blocco icona={Lightbulb} titolo="I tuoi social e la scheda Google">
         {analisi?.canaliRichiestiIl && (
@@ -142,32 +141,7 @@ export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente 
           </p>
         )}
         {canaliAnalizzati.length > 0 ? (
-          <ul className="space-y-2">
-            {canaliAnalizzati.map((c) => {
-              const a = analisi!.canali!.canali[c]!;
-              const numeri = numeriInParole(a.numeri);
-              return (
-                <li key={c} className="rounded-lg border border-cream-200 bg-white p-3">
-                  <p className="text-sm font-semibold text-ink-900">{NOMI_CANALI_ANALIZZATI[c]}</p>
-                  {a.stato !== 'fatta' ? (
-                    <p className="text-sm text-ink-600">{STATO_CANALE_IN_PAROLE[a.stato]}</p>
-                  ) : (
-                    <>
-                      {numeri.length > 0 && <p className="text-sm text-ink-700">{numeri.join(' · ')}</p>}
-                      <Elenco titolo="Cosa abbiamo visto" voci={a.osservazioni ?? []} />
-                      <Elenco titolo="Cosa ti consigliamo" voci={a.consigli ?? []} />
-                    </>
-                  )}
-                  {(a.fonte || a.letto_il) && (
-                    <p className="mt-1 text-[11px] text-ink-500">
-                      {a.letto_il ? `Letto il ${dataItaliana(a.letto_il)}` : `Analisi del ${dataItaliana(analisi!.canali!.fatta_il)}`}
-                      {a.fonte && dominio(a.fonte) && <> · fonte: <a href={a.fonte} target="_blank" rel="noopener noreferrer nofollow" className="underline">{dominio(a.fonte)}</a></>}
-                    </p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <CanaliAnalizzati canali={analisi!.canali} />
         ) : (
           !analisi?.canaliRichiestiIl && (
             <NonAncora>

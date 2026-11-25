@@ -7,6 +7,7 @@ import { leggiDemoDalLink } from '@/lib/agenzia/demo-dal-link';
 import { indirizziDemo } from '@/lib/agenzia/indirizzi-demo';
 import { hrefFascia } from '@/lib/agenzia/indirizzi-servizi';
 import AnalisiAziendale from '@/components/seller/AnalisiAziendale';
+import CanaliAnalizzati from '@/components/seller/CanaliAnalizzati';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
 
@@ -71,7 +72,21 @@ export default async function ServizioDemo({ params }: { params: Promise<{ codic
       )}
 
       {id === 'analisi' && (
-        <AnalisiAziendale analisi={p.analisiAziendale} fascia={p.consigliato} nome={p.attivita} />
+        <AnalisiAziendale analisi={p.analisiAziendale} stato={p.analisiAziendaleStato} fascia={p.consigliato} nome={p.attivita} />
+      )}
+
+      {/* 25/11/2026 sera — I social e la scheda Google anche nella demo del link (Nicola, `agenzia.social-come-il-sito`). */}
+      {id === 'analisi' && p.canali && (
+        <section className="mt-6 rounded-2xl border border-cream-300 bg-white p-5 shadow-warm sm:p-6" aria-labelledby="social-analizzati">
+          <h2 id="social-analizzati" className="text-lg font-bold text-ink-900">I tuoi social e la scheda Google</h2>
+          <div className="mt-2"><CanaliAnalizzati canali={p.canali} /></div>
+        </section>
+      )}
+      {id === 'social' && p.canali && (
+        <section className="mb-4 rounded-2xl border border-cream-300 bg-white p-5 shadow-warm sm:p-6" aria-labelledby="social-oggi">
+          <h2 id="social-oggi" className="font-serif text-xl font-bold text-ink-900">I tuoi social, oggi</h2>
+          <div className="mt-2"><CanaliAnalizzati canali={p.canali} /></div>
+        </section>
       )}
 
       {!giaAPosto && id !== 'analisi' && (

@@ -70,10 +70,12 @@ describe('l offerta su misura, corta', () => {
     expect(r.textContent).not.toContain('Al primo incontro ti chiediamo');
   });
 
-  it('se restano solo proposte senza dato vero, la sezione non si disegna', async () => {
+  // 25/11/2026 sera — Un sito noto è un dato vero (vale «medio»: si tiene nel Base, si rifà dal Business), quindi resta
+  // sempre almeno la proposta del sito: si prova che la sola generica (l'analisi) resta fuori.
+  it('le proposte senza dato vero restano fuori: col solo sito noto resta solo il sito', async () => {
     const vuota: DatiPerLOfferta = { ...BAR, dati: { ...BAR.dati, storeMedia: [{ type: 'image', url: 'a' }, { type: 'image', url: 'b' }, { type: 'image', url: 'c' }, { type: 'video', url: 'v' }], prodotti: [], socials: { instagram: 'x', website: 'https://x.it', google_maps: 'https://maps.app.goo.gl/x' } } };
     const r = await monta(createElement(OffertaSuMisura, { offerta: offertaSuMisura(vuota), fascia: 'base', corta: true }));
-    expect(r.querySelector('#offerta-su-misura')).toBeNull();
+    expect([...r.querySelectorAll('[data-proposta]')].map((x) => x.getAttribute('data-proposta'))).toEqual(['sito-rifatto']);
   });
 
   it('fuori dal preventivo l offerta resta intera', async () => {

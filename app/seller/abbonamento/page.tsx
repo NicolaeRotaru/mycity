@@ -204,7 +204,7 @@ export default function PaginaAbbonamento() {
             scelta segna quelle che comprende. */}
         <OffertaSuMisura offerta={p.offerta} fascia={p.attivo?.fascia ?? fascia} />
         {/* 25/11/2026 — L'analisi del business dell'attività (Nicola): parte generale e parte specifica. */}
-        <AnalisiAziendale corta analisi={p.analisiAziendale} fascia={p.attivo?.fascia ?? fascia} dettaglioHref={hrefServizio('analisi')} />
+        <AnalisiAziendale corta analisi={p.analisiAziendale} stato={p.analisiAziendaleStato} fascia={p.attivo?.fascia ?? fascia} dettaglioHref={hrefServizio('analisi')} />
 
         {/* I tre abbonamenti: tutti comprendono tutti i servizi, cambia quanto (Nicola, 24/11). */}
         <section className="mt-6" aria-labelledby="le-tre-fasce">
