@@ -155,6 +155,37 @@ export default function RiderOnboardingPage() {
    * solo, e finché non è salvato il passo 3 è chiuso: chi non ha l'età lo
    * scopre prima di darci un documento, non dopo.
    */
+  /**
+   * 25/11/2026 — L'ANAGRAFICA LA SCRIVE IL SERVER.
+   *
+   * Nome, cognome, codice fiscale e data di nascita si scrivevano col client
+   * Supabase del browser. La migrazione 861 toglie quelle colonne dai campi che
+   * una persona cambia di sé (come la 365 per IBAN e dati fiscali): passano da
+   * PATCH /api/rider/anagrafica, che controlla formato e 18 anni e avvisa lo
+   * staff se un dato già scritto cambia. Torna i valori salvati, già nella
+   * forma del profilo, oppure lancia l'errore del server da mostrare.
+   */
+  async function salvaAnagraficaSulServer(accessToken: string) {
+    const r = await fetch('/api/rider/anagrafica', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify({
+        legalFirstName: form.legal_first_name,
+        legalLastName: form.legal_last_name,
+        legalFiscalCode: form.legal_fiscal_code,
+        legalBirthDate: form.legal_birth_date,
+      }),
+    });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(apiErrorMessage(data, 'Non è stato possibile salvare i dati'));
+    return {
+      legal_first_name: form.legal_first_name.trim(),
+      legal_last_name: form.legal_last_name.trim(),
+      legal_fiscal_code: form.legal_fiscal_code.trim().toUpperCase(),
+      legal_birth_date: form.legal_birth_date,
+    };
+  }
+
   async function salvaAnagrafica() {
     const eta = controlloEta(form.legal_birth_date);
     if (!eta.ok) {
@@ -166,19 +197,10 @@ export default function RiderOnboardingPage() {
     setSalvandoAnagrafica(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
-      if (!userId) throw new Error('Sessione scaduta');
-      // 12/11/2026 (R03-016) — Il passo 1 scrive solo i suoi quattro campi. Mandava l'oggetto
-      // intero, con le scadenze di patente e polizza ancora vuote (''): Postgres rifiuta '' come
-      // data (22007), il salvataggio cadeva e i caricamenti dei documenti restavano chiusi.
-      const anagrafica = {
-        legal_first_name: form.legal_first_name,
-        legal_last_name: form.legal_last_name,
-        legal_fiscal_code: form.legal_fiscal_code,
-        legal_birth_date: form.legal_birth_date || null,
-      };
-      const { error } = await supabase.from('profiles').update(anagrafica).eq('id', userId);
-      if (error) throw error;
+      if (!session?.user?.id) throw new Error('Sessione scaduta');
+      // 12/11/2026 (R03-016) — Il passo 1 scrive solo i suoi quattro campi.
+      // 25/11/2026 — E li scrive il server (`salvaAnagraficaSulServer`).
+      const anagrafica = await salvaAnagraficaSulServer(session.access_token);
       setProfile((p) => ({ ...(p ?? {}), ...anagrafica }));
       toast.success('Dati salvati. Ora puoi caricare i documenti.');
     } catch (e) {
@@ -210,21 +232,26 @@ export default function RiderOnboardingPage() {
       const userId = session?.user?.id;
       if (!userId) throw new Error('Sessione scaduta');
 
-      // 1) Salva form anagrafico
+      // 1) Salva l'anagrafica: dal server (25/11/2026, migrazione 861), con gli stessi controlli
+      // del passo 1. Il fattorino può averla corretta dopo averla salvata.
+      const anagrafica = await salvaAnagraficaSulServer(session.access_token);
+      setProfile((p) => ({ ...(p ?? {}), ...anagrafica }));
+
+      // 2) Salva i dati del mezzo: questi restano fra i campi che il fattorino cambia di sé.
       // R03-016 — Le date lasciate vuote vanno come null, non come '' (che Postgres rifiuta):
       // chi va in bici senza patente non ha una scadenza da scrivere.
       const { error: uErr } = await supabase
         .from('profiles')
         .update({
-          ...form,
-          legal_birth_date: form.legal_birth_date || null,
+          rider_vehicle_type: form.rider_vehicle_type,
+          rider_vehicle_plate: form.rider_vehicle_plate,
           rider_license_expires_on: form.rider_license_expires_on || null,
           rider_insurance_expires_on: form.rider_insurance_expires_on || null,
         })
         .eq('id', userId);
       if (uErr) throw uErr;
 
-      // 2) Lancia KYC check
+      // 3) Lancia KYC check
       const r = await fetch('/api/kyc/start-check', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session?.access_token ?? ''}` },
