@@ -25,3 +25,22 @@ describe('il riquadro dell analisi del business', () => {
     expect(html).toContain('Cosa comprende l’analisi');
   });
 });
+
+/** 25/11/2026, 18:30 — Nicola: nel preventivo descrizioni corte, solo lo stretto necessario. */
+describe('nel preventivo l analisi del business è corta', () => {
+  const voce = (t: string) => [{ testo: t, fonte: 'https://example.org/x' }];
+  const analisi = {
+    situazione: voce('Trattoria a conduzione familiare in via Roma.'), mercato: voce('Tre trattorie simili nel raggio di un chilometro.'),
+    clienti: voce('Le recensioni lodano i tortelli fatti in casa.'), opportunita: voce('Il pranzo dei lavoratori della zona è scoperto.'),
+    rischi: voce('Gli orari su Google non sono aggiornati.'), prime_mosse: voce('Aggiornare gli orari sulla scheda Google.'),
+  };
+  it('al massimo tre frasi, prima le mosse, la sola fascia guardata e il rimando alla pagina Analisi', () => {
+    const html = renderToStaticMarkup(<AnalisiAziendale corta analisi={analisi} fascia="business" dettaglioHref="/seller/servizi/analisi" />);
+    expect((html.match(/<li/g) ?? []).length).toBe(3);
+    expect(html.indexOf('Aggiornare gli orari')).toBeLessThan(html.indexOf('Il pranzo dei lavoratori'));
+    expect(html).not.toContain('Tre trattorie simili');
+    expect(html).toContain(`Col ${FASCE.business.nome}:`);
+    expect(html).not.toContain(`${FASCE.premium.nome}:`);
+    expect(html).toContain('href="/seller/servizi/analisi"');
+  });
+});
