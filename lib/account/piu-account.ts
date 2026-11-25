@@ -18,7 +18,19 @@
  *
  * COSA SI SALVA E DOVE: nel localStorage del browser, che è lo stesso posto dove la libreria tiene
  * già la sessione attiva (nei cookie leggibili dal browser): nessuna esposizione nuova. Al massimo
- * cinque account; per ognuno id, email, nome e la coppia di chiavi dell'accesso.
+ * cinque account; per ognuno id, email, nome e la coppia di chiavi dell'accesso. Un accesso salvato
+ * da più di 6 mesi si scarta, come il cookie dell'accesso (lib/supabase/client.ts).
+ *
+ * DAL COLLAUDO DEL 25/11 (sera):
+ *  · le bozze che il sito tiene nel browser senza dire di chi sono (il nuovo prodotto, la cassa, il
+ *    lavoro dell'AI, l'indirizzo suggerito) si mettono da parte per account a ogni cambio e a ogni
+ *    aggiunta, e tornano quando si torna su quell'account: la bozza del negozio A non compare nel B;
+ *  · anche «Aggiungi un altro account» mette da parte il carrello: entrando, il sito l'avrebbe
+ *    fuso nel carrello del nuovo account, anche sul server;
+ *  · un accesso finito senza «Esci» (cookie scaduto o revocato: la pagina riparte senza sessione)
+ *    dimentica tutto come «Esci»: chi entra dopo non deve trovare «Passa a…» di nessuno;
+ *  · dopo un cambio le altre schede aperte si ricaricano: il cookie è uno solo, e una scheda rimasta
+ *    col modulo del negozio di prima scriverebbe col nuovo account.
  *
  * Qui non c'è React né il client di Supabase: le funzioni ricevono quello che usano, così le prove
  * le fanno girare senza browser.
@@ -28,6 +40,13 @@ export const CHIAVE_ACCOUNT = 'mycity:account-salvati';
 /** Nella scheda (sessionStorage): l'id di chi ha premuto «Aggiungi un altro account». */
 export const CHIAVE_AGGIUNTA = 'mycity:aggiunta-account';
 export const MASSIMO_ACCOUNT = 5;
+/** Quanto vale un accesso salvato: 6 mesi, come il cookie dell'accesso (DURATA_MASSIMA_SESSIONE_S). */
+export const DURATA_ACCESSO_SALVATO_MS = 180 * 24 * 60 * 60 * 1000;
+/** Scritta a ogni cambio: le ALTRE schede la sentono (evento «storage») e si ricaricano. */
+export const CHIAVE_CAMBIO = 'mycity:cambio-account';
+/** Le bozze del browser che appartengono a un account (vedi sopra). */
+export const CHIAVI_DELL_ACCOUNT = ['mc_new_product_draft', 'mc_checkout_draft', 'mycity:ai-batch:lavoro', 'mc_addr_hint'] as const;
+const DA_PARTE = 'mycity:da-parte:';
 /** L'evento che avvisa i menu aperti che l'elenco è cambiato (nella stessa scheda «storage» non arriva). */
 export const EVENTO_ACCOUNT = 'mycity:account-cambiati';
 
@@ -47,7 +66,7 @@ export type SessioneMinima = {
   user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> | null };
 };
 
-type Deposito = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+type Deposito = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> & Partial<Pick<Storage, 'key' | 'length'>>;
 
 function locale(): Deposito | null {
   try { return typeof window === 'undefined' ? null : window.localStorage; } catch { return null; }
@@ -69,10 +88,12 @@ function valido(x: unknown): x is AccountSalvato {
 }
 
 /** Gli account salvati su questo dispositivo, il più recente per primo. Mai un errore: al peggio nessuno. */
-export function leggiAccount(d: Deposito | null = locale()): AccountSalvato[] {
+export function leggiAccount(d: Deposito | null = locale(), ora = Date.now()): AccountSalvato[] {
   try {
     const grezzo = JSON.parse(d?.getItem(CHIAVE_ACCOUNT) ?? '[]') as unknown;
-    return Array.isArray(grezzo) ? grezzo.filter(valido).slice(0, MASSIMO_ACCOUNT) : [];
+    return Array.isArray(grezzo)
+      ? grezzo.filter(valido).filter((a) => ora - Number(a.salvatoIl ?? 0) <= DURATA_ACCESSO_SALVATO_MS).slice(0, MASSIMO_ACCOUNT)
+      : [];
   } catch {
     return [];
   }
@@ -111,6 +132,52 @@ export function dimenticaAccount(id: string, d: Deposito | null = locale()): voi
 export function dimenticaTutti(d: Deposito | null = locale(), s: Deposito | null = scheda()): void {
   scrivi([], d);
   try { s?.removeItem(CHIAVE_AGGIUNTA); } catch { /* noop */ }
+  // Anche le bozze messe da parte per gli altri account: contengono indirizzi e prodotti di altri.
+  try {
+    const chiavi: string[] = [];
+    for (let i = 0; i < (d?.length ?? 0); i++) {
+      const k = d?.key?.(i);
+      if (k?.startsWith(DA_PARTE)) chiavi.push(k);
+    }
+    for (const k of chiavi) d?.removeItem(k);
+  } catch { /* noop */ }
+}
+
+/**
+ * Mette da parte le bozze di chi esce (sotto il suo id) e le toglie dal browser. Risponde come
+ * rimettere tutto com'era, se il cambio non riesce.
+ */
+export function metteDaParte(idDiChiEsce: string | null, d: Deposito | null = locale()): () => void {
+  const prima = CHIAVI_DELL_ACCOUNT.map((k) => {
+    try { return [k, d?.getItem(k) ?? null] as const; } catch { return [k, null] as const; }
+  });
+  const scritte: string[] = [];
+  for (const [k, v] of prima) {
+    try {
+      if (idDiChiEsce && v !== null) { d?.setItem(`${DA_PARTE}${idDiChiEsce}:${k}`, v); scritte.push(`${DA_PARTE}${idDiChiEsce}:${k}`); }
+      d?.removeItem(k);
+    } catch { /* noop */ }
+  }
+  return () => {
+    for (const [k, v] of prima) { try { if (v !== null) d?.setItem(k, v); } catch { /* noop */ } }
+    for (const k of scritte) { try { d?.removeItem(k); } catch { /* noop */ } }
+  };
+}
+
+/** Rimette nel browser le bozze messe da parte per quell'account, se ce ne sono. */
+export function riprendi(id: string, d: Deposito | null = locale()): void {
+  for (const k of CHIAVI_DELL_ACCOUNT) {
+    try {
+      const v = d?.getItem(`${DA_PARTE}${id}:${k}`);
+      if (v !== null && v !== undefined) d?.setItem(k, v);
+      d?.removeItem(`${DA_PARTE}${id}:${k}`);
+    } catch { /* noop */ }
+  }
+}
+
+/** Avvisa le altre schede che l'account è cambiato (lo ascolta RicordaAccount). */
+export function segnaCambio(id: string, d: Deposito | null = locale(), ora = Date.now()): void {
+  try { d?.setItem(CHIAVE_CAMBIO, `${id}:${ora}`); } catch { /* noop */ }
 }
 
 /** Chi ha premuto «Aggiungi un altro account» in questa scheda, se un'aggiunta è in corso. */
@@ -142,7 +209,8 @@ export function dopoEventoAccesso(
   d: Deposito | null = locale(),
   s: Deposito | null = scheda(),
 ): void {
-  if (evento === 'SIGNED_OUT') {
+  // «Esci», o un accesso finito da solo (la pagina riparte senza sessione): si dimentica tutto.
+  if (evento === 'SIGNED_OUT' || (evento === 'INITIAL_SESSION' && !sessione?.user?.id)) {
     if (leggiAccount(d).length > 0 || aggiuntaIniziataDa(s)) dimenticaTutti(d, s);
     return;
   }
@@ -153,7 +221,28 @@ export function dopoEventoAccesso(
   ricordaSessione(sessione, d);
   if (daChi && daChi !== sessione.user.id) {
     try { s?.removeItem(CHIAVE_AGGIUNTA); } catch { /* noop */ }
+    riprendi(sessione.user.id, d);
+    segnaCambio(sessione.user.id, d);
   }
+}
+
+/**
+ * «Aggiungi un altro account»: salva chi c'è, manda su il suo carrello e mette da parte carrello e
+ * bozze, così il nuovo account parte pulito. Risponde dove andare.
+ */
+export async function preparaAggiunta(
+  m: Pick<MondoDelCambio, 'sessioneAttuale' | 'salvaCarrello' | 'svuotaCarrello'>,
+  d: Deposito | null = locale(),
+  s: Deposito | null = scheda(),
+): Promise<string> {
+  const attuale = await m.sessioneAttuale();
+  if (attuale) {
+    iniziaAggiunta(attuale, d, s);
+    await m.salvaCarrello(attuale.user.id).catch(() => undefined);
+    m.svuotaCarrello();
+    metteDaParte(attuale.user.id, d);
+  }
+  return '/sign-in?aggiungi=1';
 }
 
 /**
@@ -171,8 +260,10 @@ export async function rinnovaAccesso(
     headers: { apikey: opz.chiave, authorization: `Bearer ${opz.chiave}`, 'content-type': 'application/json' },
     body: JSON.stringify({ refresh_token: refreshToken }),
   });
-  if (r.status >= 500) throw new Error(`servizio dell'accesso non raggiungibile (${r.status})`);
-  if (!r.ok) return null;
+  // Solo un rifiuto vero dice che l'accesso non vale più; «troppe richieste» (429) e i guasti del
+  // servizio sono passeggeri e non devono far cancellare l'account salvato.
+  if (r.status === 400 || r.status === 401 || r.status === 403) return null;
+  if (!r.ok) throw new Error(`servizio dell'accesso non disponibile (${r.status})`);
   const corpo = (await r.json().catch(() => null)) as Partial<SessioneMinima> | null;
   if (!corpo?.access_token || !corpo.refresh_token || !corpo.user?.id) return null;
   return { access_token: corpo.access_token, refresh_token: corpo.refresh_token, user: corpo.user };
@@ -180,7 +271,7 @@ export async function rinnovaAccesso(
 
 export type EsitoCambio =
   | { ok: true; dove: string }
-  | { ok: false; motivo: 'sconosciuto' | 'scaduto' | 'rete'; email: string | null };
+  | { ok: false; motivo: 'sconosciuto' | 'scaduto' | 'rete' | 'gia-attivo'; email: string | null };
 
 /** Dove atterra chi passa a un account: la home del suo ruolo, come dopo l'accesso. */
 export function casaDelRuolo(ruolo: string | null | undefined): string {
@@ -209,6 +300,8 @@ export type MondoDelCambio = {
 
 /**
  * «Passa a questo account».
+ *  0. se è già l'account attivo non si fa niente (rinnovare la sua chiave salvata, forse vecchia,
+ *     farebbe chiudere al server la sessione attiva);
  *  1. l'accesso salvato si rinnova a parte: se non vale più si toglie dall'elenco e l'attivo resta;
  *  2. chi si lascia si salva con le chiavi di adesso, e il suo carrello sale sul server;
  *  3. il carrello del browser si mette da parte e il nuovo accesso si installa; se non riesce, il
@@ -219,6 +312,8 @@ export async function cambiaAccount(id: string, m: MondoDelCambio): Promise<Esit
   const d = m.deposito === undefined ? locale() : m.deposito;
   const destinazione = leggiAccount(d).find((a) => a.id === id);
   if (!destinazione) return { ok: false, motivo: 'sconosciuto', email: null };
+  const attuale = await m.sessioneAttuale();
+  if (attuale?.user.id === id) return { ok: false, motivo: 'gia-attivo', email: destinazione.email };
 
   let nuova: SessioneMinima | null;
   try {
@@ -233,18 +328,21 @@ export async function cambiaAccount(id: string, m: MondoDelCambio): Promise<Esit
   // Le chiavi appena rinnovate sono le sole buone: quelle vecchie sono già state usate.
   ricordaSessione(nuova, d);
 
-  const attuale = await m.sessioneAttuale();
-  if (attuale && attuale.user.id !== id) {
+  if (attuale) {
     ricordaSessione(attuale, d);
     await m.salvaCarrello(attuale.user.id).catch(() => undefined);
   }
 
   const ripristina = m.svuotaCarrello();
+  const ripristinaBozze = metteDaParte(attuale?.user.id ?? null, d);
   const { error } = await m.installa({ access_token: nuova.access_token, refresh_token: nuova.refresh_token });
   if (error) {
+    ripristinaBozze();
     ripristina();
     return { ok: false, motivo: 'rete', email: destinazione.email };
   }
+  riprendi(id, d);
+  segnaCambio(id, d);
   const ruolo = await m.ruoloDi(id).catch(() => null);
   return { ok: true, dove: casaDelRuolo(ruolo) };
 }

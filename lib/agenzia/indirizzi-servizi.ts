@@ -30,9 +30,10 @@ export const hrefServizio = (id: ServizioAgenzia) => `${PERCORSO_SERVIZI}/${SLUG
  */
 export const hrefFascia = (fascia: Abbonamento, base: string = PERCORSO_ABBONAMENTO) => `${base}?fascia=${fascia}`;
 
-/** La fascia scritta nell'indirizzo (?fascia=business), o `null` se non è una delle tre. */
-export function fasciaDaIndirizzo(valore: string | null | undefined): Abbonamento | null {
-  const v = (valore ?? '').trim().toLowerCase();
+/** La fascia scritta nell'indirizzo (?fascia=business), o `null` se non è una delle tre (anche se ripetuta: ?fascia=a&fascia=b). */
+export function fasciaDaIndirizzo(valore: unknown): Abbonamento | null {
+  if (typeof valore !== 'string') return null;
+  const v = valore.trim().toLowerCase();
   return (ABBONAMENTI as readonly string[]).includes(v) ? (v as Abbonamento) : null;
 }
 

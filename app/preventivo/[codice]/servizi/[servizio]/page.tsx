@@ -50,7 +50,7 @@ export default async function ServizioDemo({ params }: { params: Promise<{ codic
 
       {riga && (
         <section className="mb-4 rounded-2xl border border-cream-300 bg-white p-5 shadow-warm sm:p-6">
-          <h2 className="text-sm font-bold text-ink-900">Perché te lo proponiamo</h2>
+          <h2 className="font-serif text-xl font-bold text-ink-900">Perché te lo proponiamo</h2>
           <ul className="mt-1 list-disc pl-5 text-sm text-ink-700">
             {riga.perche.map((frase) => <li key={frase}>{frase}</li>)}
           </ul>
@@ -79,7 +79,7 @@ export default async function ServizioDemo({ params }: { params: Promise<{ codic
       )}
 
       <section className="mt-4 rounded-2xl border border-cream-300 bg-white p-5 shadow-warm sm:p-6" aria-labelledby="compreso-nei-piani">
-        <h2 id="compreso-nei-piani" className="text-sm font-bold text-ink-900">È compreso in tutti e tre gli abbonamenti</h2>
+        <h2 id="compreso-nei-piani" className="font-serif text-xl font-bold text-ink-900">È compreso in tutti e tre gli abbonamenti</h2>
         <ul className="mt-3 space-y-3">
           {ABBONAMENTI.map((f) => (
             <li key={f}>

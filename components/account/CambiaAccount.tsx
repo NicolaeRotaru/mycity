@@ -6,9 +6,10 @@ import { supabase } from '@/lib/supabase/client';
 import { CART_UPDATED_AT_KEY, fondiCarrelli, getCart, type CartItem } from '@/lib/cart';
 import {
   EVENTO_ACCOUNT,
+  MASSIMO_ACCOUNT,
   cambiaAccount,
-  iniziaAggiunta,
   leggiAccount,
+  preparaAggiunta,
   rinnovaAccesso,
   type AccountSalvato,
   type MondoDelCambio,
@@ -72,7 +73,9 @@ const etichetta = (a: AccountSalvato) => a.nome ?? a.email ?? 'Account senza nom
 
 export default function CambiaAccount({ tono = 'chiaro' }: { tono?: 'chiaro' | 'scuro' }) {
   const [lista, setLista] = useState<AccountSalvato[]>([]);
-  const [attivo, setAttivo] = useState<string | null>(null);
+  // undefined finché non si sa chi è attivo: fino ad allora niente «Passa a…», se no compariva anche
+  // l'account attivo, e passarci rinnovava la sua chiave vecchia (collaudo del 25/11).
+  const [attivo, setAttivo] = useState<string | null | undefined>(undefined);
   const [inCorso, setInCorso] = useState<string | null>(null);
   const [avviso, setAvviso] = useState<string | null>(null);
 
@@ -83,7 +86,7 @@ export default function CambiaAccount({ tono = 'chiaro' }: { tono?: 'chiaro' | '
     try {
       void Promise.resolve(supabase.auth.getSession())
         .then((r) => setAttivo(r?.data?.session?.user?.id ?? null))
-        .catch(() => undefined);
+        .catch(() => setAttivo(null));
     } catch { /* niente sessione da leggere */ }
     window.addEventListener(EVENTO_ACCOUNT, aggiorna);
     window.addEventListener('storage', aggiorna);
@@ -93,7 +96,8 @@ export default function CambiaAccount({ tono = 'chiaro' }: { tono?: 'chiaro' | '
     };
   }, []);
 
-  const altri = lista.filter((a) => a.id !== attivo);
+  const altri = attivo === undefined ? [] : lista.filter((a) => a.id !== attivo);
+  const pieno = lista.length >= MASSIMO_ACCOUNT;
 
   async function passa(a: AccountSalvato) {
     setAvviso(null);
@@ -104,6 +108,7 @@ export default function CambiaAccount({ tono = 'chiaro' }: { tono?: 'chiaro' | '
       window.location.assign(esito.dove);
       return;
     }
+    if (esito.motivo === 'gia-attivo') { setInCorso(null); return; }
     setInCorso(null);
     setAvviso(
       esito.motivo === 'scaduto'
@@ -114,9 +119,9 @@ export default function CambiaAccount({ tono = 'chiaro' }: { tono?: 'chiaro' | '
 
   async function aggiungi() {
     setInCorso('aggiungi');
-    const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
-    iniziaAggiunta((data.session as SessioneMinima | null) ?? null);
-    window.location.assign('/sign-in?aggiungi=1');
+    // Carrello e bozze di chi c'è si mettono da parte: il nuovo account parte pulito (collaudo del 25/11).
+    const dove = await preparaAggiunta(mondo).catch(() => '/sign-in?aggiungi=1');
+    window.location.assign(dove);
   }
 
   const scuro = tono === 'scuro';
@@ -142,10 +147,16 @@ export default function CambiaAccount({ tono = 'chiaro' }: { tono?: 'chiaro' | '
           </span>
         </button>
       ))}
-      <button type="button" onClick={aggiungi} disabled={inCorso !== null} className={voce}>
-        <UserPlus size={16} className={`shrink-0 ${scuro ? '' : 'text-ink-500'}`} aria-hidden />
-        Aggiungi un altro account
-      </button>
+      {pieno ? (
+        <p className={`px-4 py-2 text-xs ${scuro ? 'text-white/60' : 'text-ink-500'}`}>
+          Hai già {MASSIMO_ACCOUNT} account salvati su questo dispositivo: per aggiungerne un altro, esci e rientra.
+        </p>
+      ) : (
+        <button type="button" onClick={aggiungi} disabled={inCorso !== null} className={voce}>
+          <UserPlus size={16} className={`shrink-0 ${scuro ? '' : 'text-ink-500'}`} aria-hidden />
+          Aggiungi un altro account
+        </button>
+      )}
       {avviso && (
         <p role="alert" className={`px-4 py-2 text-xs ${scuro ? 'text-amber-200' : 'text-amber-800'}`}>{avviso}</p>
       )}

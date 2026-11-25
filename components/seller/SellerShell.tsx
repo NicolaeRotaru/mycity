@@ -241,6 +241,12 @@ function NotifPopover({
 
   const righe = ultime ?? [];
 
+  // All'apertura si rilegge anche il numero delle non lette: la lista è appena letta, il numero no
+  // (si aggiorna ogni due minuti), e i due non devono dire cose diverse (collaudo del 25/11).
+  useEffect(() => {
+    void qc.invalidateQueries({ queryKey: [...queryKeys.notifications.count, 'seller-bell'] });
+  }, [qc]);
+
   return (
     <>
       <div
@@ -318,6 +324,16 @@ function NotifPopover({
                     >
                       {dentro}
                     </Link>
+                  ) : !n.is_read ? (
+                    // Senza un indirizzo da aprire, il clic la segna letta (collaudo del 25/11).
+                    <button
+                      type="button"
+                      onClick={() => segnaLetta(n.id)}
+                      aria-label={`${n.title}: segna come letta`}
+                      className="block w-full text-left hover:bg-cream-50"
+                    >
+                      {dentro}
+                    </button>
                   ) : (
                     dentro
                   )}

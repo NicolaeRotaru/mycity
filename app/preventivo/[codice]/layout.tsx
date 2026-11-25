@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import DemoShell from '@/components/preventivo/DemoShell';
 import { CODICE_VALIDO } from '@/lib/agenzia/preventivo-col-codice';
@@ -28,7 +29,20 @@ export default async function LayoutDemoDalLink({
   if (!CODICE_VALIDO.test(codice)) notFound();
   const demo = await leggiDemoDalLink(codice);
   if (demo.tipo === 'non-trovato') notFound();
-  if (demo.tipo !== 'aperto') return <div className="px-4 py-8">{children}</div>;
+  // Senza demo (preventivo accettato, lettura caduta) resta almeno il marchio che riporta al sito: la
+  // barra del sito qui è nascosta, e senza questo non c'era un modo di tornare indietro (collaudo del 25/11).
+  if (demo.tipo !== 'aperto') {
+    return (
+      <div>
+        <div className="border-b border-cream-300 bg-surface-0 px-4 py-3">
+          <Link href="/" className="font-serif text-2xl font-extrabold leading-none tracking-tight">
+            <span className="text-primary-700">My</span><span className="text-ink-900">City</span>
+          </Link>
+        </div>
+        <div className="px-4 py-8">{children}</div>
+      </div>
+    );
+  }
   return (
     <DemoShell codice={codice} nome={demo.preventivo.attivita} consigliato={demo.preventivo.consigliato}>
       {children}

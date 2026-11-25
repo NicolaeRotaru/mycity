@@ -162,6 +162,16 @@ describe('la tendina della campanella del negozio', () => {
     expect(mondo.tabelle.notifications.find((r) => r.id === 'n2')!.is_read).toBe(false);
   });
 
+  it('una notifica non letta senza indirizzo si segna letta col clic (collaudo)', async () => {
+    riempi();
+    const pannello = await apriCampanella();
+    const voce = pannello.querySelector<HTMLButtonElement>('button[aria-label="Nuova recensione: segna come letta"]');
+    expect(voce).not.toBeNull();
+    await act(async () => { voce!.click(); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
+    expect(mondo.scritture).toEqual([{ tabella: 'notifications', valori: { is_read: true }, filtri: { id: 'n2', user_id: 's-1' } }]);
+  });
+
   it('senza notifiche lo dice', async () => {
     mondo.tabelle.profiles = [{ id: 's-1', notif_promos: false }];
     mondo.tabelle.notifications = [];

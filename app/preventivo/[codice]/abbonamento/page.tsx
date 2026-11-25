@@ -42,7 +42,7 @@ export default async function PreventivoDalLink({
   searchParams,
 }: {
   params: Promise<{ codice: string }>;
-  searchParams: Promise<{ pagato?: string; fascia?: string }>;
+  searchParams: Promise<{ pagato?: string; fascia?: string | string[] }>;
 }) {
   const { codice } = await params;
   const { pagato, fascia } = await searchParams;
@@ -155,7 +155,9 @@ export default async function PreventivoDalLink({
         {p.consigliato && <p className="mt-2 text-xs text-ink-600">Perché consigliamo {FASCE[p.consigliato].nome}: {p.perche_consigliato}</p>}
       </section>
 
-      <AccettaDalLink codice={codice} consigliato={scelta} prezzi={p.prezzi} primoMeseScontato={p.primoMeseScontato} />
+      {/* key: cambiando solo ?fascia Next tiene la pagina e lo stato del modulo; senza key il modulo restava
+          sulla fascia di prima e si accettava una fascia diversa da quella letta (collaudo del 25/11). */}
+      <AccettaDalLink key={scelta} codice={codice} consigliato={scelta} prezzi={p.prezzi} primoMeseScontato={p.primoMeseScontato} />
     </Cornice>
   );
 }

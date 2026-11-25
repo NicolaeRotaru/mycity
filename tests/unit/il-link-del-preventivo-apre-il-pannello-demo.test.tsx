@@ -22,7 +22,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { ReactElement } from 'react';
+import { act, type ReactElement } from 'react';
+import { createRoot } from 'react-dom/client';
 
 const CODICE = 'a'.repeat(64);
 
@@ -140,11 +141,12 @@ describe('il link col codice apre la dashboard della demo', () => {
     expect(stato.letturePreventivo).toBe(1);
   });
 
-  it('a preventivo accettato il guscio sparisce', async () => {
+  it('a preventivo accettato il guscio sparisce, ma resta il marchio che riporta al sito', async () => {
     stato.pc = { sellerId: 'og-1', stato: 'accettato', fasciaScelta: 'business', nomeAttivita: 'Ora del Gusto' };
     const r = disegna(await LayoutDemo({ params: params(), children: <p>dentro</p> }));
     expect(r.querySelector('[data-testid="pannello-demo"]')).toBeNull();
-    expect(r.textContent).toBe('dentro');
+    expect(r.textContent).toContain('dentro');
+    expect(r.querySelector('a[href="/"]')?.textContent).toBe('MyCity');
   });
 });
 
@@ -154,6 +156,33 @@ describe('ogni fascia apre il suo preventivo, anche nella demo', () => {
     expect(r.querySelector('h1')?.textContent).toBe('Il preventivo di Ora del Gusto col Premium');
     expect(r.querySelector(`a[href="/preventivo/${CODICE}/abbonamento?fascia=premium"]`)?.getAttribute('aria-current')).toBe('page');
     expect(r.querySelector('input[type="radio"][value="premium"]')?.hasAttribute('checked')).toBe(true);
+  });
+
+  it('cambiando fascia nella stessa pagina il modulo per accettare segue la fascia letta (collaudo: soldi)', async () => {
+    // Next, se cambia solo ?fascia, ridisegna la pagina tenendo lo stato dei componenti: qui lo stesso.
+    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+    const div = document.createElement('div');
+    document.body.appendChild(div);
+    const root = createRoot(div);
+    const spuntata = () => [...div.querySelectorAll<HTMLInputElement>('input[type="radio"]')].find((i) => i.checked)?.value;
+    try {
+      const premium = await PreventivoDemo({ params: params(), searchParams: cerca({ fascia: 'premium' }) });
+      await act(async () => { root.render(premium); });
+      expect(spuntata()).toBe('premium');
+      const base = await PreventivoDemo({ params: params(), searchParams: cerca({ fascia: 'base' }) });
+      await act(async () => { root.render(base); });
+      expect(div.querySelector('h1')?.textContent).toBe('Il preventivo di Ora del Gusto col Base');
+      expect(spuntata()).toBe('base');
+    } finally {
+      act(() => root.unmount());
+      div.remove();
+    }
+  });
+
+  it('con la fascia ripetuta nell indirizzo non va in errore: vale la consigliata', async () => {
+    const p = stato.preventivo as Preventivo;
+    const r = disegna(await PreventivoDemo({ params: params(), searchParams: Promise.resolve({ fascia: ['base', 'premium'] }) as never }));
+    expect(r.querySelector('h1')?.textContent).toBe(`Il preventivo di Ora del Gusto col ${FASCE[p.consigliato].nome}`);
   });
 
   it('senza fascia, o con una sconosciuta, vale la consigliata', async () => {

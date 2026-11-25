@@ -42,10 +42,12 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 import {
-  CHIAVE_ACCOUNT, CHIAVE_AGGIUNTA, cambiaAccount, dopoEventoAccesso, iniziaAggiunta, leggiAccount, ricordaSessione, rinnovaAccesso,
+  CHIAVE_ACCOUNT, CHIAVE_AGGIUNTA, CHIAVE_CAMBIO, DURATA_ACCESSO_SALVATO_MS, cambiaAccount, dimenticaTutti, dopoEventoAccesso,
+  iniziaAggiunta, leggiAccount, preparaAggiunta, ricordaSessione, rinnovaAccesso,
   type MondoDelCambio, type SessioneMinima,
 } from '@/lib/account/piu-account';
 import CambiaAccount from '@/components/account/CambiaAccount';
+import RicordaAccount from '@/components/account/RicordaAccount';
 
 const sess = (id: string, giro = 1): SessioneMinima => ({
   access_token: `acc-${id}-${giro}`,
@@ -92,10 +94,52 @@ describe('gli account salvati seguono gli eventi dell accesso', () => {
     expect(localStorage.getItem(CHIAVE_ACCOUNT)).toBeNull();
   });
 
+  it('un accesso finito senza «Esci» (la pagina riparte senza sessione) dimentica tutto (collaudo)', () => {
+    iniziaAggiunta(sess('a'));
+    dopoEventoAccesso('SIGNED_IN', sess('b'));
+    localStorage.setItem('mycity:da-parte:a:mc_addr_hint', 'via di A');
+    dopoEventoAccesso('INITIAL_SESSION', null);
+    expect(leggiAccount()).toEqual([]);
+    expect(localStorage.getItem('mycity:da-parte:a:mc_addr_hint')).toBeNull();
+  });
+
+  it('un accesso salvato da più di 6 mesi non vale più', () => {
+    const ora = Date.now();
+    ricordaSessione(sess('a'), localStorage, ora - DURATA_ACCESSO_SALVATO_MS - 1000);
+    ricordaSessione(sess('b'), localStorage, ora);
+    expect(leggiAccount(localStorage, ora).map((x) => x.id)).toEqual(['b']);
+  });
+
+  it('«Esci» toglie anche le bozze messe da parte per gli altri account', () => {
+    ricordaSessione(sess('a'));
+    localStorage.setItem('mycity:da-parte:a:mc_checkout_draft', '{"via":"di A"}');
+    dimenticaTutti();
+    expect(Object.keys(localStorage).filter((k) => k.startsWith('mycity:'))).toEqual([]);
+  });
+
+  it('«Aggiungi» mette da parte carrello e bozze di A, e B entrando non li trova (collaudo)', async () => {
+    localStorage.setItem('cart', '[{"id":"pane","quantity":3}]');
+    localStorage.setItem('mc_new_product_draft', '{"nome":"Torta di A"}');
+    const passi: string[] = [];
+    const dove = await preparaAggiunta({
+      sessioneAttuale: async () => sess('a'),
+      salvaCarrello: async (id) => { passi.push(`carrello-su ${id}`); },
+      svuotaCarrello: () => { passi.push('carrello-via'); localStorage.removeItem('cart'); return () => undefined; },
+    });
+    expect(dove).toBe('/sign-in?aggiungi=1');
+    expect(passi).toEqual(['carrello-su a', 'carrello-via']);
+    expect(localStorage.getItem('cart')).toBeNull();
+    expect(localStorage.getItem('mc_new_product_draft')).toBeNull();
+    dopoEventoAccesso('SIGNED_IN', sess('b'));
+    expect(localStorage.getItem('mc_new_product_draft')).toBeNull();
+    expect(localStorage.getItem(CHIAVE_CAMBIO)).toMatch(/^b:/);
+    expect(leggiAccount().map((x) => x.id)).toEqual(['b', 'a']);
+  });
+
   it('un elenco rovinato non rompe niente', () => {
     localStorage.setItem(CHIAVE_ACCOUNT, '{non json');
     expect(leggiAccount()).toEqual([]);
-    localStorage.setItem(CHIAVE_ACCOUNT, JSON.stringify([{ id: 'x' }, { id: 'y', accessToken: 'a', refreshToken: 'r' }]));
+    localStorage.setItem(CHIAVE_ACCOUNT, JSON.stringify([{ id: 'x' }, { id: 'y', accessToken: 'a', refreshToken: 'r', salvatoIl: Date.now() }, { id: 'z', accessToken: 'a', refreshToken: 'r' }]));
     expect(leggiAccount().map((x) => x.id)).toEqual(['y']);
   });
 });
@@ -126,11 +170,11 @@ describe('passare a un altro account', () => {
     ricordaSessione(sess('a'));
   });
 
-  it('nell ordine giusto: rinnova B a parte, salva A, mette da parte il carrello, installa B', async () => {
+  it('nell ordine giusto: guarda chi è attivo, rinnova B a parte, salva A, mette da parte il carrello, installa B', async () => {
     const { m, passi, carrello } = mondo();
     const esito = await cambiaAccount('b', m);
     expect(esito).toEqual({ ok: true, dove: '/seller/dashboard' });
-    expect(passi).toEqual(['rinnova ref-b-1', 'attuale', 'carrello-su a', 'carrello-via', 'installa ref-b-2']);
+    expect(passi).toEqual(['attuale', 'rinnova ref-b-1', 'carrello-su a', 'carrello-via', 'installa ref-b-2']);
     expect(carrello()).toBeNull();
     const salvati = Object.fromEntries(leggiAccount().map((x) => [x.id, x.refreshToken]));
     // B con le chiavi appena rinnovate (le vecchie sono già usate), A con quelle di adesso.
@@ -164,6 +208,44 @@ describe('passare a un altro account', () => {
     expect(carrello()).toBe('[{"id":"pane"}]');
   });
 
+  it('passare all account già attivo non fa niente: la sua chiave salvata non si tocca (collaudo)', async () => {
+    const { m, passi } = mondo({ sessioneAttuale: async () => { passi.push('attuale'); return sess('b', 9); } });
+    expect(await cambiaAccount('b', m)).toEqual({ ok: false, motivo: 'gia-attivo', email: 'b@esempio.it' });
+    expect(passi).toEqual(['attuale']);
+  });
+
+  it('le bozze di A si mettono da parte e tornano quando si torna su A; quelle di B tornano su B (collaudo)', async () => {
+    localStorage.setItem('mc_new_product_draft', '{"nome":"Torta di A"}');
+    localStorage.setItem('mc_addr_hint', 'via di A');
+    await cambiaAccount('b', mondo().m);
+    expect(localStorage.getItem('mc_new_product_draft')).toBeNull();
+    expect(localStorage.getItem('mc_addr_hint')).toBeNull();
+    // su B si scrive una bozza sua, poi si torna su A
+    localStorage.setItem('mc_new_product_draft', '{"nome":"Pane di B"}');
+    ricordaSessione(sess('a', 8));
+    const verso = mondo({ sessioneAttuale: async () => sess('b', 2), rinnova: async () => sess('a', 9) });
+    expect((await cambiaAccount('a', verso.m)).ok).toBe(true);
+    expect(localStorage.getItem('mc_new_product_draft')).toBe('{"nome":"Torta di A"}');
+    expect(localStorage.getItem('mc_addr_hint')).toBe('via di A');
+    // e di nuovo su B: torna la bozza di B
+    ricordaSessione(sess('b', 3));
+    const ancora = mondo({ sessioneAttuale: async () => sess('a', 9), rinnova: async () => sess('b', 4) });
+    expect((await cambiaAccount('b', ancora.m)).ok).toBe(true);
+    expect(localStorage.getItem('mc_new_product_draft')).toBe('{"nome":"Pane di B"}');
+  });
+
+  it('se l installazione non riesce anche le bozze tornano com erano', async () => {
+    localStorage.setItem('mc_checkout_draft', '{"via":"di A"}');
+    await cambiaAccount('b', mondo({ installa: async () => ({ error: new Error('no') }) }).m);
+    expect(localStorage.getItem('mc_checkout_draft')).toBe('{"via":"di A"}');
+    expect(Object.keys(localStorage).some((k) => k.startsWith('mycity:da-parte:'))).toBe(false);
+  });
+
+  it('dopo un cambio riuscito le altre schede ricevono il segnale', async () => {
+    await cambiaAccount('b', mondo().m);
+    expect(localStorage.getItem(CHIAVE_CAMBIO)).toMatch(/^b:\d+$/);
+  });
+
   it('un cliente atterra in home, un fattorino nelle sue consegne', async () => {
     expect(await cambiaAccount('b', mondo({ ruoloDi: async () => 'buyer' }).m)).toEqual({ ok: true, dove: '/' });
     ricordaSessione(sess('b'));
@@ -183,6 +265,11 @@ describe('il rinnovo a parte', () => {
     expect(chiamate[0][1].method).toBe('POST');
     expect((chiamate[0][1].headers as Record<string, string>).apikey).toBe('anon');
     expect(JSON.parse(String(chiamate[0][1].body))).toEqual({ refresh_token: 'ref-b' });
+  });
+
+  it('«troppe richieste» (429) non vuol dire scaduto: lancia, e l account resta salvato (collaudo)', async () => {
+    const troppe = (async () => new Response('', { status: 429 })) as unknown as typeof fetch;
+    await expect(rinnovaAccesso('ref-b', { url: 'https://x', chiave: 'k', fetch: troppe })).rejects.toThrow();
   });
 
   it('una risposta buona diventa la sessione; un guasto del servizio lancia', async () => {
@@ -220,6 +307,34 @@ describe('il blocco nel menu', () => {
     expect(testi.some((t) => t?.includes('Nome a'))).toBe(false);
     expect(testi).toContain('Aggiungi un altro account');
     expect(r.querySelector('button[aria-label="Passa all’account Nome b (b@esempio.it)"]')).not.toBeNull();
+  });
+
+  it('con 5 account salvati «Aggiungi» non c è, e lo dice', async () => {
+    for (const id of ['a', 'b', 'c', 'd', 'e']) ricordaSessione(sess(id));
+    finto.sessione = { ...sess('a'), user: { id: 'a', email: 'a@esempio.it' } };
+    const r = await monta();
+    expect([...r.querySelectorAll('button')].some((b) => b.textContent === 'Aggiungi un altro account')).toBe(false);
+    expect(r.textContent).toContain('Hai già 5 account salvati');
+  });
+
+  it('un cambio fatto in un altra scheda ricarica questa (collaudo)', async () => {
+    const ricarica = vi.fn();
+    const originale = window.location;
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...originale, reload: ricarica } });
+    try {
+      (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+      const div = document.createElement('div');
+      document.body.appendChild(div);
+      const root = createRoot(div);
+      accesi.push(root);
+      await act(async () => { root.render(createElement(RicordaAccount)); });
+      window.dispatchEvent(new StorageEvent('storage', { key: 'altra-chiave', newValue: 'x' }));
+      expect(ricarica).not.toHaveBeenCalled();
+      window.dispatchEvent(new StorageEvent('storage', { key: CHIAVE_CAMBIO, newValue: 'b:1' }));
+      expect(ricarica).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: originale });
+    }
   });
 
   it('«Aggiungi un altro account» salva chi c è e apre l accesso', async () => {
