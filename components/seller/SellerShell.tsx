@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard, Receipt, Package, Wand2,
   Tag, Megaphone, Camera, BarChart3,
@@ -20,6 +20,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { VOCI_SERVIZI } from '@/components/seller/servizi-nel-menu';
 import MenuAccount, { usePianoDelNegozio } from '@/components/seller/MenuAccount';
+import { toneFor, formatDate } from '@/lib/notifiche-aspetto';
 
 type NavItem = { href: string; icon: LucideIcon; label: string; badge?: 'todo' };
 type NavGroup = { group: string; items: NavItem[] };
@@ -107,6 +108,21 @@ function useSellerTodoCount(sellerId: string | null) {
   return data;
 }
 
+/**
+ * Le promozioni contano solo per chi le ha accese nelle impostazioni (`notif_promos`):
+ * chi le ha spente non riceve la push, e il pallino non deve accendersi per loro.
+ * Se la preferenza non si legge, si va avanti senza le promozioni: un errore
+ * sulla preferenza non deve spegnere il pallino degli ordini non letti.
+ */
+async function promoAccese(userId: string): Promise<boolean> {
+  const { data: preferenze, error } = await supabase
+    .from('profiles')
+    .select('notif_promos')
+    .eq('id', userId)
+    .maybeSingle();
+  return !error && preferenze?.notif_promos === true;
+}
+
 /** Conta le notifiche non lette per il pallino del campanello. */
 function useNotifUnread(userId: string | null) {
   const { data = 0 } = useQuery({
@@ -116,28 +132,63 @@ function useNotifUnread(userId: string | null) {
     refetchIntervalInBackground: false,
     queryFn: async () => {
       if (!userId) return 0;
-      // Le promozioni contano solo per chi le ha accese nelle impostazioni (`notif_promos`):
-      // chi le ha spente non riceve la push, e il pallino non deve accendersi per loro.
-      // Se la preferenza non si legge, il conto si fa lo stesso, senza le promozioni: un errore
-      // sulla preferenza non deve spegnere il pallino degli ordini non letti.
-      const { data: preferenze, error: errPreferenze } = await supabase
-        .from('profiles')
-        .select('notif_promos')
-        .eq('id', userId)
-        .maybeSingle();
-      const promoAccese = !errPreferenze && preferenze?.notif_promos === true;
       let conta = supabase
         .from('notifications')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .eq('is_read', false);
-      if (!promoAccese) conta = conta.neq('category', 'promo');
+      if (!(await promoAccese(userId))) conta = conta.neq('category', 'promo');
       const { count, error } = await conta;
       if (error) return 0;
       return count ?? 0;
     },
   });
   return data;
+}
+
+/** Quante notifiche si vedono nella tendina: le altre stanno nel Centro notifiche. */
+const ULTIME_NELLA_TENDINA = 6;
+
+type NotificaTendina = {
+  id: string;
+  user_id: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  is_read: boolean;
+  created_at: string;
+};
+
+/**
+ * 25/11/2026 — LA TENDINA DICEVA «HAI 3 NOTIFICHE NON LETTE» E NON DICEVA QUALI.
+ *
+ * Nicola: «dentro la finestra delle notifiche in alto a destra siano visibili le ultime notifiche».
+ * Per sapere cosa era successo il negoziante doveva aprire un'altra pagina. Ora la tendina legge le
+ * ultime notifiche, con le stesse regole del pallino (le promozioni solo per chi le ha accese), e
+ * solo quando è aperta: con la tendina chiusa non parte nessuna lettura in più.
+ * L'utente sta in fondo alla chiave: così «Segna tutte come lette» del Centro notifiche aggiorna
+ * anche questa lista (R01-001 cerca le chiavi per l'ultimo pezzo).
+ */
+function useUltimeNotifiche(userId: string | null) {
+  return useQuery({
+    queryKey: [...queryKeys.notifications.list, 'seller-bell', userId ?? ''],
+    enabled: !!userId,
+    // Si apre per vedere cosa c'è di nuovo: ogni apertura rilegge.
+    staleTime: 0,
+    queryFn: async (): Promise<NotificaTendina[]> => {
+      if (!userId) return [];
+      let lista = supabase
+        .from('notifications')
+        .select('id, user_id, title, body, link, is_read, created_at')
+        .eq('user_id', userId);
+      if (!(await promoAccese(userId))) lista = lista.neq('category', 'promo');
+      const { data, error } = await lista
+        .order('created_at', { ascending: false })
+        .limit(ULTIME_NELLA_TENDINA);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 }
 
 /**
@@ -155,18 +206,40 @@ function useNotifUnread(userId: string | null) {
  */
 function NotifPopover({
   unread,
+  userId,
   onClose,
   triggerRef,
 }: {
   unread: number;
+  userId: string | null;
   onClose: () => void;
   triggerRef: RefObject<HTMLButtonElement>;
 }) {
   const pannelloRef = useRef<HTMLDivElement>(null);
+  const qc = useQueryClient();
+  const { data: ultime, isLoading, isError, refetch } = useUltimeNotifiche(userId);
   // Il pannello esiste solo da aperto: il montaggio e' l'apertura, e lo
   // smontaggio riporta il fuoco sul campanello.
   // È una tendina, non un foglio a tutto schermo: la pagina sotto continua a scorrere.
   useBottomSheetA11y(true, pannelloRef, triggerRef, onClose, { bloccaScorrimento: false });
+
+  // Aprire una notifica la segna letta, come nel Centro notifiche. Best effort: se la scrittura
+  // non riesce la notifica si apre lo stesso, e il pallino resta finché non riesce.
+  const segnaLetta = (id: string) => {
+    if (!userId) return;
+    void supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', id)
+      .eq('user_id', userId)
+      .then(({ error }) => {
+        if (error) return;
+        void qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
+        void qc.invalidateQueries({ queryKey: queryKeys.notifications.list });
+      });
+  };
+
+  const righe = ultime ?? [];
 
   return (
     <>
@@ -181,7 +254,7 @@ function NotifPopover({
         role="dialog"
         aria-modal="true"
         aria-label="Notifiche"
-        className="absolute right-0 top-[calc(100%+10px)] z-modal w-[330px] max-w-[88vw] overflow-hidden rounded-xl border border-cream-200 bg-surface-0 text-ink-900 shadow-warm-xl"
+        className="absolute right-0 top-[calc(100%+10px)] z-modal w-[360px] max-w-[88vw] overflow-hidden rounded-xl border border-cream-200 bg-surface-0 text-ink-900 shadow-warm-xl"
       >
         <div className="flex items-center justify-between border-b border-cream-200 px-4 py-3">
           <span className="font-serif text-base font-bold">Notifiche</span>
@@ -189,17 +262,76 @@ function NotifPopover({
             <span className="text-xs font-semibold text-primary-700">{unread} non lette</span>
           )}
         </div>
-        <div className="px-4 py-6 text-center text-sm text-ink-500">
-          {unread > 0
-            ? `Hai ${unread} ${unread === 1 ? 'notifica non letta' : 'notifiche non lette'}.`
-            : 'Nessuna nuova notifica.'}
-        </div>
+        {isLoading && userId ? (
+          <p className="px-4 py-6 text-center text-sm text-ink-500" role="status">Carico le notifiche…</p>
+        ) : isError && righe.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 px-4 py-6 text-center" role="alert">
+            <p className="text-sm text-ink-600">Non riusciamo a leggere le notifiche.</p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="rounded-full border border-cream-300 px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-cream-50"
+            >
+              Riprova
+            </button>
+          </div>
+        ) : righe.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-ink-500">Nessuna notifica, per ora.</p>
+        ) : (
+          <ul className="max-h-[min(60vh,420px)] divide-y divide-cream-200 overflow-y-auto" aria-label="Ultime notifiche">
+            {righe.map((n) => {
+              const tono = toneFor(n);
+              const Icona = tono.icon;
+              const dentro = (
+                <div className={`flex items-start gap-3 px-4 py-3 ${n.is_read ? '' : 'bg-primary-50/40'}`}>
+                  <span
+                    className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tono.bg} ${tono.fg}`}
+                    aria-hidden
+                  >
+                    <Icona size={16} strokeWidth={2.2} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm leading-snug ${n.is_read ? 'font-medium text-ink-700' : 'font-semibold text-ink-900'}`}>
+                      {n.title}
+                    </p>
+                    {n.body && <p className="mt-0.5 line-clamp-2 text-xs text-ink-600">{n.body}</p>}
+                    <p className="mt-1 text-2xs text-ink-400">{formatDate(n.created_at)}</p>
+                  </div>
+                  {!n.is_read && (
+                    <>
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary-600" aria-hidden="true" />
+                      <span className="sr-only">Non letta</span>
+                    </>
+                  )}
+                </div>
+              );
+              return (
+                <li key={n.id}>
+                  {n.link ? (
+                    <Link
+                      href={n.link}
+                      className="block hover:bg-cream-50"
+                      onClick={() => {
+                        if (!n.is_read) segnaLetta(n.id);
+                        onClose();
+                      }}
+                    >
+                      {dentro}
+                    </Link>
+                  ) : (
+                    dentro
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
         <Link
           href="/notifications"
           onClick={onClose}
           className="block w-full border-t border-cream-200 bg-cream-50 px-4 py-3 text-center text-sm font-semibold text-ink-700 hover:bg-cream-100"
         >
-          Centro notifiche
+          Vedi tutte nel Centro notifiche
         </Link>
       </div>
     </>
@@ -499,6 +631,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
               {notifOpen && (
                 <NotifPopover
                   unread={notifUnread}
+                  userId={profile?.id ?? null}
                   onClose={() => setNotifOpen(false)}
                   triggerRef={notifTriggerRef}
                 />
