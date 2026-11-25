@@ -82,7 +82,9 @@ describe('le proposte nascono dai dati veri', () => {
     expect(per('sito-rifatto').perche).toContain('42 su 100');
     expect(per('sito-rifatto').perche).toContain('Manca la descrizione');
     expect(per('sito-rifatto').fonte).toBe('Google PageSpeed Insights');
-    expect(cosaInFascia(per('sito-rifatto'), 'base')).toContain('in una pagina');
+    // 25/11/2026 — Senza giudizio dell'AD il sito vale «medio»: nel Base si tiene e si collega, si rifà dal Business («ok sito»).
+    expect(cosaInFascia(per('sito-rifatto'), 'base')).toMatch(/^Colleghiamo/);
+    expect(cosaInFascia(per('sito-rifatto'), 'business')).toContain('Rifacciamo il tuo sito completo');
     expect(cosaInFascia(per('foto-prodotti'), 'base')).toBe('Fotografiamo i prodotti principali fra i 12 senza foto, nella sessione di foto all’avvio');
     expect(cosaInFascia(per('foto-prodotti'), 'business')).toContain('ogni tre mesi');
     expect(cosaInFascia(per('social-costanza'), 'base')).toBe('Da 3 a 8 post al mese su Instagram, preparati e pubblicati da noi');

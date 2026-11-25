@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { giornoDiPiacenza } from './preventivo';
+import { SERVIZI_AGENZIA, giornoDiPiacenza, type ServizioAgenzia } from './preventivo';
 import { senzaPrezzo, vociSenzaPrezzo, type SchedaCliente } from './scheda-cliente';
 
 /**
@@ -322,7 +322,12 @@ export const TITOLI_BUSINESS: Record<SezioneBusiness, string> = {
   rischi: 'I rischi',
   prime_mosse: 'Le prime mosse',
 };
-export type FraseConFonte = { testo: string; fonte: string };
+/**
+ * 25/11/2026 — Nelle opportunità e nelle prime mosse l'AD può legare la frase a un nostro servizio (`servizio`:
+ * foto_video, sito_web, social, analisi) e dire in una frase cosa facciamo (`proposta`, 10-160 caratteri, senza
+ * prezzi né contatti): allora diventa una proposta dell'offerta su misura (lib/agenzia/offerta-su-misura.ts).
+ */
+export type FraseConFonte = { testo: string; fonte: string; servizio?: ServizioAgenzia; proposta?: string };
 export type AnalisiAziendale = Record<SezioneBusiness, FraseConFonte[]>;
 
 const CONTATTO = /[\w.+-]+@[\w-]+\.[\w.]+|\+?\d[\d\s.-]{7,}\d/;
@@ -338,10 +343,20 @@ export function analisiAziendale(scheda: SchedaCliente | null | undefined): Anal
     SEZIONI_BUSINESS.map((s) => {
       const voci = Array.isArray((grezza as Record<string, unknown>)[s]) ? ((grezza as Record<string, unknown>)[s] as unknown[]) : [];
       const pulite = voci
-        .map((v) => ({
-          testo: typeof (v as FraseConFonte)?.testo === 'string' ? (v as FraseConFonte).testo.replace(/\s+/g, ' ').trim() : '',
-          fonte: typeof (v as FraseConFonte)?.fonte === 'string' ? (v as FraseConFonte).fonte.trim() : '',
-        }))
+        .map((v) => {
+          const frase: FraseConFonte = {
+            testo: typeof (v as FraseConFonte)?.testo === 'string' ? (v as FraseConFonte).testo.replace(/\s+/g, ' ').trim() : '',
+            fonte: typeof (v as FraseConFonte)?.fonte === 'string' ? (v as FraseConFonte).fonte.trim() : '',
+          };
+          const servizio = (v as Record<string, unknown>)?.servizio;
+          const proposta = typeof (v as Record<string, unknown>)?.proposta === 'string' ? String((v as Record<string, unknown>).proposta).replace(/\s+/g, ' ').trim() : '';
+          const propostaPulita = proposta.length >= 10 && proposta.length <= 160 && senzaPrezzo(proposta) && !CONTATTO.test(proposta);
+          if ((s === 'opportunita' || s === 'prime_mosse') && (SERVIZI_AGENZIA as readonly unknown[]).includes(servizio) && propostaPulita) {
+            frase.servizio = servizio as ServizioAgenzia;
+            frase.proposta = proposta;
+          }
+          return frase;
+        })
         .filter((v) => v.testo.length >= 10 && v.testo.length <= 300 && senzaPrezzo(v.testo.replace(VOTO, 'voto')) && !CONTATTO.test(v.testo) && fonteHttps.safeParse(v.fonte).success)
         .slice(0, 3);
       quante += pulite.length;

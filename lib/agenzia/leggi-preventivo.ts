@@ -2,6 +2,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import {
   ABBONAMENTI,
+  consigliataDallOfferta,
   costruisciPreventivo,
   leggiImpostazioniAgenzia,
   impostazioniSenzaPrezzi,
@@ -164,9 +165,14 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
       sito: sitoMisurato,
       // Il giudizio dell'AD sul sito vale anche nel link: è un parere su un sito pubblico, non un dato del titolare.
       giudizioSito: leggiGiudizioSito((schedaIntera?.analisi as Record<string, unknown> | undefined)?.giudizio_sito),
+      analisiAziendale: analisiAziendale(schedaIntera),
     });
     // 25/11/2026 — L'analisi del business (Nicola): è analisi, quindi c'è anche in demo e nel link.
     preventivo.analisiAziendale = analisiAziendale(schedaIntera);
+    // 25/11/2026 — Il consiglio tiene conto del sito e dell'analisi (Nicola, «ok sito»).
+    const consiglio = consigliataDallOfferta({ id: preventivo.consigliato, perche: preventivo.perche_consigliato }, preventivo.offerta);
+    preventivo.consigliato = consiglio.id;
+    preventivo.perche_consigliato = consiglio.perche;
   } catch (errore) {
     logger.warn('[preventivo] offerta su misura non preparata', { errore: String(errore) });
   }
