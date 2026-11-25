@@ -1,10 +1,10 @@
 'use client';;
-import { use, useCallback, useRef, useState, useSyncExternalStore } from "react";
+import { use, useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { hashKey, useQuery, useQueryClient } from '@tanstack/react-query';
 import { trackCategoryViewed } from '@/lib/analytics/events';
 import { Filter, RotateCcw, Tag, PackageCheck, CircleDot, Star, X, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -141,19 +141,40 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
     (avvisa: () => void) => memoriaDelleDomande?.subscribe(avvisa) ?? (() => {}),
     [memoriaDelleDomande],
   );
+  /**
+   * 25/11/2026 — L'IMPRONTA DI OGNI FILA SI CALCOLA UNA VOLTA, NON A OGNI EVENTO DELLA MEMORIA.
+   *
+   * Il controllo qui sotto gira a ogni evento della memoria delle domande, e su questa pagina gli
+   * eventi sono centinaia: ogni fila ne genera a ogni disegno. Prima cercava ogni fila con
+   * `find({ exact: true })`, che scorre TUTTE le domande e per ognuna ricalcola l'impronta della
+   * chiave cercata: sul telefono erano quasi due secondi di processore bloccato. Adesso le
+   * impronte si calcolano qui, quando cambiano le file, e la ricerca e' diretta (`get`).
+   * L'impronta e' la stessa che usa react-query (`hashKey`): nessuna domanda imposta la sua.
+   */
+  const chiaveDelHub = idsDelHub ? idsDelHub.join(',') : '';
+  const fileDaControllare = useMemo((): Array<[string, readonly unknown[], string]> => {
+    if (!chiaveDelHub) return [];
+    const [madreId, ...figlie] = chiaveDelHub.split(',');
+    const file: Array<[string, Record<string, unknown>]> = [
+      ...figlie.map((id): [string, Record<string, unknown>] => [id, { categoryId: id, limit: 12, sort: 'relevance' }]),
+      [madreId, { categoryIds: [madreId], limit: 12, sort: 'relevance' }],
+    ];
+    return file.map(([fila, filtri]) => {
+      const chiave = queryKeys.products.grid(filtri);
+      return [fila, chiave, hashKey(chiave)];
+    });
+  }, [chiaveDelHub]);
   const statoDelleFileInMemoria = useSyncExternalStore(
     iscrivitiAllaMemoria,
     () => {
       if (!memoriaDelleDomande || !idsDelHub) return '|';
-      const [madreId, ...figlie] = idsDelHub;
-      const file: Array<[string, Record<string, unknown>]> = [
-        ...figlie.map((id): [string, Record<string, unknown>] => [id, { categoryId: id, limit: 12, sort: 'relevance' }]),
-        [madreId, { categoryIds: [madreId], limit: 12, sort: 'relevance' }],
-      ];
       const cadute: string[] = [];
       const inArrivo: string[] = [];
-      for (const [fila, filtri] of file) {
-        const stato = memoriaDelleDomande.find({ queryKey: queryKeys.products.grid(filtri), exact: true })?.state.status;
+      for (const [fila, chiave, impronta] of fileDaControllare) {
+        const domanda = typeof memoriaDelleDomande.get === 'function'
+          ? memoriaDelleDomande.get(impronta)
+          : memoriaDelleDomande.find({ queryKey: chiave, exact: true });
+        const stato = domanda?.state.status;
         if (stato === 'error') cadute.push(fila);
         else if (stato !== 'success') inArrivo.push(fila);
       }
