@@ -241,6 +241,11 @@ export type DatiAttivita = {
   prodotti: { images: unknown }[];
   /** `store_customization.socials`: instagram, facebook, tiktok, whatsapp, website e, dal 24/11/2026, google_maps. */
   socials?: unknown;
+  /**
+   * 25/11/2026 — Il sito che ha già, misurato da Google PageSpeed: una frase per voce, già scritta
+   * (velocità, Google, facilità d'uso). Se c'è, il preventivo parla del suo sito invece di «non ce l'hai».
+   */
+  sitoOggi?: string[];
 };
 
 export type VoceMancante = {
@@ -298,6 +303,9 @@ export function cosaManca(d: DatiAttivita): VoceMancante[] {
 
   if (!campoPieno(d.socials, 'website')) {
     voci.push({ id: 'sito_web', perche: ['La tua attività non ha ancora un sito web suo.'] });
+  } else if (d.sitoOggi?.length) {
+    // 25/11/2026 — Il sito c'è e Google l'ha misurato: si dice com'è, e l'offerta dice cosa ci aggiungiamo.
+    voci.push({ id: 'sito_web', perche: d.sitoOggi });
   }
 
   // La gestione dei social, con dentro la scheda Google (24/11/2026), si propone sempre: dai dati

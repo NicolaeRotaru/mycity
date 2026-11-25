@@ -115,6 +115,13 @@ describe('il negozio nasce come Ora del Gusto', () => {
     expect(db.link.get(a.id_attivita)!.codice).toBe(codice);
   });
 
+  it('col sito pubblico lo scrive nei canali della vetrina; un indirizzo non https lo scarta', async () => {
+    const a = (await (await chiama({ ...BAR, sito: 'https://www.barprova.it/' })).json()) as { id_attivita: string };
+    expect(db.profili.get(a.id_attivita)!.store_customization).toEqual({ socials: { website: 'https://www.barprova.it/' } });
+    const b = (await (await chiama({ ...BAR, nome: 'Bar Due', sito: 'http://127.0.0.1/' })).json()) as { id_attivita: string };
+    expect(db.profili.get(b.id_attivita)!.store_customization).toBeUndefined();
+  });
+
   it('non riscrive un’attività che ha già accettato', async () => {
     const a = (await (await chiama(BAR)).json()) as { id_attivita: string };
     db.profili.set(a.id_attivita, { ...db.profili.get(a.id_attivita), approval_status: 'approved', is_approved: true });

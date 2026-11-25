@@ -2,6 +2,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TIPI_ATTIVITA } from './tipi-attivita';
+import { indirizzoWebPubblico } from '@/lib/indirizzi-pubblici';
 
 /**
  * UN CLIENTE NUOVO DAL MODULO 12 ENTRA IN MYCITY — 25/11/2026.
@@ -24,6 +25,8 @@ export const NuovaAttivitaInArrivo = z.object({
   dettaglio: z.string().trim().max(80).optional(),
   citta: z.string().trim().max(60).optional(),
   indirizzo: z.string().trim().max(200).optional(),
+  /** 25/11/2026 — Il sito del locale, se il modulo 12 lo conosce: va nei canali della vetrina e Google PageSpeed lo analizza. */
+  sito: z.string().trim().max(300).optional(),
 });
 export type NuovaAttivita = z.infer<typeof NuovaAttivitaInArrivo>;
 
@@ -44,7 +47,7 @@ export function emailDiSistema(a: Pick<NuovaAttivita, 'nome' | 'citta'>): string
 export const nuovoCodice = (): string => randomBytes(32).toString('hex');
 
 export type EsitoIscrizione =
-  | { ok: true; id: string; nuova: boolean }
+  | { ok: true; id: string; nuova: boolean; sito: string | null }
   | { ok: false; motivo: 'gia-con-accesso' | 'guasto'; dettaglio?: string };
 
 /** Cento anni: l'accesso resta chiuso finché il titolare non accetta il preventivo dal link. */
@@ -101,6 +104,10 @@ export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): 
   };
   if (a.indirizzo) valori.store_address = a.citta && !a.indirizzo.toLowerCase().includes(a.citta.toLowerCase()) ? `${a.indirizzo}, ${a.citta}` : a.indirizzo;
   if (a.citta) valori.city = a.citta;
+  // Il sito va nei canali della vetrina solo se è un indirizzo pubblico https, e solo alla nascita del
+  // negozio: una vetrina che esiste già ha i canali scritti dal titolare, e non si toccano.
+  const sito = indirizzoWebPubblico(a.sito);
+  if (sito && nuova) valori.store_customization = { socials: { website: sito } };
   const scritto = await admin.from('profiles').upsert({ id, ...valori }, { onConflict: 'id' });
   if (scritto.error) return { ok: false, motivo: 'guasto', dettaglio: scritto.error.message };
 
@@ -110,5 +117,5 @@ export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): 
     .upsert({ seller_id: id, codice: nuovoCodice() }, { onConflict: 'seller_id', ignoreDuplicates: true });
   if (link.error) return { ok: false, motivo: 'guasto', dettaglio: link.error.message };
 
-  return { ok: true, id, nuova };
+  return { ok: true, id, nuova, sito };
 }

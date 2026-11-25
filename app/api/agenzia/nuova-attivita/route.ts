@@ -1,12 +1,15 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta } from '@/lib/api/corpo';
 import { portaColSegreto } from '@/lib/api/porta-col-segreto';
 import { logger } from '@/lib/logger';
 import { NuovaAttivitaInArrivo, iscriviAttivita } from '@/lib/agenzia/nuova-attivita';
+import { analizzaSitoDopoLaRisposta } from '@/lib/agenzia/sito-pagespeed';
 
 export const runtime = 'nodejs';
+// 25/11/2026 — Dopo la risposta può partire l'analisi del sito con Google PageSpeed (fino a 55 secondi).
+export const maxDuration = 60;
 
 /**
  * IL MODULO 12 DI N8N ISCRIVE UN CLIENTE NUOVO IN MYCITY — 25/11/2026.
@@ -42,7 +45,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     return ApiErrors.invalidRequest(`Attività non valida: ${primo?.path.join('.') || 'corpo'} — ${primo?.message ?? ''}`.trim());
   }
 
-  const fatto = await iscriviAttivita(getAdminSupabase(), esito.data);
+  const admin = getAdminSupabase();
+  const fatto = await iscriviAttivita(admin, esito.data);
   if (!fatto.ok) {
     if (fatto.motivo === 'gia-con-accesso') {
       return NextResponse.json({ ok: false, error: { code: 'GIA_ATTIVA', message: 'Questa attività ha già accettato il preventivo: il modulo non la riscrive.' } }, { status: 409 });
@@ -51,5 +55,6 @@ export async function POST(req: Request): Promise<NextResponse> {
     return ApiErrors.unavailable('Non sono riuscito a iscrivere l’attività. Riprova fra poco.');
   }
   logger.info('[nuova-attivita] attività iscritta', { id: fatto.id, nuova: fatto.nuova });
+  if (fatto.sito) analizzaSitoDopoLaRisposta(admin, fatto.id, fatto.sito, after);
   return NextResponse.json({ ok: true, id_attivita: fatto.id, nuova: fatto.nuova }, { status: fatto.nuova ? 201 : 200 });
 }

@@ -11,8 +11,8 @@ import {
 } from '@/lib/agenzia/preventivo';
 import { tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
 import { leggiSchedaSalvata, soloConfermati } from '@/lib/agenzia/scheda-cliente';
-import { leggiAnalisiCanali, leggiRisultatoSito } from '@/lib/agenzia/analisi';
-import { offertaSuMisura } from '@/lib/agenzia/offerta-su-misura';
+import { leggiAnalisiCanali, leggiRisultatoSito, sitoInParole } from '@/lib/agenzia/analisi';
+import { leggiGiudizioSito, offertaSuMisura } from '@/lib/agenzia/offerta-su-misura';
 
 /**
  * IL PREVENTIVO LETTO DAL DATABASE — una funzione sola per la dashboard (/api/seller/preventivo) e
@@ -47,7 +47,8 @@ function abbonamentoAttivo(r: { data: unknown; error: { message: string } | null
 
 /**
  * `pubblico`: il preventivo si mostra fuori dalla pagina del negozio (il link col codice). L'offerta su
- * misura usa allora solo i dati confermati della scheda e nessuna analisi dei canali o del sito.
+ * misura usa allora solo i dati confermati della scheda e nessuna analisi dei canali; il sito misurato da
+ * Google PageSpeed e il giudizio dell’AD sul sito sì (Nicola, 25/11/2026: «sì, anche nel link»).
  */
 export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, opzioni: { pubblico?: boolean } = {}): Promise<Letti> {
   const admin = getAdminSupabase();
@@ -74,9 +75,9 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
     // 24/11/2026 — Per l'offerta su misura: la scheda di n8n (708) e l'analisi dei canali e del sito (711).
     // Tutte e due facoltative: se non ci sono, o la tabella manca, l'offerta si fa con la vetrina.
     admin.from('schede_clienti').select('scheda').eq('id_attivita', idAttivita).maybeSingle(),
-    opzioni.pubblico
-      ? Promise.resolve({ data: null, error: null })
-      : admin.from('analisi_negozi').select('sito, canali').eq('id_attivita', idAttivita).maybeSingle(),
+    // 25/11/2026 — Nel link pubblico entra il sito misurato da Google PageSpeed (Nicola: «sì, anche nel
+    // link»): è una misura di Google, non un dato da confermare. I canali restano solo nell'area del negozio.
+    admin.from('analisi_negozi').select(opzioni.pubblico ? 'sito' : 'sito, canali').eq('id_attivita', idAttivita).maybeSingle(),
   ]);
   if (profilo.error) throw new Error(`profilo non letto: ${profilo.error.message}`);
   if (!profilo.data) throw new Error('profilo non trovato');
@@ -102,6 +103,17 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
   const p = profilo.data as Record<string, unknown>;
   const personalizzazione = p.store_customization as { socials?: unknown } | null | undefined;
   const socials = personalizzazione?.socials ?? null;
+  // 25/11/2026 — Il sito che ha già, misurato da Google: se c'è, il preventivo parla del suo sito. Un
+  // sito misurato è un sito che esiste, anche se nei canali della vetrina non è ancora scritto.
+  const analisi = analisiLetta.error ? null : (analisiLetta.data as { sito?: unknown; canali?: unknown } | null);
+  const sitoMisurato = leggiRisultatoSito(analisi?.sito);
+  const socialsPerIlConto =
+    sitoMisurato && !(socials && typeof socials === 'object' && typeof (socials as Record<string, unknown>).website === 'string' && ((socials as Record<string, string>).website).trim())
+      ? { ...(socials && typeof socials === 'object' ? (socials as Record<string, unknown>) : {}), website: sitoMisurato.url }
+      : socials;
+  const sitoOggi = sitoMisurato
+    ? [`Il tuo sito c’è, e Google l’ha misurato:`, ...sitoInParole(sitoMisurato).map((v) => `${v.titolo}: ${v.punteggio} su 100. ${v.frase}`)]
+    : undefined;
   const preventivo = costruisciPreventivo({
     idAttivita,
     nomeAttivita: String(p.store_name ?? ''),
@@ -110,7 +122,8 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
       storeLogo: (p.store_logo as string | null) ?? null,
       storeMedia: p.store_media,
       prodotti: (prodotti.data ?? []) as { images: unknown }[],
-      socials,
+      socials: socialsPerIlConto,
+      sitoOggi,
     },
     impostazioni: impostazioni.error
       ? colonnaAncoraAssente ? leggiImpostazioniAgenzia(null) : impostazioniSenzaPrezzi()
@@ -125,7 +138,6 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
   // ferma il preventivo: senza offerta la pagina mostra quello che mostrava prima.
   try {
     const schedaIntera = schedaLetta.error ? null : leggiSchedaSalvata((schedaLetta.data as { scheda?: unknown } | null)?.scheda);
-    const analisi = analisiLetta.error ? null : (analisiLetta.data as { sito?: unknown; canali?: unknown } | null);
     preventivo.offerta = offertaSuMisura({
       nome: preventivo.attivita,
       tipo: preventivo.tipoAttivita,
@@ -133,11 +145,13 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
         storeLogo: (p.store_logo as string | null) ?? null,
         storeMedia: p.store_media,
         prodotti: (prodotti.data ?? []) as { images: unknown }[],
-        socials,
+        socials: socialsPerIlConto,
       },
       scheda: opzioni.pubblico ? soloConfermati(schedaIntera) : schedaIntera,
-      canali: leggiAnalisiCanali(analisi?.canali),
-      sito: leggiRisultatoSito(analisi?.sito),
+      canali: opzioni.pubblico ? null : leggiAnalisiCanali(analisi?.canali),
+      sito: sitoMisurato,
+      // Il giudizio dell'AD sul sito vale anche nel link: è un parere su un sito pubblico, non un dato del titolare.
+      giudizioSito: leggiGiudizioSito((schedaIntera?.analisi as Record<string, unknown> | undefined)?.giudizio_sito),
     });
   } catch (errore) {
     logger.warn('[preventivo] offerta su misura non preparata', { errore: String(errore) });
