@@ -6,9 +6,12 @@
 --   ② non cambia la propria partita IVA dal browser;
 --   ③ un cliente non si scrive un IBAN;
 --   ④ il negozio cambia ancora telefono e orari dal browser;
---   ⑤ il fattorino scrive ancora la sua anagrafica dal browser;
+--   ⑤ il fattorino scrive ancora i dati del suo mezzo dal browser;
 --   ⑥ il server (chiave di servizio) cambia ancora l'IBAN.
 -- Senza la migrazione 365 ①, ② e ③ sono ROSSI.
+-- 25/11/2026 — ⑤ guardava il nome legale del fattorino. Dalla migrazione 861 l'anagrafica
+-- (le colonne legal_*) si scrive solo dal server (PATCH /api/rider/anagrafica): ⑤ guarda la
+-- targa, che resta sua. La prova delle colonne legali è i-dati-del-titolare-si-cambiano-solo-dal-server.
 -- =============================================================================
 
 BEGIN;
@@ -47,8 +50,8 @@ SET LOCAL request.jwt.claims = '{"sub":"e3650000-0000-0000-0000-000000000002","r
 INSERT INTO esiti VALUES ('3 un cliente non si scrive un IBAN',
   NOT pg_temp.prova('e3650000-0000-0000-0000-000000000002', 'billing_iban', 'IT02L1234512345123456789012'), '');
 SET LOCAL request.jwt.claims = '{"sub":"e3650000-0000-0000-0000-000000000003","role":"authenticated"}';
-INSERT INTO esiti VALUES ('5 il fattorino scrive ancora il suo nome legale',
-  pg_temp.prova('e3650000-0000-0000-0000-000000000003', 'legal_first_name', 'Mario'), '');
+INSERT INTO esiti VALUES ('5 il fattorino scrive ancora la targa del suo mezzo',
+  pg_temp.prova('e3650000-0000-0000-0000-000000000003', 'rider_vehicle_plate', 'AB123CD'), '');
 RESET ROLE;
 
 INSERT INTO esiti SELECT '1b l IBAN in banca dati è ancora quello vero',
