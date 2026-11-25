@@ -49,9 +49,8 @@ export type Proposta = {
    */
   perFascia?: Partial<Record<Abbonamento, string>>;
   /**
-   * 25/11/2026 — Vera se la proposta non nasce da un dato letto sul locale ma vale per tutti (l'analisi,
-   * la scheda Google di cui non sappiamo niente). Il preventivo corto la lascia fuori (Nicola, 18:30:
-   * «lo stretto necessario che gli interessa»).
+   * 25/11/2026 — Vera se la proposta non nasce da un dato letto sul locale ma si fa a tutti (l'analisi).
+   * Il preventivo corto la lascia fuori (Nicola, 18:30: «lo stretto necessario che gli interessa»).
    */
   generica?: true;
 };
@@ -409,8 +408,6 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
       perche: 'Non ci hai ancora dato il link della tua scheda Google: chi cerca «vicino a me» vede prima le schede complete.',
       fonte: FONTE.vetrina,
       daFascia: 'base',
-      // Non sappiamo niente della sua scheda: è un'assenza nei dati, non un dato.
-      generica: true,
     });
   }
   if (google?.stato === 'fatta') {
