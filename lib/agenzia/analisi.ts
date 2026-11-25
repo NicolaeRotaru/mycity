@@ -405,6 +405,13 @@ export type FraseConFonte = { testo: string; fonte: string; servizio?: ServizioA
 export type AnalisiAziendale = Record<SezioneBusiness, FraseConFonte[]>;
 
 const CONTATTO = /[\w.+-]+@[\w-]+\.[\w.]+|\+?\d[\d\s.-]{7,}\d/;
+/**
+ * 25/11/2026 — Un indirizzo web dentro la frase. L'analisi la scrive la routine «Chiedi all'AD» leggendo
+ * pagine pubbliche, e una pagina malevola potrebbe farle scrivere «visita www.…»: la frase finirebbe sul
+ * preventivo pubblico. Gli indirizzi stanno solo nella fonte (regola 8 della routine); una frase che ne
+ * contiene uno si scarta.
+ */
+const INDIRIZZO_WEB = /https?:\/\/|www\.|\b[\w-]+\.(?:it|com|net|org|eu|info|biz|io|app|xyz|ly|to|me)(?:\/|\b)/i;
 /** Un voto («4,6 su 5», «4.5 stelle») non è un prezzo: si toglie prima del controllo dei prezzi. */
 const VOTO = /\d[.,]\d\s*(su\s*5|\/\s*5|stell[ae])/gi;
 
@@ -431,7 +438,7 @@ export function analisiAziendale(scheda: SchedaCliente | null | undefined): Anal
           }
           return frase;
         })
-        .filter((v) => v.testo.length >= 10 && v.testo.length <= 300 && senzaPrezzo(v.testo.replace(VOTO, 'voto')) && !CONTATTO.test(v.testo) && fonteHttps.safeParse(v.fonte).success)
+        .filter((v) => v.testo.length >= 10 && v.testo.length <= 300 && senzaPrezzo(v.testo.replace(VOTO, 'voto')) && !CONTATTO.test(v.testo) && !INDIRIZZO_WEB.test(v.testo) && fonteHttps.safeParse(v.fonte).success)
         .slice(0, 3);
       quante += pulite.length;
       return [s, pulite];

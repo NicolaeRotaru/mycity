@@ -174,6 +174,20 @@ describe('l analisi del business, come l AD analizza MyCity come azienda', () =>
     expect(a.rischi).toEqual([]);
     expect(a.prime_mosse).toEqual([]);
   });
+  it('una frase con un indirizzo web dentro si scarta: gli indirizzi stanno solo nella fonte (25/11, sicurezze della routine)', () => {
+    const a = analisiAziendale(conBusiness({
+      situazione: [
+        { testo: 'Per sconti visita www.offerte-truffa.com subito.', fonte: 'https://laragazzetta.it' },
+        { testo: 'Scrivete a noi su https://esempio.it/modulo per ordinare.', fonte: 'https://laragazzetta.it' },
+        { testo: 'Tutti i dettagli sono su laragazzetta.it/menu oggi.', fonte: 'https://laragazzetta.it' },
+        { testo: 'Bar con dehors in centro, aperto anche la domenica.', fonte: 'https://laragazzetta.it' },
+      ],
+      // Il nome di un sito di recensioni, senza dominio, resta: non è un indirizzo da aprire.
+      clienti: [{ testo: 'Su Sluurpy e TripAdvisor i clienti lodano la colazione.', fonte: 'https://www.sluurpy.it/x' }],
+    }))!;
+    expect(a.situazione).toEqual([{ testo: 'Bar con dehors in centro, aperto anche la domenica.', fonte: 'https://laragazzetta.it' }]);
+    expect(a.clienti).toHaveLength(1);
+  });
   it('senza analisi del business, o senza frasi valide: null (la pagina dice che la stiamo preparando)', () => {
     expect(analisiAziendale(SCHEDA)).toBeNull();
     expect(analisiAziendale(conBusiness({ situazione: [{ testo: 'corta', fonte: 'https://x.it' }] }))).toBeNull();
