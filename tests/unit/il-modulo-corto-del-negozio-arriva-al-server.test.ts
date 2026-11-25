@@ -28,7 +28,10 @@ vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: 
 vi.mock('@/lib/stripe/webhook/comune', () => ({
   notifyAdmins: async (...a: string[]) => { stato.avvisi.push(a); return 'scritto'; },
 }));
-vi.mock('@/lib/agenzia/nuovo-cliente-n8n', () => ({ inviaNuovaAttivitaAlFlusso: async () => undefined }));
+vi.mock('@/lib/agenzia/nuovo-cliente-n8n', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  inviaNuovaAttivitaAlFlusso: async () => undefined,
+}));
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     from: () => {
