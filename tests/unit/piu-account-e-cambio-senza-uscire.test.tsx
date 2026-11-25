@@ -296,6 +296,20 @@ describe('le schede', () => {
     expect(cambioInCorso(localStorage, Date.now() + 3_600_000)).toBe(true);
   });
 
+  it('un rinnovo delle chiavi di A arrivato in ritardo dopo il passaggio a B non sposta niente e non ferma la scheda (quinto collaudo)', () => {
+    allineaUtenteDelBrowser('a');
+    allineaUtenteDelBrowser('b');
+    localStorage.setItem('cart', '[{"id":"di B"}]');
+    localStorage.removeItem(CHIAVE_CAMBIO);
+    segnaUtenteDellaPagina('b');
+    dopoEventoAccesso('TOKEN_REFRESHED', sess('a', 5));
+    expect(localStorage.getItem(CHIAVE_UTENTE_DEL_BROWSER)).toBe('b');
+    expect(localStorage.getItem('cart')).toBe('[{"id":"di B"}]');
+    expect(localStorage.getItem(CHIAVE_CAMBIO)).toBeNull();
+    expect(vedeEntrare('a', '/seller/dashboard', 'TOKEN_REFRESHED')).toBe(false);
+    expect(cambioInCorso(localStorage, Date.now() + 60_000)).toBe(false);
+  });
+
   it('sulle pagine di accesso un account nuovo è atteso: niente avviso, e la pagina diventa sua', () => {
     vedeEntrare('a', '/sign-in');
     expect(vedeEntrare('b', '/sign-in')).toBe(false);

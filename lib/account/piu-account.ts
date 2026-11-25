@@ -266,7 +266,9 @@ export function cambioInCorso(d: Deposito | null = locale(), ora = Date.now()): 
  * l'avviso: è arrivato un account diverso da quello della pagina, fuori dalle pagine di accesso, e
  * non l'ha chiesto lei.
  */
-export function vedeEntrare(id: string, percorso: string): boolean {
+export function vedeEntrare(id: string, percorso: string, evento = ''): boolean {
+  // Un rinnovo delle chiavi non è un account che entra (vedi dopoEventoAccesso).
+  if (evento === 'TOKEN_REFRESHED') return false;
   if (utenteDellaPagina === null || utenteDellaPagina === id) {
     utenteDellaPagina = id;
     return false;
@@ -317,7 +319,9 @@ export function dopoEventoAccesso(
   }
   if (!sessione?.user?.id || !sessione.access_token || !sessione.refresh_token) return;
   const id = sessione.user.id;
-  allineaUtenteDelBrowser(id, d);
+  // Un rinnovo delle chiavi non cambia chi è dentro: non sposta i dati del browser. Arrivato in ritardo
+  // da un'altra scheda, riporterebbe i dati all'account di prima subito dopo un cambio (quinto collaudo).
+  if (evento !== 'TOKEN_REFRESHED') allineaUtenteDelBrowser(id, d);
   const daChi = aggiuntaIniziataDa(s);
   const salvato = leggiAccount(d).some((a) => a.id === id);
   if (salvato || daChi) ricordaSessione(sessione, d);

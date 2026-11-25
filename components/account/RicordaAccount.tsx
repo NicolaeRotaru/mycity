@@ -40,7 +40,7 @@ export default function RicordaAccount() {
     const { data } = supabase.auth.onAuthStateChange((evento, sessione) => {
       const s = (sessione as SessioneMinima | null) ?? null;
       dopoEventoAccesso(evento, s, undefined, undefined, { sessioneNelDeposito: cookieDellAccesso() });
-      if (s?.user?.id && vedeEntrare(s.user.id, window.location.pathname)) setCambiato(true);
+      if (s?.user?.id && vedeEntrare(s.user.id, window.location.pathname, evento)) setCambiato(true);
     });
     const altraScheda = (e: StorageEvent) => {
       if (e.key !== CHIAVE_CAMBIO || !e.newValue) return;
