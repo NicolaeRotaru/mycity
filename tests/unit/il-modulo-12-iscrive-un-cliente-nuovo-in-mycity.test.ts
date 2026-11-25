@@ -115,7 +115,7 @@ describe('il negozio nasce come Ora del Gusto', () => {
       const { id_attivita } = (await (await chiama(BAR)).json()) as { id_attivita: string };
       await vi.waitFor(() => expect(chiamate).toHaveLength(1));
       expect(chiamate[0].url).toBe('https://n8n.example/webhook/mycity-nuovo-cliente');
-      expect(chiamate[0].corpo).toMatchObject({ tipo: 'nuovo-cliente', attivita: { id: id_attivita, nome: 'Bar Prova', tipo: 'bar', citta: 'Piacenza' } });
+      expect(chiamate[0].corpo).toMatchObject({ tipo: 'nuovo-cliente', provenienza: 'modulo-12', attivita: { id: id_attivita, nome: 'Bar Prova', tipo: 'bar', citta: 'Piacenza' } });
       expect((await chiama(BAR)).status).toBe(200);
       await new Promise((r) => setTimeout(r, 20));
       expect(chiamate).toHaveLength(1);

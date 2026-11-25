@@ -48,6 +48,16 @@ export function schedaPerIlSito(scheda: SchedaCliente | null | undefined, aperta
 }
 
 /**
+ * La scheda del link pubblico (solo campi confermati) con dentro l'analisi della scheda intera: dal 25/11
+ * il preventivo si cuce sull'analisi anche nel link (Nicola). `null` se non c'è nessuna delle due.
+ */
+export function conLAnalisi(confermata: SchedaCliente | null, intera: SchedaCliente | null | undefined): SchedaCliente | null {
+  if (!intera) return confermata;
+  if (!intera.analisi) return confermata;
+  return { ...(confermata ?? { ...intera, campi: {}, da_confermare: [] }), analisi: intera.analisi };
+}
+
+/**
  * Legge dal database se scheda e pagella sono aperte. Del profilo si chiede solo la colonna della
  * migrazione 709 (niente dati del titolare); se la colonna non c'è ancora vale «no» e decidono gli abbonamenti.
  */

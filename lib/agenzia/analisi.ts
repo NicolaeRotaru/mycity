@@ -302,3 +302,49 @@ export function dataItaliana(quando: string): string {
   if (Number.isNaN(d.getTime())) return quando;
   return d.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' });
 }
+
+/* ───────────── 4. L'analisi del business, come l'AD analizza MyCity come azienda (25/11/2026) ───────────── */
+
+/**
+ * Nicola, 25/11 alle 17:55: «vorrei che li fai il preventivo anche sulla parte di analisi sul suo business come
+ * fa AD su MyCity (non MyCity marketplace ma azienda)». La scrive l'AD col piano Max nel flusso 16 di n8n
+ * («Chiedi all'AD»), dalle sole fonti pubbliche e gratuite, e arriva dentro la scheda: `analisi.business`.
+ * È analisi, quindi vale subito, anche in demo. Ogni frase ha la sua fonte: una frase senza fonte https, con
+ * un prezzo, un telefono o un'email non si mostra.
+ */
+export const SEZIONI_BUSINESS = ['situazione', 'mercato', 'clienti', 'opportunita', 'rischi', 'prime_mosse'] as const;
+export type SezioneBusiness = (typeof SEZIONI_BUSINESS)[number];
+export const TITOLI_BUSINESS: Record<SezioneBusiness, string> = {
+  situazione: 'Com’è messa oggi',
+  mercato: 'Il mercato e i concorrenti vicini',
+  clienti: 'I clienti e la reputazione',
+  opportunita: 'Le opportunità',
+  rischi: 'I rischi',
+  prime_mosse: 'Le prime mosse',
+};
+export type FraseConFonte = { testo: string; fonte: string };
+export type AnalisiAziendale = Record<SezioneBusiness, FraseConFonte[]>;
+
+const CONTATTO = /[\w.+-]+@[\w-]+\.[\w.]+|\+?\d[\d\s.-]{7,}\d/;
+
+/** L'analisi del business della scheda, ripulita; `null` se non c'è o se nessuna frase regge. */
+export function analisiAziendale(scheda: SchedaCliente | null | undefined): AnalisiAziendale | null {
+  const grezza = (scheda?.analisi as Record<string, unknown> | undefined)?.business;
+  if (!grezza || typeof grezza !== 'object') return null;
+  let quante = 0;
+  const fuori = Object.fromEntries(
+    SEZIONI_BUSINESS.map((s) => {
+      const voci = Array.isArray((grezza as Record<string, unknown>)[s]) ? ((grezza as Record<string, unknown>)[s] as unknown[]) : [];
+      const pulite = voci
+        .map((v) => ({
+          testo: typeof (v as FraseConFonte)?.testo === 'string' ? (v as FraseConFonte).testo.replace(/\s+/g, ' ').trim() : '',
+          fonte: typeof (v as FraseConFonte)?.fonte === 'string' ? (v as FraseConFonte).fonte.trim() : '',
+        }))
+        .filter((v) => v.testo.length >= 10 && v.testo.length <= 300 && senzaPrezzo(v.testo) && !CONTATTO.test(v.testo) && fonteHttps.safeParse(v.fonte).success)
+        .slice(0, 3);
+      quante += pulite.length;
+      return [s, pulite];
+    }),
+  ) as AnalisiAziendale;
+  return quante ? fuori : null;
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import AnalisiAziendale from '@/components/seller/AnalisiAziendale';
 import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -181,6 +182,8 @@ export default function PaginaAbbonamento() {
         {/* L'offerta su misura (24/11): le cose precise che facciamo per lui, coi suoi dati; la fascia
             scelta segna quelle che comprende. */}
         <OffertaSuMisura offerta={p.offerta} fascia={p.attivo?.fascia ?? fascia} />
+        {/* 25/11/2026 — L'analisi del business dell'attività (Nicola): parte generale e parte specifica. */}
+        <AnalisiAziendale analisi={p.analisiAziendale} fascia={p.attivo?.fascia ?? fascia} nome={p.attivita} />
 
         {/* I tre abbonamenti: tutti comprendono tutti i servizi, cambia quanto (Nicola, 24/11). */}
         <section className="mt-6" aria-labelledby="le-tre-fasce">

@@ -73,9 +73,14 @@ export type NegozioPerLaBozza = {
   sito: string | null;
   bozzaIl: string | null;
   schedaIl: string | null;
+  /**
+   * 25/11/2026 — Quando la scheda si è aperta (il primo abbonamento pagato: lib/agenzia/scheda-dopo-abbonamento.ts).
+   * Una bozza scritta prima era senza i dati della scheda: va rifatta. `null` = non si sa o non c'entra.
+   */
+  schedaApertaIl?: string | null;
 };
 
-export type InAttesa = { aspetta: true; perche: 'nessuna_bozza' | 'scheda_nuova' } | { aspetta: false };
+export type InAttesa = { aspetta: true; perche: 'nessuna_bozza' | 'scheda_nuova' | 'scheda_aperta' } | { aspetta: false };
 
 /**
  * Un negozio aspetta la bozza se è un venditore vero, non ha ancora un sito suo e: non ha una bozza,
@@ -86,5 +91,7 @@ export function aspettaLaBozza(n: NegozioPerLaBozza): InAttesa {
   if ((n.sito ?? '').trim()) return { aspetta: false };
   if (!n.bozzaIl) return { aspetta: true, perche: 'nessuna_bozza' };
   if (n.schedaIl && new Date(n.schedaIl).getTime() > new Date(n.bozzaIl).getTime()) return { aspetta: true, perche: 'scheda_nuova' };
+  // La scheda c'era ma era chiusa (negozio in demo): al primo pagamento la bozza si rifà coi suoi dati.
+  if (n.schedaIl && n.schedaApertaIl && new Date(n.schedaApertaIl).getTime() > new Date(n.bozzaIl).getTime()) return { aspetta: true, perche: 'scheda_aperta' };
   return { aspetta: false };
 }

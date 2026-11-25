@@ -1,3 +1,4 @@
+import AnalisiAziendale from '@/components/seller/AnalisiAziendale';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { CheckCircle2 } from 'lucide-react';
@@ -138,6 +139,8 @@ export default async function PreventivoDalLink({
       </section>
 
       <OffertaSuMisura offerta={p.offerta} fascia={p.consigliato} />
+      {/* 25/11/2026 — L'analisi del business dell'attività (Nicola): parte generale e parte specifica. */}
+      <AnalisiAziendale analisi={p.analisiAziendale} fascia={p.consigliato} nome={p.attivita} />
 
       <section className="mt-6" aria-labelledby="abbonamenti">
         <h2 id="abbonamenti" className="text-lg font-bold text-ink-900">I tre abbonamenti</h2>

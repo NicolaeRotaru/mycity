@@ -119,3 +119,61 @@ describe('al primo abbonamento pagato', () => {
     expect(b.scritte).toEqual([]);
   });
 });
+
+// ── Dal collaudo del 25/11 e dall'aggiunta di Nicola delle 17:55 ──────────────────────────────────────────
+const { aspettaLaBozza } = await import('@/lib/agenzia/bozza-sito-ad');
+const { conLAnalisi } = await import('@/lib/agenzia/scheda-dopo-abbonamento');
+const { analisiAziendale } = await import('@/lib/agenzia/analisi');
+const { soloConfermati } = await import('@/lib/agenzia/scheda-cliente');
+
+describe('dopo il primo pagamento la bozza del sito si rifà coi dati della scheda', () => {
+  const base = { id: 'aaaaaaaa-0000-4000-8000-000000000001', ruolo: 'seller', sito: null, schedaIl: '2026-11-25T10:00:00Z', bozzaIl: '2026-11-25T12:00:00Z' };
+  it('bozza scritta in demo, pagamento dopo: la bozza aspetta di nuovo', () => {
+    expect(aspettaLaBozza({ ...base, schedaApertaIl: '2026-11-26T09:00:00Z' })).toEqual({ aspetta: true, perche: 'scheda_aperta' });
+  });
+  it('bozza scritta dopo il pagamento, o nessun pagamento: non aspetta', () => {
+    expect(aspettaLaBozza({ ...base, schedaApertaIl: '2026-11-25T11:00:00Z' })).toEqual({ aspetta: false });
+    expect(aspettaLaBozza({ ...base, schedaApertaIl: null })).toEqual({ aspetta: false });
+    expect(aspettaLaBozza({ ...base, schedaIl: null, schedaApertaIl: '2026-11-26T09:00:00Z' })).toEqual({ aspetta: false });
+  });
+});
+
+describe('il preventivo nel link si cuce sull analisi', () => {
+  it('nel link resta l analisi; dei campi solo i confermati (in demo nessuno)', () => {
+    const chiusa = schedaPerIlSito(SCHEDA, false);
+    const link = conLAnalisi(soloConfermati(chiusa), chiusa)!;
+    expect(link.campi).toEqual({});
+    expect(link.analisi).toEqual(SCHEDA.analisi);
+    const aperta = conLAnalisi(soloConfermati(SCHEDA), SCHEDA)!;
+    expect(Object.keys(aperta.campi)).toContain('indirizzo');
+    expect(conLAnalisi(null, null)).toBeNull();
+  });
+});
+
+describe('l analisi del business, come l AD analizza MyCity come azienda', () => {
+  const conBusiness = (business: unknown) => ({ ...SCHEDA, analisi: { ...SCHEDA.analisi, business } });
+  it('tiene solo le frasi con una fonte https, senza prezzi, telefoni o email; al massimo 3 per sezione', () => {
+    const a = analisiAziendale(conBusiness({
+      situazione: [{ testo: 'Trattoria a conduzione familiare in via Roma.', fonte: 'https://laragazzetta.it' }, { testo: 'Frase con fonte non sicura.', fonte: 'http://x.it' }],
+      mercato: [{ testo: 'Un piatto costa 12,50 euro come dai vicini.', fonte: 'https://x.it' }],
+      clienti: [{ testo: 'Chiamate il 333 123 4567 per prenotare.', fonte: 'https://x.it' }],
+      opportunita: [1, 2, 3, 4].map((i) => ({ testo: `Opportunità numero ${'abcd'[i - 1]} vista nelle recensioni.`, fonte: 'https://g.co/x' })),
+      rischi: 'non è un elenco',
+    }))!;
+    expect(a.situazione).toEqual([{ testo: 'Trattoria a conduzione familiare in via Roma.', fonte: 'https://laragazzetta.it' }]);
+    expect(a.mercato).toEqual([]);
+    expect(a.clienti).toEqual([]);
+    expect(a.opportunita).toHaveLength(3);
+    expect(a.rischi).toEqual([]);
+    expect(a.prime_mosse).toEqual([]);
+  });
+  it('senza analisi del business, o senza frasi valide: null (la pagina dice che la stiamo preparando)', () => {
+    expect(analisiAziendale(SCHEDA)).toBeNull();
+    expect(analisiAziendale(conBusiness({ situazione: [{ testo: 'corta', fonte: 'https://x.it' }] }))).toBeNull();
+    expect(analisiAziendale(null)).toBeNull();
+  });
+  it('vale subito: anche con la scheda chiusa (in demo) l analisi del business resta', () => {
+    const s = conBusiness({ prime_mosse: [{ testo: 'Mettere gli orari giusti sulla scheda Google.', fonte: 'https://maps.google.com/x' }] });
+    expect(analisiAziendale(schedaPerIlSito(s, false))?.prime_mosse).toHaveLength(1);
+  });
+});

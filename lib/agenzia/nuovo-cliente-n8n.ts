@@ -42,6 +42,13 @@ export type NuovaAttivitaPerIlFlusso = {
   indirizzo: string | null;
   citta: string | null;
   descrizione: string | null;
+  /**
+   * 25/11/2026 — Facoltativi. `sito`: il sito pubblico del locale (solo https). `dalModulo12`: l'attività l'ha
+   * appena iscritta il modulo 12 (porta /api/agenzia/nuova-attivita), quindi la sua riga Clienti c'è già e il
+   * 16 non la tratta come un doppione sospetto.
+   */
+  sito?: string | null;
+  dalModulo12?: boolean;
 };
 
 /**
@@ -107,7 +114,9 @@ export async function inviaNuovaAttivitaAlFlusso(
           indirizzo: corto(a.indirizzo, 200),
           citta: corto(a.citta, 80),
           descrizione: corto(a.descrizione, 500),
+          ...(a.sito && /^https:\/\//i.test(a.sito) ? { sito: corto(a.sito, 300) } : {}),
         },
+        ...(a.dalModulo12 ? { provenienza: 'modulo-12' } : {}),
       }),
       signal: AbortSignal.timeout(ATTESA_MASSIMA_MS),
     });

@@ -56,9 +56,8 @@ export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } 
     opzioni.conIDati
       ? admin.from('profiles').select('id, visibile_senza_abbonamento').eq('role', 'seller').limit(TETTO_NEGOZI)
       : Promise.resolve({ data: [], error: null }),
-    opzioni.conIDati
-      ? admin.from('abbonamenti_servizi').select('seller_id, stato').limit(TETTO_NEGOZI * 5)
-      : Promise.resolve({ data: [], error: null }),
+    // Sempre: serve anche a sapere quando la scheda si è aperta, e quindi se la bozza va rifatta.
+    admin.from('abbonamenti_servizi').select('seller_id, stato, creato_il').limit(TETTO_NEGOZI * 5),
   ]);
   if (negozi.error) throw new Error(`negozi non letti: ${negozi.error.message}`);
   if (bozze.error) throw new Error(`bozze non lette: ${bozze.error.message}`);
@@ -74,8 +73,15 @@ export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } 
       .map((r) => r.id),
   );
   const statiPerNegozio = new Map<string, unknown[]>();
-  for (const r of (abbonamenti.error ? [] : abbonamenti.data ?? []) as Array<{ seller_id: string; stato: unknown }>) {
+  // Il primo abbonamento pagato di ogni negozio: lì la scheda si è aperta.
+  const apertaIl = new Map<string, string>();
+  for (const r of (abbonamenti.error ? [] : abbonamenti.data ?? []) as Array<{ seller_id: string; stato: unknown; creato_il?: string | null }>) {
     statiPerNegozio.set(r.seller_id, [...(statiPerNegozio.get(r.seller_id) ?? []), r.stato]);
+    const quando = typeof r.creato_il === 'string' ? r.creato_il : null;
+    if (quando && schedaEPagellaAperte({ visibileSenzaAbbonamento: false, statiAbbonamenti: [r.stato] })) {
+      const prima = apertaIl.get(r.seller_id);
+      if (!prima || new Date(quando).getTime() < new Date(prima).getTime()) apertaIl.set(r.seller_id, quando);
+    }
   }
   const aperta = (id: string) =>
     schedaEPagellaAperte({ visibileSenzaAbbonamento: visibileSenzaAbbonamento.has(id), statiAbbonamenti: statiPerNegozio.get(id) });
@@ -86,7 +92,7 @@ export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } 
     const socials = (p.store_customization as { socials?: { website?: unknown } } | null)?.socials;
     const sito = typeof socials?.website === 'string' ? socials.website : null;
     const scheda = schedePerId.get(id);
-    const esito = aspettaLaBozza({ id, ruolo: String(p.role), sito, bozzaIl: bozzaIl.get(id) ?? null, schedaIl: scheda?.aggiornata_il ?? null });
+    const esito = aspettaLaBozza({ id, ruolo: String(p.role), sito, bozzaIl: bozzaIl.get(id) ?? null, schedaIl: scheda?.aggiornata_il ?? null, schedaApertaIl: apertaIl.get(id) ?? null });
     if (!esito.aspetta) continue;
     inAttesa.push({
       id_attivita: id,

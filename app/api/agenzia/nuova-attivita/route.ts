@@ -74,6 +74,8 @@ export async function POST(req: Request): Promise<NextResponse> {
         indirizzo: a.indirizzo ?? null,
         citta: a.citta ?? null,
         descrizione: null,
+        sito: fatto.sito ?? null,
+        dalModulo12: true,
       });
     };
     // Fuori da una richiesta (le prove) `after` non c'è: si lancia e basta, come l'analisi del sito.

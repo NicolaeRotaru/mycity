@@ -5,11 +5,13 @@ import { AlertTriangle, ClipboardCheck, Clock, Gauge, Lightbulb, Store, Users } 
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
 import CanaliDelNegozio from '@/components/seller/CanaliDelNegozio';
+import AnalisiAziendale from '@/components/seller/AnalisiAziendale';
 import type { SchedaCliente } from '@/lib/agenzia/scheda-cliente';
 import {
   CANALI_ANALIZZATI,
   NOMI_CANALI_ANALIZZATI,
   STATO_CANALE_IN_PAROLE,
+  analisiAziendale,
   analisiDellAttivita,
   dataItaliana,
   numeriInParole,
@@ -78,8 +80,8 @@ export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente 
   const { data: canali } = useQuery({ queryKey: CHIAVE_CANALI, queryFn: leggiCanali });
   // 25/11/2026 — La pagella arriva solo dopo l'abbonamento (Nicola): per chi è in demo `leggiPagella`
   // dà `null` e il blocco non si mostra. Anche se la lettura non riesce non si mostra niente: meglio
-  // nessun blocco che uno davanti a chi è in demo.
-  const { data: pagella } = useQuery({ queryKey: CHIAVE_PAGELLA, queryFn: leggiPagella });
+  // nessun blocco che uno davanti a chi è in demo. Se la lettura non riesce lo si dice, senza parlare di pagella.
+  const { data: pagella, isError: pagellaNonLetta } = useQuery({ queryKey: CHIAVE_PAGELLA, queryFn: leggiPagella });
   const attivita = analisiDellAttivita(scheda);
   const sito = analisi?.sito ?? null;
   const haSito = Boolean((canali?.website ?? '').trim());
@@ -108,6 +110,7 @@ export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente 
           <PagellaDelNegozio p={pagella} />
         </Blocco>
       )}
+      {pagellaNonLetta && <p className="mt-3 text-xs text-ink-500">Una parte della pagina non si è caricata: riprova fra poco.</p>}
 
       <Blocco icona={Store} titolo="La tua attività">
         {attivita ? (
@@ -128,6 +131,9 @@ export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente 
           <NonAncora>L’analisi della tua attività la prepariamo appena abbiamo letto le fonti pubbliche del tuo locale. La trovi qui.</NonAncora>
         )}
       </Blocco>
+
+      {/* 25/11/2026 — L'analisi del business dell'attività, come l'AD analizza MyCity come azienda (Nicola). */}
+      <AnalisiAziendale analisi={analisiAziendale(scheda)} />
 
       <Blocco icona={Lightbulb} titolo="I tuoi social e la scheda Google">
         {analisi?.canaliRichiestiIl && (
