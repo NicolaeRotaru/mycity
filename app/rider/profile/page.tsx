@@ -1,7 +1,6 @@
 'use client';
 
 import PushNotificationOptIn from '@/components/PushNotificationOptIn';
-import CambiaAccount from '@/components/account/CambiaAccount';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
@@ -326,8 +325,6 @@ export default function RiderProfilePage() {
               <ChevronRight size={17} className="shrink-0 text-ink-300" aria-hidden />
             </Link>
           ))}
-          {/* 25/11/2026 — Più account, senza uscire (Nicola). */}
-          <CambiaAccount />
           <button
             type="button"
             onClick={handleSignOut}

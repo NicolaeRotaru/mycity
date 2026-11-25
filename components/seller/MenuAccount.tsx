@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, BadgeCheck, ChevronsUpDown, ExternalLink, LogOut, Settings } from 'lucide-react';
-import CambiaAccount from '@/components/account/CambiaAccount';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { CHIAVE_PREVENTIVO, leggiPreventivoAgenzia } from '@/components/seller/preventivo-agenzia';
 import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
@@ -145,10 +144,6 @@ export default function MenuAccount({
             <Settings size={16} className="shrink-0 text-ink-500" aria-hidden />
             Profilo e impostazioni
           </Link>
-          {/* 25/11/2026 — Più account, senza uscire (Nicola). */}
-          <div className="border-t border-cream-200">
-            <CambiaAccount />
-          </div>
           <div className="border-t border-cream-200">
             <Link href="/?shop=1" className={voce}>
               <ExternalLink size={16} className="shrink-0 text-ink-500" aria-hidden />

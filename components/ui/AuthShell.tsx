@@ -152,12 +152,9 @@ export function AuthAlternatives({
       const ritorno = new URL('/auth/callback', window.location.origin);
       ritorno.searchParams.set('versione', VERSIONE_TESTI_LEGALI);
       if (returnTo && returnTo !== '/') ritorno.searchParams.set('next', returnTo);
-      // 25/11/2026 — «Aggiungi un altro account» (lib/account/piu-account.ts): Google deve chiedere quale
-      // account usare, se no rientra da solo con quello di prima e «Aggiungi» non fa niente.
-      const aggiunta = new URLSearchParams(window.location.search).get('aggiungi') === '1';
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: ritorno.toString(), ...(aggiunta ? { queryParams: { prompt: 'select_account' } } : {}) },
+        options: { redirectTo: ritorno.toString() },
       });
       if (error) throw error;
       // In caso di successo il browser viene rediretto a Google: non resettiamo.

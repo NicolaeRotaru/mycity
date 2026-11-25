@@ -19,7 +19,6 @@ import LocationPill from './LocationPill';
 import PromoTicker from './PromoTicker';
 import SearchBar from './SearchBar';
 import CategoryBar from './CategoryBar';
-import CambiaAccount from '@/components/account/CambiaAccount';
 import { getAccountMenuItems } from '@/lib/account-menu';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
 import { trackSignedOut } from '@/lib/analytics/events';
@@ -628,9 +627,6 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
                 ruolo principale li ha già; a chi ha anche un altro mestiere si aggiunge il suo. */}
             {role === 'admin' && isSeller && <MenuLink href="/seller/orders" icon={Package} label="Ordini ricevuti" />}
             {(role === 'admin' || role === 'seller') && isRider && <MenuLink href="/rider" icon={Bike} label="Consegne" />}
-            <li aria-hidden><div className="border-t border-ink-100 my-1" /></li>
-            {/* 25/11/2026 — Più account, senza uscire (Nicola). */}
-            <li><CambiaAccount /></li>
             <li aria-hidden><div className="border-t border-ink-100 my-1" /></li>
             <li>
               <button
