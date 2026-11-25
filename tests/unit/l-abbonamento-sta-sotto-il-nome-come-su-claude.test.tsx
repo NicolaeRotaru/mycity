@@ -117,6 +117,9 @@ describe('il menu del venditore, come su Claude', () => {
     expect(menu.querySelector('a[href="/?shop=1"]')?.textContent).toContain('Vai al marketplace');
     expect(Array.from(menu.querySelectorAll('button')).some((b) => b.textContent?.includes('Esci'))).toBe(true);
     expect(menu.textContent).toContain('pane@esempio.it');
+    // 25/11/2026 — Più account senza uscire (Nicola): il blocco sta nel menu, prima di Esci.
+    const cambio = menu.querySelector('[role="group"][aria-label="Cambia account"]');
+    expect(cambio?.textContent).toContain('Aggiungi un altro account');
   });
 
   it('un pagamento non riuscito si vede già sotto il nome, e nel menu', async () => {

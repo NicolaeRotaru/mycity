@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { getCart, saveCart, clearCart, fondiCarrelli, CART_UPDATED_AT_KEY, type CartItem } from '@/lib/cart';
 import { idUtenteInMemoria } from '@/components/hooks/useUtente';
+import { allineaUtenteDelBrowser } from '@/lib/account/piu-account';
 
 /**
  * Sincronizza il carrello locale (localStorage) con il cloud (Supabase) quando
@@ -127,11 +128,24 @@ export default function CartCrossDeviceSync() {
       }
     };
 
+    /**
+     * 25/11/2026 (più account, lib/account/piu-account.ts) — LA SPESA DI A FINIVA A B.
+     * Con più account sullo stesso dispositivo, nel browser poteva esserci il carrello di A quando
+     * entrava B, per più strade (aggiunta, un link e poi «indietro», un'altra scheda), e qui si fondeva
+     * nel carrello di B, anche sul server. La regola ora è una sola: prima di ogni fusione, i dati del
+     * browser diventano dell'account che entra (`allineaUtenteDelBrowser`), e quelli di un altro
+     * account vanno da parte per lui. Il carrello da ospite non è di nessuno e si fonde come sempre.
+     */
+    const sincronizzaGiu = (uid: string) => {
+      allineaUtenteDelBrowser(uid);
+      void syncDown(uid);
+    };
+
     const handleAuth = async () => {
       // #88 — Il token in memoria basta: la sincronizzazione del carrello non
       // e' un'operazione di sicurezza.
       userId = await idUtenteInMemoria();
-      if (userId) await syncDown(userId);
+      if (userId) sincronizzaGiu(userId);
     };
 
     // Sync iniziale
@@ -142,7 +156,7 @@ export default function CartCrossDeviceSync() {
       const precedente = userId;
       userId = session?.user?.id ?? null;
       if (userId) {
-        syncDown(userId);
+        sincronizzaGiu(userId);
         return;
       }
       // 106 — Mancava questo ramo. All'uscita il carrello restava nel browser:

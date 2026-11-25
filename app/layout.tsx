@@ -16,6 +16,7 @@ import ActivityTracker from '@/components/ActivityTracker';
 import DailyCheckIn from '@/components/DailyCheckIn';
 import WelcomeCreditBanner from '@/components/WelcomeCreditBanner';
 import CartCrossDeviceSync from '@/components/CartCrossDeviceSync';
+import RicordaAccount from '@/components/account/RicordaAccount';
 import BuyerOnboardingTour from '@/components/BuyerOnboardingTour';
 import PWAInstallBanner from '@/components/PWAInstallBanner';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
@@ -297,6 +298,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <SupportChatButton />
             <DailyCheckIn />
             <CartCrossDeviceSync />
+            {/* 25/11/2026 — Più account sullo stesso dispositivo (lib/account/piu-account.ts). */}
+            <RicordaAccount />
             <BuyerOnboardingTour />
             {APP_INSTALLABILE_ACCESA && <PWAInstallBanner />}
             </HydrationBoundary>

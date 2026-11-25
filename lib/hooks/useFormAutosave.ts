@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { cambioInCorso } from '@/lib/account/piu-account';
 
 /**
  * Autosave su localStorage (debounced). Pensato per la bozza del NUOVO
@@ -23,6 +24,9 @@ export function useFormAutosave<T>(
     if (!enabled) return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
+      // 25/11/2026 — Durante un cambio di account (lib/account/piu-account.ts) non si salva: il modulo
+      // dell'account di prima riscriverebbe la sua bozza nel posto di quello nuovo.
+      if (cambioInCorso()) return;
       try {
         localStorage.setItem(key, JSON.stringify(value));
       } catch {
