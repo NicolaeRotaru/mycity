@@ -189,3 +189,39 @@ describe('la nuova attività arriva alla scheda Clienti (flusso n8n 16, modulo 1
     expect(chiamate).toHaveLength(1);
   });
 });
+
+/**
+ * 25/11/2026 — Nicola: «sistema la città vuota verso n8n». Il modulo corto di /sell non chiede
+ * più la sede legale, e la città del flusso 16 veniva da lì. Adesso si ricava dall'indirizzo
+ * del negozio, che il modulo corto manda sempre.
+ */
+describe('la città arriva al flusso anche col modulo corto', () => {
+  it('senza sede legale, la città viene dall indirizzo del negozio', async () => {
+    collega();
+    const corto: Record<string, unknown> = {
+      businessType: 'bar', businessTypeDetail: '', storeName: 'Bar Roma', businessVatNumber: '01234567897',
+      contactPhone: '3331234567', acceptTos: true, acceptPrivacy: true, acceptAccuracy: true, acceptBilling: false,
+      storeAddress: 'Via Roma 1, 29121 Piacenza', storeLat: 45.05, storeLng: 9.69,
+    };
+    expect((await invia(corto)).status).toBe(200);
+    expect(chiamate).toHaveLength(1);
+    expect(JSON.parse(String(chiamate[0].init.body)).attivita.citta).toBe('Piacenza');
+  });
+
+  it('come scrivono davvero l indirizzo: la città giusta, o niente se non si capisce', async () => {
+    const { cittaDallIndirizzo } = await import('@/lib/agenzia/nuovo-cliente-n8n');
+    const casi: Array<[string, string | null]> = [
+      ['Via Roma 1, Piacenza', 'Piacenza'],
+      ['Via Roma 1, 29121 Piacenza', 'Piacenza'],
+      ['Via Roma 1, 29121 Piacenza PC', 'Piacenza'],
+      ['Corso Vittorio Emanuele II 5, 29121 Piacenza (PC), Italia', 'Piacenza'],
+      ['Via Emilia Parmense 10, San Lazzaro, Piacenza', 'Piacenza'],
+      ['Piazza Cavalli 2, Castel San Giovanni', 'Castel San Giovanni'],
+      ['Via Roma 1, 29121', null],
+      ['Via Roma 1 Piacenza', null],
+      ['', null],
+    ];
+    for (const [indirizzo, atteso] of casi) expect(cittaDallIndirizzo(indirizzo), indirizzo).toBe(atteso);
+  });
+});
+

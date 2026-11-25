@@ -12,7 +12,7 @@ import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ibanValido, normalizzaIban } from '@/app/sell/iban';
 import { MAX_DETTAGLIO_ATTIVITA, TIPI_ATTIVITA, descriviAttivita } from '@/lib/agenzia/tipi-attivita';
-import { inviaNuovaAttivitaAlFlusso } from '@/lib/agenzia/nuovo-cliente-n8n';
+import { cittaDallIndirizzo, inviaNuovaAttivitaAlFlusso } from '@/lib/agenzia/nuovo-cliente-n8n';
 
 export const runtime = 'nodejs';
 
@@ -362,7 +362,8 @@ export const POST = withAuthRateLimit(
         tipo: f.businessType ?? null,
         tipoDescritto: f.businessType ? descriviAttivita(f.businessType, f.businessTypeDetail) : null,
         indirizzo: f.storeAddress,
-        citta: f.businessCity ?? null,
+        // 25/11/2026 — Il modulo corto non chiede la sede legale: la città si ricava dall'indirizzo del negozio.
+        citta: f.businessCity ?? cittaDallIndirizzo(f.storeAddress),
         descrizione: f.storeDescription ?? null,
       });
     }

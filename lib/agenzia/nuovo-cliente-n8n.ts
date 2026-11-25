@@ -44,6 +44,33 @@ export type NuovaAttivitaPerIlFlusso = {
   descrizione: string | null;
 };
 
+/**
+ * 25/11/2026 — LA CITTÀ DALL'INDIRIZZO DEL NEGOZIO.
+ *
+ * Il modulo di iscrizione corto (/sell, mycity#320) non chiede più la sede legale, e la città
+ * che arrivava al flusso 16 veniva da lì: arrivava vuota. Nicola: «sistema la città vuota verso
+ * n8n». La si ricava dall'indirizzo che il negoziante scrive accanto alla mappa, quasi sempre
+ * «via, numero, città»: «Via Roma 1, 29121 Piacenza» → «Piacenza». Si guarda da destra, perché
+ * il comune sta dopo la frazione («Via Emilia 10, San Lazzaro, Piacenza» → «Piacenza»). Paese,
+ * regione, provincia, CAP da solo e numeri civici si saltano. Senza una virgola non si indovina:
+ * meglio vuota che sbagliata, la scheda del cliente la completa a mano chi la rilegge.
+ */
+const PAESI_E_REGIONI = /^(italia|italy|emilia[- ]romagna|lombardia|piemonte|liguria|veneto|toscana)$/i;
+
+export function cittaDallIndirizzo(indirizzo: string | null | undefined): string | null {
+  const parti = (indirizzo ?? '').split(',').map((p) => p.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  if (parti.length < 2) return null;
+  for (const parte of parti.slice(1).reverse()) {
+    const senzaProvincia = parte.replace(/\s*\(?\b[A-Z]{2}\)?$/, '').trim();
+    const conCap = senzaProvincia.match(/^\d{5}\s+(.+)$/);
+    const candidata = (conCap ? conCap[1] : senzaProvincia).trim();
+    if (!candidata || /\d/.test(candidata)) continue;
+    if (PAESI_E_REGIONI.test(candidata) || /^provincia\b/i.test(candidata)) continue;
+    return candidata.slice(0, 80);
+  }
+  return null;
+}
+
 const corto = (v: string | null | undefined, massimo: number): string | null => {
   const t = (v ?? '').replace(/\s+/g, ' ').trim();
   return t ? Array.from(t).slice(0, massimo).join('') : null;
