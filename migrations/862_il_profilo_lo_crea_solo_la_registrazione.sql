@@ -3,7 +3,7 @@
 -- =============================================================================
 -- COS'ERA ROTTO. Su `public.profiles` c'era la regola di inserimento «Profile is
 -- created on signup» (001), con un solo controllo: `auth.uid() = id`. La guardia
--- `enforce_profile_update_rules` (119, poi 365, 709, 861) scatta solo quando una
+-- `enforce_profile_update_rules` (119, poi 365 e 709) scatta solo quando una
 -- riga si CAMBIA (BEFORE UPDATE): sull'inserimento non c'e'. Quindi un utente
 -- collegato che non ha ancora la sua riga poteva crearsela col client del
 -- browser, con qualunque colonna: `role = 'admin'`, `is_approved = true`,
@@ -25,7 +25,10 @@
 -- col solo permesso tolto, una regola larga aspetterebbe il primo GRANT di
 -- troppo. Chi crea la riga resta chi la creava gia':
 --   · `handle_new_user`, SECURITY DEFINER: gira coi diritti del proprietario
---     della tabella, non di chi si registra;
+--     della tabella, non di chi si registra. Controllato in produzione il
+--     25/11/2026 in sola lettura: funzione e tabella sono tutte e due di
+--     `postgres`, che ha l'INSERT diretto (non lo riceve da `authenticated`) e
+--     la tabella non ha FORCE ROW LEVEL SECURITY;
 --   · il server con la chiave di servizio (`service_role`), per esempio
 --     /api/agenzia/nuova-attivita: il suo permesso non si tocca.
 -- Nel codice del sito nessuna `insert`/`upsert` su `profiles` usa il client del
