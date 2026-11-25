@@ -17,6 +17,7 @@ const stato = vi.hoisted(() => ({
   profilo: null as Record<string, unknown> | null,
   scritture: [] as Record<string, unknown>[],
   filtriScrittura: [] as Array<[string, unknown[]]>,
+  filtriLettura: [] as Array<[string, unknown[]]>,
   righeScritte: 1,
   avvisi: [] as string[][],
 }));
@@ -34,7 +35,10 @@ vi.mock('@/lib/supabase/server', () => ({
     from: () => {
       let valori: Record<string, unknown> | null = null;
       const c: Record<string, unknown> = {};
-      const filtro = (nome: string) => (...a: unknown[]) => { if (valori) stato.filtriScrittura.push([nome, a]); return c; };
+      const filtro = (nome: string) => (...a: unknown[]) => {
+        (valori ? stato.filtriScrittura : stato.filtriLettura).push([nome, a]);
+        return c;
+      };
       c.select = () => c;
       c.eq = filtro('eq');
       c.neq = filtro('neq');
@@ -66,6 +70,7 @@ beforeEach(() => {
   stato.profilo = { role: 'rider', approval_status: 'pending', full_name: 'Mario Rossi', ...vuoto };
   stato.scritture = [];
   stato.filtriScrittura = [];
+  stato.filtriLettura = [];
   stato.righeScritte = 1;
   stato.avvisi = [];
 });
@@ -77,6 +82,18 @@ describe('l anagrafica del fattorino si scrive dal server', () => {
     expect(stato.scritture).toEqual([{
       legal_first_name: 'Mario', legal_last_name: 'Rossi', legal_fiscal_code: 'RSSMRA90A01G535X', legal_birth_date: '1990-01-01',
     }]);
+  });
+
+  // Dal collaudo del 25/11: il finto database ignora i filtri, quindi senza questa prova togliere
+  // `.eq('id', user.id)` dalla scrittura restava verde, e la rotta avrebbe scritto su tutti i fattorini.
+  it('legge e scrive solo il profilo di chi chiama, anche se il corpo porta un altro id', async () => {
+    const r = await chiama({ ...giusto, id: 'altro-utente', userId: 'altro-utente' });
+    expect(r.status).toBe(200);
+    expect(stato.filtriLettura).toContainEqual(['eq', ['id', 'fattorino-1']]);
+    expect(stato.filtriScrittura).toContainEqual(['eq', ['id', 'fattorino-1']]);
+    const tuttiGliId = [...stato.filtriLettura, ...stato.filtriScrittura].filter(([, a]) => a[0] === 'id');
+    expect(tuttiGliId.every(([, a]) => a[1] === 'fattorino-1'), 'un id preso dal corpo arriva al database').toBe(true);
+    expect(stato.scritture[0]).not.toHaveProperty('id');
   });
 
   it('nella scrittura ricontrolla il ruolo e lo stato, e uno stato vuoto non è «sospeso»', async () => {
