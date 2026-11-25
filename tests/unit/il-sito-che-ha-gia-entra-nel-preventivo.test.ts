@@ -51,8 +51,9 @@ describe('il sito che ha già, nell’offerta', () => {
     expect(v?.perche).toMatch(/Foto piccole/);
   });
 
+  // 25/11/2026 — Dal Base si rifà solo il sito «semplice» (Nicola, «ok sito»): lib/agenzia/offerta-su-misura.ts.
   it('con tante pagine il Base rifà la pagina principale, non promette tutto il sito', () => {
-    const v = voceSito(offertaSuMisura({ ...base, sito: sito({ velocita: 40 }), giudizioSito: { aspetto: null, pagine: 'molte', nota: null } }));
+    const v = voceSito(offertaSuMisura({ ...base, sito: sito({ velocita: 40 }), giudizioSito: { aspetto: null, pagine: 'molte', nota: null, livello: 'semplice' } }));
     expect(v?.perFascia?.base).toMatch(/pagina principale/);
   });
 
@@ -63,8 +64,8 @@ describe('il sito che ha già, nell’offerta', () => {
 
 describe('il giudizio dell’AD sul sito', () => {
   it('tiene solo i valori dell’elenco e scarta una nota con un prezzo', () => {
-    expect(leggiGiudizioSito({ aspetto: 'bellissimo', pagine: 'molte', nota: 'Rifarlo costa 500 €' })).toEqual({ aspetto: null, pagine: 'molte', nota: null });
-    expect(leggiGiudizioSito({ aspetto: 'curato' })).toEqual({ aspetto: 'curato', pagine: null, nota: null });
+    expect(leggiGiudizioSito({ aspetto: 'bellissimo', pagine: 'molte', nota: 'Rifarlo costa 500 €' })).toEqual({ aspetto: null, pagine: 'molte', nota: null, livello: null, funzioni: [], migliorie: null });
+    expect(leggiGiudizioSito({ aspetto: 'curato' })).toEqual({ aspetto: 'curato', pagine: null, nota: null, livello: null, funzioni: [], migliorie: null });
     expect(leggiGiudizioSito('curato')).toBeNull();
     expect(leggiGiudizioSito({})).toBeNull();
   });
