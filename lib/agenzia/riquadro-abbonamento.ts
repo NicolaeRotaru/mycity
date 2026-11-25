@@ -55,9 +55,13 @@ const GIA_A_POSTO: Record<ServizioAgenzia, string> = {
 };
 
 /** I pulsanti verso i servizi (quattro dal 24/11/2026, con l'analisi del business), ognuno col primo «perché» vero letto dalla vetrina. */
-export function pulsantiServizi(righe: Preventivo['righe'] | null | undefined): PulsanteServizio[] {
+export function pulsantiServizi(
+  righe: Preventivo['righe'] | null | undefined,
+  /** Dove porta ogni servizio: la pagina del negozio, o quella del pannello demo del link col codice (25/11). */
+  hrefDi: (id: ServizioAgenzia) => string = hrefServizio,
+): PulsanteServizio[] {
   return SERVIZI_AGENZIA.map((id) => {
     const riga = righe?.find((r) => r.id === id);
-    return { id, href: hrefServizio(id), perche: riga?.perche[0] ?? GIA_A_POSTO[id] };
+    return { id, href: hrefDi(id), perche: riga?.perche[0] ?? GIA_A_POSTO[id] };
   });
 }

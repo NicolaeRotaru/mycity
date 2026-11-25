@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ABBONAMENTI, FASCE, canonePrimoMese, scriviCanone, type Abbonamento } from '@/lib/agenzia/preventivo';
 
 /**
@@ -21,6 +22,16 @@ export default function AccettaDalLink({
   primoMeseScontato: boolean;
 }) {
   const [fascia, setFascia] = useState<Abbonamento>(consigliato);
+  const router = useRouter();
+  // 25/11/2026 (collaudo) — Il modulo segue la fascia dell'indirizzo (?fascia=): cambiandola sopra, Next
+  // tiene il modulo e il suo stato, e si accettava una fascia diversa da quella letta. Si segue la fascia
+  // senza ricreare il modulo, così l'email già scritta e la spunta restano.
+  useEffect(() => { setFascia(consigliato); }, [consigliato]);
+  // E il contrario: scegliendo qui un'altra fascia, il preventivo sopra (titolo, offerta) diventa il suo.
+  const scegli = (f: Abbonamento) => {
+    setFascia(f);
+    router.replace(`?fascia=${f}`, { scroll: false });
+  };
   const [email, setEmail] = useState('');
   const [condizioni, setCondizioni] = useState(false);
   const [invio, setInvio] = useState(false);
@@ -81,7 +92,7 @@ export default function AccettaDalLink({
         <div className="mt-2 flex flex-wrap gap-2">
           {ABBONAMENTI.map((f) => (
             <label key={f} className={`cursor-pointer rounded-lg border-2 px-3 py-2 text-sm ${fascia === f ? 'border-primary-600 bg-primary-50' : 'border-cream-200'}`}>
-              <input type="radio" name="fascia" value={f} checked={fascia === f} onChange={() => setFascia(f)} className="sr-only" />
+              <input type="radio" name="fascia" value={f} checked={fascia === f} onChange={() => scegli(f)} className="sr-only" />
               {FASCE[f].nome} · {scriviCanone(prezzi[f])}
             </label>
           ))}

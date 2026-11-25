@@ -5,10 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Bell, Inbox, Package, Tag, Gift, Sparkles, MessageCircle, CheckCheck,
-  type LucideIcon,
-} from 'lucide-react';
+import { Inbox, CheckCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -17,6 +14,7 @@ import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
 import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
 import { useUtente } from '@/components/hooks/useUtente';
+import { toneFor, formatDate } from '@/lib/notifiche-aspetto';
 
 type Notification = {
   id: string;
@@ -27,40 +25,6 @@ type Notification = {
   is_read: boolean;
   created_at: string;
 };
-
-const formatDate = (iso: string) => {
-  const d = new Date(iso);
-  const diff = Date.now() - d.getTime();
-  if (diff < 60_000) return 'adesso';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} min fa`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} ore fa`;
-  return d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
-};
-
-/**
- * Tono icona-badge per tipo di notifica. Solo brand token (primary/secondary/
- * accent/olive) — nessun colore decorativo fuori palette. Il tipo è derivato
- * da link + titolo, dato che lo schema non ha una colonna `type` dedicata.
- */
-type Tone = { bg: string; fg: string; icon: LucideIcon };
-const TONES: Record<string, Tone> = {
-  order:    { bg: 'bg-primary-100',   fg: 'text-primary-700',   icon: Package },
-  promo:    { bg: 'bg-secondary-100', fg: 'text-secondary-700', icon: Tag },
-  gift:     { bg: 'bg-accent-100',    fg: 'text-accent-700',    icon: Gift },
-  loyalty:  { bg: 'bg-olive-100',     fg: 'text-olive-700',     icon: Sparkles },
-  message:  { bg: 'bg-primary-100',   fg: 'text-primary-700',   icon: MessageCircle },
-  default:  { bg: 'bg-cream-200',     fg: 'text-ink-600',       icon: Bell },
-};
-
-function toneFor(n: Notification): Tone {
-  const hay = `${n.link ?? ''} ${n.title} ${n.body ?? ''}`.toLowerCase();
-  if (/order|ordin|consegn|spedi|delivery|rider/.test(hay)) return TONES.order;
-  if (/promo|sconto|offert|saldo|deal|drop/.test(hay)) return TONES.promo;
-  if (/gift|regalo|buono|gift.?card/.test(hay)) return TONES.gift;
-  if (/punt|loyalty|livello|tier|premio|cashback|referral|invit/.test(hay)) return TONES.loyalty;
-  if (/messagg|chat|risposta/.test(hay)) return TONES.message;
-  return TONES.default;
-}
 
 /** Un errore di sessione (non c'è, è scaduta): quello sì manda all'accesso. Gli altri no. */
 function sessioneMancante(e: unknown): boolean {

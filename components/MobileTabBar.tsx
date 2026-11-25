@@ -65,6 +65,8 @@ export default function MobileTabBar() {
     pathname.startsWith('/checkout') ||
     pathname.startsWith('/seller') ||
     pathname.startsWith('/rider') ||
+    // 25/11/2026 — Il pannello demo del link col codice ha il suo menu.
+    pathname.startsWith('/preventivo/') ||
     /^\/messages\/[^/]+/.test(pathname);
 
   // 124 — La pagina riservava sempre 72px in fondo, anche dove questa barra non
