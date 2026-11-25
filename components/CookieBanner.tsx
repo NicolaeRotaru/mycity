@@ -8,6 +8,7 @@ import {
   writeConsent,
   acceptAll,
   rejectAll,
+  rinfrescaIlCookieDelConsenso,
   type ConsentState,
 } from '@/lib/consent';
 import {
@@ -38,8 +39,11 @@ import { corsieSotto, fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
  * col primo disegno invece che dopo il JavaScript. Il controllo nel browser resta quello di prima:
  * se il browser ha gia' una scelta valida, il banner si chiude.
  */
-export default function CookieBanner({ apertoDalServer = false }: { apertoDalServer?: boolean } = {}) {
+export default function CookieBanner({ apertoDalServer = false }: { apertoDalServer?: boolean }) {
   const [show, setShow] = useState(apertoDalServer);
+  // Il banner aperto dal server prende il fuoco solo dopo che il browser ha confermato che serve:
+  // se poi si chiude subito (scelta gia' fatta), il fuoco non resta rubato a chi stava scrivendo.
+  const [verificato, setVerificato] = useState(false);
   const titoloRef = useRef<HTMLHeadingElement>(null);
   const contenitoreRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<'compact' | 'custom'>('compact');
@@ -53,7 +57,10 @@ export default function CookieBanner({ apertoDalServer = false }: { apertoDalSer
     // Mostra se mai espresso o se scaduto: la scadenza (CONSENT_MAX_AGE_DAYS) la decide
     // readConsent, la stessa regola che leggono gli strumenti di misura.
     // La scelta salvata nel browser decide, nei due sensi.
-    setShow(!readConsent());
+    const scelta = readConsent();
+    if (scelta) rinfrescaIlCookieDelConsenso(scelta);
+    setShow(!scelta);
+    setVerificato(true);
     const onReopen = () => setShow(true);
     window.addEventListener('mc:open-consent', onReopen);
     return () => window.removeEventListener('mc:open-consent', onReopen);
@@ -74,7 +81,7 @@ export default function CookieBanner({ apertoDalServer = false }: { apertoDalSer
   // elementi che stava mettendo a fuoco. Ora il fuoco ci arriva subito e la
   // pagina lascia spazio in fondo mentre il banner è visibile.
   useEffect(() => {
-    if (!show) return;
+    if (!show || !verificato) return;
     titoloRef.current?.focus();
     const precedente = document.documentElement.style.scrollPaddingBottom;
     document.documentElement.style.scrollPaddingBottom = paddingDiScorrimento(
@@ -100,7 +107,7 @@ export default function CookieBanner({ apertoDalServer = false }: { apertoDalSer
       document.documentElement.style.scrollPaddingBottom = precedente;
       smettiDiSeguire();
     };
-  }, [show]);
+  }, [show, verificato]);
 
   if (!show) return null;
 

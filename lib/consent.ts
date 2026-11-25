@@ -183,6 +183,44 @@ export function hasConsent(category: ConsentCategory): boolean {
 }
 
 /**
+ * 25/11/2026 — C'E' UNA SCELTA VALIDA NEL COOKIE? LO CHIEDE IL SERVER PER DISEGNARE IL BANNER.
+ *
+ * Il banner dei cookie si accendeva solo nel browser, dopo che tutto il JavaScript era partito:
+ * su un telefono arrivava secondi dopo il resto della pagina, ed era l'ultima cosa a disegnarsi.
+ * Adesso il server guarda questo cookie e, se manca una scelta della versione in corso, manda il
+ * banner gia' aperto dentro la pagina. Il browser poi ricontrolla con `readConsent` come prima.
+ * Rifiutare tutto e' una scelta valida: conta la versione, non i «si'».
+ */
+/**
+ * 25/11/2026 — IL COOKIE SI RISCRIVE QUANDO MANCA MA LA SCELTA NEL BROWSER C'E'.
+ *
+ * Safari fa durare al massimo 7 giorni i cookie scritti dal JavaScript, mentre la scelta nel
+ * localStorage resta. Da quando il server apre il banner guardando il cookie, chi su iPhone aveva
+ * scelto da piu' di una settimana lo vedeva comparire e richiudersi a ogni pagina. Riscriverlo a ogni
+ * visita lo tiene vivo: stessa scelta, stessa scadenza di 180 giorni dalla scelta.
+ */
+export function rinfrescaIlCookieDelConsenso(stato: ConsentState): void {
+  if (typeof document === 'undefined') return;
+  const restanti = CONSENT_MAX_AGE_DAYS * 86_400 - Math.floor((Date.now() - stato.ts) / 1000);
+  if (restanti <= 0) return;
+  const valore = encodeURIComponent(
+    `${CONSENT_VERSION}:${stato.functional ? 1 : 0}${stato.analytics ? 1 : 0}${stato.marketing ? 1 : 0}`,
+  );
+  if (document.cookie.split('; ').includes(`${CONSENT_COOKIE}=${valore}`)) return;
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${CONSENT_COOKIE}=${valore}; path=/; max-age=${restanti}; SameSite=Lax${secure}`;
+}
+
+export function sceltaNelCookie(value: string | undefined): boolean {
+  if (!value) return false;
+  let decoded: string;
+  try { decoded = decodeURIComponent(value); } catch { return false; }
+  const duePunti = decoded.indexOf(':');
+  if (duePunti < 0) return false;
+  return decoded.slice(0, duePunti) === String(CONSENT_VERSION) && /^[01]{3}$/.test(decoded.slice(duePunti + 1));
+}
+
+/**
  * Parser server-side del cookie (per leggerlo in Server Components).
  * Restituisce uno stato minimale (no ts), abbastanza per decidere se caricare
  * un widget analytics o pubblicitario.
@@ -202,24 +240,6 @@ export function hasConsent(category: ConsentCategory): boolean {
  * informativa si riferisse, e un consenso di cui non si sa il contenuto non e'
  * un consenso. Chi ce l'ha se lo vedra' richiedere una volta.
  */
-/**
- * 25/11/2026 — C'E' UNA SCELTA VALIDA NEL COOKIE? LO CHIEDE IL SERVER PER DISEGNARE IL BANNER.
- *
- * Il banner dei cookie si accendeva solo nel browser, dopo che tutto il JavaScript era partito:
- * su un telefono arrivava secondi dopo il resto della pagina, ed era l'ultima cosa a disegnarsi.
- * Adesso il server guarda questo cookie e, se manca una scelta della versione in corso, manda il
- * banner gia' aperto dentro la pagina. Il browser poi ricontrolla con `readConsent` come prima.
- * Rifiutare tutto e' una scelta valida: conta la versione, non i «si'».
- */
-export function sceltaNelCookie(value: string | undefined): boolean {
-  if (!value) return false;
-  let decoded: string;
-  try { decoded = decodeURIComponent(value); } catch { return false; }
-  const duePunti = decoded.indexOf(':');
-  if (duePunti < 0) return false;
-  return decoded.slice(0, duePunti) === String(CONSENT_VERSION) && /^[01]{3}$/.test(decoded.slice(duePunti + 1));
-}
-
 export function parseConsentCookie(value: string | undefined): {
   functional: boolean;
   analytics: boolean;

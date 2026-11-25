@@ -128,7 +128,7 @@ function HomeBlock({
                     (carattere-del-titolo.ts): il titolo arriva col suo carattere al primo disegno. */}
                 <h1
                   className="break-words text-4xl md:text-5xl lg:text-6xl font-serif font-bold leading-[1.05] tracking-tight text-ink-900"
-                  style={{ fontFamily: carattereDelTitolo.style.fontFamily }}
+                  style={{ fontFamily: `${carattereDelTitolo.style.fontFamily}, Georgia, serif` }}
                 >
                   {headline}
                 </h1>
