@@ -202,6 +202,24 @@ export function hasConsent(category: ConsentCategory): boolean {
  * informativa si riferisse, e un consenso di cui non si sa il contenuto non e'
  * un consenso. Chi ce l'ha se lo vedra' richiedere una volta.
  */
+/**
+ * 25/11/2026 — C'E' UNA SCELTA VALIDA NEL COOKIE? LO CHIEDE IL SERVER PER DISEGNARE IL BANNER.
+ *
+ * Il banner dei cookie si accendeva solo nel browser, dopo che tutto il JavaScript era partito:
+ * su un telefono arrivava secondi dopo il resto della pagina, ed era l'ultima cosa a disegnarsi.
+ * Adesso il server guarda questo cookie e, se manca una scelta della versione in corso, manda il
+ * banner gia' aperto dentro la pagina. Il browser poi ricontrolla con `readConsent` come prima.
+ * Rifiutare tutto e' una scelta valida: conta la versione, non i «si'».
+ */
+export function sceltaNelCookie(value: string | undefined): boolean {
+  if (!value) return false;
+  let decoded: string;
+  try { decoded = decodeURIComponent(value); } catch { return false; }
+  const duePunti = decoded.indexOf(':');
+  if (duePunti < 0) return false;
+  return decoded.slice(0, duePunti) === String(CONSENT_VERSION) && /^[01]{3}$/.test(decoded.slice(duePunti + 1));
+}
+
 export function parseConsentCookie(value: string | undefined): {
   functional: boolean;
   analytics: boolean;

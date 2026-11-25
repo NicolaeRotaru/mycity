@@ -32,8 +32,14 @@ import { corsieSotto, fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
  *  - Re-prompt automatico ogni 6 mesi (CONSENT_MAX_AGE_DAYS)
  *  - Link a /cookies (informativa estesa)
  */
-export default function CookieBanner() {
-  const [show, setShow] = useState(false);
+/**
+ * 25/11/2026 — `apertoDalServer`: il server non ha trovato una scelta valida nel cookie
+ * (lib/consent.ts, sceltaNelCookie) e manda il banner gia' aperto nella pagina, cosi' si vede
+ * col primo disegno invece che dopo il JavaScript. Il controllo nel browser resta quello di prima:
+ * se il browser ha gia' una scelta valida, il banner si chiude.
+ */
+export default function CookieBanner({ apertoDalServer = false }: { apertoDalServer?: boolean } = {}) {
+  const [show, setShow] = useState(apertoDalServer);
   const titoloRef = useRef<HTMLHeadingElement>(null);
   const contenitoreRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<'compact' | 'custom'>('compact');
@@ -46,9 +52,8 @@ export default function CookieBanner() {
   useEffect(() => {
     // Mostra se mai espresso o se scaduto: la scadenza (CONSENT_MAX_AGE_DAYS) la decide
     // readConsent, la stessa regola che leggono gli strumenti di misura.
-    if (!readConsent()) {
-      setShow(true);
-    }
+    // La scelta salvata nel browser decide, nei due sensi.
+    setShow(!readConsent());
     const onReopen = () => setShow(true);
     window.addEventListener('mc:open-consent', onReopen);
     return () => window.removeEventListener('mc:open-consent', onReopen);
