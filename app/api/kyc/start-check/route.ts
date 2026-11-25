@@ -6,8 +6,15 @@ import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { cancelloEtaServer } from '@/lib/maggiore-eta';
 import { rispostaPerErroreDatabase } from '@/lib/api/errore-database';
+import { documentiObbligatoriDelFattorino } from '@/lib/admin/regole-approvazione';
 
 export const runtime = 'nodejs';
+
+/** Le frasi per il fattorino a cui manca un documento chiesto dal suo mezzo. */
+const MESSAGGIO_DOCUMENTO_MANCANTE: Partial<Record<string, string>> = {
+  rider_license_url: 'Carica la patente (richiesta per scooter/auto).',
+  rider_insurance_url: 'Carica polizza RC valida.',
+};
 
 /**
  * Avvia la verifica KYC per l'utente corrente.
@@ -41,7 +48,7 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
       legal_first_name, legal_last_name, legal_fiscal_code, legal_birth_date,
       business_vat_number,
       kyc_id_doc_front_url, kyc_id_doc_back_url, kyc_selfie_url,
-      rider_license_url, rider_insurance_url,
+      rider_license_url, rider_insurance_url, rider_vehicle_type,
       kyc_provider_check_id, kyc_provider_status
     `)
     .eq('id', user.id)
@@ -81,12 +88,19 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
       ? ApiErrors.forbidden(cancelloEta.messaggio ?? '')
       : ApiErrors.invalidRequest(cancelloEta.messaggio ?? '');
   }
+  /**
+   * 25/11/2026 — IL FATTORINO IN BICI NON CHIUDEVA MAI L'ISCRIZIONE.
+   *
+   * Qui si pretendevano sempre patente e polizza RC, qualunque fosse il mezzo. La pagina
+   * /rider/onboarding e l'approvazione (R03-024) invece in bici chiedono solo documento e selfie:
+   * il pulsante «Salva e avvia verifica» si apriva e questa rotta rispondeva 400 «Carica la
+   * patente». Ora i documenti del fattorino li decide la stessa regola, in un posto solo
+   * (lib/admin/regole-approvazione.ts). Documento e selfie sono già controllati sopra per tutti.
+   */
   if (profile.role === 'rider') {
-    if (!profile.rider_license_url) {
-      return ApiErrors.invalidRequest('Carica la patente (richiesta per scooter/auto).');
-    }
-    if (!profile.rider_insurance_url) {
-      return ApiErrors.invalidRequest('Carica polizza RC valida.');
+    const mancante = documentiObbligatoriDelFattorino(profile.rider_vehicle_type).find((d) => !profile[d.colonna]);
+    if (mancante) {
+      return ApiErrors.invalidRequest(MESSAGGIO_DOCUMENTO_MANCANTE[mancante.colonna] ?? `Carica ${mancante.nome}.`);
     }
   }
 

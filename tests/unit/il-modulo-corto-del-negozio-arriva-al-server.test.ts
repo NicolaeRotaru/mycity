@@ -18,7 +18,35 @@ const stato = vi.hoisted(() => ({
   profilo: null as Record<string, unknown> | null,
   scritture: [] as Record<string, unknown>[],
   avvisi: [] as string[][],
+  filtriScrittura: [] as Array<[string, unknown[]]>,
+  /**
+   * Se c'è, la scrittura conta le righe come Postgres: applica i filtri dell'UPDATE a questa
+   * riga (con l'id di chi chiama). Se manca, la scrittura trova sempre una riga, come prima.
+   */
+  rigaAllaScrittura: null as Record<string, unknown> | null,
 }));
+
+/** Come Postgres valuta i filtri di una scrittura su una riga: un confronto con NULL non è mai vero. */
+function passaIFiltri(riga: Record<string, unknown>, filtri: Array<[string, unknown[]]>): boolean {
+  const confronta = (colonna: string, op: string, valore: unknown): boolean => {
+    const v = riga[colonna];
+    if (op === 'is' && valore === 'null') return v === null || v === undefined;
+    if (v === null || v === undefined) return false;
+    if (op === 'eq') return String(v) === String(valore);
+    if (op === 'neq') return String(v) !== String(valore);
+    throw new Error(`filtro che la prova non sa valutare: ${colonna}.${op}.${String(valore)}`);
+  };
+  return filtri.every(([nome, a]) => {
+    if (nome === 'eq' || nome === 'neq') return confronta(String(a[0]), nome, a[1]);
+    if (nome === 'or') {
+      return String(a[0]).split(',').some((pezzo) => {
+        const [colonna, op, ...resto] = pezzo.split('.');
+        return confronta(colonna, op, resto.join('.'));
+      });
+    }
+    throw new Error(`filtro che la prova non sa valutare: ${nome}`);
+  });
+}
 
 vi.mock('@/lib/api/middleware', () => ({
   withAuthRateLimit: (_o: unknown, gestore: (ctx: Record<string, unknown>) => unknown) =>
@@ -28,22 +56,39 @@ vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: 
 vi.mock('@/lib/stripe/webhook/comune', () => ({
   notifyAdmins: async (...a: string[]) => { stato.avvisi.push(a); return 'scritto'; },
 }));
-vi.mock('@/lib/agenzia/nuovo-cliente-n8n', () => ({ inviaNuovaAttivitaAlFlusso: async () => undefined }));
+vi.mock('@/lib/agenzia/nuovo-cliente-n8n', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  inviaNuovaAttivitaAlFlusso: async () => undefined,
+}));
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     from: () => {
       let valori: Record<string, unknown> | null = null;
+      let chiedeRighe = false;
+      const filtri: Array<[string, unknown[]]> = [];
       const c: Record<string, unknown> = {};
-      c.select = () => c;
-      c.eq = () => c;
-      c.neq = () => c;
-      c.in = () => c;
-      c.or = () => c;
+      // I filtri messi dopo .update() sono quelli della scrittura: si registrano.
+      const filtro = (nome: string) => (...a: unknown[]) => {
+        if (valori) { filtri.push([nome, a]); stato.filtriScrittura.push([nome, a]); }
+        return c;
+      };
+      c.select = () => { if (valori) chiedeRighe = true; return c; };
+      c.eq = filtro('eq');
+      c.neq = filtro('neq');
+      c.in = filtro('in');
+      c.or = filtro('or');
       c.insert = async () => ({ error: null });
       c.maybeSingle = async () => ({ data: stato.profilo, error: null });
       c.update = (v: Record<string, unknown>) => { valori = v; stato.scritture.push(v); return c; };
-      (c as { then: unknown }).then = (ok: (v: unknown) => void) =>
-        ok(valori ? { data: [{ id: 'utente-1' }], error: null } : { data: null, error: null });
+      (c as { then: unknown }).then = (ok: (v: unknown) => void) => {
+        if (!valori) return ok({ data: null, error: null });
+        const riga = stato.rigaAllaScrittura;
+        if (!riga) return ok({ data: [{ id: 'utente-1' }], error: null });
+        // Come PostgREST: senza .select() dopo .update() non torna nessuna riga (data null).
+        if (!chiedeRighe) return ok({ data: null, error: null });
+        const trovata = passaIFiltri({ id: 'utente-1', ...riga }, filtri);
+        return ok({ data: trovata ? [{ id: 'utente-1' }] : [], error: null });
+      };
       return c;
     },
   }),
@@ -80,6 +125,8 @@ beforeEach(() => {
   stato.profilo = { role: 'buyer', approval_status: 'pending', approval_requested_at: null };
   stato.scritture = [];
   stato.avvisi = [];
+  stato.filtriScrittura = [];
+  stato.rigaAllaScrittura = null;
 });
 
 describe('il modulo corto arriva al server', () => {
@@ -203,6 +250,51 @@ describe('il secondo collaudo del 25/11', () => {
     expect(stato.avvisi).toHaveLength(1);
     expect(stato.avvisi[0][0]).toBe('Dati del titolare inseriti');
     expect(stato.avvisi[0][1]).toContain('ora si può approvare');
+  });
+});
+
+// 25/11/2026 — Difetto minore trovato da un collaudo: la scrittura filtrava con
+// `.neq('approval_status', 'suspended')`. In SQL `NULL <> 'suspended'` non è vero, quindi un
+// negozio vecchio con lo stato vuoto trovava 0 righe e riceveva sempre «ricarica la pagina».
+// Qui la scrittura conta le righe come Postgres (vedi passaIFiltri).
+describe('un negozio con lo stato di approvazione vuoto salva i dati del titolare', () => {
+  const titolare = {
+    legalFirstName: 'Mario', legalLastName: 'Rossi', legalFiscalCode: 'RSSMRA80E05G535X', legalBirthDate: '1980-05-05',
+    legalResidenceAddr: 'Via Roma 1', legalResidenceCity: 'Piacenza', legalResidenceZip: '29121',
+  };
+
+  // `rejected` c'è perché il rifiuto lascia il ruolo «seller» e la lettura lo fa passare: una
+  // scrittura con l'elenco degli stati ammessi al posto di «non sospeso» gli darebbe sempre 409.
+  it('stato vuoto, in attesa, approvato o rifiutato: la scrittura trova la riga e risponde 200', async () => {
+    for (const approval_status of [null, 'pending', 'approved', 'rejected']) {
+      stato.profilo = { role: 'seller', approval_status, store_name: 'Bar Roma' };
+      stato.rigaAllaScrittura = { role: 'seller', approval_status };
+      stato.scritture = [];
+      const r = await chiama(salvaTitolare, titolare, 'PATCH');
+      expect(r.status, `stato ${String(approval_status)}: «ricarica la pagina» invece di salvare`).toBe(200);
+      expect(stato.scritture).toHaveLength(1);
+    }
+  });
+
+  it('nella scrittura ricontrolla chi chiama e il ruolo, anche se il corpo porta un altro id', async () => {
+    stato.profilo = { role: 'seller', approval_status: null, store_name: 'Bar Roma' };
+    await chiama(salvaTitolare, { ...titolare, id: 'altro-utente', userId: 'altro-utente' }, 'PATCH');
+    expect(stato.filtriScrittura).toContainEqual(['eq', ['id', 'utente-1']]);
+    expect(stato.filtriScrittura).toContainEqual(['eq', ['role', 'seller']]);
+    const gliId = stato.filtriScrittura.filter(([, a]) => a[0] === 'id');
+    expect(gliId.every(([, a]) => a[1] === 'utente-1'), 'un id preso dal corpo arriva alla scrittura').toBe(true);
+    expect(stato.scritture[0]).not.toHaveProperty('id');
+  });
+
+  it('se fra la lettura e la scrittura il negozio è sospeso o non è più un negozio, non scrive: 409', async () => {
+    for (const riga of [{ role: 'seller', approval_status: 'suspended' }, { role: 'buyer', approval_status: null }]) {
+      stato.profilo = { role: 'seller', approval_status: 'approved', store_name: 'Bar Roma' };
+      stato.rigaAllaScrittura = riga;
+      stato.avvisi = [];
+      const r = await chiama(salvaTitolare, titolare, 'PATCH');
+      expect(r.status, `riga alla scrittura ${JSON.stringify(riga)}`).toBe(409);
+      expect(stato.avvisi).toEqual([]);
+    }
   });
 });
 

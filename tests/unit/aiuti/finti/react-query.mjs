@@ -146,6 +146,8 @@ export const useQueryClient = () => ({
     if (Array.isArray(globalThis.__CACHE_SCRITTA__)) globalThis.__CACHE_SCRITTA__.push(['annulla', filtro?.queryKey]);
   },
 });
+// 25/11/2026 — la pagina categoria calcola l'impronta delle file con hashKey (come react-query).
+export const hashKey = (chiave) => JSON.stringify(chiave);
 export class QueryClient {}
 export const QueryClientProvider = ({ children }) => children;
 export const keepPreviousData = undefined;

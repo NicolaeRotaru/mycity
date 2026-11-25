@@ -14,7 +14,17 @@
  *
  * Qui si chiude alla radice, per tutte le prove insieme e non una per una.
  */
-import { afterEach, beforeEach } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
+
+/**
+ * 25/11/2026 — next/font/local fuori da Next non parte: lo trasforma il compilatore di Next, e qui
+ * l'import vero non ha una funzione da chiamare. Il titolo della home precarica il suo carattere
+ * (components/home-sections/carattere-del-titolo.ts), quindi ogni prova che disegna la home lo
+ * incontrerebbe. Una prova che vuole un finto suo lo dichiara e vince su questo.
+ */
+vi.mock('next/font/local', () => ({
+  default: (o: { variable?: string } = {}) => ({ className: '', variable: o?.variable ?? '', style: { fontFamily: 'carattere-finto' } }),
+}));
 
 /**
  * ① LA RETE NON SI TOCCA.

@@ -196,12 +196,21 @@ describe('il corsivo del sito', () => {
 
   it('il dritto resta precaricato: il corsivo non deve rubargli il posto', () => {
     // `preload` vale per tutto il carattere, non per la singola variante: se
-    // qualcuno lo spegne per alleggerire il corsivo, spegne anche il dritto —
-    // e il dritto è quello del titolone, cioè l'elemento più grande della home.
-    for (const c of CARATTERI) {
-      expect(c.opzioni, `${c.nome} ha il precaricamento spento`).not.toMatch(
-        /preload\s*:\s*false/,
-      );
+    // qualcuno lo spegne per alleggerire il corsivo, spegne anche il dritto.
+    //
+    // 25/11/2026 — Fraunces nel layout NON si precarica piu', per scelta: dieci file su ogni
+    // pagina passavano davanti a tutto sul telefono (Lighthouse, LCP). Il dritto che conta — il
+    // titolone della home, l'elemento piu' grande — ha il suo precarico, solo in home, in
+    // components/home-sections/carattere-del-titolo.ts. La regola adesso e' doppia: Inter (il
+    // testo di ogni pagina) resta precaricato, e il carattere del titolo pure, dritto compreso.
+    for (const c of CARATTERI.filter((x) => x.nome !== 'Fraunces')) {
+      expect(c.opzioni, `${c.nome} ha il precaricamento spento`).not.toMatch(/preload\s*:\s*false/);
     }
+    const titolo = readFileSync('components/home-sections/carattere-del-titolo.ts', 'utf8');
+    expect(titolo, 'il carattere del titolo ha il precaricamento spento').not.toMatch(/preload\s*:\s*false/);
+    expect(titolo).toMatch(/fraunces-latin-700-normal\.woff2[^}]*style:\s*'normal'/);
+    expect(titolo).toMatch(/fraunces-latin-700-italic\.woff2[^}]*style:\s*'italic'/);
+    const eroe = readFileSync('components/home-sections/HomeSectionRenderer.tsx', 'utf8');
+    expect(eroe, 'il titolo della home non usa il carattere precaricato').toMatch(/carattereDelTitolo\.style\.fontFamily/);
   });
 });
