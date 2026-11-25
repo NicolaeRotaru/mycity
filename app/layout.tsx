@@ -76,6 +76,11 @@ const fraunces = localFont({
   ],
   variable: '--font-serif',
   display: 'swap',
+  // 25/11/2026 — Questi dieci file NON si precaricano piu': il browser scarica solo quelli che
+  // servono, quando trova del testo che li usa. Precaricati tutti, su ogni pagina, erano ~200 KiB
+  // che sul telefono passavano davanti alla cosa piu' grande da disegnare (Lighthouse: LCP).
+  // Il titolo della home ha il suo precarico, solo in home: components/home-sections/carattere-del-titolo.ts.
+  preload: false,
   adjustFontFallback: 'Times New Roman',
 });
 

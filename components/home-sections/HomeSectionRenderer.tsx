@@ -20,6 +20,7 @@ import LiveActivityFeed from '@/components/LiveActivityFeed';
 import NewsletterForm from '@/components/NewsletterForm';
 import DropOfDay from '@/components/home/DropOfDay';
 import HeroStoreCard from '@/components/home/HeroStoreCard';
+import { carattereDelTitolo } from './carattere-del-titolo';
 import HowItWorks from '@/components/home/HowItWorks';
 import HomeCtaLink from '@/components/home/HomeCtaLink';
 import ChipDelleCategorie from '@/components/home-sections/ChipDelleCategorie';
@@ -123,7 +124,12 @@ function HomeBlock({
                   <Sparkles size={14} strokeWidth={2.4} />
                   {eyebrow}
                 </span>
-                <h1 className="break-words text-4xl md:text-5xl lg:text-6xl font-serif font-bold leading-[1.05] tracking-tight text-ink-900">
+                {/* 25/11/2026 — Lo stesso Fraunces grassetto, dalla dichiarazione precaricata solo in home
+                    (carattere-del-titolo.ts): il titolo arriva col suo carattere al primo disegno. */}
+                <h1
+                  className="break-words text-4xl md:text-5xl lg:text-6xl font-serif font-bold leading-[1.05] tracking-tight text-ink-900"
+                  style={{ fontFamily: carattereDelTitolo.style.fontFamily }}
+                >
                   {headline}
                 </h1>
                 <p className="text-lg text-ink-600 max-w-xl leading-relaxed">{subhead}</p>
