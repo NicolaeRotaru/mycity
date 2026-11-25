@@ -8,11 +8,13 @@
  * sincronizzazione lo fondeva nel suo.
  *
  * Casi (dato → atteso), con la sincronizzazione VERA (components/CartCrossDeviceSync.tsx) e un
- * database finto che risponde come quello vero:
- *  · aggiunta in corso da A, pagina di accesso → il carrello di A non torna nel browser;
- *  · poi entra B → nessuna scrittura del carrello di B con la spesa di A;
- *  · se nel browser c'è ancora spesa quando entra B → va da parte per A, non a B;
- *  · senza aggiunta in corso → la sincronizzazione fa come prima (scarica il carrello).
+ * database finto che risponde come quello vero. Dal quarto collaudo la regola non dipende dalla strada
+ * (Nicola: «rifai la base»): quando entra un altro account, la spesa nel browser va da parte per chi
+ * c'era, prima di ogni fusione.
+ *  · «Aggiungi», poi entra B → nessuna scrittura del carrello di B con la spesa di A;
+ *  · un link dalla pagina di accesso e poi «indietro» (il segno dell'aggiunta si perde) → lo stesso;
+ *  · carrello da ospite → si fonde nell'account che entra, come sempre;
+ *  · senza più account → la sincronizzazione fa come prima.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, createElement } from 'react';
@@ -87,22 +89,11 @@ afterEach(() => {
   for (const r of accesi.splice(0)) act(() => r.unmount());
 });
 
-describe('«Aggiungi un altro account» e il carrello', () => {
-  it('sulla pagina di accesso il carrello di A non torna nel browser, e poi B non lo riceve', async () => {
-    sessionStorage.setItem(CHIAVE_AGGIUNTA, 'a'); // preparaAggiunta l'ha messo, e ha messo da parte la spesa
-    await monta();
-    expect(localStorage.getItem('cart')).toBeNull();
-    db.utente = 'b';
-    await act(async () => { db.ascolto?.('SIGNED_IN', { user: { id: 'b' } }); });
-    await aspetta();
-    expect(db.scritture.filter((w) => w.user_id === 'b')).toEqual([]);
-    expect(db.carrelli.b).toBeUndefined();
-  });
-
-  it('se quando entra B nel browser c è ancora spesa, va da parte per A e non a B', async () => {
+describe('più account e il carrello: la spesa di un account non va mai a un altro', () => {
+  it('«Aggiungi»: sulla pagina di accesso A ha il suo carrello; entra B e la spesa di A va da parte, non a B', async () => {
     sessionStorage.setItem(CHIAVE_AGGIUNTA, 'a');
     await monta();
-    localStorage.setItem('cart', JSON.stringify(SPESA_DI_A));
+    expect(JSON.parse(localStorage.getItem('cart') ?? '[]')).toEqual(SPESA_DI_A); // è ancora di A: va bene
     db.utente = 'b';
     await act(async () => { db.ascolto?.('SIGNED_IN', { user: { id: 'b' } }); });
     await aspetta();
@@ -111,7 +102,27 @@ describe('«Aggiungi un altro account» e il carrello', () => {
     expect(JSON.parse(localStorage.getItem('mycity:da-parte:a:cart') ?? 'null')).toEqual(SPESA_DI_A);
   });
 
-  it('senza un aggiunta in corso la sincronizzazione scarica il carrello come prima', async () => {
+  it('un link dalla pagina di accesso e poi «indietro» (segno dell aggiunta perso): B non riceve la spesa di A (quarto collaudo)', async () => {
+    await monta(); // nessun segno di aggiunta
+    expect(JSON.parse(localStorage.getItem('cart') ?? '[]')).toEqual(SPESA_DI_A);
+    db.utente = 'b';
+    await act(async () => { db.ascolto?.('SIGNED_IN', { user: { id: 'b' } }); });
+    await aspetta();
+    expect(db.scritture.filter((w) => w.user_id === 'b')).toEqual([]);
+    expect(localStorage.getItem('cart')).toBeNull();
+  });
+
+  it('il carrello da ospite si fonde nell account che entra, come sempre', async () => {
+    db.utente = null;
+    localStorage.setItem('cart', JSON.stringify([{ id: 'latte', quantity: 1 }]));
+    await monta();
+    db.utente = 'b';
+    await act(async () => { db.ascolto?.('SIGNED_IN', { user: { id: 'b' } }); });
+    await aspetta();
+    expect(db.scritture.filter((w) => w.user_id === 'b').map((w) => w.items)).toEqual([[{ id: 'latte', quantity: 1 }]]);
+  });
+
+  it('senza più account la sincronizzazione scarica il carrello come prima', async () => {
     await monta();
     expect(JSON.parse(localStorage.getItem('cart') ?? '[]').map((r: { id: string }) => r.id)).toEqual(['pane']);
   });

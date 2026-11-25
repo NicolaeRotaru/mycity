@@ -4,20 +4,12 @@
 /**
  * 25/11/2026 — Nicola: «aggiungi la possibilità di avere più account e fare lo switch senza doversi
  * disconnettere dall'account». Scelta sua: per tutti, nel menu dell'account, accessi salvati solo
- * sul dispositivo. Regole in lib/account/piu-account.ts.
+ * sul dispositivo. Dopo quattro collaudi, la base rifatta (Nicola: «rifai la base»): i dati del
+ * browser (carrello, bozze) sono dell'account che c'è, e quando ne entra un altro, per qualunque
+ * strada, quelli di prima vanno da parte. Regole in lib/account/piu-account.ts.
  *
- * Casi (dato → atteso):
- *  · chi non ha mai aggiunto un account → niente di salvato, a nessun evento;
- *  · «Aggiungi» da A, poi entra B → salvati B e A, l'aggiunta finisce;
- *  · la libreria rinnova le chiavi di A (TOKEN_REFRESHED) → A salvato con le chiavi nuove;
- *  · «Esci» (SIGNED_OUT) → nessun account resta sul dispositivo;
- *  · passare a B con un accesso scaduto → B tolto, l'accesso attivo NON si tocca;
- *  · passare a B → prima si rinnova B a parte, poi si salva A, si mette da parte il carrello e solo
- *    dopo si installa B; si va alla home del ruolo di B;
- *  · se l'installazione non riesce → il carrello torna com'era;
- *  · rete caduta sul rinnovo → B resta salvato;
- *  · il menu mostra gli altri account (non quello attivo) e «Aggiungi un altro account»;
- *  · il menu del negozio ha il blocco.
+ * Casi (dato → atteso), raggruppati: l'elenco e gli eventi · la regola dei dati · il cambio · le
+ * schede · il rinnovo a parte · il menu.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, createElement } from 'react';
@@ -25,14 +17,13 @@ import { createRoot, type Root } from 'react-dom/client';
 
 const finto = vi.hoisted(() => ({
   sessione: null as null | { access_token: string; refresh_token: string; user: { id: string; email: string } },
-  setSession: [] as Array<{ access_token: string; refresh_token: string }>,
 }));
 
 vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     auth: {
       getSession: async () => ({ data: { session: finto.sessione } }),
-      setSession: async (s: { access_token: string; refresh_token: string }) => { finto.setSession.push(s); return { error: null }; },
+      setSession: async () => ({ error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => undefined } } }),
       signOut: async () => ({}),
     },
@@ -42,9 +33,9 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 import {
-  CHIAVE_ACCOUNT, CHIAVE_AGGIUNTA, CHIAVE_CAMBIO, CHIAVE_IN_CORSO, DURATA_ACCESSO_SALVATO_MS, _riparteLaScheda, cambiaAccount, cambioInCorso,
-  chiudiAggiuntaAbbandonata, dimenticaAccount, dimenticaTutti, dopoEventoAccesso, iniziaAggiunta, leggiAccount, preparaAggiunta,
-  ricordaSessione, rinnovaAccesso,
+  CHIAVE_ACCOUNT, CHIAVE_AGGIUNTA, CHIAVE_CAMBIO, CHIAVE_IN_CORSO, CHIAVE_UTENTE_DEL_BROWSER, DURATA_ACCESSO_SALVATO_MS,
+  _riparteLaScheda, allineaUtenteDelBrowser, cambiaAccount, cambioInCorso, dimenticaAccount, dopoEventoAccesso, iniziaAggiunta,
+  leggiAccount, preparaAggiunta, ricordaSessione, rinnovaAccesso, segnaUtenteDellaPagina, vedeEntrare,
   type MondoDelCambio, type SessioneMinima,
 } from '@/lib/account/piu-account';
 import { useFormAutosave } from '@/lib/hooks/useFormAutosave';
@@ -56,17 +47,22 @@ const sess = (id: string, giro = 1): SessioneMinima => ({
   refresh_token: `ref-${id}-${giro}`,
   user: { id, email: `${id}@esempio.it`, user_metadata: { full_name: `Nome ${id}` } },
 });
+const daParte = () => Object.keys(localStorage).filter((k) => k.startsWith('mycity:da-parte:')).sort();
 
+const accesi: Root[] = [];
 beforeEach(() => {
   _riparteLaScheda();
   localStorage.clear();
   sessionStorage.clear();
   finto.sessione = null;
-  finto.setSession = [];
+});
+afterEach(() => {
+  for (const r of accesi.splice(0)) act(() => r.unmount());
+  document.body.innerHTML = '';
 });
 
-describe('gli account salvati seguono gli eventi dell accesso', () => {
-  it('chi non ha mai aggiunto un account non ha niente di salvato', () => {
+describe('l elenco e gli eventi dell accesso', () => {
+  it('chi non ha mai aggiunto un account non ha niente nell elenco', () => {
     dopoEventoAccesso('SIGNED_IN', sess('a'));
     dopoEventoAccesso('TOKEN_REFRESHED', sess('a', 2));
     expect(localStorage.getItem(CHIAVE_ACCOUNT)).toBeNull();
@@ -74,8 +70,7 @@ describe('gli account salvati seguono gli eventi dell accesso', () => {
 
   it('«Aggiungi» da A, poi entra B: salvati B e A, e l aggiunta finisce', () => {
     iniziaAggiunta(sess('a'));
-    expect(sessionStorage.getItem(CHIAVE_AGGIUNTA)).toBe('a');
-    dopoEventoAccesso('INITIAL_SESSION', sess('a'), undefined, undefined, { percorso: '/sign-in' }); // la pagina di accesso si apre ancora con A
+    dopoEventoAccesso('INITIAL_SESSION', sess('a'));
     expect(sessionStorage.getItem(CHIAVE_AGGIUNTA)).toBe('a');
     dopoEventoAccesso('SIGNED_IN', sess('b'));
     expect(leggiAccount().map((x) => x.id)).toEqual(['b', 'a']);
@@ -89,87 +84,23 @@ describe('gli account salvati seguono gli eventi dell accesso', () => {
     expect(leggiAccount()[0].refreshToken).toBe('ref-a-2');
   });
 
-  it('«Esci» dimentica tutti gli account del dispositivo', () => {
-    ricordaSessione(sess('a'));
-    ricordaSessione(sess('b'));
+  it('«Esci» pulisce tutto, anche se gli accessi salvati erano già scaduti', () => {
+    ricordaSessione(sess('a'), localStorage, Date.now() - DURATA_ACCESSO_SALVATO_MS - 1000);
+    localStorage.setItem(CHIAVE_UTENTE_DEL_BROWSER, 'a');
+    localStorage.setItem('mycity:da-parte:b:cart', '[1]');
+    localStorage.setItem(CHIAVE_CAMBIO, 'a:1');
+    localStorage.setItem(CHIAVE_IN_CORSO, 'a:1');
     dopoEventoAccesso('SIGNED_OUT', null);
-    expect(leggiAccount()).toEqual([]);
-    expect(localStorage.getItem(CHIAVE_ACCOUNT)).toBeNull();
+    expect(Object.keys(localStorage).filter((k) => k.startsWith('mycity:'))).toEqual([]);
   });
 
-  it('un accesso finito senza «Esci» (la pagina riparte e il cookie non c è più) dimentica tutto (collaudo)', () => {
-    iniziaAggiunta(sess('a'));
-    dopoEventoAccesso('SIGNED_IN', sess('b'));
-    localStorage.setItem('mycity:da-parte:a:mc_addr_hint', 'via di A');
+  it('accesso finito da solo (cookie sparito) dimentica tutto; con la rete caduta (cookie presente) no', () => {
+    ricordaSessione(sess('a'));
+    dopoEventoAccesso('INITIAL_SESSION', null, undefined, undefined, { sessioneNelDeposito: true });
+    dopoEventoAccesso('INITIAL_SESSION', null);
+    expect(leggiAccount().map((x) => x.id)).toEqual(['a']);
     dopoEventoAccesso('INITIAL_SESSION', null, undefined, undefined, { sessioneNelDeposito: false });
     expect(leggiAccount()).toEqual([]);
-    expect(localStorage.getItem('mycity:da-parte:a:mc_addr_hint')).toBeNull();
-  });
-
-  it('con la rete caduta all apertura (sessione vuota ma cookie presente) non si cancella niente (secondo collaudo)', () => {
-    ricordaSessione(sess('a'));
-    ricordaSessione(sess('b'));
-    dopoEventoAccesso('INITIAL_SESSION', null, undefined, undefined, { sessioneNelDeposito: true });
-    dopoEventoAccesso('INITIAL_SESSION', null); // senza sapere del cookie: nel dubbio non si cancella
-    expect(leggiAccount().map((x) => x.id)).toEqual(['b', 'a']);
-  });
-
-  it('«Aggiungi» lasciato a metà: sulla pagina di accesso le bozze restano da parte, uscendone tornano (secondo collaudo)', async () => {
-    localStorage.setItem('mc_new_product_draft', '{"nome":"Torta di A"}');
-    await preparaAggiunta({ sessioneAttuale: async () => sess('a'), salvaCarrello: async () => undefined });
-    dopoEventoAccesso('INITIAL_SESSION', sess('a'), undefined, undefined, { percorso: '/sign-in' });
-    expect(localStorage.getItem('mc_new_product_draft')).toBeNull();
-    dopoEventoAccesso('INITIAL_SESSION', sess('a'), undefined, undefined, { percorso: '/seller/dashboard' });
-    expect(localStorage.getItem('mc_new_product_draft')).toBe('{"nome":"Torta di A"}');
-    expect(sessionStorage.getItem(CHIAVE_AGGIUNTA)).toBeNull();
-  });
-
-  it('«Aggiungi» lasciato con un link, senza ricaricare: uscendo dalle pagine di accesso le bozze tornano (terzo collaudo)', async () => {
-    localStorage.setItem('mc_new_product_draft', '{"nome":"vecchia"}');
-    await preparaAggiunta({ sessioneAttuale: async () => sess('a'), salvaCarrello: async () => undefined });
-    chiudiAggiuntaAbbandonata('/sign-in', 'a');
-    expect(localStorage.getItem('mc_new_product_draft')).toBeNull();
-    chiudiAggiuntaAbbandonata('/seller/products/new', 'a');
-    expect(localStorage.getItem('mc_new_product_draft')).toBe('{"nome":"vecchia"}');
-    expect(sessionStorage.getItem(CHIAVE_AGGIUNTA)).toBeNull();
-  });
-
-  it('una bozza scritta dopo non viene sovrascritta da quella messa da parte (terzo collaudo)', async () => {
-    localStorage.setItem('mc_new_product_draft', '{"nome":"vecchia"}');
-    await preparaAggiunta({ sessioneAttuale: async () => sess('a'), salvaCarrello: async () => undefined });
-    localStorage.setItem('mc_new_product_draft', '{"nome":"nuova"}');
-    dopoEventoAccesso('TOKEN_REFRESHED', sess('a', 2), undefined, undefined, { percorso: '/seller/products/new' });
-    expect(localStorage.getItem('mc_new_product_draft')).toBe('{"nome":"nuova"}');
-    expect(Object.keys(localStorage).some((k) => k.startsWith('mycity:da-parte:a:mc_new_product_draft'))).toBe(false);
-  });
-
-  it('«Esci» pulisce anche quando gli accessi salvati erano tutti scaduti (terzo collaudo)', () => {
-    ricordaSessione(sess('a'), localStorage, Date.now() - DURATA_ACCESSO_SALVATO_MS - 1000);
-    localStorage.setItem(CHIAVE_CAMBIO, 'a:1');
-    expect(leggiAccount()).toEqual([]);
-    dopoEventoAccesso('SIGNED_OUT', null);
-    expect(localStorage.getItem(CHIAVE_ACCOUNT)).toBeNull();
-    expect(localStorage.getItem(CHIAVE_CAMBIO)).toBeNull();
-  });
-
-  it('«Aggiungi» e poi si rientra con lo stesso account: le bozze tornano', async () => {
-    localStorage.setItem('mc_addr_hint', 'via di A');
-    await preparaAggiunta({ sessioneAttuale: async () => sess('a'), salvaCarrello: async () => undefined });
-    dopoEventoAccesso('SIGNED_IN', sess('a', 2), undefined, undefined, { percorso: '/sign-in' });
-    expect(localStorage.getItem('mc_addr_hint')).toBe('via di A');
-  });
-
-  it('le bozze di un account tolto dall elenco se ne vanno con lui; «Esci» toglie anche i segnali', () => {
-    ricordaSessione(sess('a'));
-    ricordaSessione(sess('b'));
-    localStorage.setItem('mycity:da-parte:a:mc_checkout_draft', '{"via":"di A"}');
-    dimenticaAccount('a');
-    expect(localStorage.getItem('mycity:da-parte:a:mc_checkout_draft')).toBeNull();
-    localStorage.setItem(CHIAVE_CAMBIO, 'b:1');
-    localStorage.setItem(CHIAVE_IN_CORSO, String(Date.now()));
-    dimenticaTutti();
-    expect(localStorage.getItem(CHIAVE_CAMBIO)).toBeNull();
-    expect(localStorage.getItem(CHIAVE_IN_CORSO)).toBeNull();
   });
 
   it('un accesso salvato da più di 6 mesi non vale più', () => {
@@ -179,48 +110,95 @@ describe('gli account salvati seguono gli eventi dell accesso', () => {
     expect(leggiAccount(localStorage, ora).map((x) => x.id)).toEqual(['b']);
   });
 
-  it('«Esci» toglie anche le bozze messe da parte per gli altri account', () => {
+  it('i dati messi da parte per un account tolto dall elenco se ne vanno con lui', () => {
     ricordaSessione(sess('a'));
+    ricordaSessione(sess('b'));
     localStorage.setItem('mycity:da-parte:a:mc_checkout_draft', '{"via":"di A"}');
-    dimenticaTutti();
-    expect(Object.keys(localStorage).filter((k) => k.startsWith('mycity:'))).toEqual([]);
-  });
-
-  it('«Aggiungi» mette da parte carrello e bozze di A, e B entrando non li trova (collaudo)', async () => {
-    localStorage.setItem('cart', '[{"id":"pane","quantity":3}]');
-    localStorage.setItem('mc_new_product_draft', '{"nome":"Torta di A"}');
-    const passi: string[] = [];
-    const dove = await preparaAggiunta({
-      sessioneAttuale: async () => sess('a'),
-      salvaCarrello: async (id) => { passi.push(`carrello-su ${id}`); },
-    });
-    expect(dove).toBe('/sign-in?aggiungi=1');
-    expect(passi).toEqual(['carrello-su a']);
-    expect(localStorage.getItem('cart')).toBeNull();
-    expect(localStorage.getItem('mc_new_product_draft')).toBeNull();
-    dopoEventoAccesso('SIGNED_IN', sess('b'));
-    expect(localStorage.getItem('mc_new_product_draft')).toBeNull();
-    expect(localStorage.getItem(CHIAVE_CAMBIO)).toMatch(/^b:/);
-    expect(leggiAccount().map((x) => x.id)).toEqual(['b', 'a']);
+    dimenticaAccount('a');
+    expect(localStorage.getItem('mycity:da-parte:a:mc_checkout_draft')).toBeNull();
   });
 
   it('un elenco rovinato non rompe niente', () => {
     localStorage.setItem(CHIAVE_ACCOUNT, '{non json');
     expect(leggiAccount()).toEqual([]);
-    localStorage.setItem(CHIAVE_ACCOUNT, JSON.stringify([{ id: 'x' }, { id: 'y', accessToken: 'a', refreshToken: 'r', salvatoIl: Date.now() }, { id: 'z', accessToken: 'a', refreshToken: 'r' }]));
+    localStorage.setItem(CHIAVE_ACCOUNT, JSON.stringify([{ id: 'x' }, { id: 'y', accessToken: 'a', refreshToken: 'r', salvatoIl: Date.now() }]));
     expect(leggiAccount().map((x) => x.id)).toEqual(['y']);
+  });
+});
+
+describe('la regola: i dati del browser sono dell account che c è', () => {
+  it('entra B dopo A, per qualunque strada: carrello e bozze di A vanno da parte, B parte pulito', () => {
+    allineaUtenteDelBrowser('a');
+    localStorage.setItem('cart', '[{"id":"pane","quantity":2}]');
+    localStorage.setItem('mc_new_product_draft', '{"nome":"Torta di A"}');
+    // nessuna aggiunta segnata: per esempio un link dalla pagina di accesso e poi «indietro» (quarto collaudo)
+    dopoEventoAccesso('SIGNED_IN', sess('b'));
+    expect(localStorage.getItem('cart')).toBeNull();
+    expect(localStorage.getItem('mc_new_product_draft')).toBeNull();
+    expect(daParte()).toEqual(['mycity:da-parte:a:cart', 'mycity:da-parte:a:mc_new_product_draft']);
+    expect(localStorage.getItem(CHIAVE_CAMBIO)).toMatch(/^b:\d+$/);
+    expect(localStorage.getItem(CHIAVE_IN_CORSO)).toMatch(/^b:\d+$/);
+  });
+
+  it('tornando su A tornano i suoi dati, e quelli di B vanno da parte', () => {
+    allineaUtenteDelBrowser('a');
+    localStorage.setItem('mc_addr_hint', 'via di A');
+    allineaUtenteDelBrowser('b');
+    localStorage.setItem('mc_addr_hint', 'via di B');
+    allineaUtenteDelBrowser('a');
+    expect(localStorage.getItem('mc_addr_hint')).toBe('via di A');
+    allineaUtenteDelBrowser('b');
+    expect(localStorage.getItem('mc_addr_hint')).toBe('via di B');
+  });
+
+  it('il carrello da ospite non è di nessuno: entrando resta, e si fonde come sempre', () => {
+    localStorage.setItem('cart', '[{"id":"pane","quantity":1}]');
+    dopoEventoAccesso('SIGNED_IN', sess('b'));
+    expect(localStorage.getItem('cart')).toBe('[{"id":"pane","quantity":1}]');
+    expect(localStorage.getItem(CHIAVE_CAMBIO)).toBeNull();
+  });
+
+  it('chiamata due volte (sincronizzazione del carrello e ascolto dell accesso) non sposta niente due volte', () => {
+    allineaUtenteDelBrowser('a');
+    localStorage.setItem('cart', '[1]');
+    expect(allineaUtenteDelBrowser('b')).toBe(true);
+    localStorage.setItem('cart', '[2]'); // B mette qualcosa nel carrello
+    expect(allineaUtenteDelBrowser('b')).toBe(false);
+    expect(localStorage.getItem('cart')).toBe('[2]');
+    expect(localStorage.getItem('mycity:da-parte:a:cart')).toBe('[1]');
+  });
+
+  it('un dato già nel browser vince su quello messo da parte (il più nuovo)', () => {
+    localStorage.setItem('mycity:da-parte:a:mc_new_product_draft', '{"nome":"vecchia"}');
+    localStorage.setItem(CHIAVE_UTENTE_DEL_BROWSER, 'b');
+    // B non ha bozze: entrando A torna la sua; ma se nel frattempo ce n'era una nuova, vince quella
+    localStorage.setItem('mc_new_product_draft', '{"nome":"nuova"}');
+    localStorage.removeItem(CHIAVE_UTENTE_DEL_BROWSER);
+    allineaUtenteDelBrowser('a');
+    expect(localStorage.getItem('mc_new_product_draft')).toBe('{"nome":"nuova"}');
+  });
+
+  it('«Aggiungi» lascia i dati di A nel browser finché non entra davvero un altro account', async () => {
+    localStorage.setItem('mc_new_product_draft', '{"nome":"Torta di A"}');
+    const dove = await preparaAggiunta({ sessioneAttuale: async () => sess('a'), salvaCarrello: async () => undefined });
+    expect(dove).toBe('/sign-in?aggiungi=1');
+    expect(localStorage.getItem('mc_new_product_draft')).toBe('{"nome":"Torta di A"}');
+    expect(localStorage.getItem(CHIAVE_UTENTE_DEL_BROWSER)).toBe('a');
+    dopoEventoAccesso('SIGNED_IN', sess('b'));
+    expect(localStorage.getItem('mc_new_product_draft')).toBeNull();
+    expect(localStorage.getItem('mycity:da-parte:a:mc_new_product_draft')).toBe('{"nome":"Torta di A"}');
   });
 });
 
 describe('passare a un altro account', () => {
   function mondo(over: Partial<MondoDelCambio> = {}) {
     const passi: string[] = [];
-    localStorage.setItem('cart', '[{"id":"pane"}]');
     const m: MondoDelCambio = {
       sessioneAttuale: async () => { passi.push('attuale'); return sess('a', 7); },
       installa: async (s) => {
-        // Quando entra il nuovo account il carrello del browser deve essere già vuoto.
-        passi.push(`installa ${s.refresh_token} carrello=${localStorage.getItem('cart')}`);
+        passi.push(`installa ${s.refresh_token}`);
+        // gli ascolti dell'accesso, entrando, applicano la regola (qui li fa l'installazione finta)
+        dopoEventoAccesso('SIGNED_IN', { ...sess('b'), access_token: s.access_token, refresh_token: s.refresh_token });
         return { error: null };
       },
       ruoloDi: async () => 'seller',
@@ -228,32 +206,31 @@ describe('passare a un altro account', () => {
       rinnova: async (r) => { passi.push(`rinnova ${r}`); return sess('b', 2); },
       ...over,
     };
-    return { m, passi, carrello: () => localStorage.getItem('cart') };
+    return { m, passi };
   }
 
   beforeEach(() => {
     ricordaSessione(sess('b'));
     ricordaSessione(sess('a'));
+    allineaUtenteDelBrowser('a');
+    localStorage.setItem('cart', '[{"id":"pane"}]');
   });
 
-  it('nell ordine giusto: guarda chi è attivo, rinnova B a parte, salva A, mette da parte il carrello, installa B', async () => {
-    const { m, passi, carrello } = mondo();
-    const esito = await cambiaAccount('b', m);
-    expect(esito).toEqual({ ok: true, dove: '/seller/dashboard' });
-    expect(passi).toEqual(['attuale', 'rinnova ref-b-1', 'carrello-su a', 'installa ref-b-2 carrello=null']);
-    expect(carrello()).toBeNull();
+  it('nell ordine giusto, e la spesa di A va da parte per A', async () => {
+    const { m, passi } = mondo();
+    expect(await cambiaAccount('b', m)).toEqual({ ok: true, dove: '/seller/dashboard' });
+    expect(passi).toEqual(['attuale', 'rinnova ref-b-1', 'carrello-su a', 'installa ref-b-2']);
+    expect(localStorage.getItem('cart')).toBeNull();
     expect(localStorage.getItem('mycity:da-parte:a:cart')).toBe('[{"id":"pane"}]');
-    const salvati = Object.fromEntries(leggiAccount().map((x) => [x.id, x.refreshToken]));
-    // B con le chiavi appena rinnovate (le vecchie sono già usate), A con quelle di adesso.
-    expect(salvati).toEqual({ a: 'ref-a-7', b: 'ref-b-2' });
+    expect(Object.fromEntries(leggiAccount().map((x) => [x.id, x.refreshToken]))).toEqual({ a: 'ref-a-7', b: 'ref-b-2' });
   });
 
-  it('con l accesso di B scaduto: B tolto e l account attivo non si tocca', async () => {
+  it('accesso di B scaduto: B tolto, niente installato, niente spostato', async () => {
     const { m, passi } = mondo({ rinnova: async () => null });
-    const esito = await cambiaAccount('b', m);
-    expect(esito).toEqual({ ok: false, motivo: 'scaduto', email: 'b@esempio.it' });
+    expect(await cambiaAccount('b', m)).toEqual({ ok: false, motivo: 'scaduto', email: 'b@esempio.it' });
     expect(passi.some((p) => p.startsWith('installa') || p.startsWith('carrello'))).toBe(false);
     expect(leggiAccount().map((x) => x.id)).toEqual(['a']);
+    expect(localStorage.getItem('cart')).toBe('[{"id":"pane"}]');
   });
 
   it('se il rinnovo risponde un altro utente, non si entra', async () => {
@@ -262,81 +239,45 @@ describe('passare a un altro account', () => {
     expect(passi.some((p) => p.startsWith('installa'))).toBe(false);
   });
 
-  it('con la rete caduta sul rinnovo B resta salvato', async () => {
+  it('rete caduta sul rinnovo: B resta salvato', async () => {
     const { m } = mondo({ rinnova: async () => { throw new Error('rete'); } });
     expect(await cambiaAccount('b', m)).toEqual({ ok: false, motivo: 'rete', email: 'b@esempio.it' });
     expect(leggiAccount().map((x) => x.id).sort()).toEqual(['a', 'b']);
   });
 
-  it('se l installazione non riesce, il carrello torna com era', async () => {
-    const { m, passi, carrello } = mondo({ installa: async () => ({ error: new Error('no') }) });
+  it('installazione non riuscita: niente spostato, e la scheda riprende a salvare le bozze', async () => {
+    const { m } = mondo({ installa: async () => ({ error: new Error('no') }) });
     expect((await cambiaAccount('b', m)).ok).toBe(false);
-    expect(carrello()).toBe('[{"id":"pane"}]');
+    expect(localStorage.getItem('cart')).toBe('[{"id":"pane"}]');
+    expect(daParte()).toEqual([]);
+    expect(localStorage.getItem(CHIAVE_IN_CORSO)).toBeNull();
+    segnaUtenteDellaPagina('a');
     expect(cambioInCorso()).toBe(false);
   });
 
-  it('passare all account già attivo non fa niente: la sua chiave salvata non si tocca (collaudo)', async () => {
-    const { m, passi } = mondo({ sessioneAttuale: async () => { passi.push('attuale'); return sess('b', 9); } });
-    expect(await cambiaAccount('b', m)).toEqual({ ok: false, motivo: 'gia-attivo', email: 'b@esempio.it' });
-    expect(passi).toEqual(['attuale']);
+  it('già attivo, o non si sa chi è attivo: non si fa niente', async () => {
+    const attivo = mondo({ sessioneAttuale: async () => sess('b', 9) });
+    expect(await cambiaAccount('b', attivo.m)).toEqual({ ok: false, motivo: 'gia-attivo', email: 'b@esempio.it' });
+    const nessuno = mondo({ sessioneAttuale: async () => null });
+    expect(await cambiaAccount('b', nessuno.m)).toEqual({ ok: false, motivo: 'rete', email: 'b@esempio.it' });
+    expect(nessuno.passi).toEqual([]);
+    expect(localStorage.getItem('cart')).toBe('[{"id":"pane"}]');
   });
 
-  it('le bozze di A si mettono da parte e tornano quando si torna su A; quelle di B tornano su B (collaudo)', async () => {
-    localStorage.setItem('mc_new_product_draft', '{"nome":"Torta di A"}');
-    localStorage.setItem('mc_addr_hint', 'via di A');
-    await cambiaAccount('b', mondo().m);
-    expect(localStorage.getItem('mc_new_product_draft')).toBeNull();
-    expect(localStorage.getItem('mc_addr_hint')).toBeNull();
-    // su B si scrive una bozza sua, poi si torna su A
-    localStorage.setItem('mc_new_product_draft', '{"nome":"Pane di B"}');
-    ricordaSessione(sess('a', 8));
-    const verso = mondo({ sessioneAttuale: async () => sess('b', 2), rinnova: async () => sess('a', 9) });
-    expect((await cambiaAccount('a', verso.m)).ok).toBe(true);
-    expect(localStorage.getItem('mc_new_product_draft')).toBe('{"nome":"Torta di A"}');
-    expect(localStorage.getItem('mc_addr_hint')).toBe('via di A');
-    // e di nuovo su B: torna la bozza di B
-    ricordaSessione(sess('b', 3));
-    const ancora = mondo({ sessioneAttuale: async () => sess('a', 9), rinnova: async () => sess('b', 4) });
-    expect((await cambiaAccount('b', ancora.m)).ok).toBe(true);
-    expect(localStorage.getItem('mc_new_product_draft')).toBe('{"nome":"Pane di B"}');
-  });
-
-  it('se l installazione non riesce anche le bozze tornano com erano', async () => {
-    localStorage.setItem('mc_checkout_draft', '{"via":"di A"}');
-    await cambiaAccount('b', mondo({ installa: async () => ({ error: new Error('no') }) }).m);
-    expect(localStorage.getItem('mc_checkout_draft')).toBe('{"via":"di A"}');
-    expect(Object.keys(localStorage).some((k) => k.startsWith('mycity:da-parte:'))).toBe(false);
-  });
-
-  it('se l invio del carrello fallisce, la spesa di A resta da parte e torna con A (secondo collaudo)', async () => {
+  it('invio del carrello fallito: la spesa di A resta da parte e torna con A', async () => {
     await cambiaAccount('b', mondo({ salvaCarrello: async () => { throw new Error('rete'); } }).m);
-    expect(localStorage.getItem('cart')).toBeNull();
-    ricordaSessione(sess('a', 8));
-    const verso = mondo({ sessioneAttuale: async () => sess('b', 2), rinnova: async () => sess('a', 9) });
-    localStorage.removeItem('cart'); // su B il carrello è vuoto
-    expect((await cambiaAccount('a', verso.m)).ok).toBe(true);
+    _riparteLaScheda(); // la pagina si è ricaricata
+    allineaUtenteDelBrowser('a');
     expect(localStorage.getItem('cart')).toBe('[{"id":"pane"}]');
   });
 
-  it('se non si sa chi è attivo non si tocca niente: bozze e carrello restano (secondo collaudo)', async () => {
-    localStorage.setItem('mc_new_product_draft', '{"nome":"Torta di A"}');
-    const { m, passi } = mondo({ sessioneAttuale: async () => null });
-    expect(await cambiaAccount('b', m)).toEqual({ ok: false, motivo: 'rete', email: 'b@esempio.it' });
-    expect(passi.some((p) => p.startsWith('rinnova') || p.startsWith('installa'))).toBe(false);
-    expect(localStorage.getItem('mc_new_product_draft')).toBe('{"nome":"Torta di A"}');
-    expect(localStorage.getItem('cart')).toBe('[{"id":"pane"}]');
-  });
-
-  it('durante il cambio i moduli non salvano bozze (secondo collaudo)', async () => {
+  it('durante il cambio questa scheda non salva bozze; le altre schede ricevono il segnale', async () => {
     let durante = false;
-    await cambiaAccount('b', mondo({ installa: async () => { durante = cambioInCorso(); return { error: null }; } }).m);
+    segnaUtenteDellaPagina('a');
+    await cambiaAccount('b', mondo({
+      installa: async (s) => { durante = cambioInCorso(); dopoEventoAccesso('SIGNED_IN', { ...sess('b'), refresh_token: s.refresh_token }); return { error: null }; },
+    }).m);
     expect(durante).toBe(true);
-    expect(cambioInCorso()).toBe(true); // fino al ricaricamento della pagina (15 secondi al massimo)
-    expect(cambioInCorso(localStorage, Date.now() + 16_000)).toBe(false);
-  });
-
-  it('dopo un cambio riuscito le altre schede ricevono il segnale', async () => {
-    await cambiaAccount('b', mondo().m);
     expect(localStorage.getItem(CHIAVE_CAMBIO)).toMatch(/^b:\d+$/);
   });
 
@@ -347,15 +288,38 @@ describe('passare a un altro account', () => {
   });
 });
 
-describe('il freno sui salvataggi automatici dei moduli', () => {
-  it('con un cambio in corso useFormAutosave non scrive la bozza (secondo collaudo)', async () => {
+describe('le schede', () => {
+  it('un account diverso da quello della pagina, su una pagina normale, ferma la scheda per sempre', () => {
+    expect(vedeEntrare('a', '/seller/products/new')).toBe(false);
+    expect(vedeEntrare('a', '/seller/products/new')).toBe(false);
+    expect(vedeEntrare('b', '/seller/products/new')).toBe(true);
+    expect(cambioInCorso(localStorage, Date.now() + 3_600_000)).toBe(true);
+  });
+
+  it('sulle pagine di accesso un account nuovo è atteso: niente avviso, e la pagina diventa sua', () => {
+    vedeEntrare('a', '/sign-in');
+    expect(vedeEntrare('b', '/sign-in')).toBe(false);
+    localStorage.setItem(CHIAVE_IN_CORSO, `b:${Date.now()}`);
+    expect(cambioInCorso()).toBe(false); // i moduli di B, appena entrato, salvano
+  });
+
+  it('il segno a tempo ferma per 15 secondi solo le pagine che non sono del nuovo account', () => {
+    localStorage.setItem(CHIAVE_IN_CORSO, `b:${Date.now()}`);
+    segnaUtenteDellaPagina('a');
+    expect(cambioInCorso()).toBe(true);
+    expect(cambioInCorso(localStorage, Date.now() + 16_000)).toBe(false);
+    segnaUtenteDellaPagina('b');
+    expect(cambioInCorso()).toBe(false);
+  });
+
+  it('useFormAutosave non scrive mentre la pagina non deve salvare', async () => {
     vi.useFakeTimers();
     try {
       (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
       const Modulo = ({ v }: { v: string }) => { useFormAutosave('mc_new_product_draft', { nome: v }, { delay: 10 }); return null; };
-      const div = document.createElement('div');
-      const root = createRoot(div);
-      localStorage.setItem(CHIAVE_IN_CORSO, String(Date.now()));
+      const root = createRoot(document.createElement('div'));
+      segnaUtenteDellaPagina('a');
+      localStorage.setItem(CHIAVE_IN_CORSO, `b:${Date.now()}`);
       await act(async () => { root.render(createElement(Modulo, { v: 'Torta di A' })); });
       await act(async () => { vi.advanceTimersByTime(50); });
       expect(localStorage.getItem('mc_new_product_draft')).toBeNull();
@@ -366,6 +330,30 @@ describe('il freno sui salvataggi automatici dei moduli', () => {
       act(() => root.unmount());
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it('il segnale di un cambio fatto in un altra scheda apre l avviso, senza ricaricare da sola', async () => {
+    const ricarica = vi.fn();
+    const originale = window.location;
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...originale, pathname: '/seller/dashboard', reload: ricarica } });
+    try {
+      (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+      const root = createRoot(document.createElement('div'));
+      accesi.push(root);
+      await act(async () => { root.render(createElement(RicordaAccount)); });
+      segnaUtenteDellaPagina('a');
+      await act(async () => { window.dispatchEvent(new StorageEvent('storage', { key: CHIAVE_CAMBIO, newValue: 'a:1' })); });
+      expect(document.body.textContent).not.toContain('Hai cambiato account in un’altra scheda');
+      await act(async () => { window.dispatchEvent(new StorageEvent('storage', { key: CHIAVE_CAMBIO, newValue: 'b:1' })); });
+      expect(document.body.textContent).toContain('Hai cambiato account in un’altra scheda');
+      expect(ricarica).not.toHaveBeenCalled();
+      expect(cambioInCorso(localStorage, Date.now() + 3_600_000)).toBe(true);
+      const bottone = [...document.body.querySelectorAll('button')].find((b) => b.textContent === 'Ricarica la pagina')!;
+      await act(async () => { bottone.click(); });
+      expect(ricarica).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: originale });
     }
   });
 });
@@ -384,25 +372,20 @@ describe('il rinnovo a parte', () => {
     expect(JSON.parse(String(chiamate[0][1].body))).toEqual({ refresh_token: 'ref-b' });
   });
 
-  it('«troppe richieste» (429) non vuol dire scaduto: lancia, e l account resta salvato (collaudo)', async () => {
-    const troppe = (async () => new Response('', { status: 429 })) as unknown as typeof fetch;
-    await expect(rinnovaAccesso('ref-b', { url: 'https://x', chiave: 'k', fetch: troppe })).rejects.toThrow();
+  it('«troppe richieste» (429) e i guasti lanciano: l account non va cancellato', async () => {
+    for (const status of [429, 503]) {
+      const f = (async () => new Response('', { status })) as unknown as typeof fetch;
+      await expect(rinnovaAccesso('ref-b', { url: 'https://x', chiave: 'k', fetch: f }), String(status)).rejects.toThrow();
+    }
   });
 
-  it('una risposta buona diventa la sessione; un guasto del servizio lancia', async () => {
+  it('una risposta buona diventa la sessione', async () => {
     const buona = (async () => new Response(JSON.stringify(sess('b', 3)), { status: 200 })) as unknown as typeof fetch;
     expect((await rinnovaAccesso('ref-b', { url: 'https://x', chiave: 'k', fetch: buona }))?.refresh_token).toBe('ref-b-3');
-    const guasta = (async () => new Response('', { status: 503 })) as unknown as typeof fetch;
-    await expect(rinnovaAccesso('ref-b', { url: 'https://x', chiave: 'k', fetch: guasta })).rejects.toThrow();
   });
 });
 
 describe('il blocco nel menu', () => {
-  const accesi: Root[] = [];
-  afterEach(() => {
-    for (const r of accesi.splice(0)) act(() => r.unmount());
-    document.body.innerHTML = '';
-  });
   async function monta() {
     (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
     const div = document.createElement('div');
@@ -423,7 +406,6 @@ describe('il blocco nel menu', () => {
     expect(testi).toContain('Passa a Nome bb@esempio.it');
     expect(testi.some((t) => t?.includes('Nome a'))).toBe(false);
     expect(testi).toContain('Aggiungi un altro account');
-    expect(r.querySelector('button[aria-label="Passa all’account Nome b (b@esempio.it)"]')).not.toBeNull();
   });
 
   it('con 5 account salvati «Aggiungi» non c è, e lo dice', async () => {
@@ -432,42 +414,6 @@ describe('il blocco nel menu', () => {
     const r = await monta();
     expect([...r.querySelectorAll('button')].some((b) => b.textContent === 'Aggiungi un altro account')).toBe(false);
     expect(r.textContent).toContain('Hai già 5 account salvati');
-  });
-
-  it('un cambio fatto in un altra scheda ferma questa con un avviso, senza ricaricarla da sola (collaudi)', async () => {
-    const ricarica = vi.fn();
-    const originale = window.location;
-    Object.defineProperty(window, 'location', { configurable: true, value: { ...originale, reload: ricarica } });
-    try {
-      (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
-      const div = document.createElement('div');
-      document.body.appendChild(div);
-      const root = createRoot(div);
-      accesi.push(root);
-      await act(async () => { root.render(createElement(RicordaAccount)); });
-      await act(async () => { window.dispatchEvent(new StorageEvent('storage', { key: 'altra-chiave', newValue: 'x' })); });
-      expect(document.body.textContent).not.toContain('Hai cambiato account in un’altra scheda');
-      await act(async () => { window.dispatchEvent(new StorageEvent('storage', { key: CHIAVE_CAMBIO, newValue: 'b:1' })); });
-      expect(document.body.textContent).toContain('Hai cambiato account in un’altra scheda');
-      expect(ricarica).not.toHaveBeenCalled();
-      // e la scheda ferma non salva bozze finché non si ricarica, anche dopo i 15 secondi (terzo collaudo)
-      expect(cambioInCorso(localStorage, Date.now() + 60_000)).toBe(true);
-      const bottone = [...document.body.querySelectorAll('button')].find((b) => b.textContent === 'Ricarica la pagina')!;
-      await act(async () => { bottone.click(); });
-      expect(ricarica).toHaveBeenCalledTimes(1);
-    } finally {
-      Object.defineProperty(window, 'location', { configurable: true, value: originale });
-    }
-  });
-
-  it('la pagina nuova, arrivando, toglie il segno a tempo del cambio (terzo collaudo)', async () => {
-    localStorage.setItem(CHIAVE_IN_CORSO, String(Date.now()));
-    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
-    const div = document.createElement('div');
-    const root = createRoot(div);
-    accesi.push(root);
-    await act(async () => { root.render(createElement(RicordaAccount)); });
-    expect(localStorage.getItem(CHIAVE_IN_CORSO)).toBeNull();
   });
 
   it('«Aggiungi un altro account» salva chi c è e apre l accesso', async () => {

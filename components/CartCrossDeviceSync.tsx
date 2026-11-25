@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { getCart, saveCart, clearCart, fondiCarrelli, CART_UPDATED_AT_KEY, type CartItem } from '@/lib/cart';
 import { idUtenteInMemoria } from '@/components/hooks/useUtente';
-import { aggiuntaIniziataDa, metteDaParte } from '@/lib/account/piu-account';
+import { allineaUtenteDelBrowser } from '@/lib/account/piu-account';
 
 /**
  * Sincronizza il carrello locale (localStorage) con il cloud (Supabase) quando
@@ -129,18 +129,15 @@ export default function CartCrossDeviceSync() {
     };
 
     /**
-     * 25/11/2026 (terzo collaudo dei più account, lib/account/piu-account.ts) — LA SPESA DI A FINIVA A B.
-     * Con «Aggiungi un altro account» il carrello di A va da parte e il browser resta vuoto; ma sulla
-     * pagina di accesso A è ancora dentro, e qui si riscaricava il suo carrello dal server. Poi entrava
-     * B e quel carrello si fondeva nel suo, anche sul server. Ora, mentre chi è dentro sta aggiungendo
-     * un account, il suo carrello non si scarica e non si manda; e quando entra l'altro account,
-     * qualunque spesa rimasta nel browser va da parte per chi aveva cominciato, prima di ogni fusione.
+     * 25/11/2026 (più account, lib/account/piu-account.ts) — LA SPESA DI A FINIVA A B.
+     * Con più account sullo stesso dispositivo, nel browser poteva esserci il carrello di A quando
+     * entrava B, per più strade (aggiunta, un link e poi «indietro», un'altra scheda), e qui si fondeva
+     * nel carrello di B, anche sul server. La regola ora è una sola: prima di ogni fusione, i dati del
+     * browser diventano dell'account che entra (`allineaUtenteDelBrowser`), e quelli di un altro
+     * account vanno da parte per lui. Il carrello da ospite non è di nessuno e si fonde come sempre.
      */
-    const inAggiunta = (uid: string | null) => !!uid && aggiuntaIniziataDa() === uid;
     const sincronizzaGiu = (uid: string) => {
-      if (inAggiunta(uid)) return;
-      const daChi = aggiuntaIniziataDa();
-      if (daChi && daChi !== uid) metteDaParte(daChi);
+      allineaUtenteDelBrowser(uid);
       void syncDown(uid);
     };
 
@@ -177,10 +174,10 @@ export default function CartCrossDeviceSync() {
     // Sync UP quando il carrello cambia (debounce 1s)
     let debounceId: ReturnType<typeof setTimeout> | null = null;
     const onCartUpdate = () => {
-      if (!userId || inAggiunta(userId)) return;
+      if (!userId) return;
       if (debounceId) clearTimeout(debounceId);
       debounceId = setTimeout(() => {
-        if (userId && !inAggiunta(userId)) syncUp(userId, getCart());
+        if (userId) syncUp(userId, getCart());
       }, 1000);
     };
     window.addEventListener('cart:updated', onCartUpdate);
@@ -191,7 +188,7 @@ export default function CartCrossDeviceSync() {
       if (!debounceId) return;
       clearTimeout(debounceId);
       debounceId = null;
-      if (userId && !inAggiunta(userId)) syncUp(userId, getCart());
+      if (userId) syncUp(userId, getCart());
     };
     const onVisibility = () => { if (document.visibilityState === 'hidden') flush(); };
     window.addEventListener('pagehide', flush);
