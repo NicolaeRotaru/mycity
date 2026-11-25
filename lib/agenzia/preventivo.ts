@@ -373,6 +373,11 @@ export type Preventivo = {
    * (lib/agenzia/offerta-su-misura.ts). La aggiunge chi legge il preventivo dal database.
    */
   offerta?: OffertaSuMisura;
+  /**
+   * 25/11/2026 — L'analisi del business dell'attività, come l'AD analizza MyCity come azienda (Nicola): la
+   * parte specifica del servizio «Analisi del business» (lib/agenzia/analisi.ts, `analisiAziendale`).
+   */
+  analisiAziendale?: import('./analisi').AnalisiAziendale | null;
 };
 
 export type AbbonamentoAttivo = { fascia: Abbonamento; stato: 'active' | 'past_due'; rinnovoIl: string | null };

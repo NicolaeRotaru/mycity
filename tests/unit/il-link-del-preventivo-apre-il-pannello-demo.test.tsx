@@ -175,6 +175,19 @@ describe('le pagine dei servizi della demo', () => {
     for (const f of ABBONAMENTI) expect(r.querySelector(`a[href="/preventivo/${CODICE}/abbonamento?fascia=${f}"]`), f).not.toBeNull();
   });
 
+  it('analisi del business: l analisi dell attività con le fonti, mai la pagella del marketplace (mycity#330)', async () => {
+    const p = stato.preventivo as Preventivo;
+    p.analisiAziendale = {
+      situazione: [{ testo: 'Bar e pasticceria in centro, aperto da dieci anni', fonte: 'scheda Google' }],
+      mercato: [], clienti: [], opportunita: [], rischi: [], prime_mosse: [],
+    };
+    const r = disegna(await ServizioDemo({ params: Promise.resolve({ codice: CODICE, servizio: 'analisi' }) }));
+    const blocco = r.querySelector('[data-testid="analisi-aziendale"]');
+    expect(blocco?.textContent).toContain('Bar e pasticceria in centro');
+    expect(blocco?.textContent).toContain('scheda Google');
+    expect(r.textContent?.toLowerCase()).not.toContain('pagella');
+  });
+
   it('un servizio sconosciuto non esiste', async () => {
     expect(await errore(ServizioDemo({ params: Promise.resolve({ codice: CODICE, servizio: 'boh' }) }))).toBe('NEXT_NOT_FOUND');
   });

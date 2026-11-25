@@ -9,6 +9,7 @@ import { leggiDemoDalLink } from '@/lib/agenzia/demo-dal-link';
 import { indirizziDemo } from '@/lib/agenzia/indirizzi-demo';
 import { fasciaDaIndirizzo, hrefFascia } from '@/lib/agenzia/indirizzi-servizi';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
+import AnalisiAziendale from '@/components/seller/AnalisiAziendale';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
 import AccettaDalLink from './AccettaDalLink';
@@ -125,6 +126,8 @@ export default async function PreventivoDalLink({
       </section>
 
       <OffertaSuMisura offerta={p.offerta} fascia={scelta} />
+      {/* 25/11/2026 — L'analisi del business dell'attività (Nicola, mycity#330): corta, il dettaglio nella demo. */}
+      <AnalisiAziendale corta analisi={p.analisiAziendale} fascia={scelta} dettaglioHref={indirizziDemo(codice).servizio('analisi')} />
 
       <section className="mt-6" aria-labelledby="abbonamenti">
         <h2 id="abbonamenti" className="text-lg font-bold text-ink-900">I tre abbonamenti</h2>

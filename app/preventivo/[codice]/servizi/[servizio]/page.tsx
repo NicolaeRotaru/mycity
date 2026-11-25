@@ -6,6 +6,7 @@ import { CODICE_VALIDO } from '@/lib/agenzia/preventivo-col-codice';
 import { leggiDemoDalLink } from '@/lib/agenzia/demo-dal-link';
 import { indirizziDemo } from '@/lib/agenzia/indirizzi-demo';
 import { hrefFascia } from '@/lib/agenzia/indirizzi-servizi';
+import AnalisiAziendale from '@/components/seller/AnalisiAziendale';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
 
@@ -16,8 +17,9 @@ import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
  * del link col codice: perché te lo proponiamo (dai dati veri), cosa facciamo per te con la fascia
  * consigliata, cosa ricevi già pronto (la bozza del sito, il piano dei post, i formati) e come è
  * compreso nelle tre fasce. Ogni fascia apre il suo preventivo nella voce «Abbonamento».
- * L'analisi del business qui mostra solo il perché e l'offerta: l'analisi completa nella demo la
- * porta la sessione «Analisi subito, scheda e pagella dopo l'abbonamento» (brief del 25/11 17:50).
+ * L'analisi del business qui mostra l'analisi aziendale intera, solo da fonti pubbliche
+ * (mycity#330, components/seller/AnalisiAziendale.tsx). Mai la pagella del marketplace: arriva solo
+ * dopo l'abbonamento (Nicola, 25/11).
  */
 
 export const dynamic = 'force-dynamic';
@@ -66,6 +68,10 @@ export default async function ServizioDemo({ params }: { params: Promise<{ codic
           </p>
           <p className="mt-1 text-sm text-ink-700">Dai tuoi dati risulta a posto. Se vuoi rifarlo o migliorarlo, lo diciamo nel preventivo.</p>
         </section>
+      )}
+
+      {id === 'analisi' && (
+        <AnalisiAziendale analisi={p.analisiAziendale} fascia={p.consigliato} nome={p.attivita} />
       )}
 
       {!giaAPosto && id !== 'analisi' && (

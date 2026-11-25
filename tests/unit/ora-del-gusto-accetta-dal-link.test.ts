@@ -17,6 +17,7 @@ const db = vi.hoisted(() => ({
   preventivo: null as null | { seller_id: string; codice: string; stato: string; fascia_scelta: string | null; profiles: { store_name: string } },
   scheda: null as unknown,
   profiloAggiornato: [] as Array<Record<string, unknown>>,
+  abbonamenti: [] as Array<{ stato: string }>,
   utenteAggiornato: [] as Array<Record<string, unknown>>,
   erroreUtente: null as null | { message: string; code?: string },
   posta: [] as Array<Record<string, unknown>>,
@@ -69,7 +70,12 @@ vi.mock('@/lib/supabase/server', () => {
       from: (t: string) => {
         if (t === 'preventivi_con_codice') return tabellaPreventivi();
         if (t === 'schede_clienti') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: db.scheda ? { scheda: db.scheda } : null, error: null }) }) }) };
-        if (t === 'profiles') return { update: (v: Record<string, unknown>) => ({ eq: async () => { db.profiloAggiornato.push(v); return { error: null }; } }) };
+        if (t === 'profiles') return {
+          update: (v: Record<string, unknown>) => ({ eq: async () => { db.profiloAggiornato.push(v); return { error: null }; } }),
+          // 25/11/2026 — se scheda e pagella sono aperte (lib/agenzia/scheda-dopo-abbonamento.ts).
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { visibile_senza_abbonamento: false }, error: null }) }) }),
+        };
+        if (t === 'abbonamenti_servizi') return { select: () => ({ eq: () => ({ limit: async () => ({ data: db.abbonamenti, error: null }) }) }) };
         throw new Error(`tabella inattesa ${t}`);
       },
       auth: {
@@ -108,6 +114,7 @@ beforeEach(() => {
     },
   };
   db.profiloAggiornato = [];
+  db.abbonamenti = [];
   db.utenteAggiornato = [];
   db.erroreUtente = null;
   db.posta = [];
@@ -118,13 +125,15 @@ beforeEach(() => {
 });
 
 describe('accettare dal link col codice', () => {
-  it('email collegata, profilo coi soli dati confermati e in revisione, link per entrare, cassa aperta', async () => {
+  it('email collegata, profilo in revisione SENZA i dati della scheda (non ha ancora pagato), link per entrare, cassa aperta', async () => {
     const r = await accetta(BUONO);
     expect(r.status).toBe(200);
     expect((await r.json()).data.url).toBe('https://checkout.stripe.test/s1');
     expect(db.utenteAggiornato).toEqual([{ id: ODG, email: 'titolare@example.it', email_confirm: true, ban_duration: 'none' }]);
     expect(db.profiloAggiornato).toHaveLength(1);
-    expect(db.profiloAggiornato[0]).toMatchObject({ store_address: 'Via Roma 10, Piacenza', approval_status: 'pending' });
+    // 25/11/2026 — Nicola: la scheda nasce solo dopo l'abbonamento. L'indirizzo entra al primo pagamento.
+    expect(db.profiloAggiornato[0]).not.toHaveProperty('store_address');
+    expect(db.profiloAggiornato[0]).toMatchObject({ approval_status: 'pending' });
     expect(db.profiloAggiornato[0]).not.toHaveProperty('store_phone');
     expect(db.preventivo?.stato).toBe('accettato');
     expect(db.preventivo?.fascia_scelta).toBe('business');
@@ -133,6 +142,13 @@ describe('accettare dal link col codice', () => {
     expect(String(db.posta[0].html)).toContain('https://supabase.test/verify?token=t');
     expect(db.avvisi[0]).toContain('Ora del Gusto');
     expect(db.casse[0]).toMatchObject({ sellerId: ODG, email: 'titolare@example.it', fascia: 'business' });
+  });
+
+  it('chi ha già pagato un abbonamento prima: la scheda è aperta e l’indirizzo confermato entra nel profilo', async () => {
+    db.abbonamenti = [{ stato: 'canceled' }];
+    expect((await accetta(BUONO)).status).toBe(200);
+    expect(db.profiloAggiornato[0]).toMatchObject({ store_address: 'Via Roma 10, Piacenza', approval_status: 'pending' });
+    expect(db.profiloAggiornato[0]).not.toHaveProperty('store_phone');
   });
 
   it('senza scheda di n8n si accetta lo stesso: il profilo va in revisione senza dati inventati', async () => {
