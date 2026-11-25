@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CheckCircle2 } from 'lucide-react';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { ABBONAMENTI, FASCE, FRASE_CONDIZIONI, FRASE_PARTNER, LISTINO, SERVIZI_AGENZIA, canonePrimoMese, scriviCanone } from '@/lib/agenzia/preventivo';
+import { FASCE, FRASE_PARTNER } from '@/lib/agenzia/preventivo';
 import { CODICE_VALIDO } from '@/lib/agenzia/preventivo-col-codice';
 import { leggiDemoDalLink } from '@/lib/agenzia/demo-dal-link';
 import { indirizziDemo } from '@/lib/agenzia/indirizzi-demo';
 import { fasciaDaIndirizzo, hrefFascia } from '@/lib/agenzia/indirizzi-servizi';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
+import AbbonamentiInBreve from '@/components/seller/AbbonamentiInBreve';
 import AnalisiAziendale from '@/components/seller/AnalisiAziendale';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
@@ -125,35 +125,12 @@ export default async function PreventivoDalLink({
         </ul>
       </section>
 
-      <OffertaSuMisura offerta={p.offerta} fascia={scelta} />
+      <OffertaSuMisura corta offerta={p.offerta} fascia={scelta} />
       {/* 25/11/2026 — L'analisi del business dell'attività (Nicola, mycity#330): corta, il dettaglio nella demo. */}
       <AnalisiAziendale corta analisi={p.analisiAziendale} fascia={scelta} dettaglioHref={indirizziDemo(codice).servizio('analisi')} />
 
-      <section className="mt-6" aria-labelledby="abbonamenti">
-        <h2 id="abbonamenti" className="text-lg font-bold text-ink-900">I tre abbonamenti</h2>
-        <p className="mt-1 text-sm text-ink-600">Ognuno comprende tutti i servizi: cambia quanto. {FRASE_CONDIZIONI} Tocca una fascia per vedere il suo preventivo.</p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          {ABBONAMENTI.map((f) => (
-            <Link
-              key={f}
-              href={hrefFascia(f, qui)}
-              aria-current={f === scelta ? 'page' : undefined}
-              className={`block rounded-xl border-2 p-4 transition-colors hover:border-primary-300 ${f === scelta ? 'border-primary-600 bg-primary-50' : 'border-cream-200 bg-surface-0'}`}
-            >
-              <p className="font-bold text-ink-900">{FASCE[f].nome}{f === p.consigliato ? ' · consigliato' : ''}</p>
-              <p className="mt-1 text-xl font-extrabold text-ink-900">{scriviCanone(p.prezzi[f])}</p>
-              {p.primoMeseScontato && p.prezzi[f] ? (
-                <p className="text-xs text-olive-700">Il primo mese {scriviCanone(canonePrimoMese(p.prezzi[f]))}</p>
-              ) : null}
-              <p className="mt-2 text-xs text-ink-600">{FASCE[f].perChi}</p>
-              <ul className="mt-2 space-y-1 text-xs text-ink-700">
-                {SERVIZI_AGENZIA.map((s) => <li key={s}><strong>{LISTINO[s].titolo}:</strong> {FASCE[f].servizi[s]}</li>)}
-              </ul>
-            </Link>
-          ))}
-        </div>
-        {p.consigliato && <p className="mt-2 text-xs text-ink-600">Perché consigliamo {FASCE[p.consigliato].nome}: {p.perche_consigliato}</p>}
-      </section>
+      {/* 25/11/2026 — Nicola, 18:30: nel preventivo i servizi corti, una riga ciascuno, solo per la fascia guardata. Ogni fascia apre il suo preventivo (#331). */}
+      <AbbonamentiInBreve consigliato={p.consigliato} prezzi={p.prezzi} primoMeseScontato={p.primoMeseScontato} perche={p.perche_consigliato} scelta={scelta} hrefDi={(f) => hrefFascia(f, qui)} />
 
       {/* Il modulo segue `scelta` da sé (AccettaDalLink): cambiando fascia non si perde l'email scritta. */}
       <AccettaDalLink codice={codice} consigliato={scelta} prezzi={p.prezzi} primoMeseScontato={p.primoMeseScontato} />
