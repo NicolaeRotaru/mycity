@@ -104,6 +104,28 @@ describe('il negozio nasce come Ora del Gusto', () => {
     expect(db.link.get(id_attivita)?.codice).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  // 25/11/2026 — Nicola: l'analisi parte subito, da tutte e due le porte. Chi nasce dal modulo 12 va
+  // anche al flusso 16, come chi si iscrive da /sell. Una seconda volta (stesso negozio) no.
+  it('un negozio nuovo va anche al flusso 16; lo stesso negozio rimandato no', async () => {
+    const chiamate: Array<{ url: string; corpo: Record<string, unknown> }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => { chiamate.push({ url, corpo: JSON.parse(String(init.body)) }); return new Response('{}', { status: 200 }); }));
+    process.env.N8N_NUOVO_CLIENTE_WEBHOOK_URL = 'https://n8n.example/webhook/mycity-nuovo-cliente';
+    process.env.N8N_NUOVO_CLIENTE_SEGRETO = 'segreto-16';
+    try {
+      const { id_attivita } = (await (await chiama(BAR)).json()) as { id_attivita: string };
+      await vi.waitFor(() => expect(chiamate).toHaveLength(1));
+      expect(chiamate[0].url).toBe('https://n8n.example/webhook/mycity-nuovo-cliente');
+      expect(chiamate[0].corpo).toMatchObject({ tipo: 'nuovo-cliente', provenienza: 'modulo-12', attivita: { id: id_attivita, nome: 'Bar Prova', tipo: 'bar', citta: 'Piacenza' } });
+      expect((await chiama(BAR)).status).toBe(200);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(chiamate).toHaveLength(1);
+    } finally {
+      delete process.env.N8N_NUOVO_CLIENTE_WEBHOOK_URL;
+      delete process.env.N8N_NUOVO_CLIENTE_SEGRETO;
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('lo stesso nome e città mandati due volte non creano due negozi né cambiano il link', async () => {
     const a = (await (await chiama(BAR)).json()) as { id_attivita: string };
     const codice = db.link.get(a.id_attivita)!.codice;

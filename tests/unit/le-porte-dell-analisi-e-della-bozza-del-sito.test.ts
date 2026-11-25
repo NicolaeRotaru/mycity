@@ -391,6 +391,8 @@ describe('/api/agenzia/bozza-sito', () => {
       },
     }];
     db.righe.products = [{ name: 'Torta di mele' }, { name: 'Brioche 1,20 €' }];
+    // 25/11/2026 — La scheda si usa solo dopo l'abbonamento: Ora del Gusto ha pagato.
+    db.righe.abbonamenti_servizi = [{ seller_id: NEGOZIO, stato: 'active' }];
     const { GET } = await import('@/app/api/agenzia/bozza-sito/route');
     const r = await GET(richiesta('https://mycity.example/api/agenzia/bozza-sito', 'GET', undefined, { 'x-mycity-segreto': 'segreto-ad' }));
     const corpo = await r.json();
@@ -402,5 +404,28 @@ describe('/api/agenzia/bozza-sito', () => {
     expect(Object.keys(n.dati.campi_della_scheda)).toEqual(['orari']);
     expect(n.dati.descrizione).toBe('Bar e pasticceria, chiamate Mario al [telefono]');
     expect(JSON.stringify(corpo)).not.toMatch(/333 1234567|3331234567|765 4321|1,50|1,20/);
+  });
+
+  // 25/11/2026 — Nicola: la scheda del cliente nasce solo dopo l'abbonamento. Per chi è in demo l'AD
+  // scrive la bozza con l'analisi e la vetrina: niente campi della scheda, niente prodotti dal menu.
+  it('GET: per un negozio in demo i campi della scheda restano chiusi, l analisi no', async () => {
+    db.righe.profiles = [{ id: NEGOZIO, role: 'seller', store_name: 'La Ragazzetta', store_customization: { socials: {} }, visibile_senza_abbonamento: false }];
+    db.righe.bozze_sito = [];
+    db.righe.abbonamenti_servizi = [];
+    db.righe.schede_clienti = [{
+      id_attivita: NEGOZIO, aggiornata_il: '2026-11-25T10:00:00Z',
+      scheda: {
+        tipo: 'scheda-cliente', id_attivita: NEGOZIO,
+        campi: { orari: { valore: 'Lun–Sab 7.30–19.30', stato: 'confermato', fonte: 'https://example.org' }, menu_testo: { valore: 'Tortelli\nPisarei', stato: 'confermato', fonte: null } },
+        analisi: { punti_di_forza: ['Cucina piacentina fatta in casa'] },
+      },
+    }];
+    db.righe.products = [];
+    const { GET } = await import('@/app/api/agenzia/bozza-sito/route');
+    const corpo = await (await GET(richiesta('https://mycity.example/api/agenzia/bozza-sito', 'GET', undefined, { 'x-mycity-segreto': 'segreto-ad' }))).json();
+    const n = corpo.negozi[0];
+    expect(n.dati.campi_della_scheda).toEqual({});
+    expect(n.dati.prodotti_tipici).toEqual([]);
+    expect(n.dati.punti_di_forza).toEqual(['Cucina piacentina fatta in casa']);
   });
 });

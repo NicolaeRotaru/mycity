@@ -25,6 +25,11 @@ export const maxDuration = 60;
  * Senza segreto configurato la porta resta chiusa (503). Solo https fuori dal computer di prova.
  * Non accetta schede per i negozi di sistema (MyCity, SDG: id che comincia con 11111111-1111-1111-1111-)
  * né per chi non è un venditore.
+ *
+ * 25/11/2026 — Nicola: l'analisi parte subito, la scheda del cliente nasce solo dopo l'abbonamento. La
+ * porta non cambia: la scheda arriva all'iscrizione e si conserva intera, ma il sito la legge chiusa
+ * (solo la sezione `analisi`) finché il negozio non ha pagato un abbonamento ai servizi
+ * (lib/agenzia/scheda-dopo-abbonamento.ts). Il sito della scheda va lo stesso a Google PageSpeed: è analisi.
  */
 
 const INTESTAZIONE = 'x-mycity-segreto';

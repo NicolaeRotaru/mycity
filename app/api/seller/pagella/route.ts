@@ -3,6 +3,7 @@ import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { pagella, type Lettura } from '@/lib/agenzia/pagella';
+import { leggiSchedaEPagellaAperte } from '@/lib/agenzia/scheda-dopo-abbonamento';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +14,10 @@ export const runtime = 'nodejs';
  * (solo i campi che servono: stati, date, importi, foto; niente nomi, telefoni o indirizzi dei clienti)
  * e il calcolo lo fa `lib/agenzia/pagella.ts`, la stessa logica del flusso 18 di n8n.
  * Una lettura che non riesce diventa «non misurato», mai zero.
+ *
+ * 25/11/2026 — Nicola: la pagella sul marketplace arriva solo dopo l'abbonamento. Per un negozio in demo
+ * (mai pagato un abbonamento ai servizi e non già online prima della demo) la risposta è
+ * `{ disponibile: false }`: la pagina non mostra il blocco (lib/agenzia/scheda-dopo-abbonamento.ts).
  */
 
 const TETTO = 2000;
@@ -46,6 +51,10 @@ export const GET = withSellerAnchePendingRateLimit({ name: 'seller-pagella', max
     return ApiErrors.unavailable('Non sono riuscito a preparare la pagella. Riprova fra poco.');
   }
   if ((profilo.data as { role?: string } | null)?.role !== 'seller') return ApiErrors.forbidden('La pagella è dei negozi.');
+  // 25/11/2026 — Prima dell'abbonamento niente pagella (Nicola): la pagina non mostra il blocco.
+  if (!(await leggiSchedaEPagellaAperte(admin, user.id))) {
+    return apiSuccess({ disponibile: false as const }, { headers: { 'Cache-Control': 'no-store' } });
+  }
 
   // I negozi di sistema (MyCity, SDG) non entrano nel confronto, come nel flusso 18. Se le righe sono più
   // del tetto, il conteggio è parziale e la pagella lo dice.

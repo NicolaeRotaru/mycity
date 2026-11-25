@@ -11,8 +11,9 @@ import {
 } from '@/lib/agenzia/preventivo';
 import { tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
 import { leggiSchedaSalvata, soloConfermati } from '@/lib/agenzia/scheda-cliente';
-import { leggiAnalisiCanali, leggiRisultatoSito, sitoInParole } from '@/lib/agenzia/analisi';
+import { analisiAziendale, leggiAnalisiCanali, leggiRisultatoSito, sitoInParole } from '@/lib/agenzia/analisi';
 import { leggiGiudizioSito, offertaSuMisura } from '@/lib/agenzia/offerta-su-misura';
+import { conLAnalisi, schedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
 
 /**
  * IL PREVENTIVO LETTO DAL DATABASE — una funzione sola per la dashboard (/api/seller/preventivo) e
@@ -137,7 +138,16 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
   // L'offerta su misura (24/11/2026): dalla vetrina, dalla scheda e dalle analisi. Un guasto qui non
   // ferma il preventivo: senza offerta la pagina mostra quello che mostrava prima.
   try {
-    const schedaIntera = schedaLetta.error ? null : leggiSchedaSalvata((schedaLetta.data as { scheda?: unknown } | null)?.scheda);
+    // 25/11/2026 — La scheda del cliente vale solo dopo l'abbonamento (Nicola): prima, dell'offerta su
+    // misura resta l'analisi (lib/agenzia/scheda-dopo-abbonamento.ts). Una lettura caduta vale «chiusa».
+    const aperta = schedaEPagellaAperte({
+      visibileSenzaAbbonamento: p.visibile_senza_abbonamento,
+      statiAbbonamenti: abbonamento.error ? [] : ((abbonamento.data as Array<{ stato?: unknown }> | null) ?? []).map((r) => r.stato),
+    });
+    const schedaIntera = schedaPerIlSito(
+      schedaLetta.error ? null : leggiSchedaSalvata((schedaLetta.data as { scheda?: unknown } | null)?.scheda),
+      aperta,
+    );
     preventivo.offerta = offertaSuMisura({
       nome: preventivo.attivita,
       tipo: preventivo.tipoAttivita,
@@ -147,12 +157,16 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
         prodotti: (prodotti.data ?? []) as { images: unknown }[],
         socials: socialsPerIlConto,
       },
-      scheda: opzioni.pubblico ? soloConfermati(schedaIntera) : schedaIntera,
+      // 25/11/2026 — Nicola: il preventivo si cuce sull'analisi, anche nel link. Nel link resta l'analisi
+      // (punti di forza, idee, analisi del business con le sue fonti); dei campi solo quelli confermati.
+      scheda: opzioni.pubblico ? conLAnalisi(soloConfermati(schedaIntera), schedaIntera) : schedaIntera,
       canali: opzioni.pubblico ? null : leggiAnalisiCanali(analisi?.canali),
       sito: sitoMisurato,
       // Il giudizio dell'AD sul sito vale anche nel link: è un parere su un sito pubblico, non un dato del titolare.
       giudizioSito: leggiGiudizioSito((schedaIntera?.analisi as Record<string, unknown> | undefined)?.giudizio_sito),
     });
+    // 25/11/2026 — L'analisi del business (Nicola): è analisi, quindi c'è anche in demo e nel link.
+    preventivo.analisiAziendale = analisiAziendale(schedaIntera);
   } catch (errore) {
     logger.warn('[preventivo] offerta su misura non preparata', { errore: String(errore) });
   }

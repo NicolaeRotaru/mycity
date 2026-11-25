@@ -1,6 +1,7 @@
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { aspettaLaBozza, senzaPrezzoTranneOrari, type InAttesa } from './bozza-sito-ad';
 import { leggiSchedaSalvata, prodottiTipici, senzaPrezzo, vociSenzaPrezzo } from './scheda-cliente';
+import { schedaEPagellaAperte, schedaPerIlSito } from './scheda-dopo-abbonamento';
 
 /**
  * I NEGOZI CHE ASPETTANO LA BOZZA DEL SITO — 24/11/2026.
@@ -40,7 +41,7 @@ export type NegozioInAttesa = {
 
 export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } = {}): Promise<NegozioInAttesa[]> {
   const admin = getAdminSupabase();
-  const [negozi, bozze, schede] = await Promise.all([
+  const [negozi, bozze, schede, visibili, abbonamenti] = await Promise.all([
     admin
       .from('profiles')
       .select('id, role, store_name, business_type, store_address, store_description, store_customization, approval_status, created_at')
@@ -49,6 +50,14 @@ export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } 
       .limit(TETTO_NEGOZI),
     admin.from('bozze_sito').select('id_attivita, ricevuta_il').limit(TETTO_NEGOZI),
     admin.from('schede_clienti').select(opzioni.conIDati ? 'id_attivita, aggiornata_il, scheda' : 'id_attivita, aggiornata_il').limit(TETTO_NEGOZI),
+    // 25/11/2026 — La scheda di n8n si usa solo dopo l'abbonamento (lib/agenzia/scheda-dopo-abbonamento.ts):
+    // per chi è in demo l'AD scrive la bozza con l'analisi e la vetrina, senza i campi della scheda.
+    // Due letture facoltative: se cadono, la scheda resta chiusa per tutti.
+    opzioni.conIDati
+      ? admin.from('profiles').select('id, visibile_senza_abbonamento').eq('role', 'seller').limit(TETTO_NEGOZI)
+      : Promise.resolve({ data: [], error: null }),
+    // Sempre: serve anche a sapere quando la scheda si è aperta, e quindi se la bozza va rifatta.
+    admin.from('abbonamenti_servizi').select('seller_id, stato, creato_il').limit(TETTO_NEGOZI * 5),
   ]);
   if (negozi.error) throw new Error(`negozi non letti: ${negozi.error.message}`);
   if (bozze.error) throw new Error(`bozze non lette: ${bozze.error.message}`);
@@ -58,13 +67,32 @@ export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } 
     ((schede.error ? [] : schede.data ?? []) as unknown as { id_attivita: string; aggiornata_il: string; scheda?: unknown }[]).map((s) => [s.id_attivita, s]),
   );
 
+  const visibileSenzaAbbonamento = new Set(
+    ((visibili.error ? [] : visibili.data ?? []) as Array<{ id: string; visibile_senza_abbonamento?: unknown }>)
+      .filter((r) => r.visibile_senza_abbonamento === true)
+      .map((r) => r.id),
+  );
+  const statiPerNegozio = new Map<string, unknown[]>();
+  // Il primo abbonamento pagato di ogni negozio: lì la scheda si è aperta.
+  const apertaIl = new Map<string, string>();
+  for (const r of (abbonamenti.error ? [] : abbonamenti.data ?? []) as Array<{ seller_id: string; stato: unknown; creato_il?: string | null }>) {
+    statiPerNegozio.set(r.seller_id, [...(statiPerNegozio.get(r.seller_id) ?? []), r.stato]);
+    const quando = typeof r.creato_il === 'string' ? r.creato_il : null;
+    if (quando && schedaEPagellaAperte({ visibileSenzaAbbonamento: false, statiAbbonamenti: [r.stato] })) {
+      const prima = apertaIl.get(r.seller_id);
+      if (!prima || new Date(quando).getTime() < new Date(prima).getTime()) apertaIl.set(r.seller_id, quando);
+    }
+  }
+  const aperta = (id: string) =>
+    schedaEPagellaAperte({ visibileSenzaAbbonamento: visibileSenzaAbbonamento.has(id), statiAbbonamenti: statiPerNegozio.get(id) });
+
   const inAttesa: NegozioInAttesa[] = [];
   for (const p of (negozi.data ?? []) as Array<Record<string, unknown>>) {
     const id = String(p.id);
     const socials = (p.store_customization as { socials?: { website?: unknown } } | null)?.socials;
     const sito = typeof socials?.website === 'string' ? socials.website : null;
     const scheda = schedePerId.get(id);
-    const esito = aspettaLaBozza({ id, ruolo: String(p.role), sito, bozzaIl: bozzaIl.get(id) ?? null, schedaIl: scheda?.aggiornata_il ?? null });
+    const esito = aspettaLaBozza({ id, ruolo: String(p.role), sito, bozzaIl: bozzaIl.get(id) ?? null, schedaIl: scheda?.aggiornata_il ?? null, schedaApertaIl: apertaIl.get(id) ?? null });
     if (!esito.aspetta) continue;
     inAttesa.push({
       id_attivita: id,
@@ -74,7 +102,7 @@ export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } 
       in_revisione: p.approval_status === 'pending',
       scheda_il: scheda?.aggiornata_il ?? null,
       bozza_il: bozzaIl.get(id) ?? null,
-      ...(opzioni.conIDati ? { dati: datiPubblici(p, scheda?.scheda) } : {}),
+      ...(opzioni.conIDati ? { dati: datiPubblici(p, scheda?.scheda, aperta(id)) } : {}),
     });
   }
   if (!opzioni.conIDati) return inAttesa;
@@ -94,8 +122,8 @@ export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } 
   return primi;
 }
 
-function datiPubblici(p: Record<string, unknown>, grezza: unknown): NonNullable<NegozioInAttesa['dati']> {
-  const scheda = leggiSchedaSalvata(grezza);
+function datiPubblici(p: Record<string, unknown>, grezza: unknown, aperta: boolean): NonNullable<NegozioInAttesa['dati']> {
+  const scheda = schedaPerIlSito(leggiSchedaSalvata(grezza), aperta);
   const campi: NonNullable<NegozioInAttesa['dati']>['campi_della_scheda'] = {};
   for (const [nome, c] of Object.entries(scheda?.campi ?? {})) {
     if (nome === 'telefono' || nome === 'menu_testo') continue;

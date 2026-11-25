@@ -115,7 +115,7 @@ describe('i conti del flusso 18', () => {
 });
 
 // ─── La rotta ─────────────────────────────────────────────────────────────────────────────
-const db = vi.hoisted(() => ({ letture: [] as Array<{ tabella: string; colonne: string; filtri: string[] }>, profilo: null as unknown, ruoloErrore: false }));
+const db = vi.hoisted(() => ({ letture: [] as Array<{ tabella: string; colonne: string; filtri: string[] }>, profilo: null as unknown, ruoloErrore: false, abbonamenti: [] as Array<{ stato: string }> }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@/lib/api/middleware', () => ({
   withSellerAnchePendingRateLimit: (_o: unknown, gestore: (ctx: Record<string, unknown>) => unknown) =>
@@ -137,6 +137,7 @@ vi.mock('@/lib/supabase/server', () => ({
           if (tabella === 'products' && l.filtri.includes('seller_id=negozio-1')) return Promise.resolve({ data: [{ id: 'p1', status: 'available', images: ['a'], price: 2 }], error: null, count: 1 }).then(ok);
           if (tabella === 'products') return Promise.resolve({ data: [{ seller_id: 'altro' }, { seller_id: '11111111-1111-1111-1111-5d9000000001' }], error: null }).then(ok);
           if (tabella === 'orders') return Promise.resolve({ data: null, error: { message: 'giù' } }).then(ok);
+          if (tabella === 'abbonamenti_servizi') return Promise.resolve({ data: db.abbonamenti, error: null }).then(ok);
           return Promise.resolve({ data: [{ rating: 5 }], error: null }).then(ok);
         },
       };
@@ -149,7 +150,9 @@ describe('/api/seller/pagella', () => {
   beforeEach(() => {
     vi.resetModules();
     db.letture = [];
-    db.profilo = { role: 'seller', approval_status: 'approved', approved_at: '2026-11-01T00:00:00Z', stripe_charges_enabled: true, stripe_payouts_enabled: true };
+    db.abbonamenti = [];
+    // Un negozio già online prima della modalità demo (come Pane Quotidiano): la pagella resta com'è.
+    db.profilo = { role: 'seller', visibile_senza_abbonamento: true, approval_status: 'approved', approved_at: '2026-11-01T00:00:00Z', stripe_charges_enabled: true, stripe_payouts_enabled: true };
   });
 
   it('legge solo il negozio che chiede, niente dati dei clienti, e una lettura caduta resta «non misurato»', async () => {
@@ -168,6 +171,26 @@ describe('/api/seller/pagella', () => {
     // le recensioni sono quelle del negozio (store_reviews), come nel flusso 18 e nella pagina Recensioni
     expect(db.letture.find((l) => l.tabella === 'store_reviews')!.filtri).toContain('store_id=negozio-1');
     expect(db.letture.some((l) => l.tabella === 'reviews')).toBe(false);
+  });
+
+  // 25/11/2026 — Nicola: la pagella arriva solo dopo l'abbonamento.
+  it('un negozio in demo (mai pagato, non già online) non ha la pagella e non si leggono i suoi ordini', async () => {
+    db.profilo = { role: 'seller', visibile_senza_abbonamento: false, approval_status: 'approved' };
+    db.abbonamenti = [{ stato: 'incomplete' }];
+    const { GET } = await import('@/app/api/seller/pagella/route');
+    const r = await GET(new Request('https://mycity.example/api/seller/pagella') as never);
+    expect(r.status).toBe(200);
+    expect((await r.json()).data).toEqual({ disponibile: false });
+  });
+
+  it('dopo il primo abbonamento pagato la pagella c’è, anche se poi è stato disdetto', async () => {
+    db.profilo = { role: 'seller', visibile_senza_abbonamento: false, approval_status: 'pending' };
+    for (const stato of ['active', 'past_due', 'canceled']) {
+      db.abbonamenti = [{ stato }];
+      const { GET } = await import('@/app/api/seller/pagella/route');
+      const corpo = await (await GET(new Request('https://mycity.example/api/seller/pagella') as never)).json();
+      expect(corpo.data.numeri, stato).toBeDefined();
+    }
   });
 
   it('chi non è un negozio non ha la pagella', async () => {

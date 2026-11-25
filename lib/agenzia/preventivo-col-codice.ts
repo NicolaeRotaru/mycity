@@ -7,6 +7,7 @@ import { env } from '@/lib/env';
 import { FASCE, type Abbonamento } from '@/lib/agenzia/preventivo';
 import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import { campiPerIlProfilo, leggiSchedaSalvata } from '@/lib/agenzia/scheda-cliente';
+import { leggiSchedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
 
 /**
  * IL PREVENTIVO COL LINK COL CODICE — 24/11/2026.
@@ -110,7 +111,11 @@ export async function accettaPreventivoColCodice(input: {
   // 2) Il profilo coi soli dati confermati della scheda di n8n, e in revisione.
   const scheda = await admin.from('schede_clienti').select('scheda').eq('id_attivita', id).maybeSingle();
   if (scheda.error) logger.warn('[preventivo-codice] scheda non letta: il profilo resta coi dati che ha', { sellerId: id, message: scheda.error.message });
-  const dati = campiPerIlProfilo(leggiSchedaSalvata(scheda.data?.scheda));
+  // 25/11/2026 — Nicola: la scheda del cliente nasce solo dopo l'abbonamento. Chi accetta il preventivo
+  // non ha ancora pagato: l'indirizzo della scheda entra nel profilo al primo pagamento
+  // (lib/agenzia/abbonamento-attivo-n8n.ts), qui solo se il negozio è già abbonato.
+  const aperta = await leggiSchedaEPagellaAperte(admin, id);
+  const dati = campiPerIlProfilo(schedaPerIlSito(leggiSchedaSalvata(scheda.data?.scheda), aperta));
   const profilo = await admin
     .from('profiles')
     .update({ ...dati, approval_status: 'pending', approval_requested_at: new Date().toISOString() })

@@ -276,6 +276,30 @@ describe('il webhook dell abbonamento dei servizi', () => {
     expect(stato.scritture.some((w) => w.tabella === 'notifications' && w.tipo === 'insert')).toBe(true);
   });
 
+  // 25/11/2026 — Nicola: la scheda del cliente e la pagella nascono al primo abbonamento pagato.
+  it('al primo abbonamento pagato il sito avvisa n8n (flusso 18) con l id del negozio e il segreto', async () => {
+    const chiamate: Array<{ url: string; init: RequestInit }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => { chiamate.push({ url, init }); return new Response('{}', { status: 200 }); }));
+    process.env.N8N_PAGELLA_WEBHOOK_URL = 'https://n8n.example/webhook/mycity-analisi-attivita';
+    process.env.N8N_NUOVO_CLIENTE_SEGRETO = 'segreto-16';
+    try {
+      await servizi.handleServiziSubscription(sessione(META));
+      expect(chiamate).toHaveLength(1);
+      expect(chiamate[0].url).toBe('https://n8n.example/webhook/mycity-analisi-attivita');
+      expect((chiamate[0].init.headers as Record<string, string>)['x-mycity-segreto']).toBe('segreto-16');
+      expect(JSON.parse(String(chiamate[0].init.body))).toMatchObject({ tipo: 'abbonamento-attivo', id: 'negozio-1' });
+      // un abbonamento che Stripe non dà attivo non apre niente
+      chiamate.length = 0;
+      stato.statoStripe = 'canceled';
+      await servizi.handleServiziSubscription(sessione(META));
+      expect(chiamate).toHaveLength(0);
+    } finally {
+      delete process.env.N8N_PAGELLA_WEBHOOK_URL;
+      delete process.env.N8N_NUOVO_CLIENTE_SEGRETO;
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('un secondo abbonamento pagato si registra ma avvisa del doppione, senza «grazie, è attivo» (collaudo)', async () => {
     stato.altriAttivi = [{ stripe_subscription_id: 'sub_primo' }];
     await servizi.handleServiziSubscription(sessione(META));

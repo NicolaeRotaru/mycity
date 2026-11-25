@@ -80,16 +80,16 @@ export const CHIAVE_SCHEDA = ['seller', 'scheda-cliente'] as const;
 
 /**
  * 24/11/2026 — La scheda del locale mandata da n8n (tabella schede_clienti, migrazione 708): la
- * bozza del sito e il piano dei post la usano. La regola di riga lascia leggere al negozio solo la
- * sua. Senza scheda, o se la lettura non riesce, `null`: la bozza resta quella generica.
+ * bozza del sito e il piano dei post la usano. Dal 25/11 passa dal server (/api/seller/scheda-cliente):
+ * finché il negozio non è abbonato arriva solo l'analisi, senza i campi (Nicola: la scheda nasce dopo
+ * l'abbonamento). Senza scheda, o se la lettura non riesce, `null`: la bozza resta quella generica.
  */
 export async function leggiSchedaDelNegozio(): Promise<SchedaCliente | null> {
-  const { supabase } = await import('@/lib/supabase/client');
-  const { data: chi } = await supabase.auth.getUser();
-  if (!chi.user) return null;
-  const { data, error } = await supabase.from('schede_clienti').select('scheda').eq('id_attivita', chi.user.id).maybeSingle();
-  if (error || !data) return null;
-  return leggiSchedaSalvata((data as { scheda?: unknown }).scheda);
+  const r = await fetch('/api/seller/scheda-cliente', { cache: 'no-store' }).catch(() => null);
+  if (!r || !r.ok) return null;
+  const corpo = (await r.json().catch(() => null)) as { ok?: boolean; data?: { scheda?: unknown } } | null;
+  if (!corpo?.ok || !corpo.data?.scheda) return null;
+  return leggiSchedaSalvata(corpo.data.scheda);
 }
 
 /* ───────────── 24/11/2026 — L'analisi del business e la bozza del sito dell'AD ───────────── */
@@ -174,9 +174,16 @@ export async function analizzaIlSito(): Promise<{ sito: RisultatoSito; giaFattaO
 
 export const CHIAVE_PAGELLA = ['seller', 'pagella'] as const;
 
-export async function leggiPagella(): Promise<import('@/lib/agenzia/pagella').Pagella> {
+/**
+ * 25/11/2026 — La pagella arriva solo dopo l'abbonamento (Nicola): per chi è in demo il server risponde
+ * `{ disponibile: false }` e qui diventa `null`, cioè «nessuna pagella da mostrare».
+ */
+export async function leggiPagella(): Promise<import('@/lib/agenzia/pagella').Pagella | null> {
   const r = await fetch('/api/seller/pagella', { cache: 'no-store' });
-  const corpo = (await r.json().catch(() => null)) as { ok?: boolean; data?: import('@/lib/agenzia/pagella').Pagella; error?: { message?: string } } | null;
+  const corpo = (await r.json().catch(() => null)) as
+    | { ok?: boolean; data?: import('@/lib/agenzia/pagella').Pagella | { disponibile: false }; error?: { message?: string } }
+    | null;
   if (!r.ok || !corpo?.ok || !corpo.data) throw new Error(corpo?.error?.message ?? 'Non sono riuscito a preparare la pagella.');
+  if ('disponibile' in corpo.data) return null;
   return corpo.data;
 }
