@@ -107,10 +107,10 @@ describe('2 · un sito noto senza la misura di Google conta come sito', () => {
 /* ─────────── 3 · i social ─────────── */
 const canali = (c: Record<string, unknown>): AnalisiCanali =>
   leggiAnalisiCanali({ tipo: 'analisi-canali', id_attivita: ID, fatta_il: '2026-11-25T18:00:00Z', canali: c })!;
-const ig = (post: number, video: 'spesso' | 'a_volte' | 'mai', extra: Record<string, unknown> = {}) => ({
+const ig = (post: number, video: boolean, extra: Record<string, unknown> = {}) => ({
   stato: 'fatta', fonte: 'https://www.instagram.com/esempio',
   numeri: { post_ultimi_30_giorni: post, follower: 900 },
-  giudizio: { livello: 'medio', post_al_mese: post, video, cura: 'curato', risposte_recensioni: null, migliorie: null, non_trovato: [], ...extra },
+  giudizio: { livello: 'attivo', post_al_mese: post, video, cura: 'curato', risposte_recensioni: null, migliorie: null, non_trovato: [], ...extra },
 });
 const conSocial = (c: AnalisiCanali | null, socials: Record<string, string> | null = { instagram: 'esempio' }): DatiPerLOfferta => ({
   nome: 'Esempio', tipo: 'bar', canali: c, dati: { storeLogo: null, storeMedia: [], prodotti: [], socials },
@@ -119,39 +119,41 @@ const igDi = (d: DatiPerLOfferta) => offertaSuMisura(d).proposte.find((x) => x.i
 
 describe('3 · i livelli dei social', () => {
   it('il giudizio dell’AD arriva fino al sito (non si scarta più)', () => {
-    const c = canali({ instagram: ig(10, 'mai', { livello: 'stellare', migliorie: 'Costa 300 € al mese' }) });
-    expect(c.canali.instagram!.giudizio).toMatchObject({ post_al_mese: 10, video: 'mai', cura: 'curato', livello: null, migliorie: null });
+    const c = canali({ instagram: ig(10, false, { livello: 'stellare', migliorie: 'Costa 300 € al mese' }) });
+    expect(c.canali.instagram!.giudizio).toMatchObject({ post_al_mese: 10, video: false, cura: 'curato', livello: null, migliorie: null });
   });
 
   it('debole, attivo, forte, nessuno', () => {
-    expect(livelloSocial(canali({ instagram: ig(3, 'mai') }).canali.instagram)).toBe('debole');
-    expect(livelloSocial(canali({ instagram: ig(10, 'mai') }).canali.instagram)).toBe('attivo');
-    expect(livelloSocial(canali({ instagram: ig(20, 'spesso') }).canali.instagram)).toBe('forte');
+    expect(livelloSocial(canali({ instagram: ig(3, false) }).canali.instagram)).toBe('debole');
+    expect(livelloSocial(canali({ instagram: ig(10, false) }).canali.instagram)).toBe('attivo');
+    expect(livelloSocial(canali({ instagram: ig(20, true) }).canali.instagram)).toBe('forte');
     expect(livelloSocial(canali({ instagram: { stato: 'non_trovato' } }).canali.instagram)).toBe('nessuno');
+    // senza il conto dei post vale il livello scritto dall'AD (N8N#16, 119c57e)
+    expect(livelloSocial(canali({ instagram: { stato: 'fatta', fonte: 'https://www.instagram.com/x', giudizio: { livello: 'forte', video: true } } }).canali.instagram)).toBe('forte');
     expect(livelloSocial(canali({ instagram: { stato: 'privato', fonte: 'https://www.instagram.com/x' } }).canali.instagram)).toBeNull();
   });
 
   it('debole: la gestione dal Base', () => {
-    const x = igDi(conSocial(canali({ instagram: ig(3, 'mai') })))!;
+    const x = igDi(conSocial(canali({ instagram: ig(3, false) })))!;
     expect(x.daFascia).toBe('base');
     expect(cosaInFascia(x, 'base')).toMatch(/post al mese/);
   });
 
   it('attivo: nel Base si tiene e si collega, la gestione dalla prima fascia che fa più post o video di oggi', () => {
-    const x = igDi(conSocial(canali({ instagram: ig(10, 'mai') })))!;
+    const x = igDi(conSocial(canali({ instagram: ig(10, false) })))!;
     expect(cosaInFascia(x, 'base')).toMatch(/^Teniamo/);
     expect(cosaInFascia(x, 'business')).toMatch(/12 post al mese/);
     expect(x.consiglia?.fascia).toBe('business');
     // 12 post con video: il Business non fa di più, la gestione parte dal Premium
-    const y = igDi(conSocial(canali({ instagram: ig(12, 'spesso') })))!;
+    const y = igDi(conSocial(canali({ instagram: ig(12, true) })))!;
     expect(cosaInFascia(y, 'business')).toMatch(/^Teniamo/);
     expect(cosaInFascia(y, 'premium')).toMatch(/20 post al mese/);
   });
 
   it('forte: tenuto nel Base e nel Business, gestito solo nel Premium e solo con le migliorie dell’AD', () => {
-    const senza = igDi(conSocial(canali({ instagram: ig(20, 'spesso') })))!;
+    const senza = igDi(conSocial(canali({ instagram: ig(20, true) })))!;
     for (const f of ABBONAMENTI) expect(cosaInFascia(senza, f)).toMatch(/^Teniamo/);
-    const con = igDi(conSocial(canali({ instagram: ig(20, 'spesso', { migliorie: 'Le storie ogni giorno col piatto del giorno' }) })))!;
+    const con = igDi(conSocial(canali({ instagram: ig(20, true, { migliorie: 'Le storie ogni giorno col piatto del giorno' }) })))!;
     expect(cosaInFascia(con, 'business')).toMatch(/^Teniamo/);
     expect(cosaInFascia(con, 'premium')).toContain('le storie ogni giorno col piatto del giorno');
     expect(con.consiglia?.fascia).toBe('premium');
@@ -162,20 +164,20 @@ describe('3 · i livelli dei social', () => {
   });
 
   it('mai «nessun profilo» se un profilo l’abbiamo trovato, anche se non è scritto nella vetrina', () => {
-    const d = conSocial(canali({ instagram: ig(3, 'mai') }), null);
+    const d = conSocial(canali({ instagram: ig(3, false) }), null);
     expect(offertaSuMisura(d).proposte.some((x) => x.id === 'social-apertura')).toBe(false);
     expect(testi(d)).not.toMatch(/nessun profilo/i);
   });
 
   it('le risposte alle recensioni dal Business, solo se oggi il locale non risponde', () => {
-    const google = (risposte: 'sempre' | 'mai') => canali({ google: { stato: 'fatta', fonte: 'https://maps.google.com/?cid=1', numeri: { recensioni: 210, valutazione: 4.6 }, giudizio: { risposte_recensioni: risposte } } });
+    const google = (risponde: boolean) => canali({ google: { stato: 'fatta', fonte: 'https://maps.google.com/?cid=1', numeri: { recensioni: 210, valutazione: 4.6 }, giudizio: { risposte_recensioni: risponde } } });
     const r = (c: AnalisiCanali) => offertaSuMisura(conSocial(c)).proposte.find((x) => x.id === 'google-recensioni');
-    expect(r(google('sempre'))).toBeUndefined();
-    expect(r(google('mai'))!.daFascia).toBe('business');
+    expect(r(google(true))).toBeUndefined();
+    expect(r(google(false))!.daFascia).toBe('business');
   });
 
   it('il consiglio tiene conto del livello dei social', () => {
-    const c = consigliataDallOfferta({ id: 'base', perche: 'La tua vetrina è già in ordine.' }, offertaSuMisura(conSocial(canali({ instagram: ig(10, 'mai') }))));
+    const c = consigliataDallOfferta({ id: 'base', perche: 'La tua vetrina è già in ordine.' }, offertaSuMisura(conSocial(canali({ instagram: ig(10, false) }))));
     expect(c.id).toBe('business');
   });
 });
@@ -223,7 +225,7 @@ describe('i collegamenti: leggi-preventivo e bozze-in-attesa', () => {
     tabelle.profiles = { id: ID, role: 'seller', store_name: 'La Ragazzetta', business_type: 'bar', store_customization: { socials: {} } };
     tabelle.products = [];
     tabelle.schede_clienti = { scheda: { tipo: 'scheda-cliente', id_attivita: ID, campi: { sito_ufficiale: { valore: 'https://www.laragazzetta.it', stato: 'da_confermare', fonte: 'https://www.laragazzetta.it' } }, analisi: { business_fatta_il: '2026-11-25T18:00:00Z', business_avvisi: [] } } };
-    tabelle.analisi_negozi = { sito: null, canali: { tipo: 'analisi-canali', id_attivita: ID, fatta_il: '2026-11-25T18:00:00Z', canali: { instagram: ig(10, 'mai') } } };
+    tabelle.analisi_negozi = { sito: null, canali: { tipo: 'analisi-canali', id_attivita: ID, fatta_il: '2026-11-25T18:00:00Z', canali: { instagram: ig(10, false) } } };
     const { preventivo } = await leggiPreventivo(ID, undefined, { pubblico: true });
     const ids = preventivo.offerta!.proposte.map((x) => x.id);
     expect(ids).toContain('social-costanza');

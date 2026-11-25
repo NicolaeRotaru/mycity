@@ -48,7 +48,7 @@ const canali = leggiAnalisiCanali({
     instagram: { stato: 'fatta', fonte: 'https://www.instagram.com/oradelgusto/', numeri: { follower: 812, post_ultimi_30_giorni: 3 } },
     facebook: { stato: 'non_trovato' },
     // 25/11/2026 sera — Le risposte alle recensioni si offrono solo se oggi il locale non risponde (giudizio dell'AD).
-    google: { stato: 'fatta', fonte: 'https://maps.app.goo.gl/AbC123', numeri: { valutazione: 4.6, recensioni: 128 }, osservazioni: ['Mancano gli orari della domenica'], giudizio: { risposte_recensioni: 'mai' } },
+    google: { stato: 'fatta', fonte: 'https://maps.app.goo.gl/AbC123', numeri: { valutazione: 4.6, recensioni: 128 }, osservazioni: ['Mancano gli orari della domenica'], giudizio: { risposte_recensioni: false } },
   },
 });
 const sito = riassumiPageSpeed(

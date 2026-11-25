@@ -434,7 +434,7 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
     const video = c.giudizio?.video ?? null;
     const follower = c.numeri?.follower;
     const migl = c.giudizio?.migliorie ?? null;
-    const faDiPiu = (f: Abbonamento) => (post !== null && postAlMese(f) > post) || (video === 'mai' && videoAlMese(f) > 0);
+    const faDiPiu = (f: Abbonamento) => (post !== null && postAlMese(f) > post) || (video === false && videoAlMese(f) > 0);
     const da: Abbonamento | null = livello === 'debole' ? 'base' : livello === 'attivo' ? (ABBONAMENTI.filter((f) => f !== 'base').find(faDiPiu) ?? null) : migl ? 'premium' : null;
     const tenuto = `Teniamo il tuo ${nome} com’è e lo colleghiamo alla vetrina`;
     const gestione = (f: Abbonamento) =>
@@ -445,7 +445,7 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
           : `Curiamo noi il tuo ${nome}: ${postAlMese(f)} post al mese${extra[f]}`;
     const perFascia = Object.fromEntries(ABBONAMENTI.map((f) => [f, da && ORDINE[f] >= ORDINE[da] ? gestione(f) : tenuto])) as Record<Abbonamento, string>;
     const visto = post !== null
-      ? `Negli ultimi 30 giorni su ${nome} sono usciti ${post} post${video === 'mai' ? ', senza video' : video ? ', anche con video' : ''}${follower !== undefined ? `, con ${it(follower)} persone che ti seguono` : ''}.`
+      ? `Negli ultimi 30 giorni su ${nome} sono usciti ${post} post${video === false ? ', senza video' : video === true ? ', anche con video' : ''}${follower !== undefined ? `, con ${it(follower)} persone che ti seguono` : ''}.`
       : `${LIVELLO_SOCIAL_IN_PAROLE[livello]}${follower !== undefined ? ` Ti seguono ${it(follower)} persone.` : ''}`;
     aggiungi({
       // Instagram tiene il nome di sempre: la proposta è la stessa, allargata ai livelli.
@@ -541,14 +541,13 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
     }
     const recensioni = google.numeri?.recensioni;
     // Dal Business, e solo se oggi il locale non risponde (Nicola, `agenzia.social-come-il-sito`): senza il giudizio non si sa.
-    const risponde = google.giudizio?.risposte_recensioni ?? null;
-    if (recensioni !== undefined && recensioni > 0 && (risponde === 'mai' || risponde === 'a_volte')) {
+    if (recensioni !== undefined && recensioni > 0 && google.giudizio?.risposte_recensioni === false) {
       aggiungi({
         id: 'google-recensioni',
         servizio: 'social',
         cosa: 'Rispondiamo noi alle recensioni su Google, con il tuo tono',
         perFascia: { premium: 'Rispondiamo noi alle recensioni su Google e curiamo la scheda ogni mese, con foto nuove e post' },
-        perche: `La tua scheda ha ${it(recensioni)} ${recensioni === 1 ? 'recensione' : 'recensioni'}${google.numeri?.valutazione !== undefined ? ` e ${google.numeri.valutazione.toLocaleString('it-IT', { maximumFractionDigits: 1 })} stelle su 5` : ''}, e oggi ${risponde === 'mai' ? 'nessuno risponde' : 'si risponde solo ogni tanto'}: chi risponde viene scelto di più.`,
+        perche: `La tua scheda ha ${it(recensioni)} ${recensioni === 1 ? 'recensione' : 'recensioni'}${google.numeri?.valutazione !== undefined ? ` e ${google.numeri.valutazione.toLocaleString('it-IT', { maximumFractionDigits: 1 })} stelle su 5` : ''}, e oggi nessuno risponde: chi risponde viene scelto di più.`,
         fonte: FONTE.google,
         // Le risposte alle recensioni partono dal Business (FASCE).
         daFascia: 'business',
