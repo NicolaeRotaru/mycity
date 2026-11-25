@@ -155,9 +155,8 @@ export default async function PreventivoDalLink({
         {p.consigliato && <p className="mt-2 text-xs text-ink-600">Perché consigliamo {FASCE[p.consigliato].nome}: {p.perche_consigliato}</p>}
       </section>
 
-      {/* key: cambiando solo ?fascia Next tiene la pagina e lo stato del modulo; senza key il modulo restava
-          sulla fascia di prima e si accettava una fascia diversa da quella letta (collaudo del 25/11). */}
-      <AccettaDalLink key={scelta} codice={codice} consigliato={scelta} prezzi={p.prezzi} primoMeseScontato={p.primoMeseScontato} />
+      {/* Il modulo segue `scelta` da sé (AccettaDalLink): cambiando fascia non si perde l'email scritta. */}
+      <AccettaDalLink codice={codice} consigliato={scelta} prezzi={p.prezzi} primoMeseScontato={p.primoMeseScontato} />
     </Cornice>
   );
 }

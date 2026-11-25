@@ -216,6 +216,7 @@ function NotifPopover({
   triggerRef: RefObject<HTMLButtonElement>;
 }) {
   const pannelloRef = useRef<HTMLDivElement>(null);
+  const elencoRef = useRef<HTMLUListElement>(null);
   const qc = useQueryClient();
   const { data: ultime, isLoading, isError, refetch } = useUltimeNotifiche(userId);
   // Il pannello esiste solo da aperto: il montaggio e' l'apertura, e lo
@@ -284,7 +285,7 @@ function NotifPopover({
         ) : righe.length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-ink-500">Nessuna notifica, per ora.</p>
         ) : (
-          <ul className="max-h-[min(60vh,420px)] divide-y divide-cream-200 overflow-y-auto" aria-label="Ultime notifiche">
+          <ul ref={elencoRef} tabIndex={-1} className="max-h-[min(60vh,420px)] divide-y divide-cream-200 overflow-y-auto focus:outline-none" aria-label="Ultime notifiche">
             {righe.map((n) => {
               const tono = toneFor(n);
               const Icona = tono.icon;
@@ -328,7 +329,11 @@ function NotifPopover({
                     // Senza un indirizzo da aprire, il clic la segna letta (collaudo del 25/11).
                     <button
                       type="button"
-                      onClick={() => segnaLetta(n.id)}
+                      onClick={() => {
+                        segnaLetta(n.id);
+                        // Letta, la voce non è più un pulsante: il fuoco resta nella tendina (collaudo del 25/11).
+                        elencoRef.current?.focus();
+                      }}
                       aria-label={`${n.title}: segna come letta`}
                       className="block w-full text-left hover:bg-cream-50"
                     >

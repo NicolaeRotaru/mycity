@@ -170,6 +170,8 @@ describe('la tendina della campanella del negozio', () => {
     await act(async () => { voce!.click(); });
     await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
     expect(mondo.scritture).toEqual([{ tabella: 'notifications', valori: { is_read: true }, filtri: { id: 'n2', user_id: 's-1' } }]);
+    // Il fuoco resta nella tendina, sull'elenco (secondo collaudo).
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Ultime notifiche');
   });
 
   it('senza notifiche lo dice', async () => {
