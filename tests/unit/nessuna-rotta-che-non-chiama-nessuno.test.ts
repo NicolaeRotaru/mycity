@@ -35,6 +35,7 @@ const CHIAMATE_DA_FUORI = [
   /^unsubscribe/,
   /^health/,
   /^og\//, // immagini di anteprima: le chiedono i social, non il nostro codice
+  /^agenzia\/nuova-attivita$/, // 25/11/2026: la chiama solo n8n (modulo 12, flusso 20), col segreto della scheda
 ];
 
 /**
