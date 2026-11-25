@@ -67,7 +67,31 @@ export type DatiPerLOfferta = {
   scheda?: SchedaCliente | null;
   canali?: AnalisiCanali | null;
   sito?: RisultatoSito | null;
+  /** 25/11/2026 — Com'è il sito che ha già, a occhio: lo scrive l'AD nella scheda (Google non misura la bellezza). */
+  giudizioSito?: GiudizioSito | null;
 };
+
+/**
+ * IL GIUDIZIO DELL'AD SUL SITO — 25/11/2026.
+ *
+ * Nicola: «in base alla complessità/bellezza del sito deve già esporre in base all'abbonamento quale valore
+ * aggiunto può apportare». PageSpeed misura velocità, Google e facilità d'uso, non la bellezza: quella la
+ * guarda l'AD quando scrive la scheda (sua scelta, stesso giorno), in `analisi.giudizio_sito`.
+ */
+export const ASPETTI_SITO = ['curato', 'datato', 'fai-da-te'] as const;
+export const PAGINE_SITO = ['una', 'poche', 'molte'] as const;
+export type GiudizioSito = { aspetto: (typeof ASPETTI_SITO)[number] | null; pagine: (typeof PAGINE_SITO)[number] | null; nota: string | null };
+
+/** Il giudizio letto dalla scheda, ripulito: valori fuori elenco diventano «non detto», mai un errore. */
+export function leggiGiudizioSito(grezzo: unknown): GiudizioSito | null {
+  if (!grezzo || typeof grezzo !== 'object') return null;
+  const g = grezzo as Record<string, unknown>;
+  const aspetto = (ASPETTI_SITO as readonly unknown[]).includes(g.aspetto) ? (g.aspetto as GiudizioSito['aspetto']) : null;
+  const pagine = (PAGINE_SITO as readonly unknown[]).includes(g.pagine) ? (g.pagine as GiudizioSito['pagine']) : null;
+  const notaGrezza = typeof g.nota === 'string' ? g.nota.replace(/\s+/g, ' ').trim() : '';
+  const nota = notaGrezza.length >= 3 && notaGrezza.length <= 200 && senzaPrezzo(notaGrezza) ? notaGrezza : null;
+  return aspetto || pagine || nota ? { aspetto, pagine, nota } : null;
+}
 
 const FONTE = {
   vetrina: 'la tua vetrina su MyCity',
@@ -120,7 +144,7 @@ const VIDEO_PER_TIPO: Record<TipoAttivita, string> = {
 export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
   const p: Proposta[] = [];
   const aggiungi = (x: Proposta) => p.push(x);
-  const { dati, scheda, canali, sito, tipo } = d;
+  const { dati, scheda, canali, sito, tipo, giudizioSito } = d;
 
   /* ─────────── FOTO E VIDEO ─────────── */
   const prodotti = dati.prodotti.length;
@@ -225,25 +249,66 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
       daFascia: 'base',
     });
   }
-  // Il sito che ha già: nessuna fascia dice «sistemiamo il tuo sito di oggi». Il sito è compreso in ogni
-  // fascia: lo rifacciamo noi, e il nuovo non ha i difetti che Google trova in quello di oggi.
+  // Il sito che ha già (25/11/2026: Google PageSpeed lo misura appena lo conosciamo, l'AD dice com'è).
+  // Due strade, mai «sistemiamo il tuo sito di oggi» a metà:
+  //  · fatto bene (Google contento e, se l'AD l'ha visto, curato): lo teniamo e ci aggiungiamo valore;
+  //  · altrimenti: lo rifacciamo noi, senza i difetti che Google trova in quello di oggi.
   if (haSito && sito) {
     const lento = sito.velocita !== null && votoDi(sito.velocita) !== 'bene';
+    const googleMale = sito.seo !== null && votoDi(sito.seo) !== 'bene';
     const daSistemare = vociCitabili(sito.daSistemare, 2, 300);
-    if (lento || daSistemare.length) {
+    const aspettoDebole = giudizioSito?.aspetto === 'datato' || giudizioSito?.aspetto === 'fai-da-te';
+    const aOcchio = giudizioSito?.aspetto === 'datato'
+      ? 'A vederlo, il sito sembra datato.'
+      : giudizioSito?.aspetto === 'fai-da-te'
+        ? 'A vederlo, il sito sembra fatto in casa.'
+        : giudizioSito?.aspetto === 'curato'
+          ? 'A vederlo, il sito è curato.'
+          : null;
+    const voti = [
+      sito.velocita !== null ? `${sito.velocita} su 100 per la velocità dal telefono` : null,
+      sito.seo !== null ? `${sito.seo} su 100 per farsi trovare su Google` : null,
+    ].filter(Boolean) as string[];
+    const nota = giudizioSito?.nota ? `${giudizioSito.nota.replace(/[.!?]?$/, '.')}` : null;
+    const molte = giudizioSito?.pagine === 'molte';
+    if (lento || googleMale || daSistemare.length || aspettoDebole) {
       const veloce = lento ? ', veloce dal telefono' : '';
       aggiungi({
         id: 'sito-rifatto',
         servizio: 'sito_web',
         cosa: `Rifacciamo il tuo sito${veloce}, senza le cose che Google segnala`,
         perFascia: {
-          base: `Rifacciamo il tuo sito in una pagina col tuo nome${veloce}, senza le cose che Google segnala`,
+          base: molte
+            ? `Rifacciamo la pagina principale del tuo sito${veloce}, col tuo nome e il pulsante per ordinare dalla vetrina`
+            : `Rifacciamo il tuo sito in una pagina col tuo nome${veloce}, senza le cose che Google segnala`,
           business: `Rifacciamo il tuo sito completo, di più pagine${veloce}, senza le cose che Google segnala`,
           premium: `Rifacciamo il tuo sito completo${veloce}, e lo aggiorniamo noi ogni mese`,
         },
         perche: [
           lento ? `Oggi Google gli dà ${sito.velocita} su 100 per la velocità dal telefono${sito.secondiPerVedere !== null ? `: la parte principale si vede dopo ${sito.secondiPerVedere.toLocaleString('it-IT')} secondi` : ''}.` : null,
+          googleMale ? `Per farsi trovare su Google gli dà ${sito.seo} su 100.` : null,
+          aspettoDebole ? aOcchio : null,
+          nota,
           ...daSistemare,
+        ].filter(Boolean).join(' '),
+        fonte: aspettoDebole && !lento && !googleMale && !daSistemare.length ? FONTE.scheda : FONTE.sito,
+        daFascia: 'base',
+      });
+    } else {
+      aggiungi({
+        id: 'sito-valorizzato',
+        servizio: 'sito_web',
+        cosa: 'Teniamo il tuo sito com’è e lo facciamo lavorare per te',
+        perFascia: {
+          base: 'Colleghiamo il tuo sito alla vetrina MyCity: il pulsante «Ordina» porta i clienti ai tuoi prodotti',
+          business: 'Colleghiamo il tuo sito alla vetrina, e ogni mese ci aggiungiamo una pagina nuova e i testi che Google legge',
+          premium: 'Colleghiamo il tuo sito alla vetrina e lo curiamo noi ogni mese: foto nuove, le novità del momento e i voti di Google sotto controllo',
+        },
+        perche: [
+          `Il tuo sito è già fatto bene${voti.length ? `: Google gli dà ${elenco(voti)}` : ''}.`,
+          aOcchio,
+          nota,
+          'Non lo rifacciamo: lo colleghiamo alla vetrina e lo facciamo crescere.',
         ].filter(Boolean).join(' '),
         fonte: FONTE.sito,
         daFascia: 'base',

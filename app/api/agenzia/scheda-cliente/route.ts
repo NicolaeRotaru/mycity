@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta } from '@/lib/api/corpo';
@@ -6,8 +6,12 @@ import { segretiCombaciano } from '@/lib/api/segreti';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { SchedaInArrivo } from '@/lib/agenzia/scheda-cliente';
+import { analizzaSitoDopoLaRisposta } from '@/lib/agenzia/sito-pagespeed';
+import { indirizzoWebPubblico } from '@/lib/indirizzi-pubblici';
 
 export const runtime = 'nodejs';
+// 25/11/2026 — Dopo la risposta può partire l'analisi del sito con Google PageSpeed (fino a 55 secondi).
+export const maxDuration = 60;
 
 /**
  * N8N MANDA LA SCHEDA DEL CLIENTE AL SITO — 24/11/2026.
@@ -84,5 +88,9 @@ export async function POST(req: Request): Promise<NextResponse> {
     return ApiErrors.unavailable('Non sono riuscito a salvare la scheda. Riprova fra poco.');
   }
   logger.info('[scheda-cliente] scheda salvata', { id, campi: Object.keys(scheda.campi).length });
+  // 25/11/2026 — Nicola: «se il sito c'è […] il preventivo si basa sul suo sito». Se la scheda porta il sito
+  // del locale, Google PageSpeed lo analizza dopo la risposta: n8n non aspetta.
+  const sito = indirizzoWebPubblico(String(scheda.campi.sito_ufficiale?.valore ?? ''));
+  if (sito) analizzaSitoDopoLaRisposta(admin, id, sito, after);
   return NextResponse.json({ ok: true }, { status: 200 });
 }
