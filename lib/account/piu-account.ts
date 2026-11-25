@@ -29,8 +29,21 @@
  *    fuso nel carrello del nuovo account, anche sul server;
  *  · un accesso finito senza «Esci» (cookie scaduto o revocato: la pagina riparte senza sessione)
  *    dimentica tutto come «Esci»: chi entra dopo non deve trovare «Passa a…» di nessuno;
- *  · dopo un cambio le altre schede aperte si ricaricano: il cookie è uno solo, e una scheda rimasta
- *    col modulo del negozio di prima scriverebbe col nuovo account.
+ *  · dopo un cambio le altre schede aperte si fermano con un avviso: il cookie è uno solo, e una
+ *    scheda rimasta col modulo del negozio di prima scriverebbe col nuovo account.
+ *
+ * DAL SECONDO COLLAUDO (25/11, notte):
+ *  · «la pagina riparte senza sessione» vale solo se il cookie dell'accesso non c'è davvero: con la
+ *    rete caduta all'apertura la libreria dà una sessione vuota ma il cookie resta, e l'utente è
+ *    ancora dentro. Lo decide chi chiama (`sessioneNelDeposito`);
+ *  · anche il carrello si mette da parte per account, come le bozze: se il suo invio al server non
+ *    riesce, la spesa di A resta da parte e torna con A, invece di sparire;
+ *  · un'aggiunta lasciata a metà (si torna indietro, o si rientra con lo stesso account) rimette
+ *    le bozze di A; mentre l'aggiunta è sulla pagina di accesso restano da parte;
+ *  · durante un cambio i salvataggi automatici dei moduli si fermano (`cambioInCorso`), in tutte le
+ *    schede: un modulo di A ancora a video non riscrive la sua bozza nel posto di B;
+ *  · le bozze di un account tolto dall'elenco (scaduto, o oltre i cinque) si cancellano con lui;
+ *  · se all'inizio del cambio non si sa chi è attivo, non si tocca niente.
  *
  * Qui non c'è React né il client di Supabase: le funzioni ricevono quello che usano, così le prove
  * le fanno girare senza browser.
@@ -45,7 +58,16 @@ export const DURATA_ACCESSO_SALVATO_MS = 180 * 24 * 60 * 60 * 1000;
 /** Scritta a ogni cambio: le ALTRE schede la sentono (evento «storage») e si ricaricano. */
 export const CHIAVE_CAMBIO = 'mycity:cambio-account';
 /** Le bozze del browser che appartengono a un account (vedi sopra). */
-export const CHIAVI_DELL_ACCOUNT = ['mc_new_product_draft', 'mc_checkout_draft', 'mycity:ai-batch:lavoro', 'mc_addr_hint'] as const;
+export const CHIAVI_DELL_ACCOUNT = [
+  'mc_new_product_draft', 'mc_checkout_draft', 'mycity:ai-batch:lavoro', 'mc_addr_hint',
+  // il carrello e le sue due date (lib/cart.ts, components/CartCrossDeviceSync.tsx)
+  'cart', 'cart_updated_at', 'mc_cart_synced_at',
+] as const;
+/** Scritta all'inizio di un cambio: per pochi secondi i moduli non salvano bozze (useFormAutosave). */
+export const CHIAVE_IN_CORSO = 'mycity:cambio-in-corso';
+const DURATA_IN_CORSO_MS = 15_000;
+/** Le pagine dove si sta ancora aggiungendo un account: lì le bozze di chi c'era restano da parte. */
+const PAGINE_DELL_ACCESSO = ['/sign-in', '/sign-up', '/auth/', '/reset-password'];
 const DA_PARTE = 'mycity:da-parte:';
 /** L'evento che avvisa i menu aperti che l'elenco è cambiato (nella stessa scheda «storage» non arriva). */
 export const EVENTO_ACCOUNT = 'mycity:account-cambiati';
@@ -99,12 +121,42 @@ export function leggiAccount(d: Deposito | null = locale(), ora = Date.now()): A
   }
 }
 
-function scrivi(lista: AccountSalvato[], d: Deposito | null) {
+/** Le chiavi del deposito che cominciano così (il deposito vero ha `length` e `key`). */
+function chiaviCon(prefisso: string, d: Deposito | null): string[] {
+  const chiavi: string[] = [];
   try {
-    if (lista.length === 0) d?.removeItem(CHIAVE_ACCOUNT);
-    else d?.setItem(CHIAVE_ACCOUNT, JSON.stringify(lista.slice(0, MASSIMO_ACCOUNT)));
+    for (let i = 0; i < (d?.length ?? 0); i++) {
+      const k = d?.key?.(i);
+      if (k?.startsWith(prefisso)) chiavi.push(k);
+    }
+  } catch { /* noop */ }
+  return chiavi;
+}
+
+function scrivi(lista: AccountSalvato[], d: Deposito | null) {
+  const tenuti = lista.slice(0, MASSIMO_ACCOUNT);
+  try {
+    if (tenuti.length === 0) d?.removeItem(CHIAVE_ACCOUNT);
+    else d?.setItem(CHIAVE_ACCOUNT, JSON.stringify(tenuti));
   } catch { /* deposito pieno o chiuso: si resta con un account solo, come prima */ }
+  // Le bozze messe da parte per un account che non c'è più nell'elenco se ne vanno con lui.
+  const vivi = new Set(tenuti.map((a) => a.id));
+  for (const k of chiaviCon(DA_PARTE, d)) {
+    const id = k.slice(DA_PARTE.length).split(':')[0];
+    if (!vivi.has(id)) { try { d?.removeItem(k); } catch { /* noop */ } }
+  }
   avvisa();
+}
+
+/** Un cambio è in corso (in questa scheda o in un'altra): i moduli non salvano bozze. */
+export function cambioInCorso(d: Deposito | null = locale(), ora = Date.now()): boolean {
+  try {
+    const quando = Number(d?.getItem(CHIAVE_IN_CORSO) ?? 0);
+    return quando > 0 && ora - quando < DURATA_IN_CORSO_MS;
+  } catch { return false; }
+}
+function segnaInCorso(d: Deposito | null, ora = Date.now()) {
+  try { d?.setItem(CHIAVE_IN_CORSO, String(ora)); } catch { /* noop */ }
 }
 
 /** Salva (o rinfresca) l'accesso di una sessione, in cima all'elenco. */
@@ -130,17 +182,10 @@ export function dimenticaAccount(id: string, d: Deposito | null = locale()): voi
 }
 
 export function dimenticaTutti(d: Deposito | null = locale(), s: Deposito | null = scheda()): void {
+  // Con l'elenco vuoto `scrivi` toglie anche tutte le bozze messe da parte (indirizzi e prodotti di altri).
   scrivi([], d);
   try { s?.removeItem(CHIAVE_AGGIUNTA); } catch { /* noop */ }
-  // Anche le bozze messe da parte per gli altri account: contengono indirizzi e prodotti di altri.
-  try {
-    const chiavi: string[] = [];
-    for (let i = 0; i < (d?.length ?? 0); i++) {
-      const k = d?.key?.(i);
-      if (k?.startsWith(DA_PARTE)) chiavi.push(k);
-    }
-    for (const k of chiavi) d?.removeItem(k);
-  } catch { /* noop */ }
+  try { d?.removeItem(CHIAVE_CAMBIO); d?.removeItem(CHIAVE_IN_CORSO); } catch { /* noop */ }
 }
 
 /**
@@ -208,9 +253,16 @@ export function dopoEventoAccesso(
   sessione: SessioneMinima | null,
   d: Deposito | null = locale(),
   s: Deposito | null = scheda(),
+  dove: {
+    /** Il cookie dell'accesso c'è ancora? `false` solo se manca davvero (vedi il secondo collaudo). */
+    sessioneNelDeposito?: boolean;
+    /** La pagina dove si è (window.location.pathname). */
+    percorso?: string;
+  } = {},
 ): void {
-  // «Esci», o un accesso finito da solo (la pagina riparte senza sessione): si dimentica tutto.
-  if (evento === 'SIGNED_OUT' || (evento === 'INITIAL_SESSION' && !sessione?.user?.id)) {
+  const finita = evento === 'INITIAL_SESSION' && !sessione?.user?.id && dove.sessioneNelDeposito === false;
+  // «Esci», o un accesso finito da solo (la pagina riparte e il cookie non c'è più): si dimentica tutto.
+  if (evento === 'SIGNED_OUT' || finita) {
     if (leggiAccount(d).length > 0 || aggiuntaIniziataDa(s)) dimenticaTutti(d, s);
     return;
   }
@@ -219,10 +271,20 @@ export function dopoEventoAccesso(
   const salvato = leggiAccount(d).some((a) => a.id === sessione.user.id);
   if (!salvato && !daChi) return;
   ricordaSessione(sessione, d);
-  if (daChi && daChi !== sessione.user.id) {
+  if (!daChi) return;
+  if (daChi !== sessione.user.id) {
+    // Aggiunta riuscita: è entrato un altro account.
     try { s?.removeItem(CHIAVE_AGGIUNTA); } catch { /* noop */ }
     riprendi(sessione.user.id, d);
     segnaCambio(sessione.user.id, d);
+    return;
+  }
+  // È ancora chi aveva premuto «Aggiungi». Se è rientrato con lo stesso account, o se ha lasciato la
+  // pagina di accesso senza entrare, l'aggiunta finisce e le sue bozze tornano.
+  const sullAccesso = PAGINE_DELL_ACCESSO.some((p) => (dove.percorso ?? '').startsWith(p));
+  if (evento === 'SIGNED_IN' || !sullAccesso) {
+    try { s?.removeItem(CHIAVE_AGGIUNTA); } catch { /* noop */ }
+    riprendi(sessione.user.id, d);
   }
 }
 
@@ -231,15 +293,16 @@ export function dopoEventoAccesso(
  * bozze, così il nuovo account parte pulito. Risponde dove andare.
  */
 export async function preparaAggiunta(
-  m: Pick<MondoDelCambio, 'sessioneAttuale' | 'salvaCarrello' | 'svuotaCarrello'>,
+  m: Pick<MondoDelCambio, 'sessioneAttuale' | 'salvaCarrello'>,
   d: Deposito | null = locale(),
   s: Deposito | null = scheda(),
 ): Promise<string> {
   const attuale = await m.sessioneAttuale();
   if (attuale) {
+    segnaInCorso(d);
     iniziaAggiunta(attuale, d, s);
+    // Il carrello sale sul server (se riesce) e comunque resta da parte per A, con le bozze.
     await m.salvaCarrello(attuale.user.id).catch(() => undefined);
-    m.svuotaCarrello();
     metteDaParte(attuale.user.id, d);
   }
   return '/sign-in?aggiungi=1';
@@ -286,14 +349,11 @@ export type MondoDelCambio = {
   sessioneAttuale: () => Promise<SessioneMinima | null>;
   installa: (s: { access_token: string; refresh_token: string }) => Promise<{ error: unknown }>;
   ruoloDi: (id: string) => Promise<string | null>;
-  /** Manda su il carrello dell'account che si lascia (mentre è ancora lui l'attivo). */
-  salvaCarrello: (id: string) => Promise<void>;
   /**
-   * Mette da parte il carrello del browser (la spesa di un account non passa all'altro) e risponde
-   * come rimetterlo, se il cambio non riesce. Va fatto PRIMA di installare il nuovo accesso: appena
-   * entra, il sito fonde il carrello del browser con quello del nuovo account.
+   * Manda su il carrello dell'account che si lascia (mentre è ancora lui l'attivo). Se non riesce
+   * lancia: il carrello resta comunque da parte per lui (CHIAVI_DELL_ACCOUNT), e torna con lui.
    */
-  svuotaCarrello: () => () => void;
+  salvaCarrello: (id: string) => Promise<void>;
   rinnova: (refreshToken: string) => Promise<SessioneMinima | null>;
   deposito?: Deposito | null;
 };
@@ -304,8 +364,9 @@ export type MondoDelCambio = {
  *     farebbe chiudere al server la sessione attiva);
  *  1. l'accesso salvato si rinnova a parte: se non vale più si toglie dall'elenco e l'attivo resta;
  *  2. chi si lascia si salva con le chiavi di adesso, e il suo carrello sale sul server;
- *  3. il carrello del browser si mette da parte e il nuovo accesso si installa; se non riesce, il
- *     carrello torna com'era e l'account attivo resta quello;
+ *  3. carrello e bozze si mettono da parte per chi esce (prima di installare: appena entra, il sito
+ *     fonde il carrello del browser con quello del nuovo account) e il nuovo accesso si installa;
+ *     se non riesce, tutto torna com'era e l'account attivo resta quello;
  *  4. si risponde dove andare (la home del ruolo): la pagina si ricarica da capo.
  */
 export async function cambiaAccount(id: string, m: MondoDelCambio): Promise<EsitoCambio> {
@@ -314,6 +375,8 @@ export async function cambiaAccount(id: string, m: MondoDelCambio): Promise<Esit
   if (!destinazione) return { ok: false, motivo: 'sconosciuto', email: null };
   const attuale = await m.sessioneAttuale();
   if (attuale?.user.id === id) return { ok: false, motivo: 'gia-attivo', email: destinazione.email };
+  // Senza sapere chi esce, le sue bozze non avrebbero un posto: non si tocca niente.
+  if (!attuale) return { ok: false, motivo: 'rete', email: destinazione.email };
 
   let nuova: SessioneMinima | null;
   try {
@@ -328,17 +391,15 @@ export async function cambiaAccount(id: string, m: MondoDelCambio): Promise<Esit
   // Le chiavi appena rinnovate sono le sole buone: quelle vecchie sono già state usate.
   ricordaSessione(nuova, d);
 
-  if (attuale) {
-    ricordaSessione(attuale, d);
-    await m.salvaCarrello(attuale.user.id).catch(() => undefined);
-  }
+  segnaInCorso(d);
+  ricordaSessione(attuale, d);
+  await m.salvaCarrello(attuale.user.id).catch(() => undefined);
 
-  const ripristina = m.svuotaCarrello();
-  const ripristinaBozze = metteDaParte(attuale?.user.id ?? null, d);
+  const ripristina = metteDaParte(attuale.user.id, d);
   const { error } = await m.installa({ access_token: nuova.access_token, refresh_token: nuova.refresh_token });
   if (error) {
-    ripristinaBozze();
     ripristina();
+    try { d?.removeItem(CHIAVE_IN_CORSO); } catch { /* noop */ }
     return { ok: false, motivo: 'rete', email: destinazione.email };
   }
   riprendi(id, d);

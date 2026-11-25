@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeftRight, UserPlus } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { CART_UPDATED_AT_KEY, fondiCarrelli, getCart, type CartItem } from '@/lib/cart';
+import { fondiCarrelli, getCart, type CartItem } from '@/lib/cart';
 import {
   EVENTO_ACCOUNT,
   MASSIMO_ACCOUNT,
@@ -25,9 +25,6 @@ import {
  * fattorino e dell'admin. `tono="scuro"` per i menu su fondo scuro.
  */
 
-/** Le chiavi del carrello nel browser (lib/cart.ts e components/CartCrossDeviceSync.tsx). */
-const CHIAVI_CARRELLO = ['cart', CART_UPDATED_AT_KEY, 'mc_cart_synced_at'];
-
 const mondo: MondoDelCambio = {
   sessioneAttuale: async () => {
     const { data } = await supabase.auth.getSession();
@@ -47,20 +44,12 @@ const mondo: MondoDelCambio = {
     if (locale.length === 0) return;
     const { data } = await supabase.from('user_carts').select('items').eq('user_id', id).maybeSingle();
     const cloud = Array.isArray((data as { items?: unknown } | null)?.items) ? ((data as { items: CartItem[] }).items) : [];
-    await supabase.from('user_carts').upsert(
+    const { error } = await supabase.from('user_carts').upsert(
       { user_id: id, items: fondiCarrelli(locale, cloud) as unknown as Record<string, unknown>[], updated_at: new Date().toISOString() },
       { onConflict: 'user_id' },
     );
-  },
-  // Senza passare da clearCart: quello avvisa il sito, che salverebbe il carrello vuoto sul nuovo account.
-  svuotaCarrello: () => {
-    const prima = CHIAVI_CARRELLO.map((k) => {
-      try { return [k, localStorage.getItem(k)] as const; } catch { return [k, null] as const; }
-    });
-    for (const k of CHIAVI_CARRELLO) { try { localStorage.removeItem(k); } catch { /* noop */ } }
-    return () => {
-      for (const [k, v] of prima) { try { if (v !== null) localStorage.setItem(k, v); } catch { /* noop */ } }
-    };
+    // Il client non lancia: l'errore arriva nella risposta. Se non riesce il carrello resta da parte per lui.
+    if (error) throw error;
   },
   rinnova: (refreshToken) =>
     rinnovaAccesso(refreshToken, {
@@ -149,7 +138,7 @@ export default function CambiaAccount({ tono = 'chiaro' }: { tono?: 'chiaro' | '
       ))}
       {pieno ? (
         <p className={`px-4 py-2 text-xs ${scuro ? 'text-white/60' : 'text-ink-500'}`}>
-          Hai già {MASSIMO_ACCOUNT} account salvati su questo dispositivo: per aggiungerne un altro, esci e rientra.
+          Hai già {MASSIMO_ACCOUNT} account salvati su questo dispositivo, il massimo. Per aggiungerne un altro serve «Esci», che però toglie tutti gli account salvati.
         </p>
       ) : (
         <button type="button" onClick={aggiungi} disabled={inCorso !== null} className={voce}>
