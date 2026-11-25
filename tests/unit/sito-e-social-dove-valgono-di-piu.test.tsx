@@ -288,7 +288,7 @@ describe('i collegamenti: leggi-preventivo e bozze-in-attesa', () => {
 
   it('telefoni ed email nelle osservazioni dei canali non escono', () => {
     const c = canali({
-      instagram: { ...ig(3, false), osservazioni: ['In bio c’è il cellulare del titolare 347 1234567', 'Scrivete a mario.rossi@gmail.com per gli ordini', 'Foto belle ma rare'] },
+      instagram: { ...ig(3, false), osservazioni: ['In bio c’è il cellulare del titolare 347 1234567', 'Scrivete a mario.rossi@gmail.com per gli ordini', 'Per ordinare chiamate il (347) 1234567', 'Foto belle ma rare'] },
       google: { stato: 'fatta', fonte: 'https://maps.google.com/?cid=1', osservazioni: ['La scheda riporta info@laragazzetta.it come contatto'] },
     });
     expect(c.canali.instagram!.osservazioni).toEqual(['Foto belle ma rare']);

@@ -114,7 +114,7 @@ export type GiudizioCanale = {
 
 const vf = (v: unknown): boolean | null => (v === true || v === false ? v : null);
 const tra = <T extends string>(v: unknown, elenco: readonly T[]): T | null => ((elenco as readonly unknown[]).includes(v) ? (v as T) : null);
-const TELEFONO_O_EMAIL = /[\w.+-]+@[\w-]+\.[\w.]+|\+?\d[\d\s./-]{7,}\d/;
+const TELEFONO_O_EMAIL = /[\w.+-]+@[\w-]+\.[\w.]+|\+?\(?\d[\d\s./()-]{7,}\d/;
 
 /** Il giudizio ripulito: valori fuori elenco = non detto; `null` se non resta niente. */
 export function leggiGiudizioCanale(grezzo: unknown): GiudizioCanale | null {

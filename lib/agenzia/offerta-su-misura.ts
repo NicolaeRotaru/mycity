@@ -189,7 +189,7 @@ export const videoAlMese = (f: Abbonamento): number => Number(/(\d+) video brevi
 const NOMI_SOCIAL = { instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok' } as const;
 
 /** Un numero di telefono in un testo libero (n8n può averlo trovato in rete): può essere del titolare. */
-const TELEFONO = /\+?\d[\d\s./-]{7,}\d|[\w.+-]+@[\w-]+\.[\w.]+/;
+const TELEFONO = /\+?\(?\d[\d\s./()-]{7,}\d|[\w.+-]+@[\w-]+\.[\w.]+/;
 const ORARIO = /\b\d{1,2}[.:]\d{2}\b/g;
 /** Una frase libera si cita solo senza prezzi e senza telefoni. */
 const citabile = (t: string) => senzaPrezzo(t) && !TELEFONO.test(t);
