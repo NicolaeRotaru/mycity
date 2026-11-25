@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import CambiaAccount from '@/components/account/CambiaAccount';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -230,6 +231,8 @@ function AdminFooter({
       >
         <Home size={16} strokeWidth={2.2} aria-hidden /> Torna al sito
       </Link>
+      {/* 25/11/2026 — Più account, senza uscire (Nicola). */}
+      <CambiaAccount tono="scuro" />
       <button
         type="button"
         onClick={onSignOut}
