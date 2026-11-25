@@ -139,14 +139,21 @@ describe('dopo il primo pagamento la bozza del sito si rifà coi dati della sche
 });
 
 describe('il preventivo nel link si cuce sull analisi', () => {
-  it('nel link resta l analisi; dei campi solo i confermati (in demo nessuno)', () => {
-    const chiusa = schedaPerIlSito(SCHEDA, false);
+  it('nel link resta solo l analisi del business (con le fonti); punti di forza, idee e domande senza fonte no', () => {
+    const business = { prime_mosse: [{ testo: 'Mettere gli orari giusti sulla scheda Google.', fonte: 'https://maps.google.com/x' }] };
+    const conB = { ...SCHEDA, analisi: { ...SCHEDA.analisi, punti_di_forza: ['Scrivete a info@barroma.it'], business } };
+    const chiusa = schedaPerIlSito(conB, false);
     const link = conLAnalisi(soloConfermati(chiusa), chiusa)!;
     expect(link.campi).toEqual({});
-    expect(link.analisi).toEqual(SCHEDA.analisi);
-    const aperta = conLAnalisi(soloConfermati(SCHEDA), SCHEDA)!;
-    expect(Object.keys(aperta.campi)).toContain('indirizzo');
+    expect(link.analisi).toEqual({ business });
+    expect(JSON.stringify(link)).not.toContain('info@barroma.it');
+    // Senza analisi del business il link resta come dal 24/11: nessuna analisi.
+    expect(conLAnalisi(soloConfermati(SCHEDA), SCHEDA)?.analisi).toBeUndefined();
     expect(conLAnalisi(null, null)).toBeNull();
+  });
+  it('un voto in stelle non è un prezzo', () => {
+    const a = analisiAziendale({ ...SCHEDA, analisi: { business: { clienti: [{ testo: 'Media 4,6 su 5 da duecento recensioni su Google.', fonte: 'https://maps.google.com/x' }] } } });
+    expect(a?.clienti).toHaveLength(1);
   });
 });
 

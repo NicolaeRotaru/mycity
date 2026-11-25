@@ -326,6 +326,8 @@ export type FraseConFonte = { testo: string; fonte: string };
 export type AnalisiAziendale = Record<SezioneBusiness, FraseConFonte[]>;
 
 const CONTATTO = /[\w.+-]+@[\w-]+\.[\w.]+|\+?\d[\d\s.-]{7,}\d/;
+/** Un voto («4,6 su 5», «4.5 stelle») non è un prezzo: si toglie prima del controllo dei prezzi. */
+const VOTO = /\d[.,]\d\s*(su\s*5|\/\s*5|stell[ae])/gi;
 
 /** L'analisi del business della scheda, ripulita; `null` se non c'è o se nessuna frase regge. */
 export function analisiAziendale(scheda: SchedaCliente | null | undefined): AnalisiAziendale | null {
@@ -340,7 +342,7 @@ export function analisiAziendale(scheda: SchedaCliente | null | undefined): Anal
           testo: typeof (v as FraseConFonte)?.testo === 'string' ? (v as FraseConFonte).testo.replace(/\s+/g, ' ').trim() : '',
           fonte: typeof (v as FraseConFonte)?.fonte === 'string' ? (v as FraseConFonte).fonte.trim() : '',
         }))
-        .filter((v) => v.testo.length >= 10 && v.testo.length <= 300 && senzaPrezzo(v.testo) && !CONTATTO.test(v.testo) && fonteHttps.safeParse(v.fonte).success)
+        .filter((v) => v.testo.length >= 10 && v.testo.length <= 300 && senzaPrezzo(v.testo.replace(VOTO, 'voto')) && !CONTATTO.test(v.testo) && fonteHttps.safeParse(v.fonte).success)
         .slice(0, 3);
       quante += pulite.length;
       return [s, pulite];

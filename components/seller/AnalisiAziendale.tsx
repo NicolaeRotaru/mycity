@@ -48,7 +48,7 @@ function Corta({ analisi, fascia, dettaglioHref }: Props) {
       {frasi.length ? (
         <ul className="mt-2 space-y-1">
           {frasi.map(({ s, v }) => (
-            <li key={v.testo} className="text-sm text-ink-700">
+            <li key={s} className="text-sm text-ink-700">
               <span className="font-semibold text-ink-900">{TITOLI_BUSINESS[s]}:</span> {v.testo}{' '}
               <a href={v.fonte} target="_blank" rel="noopener noreferrer nofollow" className="text-[11px] text-ink-500 underline">{dominio(v.fonte)}</a>
             </li>
@@ -81,8 +81,8 @@ export default function AnalisiAziendale(props: Props) {
               <dt className="text-sm font-bold text-ink-900">{TITOLI_BUSINESS[s]}</dt>
               <dd>
               <ul className="mt-1 space-y-1">
-                {analisi[s].map((v) => (
-                  <li key={v.testo} className="text-sm text-ink-700">
+                {analisi[s].map((v, i) => (
+                  <li key={`${i}-${v.testo}`} className="text-sm text-ink-700">
                     {v.testo}{' '}
                     <a href={v.fonte} target="_blank" rel="noopener noreferrer nofollow" className="text-[11px] text-ink-500 underline">
                       {dominio(v.fonte)}
