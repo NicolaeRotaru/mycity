@@ -29,10 +29,13 @@ const base = { nome: 'Bar Prova', tipo: 'bar' as const, dati: { storeLogo: null,
 const voceSito = (o: ReturnType<typeof offertaSuMisura>) => o.proposte.find((p) => p.servizio === 'sito_web' && (p.id === 'sito-rifatto' || p.id === 'sito-valorizzato'));
 
 describe('il sito che ha già, nell’offerta', () => {
-  it('un sito buono e curato non si rifà: si tiene e cresce, con un valore diverso per abbonamento', () => {
+  // 25/11/2026 sera — Senza livello vale «medio»: nel Base si tiene, dal Business si rifà, anche se Google lo trova a posto.
+  it('un sito buono e curato senza livello: tenuto nel Base, un valore diverso per abbonamento, e il perché dice il vero', () => {
     const v = voceSito(offertaSuMisura({ ...base, sito: sito({}), giudizioSito: { aspetto: 'curato', pagine: 'poche', nota: null } }));
-    expect(v?.id).toBe('sito-valorizzato');
+    expect(v?.id).toBe('sito-rifatto');
+    expect(v?.perFascia?.base).toMatch(/^Colleghiamo/);
     expect(v?.perche).toMatch(/95 su 100/);
+    expect(v?.perche).not.toMatch(/cose che Google segnala/);
     const testi = [v?.perFascia?.base, v?.perFascia?.business, v?.perFascia?.premium];
     expect(new Set(testi).size).toBe(3);
     expect(v?.perFascia?.premium).toMatch(/ogni mese/);
@@ -51,20 +54,24 @@ describe('il sito che ha già, nell’offerta', () => {
     expect(v?.perche).toMatch(/Foto piccole/);
   });
 
+  // 25/11/2026 — Dal Base si rifà solo il sito «semplice» (Nicola, «ok sito»): lib/agenzia/offerta-su-misura.ts.
   it('con tante pagine il Base rifà la pagina principale, non promette tutto il sito', () => {
-    const v = voceSito(offertaSuMisura({ ...base, sito: sito({ velocita: 40 }), giudizioSito: { aspetto: null, pagine: 'molte', nota: null } }));
+    const v = voceSito(offertaSuMisura({ ...base, sito: sito({ velocita: 40 }), giudizioSito: { aspetto: null, pagine: 'molte', nota: null, livello: 'semplice' } }));
     expect(v?.perFascia?.base).toMatch(/pagina principale/);
   });
 
+  // 25/11/2026 sera — Il sito noto senza misura conta come sito (vale «medio»), ma nessun voto inventato.
   it('senza la misura di Google non si inventa niente sul sito', () => {
-    expect(voceSito(offertaSuMisura({ ...base, sito: null }))).toBeUndefined();
+    const v = voceSito(offertaSuMisura({ ...base, sito: null }));
+    expect(v?.id).toBe('sito-rifatto');
+    expect(JSON.stringify(v)).not.toMatch(/su 100|Google gli dà/);
   });
 });
 
 describe('il giudizio dell’AD sul sito', () => {
   it('tiene solo i valori dell’elenco e scarta una nota con un prezzo', () => {
-    expect(leggiGiudizioSito({ aspetto: 'bellissimo', pagine: 'molte', nota: 'Rifarlo costa 500 €' })).toEqual({ aspetto: null, pagine: 'molte', nota: null });
-    expect(leggiGiudizioSito({ aspetto: 'curato' })).toEqual({ aspetto: 'curato', pagine: null, nota: null });
+    expect(leggiGiudizioSito({ aspetto: 'bellissimo', pagine: 'molte', nota: 'Rifarlo costa 500 €' })).toEqual({ aspetto: null, pagine: 'molte', nota: null, livello: null, funzioni: [], migliorie: null });
+    expect(leggiGiudizioSito({ aspetto: 'curato' })).toEqual({ aspetto: 'curato', pagine: null, nota: null, livello: null, funzioni: [], migliorie: null });
     expect(leggiGiudizioSito('curato')).toBeNull();
     expect(leggiGiudizioSito({})).toBeNull();
   });

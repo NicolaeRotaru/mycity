@@ -396,7 +396,8 @@ describe('/api/agenzia/bozza-sito', () => {
     const { GET } = await import('@/app/api/agenzia/bozza-sito/route');
     const r = await GET(richiesta('https://mycity.example/api/agenzia/bozza-sito', 'GET', undefined, { 'x-mycity-segreto': 'segreto-ad' }));
     const corpo = await r.json();
-    expect(corpo.negozi.map((n: { nome: string }) => n.nome)).toEqual(['Ora del Gusto']);
+    // 25/11/2026 sera — Chi ha già un sito, senza il giudizio dell'AD, vale «medio»: il Business lo rifà, quindi aspetta la bozza.
+    expect(corpo.negozi.map((n: { nome: string; perche: string }) => [n.nome, n.perche])).toEqual([['Ora del Gusto', 'nessuna_bozza'], ['Ha già il sito', 'sito_da_rifare']]);
     const n = corpo.negozi[0];
     expect(n.perche).toBe('nessuna_bozza');
     expect(n.dati.prodotti).toEqual(['Torta di mele']);

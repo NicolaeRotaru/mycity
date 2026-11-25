@@ -15,7 +15,7 @@ type Riga = {
   id_attivita: string;
   nome: string;
   tipo: string | null;
-  perche: 'nessuna_bozza' | 'scheda_nuova' | 'scheda_aperta';
+  perche: 'nessuna_bozza' | 'scheda_nuova' | 'scheda_aperta' | 'sito_da_rifare';
   in_revisione: boolean;
   scheda_il: string | null;
   bozza_il: string | null;
@@ -25,6 +25,7 @@ const PERCHE: Record<Riga['perche'], string> = {
   nessuna_bozza: 'Non ha ancora una bozza',
   scheda_nuova: 'n8n ha mandato dati nuovi dopo l’ultima bozza',
   scheda_aperta: 'Ha pagato l’abbonamento: la scheda è aperta, la bozza va rifatta coi suoi dati',
+  sito_da_rifare: 'Ha già un sito, ma almeno un abbonamento lo rifà: serve la bozza',
 };
 const quando = (d: string | null) => (d ? new Date(d).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Rome' }) : '—');
 

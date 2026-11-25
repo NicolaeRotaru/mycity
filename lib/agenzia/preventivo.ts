@@ -246,6 +246,10 @@ export type DatiAttivita = {
    * (velocità, Google, facilità d'uso). Se c'è, il preventivo parla del suo sito invece di «non ce l'hai».
    */
   sitoOggi?: string[];
+  /** 25/11/2026 sera — Un sito noto che il titolare non ci ha scritto: conta come sito, mai «non ce l'hai». */
+  sitoTrovato?: boolean;
+  /** 25/11/2026 sera — I profili social trovati in rete dall'analisi (nomi: «Instagram»…), anche se non sono nella vetrina. */
+  profiliTrovati?: string[];
 };
 
 export type VoceMancante = {
@@ -301,7 +305,7 @@ export function cosaManca(d: DatiAttivita): VoceMancante[] {
   }
   if (fotoVideo.length > 0) voci.push({ id: 'foto_video', perche: fotoVideo });
 
-  if (!campoPieno(d.socials, 'website')) {
+  if (!campoPieno(d.socials, 'website') && !d.sitoTrovato) {
     voci.push({ id: 'sito_web', perche: ['La tua attività non ha ancora un sito web suo.'] });
   } else if (d.sitoOggi?.length) {
     // 25/11/2026 — Il sito c'è e Google l'ha misurato: si dice com'è, e l'offerta dice cosa ci aggiungiamo.
@@ -311,10 +315,13 @@ export function cosaManca(d: DatiAttivita): VoceMancante[] {
   // La gestione dei social, con dentro la scheda Google (24/11/2026), si propone sempre: dai dati
   // non si vede chi pubblica già con costanza, e MyCity non sa se hai una scheda Google né se è curata.
   const profili = PROFILI_SOCIAL.filter(([chiave]) => campoPieno(d.socials, chiave)).map(([, nome]) => nome);
+  const trovati = (d.profiliTrovati ?? []).filter((n) => !(profili as string[]).includes(n));
   voci.push({
     id: 'social',
     perche: [
-      profili.length === 0
+      profili.length === 0 && trovati.length
+        ? `In rete abbiamo trovato ${elenco(trovati)}: lo colleghiamo alla vetrina, e i post possono partire senza che tu li scriva.`
+        : profili.length === 0
         ? 'Nessun profilo social è collegato alla vetrina.'
         : `Hai già ${elenco(profili)}: i post possono partire in automatico, senza che tu li scriva.`,
       'Quando qualcuno cerca «vicino a me», Google mostra prima le schede complete di orari e foto: controlliamo la tua.',
@@ -378,7 +385,35 @@ export type Preventivo = {
    * parte specifica del servizio «Analisi del business» (lib/agenzia/analisi.ts, `analisiAziendale`).
    */
   analisiAziendale?: import('./analisi').AnalisiAziendale | null;
+  /** 25/11/2026 sera — Fatta, fatta senza fonti (l'AD non ha trovato niente in rete), o da fare. */
+  analisiAziendaleStato?: import('./analisi').StatoAnalisiBusiness;
+  /**
+   * 25/11/2026 sera — L'analisi dei canali (social e scheda Google), anche nel link (Nicola: i social nel link pubblico).
+   * È una lettura di pagine pubbliche, con la fonte di ognuna: per la pagina «Analisi» della demo.
+   */
+  canali?: import('./analisi').AnalisiCanali | null;
 };
+
+/**
+ * LA FASCIA CONSIGLIATA, DOPO L'OFFERTA SU MISURA — 25/11/2026 (Nicola, «ok sito»).
+ * `fasciaConsigliata` guarda solo prodotti e voci mancanti; qui il consiglio sale fin dove serve per le
+ * proposte che lo chiedono (`consiglia`): il sito rifatto solo dal Business o dal Premium, le opportunità
+ * dell'analisi da seguire ogni mese. Non scende mai.
+ */
+export function consigliataDallOfferta(
+  prima: { id: Abbonamento; perche: string },
+  offerta: { proposte: Array<{ consiglia?: { fascia: Abbonamento; perche: string } }> } | null | undefined,
+): { id: Abbonamento; perche: string } {
+  const ordine = (f: Abbonamento) => ABBONAMENTI.indexOf(f);
+  let meglio = prima;
+  for (const x of offerta?.proposte ?? []) {
+    if (x.consiglia && ordine(x.consiglia.fascia) > ordine(meglio.id)) {
+      const perche = x.consiglia.perche;
+      meglio = { id: x.consiglia.fascia, perche: `${perche.charAt(0).toUpperCase()}${perche.slice(1)}.` };
+    }
+  }
+  return meglio;
+}
 
 export type AbbonamentoAttivo = { fascia: Abbonamento; stato: 'active' | 'past_due'; rinnovoIl: string | null };
 

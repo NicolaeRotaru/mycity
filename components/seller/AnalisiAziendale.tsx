@@ -1,7 +1,7 @@
 import { Briefcase } from 'lucide-react';
 import { ABBONAMENTI, FASCE, type Abbonamento } from '@/lib/agenzia/preventivo';
 import { SERVIZI_IN_BREVE } from '@/lib/agenzia/preventivo-corto';
-import { SEZIONI_BUSINESS, TITOLI_BUSINESS, type AnalisiAziendale as Analisi } from '@/lib/agenzia/analisi';
+import { ANALISI_SENZA_FONTI, SEZIONI_BUSINESS, TITOLI_BUSINESS, type AnalisiAziendale as Analisi, type StatoAnalisiBusiness } from '@/lib/agenzia/analisi';
 
 /**
  * L'ANALISI DEL BUSINESS NEL PREVENTIVO — 25/11/2026.
@@ -34,14 +34,18 @@ function Titolo() {
 const ORDINE_CORTO = ['prime_mosse', 'opportunita', 'rischi', 'situazione', 'mercato', 'clienti'] as const;
 const RIGHE_CORTE = 3;
 
-type Props = { analisi: Analisi | null | undefined; fascia?: Abbonamento; nome?: string; corta?: boolean; dettaglioHref?: string };
+/**
+ * `stato` (25/11/2026 sera): «senza_fonti» quando l'AD l'ha fatta ma in rete non ha trovato niente da citare
+ * (`statoAnalisiBusiness`): allora si dice, invece di «la stiamo preparando» per sempre.
+ */
+type Props = { analisi: Analisi | null | undefined; fascia?: Abbonamento; nome?: string; corta?: boolean; dettaglioHref?: string; stato?: StatoAnalisiBusiness };
 
 /**
  * 25/11/2026, verso le 18:30 — Nicola: «dentro il preventivo la descrizione dei servizi deve essere corta e con lo
  * stretto necessario che gli interessa». Con `corta` (il preventivo): al massimo tre frasi, una per sezione nell'ordine
  * che conta, e la sola fascia guardata; il dettaglio sta nella pagina «Analisi» della demo (`dettaglioHref`).
  */
-function Corta({ analisi, fascia, dettaglioHref }: Props) {
+function Corta({ analisi, fascia, dettaglioHref, stato }: Props) {
   const frasi = analisi ? ORDINE_CORTO.flatMap((s) => (analisi[s][0] ? [{ s, v: analisi[s][0] }] : [])).slice(0, RIGHE_CORTE) : [];
   return (
     <section className="mt-6 rounded-2xl border border-cream-300 bg-white p-5 shadow-warm" aria-labelledby="analisi-aziendale" data-testid="analisi-aziendale">
@@ -56,7 +60,7 @@ function Corta({ analisi, fascia, dettaglioHref }: Props) {
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-sm text-ink-600">La stiamo preparando dalle fonti pubbliche.</p>
+        <p className="mt-2 text-sm text-ink-600">{stato === 'senza_fonti' ? ANALISI_SENZA_FONTI : 'La stiamo preparando dalle fonti pubbliche.'}</p>
       )}
       {fascia && <p className="mt-2 text-xs text-ink-600">Col {FASCE[fascia].nome}: {SERVIZI_IN_BREVE[fascia].analisi}</p>}
       {dettaglioHref && <a href={dettaglioHref} className="mt-1 inline-block text-xs font-semibold text-primary-700 underline">Il dettaglio, con le fonti, è nella pagina Analisi</a>}
@@ -66,7 +70,7 @@ function Corta({ analisi, fascia, dettaglioHref }: Props) {
 
 export default function AnalisiAziendale(props: Props) {
   if (props.corta) return <Corta {...props} />;
-  const { analisi, fascia, nome } = props;
+  const { analisi, fascia, nome, stato } = props;
   return (
     <section className="mt-6 rounded-2xl border border-cream-300 bg-white p-5 sm:p-6 shadow-warm" aria-labelledby="analisi-aziendale" data-testid="analisi-aziendale">
       <Titolo />
@@ -99,7 +103,7 @@ export default function AnalisiAziendale(props: Props) {
         </div>
       ) : (
         <p className="mt-3 rounded-lg border border-dashed border-cream-300 bg-cream-50 p-3 text-sm text-ink-600">
-          L’analisi del tuo business la stiamo preparando dalle fonti pubbliche: appena è pronta la trovi qui.
+          {stato === 'senza_fonti' ? ANALISI_SENZA_FONTI : 'L’analisi del tuo business la stiamo preparando dalle fonti pubbliche: appena è pronta la trovi qui.'}
         </p>
       )}
 
