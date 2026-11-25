@@ -430,6 +430,10 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
               titleHref={`/category/${s.slug}`}
               seeAllHref={`/category/${s.slug}`}
               onCount={(n) => segnaConto(s.id, n)}
+              // 25/11/2026 — Le figlie che l'elenco delle piene da' per vuote non mostrano lo
+              // scheletro: sparivano dopo un secondo e le file sotto risalivano (CLS 0,17-0,52 sul
+              // telefono). La fila resta: se ha prodotti, compare quando arrivano.
+              scheletro={piene.isLoading || !piene.data || piene.data.includes(s.id)}
             />
           ))}
           {/* 5/11/2026 — Solo i prodotti messi sulla madre: con `categoryId` la lettura allargava

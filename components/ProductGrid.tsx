@@ -167,9 +167,16 @@ interface Props {
    * fino a 6 col su xl per la SRP; `4` cappa a 4 col per le pagine collezione/categoria.
    */
   maxColumns?: GridMaxColumns;
+  /**
+   * 25/11/2026 — Solo per le sezioni-fila (`rail` + `title`): `false` = mentre carica non si
+   * disegna lo scheletro. Lo usa la pagina categoria per le sottocategorie che il sito sa gia'
+   * vuote: prima mostravano dodici caselle finte e poi sparivano, e le file sotto risalivano
+   * sotto il dito (CLS). Se la fila ha prodotti compare lo stesso, appena arrivano.
+   */
+  scheletro?: boolean;
 }
 
-const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice: maxPricePieno, minPrice, prezzoSotto, titoloNascosto, onlyOpenStores, onlyPromo, onlyInStock, minRating, soloNovita, soloRecensiti, sort = 'relevance', rail, prioritaPrimeFoto = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice: maxPricePieno, minPrice, prezzoSotto, titoloNascosto, onlyOpenStores, onlyPromo, onlyInStock, minRating, soloNovita, soloRecensiti, sort = 'relevance', rail, prioritaPrimeFoto = true, scheletro = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
   /**
    * #127 — Il catalogo si fermava a 96 prodotti e non lo diceva.
    *
@@ -619,6 +626,8 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     // guardava `isSection`, e in home usciva una griglia di dodici scheletri
     // che poi si stringeva in una riga sola.
     if (formaFila) {
+      // Una sezione che il chiamante sa probabilmente vuota non tiene il posto (vedi `scheletro`).
+      if (isSection && !scheletro) return null;
       return (
         <section>
           {isSection && sectionHeader}
