@@ -13,6 +13,26 @@
  * Il pannello la chiede; non riconta niente per conto suo.
  */
 import { anniCompiuti, ETA_MINIMA_RIDER } from '@/lib/maggiore-eta';
+import { documentiObbligatoriDelFattorino } from '@/lib/admin/regole-approvazione';
+
+/**
+ * 25/11/2026 — QUALI DOCUMENTI SERVONO LO DECIDE IL MEZZO, NON QUESTO FILE.
+ *
+ * Qui patente e polizza erano obbligatorie per tutti: il fattorino in bici, che la pagina di
+ * iscrizione e la rotta di approvazione (R03-024) lasciano passare con documento e selfie, nel
+ * pannello aveva «Approva» spento con «Manca: Patente». La regola resta una sola,
+ * `documentiObbligatoriDelFattorino` in lib/admin/regole-approvazione.ts; qui si traduce soltanto
+ * la chiave del pannello nella colonna del profilo.
+ */
+const COLONNA_DEL_DOCUMENTO: Partial<Record<ChiaveDocumentoRider, string>> = {
+  documento_fronte: 'kyc_id_doc_front_url',
+  selfie: 'kyc_selfie_url',
+  patente: 'rider_license_url',
+  polizza: 'rider_insurance_url',
+};
+
+/** Patente e polizza: se ci sono, la scadenza conta anche quando il mezzo non le chiede (come all'approvazione). */
+const SCADENZA_CONTA_SE_CARICATO: ReadonlySet<ChiaveDocumentoRider> = new Set(['patente', 'polizza']);
 
 /** Quanti giorni prima della scadenza un documento si segnala «in scadenza». */
 export const GIORNI_PREAVVISO_SCADENZA = 30;
@@ -81,7 +101,10 @@ export function esameRider(dati: DatiEsameRider | null | undefined, giornoDiOggi
   if (eta === null) motivi.push('Manca la data di nascita.');
   else if (!maggiorenne) motivi.push(`Ha ${eta} anni: per consegnare ne servono ${ETA_MINIMA_RIDER}.`);
 
-  const documenti: DocumentoEsaminato[] = DOCUMENTI_RIDER.map((d) => {
+  const chiestiDalMezzo = new Set<string>(documentiObbligatoriDelFattorino(dati?.veicolo?.tipo).map((x) => x.colonna));
+  const documenti: DocumentoEsaminato[] = DOCUMENTI_RIDER.map((voce) => {
+    const colonna = COLONNA_DEL_DOCUMENTO[voce.chiave];
+    const d = { ...voce, obbligatorio: colonna ? chiestiDalMezzo.has(colonna) : voce.obbligatorio };
     const arrivato = dati?.documenti.find((x) => x.chiave === d.chiave);
     const url = arrivato?.url ?? null;
     const scade_il = arrivato?.scade_il ?? null;
@@ -94,7 +117,7 @@ export function esameRider(dati: DatiEsameRider | null | undefined, giornoDiOggi
       stato = mancano < 0 ? 'scaduto' : mancano <= GIORNI_PREAVVISO_SCADENZA ? 'in_scadenza' : 'ok';
     }
 
-    if (d.obbligatorio) {
+    if (d.obbligatorio || (url && SCADENZA_CONTA_SE_CARICATO.has(d.chiave))) {
       if (stato === 'mancante') motivi.push(`Manca: ${d.etichetta}.`);
       else if (stato === 'scaduto') motivi.push(`Scaduto: ${d.etichetta}.`);
       else if (stato === 'senza_scadenza') motivi.push(`Non sappiamo quando scade: ${d.etichetta}.`);
