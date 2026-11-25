@@ -68,7 +68,8 @@ describe('318 — copertina della vetrina', () => {
     expect(m.onUploadingChange).toHaveBeenLastCalledWith(true);
     await act(async () => { rilascia({ publicUrl: 'https://x/1.jpg' }); await fatto; });
     expect(m.onUploadingChange).toHaveBeenLastCalledWith(false);
-    for (const p of ['components/SellerApplicationForm.tsx', 'components/VendorForm.tsx']) {
+    // 25/11/2026 — Il modulo d'iscrizione corto non carica più foto: resta il modulo della vetrina.
+    for (const p of ['components/VendorForm.tsx']) {
       expect(readFileSync(p, 'utf8'), p).toContain('disabled={isLoading || uploadingLogo || uploadingMedia}');
     }
     m.root.unmount();

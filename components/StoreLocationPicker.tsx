@@ -35,9 +35,11 @@ export type StoreLocation = {
 interface Props {
   defaultValue?: Partial<StoreLocation>;
   onChange: (loc: StoreLocation) => void;
+  /** 25/11/2026 — Il nome del campo: un bar non ha un «negozio». Se manca resta quello di sempre. */
+  etichetta?: string;
 }
 
-const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
+const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -228,7 +230,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
             `id` il nome del campo veniva solo dal segnaposto, che sparisce appena si scrive. E qui
             si scrive l'indirizzo da cui dipende la zona di consegna. */}
         <label htmlFor={idIndirizzo} className="block text-sm font-medium text-ink-700 mb-1">
-          Indirizzo del negozio
+          {etichetta ?? 'Indirizzo del negozio'}
         </label>
         <div className="flex flex-col sm:flex-row gap-2">
           <input

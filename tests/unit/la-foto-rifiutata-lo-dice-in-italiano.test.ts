@@ -153,13 +153,12 @@ describe('③ una foto che non cambia mai non si riscarica ogni ora', () => {
 
   it('nessun punto di caricamento rimette un tempo corto', () => {
     const RADICE = process.cwd();
-    // I sette punti della scheda. `BackgroundRemovalPreview` scrive ancora un'ora: sta fuori dal
+    // I punti della scheda (erano sette: il 25/11/2026 è uscito SellerApplicationForm, che non carica più foto). `BackgroundRemovalPreview` scrive ancora un'ora: sta fuori dal
     // territorio di questa riparazione ed e' stato segnalato a parte, non nascosto qui.
     const punti = [
       'lib/products/uploadImages.ts',
       'lib/products/rehostImages.ts',
       'components/VendorForm.tsx',
-      'components/SellerApplicationForm.tsx',
       'components/seller/site/ImageUpload.tsx',
       'components/PhotoReviewUpload.tsx',
       'components/ImageUrlField.tsx',

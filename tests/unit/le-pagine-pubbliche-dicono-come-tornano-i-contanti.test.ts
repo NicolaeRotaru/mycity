@@ -51,7 +51,8 @@ beforeAll(async () => {
     monta('app/terms/page.tsx'),
     monta('app/privacy/page.tsx'),
     monta('app/profile/settings/page.tsx'),
-    monta('components/SellerApplicationForm.tsx'),
+    // 25/11/2026 — Il modulo corto di /sell non chiede più l'IBAN: il negozio lo scrive dal Profilo.
+    monta('components/seller/DatiPerIBonifici.tsx'),
   ]);
   Resi = r.default as ComponentType<Record<string, unknown>>;
   Faq = f.default as ComponentType<Record<string, unknown>>;
@@ -159,9 +160,11 @@ describe('le domande frequenti', () => {
   });
 
   it('IL CASO CHE ROMPEVA — «Il pagamento è sicuro?»: nessun modulo e nessun campo per l IBAN del rimborso, per chi compra', () => {
-    // Controprova: un modulo del sito l'IBAN lo chiede davvero, quello per diventare venditore. Una
+    // Controprova: un modulo del sito l'IBAN lo chiede davvero, quello del venditore. Una
     // frase su «nessun modulo» che non dice per chi vale è falsa per chi vende.
-    const v = accendi(ModuloVenditore, { onSubmit: () => {} });
+    const v = accendi(ModuloVenditore, {
+      iniziali: { billingIban: '', businessLegalName: '', businessVatNumber: '', businessAddress: '', businessCity: '', businessZip: '', businessPec: '', businessSdi: '' },
+    });
     const etichette = Array.from(v.radice.querySelectorAll('label')).map((l) => testoVisibile(l));
     v.smonta();
     expect(etichette.length, 'il modulo del venditore non è comparso: la controprova non sta guardando niente').toBeGreaterThan(5);

@@ -8,8 +8,8 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { useProfile } from '@/components/hooks/useProfile';
 import SellerApplicationForm, { type SellerApplicationData } from '@/components/SellerApplicationForm';
+import DatiDelTitolare from '@/components/seller/DatiDelTitolare';
 import { friendlyError } from '@/lib/errors';
-import { controlloEta } from '@/lib/maggiore-eta';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
@@ -68,20 +68,10 @@ export default function SellPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      /**
-       * 8/9/2026 — LA SECONDA PORTA CHE SCRIVE LA DATA DI NASCITA.
-       *
-       * Il difetto era stato visto sul modulo del fattorino, ma `legal_birth_date`
-       * ce l'hanno due strade, e sono tutte e due `update` fatti dal browser: se
-       * si chiude il cancello solo di là, un quindicenne si iscrive come negozio.
-       * Le condizioni d'uso, al punto 3, dicono diciotto anni — non «diciotto
-       * anni se consegni».
-       *
-       * Questo è il freno del browser. Quello che non si scavalca è il vincolo
-       * sul database (migrazione 156).
-       */
-      const eta = controlloEta(form.legalBirthDate);
-      if (!eta.ok) throw new Error(eta.messaggio ?? 'Controlla la data di nascita.');
+      // 25/11/2026 — La data di nascita qui non si chiede più (modulo corto, Nicola): la maggiore età
+      // si dichiara nella spunta dei dati. Il freno vero resta sul database (migrazione 156) e sulla
+      // rotta del titolare: la data si scrive subito dopo l'invio, sotto «Richiesta in valutazione»,
+      // e senza quella lo staff non approva (lib/admin/regole-approvazione.ts).
 
       /**
        * 31/10/2026 (ondata 4) — LA RICHIESTA LA SCRIVE IL SERVER.
@@ -133,7 +123,27 @@ export default function SellPage() {
   if (profile?.approval_status === 'pending' && profile?.role === 'seller' && profile?.approval_requested_at && !modifica) {
     return (
       <div className="container mx-auto p-6 max-w-2xl">
-        <PendingNotice requestedAt={profile.approval_requested_at} onModifica={() => setModifica(true)} />
+        <PendingNotice
+          requestedAt={profile.approval_requested_at}
+          onModifica={() => setModifica(true)}
+          titolareMancante={!(profile.legal_first_name && profile.legal_last_name && profile.legal_fiscal_code && profile.legal_birth_date)}
+        />
+        {/* 25/11/2026 — Il modulo corto non chiede chi firma: lo si chiede qui, subito dopo l'invio.
+            Senza questi dati lo staff non approva (lib/admin/regole-approvazione.ts). */}
+        <div className="mt-4">
+          <DatiDelTitolare
+            iniziali={{
+              legalFirstName:     profile.legal_first_name     ?? '',
+              legalLastName:      profile.legal_last_name      ?? '',
+              legalFiscalCode:    profile.legal_fiscal_code    ?? '',
+              legalBirthDate:     profile.legal_birth_date     ?? '',
+              legalResidenceAddr: profile.legal_residence_addr ?? '',
+              legalResidenceCity: profile.legal_residence_city ?? '',
+              legalResidenceZip:  profile.legal_residence_zip  ?? '',
+            }}
+            quandoSalvati={() => invalidaProfiloDiChiEntrato(qc)}
+          />
+        </div>
       </div>
     );
   }
@@ -169,30 +179,10 @@ export default function SellPage() {
           // 22/11/2026 — Il tipo di attività: chi corregge la richiesta ritrova quello scelto.
           businessType:       tipoDelProfilo(profile?.business_type),
           businessTypeDetail: profile?.business_type_detail ?? '',
-          contactPhone:    profile?.phone ?? '',
-          legalFirstName:  profile?.legal_first_name ?? profile?.full_name?.split(' ')[0] ?? '',
-          legalLastName:   profile?.legal_last_name  ?? profile?.full_name?.split(' ').slice(1).join(' ') ?? '',
-          legalFiscalCode: profile?.legal_fiscal_code ?? '',
-          legalBirthDate:  profile?.legal_birth_date ?? '',
-          // R16-010 (13/11/2026) — La residenza non si precompila più da indirizzo, CAP e città
-          // del profilo: dal 5/11 il Profilo non li mostra e nessuno li può più correggere, quindi
-          // qui arrivava un indirizzo vecchio che il negoziante non aveva modo di rettificare.
-          // Si precompila solo con la residenza che ha scritto lui in questo modulo.
-          legalResidenceAddr: profile?.legal_residence_addr ?? '',
-          legalResidenceCity: profile?.legal_residence_city ?? '',
-          legalResidenceZip:  profile?.legal_residence_zip  ?? '',
-          businessLegalName: profile?.business_legal_name ?? '',
-          businessVatNumber: profile?.business_vat_number ?? '',
-          businessAddress:   profile?.business_address ?? '',
-          businessCity:      profile?.business_city ?? '',
-          businessZip:       profile?.business_zip ?? '',
+          // 25/11/2026 — Solo i cinque dati che restano nel modulo corto: il resto si scrive dal Profilo.
           storeName:         profile?.store_name ?? '',
-          storeDescription:  profile?.store_description ?? '',
-          billingIban:       profile?.billing_iban ?? '',
-          businessPec:       profile?.business_pec ?? '',
-          businessSdi:       profile?.business_sdi ?? '',
-          storeLogo:         profile?.store_logo ?? null,
-          storeMedia:        Array.isArray(profile?.store_media) ? profile.store_media : [],
+          businessVatNumber: profile?.business_vat_number ?? '',
+          contactPhone:      profile?.phone ?? '',
           storeAddress:      profile?.store_address ?? '',
           storeLat:          profile?.store_lat ?? undefined,
           storeLng:          profile?.store_lng ?? undefined,
@@ -217,7 +207,7 @@ function SuspendedNotice() {
   );
 }
 
-function PendingNotice({ requestedAt, onModifica }: { requestedAt: string | null; onModifica: () => void }) {
+function PendingNotice({ requestedAt, onModifica, titolareMancante }: { requestedAt: string | null; onModifica: () => void; titolareMancante: boolean }) {
   return (
     <div className="bg-white border-2 border-accent-200 rounded-2xl p-8 text-center">
       <div className="w-20 h-20 mx-auto rounded-2xl bg-accent-100 flex items-center justify-center mb-4">
@@ -234,6 +224,11 @@ function PendingNotice({ requestedAt, onModifica }: { requestedAt: string | null
         Ti contatteremo entro <strong>{TEMPO_RISPOSTA_NEGOZI}</strong> via email e con una notifica in piattaforma.
         Nel frattempo puoi continuare a comprare normalmente.
       </p>
+      {titolareMancante && (
+        <p className="text-sm font-semibold text-ink-900 mb-6 rounded-lg bg-accent-50 border border-accent-200 px-3 py-2">
+          Ultimo passo: qui sotto i dati di chi firma per l&apos;attività. Senza questi non possiamo approvare il negozio.
+        </p>
+      )}
       <div className="flex flex-wrap gap-2 justify-center text-sm">
         {/* ?shop=1: un account negozio senza la modalità acquisto verrebbe rimandato alla dashboard. */}
         <Button href="/?shop=1"><span className="inline-flex items-center gap-2"><Home size={18} aria-hidden /> Continua a comprare</span></Button>

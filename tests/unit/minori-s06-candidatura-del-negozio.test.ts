@@ -90,8 +90,13 @@ describe('47 — l\'IBAN', () => {
     expect(ibanValido('IT61X0542811101000000123456')).toBe(false);
     expect(ibanValido('DE89 3704 0044 0532 0130 00')).toBe(true);
   });
-  it('il modulo usa lo stesso controllo', () => {
-    expect(readFileSync('components/SellerApplicationForm.tsx', 'utf8')).toMatch(/ibanValido\(v\)/);
+  // 25/11/2026 — Il modulo corto di /sell l'IBAN non lo chiede più: si scrive dal Profilo
+  // (DatiPerIBonifici → PATCH /api/seller/apply), e lì il server usa lo stesso controllo.
+  it('il Profilo lo chiede, e la sua rotta usa lo stesso controllo', () => {
+    expect(readFileSync('components/seller/DatiPerIBonifici.tsx', 'utf8')).toContain("k: 'billingIban'");
+    const rotta = readFileSync('app/api/seller/apply/route.ts', 'utf8');
+    const patch = rotta.slice(rotta.indexOf('const DatiPerIBonifici'));
+    expect(patch).toMatch(/ibanValido\(v\)/);
   });
 });
 
@@ -101,10 +106,11 @@ describe('2490 — PEC e codice SDI', () => {
     expect(stato.scritture[0].business_pec).toBe('forno@pec.it');
     expect(stato.scritture[0].business_sdi).toBe('ABC1234');
   });
-  it('il modulo li chiede', () => {
-    const src = readFileSync('components/SellerApplicationForm.tsx', 'utf8');
-    expect(src).toContain("register('businessPec')");
-    expect(src).toContain("register('businessSdi')");
+  // 25/11/2026 — Dal modulo corto di /sell si scrivono nel Profilo, coi dati per i bonifici.
+  it('il Profilo li chiede', () => {
+    const src = readFileSync('components/seller/DatiPerIBonifici.tsx', 'utf8');
+    expect(src).toContain("k: 'businessPec'");
+    expect(src).toContain("k: 'businessSdi'");
   });
 });
 

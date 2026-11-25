@@ -242,6 +242,9 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             </span>
           ))}
           {' · '}
+          {/* 25/11/2026 — Il modulo corto non chiede chi firma: si scrive sotto «Richiesta in valutazione». */}
+          <Link href="/sell" className="font-semibold underline">Dati di chi firma</Link>
+          {' · '}
           <Link href="/seller/dashboard" className="font-semibold underline">Pagina d’attesa</Link>
         </p>
         {children}
@@ -261,9 +264,15 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             Stiamo verificando i dati della tua attività. La dashboard sarà disponibile non appena
             il nostro team avrà approvato la richiesta (entro 48 ore lavorative).
           </p>
+          {isPending && richiestaInviata && (
+            <p className="text-sm text-ink-600 mb-4 max-w-md mx-auto">
+              Se non l&apos;hai ancora fatto, scrivi i dati di chi firma per l&apos;attività: senza quelli non possiamo approvare.
+            </p>
+          )}
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
             {isPending && richiestaInviata && <Button href="/seller/products">Prepara i tuoi prodotti</Button>}
             {isPending && richiestaInviata && <Button href={PERCORSO_ABBONAMENTO}>Scegli l’abbonamento</Button>}
+            {isPending && richiestaInviata && <Button href="/sell" variant="secondary" icon={Pencil}>Dati di chi firma</Button>}
             <Button href="/sell" variant="secondary" icon={Pencil}>Modifica richiesta</Button>
             <Button href="/?shop=1" icon={Home}>Vai al marketplace</Button>
             <Button href="/contact" variant="secondary" icon={Mail}>Contatti</Button>

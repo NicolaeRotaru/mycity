@@ -101,8 +101,10 @@ function modera(action: string, reason?: string) {
 }
 
 const NEGOZIO = {
-  id: 'bersaglio-1', role: 'seller', store_name: 'Panetteria', full_name: 'Anna', legal_birth_date: null,
+  id: 'bersaglio-1', role: 'seller', store_name: 'Panetteria', full_name: 'Anna',
   approval_status: 'pending', approved_by: null, approved_at: null, business_vat_number: '01234567897',
+  // 25/11/2026 — Per approvare un negozio servono anche i dati di chi firma (regole-approvazione).
+  legal_first_name: 'Mario', legal_last_name: 'Rossi', legal_fiscal_code: 'RSSMRA80E05G535X', legal_birth_date: '1980-05-05',
 };
 const FATTORINO = {
   id: 'bersaglio-1', role: 'rider', store_name: null, full_name: 'Luca', legal_birth_date: '1990-01-01',

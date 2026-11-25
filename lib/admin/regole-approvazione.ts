@@ -16,7 +16,8 @@
 
 /** Le colonne che la rotta deve leggere per poter decidere. */
 export const COLONNE_PER_APPROVARE =
-  'approval_status, approved_by, business_vat_number, kyc_id_doc_front_url, kyc_selfie_url, rider_license_url, rider_insurance_url, ' +
+  'approval_status, approved_by, business_vat_number, legal_first_name, legal_last_name, legal_fiscal_code, ' +
+  'kyc_id_doc_front_url, kyc_selfie_url, rider_license_url, rider_insurance_url, ' +
   'rider_license_expires_on, rider_insurance_expires_on, rider_vehicle_type';
 
 type ColonnaDocumento = 'kyc_id_doc_front_url' | 'kyc_selfie_url' | 'rider_license_url' | 'rider_insurance_url';
@@ -75,6 +76,11 @@ export type ProfiloDaApprovare = {
   approval_status?: string | null;
   approved_by?: string | null;
   business_vat_number?: string | null;
+  legal_first_name?: string | null;
+  legal_last_name?: string | null;
+  legal_fiscal_code?: string | null;
+  /** La legge la rotta di moderazione insieme a queste colonne (serve anche al freno dei minorenni). */
+  legal_birth_date?: string | null;
   rider_license_expires_on?: string | null;
   rider_insurance_expires_on?: string | null;
 } & Partial<Record<ColonnaDocumento, string | null>>;
@@ -176,6 +182,29 @@ export function motivoPerNonApprovare(
     }
     if (!partitaIvaValida(p.business_vat_number)) {
       return `${verbo}: la partita IVA del negozio non è valida (servono 11 cifre con il carattere di controllo giusto). Falla correggere ${prima}.`;
+    }
+    /**
+     * 25/11/2026 — CHI FIRMA, PRIMA DI APPROVARE. Il modulo di /sell adesso chiede solo il minimo
+     * per riconoscere l'attività (Nicola: «lascia il minimo indispensabile»), e la data di nascita
+     * non la pretende più all'invio. Senza questo freno lo staff approvava un negozio senza sapere
+     * chi firma, e un quindicenne passava con la sola spunta «ho almeno 18 anni»: la data vuota non
+     * fa scattare il controllo dei minorenni della rotta né il vincolo del database (migrazione 156).
+     * I dati il negoziante li scrive subito dopo l'invio, nella pagina «Richiesta in valutazione»
+     * di /sell (components/seller/DatiDelTitolare, PATCH /api/seller/titolare, col controllo dei 18 anni).
+     */
+    const titolare: Array<[keyof ProfiloDaApprovare, string]> = [
+      ['legal_first_name', 'nome'],
+      ['legal_last_name', 'cognome'],
+      ['legal_fiscal_code', 'codice fiscale'],
+      ['legal_birth_date', 'data di nascita'],
+    ];
+    const mancaDelTitolare = titolare.filter(([c]) => !presente(p[c])).map(([, nome]) => nome);
+    if (mancaDelTitolare.length > 0) {
+      // Secondo collaudo: un negozio sospeso non apre /sell né la rotta del titolare, quindi da solo
+      // non li può scrivere. Il messaggio non lo manda in un posto che per lui è chiuso.
+      return azione === 'reactivate'
+        ? `${verbo}: mancano i dati del titolare (${mancaDelTitolare.join(', ')}). Da sospeso il negozio non li può scrivere: chiedili al negoziante e falli inserire ${prima}.`
+        : `${verbo}: mancano i dati del titolare (${mancaDelTitolare.join(', ')}). Il negoziante li scrive su /sell, sotto «Richiesta in valutazione», ${prima}.`;
     }
   }
 

@@ -326,7 +326,6 @@ describe('e nessuna casella può tornare a dettarsi i formati da sola', () => {
    */
   const DEBITO_DICHIARATO = new Map<string, string>([
     ['components/ImageUrlField.tsx', "territorio della corsia 15 dello stesso lotto"],
-    ['components/SellerApplicationForm.tsx', 'fuori territorio'],
     ['components/seller/ProductImagesField.tsx', 'fuori territorio'],
     ['components/VendorForm.tsx', 'fuori territorio'],
     ['components/StoreMediaManager.tsx', 'fuori territorio'],

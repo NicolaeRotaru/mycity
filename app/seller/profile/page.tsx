@@ -18,6 +18,7 @@ import GestisciAbbonamento from '@/components/seller/GestisciAbbonamento';
 import PianoNelProfilo from '@/components/seller/PianoNelProfilo';
 import PushNotificationOptIn from '@/components/PushNotificationOptIn';
 import DatiPerIBonifici from '@/components/seller/DatiPerIBonifici';
+import DatiDelTitolare from '@/components/seller/DatiDelTitolare';
 import CanaliDelNegozio from '@/components/seller/CanaliDelNegozio';
 
 /**
@@ -45,7 +46,9 @@ export default function SellerProfilePage() {
           store_lat, store_lng, store_phone, store_hours, store_description, store_media,
           store_customization, store_site, offers_express, founded_year, is_approved,
           approval_status, subscription_status, created_at, billing_iban, business_legal_name,
-          business_vat_number, business_address, business_city, business_zip, business_pec, business_sdi
+          business_vat_number, business_address, business_city, business_zip, business_pec, business_sdi,
+          legal_first_name, legal_last_name, legal_fiscal_code, legal_birth_date,
+          legal_residence_addr, legal_residence_city, legal_residence_zip
         `)
         .eq('id', user.id)
         .single();
@@ -170,6 +173,20 @@ export default function SellerProfilePage() {
       {/* 24/11/2026 — I canali per l'analisi del business (Nicola: «un luogo dove l'imprenditore deve
           inserire l'id dei social e google»): lo stesso modulo della pagina dell'analisi. */}
       <CanaliDelNegozio titolo="I tuoi canali, per l’analisi del business" />
+
+      {/* 25/11/2026 — Chi firma per l'attività: il modulo d'iscrizione corto non lo chiede più. */}
+      <DatiDelTitolare
+        iniziali={{
+          legalFirstName:     profile?.legal_first_name     ?? '',
+          legalLastName:      profile?.legal_last_name      ?? '',
+          legalFiscalCode:    profile?.legal_fiscal_code    ?? '',
+          legalBirthDate:     profile?.legal_birth_date     ?? '',
+          legalResidenceAddr: profile?.legal_residence_addr ?? '',
+          legalResidenceCity: profile?.legal_residence_city ?? '',
+          legalResidenceZip:  profile?.legal_residence_zip  ?? '',
+        }}
+        quandoSalvati={() => qc.invalidateQueries({ queryKey: queryKeys.seller.profile })}
+      />
 
       {/* R11-003 — IBAN e dati della ditta: prima si scrivevano solo dal modulo d'iscrizione,
           che a un negozio approvato non si apre più. */}

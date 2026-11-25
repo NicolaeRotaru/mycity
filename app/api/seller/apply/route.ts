@@ -125,7 +125,28 @@ const CampiRichiesta = z.object({
   acceptBilling: ABBONAMENTO_NEGOZI_ACCESO ? vero("Devi accettare l'addebito") : z.boolean().optional(),
 });
 
-const RichiestaNegozio = CampiRichiesta.superRefine((f, ctx) => {
+/**
+ * 25/11/2026 — IL MODULO CORTO. Nicola: «questa pagina è troppo lunga, lascia il
+ * minimo indispensabile per identificare quella attività». /sell manda solo tipo,
+ * nome, indirizzo, partita IVA, telefono e le spunte. Titolare, ditta, IBAN,
+ * PEC, SDI, logo, foto e descrizione si scrivono dopo, dal Profilo del negozio.
+ * Qui restano accettati se arrivano (una pagina rimasta aperta col modulo vecchio
+ * li manda ancora), con gli stessi controlli di prima. La partita IVA resta
+ * obbligatoria: senza, lo staff non può approvare (lib/admin/regole-approvazione.ts).
+ */
+const RichiestaNegozio = CampiRichiesta.partial({
+  legalFirstName: true,
+  legalLastName: true,
+  legalFiscalCode: true,
+  legalBirthDate: true,
+  legalResidenceAddr: true,
+  legalResidenceCity: true,
+  legalResidenceZip: true,
+  businessLegalName: true,
+  businessAddress: true,
+  businessCity: true,
+  businessZip: true,
+}).superRefine((f, ctx) => {
   if (f.businessType === 'altro' && (f.businessTypeDetail ?? '').trim().length < 2) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['businessTypeDetail'], message: 'Scrivi in poche parole che attività hai' });
   }
@@ -160,8 +181,11 @@ export const POST = withAuthRateLimit(
     }
     const f = esito.data;
 
-    const eta = controlloEta(f.legalBirthDate);
-    if (!eta.ok) return ApiErrors.invalidRequest(eta.messaggio ?? 'Controlla la data di nascita.');
+    // 25/11/2026 — La data di nascita arriva solo dal modulo vecchio: se c'è, si controlla come prima.
+    if (f.legalBirthDate !== undefined) {
+      const eta = controlloEta(f.legalBirthDate);
+      if (!eta.ok) return ApiErrors.invalidRequest(eta.messaggio ?? 'Controlla la data di nascita.');
+    }
 
     const admin = getAdminSupabase();
     const { data: attuale, error: errLettura } = await admin
@@ -198,37 +222,48 @@ export const POST = withAuthRateLimit(
         }
       : {};
     const richiestaLetta = (attuale as { approval_requested_at?: string | null }).approval_requested_at ?? null;
+    /**
+     * 25/11/2026 — SI SCRIVE SOLO QUELLO CHE ARRIVA. Col modulo corto, chi corregge
+     * la richiesta (o la rimanda dopo un rifiuto) non manda logo, foto, IBAN, ditta
+     * e titolare: scriverli a null li avrebbe cancellati. Un campo assente resta
+     * com'è sul profilo; uno mandato vuoto (PEC, SDI, IBAN) si svuota come prima.
+     */
+    const se = <T,>(v: T | undefined, colonna: string, valore: (x: T) => unknown) =>
+      v === undefined ? {} : { [colonna]: valore(v) };
+    const daScrivere = {
+      phone: f.contactPhone,
+      store_phone: f.contactPhone,
+      store_name: f.storeName,
+      store_address: f.storeAddress,
+      store_lat: f.storeLat,
+      store_lng: f.storeLng,
+      // I dati dell'impresa: sono quelli che «Venduto da» mostra al cliente
+      // e che l'amministratore controlla prima di approvare.
+      business_vat_number: f.businessVatNumber,
+      ...se(f.legalFirstName, 'legal_first_name', (x) => x),
+      ...se(f.legalLastName, 'legal_last_name', (x) => x),
+      ...se(f.legalFiscalCode, 'legal_fiscal_code', (x) => x.toUpperCase()),
+      ...se(f.legalBirthDate, 'legal_birth_date', (x) => x),
+      ...se(f.legalResidenceAddr, 'legal_residence_addr', (x) => x),
+      ...se(f.legalResidenceCity, 'legal_residence_city', (x) => x),
+      ...se(f.legalResidenceZip, 'legal_residence_zip', (x) => x),
+      ...se(f.businessLegalName, 'business_legal_name', (x) => x),
+      ...se(f.businessAddress, 'business_address', (x) => x),
+      ...se(f.businessCity, 'business_city', (x) => x),
+      ...se(f.businessZip, 'business_zip', (x) => x),
+      ...se(f.businessPec, 'business_pec', (x) => x || null),
+      ...se(f.businessSdi, 'business_sdi', (x) => (x ? x.toUpperCase() : null)),
+      ...se(f.storeDescription, 'store_description', (x) => x || null),
+      ...se(f.storeLogo, 'store_logo', (x) => x ?? null),
+      ...se(f.storeMedia, 'store_media', (x) => x),
+      ...se(f.billingIban, 'billing_iban', (x) => x || null),
+    };
     const scrivi = (conTipo: boolean) => {
       const aggiorna = admin
         .from('profiles')
         .update({
           ...(conTipo ? tipo : {}),
-          phone: f.contactPhone,
-          legal_first_name: f.legalFirstName,
-          legal_last_name: f.legalLastName,
-          legal_fiscal_code: f.legalFiscalCode.toUpperCase(),
-          legal_birth_date: f.legalBirthDate,
-          legal_residence_addr: f.legalResidenceAddr,
-          legal_residence_city: f.legalResidenceCity,
-          legal_residence_zip: f.legalResidenceZip,
-          // I dati dell'impresa: sono quelli che «Venduto da» mostra al cliente
-          // e che l'amministratore controlla prima di approvare.
-          business_legal_name: f.businessLegalName,
-          business_vat_number: f.businessVatNumber,
-          business_address: f.businessAddress,
-          business_city: f.businessCity,
-          business_zip: f.businessZip,
-          business_pec: f.businessPec || null,
-          business_sdi: f.businessSdi ? f.businessSdi.toUpperCase() : null,
-          store_name: f.storeName,
-          store_phone: f.contactPhone,
-          store_description: f.storeDescription || null,
-          store_logo: f.storeLogo ?? null,
-          store_media: f.storeMedia ?? [],
-          store_address: f.storeAddress,
-          store_lat: f.storeLat,
-          store_lng: f.storeLng,
-          billing_iban: f.billingIban ? f.billingIban : null,
+          ...daScrivere,
           role: 'seller',
           is_approved: false,
           approval_status: 'pending',
@@ -327,7 +362,7 @@ export const POST = withAuthRateLimit(
         tipo: f.businessType ?? null,
         tipoDescritto: f.businessType ? descriviAttivita(f.businessType, f.businessTypeDetail) : null,
         indirizzo: f.storeAddress,
-        citta: f.businessCity,
+        citta: f.businessCity ?? null,
         descrizione: f.storeDescription ?? null,
       });
     }

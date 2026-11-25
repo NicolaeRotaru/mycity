@@ -51,13 +51,33 @@ async function disegna(props: Record<string, unknown> = {}) {
 }
 
 describe('il modulo d iscrizione del negozio', () => {
-  it('chiede ragione sociale, partita IVA e sede legale', async () => {
+  // 25/11/2026 — Nicola: «questa pagina è troppo lunga, lascia il minimo indispensabile per
+  // identificare quella attività». La partita IVA resta (serve per approvare); ragione sociale e
+  // sede legale si scrivono dopo, dal Profilo (DatiPerIBonifici, provato in fondo a questo file).
+  it('chiede il minimo per riconoscere l attività, partita IVA compresa', async () => {
     const radice = await disegna();
-    for (const campo of ['businessLegalName', 'businessVatNumber', 'businessAddress', 'businessCity', 'businessZip']) {
+    for (const campo of ['businessType', 'storeName', 'businessVatNumber', 'contactPhone']) {
       expect(radice.querySelector(`input[name="${campo}"]`), `manca il campo ${campo}`).not.toBeNull();
     }
     expect(radice.textContent).toContain('Partita IVA');
     expect(radice.textContent).not.toContain('temporaneamente');
+  });
+
+  it('non chiede più quello che si scrive dopo, dal Profilo', async () => {
+    const radice = await disegna();
+    for (const campo of [
+      'businessLegalName', 'businessAddress', 'businessCity', 'businessZip', 'businessPec', 'businessSdi',
+      'legalFirstName', 'legalLastName', 'legalFiscalCode', 'legalBirthDate',
+      'legalResidenceAddr', 'legalResidenceCity', 'legalResidenceZip',
+      'billingIban', 'storeDescription',
+    ]) {
+      expect(radice.querySelector(`[name="${campo}"]`), `il modulo corto chiede ancora ${campo}`).toBeNull();
+    }
+    // Da scrivere a mano restano nome, partita IVA e telefono (l'indirizzo è il selettore della mappa).
+    const daScrivere = Array.from(radice.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]), textarea'));
+    expect(daScrivere.map((i) => i.getAttribute('name'))).toEqual(['storeName', 'businessVatNumber', 'contactPhone']);
+    expect(radice.textContent, 'il negozio non sa dove mettere il resto').toContain('dal tuo pannello');
+    expect(radice.textContent, 'il negozio non sa che dopo gli chiediamo chi firma').toContain('i dati di chi firma');
   });
 
   it('non chiede un email operativa che poi non salviamo, e dice dove scriviamo', async () => {
@@ -77,5 +97,21 @@ describe('il modulo d iscrizione del negozio', () => {
     expect(testo, 'il negozio accetterebbe un addebito che al lancio non facciamo').not.toMatch(/addebito mensile/i);
     expect(testo).not.toMatch(/€\s?50/);
     expect(radice.querySelector('input[name="acceptBilling"]')).toBeNull();
+  });
+});
+
+describe('quello che il modulo corto non chiede si scrive dal Profilo', () => {
+  it('ragione sociale, sede legale, PEC, SDI e IBAN stanno in «Dati per i bonifici»', async () => {
+    const { default: DatiPerIBonifici } = await import('@/components/seller/DatiPerIBonifici');
+    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+    const radice = document.createElement('div');
+    document.body.appendChild(radice);
+    const root = createRoot(radice);
+    accesi.push(root);
+    const vuoti = { billingIban: '', businessLegalName: '', businessVatNumber: '', businessAddress: '', businessCity: '', businessZip: '', businessPec: '', businessSdi: '' };
+    await act(async () => { root.render(createElement(DatiPerIBonifici, { iniziali: vuoti })); });
+    for (const campo of Object.keys(vuoti)) {
+      expect(radice.querySelector(`input[name="${campo}"]`), `«Dati per i bonifici» non chiede ${campo}`).not.toBeNull();
+    }
   });
 });
