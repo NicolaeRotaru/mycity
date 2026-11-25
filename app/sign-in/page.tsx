@@ -311,6 +311,13 @@ const SignInForm = () => {
       <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
         Accedi per seguire i tuoi ordini e i negozi preferiti.
       </p>
+      {/* 25/11/2026 — Più account (lib/account/piu-account.ts): chi aggiunge un account lo sa. */}
+      {searchParams.get('aggiungi') === '1' && (
+        <p role="status" className="-mt-4 mb-6 rounded-xl border border-primary-200 bg-primary-50 p-3 text-sm text-ink-800">
+          Stai aggiungendo un altro account. Quello con cui eri dentro resta salvato su questo dispositivo:
+          ci torni dal menu dell’account, con «Passa a…».
+        </p>
+      )}
 
       {avviso && (
         <p

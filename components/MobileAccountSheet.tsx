@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { caricatoreLogoNegozio } from '@/components/StoreAvatar';
 import { useRouter } from 'next/navigation';
 import { Store, Bike, LogOut, X } from 'lucide-react';
+import CambiaAccount from '@/components/account/CambiaAccount';
 import { getAccountMenuItems, type MenuRole } from '@/lib/account-menu';
 import { useCloseOnBack } from './hooks/useCloseOnBack';
 import { useBottomSheetA11y } from './hooks/useBottomSheetA11y';
@@ -120,6 +121,9 @@ export default function MobileAccountSheet({ open, onClose, role, displayName, s
               </li>
             );
           })}
+          <li><div className="border-t border-ink-100 my-1" /></li>
+          {/* 25/11/2026 — Più account, senza uscire (Nicola). */}
+          <li><CambiaAccount /></li>
           <li><div className="border-t border-ink-100 my-1" /></li>
           <li>
             <button
