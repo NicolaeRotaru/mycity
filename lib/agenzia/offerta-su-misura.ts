@@ -48,6 +48,12 @@ export type Proposta = {
    * della fascia sotto, o `cosa`.
    */
   perFascia?: Partial<Record<Abbonamento, string>>;
+  /**
+   * 25/11/2026 — Vera se la proposta non nasce da un dato letto sul locale ma vale per tutti (l'analisi,
+   * la scheda Google di cui non sappiamo niente). Il preventivo corto la lascia fuori (Nicola, 18:30:
+   * «lo stretto necessario che gli interessa»).
+   */
+  generica?: true;
 };
 
 export type OffertaSuMisura = {
@@ -403,6 +409,8 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
       perche: 'Non ci hai ancora dato il link della tua scheda Google: chi cerca «vicino a me» vede prima le schede complete.',
       fonte: FONTE.vetrina,
       daFascia: 'base',
+      // Non sappiamo niente della sua scheda: è un'assenza nei dati, non un dato.
+      generica: true,
     });
   }
   if (google?.stato === 'fatta') {
@@ -451,6 +459,8 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
       : `Ci hai dato ${canaliScritti} ${canaliScritti === 1 ? 'canale' : 'canali'} da seguire.`,
     fonte: FONTE.vetrina,
     daFascia: 'base',
+    // Si propone sempre; nel preventivo la racconta già l'analisi del business, corta.
+    generica: true,
   });
 
   const perFascia = Object.fromEntries(ABBONAMENTI.map((f) => [f, p.filter((x) => ORDINE[x.daFascia] <= ORDINE[f]).length])) as Record<Abbonamento, number>;

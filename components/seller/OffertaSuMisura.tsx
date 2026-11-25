@@ -22,18 +22,24 @@ type Props = {
   titolo?: string;
   /** Mostra il riepilogo per fascia e le domande del primo incontro. */
   completa?: boolean;
+  /**
+   * 25/11/2026 — Il preventivo dal link (Nicola, 18:30: «corta e con lo stretto necessario»): solo le
+   * proposte nate da un dato vero, una frase ciascuna; niente riepilogo, domande né «in più».
+   */
+  corta?: boolean;
 };
 
-export default function OffertaSuMisura({ offerta, fascia, servizi, titolo, completa = true }: Props) {
+export default function OffertaSuMisura({ offerta, fascia, servizi, titolo, completa = true, corta = false }: Props) {
   if (!offerta) return null;
-  const delServizio = (x: Proposta) => !servizi || servizi.includes(x.servizio);
+  const delServizio = (x: Proposta) => (!servizi || servizi.includes(x.servizio)) && !(corta && x.generica);
   const comprese = offerta.proposte.filter((x) => delServizio(x) && cosaInFascia(x, fascia) !== null);
-  const salendo = inPiuSalendo(offerta, fascia);
+  const salendo = corta ? null : inPiuSalendo(offerta, fascia);
   const inPiu = (salendo?.voci ?? []).filter((v) => {
     const x = offerta.proposte.find((p) => p.id === v.id);
     return x ? delServizio(x) : false;
   });
   if (comprese.length === 0 && inPiu.length === 0) return null;
+  const riepilogo = completa && !corta;
   const gruppi = SERVIZI_AGENZIA.filter((s) => comprese.some((x) => x.servizio === s));
   const piuServizi = !servizi || servizi.length > 1;
 
@@ -43,10 +49,12 @@ export default function OffertaSuMisura({ offerta, fascia, servizi, titolo, comp
         <Sparkles size={18} className="text-primary-700" aria-hidden /> {titolo ?? `La tua offerta su misura, col ${FASCE[fascia].nome}`}
       </h2>
       <p className="mt-1 text-sm text-ink-700">
-        Le cose che faremo per te col {FASCE[fascia].nome}, una per una, prese da quello che sappiamo già della tua attività. Tu non devi fare niente: le facciamo noi.
+        {corta
+          ? 'Prese da quello che sappiamo già della tua attività. Le facciamo noi.'
+          : `Le cose che faremo per te col ${FASCE[fascia].nome}, una per una, prese da quello che sappiamo già della tua attività. Tu non devi fare niente: le facciamo noi.`}
       </p>
 
-      {completa && (
+      {riepilogo && (
         <p className="mt-2 text-xs text-ink-600" data-testid="offerta-riepilogo">
           Per te: {ABBONAMENTI.map((f) => `${FASCE[f].nome} ${offerta.perFascia[f]} ${offerta.perFascia[f] === 1 ? 'cosa' : 'cose'}`).join(' · ')}
         </p>
@@ -57,7 +65,13 @@ export default function OffertaSuMisura({ offerta, fascia, servizi, titolo, comp
           <div key={s}>
             {piuServizi && <p role="heading" aria-level={3} className="text-xs font-bold uppercase tracking-wide text-ink-700">{LISTINO[s].titolo}</p>}
             <ul className="mt-1 space-y-2">
-              {comprese.filter((x) => x.servizio === s).map((x) => (
+              {corta && comprese.filter((x) => x.servizio === s).map((x) => (
+                <li key={x.id} data-proposta={x.id} className="flex items-start gap-1.5 text-sm text-ink-900">
+                  <Check size={16} className="mt-0.5 shrink-0 text-olive-700" aria-hidden />
+                  <span>{cosaInFascia(x, fascia)} <span className="text-[11px] text-ink-500">· {x.fonte}</span></span>
+                </li>
+              ))}
+              {!corta && comprese.filter((x) => x.servizio === s).map((x) => (
                 <li key={x.id} data-proposta={x.id} className="rounded-lg border border-cream-200 bg-white p-3">
                   <p className="flex items-start gap-1.5 text-sm font-semibold text-ink-900">
                     <Check size={16} className="mt-0.5 shrink-0 text-olive-700" aria-hidden />
@@ -88,7 +102,7 @@ export default function OffertaSuMisura({ offerta, fascia, servizi, titolo, comp
         </div>
       )}
 
-      {completa && offerta.domande.length > 0 && (
+      {riepilogo && offerta.domande.length > 0 && (
         <div className="mt-3">
           <p className="text-xs font-bold uppercase tracking-wide text-ink-700">Al primo incontro ti chiediamo</p>
           <ul className="mt-1 list-disc pl-5 text-sm text-ink-700">{offerta.domande.map((d) => <li key={d}>{d}</li>)}</ul>
