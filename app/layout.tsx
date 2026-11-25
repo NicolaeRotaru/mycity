@@ -25,6 +25,8 @@ import SentryProvider from '@/lib/analytics/sentry';
 import { Suspense } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
+import { cookies } from 'next/headers';
+import { CONSENT_COOKIE, sceltaNelCookie } from '@/lib/consent';
 import { indirizzoPubblico } from '@/lib/env';
 import { APP_INSTALLABILE_ACCESA } from '@/lib/funzioni-al-lancio';
 import { HydrationBoundary } from '@tanstack/react-query';
@@ -74,6 +76,11 @@ const fraunces = localFont({
   ],
   variable: '--font-serif',
   display: 'swap',
+  // 25/11/2026 — Questi dieci file NON si precaricano piu': il browser scarica solo quelli che
+  // servono, quando trova del testo che li usa. Precaricati tutti, su ogni pagina, erano ~200 KiB
+  // che sul telefono passavano davanti alla cosa piu' grande da disegnare (Lighthouse: LCP).
+  // Il titolo della home ha il suo precarico, solo in home: components/home-sections/carattere-del-titolo.ts.
+  preload: false,
   adjustFontFallback: 'Times New Roman',
 });
 
@@ -230,6 +237,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const messages = await getMessages();
   // Un precarico non riuscito non ferma la pagina: menu, piede e vetrina leggono dal browser come prima.
   const precarico = await precaricoDelSito().catch(() => undefined);
+  // Il banner dei cookie parte aperto dal server quando manca una scelta valida (components/CookieBanner.tsx).
+  const bannerCookieAperto = !sceltaNelCookie((await cookies()).get(CONSENT_COOKIE)?.value);
 
   return (
     <html lang={locale} suppressHydrationWarning className={`${inter.variable} ${fraunces.variable}`}>
@@ -294,7 +303,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </QueryProvider>
           <ToastProvider />
           <ConfirmDialogHost />
-          <CookieBanner />
+          <CookieBanner apertoDalServer={bannerCookieAperto} />
         </NextIntlClientProvider>
         <Suspense fallback={null}>
           <GoogleAnalytics />

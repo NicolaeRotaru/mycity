@@ -21,6 +21,8 @@ vi.mock('next/font/google', () => ({
   Fraunces: () => ({ variable: 'font-serif', className: '' }),
 }));
 vi.mock('next/font/local', () => ({ default: (o: { variable?: string }) => ({ variable: o?.variable ?? '', className: '' }) }));
+// 25/11/2026 — il layout legge il cookie del consenso per aprire il banner dal server.
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
 vi.mock('next-intl/server', () => ({ getLocale: async () => 'it', getMessages: async () => ({}) }));
 
 const modulo = await import('@/app/layout');

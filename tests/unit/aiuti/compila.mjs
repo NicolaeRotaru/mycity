@@ -29,6 +29,8 @@ const FINTI_PER_NOME = {
   'next/link': path.join(FINTI, 'next-link.mjs'),
   'next/navigation': path.join(FINTI, 'next-navigation.mjs'),
   'next/image': path.join(FINTI, 'next-image.mjs'),
+  // 25/11/2026 — il titolo della home precarica il suo carattere (components/home-sections/carattere-del-titolo.ts).
+  'next/font/local': path.join(FINTI, 'next-font-local.mjs'),
   '@tanstack/react-query': path.join(FINTI, 'react-query.mjs'),
   '@/lib/supabase/client': path.join(FINTI, 'supabase-client.mjs'),
   // 15/10/2026 (R3, R55) — il client di lettura del server: la prova può dargli un database
