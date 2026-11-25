@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Modal } from '@/components/ui/Modal';
-import { CHIAVE_CAMBIO, dopoEventoAccesso, type SessioneMinima } from '@/lib/account/piu-account';
+import {
+  CHIAVE_CAMBIO, cambioArrivato, chiudiAggiuntaAbbandonata, dopoEventoAccesso, fermaQuestaScheda, type SessioneMinima,
+} from '@/lib/account/piu-account';
 
 /**
  * Tiene aggiornati gli account salvati su questo dispositivo (lib/account/piu-account.ts) a ogni
@@ -28,6 +31,20 @@ function cookieDellAccesso(): boolean {
 
 export default function RicordaAccount() {
   const [cambiato, setCambiato] = useState(false);
+  const percorso = usePathname() ?? '';
+
+  // La pagina nuova è arrivata: il segno a tempo del cambio non serve più (terzo collaudo).
+  useEffect(() => { cambioArrivato(); }, []);
+
+  // A ogni cambio di pagina: un'aggiunta lasciata a metà senza ricaricare si chiude qui.
+  useEffect(() => {
+    if (typeof supabase?.auth?.getSession !== 'function') return;
+    let vivo = true;
+    void Promise.resolve(supabase.auth.getSession())
+      .then((r) => { if (vivo) chiudiAggiuntaAbbandonata(percorso, r?.data?.session?.user?.id ?? null); })
+      .catch(() => undefined);
+    return () => { vivo = false; };
+  }, [percorso]);
 
   useEffect(() => {
     if (typeof supabase?.auth?.onAuthStateChange !== 'function') return;
@@ -38,7 +55,11 @@ export default function RicordaAccount() {
       });
     });
     const altraScheda = (e: StorageEvent) => {
-      if (e.key === CHIAVE_CAMBIO && e.newValue) setCambiato(true);
+      if (e.key === CHIAVE_CAMBIO && e.newValue) {
+        // Ferma i salvataggi delle bozze di questa scheda fino al ricaricamento, non solo per 15 secondi.
+        fermaQuestaScheda();
+        setCambiato(true);
+      }
     };
     window.addEventListener('storage', altraScheda);
     return () => {

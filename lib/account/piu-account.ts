@@ -45,6 +45,17 @@
  *  · le bozze di un account tolto dall'elenco (scaduto, o oltre i cinque) si cancellano con lui;
  *  · se all'inizio del cambio non si sa chi è attivo, non si tocca niente.
  *
+ * DAL TERZO COLLAUDO (25/11, notte):
+ *  · mentre chi è dentro sta aggiungendo un account, la sincronizzazione del carrello non riscarica
+ *    né manda la sua spesa (components/CartCrossDeviceSync.tsx): sulla pagina di accesso la
+ *    rimetteva nel browser, e poi finiva nel carrello del nuovo account;
+ *  · una bozza scritta dopo non viene mai sovrascritta da quella messa da parte: vince la più nuova;
+ *  · l'aggiunta lasciata a metà si chiude appena si esce dalle pagine di accesso, anche senza
+ *    ricaricare (`chiudiAggiuntaAbbandonata`, chiamata da RicordaAccount a ogni cambio di pagina);
+ *  · la scheda ferma sotto l'avviso «hai cambiato account in un'altra scheda» non salva bozze fino al
+ *    ricaricamento (`fermaQuestaScheda`), e la pagina nuova toglie il segno a tempo appena arriva;
+ *  · «Esci» pulisce sempre, anche se tutti gli accessi salvati erano già scaduti.
+ *
  * Qui non c'è React né il client di Supabase: le funzioni ricevono quello che usano, così le prove
  * le fanno girare senza browser.
  */
@@ -148,8 +159,20 @@ function scrivi(lista: AccountSalvato[], d: Deposito | null) {
   avvisa();
 }
 
+/** Questa scheda è ferma sotto l'avviso di un cambio fatto altrove: vale fino al ricaricamento. */
+let schedaFerma = false;
+export function fermaQuestaScheda(): void { schedaFerma = true; }
+/** Solo per le prove: la scheda riparte come dopo un ricaricamento. */
+export function _riparteLaScheda(): void { schedaFerma = false; }
+
+/** La pagina nuova è arrivata: il segno a tempo del cambio non serve più (lo chiama RicordaAccount). */
+export function cambioArrivato(d: Deposito | null = locale()): void {
+  try { d?.removeItem(CHIAVE_IN_CORSO); } catch { /* noop */ }
+}
+
 /** Un cambio è in corso (in questa scheda o in un'altra): i moduli non salvano bozze. */
 export function cambioInCorso(d: Deposito | null = locale(), ora = Date.now()): boolean {
+  if (schedaFerma) return true;
   try {
     const quando = Number(d?.getItem(CHIAVE_IN_CORSO) ?? 0);
     return quando > 0 && ora - quando < DURATA_IN_CORSO_MS;
@@ -209,12 +232,16 @@ export function metteDaParte(idDiChiEsce: string | null, d: Deposito | null = lo
   };
 }
 
-/** Rimette nel browser le bozze messe da parte per quell'account, se ce ne sono. */
+/**
+ * Rimette nel browser le bozze messe da parte per quell'account, se ce ne sono. Una bozza che nel
+ * frattempo c'è già nel browser è più nuova di quella messa da parte, e vince lei (terzo collaudo).
+ */
 export function riprendi(id: string, d: Deposito | null = locale()): void {
   for (const k of CHIAVI_DELL_ACCOUNT) {
     try {
       const v = d?.getItem(`${DA_PARTE}${id}:${k}`);
-      if (v !== null && v !== undefined) d?.setItem(k, v);
+      const adesso = d?.getItem(k);
+      if (v !== null && v !== undefined && (adesso === null || adesso === undefined)) d?.setItem(k, v);
       d?.removeItem(`${DA_PARTE}${id}:${k}`);
     } catch { /* noop */ }
   }
@@ -261,9 +288,10 @@ export function dopoEventoAccesso(
   } = {},
 ): void {
   const finita = evento === 'INITIAL_SESSION' && !sessione?.user?.id && dove.sessioneNelDeposito === false;
-  // «Esci», o un accesso finito da solo (la pagina riparte e il cookie non c'è più): si dimentica tutto.
+  // «Esci», o un accesso finito da solo (la pagina riparte e il cookie non c'è più): si dimentica tutto,
+  // sempre, anche se gli accessi salvati erano tutti scaduti (terzo collaudo).
   if (evento === 'SIGNED_OUT' || finita) {
-    if (leggiAccount(d).length > 0 || aggiuntaIniziataDa(s)) dimenticaTutti(d, s);
+    dimenticaTutti(d, s);
     return;
   }
   if (!sessione?.user?.id || !sessione.access_token || !sessione.refresh_token) return;
@@ -273,7 +301,9 @@ export function dopoEventoAccesso(
   ricordaSessione(sessione, d);
   if (!daChi) return;
   if (daChi !== sessione.user.id) {
-    // Aggiunta riuscita: è entrato un altro account.
+    // Aggiunta riuscita: è entrato un altro account. Prima il segno a tempo: le altre schede, ancora
+    // sull'account di prima, non devono salvare bozze nel posto del nuovo mentre arriva il loro avviso.
+    segnaInCorso(d);
     try { s?.removeItem(CHIAVE_AGGIUNTA); } catch { /* noop */ }
     riprendi(sessione.user.id, d);
     segnaCambio(sessione.user.id, d);
@@ -286,6 +316,23 @@ export function dopoEventoAccesso(
     try { s?.removeItem(CHIAVE_AGGIUNTA); } catch { /* noop */ }
     riprendi(sessione.user.id, d);
   }
+}
+
+/**
+ * L'aggiunta lasciata a metà senza ricaricare (un link «indietro» dalla pagina di accesso): appena chi
+ * l'aveva cominciata è su una pagina che non è di accesso, l'aggiunta finisce e le sue bozze tornano.
+ */
+export function chiudiAggiuntaAbbandonata(
+  percorso: string,
+  idAttivo: string | null,
+  d: Deposito | null = locale(),
+  s: Deposito | null = scheda(),
+): void {
+  const daChi = aggiuntaIniziataDa(s);
+  if (!daChi || daChi !== idAttivo) return;
+  if (PAGINE_DELL_ACCESSO.some((p) => percorso.startsWith(p))) return;
+  try { s?.removeItem(CHIAVE_AGGIUNTA); } catch { /* noop */ }
+  riprendi(daChi, d);
 }
 
 /**

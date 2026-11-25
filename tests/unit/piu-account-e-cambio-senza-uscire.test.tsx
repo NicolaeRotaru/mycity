@@ -42,8 +42,9 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 import {
-  CHIAVE_ACCOUNT, CHIAVE_AGGIUNTA, CHIAVE_CAMBIO, CHIAVE_IN_CORSO, DURATA_ACCESSO_SALVATO_MS, cambiaAccount, cambioInCorso,
-  dimenticaAccount, dimenticaTutti, dopoEventoAccesso, iniziaAggiunta, leggiAccount, preparaAggiunta, ricordaSessione, rinnovaAccesso,
+  CHIAVE_ACCOUNT, CHIAVE_AGGIUNTA, CHIAVE_CAMBIO, CHIAVE_IN_CORSO, DURATA_ACCESSO_SALVATO_MS, _riparteLaScheda, cambiaAccount, cambioInCorso,
+  chiudiAggiuntaAbbandonata, dimenticaAccount, dimenticaTutti, dopoEventoAccesso, iniziaAggiunta, leggiAccount, preparaAggiunta,
+  ricordaSessione, rinnovaAccesso,
   type MondoDelCambio, type SessioneMinima,
 } from '@/lib/account/piu-account';
 import { useFormAutosave } from '@/lib/hooks/useFormAutosave';
@@ -57,6 +58,7 @@ const sess = (id: string, giro = 1): SessioneMinima => ({
 });
 
 beforeEach(() => {
+  _riparteLaScheda();
   localStorage.clear();
   sessionStorage.clear();
   finto.sessione = null;
@@ -120,6 +122,34 @@ describe('gli account salvati seguono gli eventi dell accesso', () => {
     dopoEventoAccesso('INITIAL_SESSION', sess('a'), undefined, undefined, { percorso: '/seller/dashboard' });
     expect(localStorage.getItem('mc_new_product_draft')).toBe('{"nome":"Torta di A"}');
     expect(sessionStorage.getItem(CHIAVE_AGGIUNTA)).toBeNull();
+  });
+
+  it('«Aggiungi» lasciato con un link, senza ricaricare: uscendo dalle pagine di accesso le bozze tornano (terzo collaudo)', async () => {
+    localStorage.setItem('mc_new_product_draft', '{"nome":"vecchia"}');
+    await preparaAggiunta({ sessioneAttuale: async () => sess('a'), salvaCarrello: async () => undefined });
+    chiudiAggiuntaAbbandonata('/sign-in', 'a');
+    expect(localStorage.getItem('mc_new_product_draft')).toBeNull();
+    chiudiAggiuntaAbbandonata('/seller/products/new', 'a');
+    expect(localStorage.getItem('mc_new_product_draft')).toBe('{"nome":"vecchia"}');
+    expect(sessionStorage.getItem(CHIAVE_AGGIUNTA)).toBeNull();
+  });
+
+  it('una bozza scritta dopo non viene sovrascritta da quella messa da parte (terzo collaudo)', async () => {
+    localStorage.setItem('mc_new_product_draft', '{"nome":"vecchia"}');
+    await preparaAggiunta({ sessioneAttuale: async () => sess('a'), salvaCarrello: async () => undefined });
+    localStorage.setItem('mc_new_product_draft', '{"nome":"nuova"}');
+    dopoEventoAccesso('TOKEN_REFRESHED', sess('a', 2), undefined, undefined, { percorso: '/seller/products/new' });
+    expect(localStorage.getItem('mc_new_product_draft')).toBe('{"nome":"nuova"}');
+    expect(Object.keys(localStorage).some((k) => k.startsWith('mycity:da-parte:a:mc_new_product_draft'))).toBe(false);
+  });
+
+  it('«Esci» pulisce anche quando gli accessi salvati erano tutti scaduti (terzo collaudo)', () => {
+    ricordaSessione(sess('a'), localStorage, Date.now() - DURATA_ACCESSO_SALVATO_MS - 1000);
+    localStorage.setItem(CHIAVE_CAMBIO, 'a:1');
+    expect(leggiAccount()).toEqual([]);
+    dopoEventoAccesso('SIGNED_OUT', null);
+    expect(localStorage.getItem(CHIAVE_ACCOUNT)).toBeNull();
+    expect(localStorage.getItem(CHIAVE_CAMBIO)).toBeNull();
   });
 
   it('«Aggiungi» e poi si rientra con lo stesso account: le bozze tornano', async () => {
@@ -420,12 +450,24 @@ describe('il blocco nel menu', () => {
       await act(async () => { window.dispatchEvent(new StorageEvent('storage', { key: CHIAVE_CAMBIO, newValue: 'b:1' })); });
       expect(document.body.textContent).toContain('Hai cambiato account in un’altra scheda');
       expect(ricarica).not.toHaveBeenCalled();
+      // e la scheda ferma non salva bozze finché non si ricarica, anche dopo i 15 secondi (terzo collaudo)
+      expect(cambioInCorso(localStorage, Date.now() + 60_000)).toBe(true);
       const bottone = [...document.body.querySelectorAll('button')].find((b) => b.textContent === 'Ricarica la pagina')!;
       await act(async () => { bottone.click(); });
       expect(ricarica).toHaveBeenCalledTimes(1);
     } finally {
       Object.defineProperty(window, 'location', { configurable: true, value: originale });
     }
+  });
+
+  it('la pagina nuova, arrivando, toglie il segno a tempo del cambio (terzo collaudo)', async () => {
+    localStorage.setItem(CHIAVE_IN_CORSO, String(Date.now()));
+    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+    const div = document.createElement('div');
+    const root = createRoot(div);
+    accesi.push(root);
+    await act(async () => { root.render(createElement(RicordaAccount)); });
+    expect(localStorage.getItem(CHIAVE_IN_CORSO)).toBeNull();
   });
 
   it('«Aggiungi un altro account» salva chi c è e apre l accesso', async () => {
