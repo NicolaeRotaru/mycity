@@ -246,6 +246,10 @@ export type DatiAttivita = {
    * (velocità, Google, facilità d'uso). Se c'è, il preventivo parla del suo sito invece di «non ce l'hai».
    */
   sitoOggi?: string[];
+  /** 25/11/2026 sera — Un sito noto che il titolare non ci ha scritto: conta come sito, mai «non ce l'hai». */
+  sitoTrovato?: boolean;
+  /** 25/11/2026 sera — I profili social trovati in rete dall'analisi (nomi: «Instagram»…), anche se non sono nella vetrina. */
+  profiliTrovati?: string[];
 };
 
 export type VoceMancante = {
@@ -301,7 +305,7 @@ export function cosaManca(d: DatiAttivita): VoceMancante[] {
   }
   if (fotoVideo.length > 0) voci.push({ id: 'foto_video', perche: fotoVideo });
 
-  if (!campoPieno(d.socials, 'website')) {
+  if (!campoPieno(d.socials, 'website') && !d.sitoTrovato) {
     voci.push({ id: 'sito_web', perche: ['La tua attività non ha ancora un sito web suo.'] });
   } else if (d.sitoOggi?.length) {
     // 25/11/2026 — Il sito c'è e Google l'ha misurato: si dice com'è, e l'offerta dice cosa ci aggiungiamo.
@@ -311,10 +315,13 @@ export function cosaManca(d: DatiAttivita): VoceMancante[] {
   // La gestione dei social, con dentro la scheda Google (24/11/2026), si propone sempre: dai dati
   // non si vede chi pubblica già con costanza, e MyCity non sa se hai una scheda Google né se è curata.
   const profili = PROFILI_SOCIAL.filter(([chiave]) => campoPieno(d.socials, chiave)).map(([, nome]) => nome);
+  const trovati = (d.profiliTrovati ?? []).filter((n) => !(profili as string[]).includes(n));
   voci.push({
     id: 'social',
     perche: [
-      profili.length === 0
+      profili.length === 0 && trovati.length
+        ? `In rete abbiamo trovato ${elenco(trovati)}: lo colleghiamo alla vetrina, e i post possono partire senza che tu li scriva.`
+        : profili.length === 0
         ? 'Nessun profilo social è collegato alla vetrina.'
         : `Hai già ${elenco(profili)}: i post possono partire in automatico, senza che tu li scriva.`,
       'Quando qualcuno cerca «vicino a me», Google mostra prima le schede complete di orari e foto: controlliamo la tua.',

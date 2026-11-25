@@ -136,7 +136,7 @@ export function leggiGiudizioCanale(grezzo: unknown): GiudizioCanale | null {
 /**
  * I LIVELLI DEI SOCIAL — Nicola, `agenzia.social-come-il-sito` (25/11/2026), per ogni canale:
  *  · nessuno: il profilo non c'è;
- *  · debole: meno di 8 post al mese (o da 8 a 12, ma fatto in casa o datato);
+ *  · debole: meno di 8 post al mese;
  *  · attivo: da 8 a 12 post al mese, curato;
  *  · forte: più di 12 post al mese, con video.
  * Il conto dei post viene dal giudizio dell'AD o dai numeri letti; senza conto vale il livello scritto dall'AD.
@@ -151,12 +151,9 @@ export function livelloSocial(c: AnalisiDiUnCanale | null | undefined): LivelloS
   const g = c.giudizio ?? null;
   const post = g?.post_al_mese ?? c.numeri?.post_ultimi_30_giorni ?? null;
   const conVideo = g?.video === true;
-  const curaDebole = g?.cura === 'datato' || g?.cura === 'fai-da-te';
   if (post === null) return g?.livello ?? null;
   if (post < 8) return 'debole';
   if (post > 12 && conVideo) return 'forte';
-  // Da 8 a 12 post ma fatto in casa o datato: la regola dice «curato» per l'attivo.
-  if (curaDebole && post <= 12) return 'debole';
   return 'attivo';
 }
 
@@ -180,6 +177,8 @@ export const AnalisiCanaliInArrivo = z.object({
 });
 export type AnalisiCanali = z.infer<typeof AnalisiCanaliInArrivo>;
 
+const senzaContatti = (v: string[]) => v.filter((x) => !TELEFONO_O_EMAIL.test(x));
+
 /** Legge l'analisi dei canali salvata; se non è nel formato è come se non ci fosse. Le frasi con prezzi si tolgono. */
 export function leggiAnalisiCanali(grezza: unknown): AnalisiCanali | null {
   const esito = AnalisiCanaliInArrivo.safeParse(grezza);
@@ -187,7 +186,8 @@ export function leggiAnalisiCanali(grezza: unknown): AnalisiCanali | null {
   const canali = Object.fromEntries(
     Object.entries(esito.data.canali).map(([nome, c]) => [
       nome,
-      c && { ...c, osservazioni: vociSenzaPrezzo(c.osservazioni, 6, 240), consigli: vociSenzaPrezzo(c.consigli, 6, 240) },
+      // 25/11/2026 sera — I canali vanno anche nel link pubblico: oltre ai prezzi si tolgono telefoni ed email (dal collaudo).
+      c && { ...c, osservazioni: senzaContatti(vociSenzaPrezzo(c.osservazioni, 6, 240)), consigli: senzaContatti(vociSenzaPrezzo(c.consigli, 6, 240)) },
     ]),
   );
   return { ...esito.data, canali };

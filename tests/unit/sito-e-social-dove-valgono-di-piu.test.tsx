@@ -224,7 +224,7 @@ describe('i collegamenti: leggi-preventivo e bozze-in-attesa', () => {
     const { leggiPreventivo } = await import('@/lib/agenzia/leggi-preventivo');
     tabelle.profiles = { id: ID, role: 'seller', store_name: 'La Ragazzetta', business_type: 'bar', store_customization: { socials: {} } };
     tabelle.products = [];
-    tabelle.schede_clienti = { scheda: { tipo: 'scheda-cliente', id_attivita: ID, campi: { sito_ufficiale: { valore: 'https://www.laragazzetta.it', stato: 'da_confermare', fonte: 'https://www.laragazzetta.it' } }, analisi: { business_fatta_il: '2026-11-25T18:00:00Z', business_avvisi: [] } } };
+    tabelle.schede_clienti = { scheda: { tipo: 'scheda-cliente', id_attivita: ID, campi: { sito_ufficiale: { valore: 'https://www.laragazzetta.it', stato: 'confermato', fonte: 'https://www.laragazzetta.it' } }, analisi: { business_fatta_il: '2026-11-25T18:00:00Z', business_avvisi: [] } } };
     tabelle.analisi_negozi = { sito: null, canali: { tipo: 'analisi-canali', id_attivita: ID, fatta_il: '2026-11-25T18:00:00Z', canali: { instagram: ig(10, false) } } };
     const { preventivo } = await leggiPreventivo(ID, undefined, { pubblico: true });
     const ids = preventivo.offerta!.proposte.map((x) => x.id);
@@ -234,6 +234,30 @@ describe('i collegamenti: leggi-preventivo e bozze-in-attesa', () => {
     expect(preventivo.analisiAziendaleStato).toBe('senza_fonti');
     expect(preventivo.canali?.canali.instagram?.stato).toBe('fatta');
     expect(JSON.stringify(preventivo.righe)).not.toMatch(/non ha ancora un sito|Nessun profilo social/);
+    // il titolare non ha scritto niente: niente «ci hai scritto Instagram» (dal collaudo)
+    expect(JSON.stringify(preventivo)).not.toMatch(/Ci hai scritto|Ci hai dato \d/);
+    // il sito si rifà dal Business: la pagina del servizio non dice «ce l'hai già»
+    expect(preventivo.giaAPosto).not.toContain('sito_web');
+  });
+
+  it('nel link, prima dell abbonamento, un sito della scheda non confermato non decide le frasi', async () => {
+    const { leggiPreventivo } = await import('@/lib/agenzia/leggi-preventivo');
+    tabelle.profiles = { id: ID, role: 'seller', store_name: 'Omonimo', business_type: 'bar', store_customization: { socials: {} } };
+    tabelle.products = [];
+    tabelle.schede_clienti = { scheda: { tipo: 'scheda-cliente', id_attivita: ID, campi: { sito_ufficiale: { valore: 'https://www.omonimo.it', stato: 'da_confermare', fonte: 'https://www.omonimo.it' } } } };
+    tabelle.analisi_negozi = null;
+    const { preventivo } = await leggiPreventivo(ID, undefined, { pubblico: true });
+    expect(preventivo.offerta!.proposte.some((x) => x.id === 'sito-rifatto')).toBe(false);
+  });
+
+  it('telefoni ed email nelle osservazioni dei canali non escono', () => {
+    const c = canali({
+      instagram: { ...ig(3, false), osservazioni: ['In bio c’è il cellulare del titolare 347 1234567', 'Scrivete a mario.rossi@gmail.com per gli ordini', 'Foto belle ma rare'] },
+      google: { stato: 'fatta', fonte: 'https://maps.google.com/?cid=1', osservazioni: ['La scheda riporta info@laragazzetta.it come contatto'] },
+    });
+    expect(c.canali.instagram!.osservazioni).toEqual(['Foto belle ma rare']);
+    expect(c.canali.google!.osservazioni).toEqual([]);
+    expect(JSON.stringify(offertaSuMisura(conSocial(c)))).not.toMatch(/@|347/);
   });
 
   it('chi ha un sito senza giudizio aspetta la bozza; chi ha un sito di pregio senza migliorie no', async () => {

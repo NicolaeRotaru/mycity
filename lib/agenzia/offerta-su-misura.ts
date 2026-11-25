@@ -81,6 +81,11 @@ export type DatiPerLOfferta = {
   giudizioSito?: GiudizioSito | null;
   /** 25/11/2026 — L'analisi del business: le opportunità e le prime mosse che un servizio copre diventano proposte. */
   analisiAziendale?: AnalisiAziendale | null;
+  /**
+   * 25/11/2026 sera — Un sito che conosciamo ma che il titolare non ci ha scritto (misurato da Google, o trovato dal
+   * flusso 16 e confermato o con la scheda aperta). Conta come sito, ma non come «canale che ci hai dato».
+   */
+  sitoTrovato?: boolean;
 };
 
 /**
@@ -184,7 +189,7 @@ export const videoAlMese = (f: Abbonamento): number => Number(/(\d+) video brevi
 const NOMI_SOCIAL = { instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok' } as const;
 
 /** Un numero di telefono in un testo libero (n8n può averlo trovato in rete): può essere del titolare. */
-const TELEFONO = /\+?\d[\d\s./-]{7,}\d/;
+const TELEFONO = /\+?\d[\d\s./-]{7,}\d|[\w.+-]+@[\w-]+\.[\w.]+/;
 const ORARIO = /\b\d{1,2}[.:]\d{2}\b/g;
 /** Una frase libera si cita solo senza prezzi e senza telefoni. */
 const citabile = (t: string) => senzaPrezzo(t) && !TELEFONO.test(t);
@@ -282,7 +287,7 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
   /* ─────────── SITO WEB ─────────── */
   // 25/11/2026 sera — Un sito noto conta come sito, anche senza la misura di Google: scritto nella vetrina (o dal
   // modulo 12, che lo scrive lì), misurato da Google, o trovato dal flusso 16 (`campi.sito_ufficiale`). Mai «non hai un sito».
-  const haSito = pieno(dati.socials, 'website') || !!sito || !!sitoUfficialeDi(scheda);
+  const haSito = pieno(dati.socials, 'website') || !!sito || !!sitoUfficialeDi(scheda) || d.sitoTrovato === true;
   const indirizzo = datoDi(scheda, 'indirizzo');
   const orariGrezzi = datoDi(scheda, 'orari');
   const orari = orariGrezzi && orariCitabili(orariGrezzi.valore) ? orariGrezzi : null;
@@ -383,7 +388,8 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
           : `Rifacciamo il tuo sito completo${veloce}, e lo aggiorniamo noi ogni mese`,
       };
       const perFascia = Object.fromEntries(ABBONAMENTI.map((f) => [f, ORDINE[f] >= ORDINE[da] ? rifatto[f] : tenuto[f]])) as Record<Abbonamento, string>;
-      const ragioni = [...perGoogle, aspettoDebole || !perGoogle.length ? aOcchio : null, nota].filter(Boolean) as string[];
+      // A occhio prima di Google: per un sito «semplice» il motivo vero del rifacimento è quello (dal collaudo).
+      const ragioni = [aOcchio, ...perGoogle, nota].filter(Boolean) as string[];
       aggiungi({
         id: 'sito-rifatto',
         servizio: 'sito_web',

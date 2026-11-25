@@ -111,20 +111,23 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
   const analisi = analisiLetta.error ? null : (analisiLetta.data as { sito?: unknown; canali?: unknown } | null);
   const sitoMisurato = leggiRisultatoSito(analisi?.sito);
   const canaliLetti = leggiAnalisiCanali(analisi?.canali);
-  // 25/11/2026 sera — Un sito noto conta come sito anche senza la misura di Google: oltre alla vetrina (dove lo
-  // scrive anche il modulo 12) e alla misura, quello che il flusso 16 ha trovato (`campi.sito_ufficiale`). E un
-  // profilo social trovato dall'analisi conta come profilo. Mai «non hai un sito» o «nessun profilo» se c'è.
   const schedaLettaIntera = schedaLetta.error ? null : leggiSchedaSalvata((schedaLetta.data as { scheda?: unknown } | null)?.scheda);
-  const scritti = socials && typeof socials === 'object' ? (socials as Record<string, unknown>) : {};
-  const pieno = (k: string) => typeof scritti[k] === 'string' && (scritti[k] as string).trim().length > 0;
-  const aggiunte: Record<string, string> = {};
-  const sitoNoto = sitoMisurato?.url ?? sitoUfficialeDi(schedaLettaIntera);
-  if (!pieno('website') && sitoNoto) aggiunte.website = sitoNoto;
-  for (const k of ['instagram', 'facebook', 'tiktok'] as const) {
-    const c = canaliLetti?.canali[k];
-    if (!pieno(k) && c && (c.stato === 'fatta' || c.stato === 'privato') && c.fonte) aggiunte[k] = c.fonte;
-  }
-  const socialsPerIlConto = Object.keys(aggiunte).length ? { ...scritti, ...aggiunte } : socials;
+  // 25/11/2026 — La scheda del cliente vale solo dopo l'abbonamento (Nicola): prima, dell'offerta su
+  // misura resta l'analisi (lib/agenzia/scheda-dopo-abbonamento.ts). Una lettura caduta vale «chiusa».
+  const aperta = schedaEPagellaAperte({
+    visibileSenzaAbbonamento: p.visibile_senza_abbonamento,
+    statiAbbonamenti: abbonamento.error ? [] : ((abbonamento.data as Array<{ stato?: unknown }> | null) ?? []).map((r) => r.stato),
+  });
+  // 25/11/2026 sera — Un sito noto conta come sito anche senza la misura di Google: oltre alla vetrina (dove lo scrive
+  // anche il modulo 12) e alla misura, quello che il flusso 16 ha trovato (`campi.sito_ufficiale`), ma solo se è
+  // confermato o se la scheda è aperta: prima dell'abbonamento un dato non confermato non decide frasi pubbliche.
+  // Non entra fra i canali «che ci hai scritto»: il titolare non l'ha scritto (dal collaudo).
+  const sitoTrovato = !!sitoMisurato || !!sitoUfficialeDi(aperta ? schedaLettaIntera : soloConfermati(schedaLettaIntera));
+  // I profili trovati dall'analisi: mai «nessun profilo» se c'è, ma nemmeno «ci hai scritto Instagram».
+  const profiliTrovati = (['instagram', 'facebook', 'tiktok'] as const)
+    .filter((k) => ['fatta', 'privato'].includes(canaliLetti?.canali[k]?.stato ?? ''))
+    .map((k) => ({ instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok' })[k]);
+  const socialsPerIlConto = socials;
   const sitoOggi = sitoMisurato
     ? [`Il tuo sito c’è, e Google l’ha misurato:`, ...sitoInParole(sitoMisurato).map((v) => `${v.titolo}: ${v.punteggio} su 100. ${v.frase}`)]
     : undefined;
@@ -138,6 +141,8 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
       prodotti: (prodotti.data ?? []) as { images: unknown }[],
       socials: socialsPerIlConto,
       sitoOggi,
+      sitoTrovato,
+      profiliTrovati,
     },
     impostazioni: impostazioni.error
       ? colonnaAncoraAssente ? leggiImpostazioniAgenzia(null) : impostazioniSenzaPrezzi()
@@ -151,12 +156,6 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
   // L'offerta su misura (24/11/2026): dalla vetrina, dalla scheda e dalle analisi. Un guasto qui non
   // ferma il preventivo: senza offerta la pagina mostra quello che mostrava prima.
   try {
-    // 25/11/2026 — La scheda del cliente vale solo dopo l'abbonamento (Nicola): prima, dell'offerta su
-    // misura resta l'analisi (lib/agenzia/scheda-dopo-abbonamento.ts). Una lettura caduta vale «chiusa».
-    const aperta = schedaEPagellaAperte({
-      visibileSenzaAbbonamento: p.visibile_senza_abbonamento,
-      statiAbbonamenti: abbonamento.error ? [] : ((abbonamento.data as Array<{ stato?: unknown }> | null) ?? []).map((r) => r.stato),
-    });
     const schedaIntera = schedaPerIlSito(schedaLettaIntera, aperta);
     preventivo.offerta = offertaSuMisura({
       nome: preventivo.attivita,
@@ -175,7 +174,10 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
       // Il giudizio dell'AD sul sito vale anche nel link: è un parere su un sito pubblico, non un dato del titolare.
       giudizioSito: leggiGiudizioSito((schedaIntera?.analisi as Record<string, unknown> | undefined)?.giudizio_sito),
       analisiAziendale: analisiAziendale(schedaIntera),
+      sitoTrovato,
     });
+    // Il sito che si rifà in qualche fascia non è «già a posto»: la pagina del servizio non deve dire «ce l'hai già» (dal collaudo).
+    if (preventivo.offerta.proposte.some((x) => x.id === 'sito-rifatto')) preventivo.giaAPosto = preventivo.giaAPosto.filter((x) => x !== 'sito_web');
     // 25/11/2026 — L'analisi del business (Nicola): è analisi, quindi c'è anche in demo e nel link.
     preventivo.analisiAziendale = analisiAziendale(schedaIntera);
     preventivo.analisiAziendaleStato = statoAnalisiBusiness(schedaIntera);
