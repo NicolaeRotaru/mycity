@@ -32,13 +32,14 @@ const stato = vi.hoisted(() => ({
   pc: null as null | undefined | { sellerId: string; stato: 'aperto' | 'accettato' | 'chiuso'; fasciaScelta: string | null; nomeAttivita: string },
   preventivo: null as unknown,
   letturePreventivo: 0,
+  sostituzioni: [] as string[],
 }));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => stato.pathname,
   notFound: () => { throw new Error('NEXT_NOT_FOUND'); },
   redirect: (url: string) => { throw new Error(`NEXT_REDIRECT ${url}`); },
-  useRouter: () => ({ push: () => undefined, replace: () => undefined, refresh: () => undefined }),
+  useRouter: () => ({ push: () => undefined, replace: (u: string) => { stato.sostituzioni.push(u); }, refresh: () => undefined }),
 }));
 vi.mock('next/link', async () => {
   const { createElement: ce } = await import('react');
@@ -97,6 +98,7 @@ beforeEach(() => {
   stato.pc = { sellerId: 'og-1', stato: 'aperto', fasciaScelta: null, nomeAttivita: 'Ora del Gusto' };
   stato.preventivo = vetrina();
   stato.letturePreventivo = 0;
+  stato.sostituzioni = [];
 });
 
 describe('il link col codice apre la dashboard della demo', () => {
@@ -173,6 +175,21 @@ describe('ogni fascia apre il suo preventivo, anche nella demo', () => {
       await act(async () => { root.render(base); });
       expect(div.querySelector('h1')?.textContent).toBe('Il preventivo di Ora del Gusto col Base');
       expect(spuntata()).toBe('base');
+      // L'email già scritta resta (prima, con la key, il modulo ripartiva vuoto: secondo collaudo).
+      const email = div.querySelector<HTMLInputElement>('input[type="email"]')!;
+      await act(async () => {
+        const imposta = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+        imposta.call(email, 'titolare@oradelgusto.it');
+        email.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      const premiumDiNuovo = await PreventivoDemo({ params: params(), searchParams: cerca({ fascia: 'premium' }) });
+      await act(async () => { root.render(premiumDiNuovo); });
+      expect(spuntata()).toBe('premium');
+      expect(div.querySelector<HTMLInputElement>('input[type="email"]')!.value).toBe('titolare@oradelgusto.it');
+      // E scegliendo una fascia nel modulo, il preventivo sopra diventa il suo.
+      const radioBase = [...div.querySelectorAll<HTMLInputElement>('input[type="radio"]')].find((i) => i.value === 'base')!;
+      await act(async () => { radioBase.click(); });
+      expect(stato.sostituzioni).toEqual(['?fascia=base']);
     } finally {
       act(() => root.unmount());
       div.remove();
