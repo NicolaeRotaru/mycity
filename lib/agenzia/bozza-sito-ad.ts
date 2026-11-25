@@ -78,18 +78,25 @@ export type NegozioPerLaBozza = {
    * Una bozza scritta prima era senza i dati della scheda: va rifatta. `null` = non si sa o non c'entra.
    */
   schedaApertaIl?: string | null;
+  /**
+   * 25/11/2026 — Il sito che ha già, almeno un abbonamento lo rifà (Nicola, «ok sito»:
+   * `sitoDaRifareInQualcheFascia` in lib/agenzia/offerta-su-misura.ts). Assente o falso: chi ha un sito non aspetta.
+   */
+  sitoDaRifare?: boolean;
 };
 
-export type InAttesa = { aspetta: true; perche: 'nessuna_bozza' | 'scheda_nuova' | 'scheda_aperta' } | { aspetta: false };
+export type InAttesa = { aspetta: true; perche: 'nessuna_bozza' | 'scheda_nuova' | 'scheda_aperta' | 'sito_da_rifare' } | { aspetta: false };
 
 /**
- * Un negozio aspetta la bozza se è un venditore vero, non ha ancora un sito suo e: non ha una bozza,
+ * Un negozio aspetta la bozza se è un venditore vero, non ha ancora un sito suo (o ce l'ha ma almeno un
+ * abbonamento lo rifà, 25/11/2026) e: non ha una bozza,
  * oppure n8n gli ha mandato una scheda nuova dopo l'ultima bozza (i dati sono cambiati).
  */
 export function aspettaLaBozza(n: NegozioPerLaBozza): InAttesa {
   if (n.ruolo !== 'seller' || n.id.toLowerCase().startsWith(PREFISSO_DI_SISTEMA)) return { aspetta: false };
-  if ((n.sito ?? '').trim()) return { aspetta: false };
-  if (!n.bozzaIl) return { aspetta: true, perche: 'nessuna_bozza' };
+  const haSito = !!(n.sito ?? '').trim();
+  if (haSito && !n.sitoDaRifare) return { aspetta: false };
+  if (!n.bozzaIl) return { aspetta: true, perche: haSito ? 'sito_da_rifare' : 'nessuna_bozza' };
   if (n.schedaIl && new Date(n.schedaIl).getTime() > new Date(n.bozzaIl).getTime()) return { aspetta: true, perche: 'scheda_nuova' };
   // La scheda c'era ma era chiusa (negozio in demo): al primo pagamento la bozza si rifà coi suoi dati.
   if (n.schedaIl && n.schedaApertaIl && new Date(n.schedaApertaIl).getTime() > new Date(n.bozzaIl).getTime()) return { aspetta: true, perche: 'scheda_aperta' };

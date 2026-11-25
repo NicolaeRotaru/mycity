@@ -1,5 +1,7 @@
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { aspettaLaBozza, senzaPrezzoTranneOrari, type InAttesa } from './bozza-sito-ad';
+import { leggiRisultatoSito } from './analisi';
+import { leggiGiudizioSito, sitoDaRifareInQualcheFascia } from './offerta-su-misura';
 import { leggiSchedaSalvata, prodottiTipici, senzaPrezzo, vociSenzaPrezzo } from './scheda-cliente';
 import { schedaEPagellaAperte, schedaPerIlSito } from './scheda-dopo-abbonamento';
 
@@ -41,7 +43,7 @@ export type NegozioInAttesa = {
 
 export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } = {}): Promise<NegozioInAttesa[]> {
   const admin = getAdminSupabase();
-  const [negozi, bozze, schede, visibili, abbonamenti] = await Promise.all([
+  const [negozi, bozze, schede, visibili, abbonamenti, misure] = await Promise.all([
     admin
       .from('profiles')
       .select('id, role, store_name, business_type, store_address, store_description, store_customization, approval_status, created_at')
@@ -49,7 +51,8 @@ export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } 
       .order('created_at', { ascending: false })
       .limit(TETTO_NEGOZI),
     admin.from('bozze_sito').select('id_attivita, ricevuta_il').limit(TETTO_NEGOZI),
-    admin.from('schede_clienti').select(opzioni.conIDati ? 'id_attivita, aggiornata_il, scheda' : 'id_attivita, aggiornata_il').limit(TETTO_NEGOZI),
+    // 25/11/2026 — Il giudizio dell'AD sul sito serve sempre: decide se chi ha un sito aspetta la bozza («ok sito»).
+    admin.from('schede_clienti').select(opzioni.conIDati ? 'id_attivita, aggiornata_il, scheda' : 'id_attivita, aggiornata_il, giudizio:scheda->analisi->giudizio_sito').limit(TETTO_NEGOZI),
     // 25/11/2026 — La scheda di n8n si usa solo dopo l'abbonamento (lib/agenzia/scheda-dopo-abbonamento.ts):
     // per chi è in demo l'AD scrive la bozza con l'analisi e la vetrina, senza i campi della scheda.
     // Due letture facoltative: se cadono, la scheda resta chiusa per tutti.
@@ -58,6 +61,10 @@ export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } 
       : Promise.resolve({ data: [], error: null }),
     // Sempre: serve anche a sapere quando la scheda si è aperta, e quindi se la bozza va rifatta.
     admin.from('abbonamenti_servizi').select('seller_id, stato, creato_il').limit(TETTO_NEGOZI * 5),
+    // 25/11/2026 — La misura di Google del sito che hanno già. Facoltativa: se cade, chi ha un sito non aspetta.
+    Promise.resolve()
+      .then(() => admin.from('analisi_negozi').select('id_attivita, sito').limit(TETTO_NEGOZI))
+      .catch(() => ({ data: [], error: { message: 'non letta' } })),
   ]);
   if (negozi.error) throw new Error(`negozi non letti: ${negozi.error.message}`);
   if (bozze.error) throw new Error(`bozze non lette: ${bozze.error.message}`);
@@ -66,6 +73,12 @@ export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } 
   const schedePerId = new Map(
     ((schede.error ? [] : schede.data ?? []) as unknown as { id_attivita: string; aggiornata_il: string; scheda?: unknown }[]).map((s) => [s.id_attivita, s]),
   );
+
+  const misuraPerId = new Map(
+    ((misure?.error ? [] : misure?.data ?? []) as Array<{ id_attivita: string; sito?: unknown }>).map((m) => [m.id_attivita, leggiRisultatoSito(m.sito)]),
+  );
+  const giudizioDi = (s: { scheda?: unknown; giudizio?: unknown } | undefined) =>
+    leggiGiudizioSito(s?.giudizio ?? ((s?.scheda as { analisi?: Record<string, unknown> } | undefined)?.analisi?.giudizio_sito));
 
   const visibileSenzaAbbonamento = new Set(
     ((visibili.error ? [] : visibili.data ?? []) as Array<{ id: string; visibile_senza_abbonamento?: unknown }>)
@@ -92,7 +105,8 @@ export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } 
     const socials = (p.store_customization as { socials?: { website?: unknown } } | null)?.socials;
     const sito = typeof socials?.website === 'string' ? socials.website : null;
     const scheda = schedePerId.get(id);
-    const esito = aspettaLaBozza({ id, ruolo: String(p.role), sito, bozzaIl: bozzaIl.get(id) ?? null, schedaIl: scheda?.aggiornata_il ?? null, schedaApertaIl: apertaIl.get(id) ?? null });
+    const sitoDaRifare = !!sito?.trim() && sitoDaRifareInQualcheFascia(misuraPerId.get(id) ?? null, giudizioDi(scheda as { scheda?: unknown; giudizio?: unknown } | undefined));
+    const esito = aspettaLaBozza({ id, ruolo: String(p.role), sito, bozzaIl: bozzaIl.get(id) ?? null, schedaIl: scheda?.aggiornata_il ?? null, schedaApertaIl: apertaIl.get(id) ?? null, sitoDaRifare });
     if (!esito.aspetta) continue;
     inAttesa.push({
       id_attivita: id,

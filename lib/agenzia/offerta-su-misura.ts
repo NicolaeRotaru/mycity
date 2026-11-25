@@ -1,6 +1,6 @@
 import { ABBONAMENTI, FASCE, FOTO_LOCALE_CONSIGLIATE, PRODOTTI_PER_IL_PREMIUM, type Abbonamento, type DatiAttivita, type ServizioAgenzia } from './preventivo';
 import { datoDi, prodottiTipici, senzaPrezzo, vociSenzaPrezzo, type SchedaCliente } from './scheda-cliente';
-import { votoDi, type AnalisiCanali, type RisultatoSito } from './analisi';
+import { votoDi, type AnalisiAziendale, type AnalisiCanali, type RisultatoSito } from './analisi';
 import type { TipoAttivita } from './tipi-attivita';
 
 /**
@@ -53,6 +53,11 @@ export type Proposta = {
    * Il preventivo corto la lascia fuori (Nicola, 18:30: «lo stretto necessario che gli interessa»).
    */
   generica?: true;
+  /**
+   * 25/11/2026 — La proposta che sposta l'abbonamento consigliato (Nicola, «ok sito»): il sito rifatto solo
+   * da una fascia in su, le opportunità dell'analisi da seguire ogni mese. `perche` continua «Consigliamo X: …».
+   */
+  consiglia?: { fascia: Abbonamento; perche: string };
 };
 
 export type OffertaSuMisura = {
@@ -74,6 +79,8 @@ export type DatiPerLOfferta = {
   sito?: RisultatoSito | null;
   /** 25/11/2026 — Com'è il sito che ha già, a occhio: lo scrive l'AD nella scheda (Google non misura la bellezza). */
   giudizioSito?: GiudizioSito | null;
+  /** 25/11/2026 — L'analisi del business: le opportunità e le prime mosse che un servizio copre diventano proposte. */
+  analisiAziendale?: AnalisiAziendale | null;
 };
 
 /**
@@ -85,7 +92,27 @@ export type DatiPerLOfferta = {
  */
 export const ASPETTI_SITO = ['curato', 'datato', 'fai-da-te'] as const;
 export const PAGINE_SITO = ['una', 'poche', 'molte'] as const;
-export type GiudizioSito = { aspetto: (typeof ASPETTI_SITO)[number] | null; pagine: (typeof PAGINE_SITO)[number] | null; nota: string | null };
+/**
+ * IL CONTRATTO DEL GIUDIZIO DEL SITO — 25/11/2026 (Nicola, «ok sito»: il sito si offre solo dove vale di più).
+ * Lo scrive l'AD nel flusso 16, nella domanda a «Chiedi all'AD», in `scheda.analisi.giudizio_sito`:
+ *  · `livello`: «semplice» (una o due pagine, fatto in casa o datato), «medio» (più pagine, curato, senza
+ *    funzioni particolari), «pregio» (tante pagine o funzioni, fatto da professionisti). Manca = «medio».
+ *  · `funzioni`: quello che il sito sa fare già, solo da `FUNZIONI_SITO`; le altre voci si scartano.
+ *  · `migliorie`: per il «pregio», cosa miglioriamo noi rifacendolo nel Premium, in una frase (10-240
+ *    caratteri, senza prezzi né telefoni). Senza, un sito di pregio non si rifà mai.
+ *  · `aspetto`, `pagine`, `nota`: come prima.
+ */
+export const LIVELLI_SITO = ['semplice', 'medio', 'pregio'] as const;
+export const FUNZIONI_SITO = ['prenotazioni', 'negozio_online', 'piu_lingue', 'blog', 'menu', 'galleria', 'modulo_contatti', 'area_clienti'] as const;
+export type LivelloSito = (typeof LIVELLI_SITO)[number];
+export type GiudizioSito = {
+  aspetto: (typeof ASPETTI_SITO)[number] | null;
+  pagine: (typeof PAGINE_SITO)[number] | null;
+  nota: string | null;
+  livello?: LivelloSito | null;
+  funzioni?: (typeof FUNZIONI_SITO)[number][];
+  migliorie?: string | null;
+};
 
 /** Il giudizio letto dalla scheda, ripulito: valori fuori elenco diventano «non detto», mai un errore. */
 export function leggiGiudizioSito(grezzo: unknown): GiudizioSito | null {
@@ -95,7 +122,43 @@ export function leggiGiudizioSito(grezzo: unknown): GiudizioSito | null {
   const pagine = (PAGINE_SITO as readonly unknown[]).includes(g.pagine) ? (g.pagine as GiudizioSito['pagine']) : null;
   const notaGrezza = typeof g.nota === 'string' ? g.nota.replace(/\s+/g, ' ').trim() : '';
   const nota = notaGrezza.length >= 3 && notaGrezza.length <= 200 && senzaPrezzo(notaGrezza) ? notaGrezza : null;
-  return aspetto || pagine || nota ? { aspetto, pagine, nota } : null;
+  const livello = (LIVELLI_SITO as readonly unknown[]).includes(g.livello) ? (g.livello as LivelloSito) : null;
+  const funzioni = Array.isArray(g.funzioni)
+    ? [...new Set(g.funzioni.filter((f): f is (typeof FUNZIONI_SITO)[number] => (FUNZIONI_SITO as readonly unknown[]).includes(f)))]
+    : [];
+  const miglGrezze = typeof g.migliorie === 'string' ? g.migliorie.replace(/\s+/g, ' ').trim() : '';
+  const migliorie = miglGrezze.length >= 10 && miglGrezze.length <= 240 && citabile(miglGrezze) ? miglGrezze : null;
+  return aspetto || pagine || nota || livello || funzioni.length || migliorie ? { aspetto, pagine, nota, livello, funzioni, migliorie } : null;
+}
+
+/** Il livello del sito: quello dell'AD, o «medio» se non l'ha guardato (mai rifare dal Base un sito non visto). */
+export const livelloDelSito = (g: GiudizioSito | null | undefined): LivelloSito => g?.livello ?? 'medio';
+
+/** Da quale fascia rifacciamo il sito che ha già, secondo la tabella di Nicola; `null` = non si rifà. */
+function rifattoDa(g: GiudizioSito | null | undefined, qualcosaDaRifare: boolean): Abbonamento | null {
+  const livello = livelloDelSito(g);
+  if (livello === 'semplice') return 'base';
+  if (!qualcosaDaRifare) return null;
+  if (livello === 'medio') return 'business';
+  return g?.migliorie ? 'premium' : null;
+}
+
+/** C'è qualcosa da rifare nel sito di oggi: Google lo trova lento o male, o l'AD lo trova datato o fatto in casa. */
+function difettiDelSito(sito: RisultatoSito | null | undefined, g: GiudizioSito | null | undefined) {
+  const lento = !!sito && sito.velocita !== null && votoDi(sito.velocita) !== 'bene';
+  const googleMale = !!sito && sito.seo !== null && votoDi(sito.seo) !== 'bene';
+  const daSistemare = sito ? vociCitabili(sito.daSistemare, 2, 300) : [];
+  const aspettoDebole = g?.aspetto === 'datato' || g?.aspetto === 'fai-da-te';
+  return { lento, googleMale, daSistemare, aspettoDebole, qualcuno: lento || googleMale || daSistemare.length > 0 || aspettoDebole };
+}
+
+/**
+ * Almeno un abbonamento rifà il sito che ha già: allora la bozza del sito va anche a lui (Nicola, «ok sito»).
+ * Senza misura di Google e senza giudizio dell'AD non si sa niente: niente bozza.
+ */
+export function sitoDaRifareInQualcheFascia(sito: RisultatoSito | null | undefined, g: GiudizioSito | null | undefined): boolean {
+  if (!sito && !g) return false;
+  return rifattoDa(g, difettiDelSito(sito, g).qualcuno) !== null;
 }
 
 const FONTE = {
@@ -134,6 +197,7 @@ const pieno = (o: unknown, k: string) => {
 };
 const elenco = (v: string[]) => (v.length <= 1 ? v.join('') : `${v.slice(0, -1).join(', ')} e ${v[v.length - 1]}`);
 const it = (n: number) => n.toLocaleString('it-IT');
+const dominioDi = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
 const minuscola = (t: string) => `${t.charAt(0).toLowerCase()}${t.slice(1)}`;
 
 /** Il video di presentazione, detto per tipo di attività: quello che un cliente vuole vedere. */
@@ -254,15 +318,12 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
       daFascia: 'base',
     });
   }
-  // Il sito che ha già (25/11/2026: Google PageSpeed lo misura appena lo conosciamo, l'AD dice com'è).
-  // Due strade, mai «sistemiamo il tuo sito di oggi» a metà:
-  //  · fatto bene (Google contento e, se l'AD l'ha visto, curato): lo teniamo e ci aggiungiamo valore;
-  //  · altrimenti: lo rifacciamo noi, senza i difetti che Google trova in quello di oggi.
-  if (haSito && sito) {
-    const lento = sito.velocita !== null && votoDi(sito.velocita) !== 'bene';
-    const googleMale = sito.seo !== null && votoDi(sito.seo) !== 'bene';
-    const daSistemare = vociCitabili(sito.daSistemare, 2, 300);
-    const aspettoDebole = giudizioSito?.aspetto === 'datato' || giudizioSito?.aspetto === 'fai-da-te';
+  // Il sito che ha già (25/11/2026: Google PageSpeed lo misura, l'AD dice com'è e quanto vale).
+  // La tabella di Nicola («ok sito», 25/11): semplice → rifatto dal Base; medio → tenuto e collegato nel Base,
+  // rifatto dal Business; pregio → tenuto nel Base e nel Business, rifatto solo nel Premium e solo con le
+  // migliorie scritte dall'AD. Senza giudizio vale «medio». Mai «sistemiamo il tuo sito di oggi» a metà.
+  if (haSito && (sito || giudizioSito)) {
+    const { lento, googleMale, daSistemare, aspettoDebole, qualcuno } = difettiDelSito(sito, giudizioSito);
     const aOcchio = giudizioSito?.aspetto === 'datato'
       ? 'A vederlo, il sito sembra datato.'
       : giudizioSito?.aspetto === 'fai-da-te'
@@ -270,52 +331,63 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
         : giudizioSito?.aspetto === 'curato'
           ? 'A vederlo, il sito è curato.'
           : null;
-    const voti = [
+    const voti = sito ? [
       sito.velocita !== null ? `${sito.velocita} su 100 per la velocità dal telefono` : null,
       sito.seo !== null ? `${sito.seo} su 100 per farsi trovare su Google` : null,
-    ].filter(Boolean) as string[];
+    ].filter(Boolean) as string[] : [];
     const nota = giudizioSito?.nota ? `${giudizioSito.nota.replace(/[.!?]?$/, '.')}` : null;
     const molte = giudizioSito?.pagine === 'molte';
-    if (lento || googleMale || daSistemare.length || aspettoDebole) {
+    const livello = livelloDelSito(giudizioSito);
+    const da = rifattoDa(giudizioSito, qualcuno);
+    // Tenuto e collegato: le stesse frasi di sempre, fascia per fascia.
+    const tenuto: Record<Abbonamento, string> = {
+      base: 'Colleghiamo il tuo sito alla vetrina MyCity: il pulsante «Ordina» porta i clienti ai tuoi prodotti',
+      business: 'Colleghiamo il tuo sito alla vetrina, e ogni mese ci aggiungiamo una pagina nuova e i testi che Google legge',
+      premium: 'Colleghiamo il tuo sito alla vetrina e lo curiamo noi ogni mese: foto nuove, le novità del momento e i voti di Google sotto controllo',
+    };
+    if (da) {
       const veloce = lento ? ', veloce dal telefono' : '';
+      const migliorie = livello === 'pregio' && giudizioSito?.migliorie ? `: ${minuscola(giudizioSito.migliorie.replace(/[.!?]$/, ''))}` : '';
+      const rifatto: Record<Abbonamento, string> = {
+        base: molte
+          ? `Rifacciamo la pagina principale del tuo sito${veloce}, col tuo nome e il pulsante per ordinare dalla vetrina`
+          : `Rifacciamo il tuo sito in una pagina col tuo nome${veloce}, senza le cose che Google segnala`,
+        business: `Rifacciamo il tuo sito completo, di più pagine${veloce}, senza le cose che Google segnala`,
+        premium: livello === 'pregio'
+          ? `Rifacciamo il tuo sito${veloce}${migliorie}`
+          : `Rifacciamo il tuo sito completo${veloce}, e lo aggiorniamo noi ogni mese`,
+      };
+      const perFascia = Object.fromEntries(ABBONAMENTI.map((f) => [f, ORDINE[f] >= ORDINE[da] ? rifatto[f] : tenuto[f]])) as Record<Abbonamento, string>;
       aggiungi({
         id: 'sito-rifatto',
         servizio: 'sito_web',
-        cosa: `Rifacciamo il tuo sito${veloce}, senza le cose che Google segnala`,
-        perFascia: {
-          base: molte
-            ? `Rifacciamo la pagina principale del tuo sito${veloce}, col tuo nome e il pulsante per ordinare dalla vetrina`
-            : `Rifacciamo il tuo sito in una pagina col tuo nome${veloce}, senza le cose che Google segnala`,
-          business: `Rifacciamo il tuo sito completo, di più pagine${veloce}, senza le cose che Google segnala`,
-          premium: `Rifacciamo il tuo sito completo${veloce}, e lo aggiorniamo noi ogni mese`,
-        },
+        cosa: rifatto[da],
+        perFascia,
         perche: [
-          lento ? `Oggi Google gli dà ${sito.velocita} su 100 per la velocità dal telefono${sito.secondiPerVedere !== null ? `: la parte principale si vede dopo ${sito.secondiPerVedere.toLocaleString('it-IT')} secondi` : ''}.` : null,
-          googleMale ? `Per farsi trovare su Google gli dà ${sito.seo} su 100.` : null,
+          lento ? `Oggi Google gli dà ${sito!.velocita} su 100 per la velocità dal telefono${sito!.secondiPerVedere !== null ? `: la parte principale si vede dopo ${sito!.secondiPerVedere.toLocaleString('it-IT')} secondi` : ''}.` : null,
+          googleMale ? `Per farsi trovare su Google gli dà ${sito!.seo} su 100.` : null,
           aspettoDebole ? aOcchio : null,
           nota,
           ...daSistemare,
-        ].filter(Boolean).join(' '),
-        fonte: aspettoDebole && !lento && !googleMale && !daSistemare.length ? FONTE.scheda : FONTE.sito,
+          da !== 'base' ? `Col ${FASCE[da].nome} lo rifacciamo per intero; sotto lo teniamo e lo colleghiamo alla vetrina.` : null,
+        ].filter(Boolean).join(' ') || 'A vederlo, il sito è semplice: lo rifacciamo col tuo nome.',
+        fonte: (lento || googleMale || daSistemare.length) ? FONTE.sito : FONTE.scheda,
         daFascia: 'base',
+        consiglia: da === 'base' ? undefined : { fascia: da, perche: `il tuo sito lo rifacciamo dal ${FASCE[da].nome}, che lo fa per intero` },
       });
     } else {
       aggiungi({
         id: 'sito-valorizzato',
         servizio: 'sito_web',
         cosa: 'Teniamo il tuo sito com’è e lo facciamo lavorare per te',
-        perFascia: {
-          base: 'Colleghiamo il tuo sito alla vetrina MyCity: il pulsante «Ordina» porta i clienti ai tuoi prodotti',
-          business: 'Colleghiamo il tuo sito alla vetrina, e ogni mese ci aggiungiamo una pagina nuova e i testi che Google legge',
-          premium: 'Colleghiamo il tuo sito alla vetrina e lo curiamo noi ogni mese: foto nuove, le novità del momento e i voti di Google sotto controllo',
-        },
+        perFascia: tenuto,
         perche: [
-          `Il tuo sito è già fatto bene${voti.length ? `: Google gli dà ${elenco(voti)}` : ''}.`,
+          qualcuno ? 'Il tuo sito è fatto bene: non lo rifacciamo, lo colleghiamo alla vetrina e lo facciamo crescere.' : `Il tuo sito è già fatto bene${voti.length ? `: Google gli dà ${elenco(voti)}` : ''}.`,
           aOcchio,
           nota,
-          'Non lo rifacciamo: lo colleghiamo alla vetrina e lo facciamo crescere.',
+          qualcuno ? null : 'Non lo rifacciamo: lo colleghiamo alla vetrina e lo facciamo crescere.',
         ].filter(Boolean).join(' '),
-        fonte: FONTE.sito,
+        fonte: sito ? FONTE.sito : FONTE.scheda,
         daFascia: 'base',
       });
     }
@@ -438,6 +510,25 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
       daFascia: 'base',
     });
   }
+
+  /* ─────────── DALL'ANALISI DEL BUSINESS (25/11/2026, Nicola: «ok sito», lavoro B) ─────────── */
+  // Ogni opportunità o prima mossa che l'AD lega a un nostro servizio (`servizio`) e traduce in cosa facciamo
+  // (`proposta`) diventa una proposta, con la sua fonte. Al massimo tre. Le altre restano solo analisi.
+  const dallAnalisi = (['opportunita', 'prime_mosse'] as const)
+    .flatMap((sez) => d.analisiAziendale?.[sez] ?? [])
+    .filter((v) => v.servizio && v.proposta)
+    .slice(0, 3);
+  dallAnalisi.forEach((v, i) => {
+    aggiungi({
+      id: `analisi-opp-${i}`,
+      servizio: v.servizio!,
+      cosa: v.proposta!,
+      perche: v.testo,
+      fonte: dominioDi(v.fonte),
+      daFascia: 'base',
+      ...(i === 0 ? { consiglia: { fascia: 'business' as const, perche: `l’analisi trova ${dallAnalisi.length === 1 ? 'un’opportunità' : `${dallAnalisi.length} opportunità`} da seguire, e col Business la rifacciamo ogni mese` } } : {}),
+    });
+  });
 
   /* ─────────── ANALISI DEL BUSINESS ─────────── */
   const canaliScritti = (['instagram', 'facebook', 'tiktok', 'google_maps', 'website'] as const).filter((k) => pieno(dati.socials, k)).length;

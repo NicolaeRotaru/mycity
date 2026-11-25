@@ -380,6 +380,27 @@ export type Preventivo = {
   analisiAziendale?: import('./analisi').AnalisiAziendale | null;
 };
 
+/**
+ * LA FASCIA CONSIGLIATA, DOPO L'OFFERTA SU MISURA — 25/11/2026 (Nicola, «ok sito»).
+ * `fasciaConsigliata` guarda solo prodotti e voci mancanti; qui il consiglio sale fin dove serve per le
+ * proposte che lo chiedono (`consiglia`): il sito rifatto solo dal Business o dal Premium, le opportunità
+ * dell'analisi da seguire ogni mese. Non scende mai.
+ */
+export function consigliataDallOfferta(
+  prima: { id: Abbonamento; perche: string },
+  offerta: { proposte: Array<{ consiglia?: { fascia: Abbonamento; perche: string } }> } | null | undefined,
+): { id: Abbonamento; perche: string } {
+  const ordine = (f: Abbonamento) => ABBONAMENTI.indexOf(f);
+  let meglio = prima;
+  for (const x of offerta?.proposte ?? []) {
+    if (x.consiglia && ordine(x.consiglia.fascia) > ordine(meglio.id)) {
+      const perche = x.consiglia.perche;
+      meglio = { id: x.consiglia.fascia, perche: `${perche.charAt(0).toUpperCase()}${perche.slice(1)}.` };
+    }
+  }
+  return meglio;
+}
+
 export type AbbonamentoAttivo = { fascia: Abbonamento; stato: 'active' | 'past_due'; rinnovoIl: string | null };
 
 /** La fascia consigliata dai dati: il catalogo grande va sul Premium, una vetrina da rifare sul Business. */
