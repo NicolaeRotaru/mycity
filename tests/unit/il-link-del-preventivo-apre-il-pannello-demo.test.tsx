@@ -158,7 +158,7 @@ describe('ogni fascia apre il suo preventivo, anche nella demo', () => {
 
   it('senza fascia, o con una sconosciuta, vale la consigliata', async () => {
     const p = stato.preventivo as Preventivo;
-    for (const q of [{}, { fascia: 'gold' }]) {
+    for (const q of [{}, { fascia: 'gold' }] as Array<Record<string, string>>) {
       const r = disegna(await PreventivoDemo({ params: params(), searchParams: cerca(q) }));
       expect(r.querySelector('h1')?.textContent).toBe(`Il preventivo di Ora del Gusto col ${FASCE[p.consigliato].nome}`);
       expect(r.querySelector(`input[type="radio"][value="${p.consigliato}"]`)?.hasAttribute('checked')).toBe(true);
