@@ -1,5 +1,6 @@
 import { Briefcase } from 'lucide-react';
 import { ABBONAMENTI, FASCE, type Abbonamento } from '@/lib/agenzia/preventivo';
+import { SERVIZI_IN_BREVE } from '@/lib/agenzia/preventivo-corto';
 import { SEZIONI_BUSINESS, TITOLI_BUSINESS, type AnalisiAziendale as Analisi } from '@/lib/agenzia/analisi';
 
 /**
@@ -57,7 +58,7 @@ function Corta({ analisi, fascia, dettaglioHref }: Props) {
       ) : (
         <p className="mt-2 text-sm text-ink-600">La stiamo preparando dalle fonti pubbliche.</p>
       )}
-      {fascia && <p className="mt-2 text-xs text-ink-600">Col {FASCE[fascia].nome}: {FASCE[fascia].servizi.analisi}</p>}
+      {fascia && <p className="mt-2 text-xs text-ink-600">Col {FASCE[fascia].nome}: {SERVIZI_IN_BREVE[fascia].analisi}</p>}
       {dettaglioHref && <a href={dettaglioHref} className="mt-1 inline-block text-xs font-semibold text-primary-700 underline">Il dettaglio, con le fonti, è nella pagina Analisi</a>}
     </section>
   );

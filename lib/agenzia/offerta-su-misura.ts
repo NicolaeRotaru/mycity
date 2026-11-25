@@ -48,6 +48,11 @@ export type Proposta = {
    * della fascia sotto, o `cosa`.
    */
   perFascia?: Partial<Record<Abbonamento, string>>;
+  /**
+   * 25/11/2026 — Vera se la proposta non nasce da un dato letto sul locale ma si fa a tutti (l'analisi).
+   * Il preventivo corto la lascia fuori (Nicola, 18:30: «lo stretto necessario che gli interessa»).
+   */
+  generica?: true;
 };
 
 export type OffertaSuMisura = {
@@ -451,6 +456,8 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
       : `Ci hai dato ${canaliScritti} ${canaliScritti === 1 ? 'canale' : 'canali'} da seguire.`,
     fonte: FONTE.vetrina,
     daFascia: 'base',
+    // Si propone sempre; nel preventivo la racconta già l'analisi del business, corta.
+    generica: true,
   });
 
   const perFascia = Object.fromEntries(ABBONAMENTI.map((f) => [f, p.filter((x) => ORDINE[x.daFascia] <= ORDINE[f]).length])) as Record<Abbonamento, number>;
