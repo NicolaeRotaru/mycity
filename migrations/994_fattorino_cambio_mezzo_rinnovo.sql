@@ -5,9 +5,11 @@
 -- (is_approved = false, approval_status = 'pending', approval_requested_at = now()).
 --
 -- Cambia rispetto alla 991:
---   · da sospeso lo stesso cambio non esce più con un errore: rimette in coda
---     allo stesso modo. Lo staff lo rivede con «approve» (documenti e scadenze,
---     lib/admin/regole-approvazione.ts) invece che con «reactivate»;
+--   · da sospeso le scadenze di patente e polizza si aggiornano e lo stato
+--     resta 'suspended' (come per il negozio sospeso, 400): la sospensione la
+--     toglie solo lo staff con «reactivate», che guarda le scadenze
+--     (lib/admin/regole-approvazione.ts). Il cambio di mezzo da sospeso esce
+--     ancora con 42501, come nella 991;
 --   · da approvato, con una consegna già ritirata (PICKED_UP, OUT_FOR_DELIVERY)
 --     il cambio aspetta la fine di quella consegna (errore P0001 con la frase
 --     per il fattorino): la consegna si finisce come dice la 270;
@@ -43,7 +45,14 @@ BEGIN
        OR NEW.rider_license_expires_on   IS DISTINCT FROM OLD.rider_license_expires_on
        OR NEW.rider_insurance_expires_on IS DISTINCT FROM OLD.rider_insurance_expires_on) THEN
 
-    IF OLD.is_approved IS TRUE AND OLD.id = (SELECT auth.uid()) THEN
+    IF OLD.approval_status = 'suspended' THEN
+      IF NEW.rider_vehicle_type IS DISTINCT FROM OLD.rider_vehicle_type THEN
+        RAISE EXCEPTION 'profiles: il mezzo si cambia dopo la riattivazione' USING ERRCODE = '42501';
+      END IF;
+      RETURN NEW;
+    END IF;
+
+    IF OLD.id = (SELECT auth.uid()) THEN
       IF EXISTS (SELECT 1 FROM public.orders
                   WHERE rider_id = OLD.id
                     AND delivery_status IN ('PICKED_UP', 'OUT_FOR_DELIVERY')) THEN
@@ -57,7 +66,7 @@ BEGIN
          WHERE rider_id = OLD.id AND delivery_status = 'ASSIGNED'
       LOOP
         IF coalesce((public.rider_release_order(v_ordine) ->> 'ok')::boolean, false) IS NOT TRUE THEN
-          RAISE EXCEPTION 'Finisci prima la consegna che hai ritirato: mezzo e scadenze dei documenti si cambiano a consegna chiusa.'
+          RAISE EXCEPTION 'Una tua consegna è cambiata proprio adesso: ricarica la pagina e riprova.'
             USING ERRCODE = 'P0001';
         END IF;
       END LOOP;

@@ -9,8 +9,9 @@
 -- lista «In attesa» mostra come «Inviata il»). Lo staff lo rivede con «approve»
 -- e le regole del mezzo (lib/admin/regole-approvazione.ts).
 -- Da sospeso (approval_status = 'suspended') questa versione rifiutava il
--- cambio con 42501. La 994 la sostituisce: da sospeso lo stesso cambio rimette
--- in coda, e da approvato tiene conto delle consegne già sue. Vale la 994.
+-- cambio con 42501. La 994 la sostituisce: da sospeso le scadenze si
+-- aggiornano (lo stato resta sospeso) e il mezzo no; da approvato tiene conto
+-- delle consegne già sue. Vale la 994.
 -- Iscrizione, bici, targa e gli altri campi non cambiano.
 --
 -- Non si applica a: is_admin(), ruolo JWT service_role,

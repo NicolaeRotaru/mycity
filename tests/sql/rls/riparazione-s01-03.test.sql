@@ -15,16 +15,18 @@
 --   ⑨ chi è in coda non si rimette «approvato» da solo;
 --   ⑩ chi è in coda non finisce fra i documenti da potare;
 --   ⑪ riapprovato dallo staff, prende l'ordine;
---   ⑬ da sospeso scrive «auto» e due scadenze: torna in coda, non approvato,
---     e l'ordine non lo prende;
+--   ⑬ da sospeso non scrive «auto» e due scadenze: riattivato, torna in bici;
 --   ⑭ da sospeso in scooter con la polizza scaduta scrive la nuova scadenza:
---     torna in coda (lo staff lo rivede con «approve»), niente errore;
+--     niente errore, resta sospeso (lo riattiva lo staff), l'ordine non lo prende;
 --   ⑮ approvato con una consegna ritirata: il rinnovo aspetta la fine della
---     consegna (frase per il fattorino), resta approvato e vede la consegna;
+--     consegna (frase per il fattorino), resta approvato, vede la consegna e
+--     arriva al codice di consegna;
 --   ⑯ approvato con una consegna assegnata e non ritirata: torna in coda, la
 --     consegna torna in bacheca e il negozio riceve l'avviso;
---   ⑰ dopo ⑯ la scrittura degli ordini non resta aperta nella transazione.
--- Senza la migrazione 991 ①, ②, ③, ④ e ⑨ sono ROSSI; senza la 994 ⑬, ⑭, ⑮ e ⑯.
+--   ⑰ dopo ⑯ la scrittura degli ordini non resta aperta nella transazione;
+--   ⑱ da sospeso, dopo la nuova scadenza, non passa da scooter ad auto e non
+--     esce da «sospeso».
+-- Senza la migrazione 991 ①, ②, ③, ④, ⑨ e ⑬ sono ROSSI; senza la 994 ⑭, ⑮ e ⑯.
 -- =============================================================================
 
 BEGIN;
@@ -134,6 +136,20 @@ EXCEPTION WHEN OTHERS THEN RETURN SQLSTATE || ' ' || SQLERRM;
 END $$;
 GRANT EXECUTE ON FUNCTION pg_temp.frase(uuid, text) TO authenticated;
 
+-- La scadenza della polizza dopo l'aggiornamento (VOLATILE: vede la riga già scritta).
+CREATE FUNCTION pg_temp.polizza(utente uuid) RETURNS date
+LANGUAGE sql AS $$ SELECT rider_insurance_expires_on FROM public.profiles WHERE id = utente $$;
+GRANT EXECUTE ON FUNCTION pg_temp.polizza(uuid) TO authenticated;
+
+-- Il fattorino (jwt) prova a chiudere la consegna con un codice: torna il motivo.
+CREATE FUNCTION pg_temp.consegna(utente uuid, ordine uuid) RETURNS text
+LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', utente, 'role', 'authenticated')::text, true);
+  RETURN coalesce(public.verify_delivery_code(ordine, '000000') ->> 'reason', 'ok');
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.consegna(uuid, uuid) TO authenticated;
+
 -- Le consegne che il fattorino (jwt) vede come sue.
 CREATE FUNCTION pg_temp.sue(utente uuid) RETURNS bigint
 LANGUAGE plpgsql AS $$
@@ -206,22 +222,25 @@ INSERT INTO esiti SELECT '7 durante l''iscrizione mezzo e scadenze si scrivono c
     $s$rider_vehicle_type = 'SCOOTER', rider_license_expires_on = '2030-01-01', rider_insurance_expires_on = '2030-01-01'$s$) AS e;
 INSERT INTO passi SELECT 13, pg_temp.cambia('e9910000-0000-0000-0000-00000000000e',
     $s$rider_vehicle_type = 'CAR', rider_license_expires_on = '2030-01-01', rider_insurance_expires_on = '2030-01-01'$s$);
-INSERT INTO esiti SELECT '13 da sospeso, auto e due scadenze: in coda, non approvato, l''ordine non lo prende',
-  p.e = 'righe=1 approvato=f stato=pending richiesta=t mezzo=CAR in_regola=f consegne_in_corso=f' AND o = 'false',
-  p.e || ' · presa ok=' || o
-  FROM passi p, pg_temp.prendi('e9910000-0000-0000-0000-00000000000e', 'a9910000-0000-0000-0000-000000000003') AS o
- WHERE p.n = 13;
-INSERT INTO esiti SELECT '14 da sospeso con la polizza scaduta, nuova scadenza: in coda per lo staff',
-  e = 'righe=1 approvato=f stato=pending richiesta=t mezzo=SCOOTER in_regola=f consegne_in_corso=f', e
-  FROM pg_temp.cambia('e9910000-0000-0000-0000-000000000011', $s$rider_insurance_expires_on = '2031-06-30'$s$) AS e;
-INSERT INTO esiti SELECT '15 con una consegna ritirata il rinnovo aspetta: resta approvato e la vede',
+INSERT INTO esiti SELECT '14 da sospeso con la polizza scaduta, nuova scadenza: resta sospeso, l''ordine non lo prende',
+  e = 'righe=1 approvato=f stato=suspended richiesta=f mezzo=SCOOTER in_regola=f consegne_in_corso=f' AND o = 'false'
+    AND pg_temp.polizza('e9910000-0000-0000-0000-000000000011') = '2031-06-30',
+  e || ' · presa ok=' || o || ' · polizza ' || pg_temp.polizza('e9910000-0000-0000-0000-000000000011')
+  FROM pg_temp.cambia('e9910000-0000-0000-0000-000000000011', $s$rider_insurance_expires_on = '2031-06-30'$s$) AS e,
+       pg_temp.prendi('e9910000-0000-0000-0000-000000000011', 'a9910000-0000-0000-0000-000000000003') AS o;
+INSERT INTO esiti SELECT '18 da sospeso non passa da scooter ad auto e non esce da sospeso',
+  e LIKE 'righe=-1 approvato=f stato=suspended richiesta=f mezzo=SCOOTER %', e
+  FROM pg_temp.cambia('e9910000-0000-0000-0000-000000000011',
+    $s$rider_vehicle_type = 'CAR', rider_license_expires_on = '2031-06-30'$s$) AS e;
+INSERT INTO esiti SELECT '15 con una consegna ritirata il rinnovo aspetta: resta approvato, la vede e la chiude',
   f LIKE 'P0001 Finisci prima la consegna%'
     AND (SELECT is_approved AND approval_status = 'approved' AND rider_insurance_expires_on = '2030-01-01'
            FROM public.profiles WHERE id = 'e9910000-0000-0000-0000-00000000000f')
-    AND s = 1,
-  f || ' · sue=' || s
+    AND s = 1 AND c IN ('WRONG_CODE', 'CODE_NOT_ISSUED'),
+  f || ' · sue=' || s || ' · codice di consegna: ' || c
   FROM pg_temp.frase('e9910000-0000-0000-0000-00000000000f', $s$rider_insurance_expires_on = '2031-06-30'$s$) AS f,
-       pg_temp.sue('e9910000-0000-0000-0000-00000000000f') AS s;
+       pg_temp.sue('e9910000-0000-0000-0000-00000000000f') AS s,
+       pg_temp.consegna('e9910000-0000-0000-0000-00000000000f', 'a9910000-0000-0000-0000-000000000004') AS c;
 INSERT INTO passi SELECT 16, pg_temp.cambia('e9910000-0000-0000-0000-000000000010', $s$rider_insurance_expires_on = '2031-06-30'$s$);
 INSERT INTO esiti SELECT '17 dopo il rinnovo la scrittura degli ordini resta chiusa',
   coalesce(current_setting('mycity.allow_order_write', true), '') <> '1',
@@ -242,7 +261,7 @@ SET LOCAL request.jwt.claims = '{"role":"service_role"}';
 CREATE TEMP TABLE servizio_esito AS
   SELECT pg_temp.prova('e9910000-0000-0000-0000-000000000008', $s$rider_vehicle_type = 'SCOOTER', rider_license_expires_on = '2030-01-01', rider_insurance_expires_on = '2030-01-01'$s$) AS n;
 UPDATE public.profiles SET approval_status = 'approved', is_approved = true, approved_at = now()
- WHERE id = 'e9910000-0000-0000-0000-000000000001';
+ WHERE id IN ('e9910000-0000-0000-0000-000000000001', 'e9910000-0000-0000-0000-00000000000e');
 RESET ROLE;
 
 INSERT INTO esiti SELECT '8 i cambi dello staff e del server non rimettono in coda',
@@ -259,6 +278,14 @@ INSERT INTO esiti SELECT '16 con una consegna solo assegnata: in coda, la conseg
                  WHERE user_id = 'e9910000-0000-0000-0000-00000000000a' AND link = '/seller/orders/a9910000-0000-0000-0000-000000000005'),
   p.e || ' · ordine: ' || (SELECT concat_ws(' ', delivery_status, rider_id::text) FROM public.orders WHERE id = 'a9910000-0000-0000-0000-000000000005')
   FROM passi p WHERE p.n = 16;
+
+INSERT INTO esiti SELECT '13 da sospeso non scrive auto e scadenze: riattivato, torna in bici',
+  p.e LIKE 'righe=-1 approvato=f stato=suspended %'
+    AND (SELECT rider_vehicle_type = 'BIKE' AND rider_license_expires_on IS NULL AND rider_insurance_expires_on IS NULL
+           FROM public.profiles WHERE id = 'e9910000-0000-0000-0000-00000000000e'),
+  p.e || ' · dopo la riattivazione: ' || (SELECT concat_ws(' ', rider_vehicle_type, rider_license_expires_on::text, rider_insurance_expires_on::text)
+                                           FROM public.profiles WHERE id = 'e9910000-0000-0000-0000-00000000000e')
+  FROM passi p WHERE p.n = 13;
 
 INSERT INTO esiti SELECT '10 chi è in coda non finisce fra i documenti da potare',
   NOT EXISTS (SELECT 1 FROM public.documenti_iscrizione_a_meta
@@ -277,7 +304,7 @@ BEGIN
     RAISE INFO '%  %  — %', CASE WHEN r.ok THEN 'ok  ' ELSE 'ROTTO' END, r.nome, r.dettaglio;
   END LOOP;
   SELECT count(*) INTO rossi FROM esiti WHERE ok IS NOT TRUE;
-  IF rossi > 0 OR (SELECT count(*) FROM esiti) <> 16 THEN
+  IF rossi > 0 OR (SELECT count(*) FROM esiti) <> 17 THEN
     RAISE EXCEPTION '% controlli su % sono rossi (S01-03)', rossi, (SELECT count(*) FROM esiti);
   END IF;
   RAISE INFO 'S01-03: % controlli verdi', (SELECT count(*) FROM esiti);
