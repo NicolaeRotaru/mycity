@@ -12,6 +12,12 @@ import { NextRequest } from 'next/server';
  * CHIAMA e non un altro, e senza il filtro sull'id le righe diventano due e la lettura
  * cade. Gli involucri di autenticazione sono quelli veri; Stripe e database sono finti,
  * nessuna chiamata vera.
+ *
+ * Il negozio «in attesa» finto ha anche la data della richiesta (`approval_requested_at`):
+ * con quella l'involucro «anche in attesa» lo farebbe entrare, quindi il 403 dipende solo
+ * dall'approvazione e non da una data che manca. L'amministratore ha `approval_status`
+ * vuoto, come sul database vero (migrazione 119): l'involucro del negozio lo lascia
+ * passare, e il collegamento a Stripe lo ferma solo il controllo della verifica.
  */
 
 type Riga = Record<string, unknown>;
@@ -105,6 +111,8 @@ const chiama = (rotta: unknown, percorso: string, intestazioni: Record<string, s
   }));
 
 const IO = 'u-io';
+/** La data della richiesta di approvazione: c'è, così «in attesa» è una richiesta mandata davvero. */
+const IN_ATTESA_DAL = '2026-11-20T09:00:00.000Z';
 /** Chi chiama: ogni ruolo ha già un conto Stripe suo, così il conto non decide niente. */
 const io = (ruolo: string, altro: Riga = {}) => {
   stato.profili[0] = {
@@ -134,8 +142,8 @@ describe('R25-007 · /api/stripe/connect/login: il 403 viene dal ruolo, non dal 
     expect(stripeFinto.linkLogin).not.toHaveBeenCalled();
   });
 
-  it('un negozio non ancora approvato, anche col conto, riceve 403', async () => {
-    io('seller', { is_approved: false, approval_status: 'pending' });
+  it('un negozio in attesa con la richiesta mandata, anche col conto, riceve 403', async () => {
+    io('seller', { is_approved: false, approval_status: 'pending', approval_requested_at: IN_ATTESA_DAL });
     expect((await vai()).status).toBe(403);
     expect(stripeFinto.linkLogin).not.toHaveBeenCalled();
   });
@@ -154,6 +162,20 @@ describe('R25-007 · /api/stripe/connect/onboarding: solo il negozio approvato, 
   it.each(['buyer', 'rider'])('un %s con la verifica «approved» sul profilo riceve 403', async (ruolo) => {
     io(ruolo);
     expect((await vai()).status).toBe(403);
+    expect(stripeFinto.linkOnboarding).not.toHaveBeenCalled();
+  });
+
+  it('un negozio in attesa con la richiesta mandata riceve 403 e nessun collegamento', async () => {
+    io('seller', { is_approved: false, approval_status: 'pending', approval_requested_at: IN_ATTESA_DAL });
+    expect((await vai()).status).toBe(403);
+    expect(stripeFinto.linkOnboarding).not.toHaveBeenCalled();
+  });
+
+  it("l'amministratore, senza verifica del negozio, riceve 403 e nessun conto Stripe a suo nome", async () => {
+    io('admin', { is_approved: true, approval_status: null });
+    const res = await vai();
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: { code: 'FORBIDDEN', message: expect.stringContaining('verifica KYC') } });
     expect(stripeFinto.linkOnboarding).not.toHaveBeenCalled();
   });
 
