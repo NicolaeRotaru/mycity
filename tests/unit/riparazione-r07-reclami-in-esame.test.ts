@@ -44,4 +44,21 @@ describe('reclami: il filtro d\'apertura mostra anche quelli in valutazione', ()
     expect((await premi('In valutazione'))?.filtri.status).toBe('under_review');
     expect((await premi('Tutti'))?.filtri.status).toBeUndefined();
   });
+  it('il riquadro «Reclami da gestire» conta open e under_review insieme', async () => {
+    const riga = (id: string, status: string, opener: string) => ({
+      id, order_id: `${id}-ordine-00000000`, opener_id: opener, reason: 'other', description: 'x', status,
+      resolution_notes: null, refund_cents: null, created_at: '2026-11-01T10:00:00Z',
+      opener: { full_name: 'Cliente' }, against: { store_name: `Negozio ${id}`, full_name: null },
+    });
+    fake.rispondi = (q) => ({
+      data: q.tabella === 'disputes' && q.op === 'select'
+        ? [riga('a1', 'open', 'u1'), riga('a2', 'under_review', 'u2'), riga('a3', 'under_review', 'u3')]
+        : [],
+      error: null,
+    });
+    const host = await apri();
+    const testo = host.textContent ?? '';
+    expect(testo).toContain('Reclami da gestire');
+    expect(testo).toContain('3 reclami da decidere');
+  });
 });

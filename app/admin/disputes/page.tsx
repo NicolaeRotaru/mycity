@@ -206,13 +206,13 @@ export default function AdminDisputesPage() {
         body: `${topOpener.count} reclami ancora aperti. Pattern da verificare per possibili abusi.`,
       });
     }
-    const openCount = disputes.filter((d) => d.status === 'open').length;
+    const openCount = disputes.filter((d) => d.status === 'open' || d.status === 'under_review').length;
     if (openCount >= 1) {
       signals.push({
         icon: ShieldAlert,
         high: openCount >= 5,
         title: 'Reclami da gestire',
-        body: `${openCount} ${openCount === 1 ? 'reclamo aperto' : 'reclami aperti'} in attesa di una decisione. Riducili per tenere alta la fiducia.`,
+        body: `${openCount} ${openCount === 1 ? 'reclamo' : 'reclami'} da decidere. Riducili per tenere alta la fiducia.`,
       });
     }
     return signals;
