@@ -2,19 +2,8 @@
  * Il webhook Stripe che crea gli ordini, e quello che gestisce un carrello
  * scaduto. È la strada su cui passano tutti i soldi del marketplace.
  *
- * #12 — Perché sta qui e non in `app/api/stripe/webhook/route.ts`.
- *
- * Quel file era uno solo, da mille righe, con dentro otto mestieri senza
- * rapporto fra loro: creazione ordini, buoni regalo, spazi sponsorizzati,
- * abbonamenti, rimborsi, contestazioni, storni, esiti dei pagamenti. Ogni
- * modifica ai buoni regalo si portava dietro il rischio di toccare la
- * creazione degli ordini, perché stavano nello stesso file e la revisione
- * mostrava un diff dentro un blocco da mille righe. È la strada su cui
- * passano tutti i soldi del marketplace: è l'ultimo posto dove si vuole una
- * revisione difficile da leggere.
- *
- * Nessuna logica è cambiata in questo spostamento: le prove esistenti sul
- * webhook sono la dimostrazione che non si è rotto niente.
+ * #12 — Sta qui e non in `app/api/stripe/webhook/route.ts`: quel file era uno solo, da mille
+ * righe, con otto mestieri senza rapporto fra loro (il perché intero in testa a `rimborsi.ts`).
  */
 import type Stripe from 'stripe';
 import { getStripe, computeOrderSplit } from '@/lib/stripe/client';
@@ -27,12 +16,12 @@ import { clientIdGaValido } from '@/lib/analytics/ga-client-id';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { notifyAdmins, provaAMandare, sessionePagata, suonaLaCampanellaAiNegozi } from './comune';
 import { scritturaObbligatoria } from './esito';
-import { chiudiIlCarrelloPerQuadratura } from './quadratura';
+import { chiudiIlCarrelloPerQuadratura, merceDelCarrello } from './quadratura';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 import { fasciaAlGiornoDellOrdine } from '@/lib/ordini/fascia-leggibile';
-import { orariDeiNegozi, rimborsaLaFasciaPersa, diciAlClienteDelCarrelloRimborsato } from './fascia-al-pagamento';
+import { orariDeiNegozi, rimborsaLaFasciaPersa, diciAlClienteDelCarrelloRimborsato, avvisaIlClienteDelRimborsoAutomatico } from './fascia-al-pagamento';
 
 export type PendingGroup = {
   sellerId: string;
@@ -254,26 +243,52 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : null;
   const transferGroup = `mc_${pendingCheckoutId}`;
 
-  // Recupera la latest_charge dal PaymentIntent per popolare stripe_charge_id
-  // (serve a /api/stripe/payout per usare source_transaction).
+  // La latest_charge dà stripe_charge_id (il bonifico al negozio usa source_transaction) e dice
+  // se la carta è già tornata indietro mentre questo avviso falliva.
   let stripeChargeId: string | null = null;
+  let carta: Stripe.Charge | null = null;
   if (paymentIntent) {
     try {
       const pi = await stripe.paymentIntents.retrieve(paymentIntent, { expand: ['latest_charge'] });
       const lc = pi.latest_charge;
       stripeChargeId = typeof lc === 'string' ? lc : (lc?.id ?? null);
+      carta = lc && typeof lc === 'object' ? lc : null;
     } catch (e) {
-      // 052 — Questo NON è un dettaglio best-effort. Senza `stripe_charge_id` il
-      // pagamento al negozio parte senza `source_transaction`: Stripe lo prende
-      // dal saldo della piattaforma, che sui conti nuovi è vuoto, e il
-      // trasferimento resta bloccato per sempre. Il negozio non viene pagato e
-      // nessuno sa perché.
-      // Meglio far fallire l'evento: Stripe lo riconsegna, e la creazione degli
-      // ordini è già protetta dall'indice unico su (sessione, negozio).
+      // 052 — Non è best-effort: senza `stripe_charge_id` il bonifico al negozio parte dal saldo
+      // della piattaforma (vuoto sui conti nuovi) e resta bloccato per sempre. Stripe riconsegna
+      // l'evento, e gli ordini sono già protetti dall'indice unico su (sessione, negozio).
       logger.error('[stripe] retrieve PI per charge_id fallita: evento respinto per riconsegna', {
         sessionId: session.id, paymentIntent, e,
       });
       throw e;
+    }
+  }
+
+  // 26/11/2026 — LA CARTA GIÀ TORNATA. Rimborsata o contestata mentre questo avviso falliva: rileggerla solo per l'id
+  // faceva nascere l'ordine PAID, e il giro pagava il negozio con soldi già tornati al cliente. Tutta o contestata:
+  // non nasce niente (i nati li lavorano rimborso e contestazione). In parte e nessun ordine nato: il resto torna al
+  // cliente. In parte con ordini nati (un nostro annullo in un carrello nato a metà, o il cruscotto, che lavora
+  // rimborsi-da-fuori.ts): il resto nasce, come prima.
+  const giaTornati = carta?.amount_refunded ?? 0;
+  const tutta = !!carta && (carta.refunded || carta.disputed || (giaTornati > 0 && giaTornati >= carta.amount));
+  if (carta && paymentIntent && (tutta || giaTornati > 0)) {
+    const { data: nati, error: errNati } = await admin.from('orders').select('seller_id').eq('stripe_session_id', session.id);
+    if (errNati) throw new Error(`[stripe] carta già tornata: ordini non letti (${errNati.message})`);
+    const natiDa = new Set((nati ?? []).map((o) => o.seller_id as string));
+    if (tutta || natiDa.size === 0) {
+      // Senza importo e con la chiave stabile: Stripe rimborsa quello che manca, e la riconsegna non ne fa un altro.
+      if (!tutta) await stripe.refunds.create({ payment_intent: paymentIntent, metadata: { motivo: 'carta_tornata', pending_checkout_id: pendingCheckoutId } }, { idempotencyKey: `refund_carta_tornata_${pendingCheckoutId}` });
+      if (natiDa.size === 0) await chiudiIlCarrelloPerQuadratura(admin, pendingCheckoutId);
+      // Nato a metà: si chiude, e torna in vendita la merce dei soli negozi non nati (quella dei nati la rimette il loro rimborso).
+      else if ((await admin.from('pending_checkouts').update({ status: 'CANCELED' }).eq('id', pendingCheckoutId).eq('status', 'PENDING').select('id')).data?.length) {
+        const { error } = await admin.rpc('restore_stock', { p_items: merceDelCarrello(groups.filter((g) => !natiDa.has(g.sellerId))) });
+        if (error) logger.error('[stripe] carta già tornata: merce dei negozi non nati non rimessa in vendita', { pendingCheckoutId, message: error.message });
+      }
+      await notifyAdmins('⚠️ Pagamento senza ordine: carta già tornata', `Sul carrello ${pendingCheckoutId} la carta risulta ${carta.disputed ? 'contestata in banca (se è solo una richiesta di informazioni i soldi ci sono ancora: il cliente va rimborsato a mano)' : tutta ? 'rimborsata per intero' : 'rimborsata in parte (il resto è stato rimborsato adesso)'}${natiDa.size ? `, con ${natiDa.size} ordine/i già nati: il resto non nasce` : ''}. Nessun ordine nuovo creato: guarda su Stripe.`, '/admin/orders', { unaVoltaPer: `carta-tornata:${pendingCheckoutId}` });
+      if (!tutta) await avvisaIlClienteDelRimborsoAutomatico(admin, session, { chiave: `carta-tornata-cliente:${pendingCheckoutId}`, buyerId, traccia: { pendingCheckoutId },
+        frase: "Una parte del pagamento ti era già stata rimborsata prima che l'ordine nascesse: ti abbiamo rimborsato anche il resto e nessun ordine è stato creato.",
+        invito: "Puoi rifare l'ordine dal carrello.", oggetto: '💶 Pagamento rimborsato: il tuo ordine non è stato creato', motivo: 'il pagamento era già stato rimborsato in parte.' });
+      return;
     }
   }
 
@@ -461,33 +476,18 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   // Non richiamiamo increment_coupon_usage qui per evitare doppio conteggio.
 
   /**
-   * #176 — Le email non tengono piu' in ostaggio la risposta a Stripe.
+   * #176 — Le email non tengono piu' in ostaggio la risposta a Stripe, che considera fallita una
+   * consegna senza risposta entro pochi secondi, la ritenta e dopo troppi fallimenti disattiva
+   * l'endpoint: due invii di posta per ordine, con tre negozi e Resend lento, andavano oltre il
+   * limite a ordine gia' fatto.
    *
-   * Stripe considera fallita una consegna che non riceve risposta entro pochi
-   * secondi, la ritenta, e dopo troppi fallimenti disattiva l'endpoint. Qui,
-   * per ogni ordine, si aspettavano DUE invii di posta (con un secondo
-   * tentativo interno ciascuno) piu' una lettura dell'utente venditore: con un
-   * carrello da tre negozi e Resend lento si arrivava tranquillamente oltre il
-   * limite. E il lavoro che conta — l'ordine — era gia' fatto.
-   *
-   * 28/8/2026 — MA «NON ASPETTARE» NON VUOL DIRE «LANCIARE NEL VUOTO».
-   *
-   * Radiografia del 27/8, terzo bloccante. Il blocco partiva come promessa non
-   * attesa (`const avvisi = (async () => {...})()` + `void avvisi.catch`). Su
-   * un server che si spegne appena risposto — cioe' il nostro, Vercel — quel
-   * lavoro puo' non arrivare mai in fondo. Dentro non c'erano solo le email:
-   * c'era anche la campanella del venditore, che e' la riga da cui parte pure
-   * la notifica push (app/api/cron/send-push la legge da `notifications`).
-   * Risultato possibile: ordine pagato, soldi incassati, cliente che aspetta, e
-   * in negozio non squilla niente.
-   *
-   * Adesso in due tempi, come fa gia' la rotta contanti:
-   *   ① la campanella si scrive PRIMA di rispondere. E' una insert sola, non
-   *      chiama nessun servizio esterno, e senza di lei il negoziante non sa di
-   *      avere un ordine.
-   *   ② le email e le misure restano best-effort, ma dentro `after()`: la
-   *      piattaforma tiene viva la funzione finche' non finiscono, invece di
-   *      spegnerla a meta'.
+   * 28/8/2026 — MA «NON ASPETTARE» NON VUOL DIRE «LANCIARE NEL VUOTO». Una promessa non attesa, su
+   * un server che si spegne appena risposto (Vercel), puo' non arrivare in fondo: e dentro c'era
+   * anche la campanella del venditore, da cui parte pure la push (app/api/cron/send-push legge
+   * `notifications`). Ordine pagato, e in negozio non squillava niente. Adesso in due tempi, come
+   * la rotta contanti:
+   *   ① la campanella si scrive PRIMA di rispondere: una insert sola, senza servizi esterni;
+   *   ② le email e le misure restano best-effort, ma dentro `after()`, che tiene viva la funzione.
    */
   // 5/11/2026 — Campanella per tutti gli ordini (id fisso): anche quelli di un tentativo morto prima degli avvisi.
   if (createdOrderIds.some((c) => c.nuovo)) {
