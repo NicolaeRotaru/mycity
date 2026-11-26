@@ -1810,12 +1810,19 @@ async function laParteDeiRimborsiSenzaOrdine(
  * amministratori con negozio, cifra e ordine: «togli 18,00 € dal prossimo bonifico». Una volta
  * per rimborso (`unaVoltaPer` sulla chiave). Un avviso che non parte non ferma il rimborso, già
  * uscito: resta nel log, col testo.
+ *
+ * 26/11/2026 — E ANCHE QUANDO IL BONIFICO DEL LUNEDÌ È SEGNATO FATTO (`bonificoGiaFatto`).
+ * Col tasto «Bonifico fatto» l'ordine passa da HELD a PAID_MANUALLY: l'avviso partiva solo su HELD,
+ * quindi proprio sul rimborso arrivato dopo il bonifico del lunedì non partiva niente, e il negozio
+ * teneva la sua quota. Lì il bonifico è uscito di sicuro: l'avviso lo dice senza «se», e parte anche
+ * se le consegne di quel giorno le pagherebbe Stripe (quel bonifico l'ha fatto Nicola, non Stripe).
  */
 async function avvisaDellaQuotaDaTrattenere(
   admin: ReturnType<typeof getAdminSupabase>,
   orderId: string,
   quotaCents: number,
   chiave: string,
+  bonificoGiaFatto = false,
 ): Promise<void> {
   let negozio = 'il negozio';
   try {
@@ -1823,7 +1830,7 @@ async function avvisaDellaQuotaDaTrattenere(
     // Collaudo K04 — se i contanti di quell'ordine li paga Stripe (contantiPagabiliDaStripe), il
     // bonifico automatico scala già la quota scritta sull'ordine: l'avviso la farebbe togliere due
     // volte. L'avviso serve solo al bonifico fatto a mano.
-    if (o && contantiPagabiliDaStripe((o as { delivered_at?: string | null }).delivered_at)) return;
+    if (!bonificoGiaFatto && o && contantiPagabiliDaStripe((o as { delivered_at?: string | null }).delivered_at)) return;
     const sellerId = (o as { seller_id?: string | null } | null)?.seller_id ?? null;
     if (sellerId) {
       const { data: p } = await admin.from('profiles').select('store_name').eq('id', sellerId).maybeSingle();
@@ -1835,10 +1842,12 @@ async function avvisaDellaQuotaDaTrattenere(
   }
   const cifra = formatPriceFromCents(quotaCents);
   const titolo = `💶 Togli ${cifra} dal prossimo bonifico a ${negozio}`;
-  const testo =
-    `Sull'ordine in contanti #${orderId.slice(0, 8)} è partito un rimborso: la parte del negozio è ${cifra}. ` +
-    `Se il bonifico di quell'ordine a ${negozio} è già partito, togli ${cifra} dal prossimo; ` +
-    'se non è ancora partito, versa solo il resto.';
+  const testo = bonificoGiaFatto
+    ? `Sull'ordine in contanti #${orderId.slice(0, 8)} è partito un rimborso dopo il bonifico del lunedì, già fatto a ${negozio}: ` +
+      `la parte del negozio è ${cifra}. Togli ${cifra} dal prossimo bonifico a ${negozio}.`
+    : `Sull'ordine in contanti #${orderId.slice(0, 8)} è partito un rimborso: la parte del negozio è ${cifra}. ` +
+      `Se il bonifico di quell'ordine a ${negozio} è già partito, togli ${cifra} dal prossimo; ` +
+      'se non è ancora partito, versa solo il resto.';
   let arrivato = false;
   try {
     arrivato = (await notifyAdmins(titolo, testo, '/admin/cod-remittance', { unaVoltaPer: `quota-da-trattenere:${chiave}` })) !== 'nessuno';
@@ -2530,8 +2539,10 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
       logger.error('[refundOrder] avviso della quota da recuperare a mano non inviato', { orderId: order.id, centesimi: daRiprendere, e });
     }
   }
-  if (tipo === 'contanti' && order.payout_status === 'HELD' && sellerShare > 0) {
-    await avvisaDellaQuotaDaTrattenere(admin, order.id, sellerShare, chiave);
+  // 26/11/2026 — Anche dopo il bonifico del lunedì segnato fatto (PAID_MANUALLY): vedi la funzione.
+  const bonificoDelLunediFatto = order.payout_status === 'PAID_MANUALLY';
+  if (tipo === 'contanti' && (order.payout_status === 'HELD' || bonificoDelLunediFatto) && sellerShare > 0) {
+    await avvisaDellaQuotaDaTrattenere(admin, order.id, sellerShare, chiave, bonificoDelLunediFatto);
   }
   // R03-005 — il segno del rimborso in credito finito (vedi sopra, `wallet:<chiave>`): si scrive
   // dopo la quota del negozio, cosi' una ripresa che lo trova sa che non manca niente.
