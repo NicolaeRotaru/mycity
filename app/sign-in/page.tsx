@@ -309,16 +309,20 @@ const SignInForm = () => {
       return;
     }
     setSendingReset(true);
+    // R23-013 — Col CAPTCHA acceso su Supabase anche la richiesta del link vuole il gettone; vale una
+    // volta sola, quindi dopo averlo mandato se ne chiede uno nuovo per l'accesso.
+    const gettone = captchaToken || undefined;
     try {
       const redirectTo = typeof window !== 'undefined'
         ? `${window.location.origin}/reset-password`
         : undefined;
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo, captchaToken: gettone });
       if (error) throw error;
       toast.success('Ti abbiamo inviato un\'email per reimpostare la password');
     } catch (err) {
       toast.error(translateAuthError(err instanceof Error ? err.message : ''));
     } finally {
+      if (gettone) rigeneraGettone();
       setSendingReset(false);
     }
   };
