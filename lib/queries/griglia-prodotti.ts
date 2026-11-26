@@ -38,6 +38,8 @@ export type RigaGriglia = {
   created_at: string;
   seller_id: string | null;
   category_id: string | null;
+  /** Solo quando si ordina per prezzo: il prezzo che si paga (R10-004). */
+  prezzo_pagato?: string | number | null;
   profiles?: SellerPublicProfile | null;
 };
 
@@ -85,7 +87,7 @@ export interface DomandaGriglia {
 }
 
 /**
- * R10-003 — Il prezzo che il cliente paga, colonna calcolata di `products` (migrazione 960):
+ * R10-003 R10-004 R10-005 — Il prezzo che il cliente paga, colonna calcolata di `products` (migrazione 960):
  * il prezzo pieno meno la promozione attiva. Ordine e taglio di prezzo guardano lui, non `price`.
  */
 const COLONNA_PREZZO_PAGATO = 'prezzo_pagato';
@@ -240,7 +242,7 @@ function nellOrdineDelDatabase(sort: OrdineGriglia): (a: RigaGriglia, b: RigaGri
   const crescente = sort === 'price_asc';
   const confronta = (x: string | number, y: string | number) => (x === y ? 0 : x < y ? -1 : 1);
   return (a, b) => {
-    const primo = perPrezzo ? confronta(Number(a.price), Number(b.price)) : confronta(a.created_at, b.created_at);
+    const primo = perPrezzo ? confronta(Number(a.prezzo_pagato ?? a.price), Number(b.prezzo_pagato ?? b.price)) : confronta(a.created_at, b.created_at);
     if (primo !== 0) return crescente ? primo : -primo;
     return -confronta(a.id, b.id);
   };
@@ -311,12 +313,16 @@ export async function leggiProdottiDellaGriglia(
         ? await conLeSueSottocategorie(supabase, d.categoryId)
         : null;
 
+  const perPrezzo = d.sort === 'price_asc' || d.sort === 'price_desc';
   const base = (colonne: string = COLONNE) => {
-    let q = supabase.from('products').select(colonne).eq('status', 'available');
+    // R10-004 — Ordinando per prezzo le righe portano anche il prezzo pagato: serve a rimettere nell'ordine
+    // del database le righe riunite a blocchi (`leggiFraGliIdsColVoto`). Solo qui: senza prezzo non serve.
+    let q = supabase.from('products').select(perPrezzo && colonne === COLONNE ? `${colonne}, ${COLONNA_PREZZO_PAGATO}` : colonne).eq('status', 'available');
 
     switch (d.sort) {
-      case 'price_asc':  q = q.order('price', { ascending: true }); break;
-      case 'price_desc': q = q.order('price', { ascending: false }); break;
+      // R10-004 R10-005 — Si ordina sul prezzo che si paga, come lo mostra la griglia e lo addebita la cassa.
+      case 'price_asc':  q = q.order(COLONNA_PREZZO_PAGATO, { ascending: true }); break;
+      case 'price_desc': q = q.order(COLONNA_PREZZO_PAGATO, { ascending: false }); break;
       default:           q = q.order('created_at', { ascending: false });
     }
     // 30/8/2026 (R080) — Il secondo criterio d'ordine non e' un dettaglio: con
