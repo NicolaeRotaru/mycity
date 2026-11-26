@@ -82,26 +82,6 @@ type AddressForm = {
 };
 
 /**
- * 26/11/2026 (R26-016) — LA BOZZA CON NOME, INDIRIZZO E TELEFONO SCADE DOPO DUE ORE.
- *
- * La bozza (`mc_checkout_draft`) si scrive nel localStorage prima di andare all'accesso, con
- * «Ordina» da ospite e anche col solo tocco su «Ho già un account». Dentro ci sono nome, via,
- * telefono e note («citofono Rossi»). Non scadeva: chi rinunciava all'accesso la lasciava lì, e
- * chi apriva la cassa sullo stesso browser una settimana dopo trovava i dati di un altro già
- * scritti. Adesso l'ora del salvataggio (`sceltaIl`, che `bozzaDaSalvare` scrive sempre) decide:
- * più di due ore prima, o dopo (un orologio spostato), e la bozza non si rimette e si cancella.
- * Una bozza senza ora (scritta prima del 12/11) si legge come prima. Prova:
- * tests/unit/riparazione-r26-la-bozza-della-cassa-scade.test.ts.
- */
-const BOZZA_VALE_MS = 2 * 60 * 60 * 1000;
-
-function bozzaScaduta(grezza: unknown, adesso: number): boolean {
-  const salvataIl = grezza && typeof grezza === 'object' ? (grezza as { sceltaIl?: unknown }).sceltaIl : undefined;
-  if (typeof salvataIl !== 'number' || !Number.isFinite(salvataIl)) return false;
-  return Math.abs(adesso - salvataIl) > BOZZA_VALE_MS;
-}
-
-/**
  * 13/11/2026 (R19-017 ④) — La data «AAAA-MM-GG» del giorno di Roma a cui si riferisce la fascia.
  *
  * Nella richiesta andava solo l'etichetta («Domani · 9:00–11:00»), e la rotta la legge col suo
@@ -547,15 +527,8 @@ export default function CheckoutPage() {
       // comunque appena viene ripresa, come prima.
       const raw = localStorage.getItem('mc_checkout_draft') ?? sessionStorage.getItem('mc_checkout_draft');
       if (!raw) return;
-      const grezza: unknown = JSON.parse(raw);
-      // R26-016 — Salvata più di due ore fa: i dati di chi l'ha scritta non si rimettono, si cancellano.
-      if (bozzaScaduta(grezza, Date.now())) {
-        localStorage.removeItem('mc_checkout_draft');
-        sessionStorage.removeItem('mc_checkout_draft');
-        return;
-      }
       // R03-025 — con l'orologio: «Domani» salvato ieri sera è «Oggi», una fascia passata non torna.
-      const bozza = bozzaLetta(grezza, new Date());
+      const bozza = bozzaLetta(JSON.parse(raw), new Date());
       if (!bozza) return;
       setForm((prev) => ({ ...prev, ...(bozza.form as Partial<typeof form>) }));
       setIndirizzoDellaBozza(bozza.form as Partial<typeof form>);
@@ -1332,8 +1305,7 @@ export default function CheckoutPage() {
   };
 
   // R19-004 — Un solo modo di salvare la bozza prima di andare all'accesso: lo usano «Ordina» da ospite
-  // e il link «Ho già un account». Passa da `bozzaDaSalvare`, che segna l'ora del salvataggio (`sceltaIl`): da lì la
-  // bozza vale due ore (R26-016: `BOZZA_VALE_MS`, controllata da `bozzaScaduta` quando la cassa la rilegge).
+  // e il link «Ho già un account». Passa da `bozzaDaSalvare`, che segna quando e' stata scelta (`sceltaIl`): la bozza non ha una scadenza.
   const salvaLaBozzaPerAccesso = () => {
     try {
       localStorage.setItem('mc_checkout_draft', JSON.stringify(bozzaDaSalvare({
