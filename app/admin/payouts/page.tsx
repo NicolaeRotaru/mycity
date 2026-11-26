@@ -17,7 +17,7 @@ import { STATI_VERSATI, daVersareLunedi, ordiniDaVersareLunedi, gruppoDelPannell
  *
  * R11-001 / R11-004 — Al lancio i contanti li versa Nicola a mano il lunedì: la
  * pagina dice quanto versare a ogni negozio («Da versare lunedì») e il tasto
- * «Bonifico fatto» lo registra (migrazione 350). La carta resta automatica.
+ * «Bonifico fatto» lo registra (migrazione 916). La carta resta automatica.
  *
  * Legge la tabella `orders` (netto, storni, stato del bonifico) e raggruppa per negozio. La regola
  * degli stati sta in lib/guadagni/negozio.ts (`gruppoDelPannello`): contanti con la rimessa
@@ -110,7 +110,7 @@ type LettiPayout = PayoutOrder[] & { totale?: number; chiusi?: PayoutOrder[]; to
 /**
  * R11-004 — «Bonifico fatto»: segna come pagati a mano i contanti con la rimessa
  * confermata (HELD) di un negozio. Lo scrive `segna_bonifico_manuale` (migrazione
- * 350), riservata agli amministratori: da qui parte solo la richiesta.
+ * 916), riservata agli amministratori: da qui parte solo la richiesta.
  */
 function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
   sellerId: string;
@@ -205,7 +205,7 @@ export default function AdminPayoutsPage() {
       const righeChiuse = ((daChiusi.data ?? []) as unknown as PayoutOrder[]).filter((o) => !giaLetti.has(o.id));
       const totaleChiusi = Math.max(typeof daChiusi.count === 'number' ? daChiusi.count : 0, daChiusi.data?.length ?? 0);
       // Collaudo K04 — resi e reclami aperti si leggono dalle loro tabelle, come fanno il giro e la
-      // funzione 350: senza, un contante con un reso aperto entrava nei «Da versare», la 350 lo saltava
+      // funzione 916: senza, un contante con un reso aperto entrava nei «Da versare», la funzione lo saltava
       // in silenzio e il lunedì dopo ricompariva, pagato due volte. Una lettura caduta li ferma tutti.
       const contantiHeld = righe.filter((o) => o.payment_method === 'cod' && o.payout_status === 'HELD').map((o) => o.id);
       const aperti = new Set<string>();
