@@ -12,6 +12,15 @@ export type StoreHours = Partial<
   Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', HoursInterval[]>
 >;
 
+/** I due segni di sospensione, accanto ai giorni (tipo a parte: `keyof StoreHours` resta i soli sette giorni). */
+export type SegniDiSospensione = {
+  /** AAAA-MM-GG, ultimo giorno di chiusura incluso («chiuso fino al…»). */
+  chiusoFinoAl?: string;
+  /** AAAA-MM-GG di Roma del giorno in cui il negoziante ha premuto «finito per oggi». */
+  finitoOggiIl?: string;
+};
+export type StoreHoursConSegni = StoreHours & SegniDiSospensione;
+
 export const DAY_KEYS: (keyof StoreHours)[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 export function streetFromAddress(address?: string | null): string | null {
@@ -90,6 +99,26 @@ export function romeNow(base: Date = new Date()): Date {
   return new Date(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second, base.getMilliseconds());
 }
 
+/** AAAA-MM-GG di un orologio «da parete» di Roma (quello di `romeNow`). */
+export function giornoDiRoma(now: Date = romeNow()): string {
+  const due = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${due(now.getMonth() + 1)}-${due(now.getDate())}`;
+}
+
+/**
+ * 26/11/2026 — «FINITO PER OGGI» E «CHIUSO FINO AL…».
+ *
+ * True se il negozio ha detto di non servire quel giorno (AAAA-MM-GG di Roma): `chiusoFinoAl`
+ * copre quel giorno e tutti i precedenti, `finitoOggiIl` solo il giorno in cui è stato premuto
+ * (scade da solo a mezzanotte, la fascia di domani resta servibile).
+ */
+export function sospesoIl(storeHours: unknown, giorno: string): boolean {
+  if (!storeHours || typeof storeHours !== 'object') return false;
+  const { chiusoFinoAl, finitoOggiIl } = storeHours as SegniDiSospensione;
+  if (typeof chiusoFinoAl === 'string' && giorno <= chiusoFinoAl) return true;
+  return typeof finitoOggiIl === 'string' && finitoOggiIl === giorno;
+}
+
 /**
  * 5/11/2026 — La casella del giorno di oggi, letta con lo stesso orologio dell'ora.
  *
@@ -111,6 +140,7 @@ export function chiaveDiOggi(now: Date = romeNow()): keyof StoreHours {
  */
 export function isStoreClosedForOrder(storeHours: unknown, now: Date = romeNow()): boolean {
   if (!storeHours || typeof storeHours !== 'object') return false;
+  if (sospesoIl(storeHours, giornoDiRoma(now))) return true;
   const hours = orariImpostati(storeHours);
   if (!hours) return false;
   const todayKey = DAY_KEYS[now.getDay()];
@@ -225,6 +255,19 @@ function ultimoInizioDelRitiro(intervals: HoursInterval[] | undefined, da: numbe
   return ultimo;
 }
 
+/** Il giorno (AAAA-MM-GG di Roma) a cui la fascia si riferisce: oggi, o il giorno dopo la proposta. */
+function giornoDellaFascia(
+  fascia: string | null | undefined,
+  now: Date,
+  propostaIl: Date,
+): string {
+  const scelta = leggiFinestraConsegna(fascia);
+  if (scelta?.giorno === 'domani') {
+    return giornoDiRoma(new Date(propostaIl.getFullYear(), propostaIl.getMonth(), propostaIl.getDate() + 1));
+  }
+  return giornoDiRoma(now);
+}
+
 /** Il giorno e i minuti in cui il ritiro per questa fascia si può cominciare (la regola del ritiro). */
 function finestraDelRitiro(
   hours: StoreHours,
@@ -310,6 +353,8 @@ export function negozioPuoServire(
   now: Date = romeNow(),
   propostaIl: Date = now,
 ): boolean {
+  // 26/11/2026 — «Finito per oggi» e «chiuso fino al…» valgono anche senza orari impostati.
+  if (sospesoIl(storeHours, giornoDellaFascia(fascia, now, propostaIl))) return false;
   const hours = orariImpostati(storeHours);
   if (!hours) return true;
 
@@ -393,8 +438,20 @@ export function motivoNegozioChiuso(
   nomeNegozio: string,
   fascia?: string | null,
   now: Date = romeNow(),
+  storeHours?: unknown,
+  propostaIl: Date = now,
 ): string {
   const scelta = leggiFinestraConsegna(fascia);
+  // 26/11/2026 — Il motivo vero quando il negozio ha detto «chiuso fino al…» o «finito per oggi».
+  const giorno = giornoDellaFascia(fascia, now, propostaIl);
+  if (sospesoIl(storeHours, giorno)) {
+    const fino = (storeHours as SegniDiSospensione).chiusoFinoAl;
+    if (typeof fino === 'string' && giorno <= fino) {
+      const [, mm, gg] = fino.split('-');
+      return `${nomeNegozio} è chiuso fino al ${gg}/${mm}. Scegli un altro negozio, oppure riprova dopo.`;
+    }
+    return `${nomeNegozio} ha finito per oggi. Scegli un altro orario, oppure ordina per domani.`;
+  }
   // 5/11/2026 — «è chiuso in quella fascia» era falso per il negozio aperto nella fascia ma che
   // apre dopo il limite del ritiro (bar 10:30-19:00, «Domani · 9:00–11:00»): la frase ora dice
   // tutti e due i casi.

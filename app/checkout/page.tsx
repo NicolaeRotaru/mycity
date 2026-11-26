@@ -20,7 +20,7 @@ import { CODICI_SCONTO_IN_CASSA } from '@/lib/funzioni-al-lancio';
 import { shippingForEuro } from '@/lib/shipping';
 import { cartaAlCheckoutDisponibile, fraseOrdiniDivisi, promessaSpedizione, rigaDelCodiceSpedizione, VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
 import { leggiEsitoDellaVeloce } from '@/lib/ordini/consegna-veloce';
-import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
+import { ingressiDellaCassa, riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
 import { MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI, TETTO_CONTANTI_CENTS, sopraIlTettoDeiContanti } from '@/lib/ordini/tetto-dei-contanti';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
@@ -805,33 +805,26 @@ export default function CheckoutPage() {
    * che decide l'addebito nelle due rotte. `riepilogoDaMostrare` la legge in
    * euro, che è come si stampa.
    */
-  // Il sottototale di OGNI negozio, in centesimi. Uno per gruppo, perché è
-  // così che si contano sia i soldi sia la soglia della spedizione gratuita.
-  const sottototaliPerNegozioCents = groups.map((g) =>
-    // Il prezzo di riga è già quello di adesso e già scontato (#114): qui si
-    // passa solo dagli euro ai centesimi, come fa il server.
-    g.items.reduce((s, it) => s + Math.round(it.price * 100) * it.quantity, 0),
-  );
-
-  const riepilogo = riepilogoDaMostrare({
-    gruppi: groups.map((g, i) => ({
-      sellerId: g.sellerId,
-      subtotalCents: sottototaliPerNegozioCents[i],
-    })),
-    coordinateNegozio: (sellerId) => {
-      const g = groups.find((x) => x.sellerId === sellerId);
-      return { lat: g?.storeLat ?? null, lng: g?.storeLng ?? null };
-    },
-    consegnaLat: form.lat,
-    consegnaLng: form.lng,
+  // 26/11/2026 (R26-005) — Gli ingressi del conto nascono dallo stato della cassa passato così
+  // com'è, coi suoi nomi: il passaggio (sottototali, codice, credito) sta in `ingressiDellaCassa`,
+  // dove una prova lo esegue. Qui nessun valore si riscrive a mano: c'è solo la regola del credito.
+  const ingressiDelConto = ingressiDellaCassa({
+    groups,
+    form,
     pickupInStore,
-    couponSpedizioneGratis: !!appliedCoupon?.freeShipping,
-    couponScontoCents: Math.round((appliedCoupon?.discount ?? 0) * 100),
+    appliedCoupon,
+    walletCents,
     // Il credito si applica solo agli ordini COD in questo flusso (la carta
     // passa da Stripe, dove il credito arriverà più avanti).
-    consegnaVeloce: eConsegnaVeloce({ fascia: deliverySlot, ritiroInNegozio: pickupInStore }),
     usaCredito: paymentMethod === 'cod' && useCredit,
-    creditoDisponibileCents: walletCents ?? 0,
+  });
+  // Il sottototale di OGNI negozio, in centesimi: lo stesso che va nel conto e che l'invio
+  // rimanda al server (R03-011).
+  const sottototaliPerNegozioCents = ingressiDelConto.gruppi.map((g) => g.subtotalCents);
+
+  const riepilogo = riepilogoDaMostrare({
+    ...ingressiDelConto,
+    consegnaVeloce: eConsegnaVeloce({ fascia: deliverySlot, ritiroInNegozio: pickupInStore }),
   });
 
   /*
@@ -1605,7 +1598,7 @@ export default function CheckoutPage() {
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">
                   <Wallet size={20} aria-hidden />
                 </span>
-                <div className="flex-1">
+                <div className="min-w-0 flex-1 break-words">
                   <p className="font-bold text-ink-900">Usa il mio credito MyCity</p>
                   <p className="text-sm text-ink-600 mt-0.5">
                     Hai {formatPrice(walletEuro)} di credito.{creditApplied > 0 ? ` Applicati ${formatPrice(creditApplied)} a questo ordine.` : ''}

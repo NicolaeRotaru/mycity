@@ -1,0 +1,425 @@
+{
+  "sessione": "R26",
+  "aggiornato": "2026-11-26 17:50",
+  "finita": true,
+  "testa": "2f5433635cf9ae9d7e391432e176e3485ae5668d",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "2f5433635cf9ae9d7e391432e176e3485ae5668d",
+    "nota": "2240 file di prova passati (1 saltato già alla base), lint 0 errori; SHA preso con git rev-parse HEAD prima e dopo il verify."
+  },
+  "voci": [
+    {
+      "id": "R26-005",
+      "chiave": "architettura|il conto del carrello ha una seconda copia che nessuna pagina usa, e la prova «lo schermo fa lo stesso conto del server» controlla proprio quella",
+      "esito": "parziale",
+      "commit": "7c6b45287cda1307163488b2592c96126d413c64",
+      "file_toccati": [
+        "app/checkout/page.tsx",
+        "lib/ordini/riepilogo-cassa.ts",
+        "tests/unit/riparazione-r26-la-cassa-passa-al-conto-quello-che-vede.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r26-la-cassa-passa-al-conto-quello-che-vede.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r26-la-cassa-passa-al-conto-quello-che-vede.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_lanciata",
+        "uscita": null,
+        "comando": "",
+        "nota": "Estrazione senza cambio di comportamento e prova sul nome nuovo ingressiDellaCassa: la rimessa darebbe 3 per costruzione. Al suo posto 10 guasti a mano, tutti rossi: nella funzione couponScontoCents: 0, usaCredito: true, creditoDisponibileCents: 0, couponSpedizioneGratis: false, pickupInStore: false, sottototale arrotondato sulla somma; nella pagina couponScontoCents: 0 dopo lo spread, appliedCoupon: null, usaCredito: useCredit, walletCents: 0."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Gli ingressi di riepilogoDaMostrare nascono da ingressiDellaCassa, funzione pura in lib/ordini/riepilogo-cassa.ts; la pagina le passa il suo stato. La prova nuova esegue la funzione contro il conto del server e legge la pagina sull'albero del codice: diventa rossa con lo sconto a zero o con lo stato riscritto a mano (la nota della regia). 68 file di prova sulla cassa verdi.",
+      "cosa_resta": "Cancellare components/checkout/useTotaliCarrello.ts dopo le modifiche alle due prove comuni che lo importano (importano lib/stripe/client, e la seconda lib/promesse-pubbliche e components/checkout/DeliverySlotPicker, file di altre sessioni). Restano il controllo CI sui moduli orfani e la decisione di Nicola sulle due rotte AI.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/la-consegna-costa-3-o-4-euro-per-negozio.test.ts",
+          "modifica": "togliere la riga 4 (import calcolaTotali), il blocco const schermo = calcolaTotali({...}).centesimi (righe 74-83) e le righe 105-106 (const s = schermo.gruppi[k] e il confronto); dopo il forEach aggiungere: if (Math.round(cassa.feeConsegna * 100) !== server.gruppi.reduce((t, g) => t + g.deliveryFeeCents, 0)) errori.push(`consegna a schermo diversa: ${merci.join('+')}`);"
+        },
+        {
+          "file": "tests/unit/la-consegna-e-una-sola-per-tutto-il-carrello.test.ts",
+          "modifica": "togliere la riga 50 (import calcolaTotali); al posto delle righe 164-172 (const schermo = calcolaTotali(...), il suo forEach e il const cassa già presente): const cassa = riepilogoDaMostrare({ ...i, usaCredito: false, creditoDisponibileCents: 0 }); if (Math.round(cassa.feeConsegna * 100) !== server.grandDeliveryFeeCents) errori.push(`schermo diverso ${merci.join('+')}`); poi lasciare la riga del «riepilogo diverso»"
+        },
+        {
+          "file": "components/checkout/useTotaliCarrello.ts",
+          "modifica": "(file di R26) cancellarlo solo dopo le due modifiche sopra"
+        },
+        {
+          "file": ".github/workflows/ci.yml",
+          "modifica": "dopo il lint un passo - run: node scripts/moduli-orfani.mjs; lo script nuovo costruisce gli import di app/, lib/, components/ e middleware.ts ed esce 1 se un file di lib/ o components/ non lo importa nessun file di produzione, salvo un elenco di eccezioni nello script"
+        }
+      ],
+      "domanda": "Le rotte /api/ai/answer-qa e /api/ai/reviews-summary non le chiama nessuna pagina: si collegano a una pagina (quale) o si tolgono?"
+    },
+    {
+      "id": "R26-016",
+      "chiave": "privacy-legale|il link «ho già un account» lascia nome, indirizzo e telefono nel browser senza scadenza",
+      "esito": "scelta_di_nicola",
+      "domanda": "La bozza della cassa con nome, via e telefono deve scadere dopo 2 ore? La cura è pronta nel commit 49238646d328c5b704ba9a97d18607f37757d42c (annullato da 6a9caba2417828b63be530a288151861e18e36bd), ma la prova comune riparazione-r09-la-bozza-della-cassa-non-scade pretende «non ha una scadenza»: serve la firma per cambiarla come in quel commit.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r09-la-bozza-della-cassa-non-scade.test.ts",
+          "modifica": "come nel commit 49238646d328c5b704ba9a97d18607f37757d42c: il secondo caso vuole nel commento di salvaLaBozzaPerAccesso «due ore» e «bozzaScaduta», non più «non ha una scadenza», e expect(cassa).toMatch(/function bozzaScaduta\\(/); il primo caso (lib/bozza-checkout.ts senza scadenza) resta."
+        }
+      ],
+      "nota": "Il commit annullato porta anche app/checkout/page.tsx (BOZZA_VALE_MS, bozzaScaduta: bozza più vecchia di 2 ore o col sceltaIl nel futuro non si rimette e si cancella) e la prova montata tests/unit/riparazione-r26-la-bozza-della-cassa-scade.test.ts (orologio finto; rimessa uscita 0 sul commit). Si riapplica con git cherry-pick dopo la firma; con lui va la modifica della 004 nella versione «due ore»."
+    },
+    {
+      "id": "R26-004",
+      "chiave": "architettura|il commento e la prova dicono che la bozza della cassa scade, ma la scadenza è stata tolta",
+      "esito": "serve_file_altrui",
+      "nota": "Sulla base il commento di app/checkout/page.tsx è già vero (la bozza non scade). Resta solo la prova R19 di «Ho già un account», che usa file di altre sessioni dell'onda (prova comune): la modifica era nel commit d096aac818e9a63c899e6fe5b8ffc6adde9f7f19, annullato da 26dea929070ad96b0529c75d30e21bca32eaa211.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts",
+          "modifica": "riga 65: togliere `scadeIl: adesso + 60 * 60_000,` dalla bozza finta; riga 18: nel titolo togliere «(con la scadenza)» (se entra la scadenza di due ore della voce sulla bozza del «ho già un account»: «(che segna l'ora del salvataggio, da cui la cassa conta le due ore)», come nel commit d096aac818e9a63c899e6fe5b8ffc6adde9f7f19)."
+        }
+      ]
+    },
+    {
+      "id": "R26-013",
+      "chiave": "layout-responsive|alla cassa, col testo del telefono al massimo, la scheda «contanti alla consegna» esce dallo schermo e la pagina scorre di lato",
+      "esito": "riparato",
+      "commit": "3f2e14ae5fde5244fb5fb553d8bb04f7cfaaad13",
+      "file_toccati": [
+        "components/checkout/PaymentMethodSelector.tsx",
+        "app/checkout/page.tsx",
+        "tests/unit/riparazione-r26-col-testo-grande-la-scheda-contanti-resta-nello-schermo.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r26-col-testo-grande-la-scheda-contanti-resta-nello-schermo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r26-col-testo-grande-la-scheda-contanti-resta-nello-schermo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d096aac818e9a63c899e6fe5b8ffc6adde9f7f19 --file components/checkout/PaymentMethodSelector.tsx,app/checkout/page.tsx --prove tests/unit/riparazione-r26-col-testo-grande-la-scheda-contanti-resta-nello-schermo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "min-w-0 e break-words su fieldset, contenuto delle schede, titolo «Contanti alla consegna» e riga «Un solo pagamento…»; nella pagina sulla scheda del credito di «Come paghi». Misurato con Chromium e Tailwind vero: prima a 390 px col 200% la pagina era larga 414 px; dopo, da 360 a 412 px col 200%, niente scorre di lato. Prova leggera sulle classi del selettore montato, cade togliendo la correzione da ognuno dei due file.",
+      "verificato_da": "revisore (sonnet): prova rilanciata verde; min-w-0 sul fieldset (la causa vera, min-inline-size: min-content), sui div di testo e sulla scheda del credito; nessun altro nodo della scheda sfora."
+    },
+    {
+      "id": "R26-003",
+      "chiave": "architettura|una prova sul webhook di stripe controlla l'ordine delle righe cercando una parola, e basta togliere uno spazio per ingannarla",
+      "esito": "riparato",
+      "commit": "55e47c067ced069b3002e188ed2ac292cf340e6e",
+      "file_toccati": [
+        "tests/unit/webhook-diviso-per-mestiere.test.ts",
+        "tests/unit/riparazione-r09-la-prova-del-webhook-non-si-inganna.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-la-prova-del-webhook-non-si-inganna.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-la-prova-del-webhook-non-si-inganna.test.ts tests/unit/webhook-diviso-per-mestiere.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3f2e14ae5fde5244fb5fb553d8bb04f7cfaaad13 --file tests/unit/webhook-diviso-per-mestiere.test.ts --prove tests/unit/riparazione-r09-la-prova-del-webhook-non-si-inganna.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "marcatureDellaRotta, la lettura sull'albero del codice, vede la marcatura anche come { processed }, ['processed'], [`processed`], riga.processed = true e dentro un case prima del gestore (vale solo se segue return o break). La guardia, riscritta senza vitest figli, esegue la funzione sulla rotta vera e su 9 copie guastate in memoria e le vuole tutte rosse; rimettendo la ricerca della parola diventa rossa. Il limite delle 250 righe non conta più. Rotta non toccata. La guardia legge per nome solo la rotta e webhook-diviso-per-mestiere (file miei).",
+      "verificato_da": "revisore (sonnet): prove verdi (11+4); marcatureDellaRotta vede le forme senza spazio, tra virgolette, calcolate con testo fisso, brevi e su una riga; le copie guastate risultano tutte fuori posto. Sfugge solo una chiave calcolata da variabile, caso teorico."
+    },
+    {
+      "id": "R26-014",
+      "chiave": "performance|al consenso statistico posthog si avvia due o tre volte in parallelo",
+      "esito": "riparato",
+      "commit": "87da3a728b6415e733c366b5b61a9c4eef93e96f",
+      "file_toccati": [
+        "lib/analytics/posthog.tsx",
+        "tests/unit/riparazione-r26-posthog-un-solo-avvio.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r26-posthog-un-solo-avvio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r26-posthog-un-solo-avvio.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 87da3a728b6415e733c366b5b61a9c4eef93e96f^ --file lib/analytics/posthog.tsx --prove tests/unit/riparazione-r26-posthog-un-solo-avvio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le chiamate in parallelo (consenso, evento, identify) condividono una sola promessa di avvio: posthog-js si avvia una volta. Prova: tre chiamate in parallelo, un solo init, eventi tutti partiti.",
+      "nota": "Un primo commit della stessa voce (9beed1515ed90fca72c4540dda8cd60c1a3b4ce4, senza il tipo ristretto) è stato spinto e poi sostituito da questo: l'unione d3975f44257cb1111661470bc5e0a09eeb8de59a tiene l'albero di questo.",
+      "verificato_da": "revisore (sonnet): prova verde; l'avvio in corso si azzera con finally, quindi un avvio fallito non blocca i tentativi dopo (lib/analytics/posthog.tsx:407-409)."
+    },
+    {
+      "id": "R26-006",
+      "chiave": "architettura|la misura della velocità manda a ga4 da una porta sua, fuori dall'aiutante comune",
+      "esito": "riparato",
+      "commit": "7dbeee2368417d359c38adfd57b3b46acdd9fe5d",
+      "file_toccati": [
+        "lib/analytics/posthog.tsx",
+        "lib/analytics/events.ts",
+        "tests/unit/riparazione-r26-velocita-a-ga4-dalla-porta-comune.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r26-velocita-a-ga4-dalla-porta-comune.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r26-velocita-a-ga4-dalla-porta-comune.test.ts tests/unit/riparazione-r15-velocita-clienti-veri.test.tsx tests/unit/riparazione-r23-velocita-vista-dai-clienti.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7dbeee2368417d359c38adfd57b3b46acdd9fe5d^ --file lib/analytics/posthog.tsx --prove tests/unit/riparazione-r26-velocita-a-ga4-dalla-porta-comune.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "ga() esportata da lib/analytics/events.ts col cancello del consenso dentro; mandaMisuraDiVelocita la usa al posto della chiamata diretta a gtag. Le prove r15, r23 e le altre che importano events/posthog restano verdi.",
+      "nota": "events.ts cambia solo con un export (nessun comportamento): fuori da --file, con lui la rimessa darebbe 3. Scartati ga4.ts nuovo (rimessa 3) e ga dentro posthog.tsx (rompe 4 prove che fingono posthog con solo track).",
+      "verificato_da": "revisore (sonnet): r26, r15 e r23 verdi; ga() rilegge il consenso; il ciclo posthog.tsx↔events.ts usa le funzioni solo a chiamata, non al caricamento."
+    },
+    {
+      "id": "R26-015",
+      "chiave": "performance|la velocità del sito vista dai clienti veri non la misura nessuno",
+      "esito": "gia_riparato_prima",
+      "prova": "lib/analytics/posthog.tsx:645 await import('web-vitals'), :648 mandaMisuraDiVelocita(name, metric), :651 mod.onLCP(sendVital('LCP')); package.json ha \"web-vitals\": \"^4.2.0\"; le prove riparazione-r15-velocita-clienti-veri e riparazione-r23-velocita-vista-dai-clienti passano.",
+      "nota": "Parte non_codice per Nicola: su Vercel, progetto mycity, ambiente Production, controllare che ci siano NEXT_PUBLIC_POSTHOG_KEY (e NEXT_PUBLIC_POSTHOG_HOST se serve) e l'ID di GA4, altrimenti la misura non parte in produzione."
+    },
+    {
+      "id": "R26-007",
+      "chiave": "architettura|la fila per richiesta delle email si appoggia a un file interno di next.js",
+      "esito": "serve_file_altrui",
+      "nota": "Cura fatta e provata nel commit e84a373659028957c14ea5c7dd8ea42db456672b (rimessa 0), annullata da 3a7af62202543641776bf90a48dc4e2d59aebd07: la prova esistente riparazione-r09-dopo-la-risposta-una-fila-per-richiesta finge per nome l'import interno ed è comune. Si riapplica con git cherry-pick insieme alla modifica della prova.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r09-dopo-la-risposta-una-fila-per-richiesta.test.ts",
+          "modifica": "sostituire il vi.mock('next/dist/server/app-render/work-async-storage.external', ...) con vi.mock('next/headers', () => ({ headers: () => stato.richiesta }));"
+        },
+        {
+          "file": "lib/api/dopo-la-risposta.ts",
+          "modifica": "(file di R26, dopo la prova sopra) come nel commit e84a373659028957c14ea5c7dd8ea42db456672b: import { headers } from 'next/headers' al posto dell'import interno; in chiaveDellaRichiesta return (headers() as unknown as object) ?? SENZA_RICHIESTA (fuori richiesta lancia e il catch ripiega sulla fila unica); con la prova nuova tests/unit/riparazione-r26-dopo-la-risposta-senza-import-interni.test.ts dello stesso commit."
+        }
+      ]
+    },
+    {
+      "id": "R26-008",
+      "chiave": "architettura|l'azione 'order.delivery_closed_by_admin' non è nel catalogo delle azioni: in /admin/audit non ha etichetta e il filtro non la offre",
+      "esito": "riparato",
+      "commit": "c241e73f45e22ea4a97f9bad49a40a1df6725115",
+      "file_toccati": [
+        "lib/audit-azioni.ts",
+        "tests/unit/riparazione-r26-audit-chiusura-consegna-dallo-staff.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r26-audit-chiusura-consegna-dallo-staff.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r26-audit-chiusura-consegna-dallo-staff.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c241e73f45e22ea4a97f9bad49a40a1df6725115^ --file lib/audit-azioni.ts --prove tests/unit/riparazione-r26-audit-chiusura-consegna-dallo-staff.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "'order.delivery_closed_by_admin' entra nel catalogo AZIONI_AUDIT con l'etichetta «Consegna chiusa dallo staff» e compare tra le opzioni del filtro.",
+      "verificato_da": "revisore (sonnet): prova verde; azione in AZIONI_AUDIT e nelle etichette (lib/audit-azioni.ts:33,73), scritta con quella stringa da migrations/360:122; nessun'altra azione delle migrazioni manca dal catalogo."
+    },
+    {
+      "id": "R26-001",
+      "chiave": "architettura|la regola che vieta i tipi «qualunque» non è accesa: 46 sono passati, e 40 permessi di saltare il controllo non saltano niente",
+      "esito": "serve_file_altrui",
+      "nota": "Metà già riparata prima: .eslintrc.json:2 reportUnusedDisableDirectives true, :49-62 no-explicit-any a error, :64-87 override a warn solo per i 16 file che hanno any; npm run lint esce 0 e un any nuovo fuori elenco lo rompe. Resta: con ESLint 8.57.1 le direttive morte sono solo avvisi (error solo col flag --report-unused-disable-directives), e accenderlo ora renderebbe rosso il lint per 28 direttive morte in 23 file altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "app/admin/products/page.tsx, app/product/[id]/layout.tsx, app/product/[id]/opengraph-image.tsx, app/product/[id]/page.tsx, app/seller/orders/[id]/page.tsx, app/seller/products/ai-batch/page.tsx, app/store/[id]/opengraph-image.tsx, components/CategoryShowcase.tsx, components/ImageUrlField.tsx, components/StoreListRow.tsx, components/StoreMediaManager.tsx, components/StorePreviewCard.tsx, components/SupportProductAssistant.tsx, components/account/AccountSidebar.tsx, components/seller/BackgroundRemovalPreview.tsx, components/seller/BarcodeScanner.tsx, components/seller/BulkPhotoCreate.tsx, components/seller/CameraCapture.tsx, components/seller/ProductForm.tsx, components/seller/ProductImagesField.tsx, components/seller/ReturnRequestCard.tsx, components/seller/site/SitePreview.tsx, lib/email/avviso-messaggio-negozio.ts",
+          "modifica": "togliere ogni riga eslint-disable che npm run lint segnala «Unused eslint-disable directive»; poi (package.json, file di R26) aggiungere --report-unused-disable-directives al comando lint; poi togliere gli any dei 16 file nell'override di .eslintrc.json e svuotarlo."
+        }
+      ]
+    },
+    {
+      "id": "R26-002",
+      "chiave": "architettura|la rotta delle email a orario si crea un suo client admin",
+      "esito": "serve_file_altrui",
+      "nota": "Difetto ancora presente (app/api/cron/send-emails/route.ts:264-267). La prova l-allarme-della-coda-email… è comune (finge @/lib/supabase/server e importa la rotta operational-alerts e lib/email/*, file altrui) e col client da getAdminSupabase diventerebbe rossa: il suo finto non ha rpc.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/l-allarme-della-coda-email-segue-quanto-in-fretta-la-svuotiamo.test.ts",
+          "modifica": "nel vi.mock('@/lib/supabase/server') (~riga 77) far restituire a getAdminSupabase l'oggetto { rpc: (nome, argomenti) => { if (nome === 'claim_pending_emails') stato.presiDaUnGiro = Number(argomenti.p_max); return Promise.resolve({ data: stato.righeDaSpedire, error: null }); }, from: (t) => fintaTabella(t), auth: { admin: { getUserById: async () => ({ data: null }) } } }; poi togliere il vi.mock('@supabase/supabase-js') (righe ~79-87)"
+        },
+        {
+          "file": "app/api/cron/send-emails/route.ts",
+          "modifica": "(file di R26, dopo la prova sopra) riapplicare 191f58354f899505d20d4eec245b4177b29e6433: via createClient e requireSupabaseService, import { getAdminSupabase } from '@/lib/supabase/server'; let supa; try { supa = getAdminSupabase(); } catch (e) { return ApiErrors.unavailable(e instanceof Error ? e.message : 'config error'); } al posto delle righe 263-267; con una prova nuova che vuole il client da getAdminSupabase e il 503 senza configurazione."
+        }
+      ]
+    },
+    {
+      "id": "R26-009",
+      "chiave": "architettura|il parametro propostail di negoziopuoservire non lo passa nessuno",
+      "esito": "scelta_di_nicola",
+      "domanda": "Si firma la riscrittura della prova comune riparazione-r03-fascia-domani-proposta sul riporto che le rotte usano già (fasciaAlGiornoDellOrdine), per poter togliere il parametro propostaIl che nessuno passa?",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r03-fascia-domani-proposta.test.ts",
+          "modifica": "primo caso: con l'orologio a 2026-11-23T23:01:00Z, expect(motivoFasciaRifiutata(fasciaAlGiornoDellOrdine(FASCIA, new Date('2026-11-23T22:59:00Z'), new Date()) ?? FASCIA, negozi)).toBeNull() (fasciaAlGiornoDellOrdine da lib/ordini/fascia-leggibile.ts); il secondo caso resta"
+        },
+        {
+          "file": "lib/store-hours.ts",
+          "modifica": "(file di R26, dopo la prova) togliere propostaIl da negozioPuoServire, ultimoRitiroDellaFascia e finestraDelRitiro (per «domani» now.getDay()+1); attenzione: dal commit 6a1676714ddc1d942afdc868483e0856d52c5716 propostaIl serve anche a scegliere il giorno della fascia per i segni di sospensione, da sostituire con lo stesso riporto"
+        },
+        {
+          "file": "lib/quando-arriva.ts",
+          "modifica": "(file di R26) motivoFasciaRifiutata senza il quarto parametro, chiama negozioPuoServire(n.orari, fascia, ora)"
+        }
+      ]
+    },
+    {
+      "id": "R26-011",
+      "chiave": "architettura|un altro finto scritto a mano risponde alle letture degli avvisi nelle prove della cancellazione",
+      "esito": "serve_file_altrui",
+      "nota": "La prova importa solo file altrui (app/api/account/delete/route, lib/privacy/avvisi-a-chi-aspetta, lib/cron-cancellazioni): è comune.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/minori-s08-cancellazione.test.ts",
+          "modifica": "sostituire il finto scritto a mano delle righe 42-68 (adminFinto: letture degli avvisi per account/delete → motivoDellAttesa) con il finto unico di tests/unit/aiuti/finto-giro-notturno.ts"
+        }
+      ]
+    },
+    {
+      "id": "R26-010",
+      "chiave": "architettura|in home ogni sezione chiede di nuovo alla vetrina lo stesso negozio, e ogni fascia compare un giro di rete più tardi",
+      "esito": "serve_file_altrui",
+      "nota": "Difetto presente: le query della home chiamano fetchSellerPublicMap direttamente. lib/queries/seller-public-profiles.ts (mio) resta com'è: unisce già le domande in volo.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/queries/fasce-prodotti.ts",
+          "modifica": "righe 136, 187, 328: leggere i negozi con queryClient.fetchQuery({ queryKey: ['vetrina-negozio', id, colonne], queryFn: () => fetchSellerPublicMap(client, [id], colonne), staleTime: qualche minuto }) per negozio"
+        },
+        {
+          "file": "lib/queries/negozio-del-mese.ts",
+          "modifica": "riga 47: stessa modifica"
+        },
+        {
+          "file": "lib/queries/griglia-prodotti.ts",
+          "modifica": "riga 412: stessa modifica"
+        },
+        {
+          "file": "lib/queries/catalogo.ts",
+          "modifica": "riga 209: stessa modifica (colonne della scheda)"
+        },
+        {
+          "file": "i componenti della home che chiamano queste query (Drop del giorno, storie, Ordina di nuovo, tendenze)",
+          "modifica": "passare alle query sopra il queryClient condiviso"
+        }
+      ]
+    },
+    {
+      "id": "R26-012",
+      "chiave": "frontend-ux|mancano «finito per oggi» e «chiuso fino al…», promessi ai negozi della prima ondata",
+      "esito": "parziale",
+      "commit": "6a1676714ddc1d942afdc868483e0856d52c5716",
+      "file_toccati": [
+        "lib/store-hours.ts",
+        "lib/quando-arriva.ts",
+        "components/store-sections/orari-schema.ts",
+        "components/seller/StoreHoursEditor.tsx",
+        "tests/unit/riparazione-r26-finito-per-oggi-chiuso-fino-al.test.tsx",
+        "tests/unit/riparazione-r26-scheda-del-negozio-sospeso.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r26-finito-per-oggi-chiuso-fino-al.test.tsx",
+        "tests/unit/riparazione-r26-scheda-del-negozio-sospeso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r26-finito-per-oggi-chiuso-fino-al.test.tsx tests/unit/riparazione-r26-scheda-del-negozio-sospeso.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6a1676714ddc1d942afdc868483e0856d52c5716^ --file lib/store-hours.ts,lib/quando-arriva.ts,components/seller/StoreHoursEditor.tsx --prove tests/unit/riparazione-r26-finito-per-oggi-chiuso-fino-al.test.tsx --json",
+        "nota": "e per orari-schema.ts con la prova riparazione-r26-scheda-del-negozio-sospeso: stessa base, uscita 0"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "chiusoFinoAl e finitoOggiIl (tipo a parte, così i sette giorni restano indicizzabili), sospesoIl e il giorno di Roma; isStoreClosedForOrder, negozioPuoServire e motivoNegozioChiuso li rispettano (giorno della fascia: oggi, o domani); la scheda pubblica tace gli orari di un negozio sospeso; l'editor ha «Finito per oggi» e il campo «Chiuso fino al». Prova a orologio finto che monta l'editor e passa il valore al rifiuto dell'ordine. 140 file di prova su orari/fasce verdi.",
+      "nota": "La voce ha sei commit: 6a1676714ddc1d942afdc868483e0856d52c5716 più le correzioni di prova e di tipo 7d1fe7c69f1b3253e2474d0de2a2a0a465253420, 5fdb2ed87ca34ca688502a80ccd582c926a0aae4, 17675c0ddcd0a0f671c7d92518d2d7102d21fe00, 54b4d62e1198d18baf6cfd7fad84e90322ab4503, 2f5433635cf9ae9d7e391432e176e3485ae5668d (il primo da solo rompeva il typecheck). Scelta: orariImpostati non cambiata (con un segno scaduto avrebbe chiuso per sempre un negozio senza orari): i segni contano con un controllo prima, anche senza orari.",
+      "verificato_da": "revisore (sonnet): prove verdi (5+1); fuso di Roma e cambio d'ora coperti, «chiuso fino al» passato o vuoto non chiude, la fascia di domani con «finito per oggi» resta servibile, il valore dell'editor arriva a negozioPuoServire e isStoreClosedForOrder. Giudizio: parziale, le viste dicono ancora «Aperto ora».",
+      "cosa_resta": "La sospensione la rispettano la cassa, le rotte d'ordine e la scheda pubblica (orari-schema), non le altre viste: un negozio sospeso risulta ancora «Aperto ora» in elenco, hero e orari, e la promessa di consegna veloce/express può ancora comparire. Resta anche, nel mio editor, la X che annulla gli orari (StoreHoursEditor.tsx:47) e butta via un segno impostato nel frattempo.",
+      "serve_file_altrui": [
+        {
+          "file": "components/StoreListRow.tsx",
+          "modifica": "riga 34: lo stato «Aperto ora» deve tacere (o dire «Chiuso oggi»/«Chiuso fino al GG/MM») quando sospesoIl(store_hours, giornoDiRoma(oggi)) da lib/store-hours.ts è vero"
+        },
+        {
+          "file": "components/store-sections/HeroSection.tsx",
+          "modifica": "riga 59: stessa regola con sospesoIl"
+        },
+        {
+          "file": "components/store-sections/HoursSection.tsx",
+          "modifica": "riga 29: stessa regola con sospesoIl, e mostrare il motivo di motivoNegozioChiuso"
+        },
+        {
+          "file": "components/home/HeroStoreCard.tsx",
+          "modifica": "riga 148: stessa regola con sospesoIl"
+        },
+        {
+          "file": "app/stores/page.tsx",
+          "modifica": "riga 271: stessa regola con sospesoIl"
+        },
+        {
+          "file": "lib/promessa-consegna.ts",
+          "modifica": "righe 157, 255, 277: niente promessa veloce/express se sospesoIl per il giorno della promessa"
+        }
+      ]
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "a 320 px col testo al 200% il bollino «Zero rischio» della cassa esce ancora di 18 px",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/ui/Badge.tsx:65",
+      "descrizione": "Il bollino è inline-flex senza a capo; la voce sulla scheda dei contanti parlava di 390 px, dove ora non esce."
+    },
+    {
+      "titolo": "una bozza della cassa che non si legge resta nel browser",
+      "dimensione": "privacy-legale",
+      "severita": "minore",
+      "file": "app/checkout/page.tsx:559",
+      "descrizione": "if (!bozza) return; esce prima della cancellazione: la bozza illeggibile con i dati dell'ospite resta in localStorage."
+    },
+    {
+      "titolo": "la bozza di chi non completa l'accesso non si cancella all'uscita dall'account o per un altro utente",
+      "dimensione": "privacy-legale",
+      "severita": "minore",
+      "file": "components/Navbar.tsx, components/providers/QueryProvider.tsx",
+      "descrizione": "La pulizia all'uscita è la voce madre «nome, telefono e indirizzo di chi non completa l'accesso…», ancora aperta: qui solo per memoria."
+    },
+    {
+      "titolo": "una veloce già in attesa scade subito quando il negozio preme «finito per oggi»",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "lib/ordini/scadenza-accettazione.ts:241",
+      "descrizione": "usa isStoreClosedForOrder, che ora vede la sospensione: forse voluto, da decidere."
+    },
+    {
+      "titolo": "un testo che non è una data in chiusoFinoAl, scritto a mano nel database, chiude il negozio per sempre",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "lib/store-hours.ts (sospesoIl)",
+      "descrizione": "il confronto è tra stringhe; il campo data dell'editor lo impedisce, una scrittura a mano no."
+    }
+  ],
+  "domande_per_nicola": [
+    "Rotte /api/ai/answer-qa e /api/ai/reviews-summary: nessuna pagina le chiama. Si collegano a una pagina (quale) o si tolgono?",
+    "La bozza della cassa con nome, via e telefono deve scadere dopo 2 ore? Serve la firma sulla prova comune riparazione-r09-la-bozza-della-cassa-non-scade (cura pronta nel commit 49238646d328c5b704ba9a97d18607f37757d42c)."
+  ],
+  "conto": {
+    "agenti": 4,
+    "nota": "3 lotti (il primo sul modello grande, gli altri due sul piccolo) e 1 revisore sul piccolo. Il ramo ha un'unione (d3975f44257cb1111661470bc5e0a09eeb8de59a, -s ours) perché un subagente ha ricucito un commit già spinto: segnalata alla regista.",
+    "subagenti": 4
+  },
+  "costo_usd": 16.89,
+  "nota_regia_copia_lineare": "2026-11-26 23:55 la regia ha copiato il ramo -m26 in -m26b senza l unione interna d3975f44 (alberi identici, verificati commit per commit); qui cambiano solo gli SHA dei sei commit di R26-012 e la testa."
+}

@@ -2,22 +2,29 @@
 
 import { useRef } from 'react';
 import { Plus, X } from 'lucide-react';
-import { orariImpostati, type StoreHours, type HoursInterval } from '@/lib/store-hours';
+import { orariImpostati, romeNow, type StoreHours, type StoreHoursConSegni, type HoursInterval } from '@/lib/store-hours';
 import { DAYS, erroreDelleFasce, prossimaFascia } from './orari-validi';
 
 export { erroreDegliOrari, erroreDelleFasce, prossimaFascia } from './orari-validi';
 
 
+/** AAAA-MM-GG di oggi a Roma (l'orologio da parete di `romeNow`). */
+function oggiAMezzanotte(): string {
+  const adesso = romeNow();
+  const due = (n: number) => String(n).padStart(2, '0');
+  return `${adesso.getFullYear()}-${due(adesso.getMonth() + 1)}-${due(adesso.getDate())}`;
+}
+
 interface Props {
-  value: StoreHours;
-  onChange: (next: StoreHours) => void;
+  value: StoreHoursConSegni;
+  onChange: (next: StoreHoursConSegni) => void;
 }
 
 /** Editor visuale degli orari di apertura (più fasce/giorno per la pausa pranzo). */
 export default function StoreHoursEditor({ value, onChange }: Props) {
   // 24/11/2026 — Il valore «senza orari» da cui questo editor ha riempito la settimana (vedi sotto):
   // serve a tornarci quando il negoziante annulla con la X tutte le fasce che ha aggiunto.
-  const senzaOrari = useRef<StoreHours | null>(null);
+  const senzaOrari = useRef<StoreHoursConSegni | null>(null);
   // 31/10/2026 — Si scrive sempre la settimana intera: un giorno mai toccato diventa «chiuso» (lista
   // vuota), come lo mostra già questo editor. Prima restava assente, e chi chiudeva tutti i giorni
   // per le ferie salvava una settimana a metà, che il sito leggeva «orari mai impostati» = sempre aperto.
@@ -122,6 +129,28 @@ export default function StoreHoursEditor({ value, onChange }: Props) {
           </div>
         );
       })}
+      <div className="flex flex-wrap items-center gap-3 pt-3">
+        <button
+          type="button"
+          // 26/11/2026 — «Finito per oggi»: vale fino a mezzanotte di Roma, poi scade da solo.
+          onClick={() => onChange({ ...value, finitoOggiIl: oggiAMezzanotte() })}
+          className="rounded-lg border border-cream-200 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-cream-50"
+        >
+          Finito per oggi
+        </button>
+        <label className="inline-flex items-center gap-2 text-xs text-ink-700">
+          Chiuso fino al
+          <input
+            type="date"
+            value={value.chiusoFinoAl ?? ''}
+            onChange={(e) => {
+              const { chiusoFinoAl: _tolto, ...resto } = value;
+              onChange(e.target.value ? { ...resto, chiusoFinoAl: e.target.value } : resto);
+            }}
+            className="rounded border border-cream-200 px-2 py-1 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700"
+          />
+        </label>
+      </div>
       <p className="text-xs text-ink-500 pt-2">Aggiungi più fasce per la pausa pranzo. &quot;Chiudi&quot; segna il giorno come chiuso.</p>
     </div>
   );

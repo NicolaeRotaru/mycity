@@ -1,4 +1,4 @@
-import { DAY_KEYS, orariImpostati, type HoursInterval } from '@/lib/store-hours';
+import { DAY_KEYS, giornoDiRoma, orariImpostati, sospesoIl, type HoursInterval } from '@/lib/store-hours';
 
 /**
  * 12/11/2026 (R07-022) — GLI ORARI DEL NEGOZIO NELLO SCHEMA PER GOOGLE.
@@ -44,6 +44,8 @@ export type SpecificaOrario = {
 };
 
 export function orariPerLoSchema(storeHours: unknown): SpecificaOrario[] | undefined {
+  // 26/11/2026 — Un negozio sospeso («finito per oggi», «chiuso fino al…») non si dichiara aperto.
+  if (sospesoIl(storeHours, giornoDiRoma())) return undefined;
   const orari = orariImpostati(storeHours);
   if (!orari) return undefined;
   const specifiche: SpecificaOrario[] = [];

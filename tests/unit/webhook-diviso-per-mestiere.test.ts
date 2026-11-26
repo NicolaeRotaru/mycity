@@ -18,9 +18,7 @@ import { join } from 'node:path';
  * regga. Se qualcuno rimette un gestore dentro la rotta, torna rossa.
  */
 
-// La variabile serve solo a riparazione-r09-la-prova-del-webhook-non-si-inganna.test.ts, che fa
-// leggere a questa prova una copia guastata della rotta e pretende che diventi rossa.
-const ROTTA = process.env.ROTTA_DEL_WEBHOOK_DA_LEGGERE ?? join(process.cwd(), 'app/api/stripe/webhook/route.ts');
+const ROTTA = join(process.cwd(), 'app/api/stripe/webhook/route.ts');
 const CARTELLA = join(process.cwd(), 'lib/stripe/webhook');
 
 describe('il webhook Stripe è diviso per mestiere', () => {
@@ -70,16 +68,35 @@ describe('il webhook Stripe è diviso per mestiere', () => {
  * la vedeva, e la prova restava verde. Qui la rotta si legge col compilatore TypeScript: conta
  * ogni proprietà `processed` che non vale `false`, comunque sia scritta (spazi, a capo, virgolette).
  *
- * Il posto giusto è uno di due: dentro lo smistamento (un ramo che chiude l'evento senza gestore,
- * come la sessione completata ma non pagata) o dopo, nello stesso blocco, quando il gestore è
- * riuscito. Prima dello smistamento, o nel ramo dell'errore, un gestore fallito non verrebbe più
- * riprovato da Stripe. Quello che non vede: una marcatura fatta da un aiutante importato (una
- * chiamata, non un oggetto con `processed`). Spostata lì manca quella «dopo» e la prova boccia; ma
- * aggiunta lì prima dello smistamento, lasciando quella di dopo, non la vede: per quel caso valgono
- * le prove che eseguono il webhook (stripe-webhook-idempotenza, se-il-database-sbaglia-stripe-riprova).
+ * 26/11/2026 sera (R26-003) — E COMUNQUE SIA SCRITTA DAVVERO. Contava solo `processed: <valore>`:
+ * la forma breve (`const processed = true; update({ processed })`), la chiave calcolata
+ * (`['processed']: true`) e l'assegnazione (`riga.processed = true`) passavano. E saltava tutto lo
+ * smistamento: una marcatura dentro un `case`, prima del suo gestore, restava verde. Adesso conta
+ * anche quelle, e dentro lo smistamento la marcatura vale solo se subito dopo l'evento esce (un
+ * `return` o un `break`): è il ramo che chiude l'evento senza gestore, come la sessione completata
+ * ma non pagata. La prova che questa lettura diventa rossa sulle copie guastate della rotta è
+ * `riparazione-r09-la-prova-del-webhook-non-si-inganna.test.ts` (senza vitest figli): per questo la
+ * funzione resta qui, tutta dentro di sé.
+ *
+ * Il posto giusto, fuori dallo smistamento, è dopo, nello stesso blocco, quando il gestore è
+ * riuscito. Prima dello smistamento, nel ramo dell'errore o nel `finally`, un gestore fallito non
+ * verrebbe più riprovato da Stripe. Quello che non vede: una marcatura fatta da un aiutante
+ * importato (una chiamata, non un oggetto con `processed`). Spostata lì manca quella «dopo» e la
+ * prova boccia; ma aggiunta lì prima dello smistamento, lasciando quella di dopo, non la vede: per
+ * quel caso valgono le prove che eseguono il webhook (stripe-webhook-idempotenza,
+ * se-il-database-sbaglia-stripe-riprova).
  */
 function marcatureDellaRotta(testo: string): { smistamento: boolean; dopo: number; fuoriPosto: string[] } {
   const sorgente = ts.createSourceFile('route.ts', testo, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  /** Il nome di una chiave scritta come parola, tra virgolette o calcolata con un testo fisso. */
+  const nomeDellaChiave = (n: ts.PropertyName): string | null => {
+    if (ts.isIdentifier(n) || ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) return n.text;
+    if (ts.isComputedPropertyName(n)) {
+      const e = n.expression;
+      if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) return e.text;
+    }
+    return null;
+  };
   let smistamento: ts.SwitchStatement | undefined;
   const marcature: ts.Node[] = [];
   const visita = (n: ts.Node) => {
@@ -87,27 +104,55 @@ function marcatureDellaRotta(testo: string): { smistamento: boolean; dopo: numbe
       !smistamento && ts.isSwitchStatement(n) && ts.isPropertyAccessExpression(n.expression)
       && n.expression.name.text === 'type' && n.expression.expression.getText(sorgente) === 'event'
     ) smistamento = n;
-    if (
-      ts.isPropertyAssignment(n) && (ts.isIdentifier(n.name) || ts.isStringLiteral(n.name))
-      && n.name.text === 'processed' && n.initializer.kind !== ts.SyntaxKind.FalseKeyword
-    ) marcature.push(n);
+    // `processed: true`, `'processed': true`, `['processed']: true` — tutto tranne `false`.
+    if (ts.isPropertyAssignment(n) && nomeDellaChiave(n.name) === 'processed' && n.initializer.kind !== ts.SyntaxKind.FalseKeyword) marcature.push(n);
+    // `{ processed }`: il valore sta altrove, quindi conta sempre.
+    if (ts.isShorthandPropertyAssignment(n) && n.name.text === 'processed') marcature.push(n);
+    // `riga.processed = true` o `riga['processed'] = true`.
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && n.right.kind !== ts.SyntaxKind.FalseKeyword) {
+      const l = n.left;
+      const nome = ts.isPropertyAccessExpression(l) ? l.name.text
+        : ts.isElementAccessExpression(l) && (ts.isStringLiteral(l.argumentExpression) || ts.isNoSubstitutionTemplateLiteral(l.argumentExpression)) ? l.argumentExpression.text
+          : null;
+      if (nome === 'processed') marcature.push(n);
+    }
     ts.forEachChild(n, visita);
   };
   visita(sorgente);
   const sw = smistamento;
   if (!sw) return { smistamento: false, dopo: 0, fuoriPosto: [] };
+  const riga = (m: ts.Node) => `riga ${sorgente.getLineAndCharacterOfPosition(m.getStart(sorgente)).line + 1}: ${m.getText(sorgente)}`;
+  /** L'istruzione che contiene `m` dentro un elenco di istruzioni (un blocco o un `case`), con l'elenco. */
+  const istruzioneDi = (m: ts.Node): { istruzione: ts.Statement; elenco: ts.NodeArray<ts.Statement> } | null => {
+    let a: ts.Node = m;
+    while (a.parent) {
+      const p = a.parent;
+      if ((ts.isBlock(p) || ts.isCaseClause(p) || ts.isDefaultClause(p) || ts.isSourceFile(p)) && p.statements.includes(a as ts.Statement)) {
+        return { istruzione: a as ts.Statement, elenco: p.statements };
+      }
+      a = p;
+    }
+    return null;
+  };
   const blocco = sw.parent;
   let dopo = 0;
   const fuoriPosto: string[] = [];
   for (const m of marcature) {
-    if (m.getStart(sorgente) >= sw.getStart(sorgente) && m.end <= sw.end) continue; // dentro lo smistamento
+    if (m.getStart(sorgente) >= sw.getStart(sorgente) && m.end <= sw.end) {
+      // Dentro lo smistamento: solo se subito dopo l'evento esce, senza lavorare altro.
+      const qui = istruzioneDi(m);
+      const seguente = qui ? qui.elenco[qui.elenco.indexOf(qui.istruzione) + 1] : undefined;
+      if (seguente && (ts.isReturnStatement(seguente) || ts.isBreakStatement(seguente))) continue;
+      fuoriPosto.push(`${riga(m)} (dentro lo smistamento, prima di altro lavoro)`);
+      continue;
+    }
     let a: ts.Node = m;
     while (a.parent && a.parent !== blocco) a = a.parent;
     if (a.parent === blocco && ts.isBlock(blocco) && blocco.statements.indexOf(a as ts.Statement) > blocco.statements.indexOf(sw)) {
       dopo++;
       continue;
     }
-    fuoriPosto.push(`riga ${sorgente.getLineAndCharacterOfPosition(m.getStart(sorgente)).line + 1}: ${m.getText(sorgente)}`);
+    fuoriPosto.push(riga(m));
   }
   return { smistamento: true, dopo, fuoriPosto };
 }
