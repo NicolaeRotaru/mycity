@@ -196,12 +196,35 @@ function daLeggerePrimaDiApplicare(patch: AiProductPatch, prodotto: ProductRow):
   if (Array.isArray(patch.tags)) {
     const restano = tagDelPatch(patch.tags);
     const tolti = (Array.isArray(prodotto.tags) ? prodotto.tags : []).filter((t) => {
+      // Un tag NULL nella scheda non si nomina: la frase diventava «spariscono: , dolci».
+      if (typeof t !== 'string') return false;
       const chiave = tagDelPatch([t])[0];
       return chiave !== undefined && !restano.includes(chiave);
     });
     if (tolti.length) righe.push(`Applicando, questi tag spariscono: ${tolti.join(', ')}.`);
   }
   return righe.map((r) => ` ${r}`).join('');
+}
+
+/**
+ * 26/11/2026 — LA SCHEDA DA APPROVARE MOSTRAVA I TAG COME LI SCRIVE IL MODELLO.
+ *
+ * La scheda con Applica elenca `patch.tags` così come arrivano dal modello:
+ * diciassette tag, «Dolci» e «dolci», mentre il server ne salva quindici, in
+ * minuscolo e senza doppioni. E una descrizione di soli spazi diventava
+ * «Descrizione aggiornata», che il server poi non scrive. La proposta torna
+ * alla chat già nella forma che il server salva (stesse funzioni di
+ * `resolveAiPatch`): quello che il negoziante legge è quello che entra.
+ */
+function comeLaSalvaIlServer(proposta: AiProductPatch): AiProductPatch {
+  const fuori: AiProductPatch = { ...proposta };
+  if ('description' in fuori) {
+    const testo = testoDelPatch(fuori.description, MAX_DESCRIZIONE_PRODOTTO);
+    if (testo) fuori.description = testo;
+    else delete fuori.description;
+  }
+  if (Array.isArray(fuori.tags)) fuori.tags = tagDelPatch(fuori.tags);
+  return fuori;
 }
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
@@ -473,7 +496,7 @@ Identifica di quale prodotto parla il venditore e imposta "product_id". Se non s
     // (16/10/2026) La proposta torna alla chat nella forma in cui il server la
     // applicherebbe: una voce scritta fuori schema (`[["allergeni"]]`) faceva
     // cadere la chat mentre disegnava la scheda. Vedi `propostaPerLaChat`.
-    const proposta = matched ? propostaPerLaChat(toolInput?.patch, categories, matched.category_id ?? null, (matched.attributes ?? null) as Record<string, unknown> | null) : {};
+    const proposta = matched ? comeLaSalvaIlServer(propostaPerLaChat(toolInput?.patch, categories, matched.category_id ?? null, (matched.attributes ?? null) as Record<string, unknown> | null)) : {};
     // 1/11/2026 — In identificazione (nessun prodotto aperto) il modello vede
     // del catalogo solo id, nome, prezzo, stato e categoria: tag, descrizione e
     // caratteristiche non li ha letti. Una proposta che li riscrive e' alla
