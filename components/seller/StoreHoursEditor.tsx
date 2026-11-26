@@ -2,18 +2,11 @@
 
 import { useRef } from 'react';
 import { Plus, X } from 'lucide-react';
-import { orariImpostati, romeNow, type StoreHours, type HoursInterval } from '@/lib/store-hours';
+import { giornoDiRoma, orariImpostati, type StoreHours, type HoursInterval } from '@/lib/store-hours';
 import { DAYS, erroreDelleFasce, prossimaFascia } from './orari-validi';
 
 export { erroreDegliOrari, erroreDelleFasce, prossimaFascia } from './orari-validi';
 
-
-/** AAAA-MM-GG di oggi a Roma (l'orologio da parete di `romeNow`). */
-function oggiAMezzanotte(): string {
-  const adesso = romeNow();
-  const due = (n: number) => String(n).padStart(2, '0');
-  return `${adesso.getFullYear()}-${due(adesso.getMonth() + 1)}-${due(adesso.getDate())}`;
-}
 
 interface Props {
   value: StoreHours;
@@ -133,7 +126,7 @@ export default function StoreHoursEditor({ value, onChange }: Props) {
         <button
           type="button"
           // 26/11/2026 — «Finito per oggi»: vale fino a mezzanotte di Roma, poi scade da solo.
-          onClick={() => onChange({ ...value, finitoOggiIl: oggiAMezzanotte() })}
+          onClick={() => onChange({ ...value, finitoOggiIl: giornoDiRoma() })}
           className="rounded-lg border border-cream-200 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-cream-50"
         >
           Finito per oggi
