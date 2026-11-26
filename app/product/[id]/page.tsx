@@ -77,6 +77,44 @@ const GIA_RECENSITO = 'Hai già recensito questo prodotto: resta pubblicata la r
  * precarica il prodotto sul server e lo consegna dentro l'HTML.
  */
 
+/**
+ * R08-005 — La quantita' netta scritta dal negozio («190 g», «1kg», «1,5 L», «75cl»), letta in modo
+ * tollerante. Torna la quantita' in grammi o in millilitri e la famiglia (peso o volume), oppure
+ * null se non e' un numero con un'unita' riconosciuta («6 pezzi», «boh», «0 g»).
+ */
+function leggiQuantitaNetta(v: unknown): { quantita: number; famiglia: 'kg' | 'l' } | null {
+  if (typeof v !== 'string') return null;
+  const m = /^\s*(\d+(?:[.,]\d+)?)\s*(kg|g|gr|grammi|l|lt|litri|litro|ml|cl|dl)\.?\s*$/i.exec(v);
+  if (!m) return null;
+  const n = Number(m[1].replace(',', '.'));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const u = m[2].toLowerCase();
+  if (u === 'kg') return { quantita: n * 1000, famiglia: 'kg' };
+  if (u === 'g' || u === 'gr' || u === 'grammi') return { quantita: n, famiglia: 'kg' };
+  if (u === 'l' || u === 'lt' || u === 'litri' || u === 'litro') return { quantita: n * 1000, famiglia: 'l' };
+  if (u === 'cl') return { quantita: n * 10, famiglia: 'l' };
+  if (u === 'dl') return { quantita: n * 100, famiglia: 'l' };
+  return { quantita: n, famiglia: 'l' }; // ml
+}
+
+/**
+ * R08-005 — Il prezzo per unita' di misura (Codice del Consumo): € al chilo o al litro, al centesimo.
+ * Solo quando il prezzo e' a pezzo o a confezione e la quantita' netta e' leggibile; altrimenti null
+ * (nessuna riga, mai un numero inventato).
+ */
+function prezzoPerUnitaDiMisura(
+  prezzo: unknown,
+  unitaDiVendita: string | null | undefined,
+  quantitaNetta: unknown,
+): { valore: number; unita: 'kg' | 'l' } | null {
+  if (unitaDiVendita && unitaDiVendita !== 'pezzo' && unitaDiVendita !== 'confezione') return null;
+  const p = typeof prezzo === 'number' ? prezzo : Number(prezzo);
+  if (!Number.isFinite(p) || p <= 0) return null;
+  const q = leggiQuantitaNetta(quantitaNetta);
+  if (!q) return null;
+  return { valore: Math.round((p / (q.quantita / 1000)) * 100) / 100, unita: q.famiglia };
+}
+
 export default function ProductPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
   const { id } = params;
@@ -548,6 +586,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const comparePct = compareValid ? Math.round((1 - prezzoPieno / compareAtNum) * 100) : 0;
   const unitRaw = (product as { unit?: string | null }).unit ?? null;
   const unitSuffix = unitRaw && unitRaw !== 'pezzo' ? (UNIT_SUFFIX[unitRaw as ProductUnit] ?? '') : '';
+  // R08-005 — Per gli alimenti, accanto al prezzo il prezzo al chilo o al litro (Codice del Consumo),
+  // calcolato dalla quantita' netta dichiarata. Senza quantita' leggibile non si scrive niente.
+  const attributiProdotto = (product.attributes ?? {}) as Record<string, unknown>;
+  const eAlimento = product.categories?.slug === 'alimentari'
+    || 'allergeni' in attributiProdotto || 'ingredienti' in attributiProdotto;
+  const prezzoUnitario = eAlimento ? prezzoPerUnitaDiMisura(price, unitRaw, attributiProdotto.peso) : null;
   const conditionRaw = (product as { condition?: string | null }).condition ?? null;
   const conditionLabel = conditionRaw ? (CONDITION_LABELS[conditionRaw as ProductCondition] ?? conditionRaw) : null;
   // Varianti: i selettori derivano dalle varianti; la disponibilità mostrata è
@@ -1018,6 +1062,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 {formatPrice(price)}
                 {unitSuffix && <span className="text-base font-semibold text-ink-400">{unitSuffix}</span>}
               </span>
+              {prezzoUnitario && (
+                <span className="text-sm text-ink-600" data-testid="prezzo-unitario">
+                  ({formatPrice(prezzoUnitario.valore)}/{prezzoUnitario.unita === 'kg' ? 'kg' : 'l'})
+                </span>
+              )}
               {scontoPromo > 0 && (
                 <span className="text-lg text-ink-400 line-through">
                   <span className="sr-only">Prezzo pieno </span>{formatPrice(prezzoPieno)}
