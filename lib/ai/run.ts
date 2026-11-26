@@ -5,7 +5,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { getAnthropic, estimateCostEur, segnalaModelloRitirato, type ModelId } from '@/lib/ai/client';
 import { aggiungiSpesaCents, spesaDiOggiCents, statoContoCondiviso, ultimaSpesaNotaCents } from '@/lib/ai/tettoSpesa';
-import { decidiSpesaAi, leggiCopieAttese } from '@/lib/ai/decisioneTettoSpesa';
+import { decidiSpesaAi, euroInCents, leggiCopieAttese } from '@/lib/ai/decisioneTettoSpesa';
 
 /**
  * Esecuzione centralizzata di `messages.create`.
@@ -193,6 +193,8 @@ let _inVoloCents = 0;
  * quella dopo: una prenotazione che una copia spenta non toglie sparisce da
  * sola in pochi minuti invece di stringere il tetto per tutto il giorno.
  * Senza Upstash (o se non risponde) si torna alla prenotazione della copia.
+ * Questo vale sul computer di chi sviluppa: in rete la prenotazione sta nel
+ * conto condiviso stesso, anche senza Upstash (R20-002, piu' sotto).
  */
 const FINESTRA_IN_VOLO_MS = 5 * 60_000;
 const VITA_CHIAVE_IN_VOLO_S = 15 * 60;
@@ -257,10 +259,97 @@ export function __inVoloSpesaAiCents(): number {
   return _inVoloCents;
 }
 
+/**
+ * 26/11/2026 (R20-002) — IN RETE IL CONTO DI UNA COPIA NON E' UN TETTO.
+ *
+ * In produzione il conto condiviso non c'e' (migrazione 131 mai applicata la'),
+ * e ogni copia ripiegava sul suo contatore in memoria: le copie su Vercel sono
+ * quante ne servono, ogni risveglio nasce col contatore a zero, e il tetto
+ * scritto valeva per copia. Anche col conto vivo restavano due buchi: una spesa
+ * che non si riusciva a scrivere restava solo nella memoria della copia (spenta
+ * la copia, sparita), e senza Upstash le chiamate in volo di due copie non si
+ * vedevano (99 su 100, due chiamate insieme: passavano tutte e due).
+ *
+ * In rete adesso (`prenotaNelContoCondiviso`):
+ * · la stima di ogni chiamata si PRENOTA nel conto condiviso prima di chiamare
+ *   il modello: un'aggiunta atomica (`aggiungiSpesaCents`, che torna il totale).
+ *   Se il totale passa il tetto la prenotazione si restituisce e la chiamata non
+ *   parte: di due copie a 99 su 100 passa solo la prima, anche senza Upstash;
+ * · finita la chiamata il costo vero si scrive (`registraSpesaAi`) e poi la
+ *   prenotazione si restituisce. Se una scrittura della spesa e' fallita mentre
+ *   la prenotazione era aperta, la prenotazione RESTA nel conto al suo posto: la
+ *   spesa e' gia' dove la vedono tutte le copie, anche se questa si spegne;
+ * · se il conto non risponde, la spesa di oggi e' «non lo so»: la chiamata non
+ *   parte, con un errore temporaneo (R20-008), mai col conto di una copia.
+ *
+ * «In rete» vuol dire Vercel in produzione o in anteprima. `vercel dev`
+ * (VERCEL_ENV=development) e il computer di chi sviluppa hanno una copia sola:
+ * li' il contatore in memoria E' il conto del sito, e il ripiego resta com'era.
+ */
+export function contoCondivisoObbligatorio(): boolean {
+  const ambiente = (process.env.VERCEL_ENV ?? '').trim().toLowerCase();
+  if (ambiente === 'development') return false;
+  if (ambiente === 'production' || ambiente === 'preview') return true;
+  return process.env.VERCEL === '1';
+}
+
+/**
+ * In rete: la spesa che questa copia non e' riuscita a scrivere e che nessuna
+ * prenotazione rimasta nel conto copre (il costo vero oltre la stima). Entra
+ * nel conto con la prenotazione dopo; finche' il conto tace, non parte niente.
+ */
+let _daScrivereCents = 0;
+/** In rete: quante scritture della spesa sono fallite in questa copia. */
+let _scrittureFallite = 0;
+
+async function prenotaNelContoCondiviso(feature: string, limitEur: number, stima: number): Promise<() => Promise<void>> {
+  const tettoCents = euroInCents(limitEur);
+  const quando = new Date(); // la restituzione va nella casella del giorno della prenotazione
+  const fallimentiPrima = _scrittureFallite;
+  // Con una stima di zero si prenota un centesimo: «speso + 1 <= tetto» e'
+  // «speso < tetto», il confronto di sempre.
+  const prenotati = Math.max(1, stima);
+  const debito = _daScrivereCents;
+  _daScrivereCents = 0;
+  const totale = await aggiungiSpesaCents(prenotati + debito, quando);
+  if (typeof totale !== 'number' || !Number.isFinite(totale)) {
+    _daScrivereCents += debito;
+    logger.warn('ai_spesa_sconosciuta', { feature, limitEur, inRete: true });
+    throw AiCallError.perSpesaSconosciuta(feature);
+  }
+  if (totale > tettoCents) {
+    // Il debito resta scritto: era spesa vera. Si restituisce solo la stima.
+    await aggiungiSpesaCents(-prenotati, quando);
+    logger.warn('ai_budget_exceeded', {
+      feature,
+      spentEur: (totale - prenotati) / 100,
+      stimaEur: stima / 100,
+      limitEur,
+      contoCondiviso: true,
+    });
+    throw AiCallError.perTettoSpesa(feature);
+  }
+  let liberata = false;
+  return async () => {
+    if (liberata) return;
+    liberata = true;
+    if (_scrittureFallite !== fallimentiPrima) {
+      // Una spesa non e' entrata nel conto mentre questa prenotazione era
+      // aperta: la prenotazione resta li' al suo posto, e copre quella parte.
+      _daScrivereCents = Math.max(0, _daScrivereCents - prenotati);
+      return;
+    }
+    await aggiungiSpesaCents(-prenotati, quando);
+  };
+}
+
 export async function controllaTettoSpesaAi(feature: string, stimaCents: number = 0): Promise<() => Promise<void>> {
   const limitEur = Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0);
   if (!(limitEur > 0)) return async () => undefined; // nessun tetto configurato: niente giro di rete
   const stima = Number.isFinite(stimaCents) && stimaCents > 0 ? Math.ceil(stimaCents) : 0;
+  // R20-002 — In rete decide solo il conto condiviso; qui sotto resta il
+  // computer di chi sviluppa (una copia sola), com'era.
+  if (contoCondivisoObbligatorio()) return prenotaNelContoCondiviso(feature, limitEur, stima);
   // R03-013 — Fra copie diverse: la stima si prenota nel contatore condiviso
   // PRIMA di leggere lo speso (prenotaInVoloCondiviso, qui sopra).
   const condivisa = await prenotaInVoloCondiviso(stima);
@@ -294,6 +383,15 @@ export async function controllaTettoSpesaAi(feature: string, stimaCents: number 
     copieAttese: leggiCopieAttese(process.env.AI_COPIE_ATTESE),
   });
   if (!decisione.consentito) {
+    // 26/11/2026 (R20-008) — «Non so quanto si e' speso» non e' «il budget e'
+    // finito». Il conto condiviso che non risponde (un timeout, la pausa del
+    // circuito) e' un guasto di minuti: diventa un errore temporaneo suo, e il
+    // negoziante non legge «riprova domani».
+    if (decisione.motivo === 'spesa_sconosciuta') {
+      logger.warn('ai_spesa_sconosciuta', { feature, limitEur, contoCondiviso: conto.condiviso });
+      await condivisa?.libera();
+      throw AiCallError.perSpesaSconosciuta(feature);
+    }
     logger.warn('ai_budget_exceeded', {
       feature,
       spentEur: spesiCents / 100,
@@ -369,7 +467,14 @@ export async function registraSpesaAi(costEur: number): Promise<void> {
   const mancano = cents - _creditoCents;
   const interi = Math.ceil(mancano);
   _creditoCents = interi - mancano;
-  await aggiungiSpesaCents(interi);
+  const totale = await aggiungiSpesaCents(interi);
+  // R20-002 — In rete una spesa che non entra nel conto condiviso non resta il
+  // conto di questa copia: la prenotazione aperta resta nel conto al suo posto
+  // (vedi `prenotaNelContoCondiviso`), e il resto entra con la prossima.
+  if (contoCondivisoObbligatorio() && (typeof totale !== 'number' || !Number.isFinite(totale))) {
+    _daScrivereCents += interi;
+    _scrittureFallite++;
+  }
 }
 
 /** Errore lanciato quando l'SDK fallisce; porta lo status per il mapping. */
@@ -391,8 +496,11 @@ export class AiCallError extends Error {
      *
      * Lo status resta 503 (le rotte che lo guardano non cambiano
      * comportamento): quello che si aggiunge è il motivo, cioè chi ha frenato.
+     *
+     * 26/11/2026 (R20-008) — `spesa_sconosciuta`: il conto della spesa di oggi
+     * non si e' potuto leggere. Non e' il tetto: e' un guasto di minuti.
      */
-    readonly motivo?: 'tetto_spesa',
+    readonly motivo?: 'tetto_spesa' | 'spesa_sconosciuta',
   ) {
     super(`AI call failed (${feature}, status=${status ?? 'n/a'})`);
     this.name = 'AiCallError';
@@ -401,6 +509,11 @@ export class AiCallError extends Error {
   /** Il freno di spesa giornaliero: nostro, non del fornitore. */
   static perTettoSpesa(feature: string): AiCallError {
     return new AiCallError(feature, 503, undefined, undefined, 'tetto_spesa');
+  }
+
+  /** Il conto della spesa di oggi non risponde: non sappiamo se si puo' spendere. Temporaneo. */
+  static perSpesaSconosciuta(feature: string): AiCallError {
+    return new AiCallError(feature, 503, undefined, undefined, 'spesa_sconosciuta');
   }
 }
 
@@ -490,6 +603,11 @@ export function mapAiError(err: unknown, feature: string): NextResponse {
   // giornata di lavoro.
   if (err instanceof AiCallError && err.motivo === 'tetto_spesa') {
     return ApiErrors.unavailable('Budget AI giornaliero esaurito. Riprova domani.');
+  }
+  // R20-008 — Il conto della spesa non risponde: il budget non e' finito, e'
+  // il conto che per qualche minuto non si legge.
+  if (err instanceof AiCallError && err.motivo === 'spesa_sconosciuta') {
+    return ApiErrors.unavailable('Servizio AI momentaneamente non disponibile. Riprova fra qualche minuto.');
   }
   if (status === 503) return ApiErrors.unavailable('Servizio AI non disponibile in questo momento. Riprova fra qualche minuto.');
   // 12/11/2026 (R04-002) — Un 404 dal fornitore vuol dire «questo modello non

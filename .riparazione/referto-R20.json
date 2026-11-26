@@ -1,0 +1,197 @@
+{
+  "sessione": "R20",
+  "aggiornato": "2026-11-26 17:40",
+  "finita": true,
+  "testa": "a0f1254545ab8fc817d3ae6791a8b03c4483e6b2",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "a0f1254545ab8fc817d3ae6791a8b03c4483e6b2",
+    "nota": "typecheck + lint + vitest: 2237 file, 13658 prove verdi, uscita 0, aspettato nello stesso turno."
+  },
+  "voci": [
+    {
+      "id": "R20-001",
+      "chiave": "ai-endpoints|nella chat assistenza il negoziante approva una descrizione nuova senza poterla leggere, e al primo messaggio l'assistente riscrive tag e descrizione senza aver visto quelli che ci sono",
+      "esito": "parziale",
+      "commit": "a0f1254545ab8fc817d3ae6791a8b03c4483e6b2",
+      "file_toccati": [
+        "app/api/ai/catalog-chat/route.ts",
+        "tests/unit/riparazione-r20-chat-testo-intero.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r20-chat-testo-intero.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r20-chat-testo-intero.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a0f1254545ab8fc817d3ae6791a8b03c4483e6b2^ --file app/api/ai/catalog-chat/route.ts --prove tests/unit/riparazione-r20-chat-testo-intero.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La proposta torna alla chat nella forma che il server salva: tag al massimo quindici, in minuscolo e senza doppioni, cioè quelli che la scheda con Applica elenca; una descrizione di soli spazi viene tolta, così sparisce la falsa «Descrizione aggiornata»; un tag NULL non lascia più il buco «spariscono: , dolci». Il testo intero della descrizione nuova nella risposta c'era già sulla base.",
+      "nota": "Prova sulla rotta vera con il modello finto, 4 casi (17 tag grezzi → 15 salvati sulla scheda; descrizione di 40 righe intera nella risposta e nella proposta; descrizione di soli spazi; tag NULL). Nessuna migrazione.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/products/prontoPerLaVendita.ts",
+          "modifica": "riga 705: sostituire `if (testo(patch.description)) out.push('Descrizione aggiornata');` con `{ const nuova = testoDelPatch(patch.description, MAX_DESCRIZIONE_PRODOTTO); if (nuova) out.push(`Descrizione nuova: «${nuova}»`); }` e aggiungere `MAX_DESCRIZIONE_PRODOTTO, testoDelPatch,` all'import da '@/lib/products/aiPatch' (righe 8-17), con una prova su righeDellaProposta: così la scheda accanto ad Applica mostra il testo intero che il server salva."
+        }
+      ],
+      "cosa_resta": "(1) La scheda accanto ad Applica dice ancora «Descrizione aggiornata» invece del testo: la cura è in lib/products/prontoPerLaVendita.ts (serve_file_altrui). (2) Al primo messaggio l'assistente non vede tag e descrizione attuali: la cura in route.ts è pronta e verde (ogni riga del catalogo del venditore, già filtrato per seller_id, porta tag e descrizione, entro MAX_CONTENT=2000 per descrizione e 40000 in tutto; la proposta su descrizione e tag passa solo per un prodotto letto per intero), ma non è nel ramo perché rovescia tre prove comuni che oggi vogliono la proposta tolta al primo messaggio: tests/unit/riparazione-r03-catalog-chat.test.ts (righe 10-11 e 89-97), tests/unit/al-primo-messaggio-la-chat-non-propone-quello-che-non-ha-letto.test.ts (righe 7-10, 63, 70-80), tests/unit/riparazione-r04-chat-non-inventa.test.ts (riga 1 e caso a riga 68). Patch completa (rotta + 3 prove + 2 casi nuovi, verde: 13 file, 65 prove) tenuta dalla sessione R20 e consegnata alla regista. Costo: nel caso peggiore circa 10.000 token in più per chiamata di identificazione.",
+      "domanda": "Nicola firma il cambio delle tre prove comuni (r03-catalog-chat, al-primo-messaggio, r04-chat-non-inventa) perché al primo messaggio il modello veda tag e descrizione attuali (circa 10.000 token in più per chiamata nel caso peggiore)?",
+      "verificato_da": "qa (modello grande, a parte): parziale_confermato. Rilanciate 13 file/62 prove e tsc; scheda e salvataggio usano le stesse testoDelPatch/tagDelPatch di lib/products/aiPatch.ts; confronto scheda/salvato con la rotta vera su 16 tag con doppione, maiuscole accentate, tag di 300 caratteri, descrizione di soli a capo, descrizione lunga: combaciano. Le due parti rimaste sono vere; al primo messaggio la proposta su tag e descrizione è davvero tolta (route.ts:175, :506), nessuna approvazione alla cieca. Scarto residuo: tagDelPatch non è idempotente (aiPatch.ts:831), vedi nuovi_difetti_visti."
+    },
+    {
+      "id": "R20-002",
+      "chiave": "ai-endpoints|il tetto giornaliero di spesa ai in produzione non è condiviso: ogni copia del sito conta per sé",
+      "esito": "parziale",
+      "commit": "52b0a1638434c9783ae7ef4ce7ae8f14e9dab702",
+      "file_toccati": [
+        "lib/ai/run.ts",
+        "lib/ai/tettoSpesa.ts",
+        "migrations/980_il_conto_della_spesa_ai_restituisce_le_prenotazioni.sql",
+        "tests/unit/riparazione-r20-tetto-condiviso.test.ts",
+        "tests/sql/rls/riparazione-r20-conto-spesa-ai-restituisce.test.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r20-tetto-condiviso.test.ts",
+        "tests/sql/rls/riparazione-r20-conto-spesa-ai-restituisce.test.sql"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r20-tetto-condiviso.test.ts ; PGHOST=/var/run/postgresql PGUSER=root bash tests/sql/harness/apply.sh r20_prova_tetto && psql -X -d r20_prova_tetto -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r20-conto-spesa-ai-restituisce.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 52b0a1638434c9783ae7ef4ce7ae8f14e9dab702^ --file lib/ai/run.ts,lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r20-tetto-condiviso.test.ts --json ; timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 52b0a1638434c9783ae7ef4ce7ae8f14e9dab702^ --file migrations/980_il_conto_della_spesa_ai_restituisce_le_prenotazioni.sql --prove tests/sql/rls/riparazione-r20-conto-spesa-ai-restituisce.test.sql --sql r20_rimessa_tetto --json (uscita 0 tutte e due)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "In rete (VERCEL_ENV production o preview, o VERCEL=1 senza VERCEL_ENV=development) il tetto non conta più in memoria: prima della chiamata prenota la stima più l'eventuale debito nel conto condiviso con un'aggiunta atomica; oltre il tetto restituisce la stima e risponde tetto_spesa; conto che non risponde, timeout o circuito in pausa → 503 spesa_sconosciuta senza chiamare il modello. A fine chiamata il costo vero si scrive con await e la prenotazione si restituisce. In locale e con vercel dev il ripiego in memoria resta identico.",
+      "nota": "Migrazione nuova migrations/980_il_conto_della_spesa_ai_restituisce_le_prenotazioni.sql (non applicata): crea ai_spend_daily se manca, registra_spesa_ai accetta un negativo (mai sotto zero), spesa_ai_di_oggi identica alla 158, permessi solo service_role come 158 e 425. Senza migrazioni in produzione l'AI in rete si ferma con 503 temporaneo, mai «budget esaurito». Con la 158 senza la 980 le restituzioni non scendono: il tetto arriva prima, mai dopo. Limite: se la scrittura fallisce e la copia si spegne prima della prenotazione dopo, si perde solo il costo oltre la stima.",
+      "cosa_resta": "Punto VERCEL/VERCEL_ENV delle prove: 8 prove esistenti in 4 file comuni (il-tetto-di-spesa-ai-e-uno-solo 3, il-tetto-di-spesa-ai-non-si-moltiplica-per-le-copie 1, riparazione-r03-tetto-fra-copie 1, riparazione-r04-tetto-concorrente 3) cadono con VERCEL=1 VERCEL_ENV=preview perché provano la strada locale: non le tocco (fanno vi.mock di lib/logger.ts, file altrui). Resta anche che sondaContoCondiviso (lib/ai/tettoSpesa.ts) guarda solo spesa_ai_di_oggi e non si accorge di «158 applicata senza la 980». Trovato dal revisore: (a) la spesa OLTRE la stima che non si riesce a scrivere resta nella memoria della copia (lib/ai/run.ts:475); pesa perché stimaCostoChiamataCents (run.ts:421) non conta le ricerche web (barcode-lookup, improve-product, product-chat, catalog-chat, diagnose): stima 1 centesimo, costo vero 18,4, scrittura persa e copia spenta → nel conto resta 1. Stesso buco in app/api/ai/catalog-batch/status/route.ts:204 (file non mio: la differenza del lotto si registra fuori da ogni prenotazione). (b) Per le funzioni con ricerca web il tetto è rigido sulla stima, non sul costo vero (90/100, tre copie con stima 3 passano, poi le ricerche portano a circa 113). (c) Errori per eccesso: se fallisce la restituzione dopo un rifiuto oltre il tetto (run.ts:322) o all'uscita (run.ts:342) la stima resta nel conto per il giorno; il contatore dei fallimenti è unico per la copia (run.ts:336). (d) Finché la 980 non è applicata, in produzione e in anteprima l'AI a pagamento risponde 503: va applicata prima di riaccendere l'AI.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/_setup.ts",
+          "modifica": "Dopo la riga `process.env.CANCELLAZIONI_A_ORARIO = 'accese';` aggiungere il commento `// Le prove non sanno di girare su Vercel: in rete il tetto della spesa AI cambia strada (VERCEL_ENV production/preview). Chi prova la rete lo imposta da sé con vi.stubEnv.` poi `delete process.env.VERCEL;` e `delete process.env.VERCEL_ENV;`. In alternativa, nei 4 file elencati in cosa_resta, nel beforeEach `vi.stubEnv('VERCEL', ''); vi.stubEnv('VERCEL_ENV', '');` e `vi.unstubAllEnvs()` nell'afterEach dove manca."
+        }
+      ],
+      "verificato_da": "qa (modello grande, a parte): parziale_confermato. Prove R20 15/15, prova SQL 5/5 su 241 migrazioni, 980 applicata due volte di fila senza errori; corsa vera su Postgres con due sessioni a 99/100 (la seconda vede 101, restituisce, il conto torna a 100); anon e authenticated ricevono permission denied, SECURITY DEFINER con search_path=public; modello in errore → prenotazione restituita una volta sola; mezzanotte, stima NaN/zero, VERCEL_ENV=development: come atteso; solo run.ts usa aggiungiSpesaCents; 92 file di prova verdi, tsc pulito."
+    },
+    {
+      "id": "R20-003",
+      "chiave": "ai-endpoints|il segno di fine dell'applicazione del catalogo non lo scrive nessuno",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: limite di spesa della sessione. Dopo i due gravi (R20-002 con R20-008, R20-001) e i loro revisori sul modello grande la spesa era 17,07 $ su 25 $; un altro lotto con il suo revisore avrebbe superato l'80% (20 $), quindi consegno (regole del 26/11, punto 4). Da riassegnare in un'onda dopo."
+    },
+    {
+      "id": "R20-004",
+      "chiave": "ai-endpoints|l attesa per un applicazione del catalogo ancora in corso non scatta mai: legge una colonna che nessuna migrazione crea",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: limite di spesa della sessione. Dopo i due gravi (R20-002 con R20-008, R20-001) e i loro revisori sul modello grande la spesa era 17,07 $ su 25 $; un altro lotto con il suo revisore avrebbe superato l'80% (20 $), quindi consegno (regole del 26/11, punto 4). Da riassegnare in un'onda dopo. La prova comune tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts va girata come nella modifica già scritta nella scheda."
+    },
+    {
+      "id": "R20-005",
+      "chiave": "ai-endpoints|i prodotti ripresi dalla via dei falliti consumano il permesso di riprovare già in selezione: se il giro li lascia fuori restano fermi altre sei ore",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: limite di spesa della sessione. Dopo i due gravi (R20-002 con R20-008, R20-001) e i loro revisori sul modello grande la spesa era 17,07 $ su 25 $; un altro lotto con il suo revisore avrebbe superato l'80% (20 $), quindi consegno (regole del 26/11, punto 4). Da riassegnare in un'onda dopo."
+    },
+    {
+      "id": "R20-006",
+      "chiave": "ai-endpoints|col budget ai finito il prodotto importato viene segnato in errore e resta frenato sei ore anche quando il budget torna",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: limite di spesa della sessione. Dopo i due gravi (R20-002 con R20-008, R20-001) e i loro revisori sul modello grande la spesa era 17,07 $ su 25 $; un altro lotto con il suo revisore avrebbe superato l'80% (20 $), quindi consegno (regole del 26/11, punto 4). Da riassegnare in un'onda dopo."
+    },
+    {
+      "id": "R20-007",
+      "chiave": "ai-endpoints|il testo dell'allarme del tetto di spesa ai dice ancora «sceso a x € per copia» mentre in produzione ora l'ai si ferma",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: limite di spesa della sessione. Dopo i due gravi (R20-002 con R20-008, R20-001) e i loro revisori sul modello grande la spesa era 17,07 $ su 25 $; un altro lotto con il suo revisore avrebbe superato l'80% (20 $), quindi consegno (regole del 26/11, punto 4). Da riassegnare in un'onda dopo. Da fare dopo R20-002: il testo dell'allarme deve dire che in rete l'AI si ferma e nominare la migrazione 980."
+    },
+    {
+      "id": "R20-008",
+      "chiave": "ai-endpoints|con un solo timeout del conto condiviso della spesa ai il negoziante legge «budget ai giornaliero esaurito. riprova domani.»",
+      "esito": "riparato",
+      "commit": "951fdcbed871060f3bdc4541efc25f5c2e1c4208",
+      "file_toccati": [
+        "lib/ai/run.ts",
+        "app/api/ai/catalog-batch/start/route.ts",
+        "tests/unit/riparazione-r20-spesa-sconosciuta.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r20-spesa-sconosciuta.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r20-spesa-sconosciuta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 951fdcbed871060f3bdc4541efc25f5c2e1c4208^ --file lib/ai/run.ts,app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r20-spesa-sconosciuta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Quando la spesa di oggi non si sa (decisione spesa_sconosciuta) l'AI lancia un errore suo, AiCallError.perSpesaSconosciuta: 503 con motivo 'spesa_sconosciuta', mai tetto_spesa. mapAiError risponde «Servizio AI momentaneamente non disponibile. Riprova fra qualche minuto.» e il lotto del catalogo chiude la riga 'failed' (non 'canceled' per tetto), quindi si può riavviare; il tetto vero continua a dire «Budget AI giornaliero esaurito» e chiude 'canceled'.",
+      "nota": "Sulla base la strada era latente: run.ts:296-306 trasformava ogni rifiuto, compreso spesa_sconosciuta, in tetto_spesa. La prova finge la spesa sconosciuta (NaN) e controlla motivo, testo, stato del lotto e che il modello non venga chiamato, più il caso del tetto vero che resta com'è. Con R20-002 la strada diventa reale in rete. Nessuna migrazione.",
+      "verificato_da": "qa (modello grande, insieme alla revisione di R20-002, stesso percorso): prove R20 15/15 verdi; conto che non risponde → 503 senza chiamare il modello; 92 file di prova che importano run.ts/tettoSpesa.ts verdi (501/501), tsc pulito."
+    },
+    {
+      "id": "R20-009",
+      "chiave": "ai-endpoints|il freno di sei ore sui prodotti importati in errore regge solo con upstash: senza, ogni copia del sito ripaga le chiamate ai",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: limite di spesa della sessione. Dopo i due gravi (R20-002 con R20-008, R20-001) e i loro revisori sul modello grande la spesa era 17,07 $ su 25 $; un altro lotto con il suo revisore avrebbe superato l'80% (20 $), quindi consegno (regole del 26/11, punto 4). Da riassegnare in un'onda dopo. Serve anche lib/database.types.ts rigenerato (file altrui)."
+    },
+    {
+      "id": "R20-010",
+      "chiave": "qa-flussi|il precarico non riempie lo sconto attivo del prodotto, che il browser rilegge",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: limite di spesa della sessione. Dopo i due gravi (R20-002 con R20-008, R20-001) e i loro revisori sul modello grande la spesa era 17,07 $ su 25 $; un altro lotto con il suo revisore avrebbe superato l'80% (20 $), quindi consegno (regole del 26/11, punto 4). Da riassegnare in un'onda dopo."
+    },
+    {
+      "id": "R20-011",
+      "chiave": "qa-flussi|la risposta del negozio svuotata e riscritta dall api riavvisa il cliente ogni volta",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: limite di spesa della sessione. Dopo i due gravi (R20-002 con R20-008, R20-001) e i loro revisori sul modello grande la spesa era 17,07 $ su 25 $; un altro lotto con il suo revisore avrebbe superato l'80% (20 $), quindi consegno (regole del 26/11, punto 4). Da riassegnare in un'onda dopo. Nota della regia: una funzione sola con la correzione della 900 e la nuova, migrazione 98x (980 è già usata da R20-002: usare 981-989)."
+    },
+    {
+      "id": "R20-012",
+      "chiave": "stati-ui|il link al reclamo nella scheda ordine porta all'elenco filtrato sui reclami aperti e non mostra quelli in esame",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: limite di spesa della sessione. Dopo i due gravi (R20-002 con R20-008, R20-001) e i loro revisori sul modello grande la spesa era 17,07 $ su 25 $; un altro lotto con il suo revisore avrebbe superato l'80% (20 $), quindi consegno (regole del 26/11, punto 4). Da riassegnare in un'onda dopo."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "nella chat Assistenza un tag che finisce con spazio e virgola compare come doppione sulla scheda ma il server non lo salva",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "lib/products/aiPatch.ts:831",
+      "descrizione": "tagDelPatch non dà lo stesso risultato se passata due volte (toglie gli spazi prima delle virgole finali): la chat la applica una volta, il server una seconda. Con [\"Dolci ,\",\"dolci\"] la scheda mostra «dolci , dolci» e il server salva [\"dolci\"]; con 16 tag tipo \"x ,\" e \"x\" la scheda ne elenca 15 e il server ne salva 14. Il server non salva mai un tag che la scheda non mostra."
+    },
+    {
+      "titolo": "nella chat Assistenza la scheda da approvare mostra nome e unità come li scrive il modello, non come li salva il server",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/ai/catalog-chat/route.ts:219-228 · lib/products/prontoPerLaVendita.ts:703 · lib/products/aiPatch.ts:1207",
+      "descrizione": "comeLaSalvaIlServer pulisce solo descrizione e tag: un nome di soli spazi compare come «Nome → \"   \"» e il server non scrive niente; un nome di 200 caratteri si vede intero e il server ne salva 120; un'unità di soli spazi idem."
+    },
+    {
+      "titolo": "la descrizione proposta nella chat Assistenza arriva intera ma su una riga sola",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "components/SupportProductAssistant.tsx:398-413",
+      "descrizione": "il fumetto non ha whitespace-pre-wrap: gli a capo della descrizione nuova si perdono a video (forse già una voce di un'altra sessione)."
+    }
+  ],
+  "domande_per_nicola": [
+    "R20-001: firmi il cambio delle tre prove comuni (riparazione-r03-catalog-chat, al-primo-messaggio-la-chat-non-propone-quello-che-non-ha-letto, riparazione-r04-chat-non-inventa) così al primo messaggio l'assistente vede tag e descrizione attuali prima di proporre? Costa circa 10.000 token in più per chiamata nel caso peggiore.",
+    "R20-002: per riaccendere l'AI in produzione serve applicare la migrazione 980 (oggi in rete l'AI a pagamento risponderebbe 503, voluto: meglio fermo che senza tetto). La applichi insieme alla 131/158 quando decidi di riaccendere?"
+  ],
+  "conto": {
+    "agenti": 4,
+    "subagenti": 4,
+    "costo_usd": 17.46,
+    "nota": "4 subagenti su 8: 2 riparatori (lotto 1: R20-008 e R20-002; lotto 2: R20-001) e 2 revisori sul modello grande, uno per grave. usage.cost_usd 17,46 $ prima della consegna; fermato per il limite (80% di 25 $)."
+  },
+  "costo_usd": 17.46
+}
