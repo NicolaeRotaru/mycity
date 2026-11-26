@@ -257,6 +257,9 @@ function vistaNonAncoraCreata(errore: unknown): boolean {
   return code === 'PGRST205' || code === '42P01';
 }
 
+/** L'avviso «vista assente» è già nel registro di questo processo. */
+let avvisoSenzaLaVistaDato = false;
+
 /** id -> nome di battesimo, per le persone che chi legge puo' vedere. Gli id senza nome mancano. */
 export async function fetchNomiPubblici(
   supabase: LettoreVista,
@@ -271,7 +274,12 @@ export async function fetchNomiPubblici(
   if (!vista.error) {
     righe = (vista.data ?? []) as Array<{ id: string; nome: string | null }>;
   } else if (vistaNonAncoraCreata(vista.error)) {
-    logger.warn('[nomi] vista nomi_pubblici assente (migrazione 164 non applicata): leggo profiles', vista.error);
+    // R15-004 — L'avviso si scrive una volta per processo, come quello della 181: finché la vista manca
+    // diceva la stessa cosa a ogni chiamata. Il ripiego su `profiles` lavora comunque a ogni chiamata.
+    if (!avvisoSenzaLaVistaDato) {
+      avvisoSenzaLaVistaDato = true;
+      logger.warn('[nomi] vista nomi_pubblici assente (migrazione 164 non applicata): leggo profiles', vista.error);
+    }
     const vecchia = await supabase.from('profiles').select('id, full_name').in('id', unici);
     if (vecchia.error) {
       logger.warn('[nomi] nomi non letti nemmeno da profiles: le firme restano generiche', vecchia.error);
