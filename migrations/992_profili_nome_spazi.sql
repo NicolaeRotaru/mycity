@@ -8,6 +8,9 @@
 -- nomi_pubblici, rider_reviews_ricevute e get_referral_leaderboard() restano
 -- come sono: la prima parola la prendono sullo spazio.
 --
+-- La 997 allarga la classe (tutti gli spazi di Unicode, i caratteri invisibili
+-- e i riempitivi) e salva NULL un nome rimasto vuoto: vale la 997.
+--
 -- Prova: tests/sql/rls/riparazione-s01-04.test.sql
 
 CREATE OR REPLACE FUNCTION public.profiles_nome_spazi_normalizzati()
