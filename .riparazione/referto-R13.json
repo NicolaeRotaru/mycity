@@ -1,0 +1,333 @@
+{
+ "sessione": "R13",
+ "aggiornato": "2026-11-26 15:20",
+ "finita": true,
+ "testa": "897182db181e03c33bafb02f0c7161a6a49b7a14",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "897182db181e03c33bafb02f0c7161a6a49b7a14",
+  "nota": "typecheck, lint (0 errori) e vitest: 2149 file, 13281 prove verdi"
+ },
+ "voci": [
+  {
+   "id": "R13-001",
+   "chiave": "accessibilita|la card senza href scarta aria-label, e la card con href non passa al link il resto delle prop (id, role)",
+   "esito": "riparato",
+   "commit": "3cd761af02bf11f095ac421f3bbac8cb09e49d32",
+   "file_toccati": [
+    "components/ui/Card.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r13-ui.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r13-ui.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3cd761af02bf11f095ac421f3bbac8cb09e49d32^ --file components/ui/Card.tsx --prove tests/unit/riparazione-r13-ui.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "aria-label non viene più tolto dalle prop: senza href va sull'elemento insieme a id, role, data-*; con href il Link riceve tutto il resto delle prop. Le 9 prove esistenti che importano Card restano verdi.",
+   "verificato_da": "qa (sonnet, smentitore lotto 2): variant, padding, hover, radius, as non finiscono nel DOM; id e role arrivano al Link; 10 prove che importano Card verdi"
+  },
+  {
+   "id": "R13-002",
+   "chiave": "coerenza-brand|la primitiva card è usata in 10 file, mentre 141 card sono ridisegnate a mano con quattro raggi diversi",
+   "esito": "scelta_di_nicola",
+   "domanda": "Card.tsx dichiara già il raggio per contesto (16px contenuto, 20px prodotto/negozio, 12px riquadro interno): confermi questa regola dei raggi, o ne scegli uno unico, prima di migrare alla primitiva Card i 141 riquadri a mano, che stanno in file di altre sessioni?"
+  },
+  {
+   "id": "R13-003",
+   "chiave": "deploy-sre|la guida al backup non dice che con un remote cifrato o alias lo storico va impostato a mano",
+   "esito": "riparato",
+   "commit": "f252a9b716b739aa43a1ec27e0dc3837796910c1",
+   "file_toccati": [
+    "docs/backup-restore.md"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r13-backup-guida.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r13-backup-guida.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f252a9b716b739aa43a1ec27e0dc3837796910c1^ --file docs/backup-restore.md --prove tests/unit/riparazione-r13-backup-guida.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Aggiunto nella sezione rclone un avviso: con un remote crypt o alias (o usato alla radice) lo script non ha un secchio storico predefinito, la notte resta rossa finché non si imposta STORAGE_SYNC_STORICO a mano su un secchio diverso da quello della copia, con esempio.",
+   "verificato_da": "qa (sonnet, smentitore lotto 2): confrontato con scripts/backup-db.sh (STORAGE_SYNC_STORICO, tipi avvolgenti, notte rossa con exit 5): il testo corrisponde"
+  },
+  {
+   "id": "R13-004",
+   "chiave": "frontend-ux|anche i campi brevi delle categorie nel pannello admin tagliano in silenzio con maxlength",
+   "esito": "riparato",
+   "commit": "ca78bd01b464783927202273d963ec8d8980dd65",
+   "file_toccati": [
+    "app/admin/categories/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r13-categorie-campi-brevi.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r13-categorie-campi-brevi.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ca78bd01b464783927202273d963ec8d8980dd65^ --file app/admin/categories/page.tsx --prove tests/unit/riparazione-r13-categorie-campi-brevi.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Tolti i 7 maxLength (nome e slug 60, icona 8, foto 500: stessi tetti dell'API) dal modulo di creazione e dalle righe; il testo resta intero e sotto il campo compare «Troppo lungo: N caratteri su M», come negli altri moduli già riparati.",
+   "verificato_da": "qa (sonnet, smentitore lotto 2): tetti uguali all'API (60/60/8/500), coperti modulo e righe, avviso con role=alert; oltre il tetto l'API dà 400 e il toast lo spiega; 4 prove categorie verdi"
+  },
+  {
+   "id": "R13-005",
+   "chiave": "frontend-ux|alcune sottopagine vere di un profilo facebook (/nome/timeline, /nome/info, /nome/photos_by) vengono rifiutate invece di tenere il nome",
+   "esito": "riparato",
+   "commit": "16a2f0268cfc8e187943f2e1587465eb297d1a2c",
+   "file_toccati": [
+    "lib/store-customization.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r13-social.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r13-social.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 16a2f0268cfc8e187943f2e1587465eb297d1a2c^ --file lib/store-customization.ts --prove tests/unit/riparazione-r13-social.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Aggiunte all'elenco delle sottopagine di profilo timeline, info, photos_by e simili (photos_of, photos_albums, videos_by, about_details, likes, following…), e nel giro di correzione anche about_* (about_overview, about_contact_and_basic_info…), friends_* (friends_all…), offers e jobs: ora tengono il nome. Una sottopagina inventata resta fermata.",
+   "commit_correzione": "46ccc9acf1dd8b4032e20b4db3001dea0052efea",
+   "rimessa_correzione": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 46ccc9acf1dd8b4032e20b4db3001dea0052efea^ --file lib/store-customization.ts --prove tests/unit/riparazione-r13-social.test.ts --json"
+   },
+   "verificato_da": "qa (sonnet, smentitore lotto 1): timeline, info, photos_by anche maiuscoli e con ?x=1 tengono il nome; ha trovato rifiutate about_overview, friends_all, offers, jobs → corrette nel commit 46ccc9acf1dd8b4032e20b4db3001dea0052efea con prova rimessa che regge; 14 prove che importano store-customization verdi (288)"
+  },
+  {
+   "id": "R13-006",
+   "chiave": "frontend-ux|altri percorsi di facebook non elencati possono essere salvati come nome del profilo",
+   "esito": "parziale",
+   "commit": "841ed83863e415ae61755f2ec69d94f5fbc951dc",
+   "file_toccati": [
+    "lib/store-customization.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r13-social.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r13-social.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 841ed83863e415ae61755f2ec69d94f5fbc951dc^ --file lib/store-customization.ts --prove tests/unit/riparazione-r13-social.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Aggiunti all'elenco altri 30 percorsi di servizio di Facebook (profile, story, permalink, topic(s), directory, security, cookies, support, inbox, oauth, adsmanager, instantgames, logout, recommendations, biz, creators, tr, ajax, requests, invite(s), tournaments, birthdays, communities, fbreels…), lasciando fuori nomi ambigui come shop, city, local, meta.",
+   "cosa_resta": "Un percorso sconosciuto di una sola parola resta indistinguibile da un nome vero: l'elenco non si chiude mai del tutto.",
+   "verificato_da": "qa (sonnet, smentitore lotto 1): controllati i 30 percorsi aggiunti, nessuno è un nome plausibile, anche con /@; 14 prove che importano store-customization verdi (282)"
+  },
+  {
+   "id": "R13-007",
+   "chiave": "frontend-ux|il link tiktok di un profilo vero chiamato come un percorso riservato (tiktok.com/@live) viene rifiutato anche con la @",
+   "esito": "riparato",
+   "commit": "78f946006c7b14b1b0efb18371d630c222f6cc59",
+   "file_toccati": [
+    "lib/store-customization.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r13-social.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r13-social.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 78f946006c7b14b1b0efb18371d630c222f6cc59^ --file lib/store-customization.ts --prove tests/unit/riparazione-r13-social.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Su TikTok la @ nel link rende il nome un profilo anche se coincide con un percorso riservato (tiktok.com/@live dà «live»); tiktok.com/live senza @ resta riservato. Instagram e Facebook invariati.",
+   "verificato_da": "qa (sonnet, smentitore lotto 1): @live con www, ?lang, /video/1 → live; /live, /discover senza @ rifiutati; @@live e @ rifiutati; Instagram e Facebook invariati"
+  },
+  {
+   "id": "R13-008",
+   "chiave": "frontend-ux|il sito del negozio accetta un indirizzo con schema sbagliato, come ftp:// o http//",
+   "esito": "riparato",
+   "commit": "11a2ba9cb962a1f2d966f72144b563112e670f5f",
+   "file_toccati": [
+    "lib/store-customization.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r13-social.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r13-social.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 11a2ba9cb962a1f2d966f72144b563112e670f5f^ --file lib/store-customization.ts --prove tests/unit/riparazione-r13-social.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il sito del negozio non mette più https:// davanti a un indirizzo che ha già uno schema, e lo schema accetta solo http/https con un messaggio chiaro. Rifiutati ftp://, mailto:, javascript:, file:, http//, https:/, htp://; il dominio nudo (anche con porta) diventa https:// come prima.",
+   "verificato_da": "qa (sonnet, smentitore lotto 1): HTTP:// maiuscolo, percorsi con query, localhost:3000, www., :8080 accettati; ftp, http//, https:/, http:/, hxxp, htp, //, javascript:, mailto:, file:, data:, tel: rifiutati"
+  },
+  {
+   "id": "R13-009",
+   "chiave": "frontend-ux|nel link facebook.com/nome_col_trattino_basso il primo messaggio che si legge è quello generico, «scrivi solo il nome del profilo…», non quello del trattino basso",
+   "esito": "riparato",
+   "commit": "4e7a3801fc53227c86073c2105c3a72b418867a7",
+   "file_toccati": [
+    "lib/store-customization.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r13-social.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r13-social.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4e7a3801fc53227c86073c2105c3a72b418867a7^ --file lib/store-customization.ts --prove tests/unit/riparazione-r13-social.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il campo Facebook ha un suo controllo che emette prima il messaggio del trattino basso e poi quello generico: incollando facebook.com/nome_x il primo messaggio è quello del trattino.",
+   "verificato_da": "qa (sonnet, smentitore lotto 1): nome_x da solo e nei link (/posts, ?x=1) dà prima il messaggio del trattino; nome!, a b, 70 caratteri invariati"
+  },
+  {
+   "id": "R13-010",
+   "chiave": "qa-flussi|un cliente che esiste già non ha una strada da solo per diventare fattorino",
+   "esito": "parziale",
+   "commit": "897182db181e03c33bafb02f0c7161a6a49b7a14",
+   "file_toccati": [
+    "app/help/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r13-aiuto-rider.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r13-aiuto-rider.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 897182db181e03c33bafb02f0c7161a6a49b7a14^ --file app/help/page.tsx --prove tests/unit/riparazione-r13-aiuto-rider.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "La scheda «Diventa rider» della pagina di aiuto prometteva a tutti «Ti candidi dal sito», ma per un cliente già registrato /sign-up?role=rider non riconosce l'account (con la stessa email non succede niente, con un'altra nasce un secondo account). Ora dice «Nuovo su MyCity? Ti candidi dal sito. Hai già un account cliente? Leggi qui sotto.», e il paragrafo sotto lo manda al modulo contatti, che ha l'opzione «Voglio diventare rider». La prova comune r05 (href /lavora-con-noi e paragrafo) resta verde, non toccata.",
+   "cosa_resta": "La strada da soli non esiste: nessuna rotta mette un cliente in «fattorino in attesa» (solo app/api/admin/users/[id]/moderate cambia il ruolo; la migrazione 119 vieta di cambiarselo da sé). Serve una scelta di Nicola: rotta nuova come /api/seller/apply più pulsante (file altrui), da fare insieme a R13-011; oppure confermare la strada del modulo contatti.",
+   "domanda": "Un cliente già registrato deve poter diventare fattorino da solo, con una rotta che mette il suo profilo in «fattorino in attesa» come /api/seller/apply per i negozi (riapre il reclutamento dal sito chiuso il 26/10), o resta la strada del modulo contatti?",
+   "verificato_da": "qa (modello grande, smentitore lotto 3): nessuna rotta né comando admin trasforma un cliente in fattorino; ha trovato la promessa «Ti candidi dal sito» della scheda che porta un cliente loggato a un'iscrizione che non lo riconosce → corretta nel commit 897182db181e03c33bafb02f0c7161a6a49b7a14 con prova rimessa che regge"
+  },
+  {
+   "id": "R13-011",
+   "chiave": "qa-flussi|il fattorino nuovo non può finire l'iscrizione: la pagina dei documenti lo tiene fuori finché non è approvato",
+   "esito": "scelta_di_nicola",
+   "domanda": "Il portiere tiene fuori dal sito il fattorino in attesa (decisione 1 del 26/10), ma il resto del sito lo recluta ancora (Rider nell'iscrizione, «Diventa rider» nell'accesso, /lavora-con-noi, /rider/onboarding fatta per chi aspetta) e l'approvazione pretende i documenti che si caricano solo da quella pagina chiusa: oggi nessun fattorino iscritto dal sito può essere approvato. Apriamo /rider/onboarding a chi aspetta (fuori rifiutati e sospesi), o togliamo Rider dall'iscrizione e dai link?",
+   "nota": "Il difetto c'è ancora sulla base (lib/auth/decisione-portiere.ts:281-282 e 291-303 rimandano a / il fattorino non approvato anche su /rider/onboarding), ma è voluto: il commento cita la decisione 1 del 26/10, e la prova comune tests/unit/il-portiere-non-chiude-fuori-chi-aspetta-e-non-perde-il-rinnovo.test.ts:110-115 (importa middleware.ts) fissa il comportamento chiuso. Modifiche pronte se Nicola dice sì: (1) lib/auth/decisione-portiere.ts (mio): approvalStatus nello stato di decidiAccessoArea e, prima di return fuori, entra se role==='rider' && percorso==='/rider/onboarding' && approvalStatus non è 'rejected' né 'suspended'; (2) middleware.ts (altrui): select 'role, is_approved, approval_status', nel cookie del ruolo e passato a decidiAccessoArea; (3) app/rider/onboarding/page.tsx (altrui): riga 262 dopo l'invio non router.push('/rider'), e il link indietro /rider/profile (riga 291) rimanda fuori; (4) la prova comune va rovesciata: serve la firma di Nicola. Nessun commit.",
+   "verificato_da": "qa (modello grande, smentitore lotto 3): commento e prova comune esistono (decisione-portiere.ts:281-282, prova 110-115 verde 12/12); la decisione del 26/10 non è rispettata dal resto del sito (app/sign-up/page.tsx:33, components/ui/AuthShell.tsx:227, app/lavora-con-noi/page.tsx:36, lib/admin/regole-approvazione.ts:36-41): la scelta resta di Nicola, la domanda è riformulata"
+  },
+  {
+   "id": "R13-012",
+   "chiave": "qa-flussi|il negozio che risponde alla propria domanda senza answered_by si avvisa da solo",
+   "esito": "riparato",
+   "commit": "0f335515ef4d02bcd7f1ee86cf9bd4cb02bdd8d6",
+   "file_toccati": [
+    "migrations/900_il_negozio_che_risponde_a_se_stesso_non_si_avvisa.sql",
+    "tests/sql/rls/riparazione-r13-risposta-a-se-stesso.test.sql"
+   ],
+   "prova_file": [
+    "tests/sql/rls/riparazione-r13-risposta-a-se-stesso.test.sql"
+   ],
+   "prova_comando": "PGHOST=/var/run/postgresql PGUSER=root bash tests/sql/harness/apply.sh r13_prova_risposta && psql -X -d r13_prova_risposta -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r13-risposta-a-se-stesso.test.sql",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0f335515ef4d02bcd7f1ee86cf9bd4cb02bdd8d6^ --file migrations/900_il_negozio_che_risponde_a_se_stesso_non_si_avvisa.sql --prove tests/sql/rls/riparazione-r13-risposta-a-se-stesso.test.sql --sql r13_rimessa_risposta --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Migrazione nuova 900 che ridefinisce public.risposta_avvisa_chi_ha_chiesto() (nessuna migrazione dopo la 822 la cambia): l'avviso non parte quando chi ha chiesto è il negozio del prodotto, letto dal database e non da answered_by. Le domande dei clienti, e quelle di un negozio a un altro negozio, avvisano come prima anche senza answered_by.",
+   "nota": "Migrazione nuova 900 (fascia 900-909), non applicata a nessun database vero: lo decide Nicola. Suite SQL locale (apply.sh e run.sh) verde con la 900.",
+   "verificato_da": "qa (modello grande, smentitore lotto 3): database locale ricostruito con e senza la 900; 10 casi propri (negozio con 3 prodotti, answered_by admin o altro negozio, risposta dal server, UPDATE ripetuti, prodotto senza negozio): 5 rossi senza la 900, tutti verdi con; SECURITY DEFINER, search_path e REVOKE come nella 822; nessuna migrazione 823-899 ridefinisce la funzione; suite SQL e 28 prove che leggono le migrazioni verdi"
+  },
+  {
+   "id": "R13-013",
+   "chiave": "qa-flussi|l'aiutante attendi() può dire «sospeso per sempre» per un import solo lento, e il permesso permettisospeso vale per l'ultima accendi",
+   "esito": "serve_file_altrui",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/aiuti/schermo.ts",
+     "modifica": "Prova comune: serve la firma di Nicola (l'aiutante lo importano 289 file di prova di più sessioni). (1) Righe 22-23 e 37: togliere la variabile di modulo permettiSospesoDaAccendi e tenere un registro per schermo, const accesi = new Map<HTMLElement, { permettiSospeso: boolean; prova: string | undefined }>(); in accendi: accesi.set(radice, { permettiSospeso: opzioni.permettiSospeso === true, prova: expect.getState().currentTestName }); in smonta (righe 55-60): accesi.delete(radice). (2) Righe 25-34: controllaNonSospeso conta i [data-aiuto-sospeso] solo dentro le radici della prova in corso senza permesso: for (const [radice, s] of accesi) if (!s.permettiSospeso && s.prova === expect.getState().currentTestName) n += radice.querySelectorAll(SOSPESO).length. (3) Righe 70-77: al posto dei 20 giri di setTimeout(0), prima await act(async () => { await vi.dynamicImportSettled(); }), poi un tetto a tempo (es. 1000 ms sotto il testTimeout) con giri da 10 ms sulle radici del punto 2; con l'orologio finto (vi.isFakeTimers()) il giro avanza con vi.advanceTimersByTimeAsync(10). Se il tetto scade il messaggio dice «ancora sospeso dopo N ms, con gli import pigri già arrivati: una promessa che non torna», distinto dall'import lento. Lo stesso tetto per l'attendi() dopo un clic che fa risospendere il componente."
+    }
+   ],
+   "nota": "Il file non è mio: non toccato, nessun commit. Prova comune: serve la firma di Nicola.",
+   "verificato_da": "qa (modello grande, smentitore lotto 3): difetto confermato con un file temporaneo: import pigro da 60 ms → attendi() lancia «ancora sospeso», e permettiSospeso globale sbaglia nei due sensi con due schermi"
+  },
+  {
+   "id": "R13-014",
+   "chiave": "stati-ui|il modulo prodotto ricalcola la spunta «escluso dal recesso» dell'apertura a ogni disegno",
+   "esito": "riparato",
+   "commit": "9c85946b3f4e070647333d155d54836ed001d19a",
+   "file_toccati": [
+    "components/seller/ProductForm.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r13-recesso-all-apertura.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r13-recesso-all-apertura.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9c85946b3f4e070647333d155d54836ed001d19a^ --file components/seller/ProductForm.tsx --prove tests/unit/riparazione-r13-recesso-all-apertura.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il valore d'apertura della spunta è ora useState con inizializzatore pigro: se il padre passa initialValues nuovi a modulo aperto, il salvataggio non riscrive più non_recedibile per una spunta mai toccata; una spunta toccata si salva lo stesso.",
+   "verificato_da": "qa (sonnet, smentitore lotto 2): le due pagine che montano ProductForm hanno una key che lo ricrea al cambio prodotto; 52 prove che importano ProductForm verdi (277)"
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+   "riservato": true,
+   "dimensione": "sicurezza",
+   "severita": "minore",
+   "file": "(nel referto privato)"
+  },
+  {
+   "titolo": "Il campo sito del negozio accetta uno spazio nel percorso (https://negozio.it/a b) e lo salva con lo spazio",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "lib/store-customization.ts",
+   "descrizione": "Visto dallo smentitore del lotto 1: un URL con uno spazio nel percorso passa la validazione e si salva così; anche //negozio.it diventa https:////negozio.it prima di essere rifiutato (il rifiuto è corretto, il passaggio intermedio no)."
+  }
+ ],
+ "domande_per_nicola": [
+  "R13-011: apriamo /rider/onboarding al fattorino in attesa (fuori rifiutati e sospesi), o togliamo Rider dall'iscrizione e dai link? Oggi nessun fattorino iscritto dal sito può essere approvato.",
+  "R13-010: un cliente già registrato deve poter diventare fattorino da solo, con una rotta che lo mette in «fattorino in attesa» come /api/seller/apply, o resta la strada del modulo contatti?",
+  "R13-002: confermi la regola dei raggi della Card (16px contenuto, 20px prodotto/negozio, 12px riquadro interno) o ne scegli uno unico, prima di migrare alla Card i 141 riquadri a mano dei file altrui?",
+  "R13-013: firmi la modifica alla prova comune tests/unit/aiuti/schermo.ts (attendi() e permettiSospeso per schermo)?"
+ ],
+ "conto": {
+  "agenti": 6,
+  "nota": "3 subagenti riparatori (lotto 1 e 2 sonnet, lotto 3 modello grande) e 3 smentitori (lotto 1 e 2 sonnet, lotto 3 modello grande). Le due correzioni chieste dagli smentitori (R13-005, R13-010) le ho fatte io, al tetto dei subagenti. Costo letto con get_session (senza id) prima della consegna: 11,95 $ (a turno chiuso precedente).",
+  "subagenti": 6
+ },
+ "costo_usd": 11.95
+}
