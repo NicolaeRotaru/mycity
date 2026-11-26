@@ -233,6 +233,12 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
       // PRIMA di invalidare: scritta dopo, la memoria tornerebbe «fresca» e non si rileggerebbe.
       qc.setQueryData<Array<{ id: string }> | null>(queryKeys.lists.mine, (mie) =>
         mie ? mie.filter((l) => l.id !== params.id) : mie);
+      // Stesso per «Liste della community» e per la vetrina: se la lista eliminata era pubblica
+      // restavano a video (e toccarla portava a «Lista non trovata») finché la rilettura non tornava.
+      for (const chiave of [queryKeys.lists.public, queryKeys.lists.inVetrina]) {
+        qc.setQueryData<Array<{ id: string }> | null>(chiave, (elenco) =>
+          elenco ? elenco.filter((l) => l.id !== params.id) : elenco);
+      }
       rileggiLeListeDiLists();
       // R10-009 — e il menu «Aggiungi a lista» della scheda prodotto: prima la mostrava ancora.
       // Il menu legge solo quando è aperto, quindi l'invalidazione lo segna soltanto vecchio e

@@ -154,4 +154,40 @@ describe('R11-009 · eliminata una lista, «Le mie liste» non la mostra più', 
     expect(box.querySelector('a[href="/lists/L1"]')).toBeNull();
     expect(box.querySelector('a[href="/lists/L2"]')).not.toBeNull();
   });
+
+  it('una lista PUBBLICA eliminata sparisce subito anche da «Liste della community» e dalla vetrina', async () => {
+    const PUBBLICA = { ...COLAZIONE, id: 'P1', title: 'Pubblica', is_public: true, is_featured: true };
+    const ALTRA = { ...PUBBLICA, id: 'P2', title: 'Altra pubblica' };
+    db.liste = [{ ...PUBBLICA }, { ...ALTRA }];
+    db.righe = [];
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } });
+
+    let box = monta(qc, createElement(ListsPage));
+    await aspetta(() => box.querySelector('a[href="/lists/P1"]') !== null && box.querySelector('a[href="/lists/P2"]') !== null,
+      '/lists non mostra le liste pubbliche');
+    await smonta();
+
+    box = monta(qc, createElement(ListDetailPage as never, { params: { id: 'P1' } }));
+    const cestino = () => box.querySelector('button[aria-label="Elimina"]') as HTMLButtonElement | null;
+    await aspetta(() => cestino() !== null, 'la pagina della lista non offre «Elimina»');
+    await act(async () => { cestino()!.click(); });
+    await aspetta(() => !db.liste.some((l) => l.id === 'P1'), 'l’eliminazione non è arrivata al database');
+    await pausa(20);
+    await smonta();
+
+    // La memoria, subito: né la community né la vetrina tengono la lista eliminata.
+    const ids = (k: readonly unknown[]) => ((qc.getQueryData(k) as Array<{ id: string }> | undefined) ?? []).map((l) => l.id);
+    expect(ids(['lists-public']), 'la community tiene la lista eliminata').not.toContain('P1');
+    expect(ids(['lists-featured']), 'la vetrina tiene la lista eliminata').not.toContain('P1');
+    expect(ids(['lists-public'])).toContain('P2');
+
+    db.ritardo = 400;
+    box = monta(qc, createElement(ListsPage));
+    await pausa(30);
+    expect(box.querySelector('a[href="/lists/P2"]'), 'le altre liste pubbliche restano a video').not.toBeNull();
+    expect(box.querySelector('a[href="/lists/P1"]'),
+      '/lists mostra ancora la lista pubblica eliminata: toccarla porta a «Lista non trovata»').toBeNull();
+    await pausa(500);
+    expect(box.querySelector('a[href="/lists/P1"]')).toBeNull();
+  });
 });
