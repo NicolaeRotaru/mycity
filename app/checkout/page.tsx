@@ -1626,7 +1626,7 @@ export default function CheckoutPage() {
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">
                   <Wallet size={20} aria-hidden />
                 </span>
-                <div className="flex-1">
+                <div className="min-w-0 flex-1 break-words">
                   <p className="font-bold text-ink-900">Usa il mio credito MyCity</p>
                   <p className="text-sm text-ink-600 mt-0.5">
                     Hai {formatPrice(walletEuro)} di credito.{creditApplied > 0 ? ` Applicati ${formatPrice(creditApplied)} a questo ordine.` : ''}
