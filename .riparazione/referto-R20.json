@@ -189,6 +189,9 @@
   ],
   "conto": {
     "agenti": 4,
-    "nota": "4 subagenti su 8: 2 riparatori (lotto 1: R20-008 e R20-002; lotto 2: R20-001) e 2 revisori sul modello grande, uno per grave. Spesa 17,07 $ a fine revisione (usage.cost_usd); fermato per il limite."
-  }
+    "subagenti": 4,
+    "costo_usd": 17.46,
+    "nota": "4 subagenti su 8: 2 riparatori (lotto 1: R20-008 e R20-002; lotto 2: R20-001) e 2 revisori sul modello grande, uno per grave. usage.cost_usd 17,46 $ prima della consegna; fermato per il limite (80% di 25 $)."
+  },
+  "costo_usd": 17.46
 }
