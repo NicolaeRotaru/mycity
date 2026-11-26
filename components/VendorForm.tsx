@@ -396,7 +396,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
                   </p>
                 ) : (
                   <p className="text-ink-500">
-                    <span className="font-medium text-primary-700">Carica</span> un'immagine quadrata (PNG, JPG)
+                    <span className="font-medium text-primary-700">Carica</span> un'immagine quadrata ({tipiScrittiPerUmani()})
                   </p>
                 )}
               </div>
