@@ -240,6 +240,12 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
       trackErrorShown(e.code, e.message ?? '', context?.page);
       return 'La descrizione del prodotto è troppo lunga: al massimo 4000 caratteri. Accorciala e riprova.';
     }
+    // R16-007 — Il tetto del nome del negozio (migrazione 830, un trigger che alza 23514 con la sua
+    // frase «Il nome del negozio può avere al massimo 80 caratteri») usciva col 23514 generico.
+    if (e.code === '23514' && /nome del negozio/i.test(`${e.message ?? ''} ${e.details ?? ''}`)) {
+      trackErrorShown(e.code, e.message ?? '', context?.page);
+      return 'Il nome del negozio è troppo lungo: al massimo 80 caratteri. Accorcialo e riprova.';
+    }
     if (e.code && SUPABASE_CODE_MAP[e.code]) {
       trackErrorShown(e.code, e.message ?? '', context?.page);
       return SUPABASE_CODE_MAP[e.code];
