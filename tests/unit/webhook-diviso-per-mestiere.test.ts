@@ -73,8 +73,10 @@ describe('il webhook Stripe è diviso per mestiere', () => {
  * Il posto giusto è uno di due: dentro lo smistamento (un ramo che chiude l'evento senza gestore,
  * come la sessione completata ma non pagata) o dopo, nello stesso blocco, quando il gestore è
  * riuscito. Prima dello smistamento, o nel ramo dell'errore, un gestore fallito non verrebbe più
- * riprovato da Stripe. Sbaglia solo verso il rosso: una marcatura spostata in un aiutante importato
- * non si vede qui, e allora manca quella «dopo» e la prova boccia.
+ * riprovato da Stripe. Quello che non vede: una marcatura fatta da un aiutante importato (una
+ * chiamata, non un oggetto con `processed`). Spostata lì manca quella «dopo» e la prova boccia; ma
+ * aggiunta lì prima dello smistamento, lasciando quella di dopo, non la vede: per quel caso valgono
+ * le prove che eseguono il webhook (stripe-webhook-idempotenza, se-il-database-sbaglia-stripe-riprova).
  */
 function marcatureDellaRotta(testo: string): { smistamento: boolean; dopo: number; fuoriPosto: string[] } {
   const sorgente = ts.createSourceFile('route.ts', testo, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
