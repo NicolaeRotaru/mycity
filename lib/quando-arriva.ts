@@ -232,7 +232,7 @@ export function motivoFasciaRifiutata(
   // cassa ha proposto la fascia: «Domani» si conta da lì, non da quando la rotta la giudica.
   // Prima il parametro c'era in `negozioPuoServire` ma da qui non scendeva a nessuno.
   const chiuso = negozi.find((n) => !negozioPuoServire(n.orari, fascia, ora, propostaIl));
-  return chiuso ? motivoNegozioChiuso(chiuso.nome ?? 'Il negozio', fascia, ora, chiuso.orari, propostaIl) : null;
+  return chiuso ? motivoNegozioChiuso(chiuso.nome ?? 'Il negozio', fascia, ora) : null;
 }
 
 /**

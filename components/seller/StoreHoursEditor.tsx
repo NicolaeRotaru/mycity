@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { Plus, X } from 'lucide-react';
-import { giornoDiRoma, orariImpostati, type StoreHours, type HoursInterval } from '@/lib/store-hours';
+import { orariImpostati, type StoreHours, type HoursInterval } from '@/lib/store-hours';
 import { DAYS, erroreDelleFasce, prossimaFascia } from './orari-validi';
 
 export { erroreDegliOrari, erroreDelleFasce, prossimaFascia } from './orari-validi';
@@ -122,28 +122,6 @@ export default function StoreHoursEditor({ value, onChange }: Props) {
           </div>
         );
       })}
-      <div className="flex flex-wrap items-center gap-3 pt-3">
-        <button
-          type="button"
-          // 26/11/2026 — «Finito per oggi»: vale fino a mezzanotte di Roma, poi scade da solo.
-          onClick={() => onChange({ ...value, finitoOggiIl: giornoDiRoma() })}
-          className="rounded-lg border border-cream-200 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-cream-50"
-        >
-          Finito per oggi
-        </button>
-        <label className="inline-flex items-center gap-2 text-xs text-ink-700">
-          Chiuso fino al
-          <input
-            type="date"
-            value={value.chiusoFinoAl ?? ''}
-            onChange={(e) => {
-              const { chiusoFinoAl: _tolto, ...resto } = value;
-              onChange(e.target.value ? { ...resto, chiusoFinoAl: e.target.value } : resto);
-            }}
-            className="rounded border border-cream-200 px-2 py-1 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700"
-          />
-        </label>
-      </div>
       <p className="text-xs text-ink-500 pt-2">Aggiungi più fasce per la pausa pranzo. &quot;Chiudi&quot; segna il giorno come chiuso.</p>
     </div>
   );
