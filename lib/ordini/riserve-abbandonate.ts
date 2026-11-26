@@ -288,7 +288,13 @@ export async function liberaRiserveAbbandonate(
 
     if (riga.coupon_code) {
       const { error: errCodice } = await admin.rpc('release_coupon', { p_code: riga.coupon_code });
-      if (errCodice) logger.warn('[riserve] codice sconto non restituito', { id: riga.id, message: errCodice.message });
+      if (errCodice) {
+        // 26/11/2026 — Il codice non è tornato: il tentativo non va fra i liberati, perché chi chiama
+        // chiude la rivendicazione dei liberati (coupon_redemptions). Resta aperta, come fanno l'avviso
+        // di Stripe e `rilasciaCoupon` della cassa quando la restituzione non riesce.
+        logger.warn('[riserve] codice sconto non restituito', { id: riga.id, message: errCodice.message });
+        continue;
+      }
     }
 
     liberati.push(riga.id);
