@@ -314,6 +314,8 @@ const SignInForm = () => {
     // R23-013 — Col CAPTCHA acceso su Supabase anche la richiesta del link vuole il gettone; vale una
     // volta sola, quindi dopo averlo mandato se ne chiede uno nuovo per l'accesso.
     const gettone = captchaToken || undefined;
+    // Si toglie subito dallo stato: un «Accedi» premuto mentre la richiesta è in corso non lo rimanda.
+    if (gettone) setCaptchaToken('');
     try {
       const redirectTo = typeof window !== 'undefined'
         ? `${window.location.origin}/reset-password`

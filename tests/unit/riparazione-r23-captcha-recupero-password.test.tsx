@@ -17,6 +17,8 @@ import { createRoot } from 'react-dom/client';
 const stato = vi.hoisted(() => ({
   emessi: 0,
   richieste: [] as Array<{ email: string; captchaToken?: string }>,
+  /** Se c'è, la richiesta del link resta in corso finché non si scioglie. */
+  trattieni: null as Promise<void> | null,
 }));
 vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'chiave-del-sito');
 
@@ -25,6 +27,7 @@ vi.mock('@/lib/supabase/client', () => ({
     auth: {
       resetPasswordForEmail: async (email: string, opz?: { captchaToken?: string }) => {
         stato.richieste.push({ email, captchaToken: opz?.captchaToken });
+        if (stato.trattieni) await stato.trattieni;
         return { data: {}, error: null };
       },
       initialize: async () => ({ error: null }),
@@ -90,7 +93,7 @@ function monta(pagina: () => unknown) {
   };
 }
 
-beforeEach(() => { stato.emessi = 0; stato.richieste = []; });
+beforeEach(() => { stato.emessi = 0; stato.richieste = []; stato.trattieni = null; });
 
 describe('R23-013 — il recupero della password porta il gettone anti-robot', () => {
   it('«Password dimenticata?» nella pagina di accesso manda il gettone, e il secondo invio ne ha uno nuovo', async () => {
@@ -125,5 +128,56 @@ describe('R23-013 — il recupero della password porta il gettone anti-robot', (
     p.smonta();
     expect(stato.richieste).toHaveLength(1);
     expect(stato.richieste[0].captchaToken, 'la richiesta del link parte senza gettone').toBe('gettone-1');
+  });
+
+  it('«Accedi» premuto mentre la richiesta del link è in corso non rimanda lo stesso gettone', async () => {
+    let sciogli: () => void = () => undefined;
+    stato.trattieni = new Promise<void>((r) => { sciogli = r; });
+    const accessi: Array<string | undefined> = [];
+    vi.stubGlobal('fetch', async (_u: string, init?: { body?: string }) => {
+      accessi.push(JSON.parse(init?.body ?? '{}').captchaToken);
+      return new Promise(() => {});
+    });
+    const p = monta(Accesso);
+    await p.accendi();
+    await aspetta();
+    scrivi(p.div.querySelector<HTMLInputElement>('#signin-email')!, 'persona@esempio.it');
+    scrivi(p.div.querySelector<HTMLInputElement>('#signin-password')!, 'giusta123');
+    const dimenticata = [...p.div.querySelectorAll('button')].find((b) => /Password dimenticata/.test(b.textContent ?? ''));
+    const modulo = p.div.querySelector<HTMLFormElement>('form')!;
+    await act(async () => { dimenticata!.click(); });
+    await aspetta();
+    await act(async () => { modulo.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })); });
+    await aspetta();
+    sciogli();
+    await aspetta();
+    await act(async () => { modulo.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })); });
+    await aspetta();
+    p.smonta();
+    vi.unstubAllGlobals();
+    expect(stato.richieste.map((r) => r.captchaToken)).toEqual(['gettone-1']);
+    expect(accessi, 'l\'accesso ha rimandato il gettone già speso dalla richiesta del link').not.toContain('gettone-1');
+    expect(accessi.at(-1), 'controprova: finita la richiesta, l\'accesso parte col gettone nuovo').toBe('gettone-2');
+  });
+
+  it('un secondo «Invia il link» mentre il primo è in corso non rimanda lo stesso gettone', async () => {
+    let sciogli: () => void = () => undefined;
+    stato.trattieni = new Promise<void>((r) => { sciogli = r; });
+    window.history.replaceState(null, '', '/reset-password');
+    const p = monta(NuovaPassword);
+    await p.accendi();
+    for (let i = 0; i < 40 && !p.div.querySelector('#reset-request-email'); i++) await aspetta(25);
+    const campo = p.div.querySelector<HTMLInputElement>('#reset-request-email');
+    expect(campo, 'controprova: la vista «richiedi link» deve essere a video').toBeTruthy();
+    scrivi(campo!, 'persona@esempio.it');
+    const modulo = campo!.closest('form')!;
+    await act(async () => { modulo.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })); });
+    await act(async () => { modulo.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })); });
+    sciogli();
+    await aspetta();
+    p.smonta();
+    expect(stato.richieste).toHaveLength(2);
+    expect(stato.richieste[0].captchaToken).toBe('gettone-1');
+    expect(stato.richieste[1].captchaToken, 'il secondo invio ha rimandato il gettone già speso').not.toBe('gettone-1');
   });
 });

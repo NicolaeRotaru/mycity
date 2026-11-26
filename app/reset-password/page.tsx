@@ -261,6 +261,8 @@ function ResetPasswordInner() {
     setSendingLink(true);
     // Il gettone vale una volta sola: dopo averlo mandato se ne chiede uno nuovo.
     const gettone = captchaToken || undefined;
+    // Si toglie subito dallo stato: un secondo invio mentre la richiesta è in corso non lo rimanda.
+    if (gettone) setCaptchaToken('');
     try {
       const redirectTo = typeof window !== 'undefined'
         ? `${window.location.origin}/reset-password`
