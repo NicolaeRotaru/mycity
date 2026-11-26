@@ -10,8 +10,8 @@
  * si chiedono solo i negozi che mancano. (La memoria di qualche minuto resta da
  * fare nei chiamanti, con React Query: e' nel referto.)
  */
-import { describe, it, expect } from 'vitest';
-import { fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
+import { describe, it, expect, vi } from 'vitest';
+import { fetchSellerPublicMap, DURATA_MEMORIA_NEGOZIO_MS } from '@/lib/queries/seller-public-profiles';
 
 function vetrina(righe: Array<{ id: string; store_name: string; is_approved: boolean }>) {
   const domande: string[][] = [];
@@ -56,11 +56,17 @@ describe('R06-009 · la vetrina nel browser', () => {
     expect(domande, 'Ogni sezione rifaceva la stessa domanda alla vetrina').toEqual([['pane'], ['latte']]);
   });
 
-  it('a volo atterrato la domanda successiva torna al database (niente dati vecchi)', async () => {
-    const { client, domande } = vetrina([PANE]);
-    await fetchSellerPublicMap(client, ['pane']);
-    await fetchSellerPublicMap(client, ['pane']);
-    expect(domande.length).toBe(2);
+  it('a memoria scaduta la domanda successiva torna al database (niente dati vecchi)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const { client, domande } = vetrina([PANE]);
+      await fetchSellerPublicMap(client, ['pane']);
+      vi.setSystemTime(Date.now() + DURATA_MEMORIA_NEGOZIO_MS + 1);
+      await fetchSellerPublicMap(client, ['pane']);
+      expect(domande.length).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('una lettura caduta risale a chi chiama e non resta in memoria', async () => {

@@ -88,15 +88,21 @@ function conColonneIndispensabili(select: string): string {
  * (stesso client, stesse colonne) si aspetta invece di rifarla, e si chiedono
  * solo i negozi che mancano.
  *
- * Una memoria che duri qualche minuto, come proponeva la voce, qui non si tiene:
- * il modulo non sa quando i dati diventano vecchi (un negozio sospeso, una vista
- * che cade), e chi lo sa e' la cache di React Query dei chiamanti. Quella parte
- * resta da fare nei componenti che chiamano (referto R06).
- *
  * Solo nel browser: sul server una mappa del modulo vive fra richieste di persone
  * diverse.
  */
-type VoliDelClient = Map<string, Promise<SellerPublicProfile | null>>;
+/**
+ * 26/11/2026 (R15-002) — E LA RISPOSTA ATTERRATA SI TIENE QUALCHE MINUTO.
+ *
+ * Il volo atterrato non si butta piu' subito: resta nella memoria del client per
+ * `DURATA_MEMORIA_NEGOZIO_MS`, cosi' le sezioni della home che partono un attimo
+ * dopo la prima trovano il negozio gia' pronto. Il limite e' breve perche' un
+ * negozio sospeso o cambiato non deve restare vecchio a lungo. Una lettura caduta
+ * non si tiene mai.
+ */
+export const DURATA_MEMORIA_NEGOZIO_MS = 3 * 60 * 1000;
+type Volo = { volo: Promise<SellerPublicProfile | null>; scade: number };
+type VoliDelClient = Map<string, Volo>;
 const voliPerClient = new WeakMap<object, VoliDelClient>();
 
 function voliDi(supabase: LettoreVista): VoliDelClient | null {
@@ -125,22 +131,25 @@ export async function fetchSellerPublicMap(
   // e si uniscono. Colonne diverse restano domande diverse.
   const colonne = [...new Set(conColonneIndispensabili(select).split(',').map((c) => c.trim()))].sort().join(',');
   const chiave = (id: string) => `${colonne}|${id}`;
+  const adesso = Date.now();
+  for (const [k, v] of voli) if (v.scade <= adesso) voli.delete(k);
   const daChiedere = unique.filter((id) => !voli.has(chiave(id)));
   if (daChiedere.length > 0) {
     const lettura = leggiDallaVista(supabase, daChiedere, select);
     for (const id of daChiedere) {
       const k = chiave(id);
       const volo = lettura.then((letti) => letti.get(id) ?? null);
-      voli.set(k, volo);
-      // Atterrato (bene o male), il volo si toglie: la prossima domanda va al database.
+      const voce: Volo = { volo, scade: Number.POSITIVE_INFINITY };
+      voli.set(k, voce);
+      // Atterrato bene, il volo resta in memoria fino alla scadenza; caduto, si toglie subito.
       void volo.then(
-        () => { if (voli.get(k) === volo) voli.delete(k); },
-        () => { if (voli.get(k) === volo) voli.delete(k); },
+        () => { if (voli.get(k) === voce) voce.scade = Date.now() + DURATA_MEMORIA_NEGOZIO_MS; },
+        () => { if (voli.get(k) === voce) voli.delete(k); },
       );
     }
   }
   // Una lettura caduta risale a chi chiama, come prima: niente mappa vuota «senza errore».
-  const righe = await Promise.all(unique.map((id) => voli.get(chiave(id)) ?? Promise.resolve(null)));
+  const righe = await Promise.all(unique.map((id) => voli.get(chiave(id))?.volo ?? Promise.resolve(null)));
   const map = new Map<string, SellerPublicProfile>();
   unique.forEach((id, i) => {
     const riga = righe[i];
