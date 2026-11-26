@@ -203,6 +203,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "1 lotto che ripara, 3 smentite del lotto, 1 giro di correzione, 1 smentita della correzione. Spesa 21,25 $ (cost_usd) prima della chiusura; lotti 2 e 3 non lavorati per il tetto."
-  }
+    "nota": "6 subagenti aperti: 1 lotto che ripara, 3 smentite del lotto, 1 giro di correzione, 1 smentita della correzione. costo_usd 23,80 da get_session (senza id) prima della consegna; lotti 2 e 3 non lavorati per il tetto di spesa.",
+    "subagenti": 6
+  },
+  "costo_usd": 23.8
 }
