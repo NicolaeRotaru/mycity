@@ -96,9 +96,11 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
 
   let checked = 0, alerts = 0, errors = 0;
   let modelloNonTrovato = false;
+  let rimasti = 0;
   const now = new Date().toISOString();
 
-  for (const r of rows) {
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
     const prev = r.external_data;
     const query = prev?.source_title || r.name || '';
     if (!query) continue;
@@ -139,6 +141,10 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
       if (err instanceof AiCallError && err.status === 404) {
         modelloNonTrovato = true;
         logger.error('[ai] il fornitore non trova il modello: controllare AI_MODELLO_SMART', { feature: err.feature, productId: r.id });
+        // R03-002 — Il modello manca per tutti: il giro si ferma qui. Nessun prodotto, questo
+        // compreso, finisce segnato 'error' (dietro il freno di sei ore) per un guasto non suo.
+        rimasti = rows.length - i - 1;
+        break;
       } else {
         logger.warn('external-price-alerts: check failed', { productId: r.id });
       }
@@ -154,6 +160,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     checked,
     alerts,
     errors,
+    ...(rimasti > 0 ? { rimasti } : {}),
     ...(modelloNonTrovato ? { errore: 'Il fornitore AI non trova il modello: controllare AI_MODELLO_SMART.' } : {}),
   });
 });
