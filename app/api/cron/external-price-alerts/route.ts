@@ -51,6 +51,8 @@ type Row = {
 };
 
 const handler = withCronAuth(async (req): Promise<NextResponse> => {
+  // R03-003 — il tempo del giro si conta da qui: avvio e selezione dei candidati fanno parte dei 300 s.
+  const inizioGiro = Date.now();
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   // 5/11/2026 — Con l'AI dei negozi spenta al lancio il giro non parte: con la chiave presente
@@ -108,7 +110,6 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   let modelloNonTrovato = false;
   let rimasti = 0;
   const now = new Date().toISOString();
-  const inizioGiro = Date.now();
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];

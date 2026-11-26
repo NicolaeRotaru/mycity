@@ -10,6 +10,8 @@ const stato = vi.hoisted(() => ({
   aggiornamenti: [] as Array<Record<string, unknown>>,
   chiamate: 0,
   durataChiamataMs: 0,
+  selezioneMs: 0,
+  partenze: [] as number[],
 }));
 vi.mock('@/lib/funzioni-al-lancio', async (orig) => {
   const vero = await orig<typeof import('@/lib/funzioni-al-lancio')>();
@@ -23,6 +25,7 @@ vi.mock('@/lib/api/middleware', () => ({ withCronAuth: (h: (r: unknown) => unkno
 vi.mock('@/lib/products/externalSync', () => ({
   fetchExternalSnapshot: async () => {
     stato.chiamate += 1;
+    stato.partenze.push(Date.now());
     vi.setSystemTime(Date.now() + stato.durataChiamataMs);
     return { price: 10, external: { price: 10, availability: 'in_stock' } };
   },
@@ -48,7 +51,10 @@ vi.mock('@/lib/supabase/server', () => ({
           if (c === 'external_sync_status' && v === 'error') falliti = true;
           return q;
         },
-        then: (ok: (x: unknown) => void) => ok({ data: falliti ? [] : RIGHE, error: null }),
+        then: (ok: (x: unknown) => void) => {
+          if (!falliti) vi.setSystemTime(Date.now() + stato.selezioneMs);
+          return ok({ data: falliti ? [] : RIGHE, error: null });
+        },
       });
       return q;
     },
@@ -62,20 +68,33 @@ async function giro(): Promise<Record<string, unknown>> {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-11-26T10:00:00Z'));
-  stato.aggiornamenti.length = 0; stato.chiamate = 0;
+  stato.aggiornamenti.length = 0; stato.chiamate = 0; stato.partenze.length = 0; stato.selezioneMs = 0;
 });
 afterEach(() => { vi.useRealTimers(); });
 
 describe('giro dei prezzi esterni e durata massima', () => {
-  it('con chiamate da 60 s si ferma prima di sforare i 300 s e non segna in errore i rimasti', async () => {
+  it('con chiamate da 60 s partono esattamente 4 chiamate, l\'ultima non oltre 210 s, e i rimasti non vanno in errore', async () => {
     stato.durataChiamataMs = 60_000;
     const t0 = Date.now();
     const r = await giro();
-    expect(Date.now() - t0).toBeLessThanOrEqual(300_000);
-    expect(stato.chiamate).toBeLessThan(10);
-    expect(stato.chiamate).toBeGreaterThan(0);
-    expect(r.rimasti).toBe(10 - stato.chiamate);
+    // limite 300 - 30 = 270 s: partenze a 0, 60, 120, 180; a 240 finirebbe a 300 > 270.
+    expect(stato.chiamate).toBe(4);
+    expect(stato.partenze.map((t) => t - t0)).toEqual([0, 60_000, 120_000, 180_000]);
+    expect(Math.max(...stato.partenze) - t0).toBeLessThanOrEqual(270_000 - 60_000);
+    expect(Date.now() - t0).toBeLessThanOrEqual(270_000);
+    expect(r.rimasti).toBe(6);
     expect(stato.aggiornamenti.filter((a) => a.external_sync_status === 'error')).toEqual([]);
+  });
+
+  it('il tempo della selezione dei candidati conta nei 300 s del giro', async () => {
+    stato.durataChiamataMs = 60_000;
+    stato.selezioneMs = 90_000;
+    const t0 = Date.now();
+    const r = await giro();
+    // 90 s gia' spesi: partenze a 90, 150, 210 (finisce a 270); a 270 no.
+    expect(stato.chiamate).toBe(3);
+    expect(Math.max(...stato.partenze) - t0).toBeLessThanOrEqual(270_000 - 60_000);
+    expect(r.rimasti).toBe(7);
   });
 
   it('con chiamate veloci lavora tutti i prodotti del giro', async () => {
