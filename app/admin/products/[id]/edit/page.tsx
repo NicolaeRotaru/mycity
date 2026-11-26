@@ -22,15 +22,6 @@ const FORMA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 
-/**
- * R03-008 — IL MODULO APERTO RESTA APERTO, CON I DATI CON CUI SI È APERTO (come nella pagina del
- * negozio). Aperta la pagina senza rete (riga e taglie in memoria), al ritorno della rete le letture
- * ripartivano e il caricamento prendeva il posto del modulo: il modulo si smontava e le modifiche
- * scritte sparivano. Una volta aperto, il modulo non si smonta più; si rimonta solo quando lo chiede
- * una scorta cambiata (sotto, con la riga e le taglie appena rilette).
- */
-type Apertura = { id: string; riga: Record<string, unknown>; taglie: ProductVariant[] };
-
 export default function AdminEditProductPage(props: { params: Promise<{ id: string }> }) {
   const { id } = use(props.params);
   const router = useRouter();
@@ -39,9 +30,8 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
   // riletti: la scorta vista all'apertura la tiene il modulo, e senza rimontarlo
   // ogni nuovo «Salva» ridava lo stesso errore finché non si usciva.
   const [versioneModulo, setVersioneModulo] = useState(0);
-  const [apertura, setApertura] = useState<Apertura | null>(null);
 
-  const { data: product, isLoading, error, refetch: rileggiProdotto, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto, fetchStatus: prodottoFetchStatus } = useQuery({
+  const { data: product, isLoading, error, refetch: rileggiProdotto, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto } = useQuery({
     queryKey: queryKeys.admin.product(id),
     queryFn: async () => {
       // R22-017 — Un id che non ha la forma di un codice non è un guasto: il prodotto non c'è.
@@ -65,7 +55,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
     refetchOnMount: 'always',
   });
 
-  const { data: variantiLette, error: erroreVarianti, isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette, refetch: rileggiVarianti, fetchStatus: variantiFetchStatus } = useQuery({
+  const { data: variants = [], error: erroreVarianti, isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette, refetch: rileggiVarianti } = useQuery({
     queryKey: [...queryKeys.admin.product(id), 'variants'],
     queryFn: () => loadProductVariants(id),
     // R22-017 — Con un id che non ha la forma di un codice il database risponderebbe con un errore di
@@ -123,10 +113,6 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
       if ((err as { conflitto?: boolean })?.conflitto) {
         // La chiave del prodotto è anche il prefisso di quella delle varianti: si rileggono tutte e due.
         await qc.invalidateQueries({ queryKey: queryKeys.admin.product(id) });
-        // R03-008 — Il modulo si rimonta con la riga e le taglie appena rilette, non con quelle dell'apertura.
-        const riga = qc.getQueryData<Record<string, unknown> | null>(queryKeys.admin.product(id));
-        const taglie = qc.getQueryData<ProductVariant[]>([...queryKeys.admin.product(id), 'variants']);
-        if (riga && taglie) setApertura({ id, riga, taglie });
         setVersioneModulo((v) => v + 1);
         toast.error('Qualcosa è cambiato mentre la scheda era aperta (scorta o varianti): ho riletto il prodotto. Controlla i numeri e salva di nuovo.', { duration: 10_000 });
         return;
@@ -148,68 +134,52 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  // R03-008 — Senza rete la lettura va in pausa (senza dati, ne' caricamento ne' errore): non e'
-  // «Prodotto non trovato» e non e' un modulo con zero taglie. Una query spenta non e' in pausa.
-  const prodottoInPausa = product === undefined && prodottoFetchStatus === 'paused';
-  const taglieInPausa = variantiLette === undefined && variantiFetchStatus === 'paused';
-  const giaAperto = apertura !== null && apertura.id === id ? apertura : null;
-  // Il caricamento e gli avvisi al posto del modulo valgono solo finche' il modulo non si e' aperto:
-  // dopo, quando la rete torna e le letture ripartono, il modulo resta dov'e'.
-  if (!giaAperto) {
-    if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette)) return <LoadingState />;
-    // 31/10/2026 — SENZA LE VARIANTI IL MODULO NON SI APRE. Se la lettura delle
-    // taglie cade, le taglie non ci sono e il modulo partiva senza taglie: al «Salva»
-    // la PATCH le riceveva vuote. Come nella pagina del negozio, si ferma e lo dice.
-    if (error || erroreVarianti || prodottoInPausa || taglieInPausa || !product) {
-      const prodottoNonLetto = Boolean(error) || prodottoInPausa;
-      return (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
-          <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Errore</p>
-          <p className="text-sm mb-3">
-            {prodottoNonLetto
-              ? 'Non riesco a leggere questo prodotto. Non vuol dire che non esista: vuol dire che non l’ho potuto guardare. Riprova fra un momento.'
-              : erroreVarianti || taglieInPausa
-                ? 'Non riesco a leggere le taglie e le varianti di questo prodotto. Ricarica la pagina prima di modificarlo: salvando adesso le varianti andrebbero perse.'
-                : 'Prodotto non trovato'}
-          </p>
-          {/* R03-007 — Riprova anche quando a cadere sono le varianti: rilegge quelle (e il prodotto, se è caduto lui). */}
-          {(prodottoNonLetto || erroreVarianti || taglieInPausa) && (
-            <button type="button" onClick={() => { if (prodottoNonLetto) void rileggiProdotto(); if (erroreVarianti || taglieInPausa) void rileggiVarianti(); }} className="mr-4 text-sm font-semibold text-rose-700 hover:underline">
-              Riprova
-            </button>
-          )}
-          <Link href="/admin/products" className="text-sm font-semibold text-rose-700 hover:underline">← Torna ai prodotti</Link>
-        </div>
-      );
-    }
+  if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette)) return <LoadingState />;
+  // 31/10/2026 — SENZA LE VARIANTI IL MODULO NON SI APRE. Se la lettura delle
+  // taglie cade, `variants` resta [] e il modulo partiva senza taglie: al «Salva»
+  // la PATCH le riceveva vuote. Come nella pagina del negozio, si ferma e lo dice.
+  if (error || erroreVarianti || !product) {
+    return (
+      <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
+        <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Errore</p>
+        <p className="text-sm mb-3">
+          {error
+            ? 'Non riesco a leggere questo prodotto. Non vuol dire che non esista: vuol dire che non l’ho potuto guardare. Riprova fra un momento.'
+            : erroreVarianti
+              ? 'Non riesco a leggere le taglie e le varianti di questo prodotto. Ricarica la pagina prima di modificarlo: salvando adesso le varianti andrebbero perse.'
+              : 'Prodotto non trovato'}
+        </p>
+        {/* R03-007 — Riprova anche quando a cadere sono le varianti: rilegge quelle (e il prodotto, se è caduto lui). */}
+        {(error || erroreVarianti) && (
+          <button type="button" onClick={() => { if (error) void rileggiProdotto(); if (erroreVarianti) void rileggiVarianti(); }} className="mr-4 text-sm font-semibold text-rose-700 hover:underline">
+            Riprova
+          </button>
+        )}
+        <Link href="/admin/products" className="text-sm font-semibold text-rose-700 hover:underline">← Torna ai prodotti</Link>
+      </div>
+    );
   }
 
-  // Il modulo si apre adesso (e da qui in poi resta), oppure e' gia' aperto: con i dati dell'apertura.
-  const modulo: Apertura = giaAperto ?? { id, riga: product as Record<string, unknown>, taglie: variantiLette as ProductVariant[] };
-  if (!giaAperto) setApertura(modulo);
-  const variants = modulo.taglie;
-  const rigaViva = (product as Record<string, unknown> | null | undefined) ?? modulo.riga;
-
-  const attrs = (modulo.riga.attributes as Record<string, unknown>) ?? {};
+  const attrs = (product.attributes as Record<string, unknown>) ?? {};
   const legacyStato = typeof attrs.stato === 'string' ? attrs.stato : '';
   const initialValues: ProductInitialValues = {
-    name: (modulo.riga.name as string) ?? '',
-    description: (modulo.riga.description as string) ?? '',
-    price: (modulo.riga.price as number) ?? undefined,
-    compareAtPrice: (modulo.riga.compare_at_price as number) ?? undefined,
-    unit: ((modulo.riga.unit as ProductUnit) ?? 'pezzo'),
-    condition: ((modulo.riga.condition as ProductCondition) ?? (normalizeCondition(legacyStato) || null)),
-    stock: (modulo.riga.stock as number | null) ?? null,
-    category_id: (modulo.riga.category_id as string) ?? '',
-    images: Array.isArray(modulo.riga.images) ? (modulo.riga.images as string[]) : [],
+    name: (product.name as string) ?? '',
+    description: (product.description as string) ?? '',
+    price: (product.price as number) ?? undefined,
+    compareAtPrice: (product.compare_at_price as number) ?? undefined,
+    unit: ((product.unit as ProductUnit) ?? 'pezzo'),
+    condition: ((product.condition as ProductCondition) ?? (normalizeCondition(legacyStato) || null)),
+    stock: (product.stock as number | null) ?? null,
+    category_id: (product.category_id as string) ?? '',
+    images: Array.isArray(product.images) ? (product.images as string[]) : [],
     attributes: attrs,
-    tags: Array.isArray(modulo.riga.tags) ? (modulo.riga.tags as string[]) : [],
-    expressEnabled: (modulo.riga.express_enabled as boolean | null) ?? null,
-    status: (modulo.riga.status as string) ?? 'available',
+    tags: Array.isArray(product.tags) ? (product.tags as string[]) : [],
+    expressEnabled: (product.express_enabled as boolean | null) ?? null,
+    status: (product.status as string) ?? 'available',
     variants,
   };
 
-  const externalSourceUrl = (modulo.riga.external_source_url as string | null) ?? null;
+  const externalSourceUrl = (product.external_source_url as string | null) ?? null;
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -221,10 +191,10 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
       {externalSourceUrl && (
         <ExternalDataPanel
           productId={id}
-          marketplace={(rigaViva.external_marketplace as string | null) ?? null}
+          marketplace={(product.external_marketplace as string | null) ?? null}
           sourceUrl={externalSourceUrl}
-          syncedAt={(rigaViva.external_synced_at as string | null) ?? null}
-          external={(rigaViva.external_data as ExternalData | null) ?? null}
+          syncedAt={(product.external_synced_at as string | null) ?? null}
+          external={(product.external_data as ExternalData | null) ?? null}
           onRefreshed={() => qc.invalidateQueries({ queryKey: queryKeys.admin.product(id) })}
         />
       )}
@@ -241,7 +211,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
         onDelete={async () => {
           const ok = await confirmDialog({
             title: 'Eliminare il prodotto?',
-            message: `"${modulo.riga.name as string}" verrà rimosso definitivamente.`,
+            message: `"${product.name as string}" verrà rimosso definitivamente.`,
             confirmLabel: 'Sì, elimina',
             danger: true,
             icon: Trash2,
