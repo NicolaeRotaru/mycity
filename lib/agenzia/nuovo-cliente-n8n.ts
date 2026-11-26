@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger';
+import type { IndiziDelTitolare } from './indizi-del-titolare';
 
 const ATTESA_MASSIMA_MS = 5_000;
 
@@ -49,7 +50,17 @@ export type NuovaAttivitaPerIlFlusso = {
    */
   sito?: string | null;
   dalModulo12?: boolean;
+  /**
+   * 26/11/2026 — Facoltativi: gli indizi che il titolare scrive all'iscrizione (/sell), il nome Instagram
+   * dell'attività e il link della scheda Google Maps. A n8n arrivano come `indizi_del_titolare`: aiutano a trovare
+   * il profilo e il place_id giusti. Sono dati dell'attività, non del titolare.
+   */
+  indizi?: IndiziDelTitolare | null;
 };
+
+// 26/11/2026 — Gli indizi si controllano uguali nel modulo e qui: le regole stanno in un file solo, senza
+// dipendenze dal server (lib/agenzia/indizi-del-titolare.ts).
+export { indiziDelTitolare, type IndiziDelTitolare } from './indizi-del-titolare';
 
 /**
  * 25/11/2026 — LA CITTÀ DALL'INDIRIZZO DEL NEGOZIO.
@@ -117,6 +128,7 @@ export async function inviaNuovaAttivitaAlFlusso(
           ...(a.sito && /^https:\/\//i.test(a.sito) ? { sito: corto(a.sito, 300) } : {}),
         },
         ...(a.dalModulo12 ? { provenienza: 'modulo-12' } : {}),
+        ...(a.indizi && Object.keys(a.indizi).length ? { indizi_del_titolare: a.indizi } : {}),
       }),
       signal: AbortSignal.timeout(ATTESA_MASSIMA_MS),
     });

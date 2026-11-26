@@ -27,6 +27,14 @@ const db = vi.hoisted(() => ({
   casse: [] as Array<Record<string, unknown>>,
 }));
 
+// 26/11/2026 — Il pagamento online è spento (lib/agenzia/pagamento-servizi.ts, Nicola: per ora contanti).
+// Queste prove guardano la cassa Stripe per quando si riaccende: qui l'interruttore è acceso apposta.
+// Lo stato di oggi, spento, lo provano tests/unit/l-abbonamento-si-paga-in-contanti.test.tsx.
+vi.mock('@/lib/agenzia/pagamento-servizi', async (originale) => ({
+  ...(await originale<typeof import('@/lib/agenzia/pagamento-servizi')>()),
+  PAGAMENTO_ONLINE_SERVIZI: true,
+  pagamentoOnlineAttivo: () => true,
+}));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@/lib/rate-limit', () => ({
   rateLimitAsync: vi.fn(async () => ({ allowed: true, remaining: 10, retryAfterSec: 0, limit: 10 })),

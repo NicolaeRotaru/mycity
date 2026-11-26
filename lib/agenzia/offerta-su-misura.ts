@@ -561,15 +561,15 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
     for (const [i, oss] of vociCitabili(google.osservazioni, 2, 240).entries()) {
       aggiungi({ id: `google-sistema-${i}`, servizio: 'social', cosa: 'Sistemiamo la tua scheda Google', perche: oss, fonte: FONTE.google, daFascia: 'base' });
     }
-    const recensioni = google.numeri?.recensioni;
     // Dal Business, e solo se oggi il locale non risponde (Nicola, `agenzia.social-come-il-sito`): senza il giudizio non si sa.
-    if (recensioni !== undefined && recensioni > 0 && google.giudizio?.risposte_recensioni === false) {
+    // 26/11/2026 — Senza numeri di Google: voto e numero di recensioni non si copiano nel preventivo (parere legale).
+    if (google.giudizio?.risposte_recensioni === false) {
       aggiungi({
         id: 'google-recensioni',
         servizio: 'social',
         cosa: 'Rispondiamo noi alle recensioni su Google, con il tuo tono',
         perFascia: { premium: 'Rispondiamo noi alle recensioni su Google e curiamo la scheda ogni mese, con foto nuove e post' },
-        perche: `La tua scheda ha ${it(recensioni)} ${recensioni === 1 ? 'recensione' : 'recensioni'}${google.numeri?.valutazione !== undefined ? ` e ${google.numeri.valutazione.toLocaleString('it-IT', { maximumFractionDigits: 1 })} stelle su 5` : ''}, e oggi nessuno risponde: chi risponde viene scelto di più.`,
+        perche: 'Sulla tua scheda Google oggi nessuno risponde alle recensioni: chi risponde viene scelto di più.',
         fonte: FONTE.google,
         // Le risposte alle recensioni partono dal Business (FASCE).
         daFascia: 'business',
@@ -612,12 +612,9 @@ export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
     id: 'analisi',
     servizio: 'analisi',
     cosa: 'Un’analisi completa della tua attività, dei social, della scheda Google e del sito',
-    // Il ritmo scelto da Nicola il 24/11: avvio, mese, settimana (FASCE).
-    perFascia: {
-      base: 'Un’analisi completa all’avvio: la tua attività, i social, la scheda Google e il sito, con cosa migliorare',
-      business: 'L’analisi completa all’avvio e una nuova ogni mese: cosa è cambiato e cosa fare il mese dopo',
-      premium: 'L’analisi ogni settimana, e un incontro al mese per leggerla insieme',
-    },
+    // Il ritmo scelto da Nicola il 24/11: avvio, mese, settimana. Dal 26/11 il testo è quello di FASCE, scritto una
+    // volta sola (era copiato qui e si sarebbe separato dal listino al primo cambio).
+    perFascia: Object.fromEntries(ABBONAMENTI.map((f) => [f, FASCE[f].servizi.analisi.replace(/\.$/, '')])) as Record<Abbonamento, string>,
     perche: canaliScritti === 0
       ? 'Oggi non conosciamo nessuno dei tuoi canali: scrivili nella pagina dell’analisi e partiamo da lì.'
       : `Ci hai dato ${canaliScritti} ${canaliScritti === 1 ? 'canale' : 'canali'} da seguire.`,

@@ -11,6 +11,7 @@ import {
   LayoutTemplate, FileText, FolderTree, Palette, Rss, ScrollText, LifeBuoy,
   Home, LogOut, Menu, X, MessageCircle, Flag, Package, Bell,
   type LucideIcon,
+  UserPlus,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
@@ -38,6 +39,7 @@ const NAV: NavGroup[] = [
     { href: '/admin/users', icon: Users, label: 'Utenti' },
     // 24/11/2026 — Il link del preventivo per chi è in «modalità preventivo» (Ora del Gusto).
     { href: '/admin/preventivi', icon: FileText, label: 'Preventivi col link' },
+    { href: '/admin/agenti', icon: UserPlus, label: 'Agenti' },
     // 24/11/2026 — I negozi che aspettano la bozza del sito scritta dall'AD nel suo giro.
     { href: '/admin/bozze-sito', icon: FileText, label: 'Bozze del sito' },
   ] },

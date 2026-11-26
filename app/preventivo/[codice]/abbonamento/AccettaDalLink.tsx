@@ -4,11 +4,16 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ABBONAMENTI, FASCE, canonePrimoMese, scriviCanone, type Abbonamento } from '@/lib/agenzia/preventivo';
+import { FRASE_CONTANTI, PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagamento-servizi';
 
 /**
  * Il titolare sceglie l'abbonamento, lascia l'email e accetta: il server gli crea l'accesso e apre
  * il pagamento (app/api/preventivo/[codice]/accetta). Se il pagamento non si apre, l'accettazione
  * vale lo stesso: entra dal link nell'email e paga dalla sua pagina.
+ *
+ * 26/11/2026 — Nicola: «tasto abbona toglilo», per ora si paga in contanti. Con il pagamento online
+ * spento (lib/agenzia/pagamento-servizi.ts) il pulsante dice solo «Accetto il preventivo» e sotto
+ * c'è come si paga.
  */
 export default function AccettaDalLink({
   codice,
@@ -77,7 +82,7 @@ export default function AccettaDalLink({
           {fatto.accessoInviato
             ? `Ti abbiamo scritto a ${email}: da lì entri nel tuo account.`
             : 'L’email con il link per entrare non è partita: ti scriviamo noi a breve.'}{' '}
-          L’abbonamento lo paghi riaprendo questo stesso link.
+          {PAGAMENTO_ONLINE_SERVIZI ? 'L’abbonamento lo paghi riaprendo questo stesso link.' : 'Il pagamento lo facciamo di persona, in contanti: ti contattiamo noi per fissare l’inizio.'}
         </p>
       </div>
     );
@@ -86,7 +91,7 @@ export default function AccettaDalLink({
   const prezzo = prezzi[fascia];
   return (
     <form onSubmit={accetta} className="mt-6 rounded-2xl border-2 border-cream-300 bg-surface-0 p-5" aria-labelledby="accetta-titolo">
-      <h2 id="accetta-titolo" className="text-lg font-bold text-ink-900">Accetta e attiva</h2>
+      <h2 id="accetta-titolo" className="text-lg font-bold text-ink-900">{PAGAMENTO_ONLINE_SERVIZI ? 'Accetta e attiva' : 'Accetta il preventivo'}</h2>
       <fieldset className="mt-3">
         <legend className="text-sm font-medium text-ink-800">Quale abbonamento?</legend>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -122,8 +127,15 @@ export default function AccettaDalLink({
         disabled={invio}
         className="mt-4 w-full rounded-lg bg-ink-900 py-3 font-bold text-white hover:bg-ink-800 disabled:opacity-60"
       >
-        {invio ? 'Un momento…' : prezzo ? `Accetto e pago ${scriviCanone(primoMeseScontato ? canonePrimoMese(prezzo) : prezzo)}` : 'Accetto'}
+        {invio
+          ? 'Un momento…'
+          : !PAGAMENTO_ONLINE_SERVIZI
+            ? 'Accetto il preventivo'
+            : prezzo
+              ? `Accetto e pago ${scriviCanone(primoMeseScontato ? canonePrimoMese(prezzo) : prezzo)}`
+              : 'Accetto'}
       </button>
+      {!PAGAMENTO_ONLINE_SERVIZI && <p className="mt-2 text-xs text-ink-600">{FRASE_CONTANTI}</p>}
     </form>
   );
 }

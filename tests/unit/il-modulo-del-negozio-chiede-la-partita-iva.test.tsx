@@ -75,7 +75,11 @@ describe('il modulo d iscrizione del negozio', () => {
     }
     // Da scrivere a mano restano nome, partita IVA e telefono (l'indirizzo è il selettore della mappa).
     const daScrivere = Array.from(radice.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]), textarea'));
-    expect(daScrivere.map((i) => i.getAttribute('name'))).toEqual(['storeName', 'businessVatNumber', 'contactPhone']);
+    // 26/11/2026 — Più due indizi FACOLTATIVI per l'analisi (Nicola): Instagram e la scheda Google Maps.
+    expect(daScrivere.map((i) => i.getAttribute('name'))).toEqual(['storeName', 'businessVatNumber', 'contactPhone', 'instagram', 'googleMaps']);
+    for (const facoltativo of ['instagram', 'googleMaps']) {
+      expect(radice.querySelector(`[name="${facoltativo}"]`)?.hasAttribute('required'), `${facoltativo} è diventato obbligatorio`).toBe(false);
+    }
     expect(radice.textContent, 'il negozio non sa dove mettere il resto').toContain('dal tuo pannello');
     expect(radice.textContent, 'il negozio non sa che dopo gli chiediamo chi firma').toContain('i dati di chi firma');
   });

@@ -6,6 +6,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { CONDIZIONI, FASCE, leggiImpostazioniAgenzia, type Abbonamento } from '@/lib/agenzia/preventivo';
 import { KIND_SERVIZI } from '@/lib/stripe/webhook/servizi';
+import { MESSAGGIO_CASSA_SPENTA, pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
 
 /**
  * LA CASSA STRIPE DELL'ABBONAMENTO DEI SERVIZI — una sola, per due strade (24/11/2026):
@@ -82,6 +83,9 @@ export async function apriCassaServizi({ sellerId, email, fascia, ritorno, chiav
    */
   chiaveExtra?: string;
 }): Promise<NextResponse> {
+  // 26/11/2026 — Nicola: per ora si paga in contanti, la piattaforma dei pagamenti non è pronta
+  // (lib/agenzia/pagamento-servizi.ts). Nessuna cassa, da nessuna delle due strade.
+  if (!pagamentoOnlineAttivo()) return ApiErrors.conflict(MESSAGGIO_CASSA_SPENTA);
   const admin = getAdminSupabase();
   const [profilo, impostazioni, attivi] = await Promise.all([
     admin.from('profiles').select('store_name').eq('id', sellerId).maybeSingle(),
