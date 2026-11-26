@@ -81,14 +81,19 @@ AS $$
   RETURNING id;
 $$;
 
-/** Restituisce un posto preso da un'iscrizione non riuscita, in un passaggio solo (mai sotto zero). */
+/**
+ * Restituisce un posto preso da un'attivazione non riuscita, in un passaggio solo. Mai sotto il numero di agenti
+ * entrati davvero con quel link: se la riga di agente si è scritta e solo la risposta si è persa, il posto NON
+ * torna libero (terzo collaudo del 26/11: senza questa guardia un link monouso valeva per due persone).
+ */
 CREATE OR REPLACE FUNCTION public.restituisci_invito_agente(p_id uuid)
 RETURNS void
 LANGUAGE sql
 SECURITY INVOKER
 SET search_path = public
 AS $$
-  UPDATE public.inviti_agente SET usi = usi - 1 WHERE id = p_id AND usi > 0;
+  UPDATE public.inviti_agente SET usi = usi - 1
+  WHERE id = p_id AND usi > (SELECT count(*) FROM public.agenti WHERE invito_id = p_id);
 $$;
 
 -- Chi esegue una migrazione vecchia su un database dove la tabella c'era già col RESTRICT: si porta a CASCADE.

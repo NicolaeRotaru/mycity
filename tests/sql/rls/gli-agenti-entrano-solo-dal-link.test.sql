@@ -44,6 +44,9 @@ BEGIN
   BEGIN SELECT public.usa_invito_agente(repeat('a', 64)) INTO u; esito := 'usato: ' || coalesce(u::text, 'null');
   EXCEPTION WHEN insufficient_privilege THEN esito := 'negato'; END;
   INSERT INTO esiti VALUES ('l utente collegato non usa un invito', esito = 'negato', esito);
+  BEGIN PERFORM public.restituisci_invito_agente(gen_random_uuid()); esito := 'restituito';
+  EXCEPTION WHEN insufficient_privilege THEN esito := 'negato'; END;
+  INSERT INTO esiti VALUES ('l utente collegato non restituisce posti nei link', esito = 'negato', esito);
 END $$;
 RESET ROLE;
 
@@ -76,9 +79,17 @@ BEGIN
   BEGIN INSERT INTO public.inviti_agente (codice_hash, scade_il) VALUES ('codice-in-chiaro', now() + interval '1 day'); storto := 'entrato';
   EXCEPTION WHEN check_violation THEN storto := 'rifiutato'; END;
   INSERT INTO esiti VALUES ('il codice in chiaro non entra (solo l impronta)', storto = 'rifiutato', storto);
+  -- Un agente è entrato davvero con quel link (la riga c'è): il posto NON torna libero, anche se lo si chiede.
+  INSERT INTO public.agenti (user_id, email, invito_id) VALUES ('a8651111-1111-1111-1111-111111111111', 'curioso-865@test.it', primo);
+  PERFORM public.restituisci_invito_agente(primo);
+  INSERT INTO esiti VALUES ('il posto di un agente entrato davvero non torna libero (link monouso resta monouso)',
+    (SELECT usi FROM public.inviti_agente WHERE id = primo) = 1 AND public.usa_invito_agente(repeat('a', 64)) IS NULL,
+    (SELECT usi FROM public.inviti_agente WHERE id = primo)::text);
+  -- Nessun agente scritto (l'attivazione si è fermata prima): il posto torna libero, e mai sotto zero.
+  DELETE FROM public.agenti WHERE user_id = 'a8651111-1111-1111-1111-111111111111';
   PERFORM public.restituisci_invito_agente(primo);
   PERFORM public.restituisci_invito_agente(primo);
-  INSERT INTO esiti VALUES ('il posto restituito torna libero, mai sotto zero',
+  INSERT INTO esiti VALUES ('il posto di un attivazione non riuscita torna libero, mai sotto zero',
     (SELECT usi FROM public.inviti_agente WHERE id = primo) = 0, (SELECT usi FROM public.inviti_agente WHERE id = primo)::text);
 END $$;
 RESET ROLE;

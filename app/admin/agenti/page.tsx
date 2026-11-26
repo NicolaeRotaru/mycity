@@ -53,8 +53,9 @@ export default function Agenti() {
     <div className="max-w-4xl p-4">
       <h1 className="font-serif text-2xl font-extrabold text-ink-900">Agenti</h1>
       <p className="mt-1 text-sm text-ink-600">
-        Gli agenti visitano i negozi e propongono i servizi di SDG. Entrano solo dal link che crei qui: con il link creano il loro account
-        e aprono la pagina della scheda del cliente (incollano il link di Google Maps, premono «Analizza»). Ogni link vale per una persona e per 14 giorni.
+        Gli agenti visitano i negozi e propongono i servizi di SDG. Entrano solo dal link che crei qui: aprono il link, creano il loro account
+        MyCity (confermano l’email) e premono «Attiva». Da lì usano la pagina della scheda del cliente: incollano il link di Google Maps e premono «Analizza».
+        Ogni link vale per una persona e per 14 giorni. Non aprirlo tu da admin: la pagina è già tua.
       </p>
 
       <section className="mt-5 rounded-xl border border-cream-200 bg-surface-0 p-4">
