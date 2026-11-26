@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * Collegare Stripe da un'anteprima che usa il database vero sostituiva il conto
@@ -7,9 +7,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * La chiave di prova non conosce i conti veri: `accounts.retrieve` sul conto
  * salvato nel profilo risponde «No such account» (resource_missing). Prima, in
  * quel caso, si creava un conto nuovo e lo si scriveva sul profilo al posto di
- * quello vero: il negozio non riceveva piu' i bonifici. Con una chiave di prova
- * ora ci si ferma con un errore; con la chiave vera e senza conto salvato resta
- * tutto com'era.
+ * quello vero: il negozio non riceveva piu' i bonifici. Nell'anteprima, con una
+ * chiave di prova, ora ci si ferma con un errore; fuori dall'anteprima, con la
+ * chiave vera e senza conto salvato resta tutto com'era.
  *
  * Stripe e il salvataggio sul profilo sono finti: niente rete, niente database.
  */
@@ -57,7 +57,11 @@ beforeEach(() => {
   vi.stubEnv('VERCEL_ENV', 'preview');
 });
 
-describe('un conto gia salvato non lo sostituisce un conto creato con la chiave di prova', () => {
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe('dall anteprima un conto gia salvato non lo sostituisce un conto creato con la chiave di prova', () => {
   it('anteprima, chiave di prova, conto vero sul profilo: nessun conto nuovo, niente scritto sul profilo', async () => {
     await expect(collega('acct_vero_del_negozio')).rejects.toThrow(/chiave di prova/);
     expect(st.creati, 'si crea un conto di prova al posto di quello vero').toBe(0);
@@ -74,6 +78,14 @@ describe('un conto gia salvato non lo sostituisce un conto creato con la chiave 
 
   it('controprova: nessun conto salvato, con la chiave di prova se ne crea uno e si salva', async () => {
     const esito = await collega(null);
+    expect(st.creati).toBe(1);
+    expect(st.salvati).toEqual(['acct_nuovo']);
+    expect(esito.accountId).toBe('acct_nuovo');
+  });
+
+  it('controprova: fuori dall anteprima (sviluppo locale), con la chiave di prova un conto sconosciuto si rifa come prima', async () => {
+    vi.stubEnv('VERCEL_ENV', undefined);
+    const esito = await collega('acct_di_un_altro_conto_di_prova');
     expect(st.creati).toBe(1);
     expect(st.salvati).toEqual(['acct_nuovo']);
     expect(esito.accountId).toBe('acct_nuovo');
