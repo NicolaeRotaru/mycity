@@ -307,11 +307,18 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
         // R10-010 — Un social sbagliato non ferma più nome, logo, descrizione e colore: quel social
         // resta com'era salvato, tutto il resto si salva, e l'errore resta sotto il suo campo.
         const salvati = (defaultValues?.storeCustomization?.socials ?? {}) as Record<string, string | undefined>;
+        // R21-012 — Un valore GIA' salvato che il negoziante non ha toccato non blocca il resto, anche se le
+        // regole di oggi lo rifiuterebbero (un sito salvato con «ftp://»): per il controllo si lascia vuoto,
+        // poi si rimette com'era. Un valore NUOVO sbagliato resta rifiutato come prima.
+        // Solo il sito: per i social con nome (Instagram, Facebook, TikTok) un valore salvato e rifiutato resta fermo come prima.
+        const nonToccati = Object.keys(sociali).filter(
+          (k) => k === 'website' && !!salvati[k] && ((custom.socials as Record<string, string | undefined> | undefined)?.[k] ?? '') === salvati[k],
+        );
         const conISocialDiPrima: StoreCustomization = {
           ...corretta,
           socials: {
             ...corretta.socials,
-            ...Object.fromEntries(Object.keys(sociali).map((k) => [k, salvati[k] ?? ''])),
+            ...Object.fromEntries(Object.keys(sociali).map((k) => [k, nonToccati.includes(k) ? '' : (salvati[k] ?? '')])),
           },
         };
         const riprova = altro === null ? storeCustomizationSchema.safeParse(conISocialDiPrima) : null;
@@ -321,7 +328,9 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
           );
           return;
         }
-        customData = riprova.data;
+        customData = nonToccati.length > 0
+          ? { ...riprova.data, socials: { ...riprova.data.socials, ...Object.fromEntries(nonToccati.map((k) => [k, salvati[k]])) } }
+          : riprova.data;
         const chiavi = Object.keys(sociali);
         const nomeDi = (k: string) => campoDellErrore(['socials', k]) ?? k;
         // Un campo che prima era vuoto non «resta com'era»: semplicemente non si salva.
