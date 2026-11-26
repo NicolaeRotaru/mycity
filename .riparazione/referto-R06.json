@@ -1,6 +1,6 @@
 {
   "sessione": "R06",
-  "aggiornato": "2026-11-26 15:04",
+  "aggiornato": "2026-11-26 15:05",
   "finita": true,
   "testa": "5fb77f5579429153023749d9b0c7e79222282204",
   "verifica": {
@@ -374,6 +374,8 @@
   ],
   "conto": {
     "agenti": 8,
-    "nota": "7 subagenti su 8: 4 riparatori (lotti 1, 2, 3a sul modello grande; 4 su sonnet) e 3 per la smentita in worktree separati (R06-002 e lotto 3a sul modello grande, lotto 4 su sonnet). Il lotto 3 è stato diviso in due metà da 4 voci; la seconda metà (005, 008, 011, 016) non è partita per il limite di spesa. Spesa letta da get_session: 21,06 $ prima della chiusura."
-  }
+    "nota": "8 subagenti su 8: 4 riparatori (lotti 1, 2 e 3a sul modello grande, lotto 4 su sonnet) e 4 per la smentita in worktree separati (R06-002 e lotto 3a sul modello grande; lotto 4 e la correzione rifatta di R06-004 su sonnet). Il lotto 3 è stato diviso in due metà da 4 voci; la seconda (005, 008, 011, 016) non è partita per il limite di spesa. Costo letto con get_session prima della consegna: 22,91 $.",
+    "subagenti": 8
+  },
+  "costo_usd": 22.91
 }
