@@ -158,6 +158,23 @@ async function leggiContattiAuth(): Promise<RigaAuth[]> {
   return data as RigaAuth[];
 }
 
+/**
+ * 26/11/2026 (R08-003) — LA RICERCA NON SI PORTA PIÙ A CASA TUTTE LE EMAIL.
+ *
+ * Per trovare una persona per email la ricerca leggeva tutto auth.users (la lettura qui sopra) e
+ * filtrava qui: a ogni ricerca le email di tutti gli iscritti arrivavano nel browser. Adesso il
+ * testo lo cerca il database (migrazione 940, la stessa RPC con due argomenti, solo admin): tornano
+ * i contatti che corrispondono, più quelli dei profili già trovati per nome, perché anche quelle
+ * righe mostrino l'email. Finché la 940 non è applicata la funzione con questi argomenti non c'è
+ * (PGRST202) e si torna alla lettura di prima.
+ */
+async function cercaContattiAuth(termine: string, idsGiaTrovati: readonly string[]): Promise<RigaAuth[]> {
+  const { data, error } = await supabase.rpc('admin_list_user_emails', { p_termine: termine, p_ids: [...idsGiaTrovati] });
+  if (!error && Array.isArray(data)) return data as RigaAuth[];
+  if ((error as { code?: string } | null)?.code === 'PGRST202') return leggiContattiAuth();
+  return [];
+}
+
 /** Attacca a ogni profilo i contatti letti da auth.users. */
 function conContattiAuth(base: Profile[], righeAuth: readonly RigaAuth[]): Profile[] {
   if (righeAuth.length === 0) return base;
@@ -228,7 +245,7 @@ function AdminUsersPageInner() {
    * Filtrare in memoria vuol dire cercare dentro i cinquecento piu' recenti: un
    * cliente iscritto sei mesi fa non usciva, e non usciva in silenzio. Qui la
    * domanda va al database, su tutti i profili, e l'email — che sta in
-   * auth.users, non in profiles — si cerca dalle righe della RPC admin.
+   * auth.users, non in profiles — la cerca la RPC admin (`cercaContattiAuth`).
    */
   const termineScritto = search.trim();
   const termine = useDebounce(termineScritto, 300);
@@ -242,9 +259,6 @@ function AdminUsersPageInner() {
     queryFn: async (): Promise<{ righe: Profile[]; troncato: boolean }> => {
       if (!filtro) return { righe: [], troncato: false };
 
-      const contatti = await leggiContattiAuth();
-      const idsPerContatto = idsDaContattiAuth(contatti, termine);
-
       const perTesto = await leggiProfili((colonne) =>
         supabase
           .from('profiles')
@@ -253,6 +267,9 @@ function AdminUsersPageInner() {
           .order('created_at', { ascending: false })
           .limit(TETTO_RISULTATI_RICERCA) as unknown as PromiseLike<RispostaProfili>,
       );
+
+      const contatti = await cercaContattiAuth(termine, perTesto.map((p) => p.id));
+      const idsPerContatto = idsDaContattiAuth(contatti, termine);
 
       // Chi combacia solo per email o telefono: si prende per identificativo, a
       // blocchi, perche' un elenco lungo di id non ci sta in un indirizzo (#93).
