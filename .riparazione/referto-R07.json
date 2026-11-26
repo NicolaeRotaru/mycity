@@ -226,6 +226,8 @@
   ],
   "conto": {
     "agenti": 7,
-    "nota": "3 riparatori (2 sul modello grande, 1 piccolo), 3 verificatori (2 grandi, 1 piccolo), 1 giro di correzione (piccolo). Spesa letta da get_session: 10,81 $ all'ultimo turno chiuso, tetto 25 $."
-  }
+    "nota": "7 subagenti aperti, nessuno fermato: 3 riparatori (2 sul modello grande, 1 piccolo), 3 verificatori (2 grandi, 1 piccolo), 1 giro di correzione (piccolo). costo_usd letto con get_session senza id prima della consegna: 11,42 $ (tetto 25 $).",
+    "subagenti": 7
+  },
+  "costo_usd": 11.42
 }
