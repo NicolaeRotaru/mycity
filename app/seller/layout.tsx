@@ -148,6 +148,24 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     );
   }
 
+  // 26/11/2026 (R06-012) — L'area negozio lascia entrare l'admin, ma le storie si scrivono solo a
+  // nome di un negozio approvato (migrazione 404): la foto si caricava prima, l'inserimento era
+  // rifiutato e la foto restava orfana nel deposito. All'admin si dice la cosa prima di caricare.
+  if (isAdmin && /^\/seller\/stories(\/|$)/.test(pathname)) {
+    return (
+      <div className="container mx-auto p-6 max-w-2xl">
+        <div className="bg-white border-2 border-primary-200 rounded-2xl p-8 text-center">
+          <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Le storie sono dei negozi</h1>
+          <p className="text-ink-600 mb-4 max-w-md mx-auto">
+            Una storia si pubblica a nome di un negozio approvato: con un account amministratore non si può,
+            e la foto resterebbe caricata senza storia. Accedi con l’account del negozio.
+          </p>
+          <Button href="/admin" icon={ArrowLeft}>Torna all’area admin</Button>
+        </div>
+      </div>
+    );
+  }
+
   if (isSuspended) {
     return (
       <div className="container mx-auto p-6 max-w-2xl">
