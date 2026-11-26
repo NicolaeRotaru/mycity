@@ -12,12 +12,12 @@ import StoreHoursEditor from '@/components/seller/StoreHoursEditor';
 import { isStoreClosedForOrder, negozioPuoServire, romeNow } from '@/lib/store-hours';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 
-type StoreHoursConSegni = Parameters<typeof StoreHoursEditor>[0]['value'];
+type OrariConSegni = Parameters<typeof StoreHoursEditor>[0]['value'];
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const GIORNO: [string, string][] = [['08:00', '20:00']];
-const APERTO_SEMPRE: StoreHoursConSegni = { mon: GIORNO, tue: GIORNO, wed: GIORNO, thu: GIORNO, fri: GIORNO, sat: GIORNO, sun: GIORNO };
+const APERTO_SEMPRE: OrariConSegni = { mon: GIORNO, tue: GIORNO, wed: GIORNO, thu: GIORNO, fri: GIORNO, sat: GIORNO, sun: GIORNO };
 const OGGI = 'Stasera · 18:00–20:00';
 const DOMANI = 'Domani · 9:00–11:00';
 
@@ -35,10 +35,10 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function apri(iniziale: StoreHoursConSegni) {
-  let ultimo: StoreHoursConSegni = iniziale;
+function apri(iniziale: OrariConSegni) {
+  let ultimo: OrariConSegni = iniziale;
   function Modulo() {
-    const [orari, setOrari] = useState<StoreHoursConSegni>(iniziale);
+    const [orari, setOrari] = useState<OrariConSegni>(iniziale);
     return <StoreHoursEditor value={orari} onChange={(n) => { ultimo = n; setOrari(n); }} />;
   }
   box = document.createElement('div');
