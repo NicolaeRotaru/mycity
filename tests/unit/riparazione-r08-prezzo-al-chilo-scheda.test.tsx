@@ -132,10 +132,10 @@ describe('R08-005 la scheda di un alimento mostra il prezzo al chilo o al litro'
     expect(radice.textContent).toContain(formatPrice(5.9));
     expect(riga).toBe(norm(`(${formatPrice(31.05)}/kg)`));
   });
-  it('ml e litri danno €/l, e i valori vecchi («1kg», «1,5 L») si leggono', async () => {
-    expect((await apri({ price: 3 }, { ...dichiarazioni, peso: '1,5 L' })).riga).toBe(norm(`(${formatPrice(2)}/l)`));
+  it('ml e litri danno €/L, e i valori vecchi («1kg», «1,5 L») si leggono', async () => {
+    expect((await apri({ price: 3 }, { ...dichiarazioni, peso: '1,5 L' })).riga).toBe(norm(`(${formatPrice(2)}/L)`));
     chiudi();
-    expect((await apri({ price: 1.5, unit: 'pezzo' }, { ...dichiarazioni, peso: '500ml' })).riga).toBe(norm(`(${formatPrice(3)}/l)`));
+    expect((await apri({ price: 1.5, unit: 'pezzo' }, { ...dichiarazioni, peso: '500ml' })).riga).toBe(norm(`(${formatPrice(3)}/L)`));
     chiudi();
     expect((await apri({ price: 4, unit: null }, { ...dichiarazioni, peso: '1kg' })).riga).toBe(norm(`(${formatPrice(4)}/kg)`));
   });
@@ -148,6 +148,23 @@ describe('R08-005 la scheda di un alimento mostra il prezzo al chilo o al litro'
   });
   it('prezzo già al chilo (unità kg): niente doppia riga', async () => {
     expect((await apri({ unit: 'kg' }, { ...dichiarazioni, peso: '190 g' })).riga).toBeNull();
+  });
+  it('il punto delle migliaia si legge all italiana: «1.000 g» sono mille grammi, non uno', async () => {
+    expect((await apri({ price: 2 }, { ...dichiarazioni, peso: '1.000 g' })).riga).toBe(norm(`(${formatPrice(2)}/kg)`));
+    chiudi();
+    expect((await apri({ price: 3 }, { ...dichiarazioni, peso: '1.500 ml' })).riga).toBe(norm(`(${formatPrice(2)}/L)`));
+  });
+  it('quantità assurde (meno di 1 g, più di 50 kg): nessuna riga invece di un prezzo al chilo ridicolo', async () => {
+    for (const peso of ['0,1 g', '0,001 g', '99999999 kg', '1.250 kg']) {
+      const { riga } = await apri({ price: 1.2 }, { ...dichiarazioni, peso });
+      expect(riga, peso).toBeNull();
+      chiudi();
+    }
+  });
+  it('i mezzi centesimi si arrotondano tutti allo stesso modo', async () => {
+    expect((await apri({ price: 3.15 }, { ...dichiarazioni, peso: '400 g' })).riga).toBe(norm(`(${formatPrice(7.88)}/kg)`));
+    chiudi();
+    expect((await apri({ price: 1.25 }, { ...dichiarazioni, peso: '400 g' })).riga).toBe(norm(`(${formatPrice(3.13)}/kg)`));
   });
   it('un prodotto che non è un alimento non mostra il prezzo al chilo', async () => {
     const { riga } = await apri({ name: 'Pentola', categories: { name: 'Casa', slug: 'casa' } }, { peso: '1,2 kg' });

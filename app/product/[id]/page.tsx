@@ -81,20 +81,23 @@ const GIA_RECENSITO = 'Hai già recensito questo prodotto: resta pubblicata la r
  * R08-005 — La quantita' netta scritta dal negozio («190 g», «1kg», «1,5 L», «75cl»), letta in modo
  * tollerante. Torna la quantita' in grammi o in millilitri e la famiglia (peso o volume), oppure
  * null se non e' un numero con un'unita' riconosciuta («6 pezzi», «boh», «0 g»).
+ * Il punto con tre cifre dopo e' quello delle migliaia, all'italiana: «1.000 g» sono mille grammi.
+ * Fuori da 1 g/ml … 50 kg/l per un pezzo o una confezione il dato e' sbagliato: nessuna riga.
  */
 function leggiQuantitaNetta(v: unknown): { quantita: number; famiglia: 'kg' | 'l' } | null {
   if (typeof v !== 'string') return null;
-  const m = /^\s*(\d+(?:[.,]\d+)?)\s*(kg|g|gr|grammi|l|lt|litri|litro|ml|cl|dl)\.?\s*$/i.exec(v);
+  const m = /^\s*(\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)\s*(kg|g|gr|grammi|l|lt|litri|litro|ml|cl|dl)\.?\s*$/i.exec(v);
   if (!m) return null;
-  const n = Number(m[1].replace(',', '.'));
+  const cifre = /^\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(m[1]) ? m[1].replace(/\./g, '') : m[1];
+  const n = Number(cifre.replace(',', '.'));
   if (!Number.isFinite(n) || n <= 0) return null;
   const u = m[2].toLowerCase();
-  if (u === 'kg') return { quantita: n * 1000, famiglia: 'kg' };
-  if (u === 'g' || u === 'gr' || u === 'grammi') return { quantita: n, famiglia: 'kg' };
-  if (u === 'l' || u === 'lt' || u === 'litri' || u === 'litro') return { quantita: n * 1000, famiglia: 'l' };
-  if (u === 'cl') return { quantita: n * 10, famiglia: 'l' };
-  if (u === 'dl') return { quantita: n * 100, famiglia: 'l' };
-  return { quantita: n, famiglia: 'l' }; // ml
+  const per =
+    u === 'kg' || u === 'l' || u === 'lt' || u === 'litri' || u === 'litro' ? 1000 : u === 'cl' ? 10 : u === 'dl' ? 100 : 1;
+  const quantita = n * per;
+  if (quantita < 1 || quantita > 50000) return null;
+  const famiglia = u === 'kg' || u === 'g' || u === 'gr' || u === 'grammi' ? 'kg' : 'l';
+  return { quantita, famiglia };
 }
 
 /**
@@ -112,7 +115,10 @@ function prezzoPerUnitaDiMisura(
   if (!Number.isFinite(p) || p <= 0) return null;
   const q = leggiQuantitaNetta(quantitaNetta);
   if (!q) return null;
-  return { valore: Math.round((p / (q.quantita / 1000)) * 100) / 100, unita: q.famiglia };
+  // Il conto si fa in centesimi interi: 3,15 € per 400 g sono 7,875 → 7,88, come 1,25 € per 400 g → 3,13.
+  const centesimi = Math.round((Math.round(p * 100) * 1000) / q.quantita);
+  if (centesimi <= 0) return null;
+  return { valore: centesimi / 100, unita: q.famiglia };
 }
 
 export default function ProductPage(props: { params: Promise<{ id: string }> }) {
@@ -1064,7 +1070,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               </span>
               {prezzoUnitario && (
                 <span className="text-sm text-ink-600" data-testid="prezzo-unitario">
-                  ({formatPrice(prezzoUnitario.valore)}/{prezzoUnitario.unita === 'kg' ? 'kg' : 'l'})
+                  ({formatPrice(prezzoUnitario.valore)}/{prezzoUnitario.unita === 'kg' ? 'kg' : 'L'})
                 </span>
               )}
               {scontoPromo > 0 && (
