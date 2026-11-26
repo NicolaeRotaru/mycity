@@ -211,19 +211,37 @@ const TETTO_PAYOUT = 1000;
 const STATI_CHIUSI = ['TRANSFERRED', 'PAID_MANUALLY', 'REFUNDED', 'REVERSED', 'REVERSAL_FAILED', 'CASH_IN_STORE'];
 /** R22-002 — Un ritiro al banco con la commissione ancora da regolare resta fra gli aperti. */
 const RITIRO_DA_REGOLARE = 'and(payout_status.eq.CASH_IN_STORE,payout_at.is.null)';
+/**
+ * R22-001 — Quello che il lunedì si paga: contanti HELD e ritiri al banco da regolare. Si leggono da
+ * soli, col loro tetto, dal consegnato prima: le righe ferme (contanti dal fattorino, reclami, IBAN,
+ * carte in attesa) non li spingono fuori, e se si tagliano restano fuori le consegne più recenti.
+ */
+const PAGABILI = `and(payout_status.eq.HELD,payment_method.eq.cod),${RITIRO_DA_REGOLARE}`;
 
-type LettiPayout = PayoutOrder[] & { totale?: number; chiusi?: PayoutOrder[]; totaleChiusi?: number };
+/** Lo stesso insieme di PAGABILI, sulla riga già letta. */
+const pagabile = (o: PayoutOrder) =>
+  (o.payout_status === 'HELD' && o.payment_method === 'cod') || (o.payout_status === 'CASH_IN_STORE' && !o.payout_at);
+
+type LettiPayout = PayoutOrder[] & {
+  totale?: number;
+  chiusi?: PayoutOrder[];
+  totaleChiusi?: number;
+  tagliato?: boolean;
+  tagliatoPagabili?: boolean;
+};
 
 /**
  * R11-004 — «Bonifico fatto»: segna come pagati a mano i contanti con la rimessa
  * confermata (HELD) di un negozio. Lo scrive `segna_bonifico_manuale` (migrazione
  * 916), riservata agli amministratori: da qui parte solo la richiesta.
  */
-function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
+function BonificoFatto({ sellerId, storeName, ordini, quandoFatto, parziale = false }: {
   sellerId: string;
   storeName: string;
   ordini: PayoutOrder[];
   quandoFatto: () => void;
+  /** R22-001 — l'elenco dei contanti da versare è tagliato: questo bonifico è solo una parte del dovuto. */
+  parziale?: boolean;
 }) {
   const [stato, setStato] = useState<'pronto' | 'invio' | 'errore'>('pronto');
   const [esito, setEsito] = useState<string | null>(null);
@@ -238,8 +256,9 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
     if (totale > 0) {
       const credito = c.creditoCents > 0 ? ` più ${formatPrice(c.creditoCents / 100)} di credito MyCity dei ritiri al banco` : '';
       const commissione = c.trattenutaCents > 0 || c.creditoCents > 0 ? ` (contanti ${formatPrice(c.contantiCents / 100)}${credito}${c.trattenutaCents > 0 ? ` meno ${formatPrice(c.trattenutaCents / 100)} di commissione dei ritiri al banco` : ''})` : '';
+      const parte = parziale ? `\nÈ solo una parte di quanto devi a ${storeName}: l’elenco è tagliato a ${TETTO_PAYOUT} ordini. Dopo il bonifico ricarica la pagina per il resto.` : '';
       const scritto = window.prompt(
-        `Bonifico a ${storeName}: ${formatPrice(totale / 100)}${commissione} per ${daSegnare.length} ordini in contanti.\nScrivi il riferimento del bonifico (CRO/TRN o data):`,
+        `Bonifico a ${storeName}: ${formatPrice(totale / 100)}${commissione} per ${daSegnare.length} ordini in contanti.${parte}\nScrivi il riferimento del bonifico (CRO/TRN o data):`,
       );
       if (!scritto || scritto.trim().length < 3) return;
       riferimento = scritto.trim();
@@ -297,7 +316,11 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
         disabled={stato === 'invio'}
         className="rounded-lg border border-olive-300 bg-white px-3 py-1 text-xs font-semibold text-olive-800 hover:bg-olive-50 disabled:opacity-50"
       >
-        {stato === 'invio' ? 'Segno…' : totale > 0 ? `Bonifico fatto · ${formatPrice(totale / 100)}` : 'Segna la compensazione · nessun bonifico'}
+        {stato === 'invio'
+          ? 'Segno…'
+          : totale > 0
+            ? `Bonifico fatto · ${formatPrice(totale / 100)}${parziale ? ' (solo una parte)' : ''}`
+            : `Segna la compensazione · nessun bonifico${parziale ? ' (solo una parte)' : ''}`}
       </button>
       {esito && <p role="status" className="mt-1 text-xs text-ink-600">{esito}</p>}
       {stato === 'errore' && (
@@ -328,7 +351,9 @@ export default function AdminPayoutsPage() {
           .eq('delivery_status', 'DELIVERED')
           .not('seller_payout_cents', 'is', null);
       // R05-001 — il tetto vale per gli aperti da soli: i bonifici chiusi non li spingono più fuori.
-      const [daAperti, daChiusi] = await Promise.all([
+      const [daPagabili, daAperti, daChiusi, daStorni] = await Promise.all([
+        // R22-001 — i pagabili a parte, dal consegnato prima (poi id), col loro tetto.
+        consegnati().or(PAGABILI).order('delivered_at', { ascending: true }).order('id', { ascending: true }).limit(TETTO_PAYOUT + 1),
         consegnati()
           .or(`payout_status.is.null,payout_status.not.in.(${STATI_CHIUSI.join(',')}),${RITIRO_DA_REGOLARE}`)
           // R22-001 — dal più vecchio: se l'elenco si taglia, restano fuori i più recenti (questa settimana),
@@ -337,14 +362,26 @@ export default function AdminPayoutsPage() {
           // Una riga in più: se arriva, l'elenco è tagliato davvero (con 1000 esatte no).
           .limit(TETTO_PAYOUT + 1),
         consegnati().in('payout_status', STATI_CHIUSI).order('created_at', { ascending: false }).limit(TETTO_PAYOUT + 1),
+        // R22-001 — lo storno non riuscito è raro e va recuperato a mano: una lettura sua, non esce con i chiusi.
+        consegnati().eq('payout_status', 'REVERSAL_FAILED').order('created_at', { ascending: false }).limit(TETTO_PAYOUT + 1),
       ]);
-      if (daAperti.error) throw daAperti.error;
-      if (daChiusi.error) throw daChiusi.error;
+      for (const r of [daPagabili, daAperti, daChiusi, daStorni]) if (r.error) throw r.error;
       const { data, count } = daAperti;
+      const contati = (r: { data: unknown; count?: number | null }) =>
+        Math.max(typeof r.count === 'number' ? r.count : 0, Array.isArray(r.data) ? r.data.length : 0);
       // L'elenco resta un elenco; il totale contato dal database gli viaggia attaccato.
-      const righe = (data ?? []) as unknown as PayoutOrder[];
+      const pagabili = ((daPagabili.data ?? []) as unknown as PayoutOrder[]).slice(0, TETTO_PAYOUT);
+      const idPagabili = new Set(pagabili.map((o) => o.id));
+      const righe = [
+        ...pagabili,
+        // I pagabili vengono solo dalla loro lettura: una finestra sola, senza buchi.
+        ...((data ?? []) as unknown as PayoutOrder[]).slice(0, TETTO_PAYOUT).filter((o) => !idPagabili.has(o.id) && !pagabile(o)),
+      ];
       const giaLetti = new Set(righe.map((o) => o.id));
-      const righeChiuse = ((daChiusi.data ?? []) as unknown as PayoutOrder[]).filter((o) => !giaLetti.has(o.id));
+      const righeChiuse = [
+        ...((daStorni.data ?? []) as unknown as PayoutOrder[]).slice(0, TETTO_PAYOUT),
+        ...((daChiusi.data ?? []) as unknown as PayoutOrder[]).slice(0, TETTO_PAYOUT),
+      ].filter((o) => !giaLetti.has(o.id) && (giaLetti.add(o.id), true));
       const totaleChiusi = Math.max(typeof daChiusi.count === 'number' ? daChiusi.count : 0, daChiusi.data?.length ?? 0);
       // Collaudo K04 — resi e reclami aperti si leggono dalle loro tabelle, come fanno il giro e la
       // funzione 916: senza, un contante con un reso aperto entrava nei «Da versare», la funzione lo saltava
@@ -364,13 +401,16 @@ export default function AdminPayoutsPage() {
         if (resi.error || reclami.error) letturaCaduta = true;
         for (const r of [...((resi.data ?? []) as { order_id: string }[]), ...((reclami.data ?? []) as { order_id: string }[])]) aperti.add(r.order_id);
       }
+      const daControllare = new Set(contantiHeld);
       for (const o of righe) {
-        if (letturaCaduta ? contantiHeld.includes(o.id) : aperti.has(o.id)) o.pratica_aperta = true;
+        if (letturaCaduta ? daControllare.has(o.id) : aperti.has(o.id)) o.pratica_aperta = true;
       }
       return Object.assign(righe, {
         totale: typeof count === 'number' ? count : righe.length,
-        chiusi: righeChiuse.slice(0, TETTO_PAYOUT),
+        chiusi: righeChiuse,
         totaleChiusi,
+        tagliato: contati(daAperti) > TETTO_PAYOUT,
+        tagliatoPagabili: contati(daPagabili) > TETTO_PAYOUT,
       });
     },
   });
@@ -421,16 +461,19 @@ export default function AdminPayoutsPage() {
   };
 
   const meta = letti as LettiPayout;
-  const tagliato = Math.max(meta.totale ?? 0, letti.length) > TETTO_PAYOUT;
+  const tagliato = meta.tagliato ?? Math.max(meta.totale ?? 0, letti.length) > TETTO_PAYOUT;
+  // R22-001 — la cifra del lunedì e il tasto dipendono solo dai pagabili, letti a parte col loro tetto.
+  const tagliatoPagabili = meta.tagliatoPagabili ?? tagliato;
   // R05-001 — i chiusi hanno il loro tetto: tagliati loro, è un minimo solo «già pagato».
   const tagliatoChiusi = meta.chiusi ? (meta.totaleChiusi ?? 0) > TETTO_PAYOUT : tagliato;
   const orders = useMemo(() => {
-    const tutti = [...letti.slice(0, TETTO_PAYOUT), ...((letti as LettiPayout).chiusi ?? [])];
+    const tutti = [...letti, ...((letti as LettiPayout).chiusi ?? [])];
     // Lo stesso ordine di prima, aperti e chiusi mescolati: il più recente in cima.
     return tutti.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
   }, [letti]);
   // Con l'elenco tagliato ogni somma è un minimo, non il totale.
   const almeno = tagliato ? 'almeno ' : '';
+  const almenoDovuto = tagliatoPagabili ? 'almeno ' : '';
   const almenoPagati = tagliatoChiusi || !manualiLetti ? 'almeno ' : '';
 
   const groups = useMemo(() => {
@@ -539,14 +582,25 @@ export default function AdminPayoutsPage() {
       />
 
       {/* L'avviso viene PRIMA dei riquadri: chi legge solo il numero deve già sapere che è parziale. */}
-      {tagliato && (
+      {(tagliato || tagliatoPagabili) && (
         <div role="status" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
-          <p>
-            <strong>Elenco tagliato:</strong> mostro solo i {TETTO_PAYOUT} ordini consegnati più vecchi col bonifico ancora aperto.
-            Mancano i più recenti: i totali di questa pagina, anche quelli dei singoli negozi, possono essere più bassi
-            del vero.
-          </p>
+          <div className="space-y-1">
+            {tagliato && (
+              <p>
+                <strong>Elenco tagliato:</strong> mostro solo i {TETTO_PAYOUT} ordini consegnati più vecchi col bonifico ancora aperto.
+                Mancano i più recenti: i totali di questa pagina, anche quelli dei singoli negozi, possono essere più bassi
+                del vero.
+              </p>
+            )}
+            {/* R22-001 — i contanti da versare hanno il loro tetto: tagliati loro, la cifra del lunedì è una parte. */}
+            {tagliatoPagabili && (
+              <p>
+                <strong>Contanti da versare oltre {TETTO_PAYOUT}:</strong> mostro i consegnati prima. La cifra da versare e il tasto
+                «Bonifico fatto» sono solo una parte del dovuto: dopo il bonifico ricarica la pagina per il resto.
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -558,7 +612,7 @@ export default function AdminPayoutsPage() {
 
       {/* KPI: pronto · in sospeso · già pagato */}
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        <AdminStatCard icon={Banknote} tone="olive" label="Contanti da versare" value={`${almeno}${formatPrice(totals.dueCents / 100)}`} />
+        <AdminStatCard icon={Banknote} tone="olive" label="Contanti da versare" value={`${almenoDovuto}${formatPrice(totals.dueCents / 100)}`} />
         <AdminStatCard icon={Clock} tone="accent" label="In sospeso" value={`${almeno}${formatPrice(totals.holdCents / 100)}`} />
         <AdminStatCard icon={CheckCircle2} tone="primary" label="Già pagato" value={`${almenoPagati}${formatPrice(totals.paidCents / 100)}`} />
       </div>
@@ -606,7 +660,7 @@ export default function AdminPayoutsPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-400">Da versare lunedì</p>
-                  <p className="font-mono text-lg font-extrabold text-olive-700">{almeno}{formatPrice(g.lunediCents / 100)}</p>
+                  <p className="font-mono text-lg font-extrabold text-olive-700">{almenoDovuto}{formatPrice(g.lunediCents / 100)}</p>
                   {(g.lunedi.trattenutaCents > 0 || g.lunedi.creditoCents > 0) && (
                     <p className="text-xs text-ink-500">
                       contanti {formatPrice(g.lunedi.contantiCents / 100)}
@@ -620,7 +674,7 @@ export default function AdminPayoutsPage() {
                     </p>
                   )}
                   {g.settimanaCents > 0 && (
-                    <p className="text-xs text-ink-500">+ {almeno}{formatPrice(g.settimanaCents / 100)} di questa settimana</p>
+                    <p className="text-xs text-ink-500">+ {almenoDovuto}{formatPrice(g.settimanaCents / 100)} di questa settimana</p>
                   )}
                   {g.holdCents > 0 && (
                     <p className="text-xs text-ink-500">{almeno}{formatPrice(g.holdCents / 100)} in sospeso</p>
@@ -642,7 +696,7 @@ export default function AdminPayoutsPage() {
                       {formatPrice(f.cents / 100)} di commissione in fattura ({nomeDelMese(f.mese)})
                     </p>
                   ))}
-                  <BonificoFatto sellerId={g.sellerId} storeName={g.storeName} ordini={g.orders} quandoFatto={rileggi} />
+                  <BonificoFatto sellerId={g.sellerId} storeName={g.storeName} ordini={g.orders} quandoFatto={rileggi} parziale={tagliatoPagabili} />
                 </div>
               </div>
 

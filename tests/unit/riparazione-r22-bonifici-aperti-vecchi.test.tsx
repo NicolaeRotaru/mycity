@@ -65,7 +65,7 @@ function condizione(expr: string): (r: Riga) => boolean {
 
 function tabella(nome: string) {
   const filtri: Array<(r: Riga) => boolean> = [];
-  let ordine: { col: string; asc: boolean } | null = null;
+  const ordine: { col: string; asc: boolean }[] = [];
   let limite = Infinity;
   const b: Record<string, unknown> = {
     select: () => b,
@@ -74,15 +74,19 @@ function tabella(nome: string) {
     in: (c: string, v: unknown[]) => { filtri.push(condizione(`${c}.in.(${v.join(',')})`)); return b; },
     not: (c: string, op: string, v: unknown) => { filtri.push(condizione(`${c}.not.${op}.${String(v)}`)); return b; },
     or: (s: string) => { filtri.push(condizione(`or(${s})`)); return b; },
-    order: (c: string, o?: { ascending?: boolean }) => { ordine = { col: c, asc: o?.ascending !== false }; return b; },
+    order: (c: string, o?: { ascending?: boolean }) => { ordine.push({ col: c, asc: o?.ascending !== false }); return b; },
     limit: (n: number) => { limite = n; return b; },
     then: (ok: (r: unknown) => unknown, ko?: (e: unknown) => unknown) => {
       let righe = (nome === 'orders' ? stato.ordini : []).filter((r) => filtri.every((f) => f(r)));
       const totale = righe.length;
-      if (ordine) {
-        const { col, asc } = ordine;
-        righe = [...righe].sort((x, y) => (asc ? 1 : -1) * String(x[col] ?? '').localeCompare(String(y[col] ?? '')));
-      }
+      // Come PostgREST: più ordinamenti uno dopo l'altro (il secondo decide i pari del primo).
+      righe = [...righe].sort((x, y) => {
+        for (const { col, asc } of ordine) {
+          const d = (asc ? 1 : -1) * String(x[col] ?? '').localeCompare(String(y[col] ?? ''));
+          if (d !== 0) return d;
+        }
+        return 0;
+      });
       righe = righe.slice(0, Math.min(limite, 1000));
       return Promise.resolve({ data: righe, error: null, count: totale }).then(ok, ko);
     },
