@@ -1,0 +1,296 @@
+{
+  "sessione": "R25",
+  "aggiornato": "2026-11-26 20:15",
+  "finita": true,
+  "testa": "bc39cf2bce37ab0e0d29db2861a5bc040471f39c",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "bc39cf2bce37ab0e0d29db2861a5bc040471f39c",
+    "nota": "typecheck, lint e vitest: 2238 file di prova passati, 1 saltato; 13672 prove passate, 1 saltata"
+  },
+  "voci": [
+    {
+      "id": "R25-007",
+      "chiave": "qa-flussi|il collegamento del negozio a stripe e il bonifico manuale non hanno nessuna prova",
+      "esito": "parziale",
+      "commit": "17f07e25c49fbce5520373b7dc3b44090b45f1c9",
+      "file_toccati": [
+        "tests/unit/riparazione-r25-stripe-connect-ruolo.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r25-stripe-connect-ruolo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r25-stripe-connect-ruolo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_applicabile",
+        "uscita": null,
+        "comando": "",
+        "nota": "Voce di sole prove: le rotte non cambiano, quindi prova-rimessa.mjs non ha un file corretto da togliere (uscita 2). Al suo posto mutazioni a mano, ogni file rimesso con git checkout. Rosse (10): login→withSellerAnchePendingRateLimit; login→withAuthRateLimit; onboarding senza il controllo approval_status (cade sul caso amministratore); onboarding senza controllo e con withSellerAnchePendingRateLimit (cade sul negozio in attesa e sull'amministratore); onboarding→withAuthRateLimit; .eq('id', user.id) tolto in login, onboarding, refresh-status e rider-onboarding, una rotta alla volta; payout withInternalAuth→withAdminAuth. Verde (1): onboarding→withSellerAnchePendingRateLimit lasciando il controllo, mutante equivalente (il controllo della rotta dà lo stesso 403)."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Prova nuova con gli involucri veri: ogni persona finta ha già uno stripe_account_id (il 403 su login dipende solo da ruolo e approvazione), il negozio in attesa ha approval_requested_at, e onboarding ha i casi del negozio in attesa con la richiesta mandata e dell'amministratore senza verifica; il database finto rispetta i filtri e vede che ogni rotta legge il profilo di chi chiama. Commit b93d59355bc996b719c82ce5ad845a3757f964e5 e 17f07e25c49fbce5520373b7dc3b44090b45f1c9, 18/18 verdi.",
+      "cosa_resta": "Nel codice niente: le prove ci sono e ogni controllo di ruolo o autorizzazione delle 5 rotte, tolto, fa diventare rossa la prova. Resta solo il sigillo della macchina: su una voce di sole prove la prova rimessa non si applica, quindi l'esito «riparato» chiede la deroga «rimessa_a_mano» o il giudizio pieno del collaudo sulle mutazioni elencate.",
+      "verificato_da": "collaudatore R25 (modello grande): 13 mutazioni rosse su 17 sul primo commit, due buchi trovati (negozio in attesa senza data, controllo approval_status di onboarding); chiusi nel giro di correzione 17f07e25c49fbce5520373b7dc3b44090b45f1c9 e rifatte le mutazioni: 10 rosse, 1 verde equivalente"
+    },
+    {
+      "id": "R25-012",
+      "chiave": "stati-ui|collegando stripe in anteprima con un conto di prova vecchio la persona legge solo «errore stripe»: il consiglio di togliere il conto dal profilo resta nei registri",
+      "esito": "riparato",
+      "commit": "546867b9d60d7221abfc855f8618fcebe4c6282e",
+      "file_toccati": [
+        "app/api/stripe/connect/onboarding/route.ts",
+        "app/api/stripe/connect/rider-onboarding/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r25-stripe-anteprima-conto-di-prova.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r25-stripe-anteprima-conto-di-prova.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 546867b9d60d7221abfc855f8618fcebe4c6282e^ --file app/api/stripe/connect/onboarding/route.ts,app/api/stripe/connect/rider-onboarding/route.ts --prove tests/unit/riparazione-r25-stripe-anteprima-conto-di-prova.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "L'errore del conto sconosciuto alla chiave di prova non finisce più nel 500 «Errore Stripe»: la rotta del negozio e quella del fattorino rispondono 409 con una frase semplice che dice di togliere il conto dal profilo e riprovare, senza l'id del conto. Un guasto vero di Stripe resta 500.",
+      "nota": "L'errore si riconosce dal nome e non con instanceof, perché le prove esistenti fingono lib/stripe/client senza quella classe.",
+      "verificato_da": "collaudatore R25 (modello grande): rimessa 0; StripeConnectButton.tsx:60-66 e RiderConnectButton.tsx:94-98 mostrano il testo del 409 com'è, senza id né chiavi; altro errore Stripe resta 500; riconoscimento per nome solo sulla classe di lib/stripe/client.ts:342; 66 prove Stripe accanto verdi"
+    },
+    {
+      "id": "R25-002",
+      "chiave": "api-backend|un link di disiscrizione vecchio (v1) senza il segreto in produzione dà errore 500 invece di «link non valido»",
+      "esito": "riparato",
+      "commit": "d6a66d27152aa6b9113be8d584441851e79a629f",
+      "file_toccati": [
+        "lib/email/unsubscribe.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r25-disiscrizione-v1-senza-segreto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r25-disiscrizione-v1-senza-segreto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d6a66d27152aa6b9113be8d584441851e79a629f^ --file lib/email/unsubscribe.ts --prove tests/unit/riparazione-r25-disiscrizione-v1-senza-segreto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In apriFirmato il segreto si calcola dentro un try, come per i gettoni cifrati: senza UNSUBSCRIBE_SECRET in produzione un v1 dà null e GET /api/unsubscribe porta a «link-non-valido» invece di 500. Col segreto i v1 si aprono ancora.",
+      "verificato_da": "collaudatore R25 (modello grande): rimessa 0; sonda senza segreto in produzione su v1, v2, v3, vuoto, «v3.», «.», «a.» in GET e POST, sempre «link-non-valido» e mai 500; col segreto i validi si aprono, falsificati no; 34 prove accanto verdi"
+    },
+    {
+      "id": "R25-001",
+      "chiave": "api-backend|la chiave di cifratura del link di disiscrizione si ricava con lo stesso calcolo usato per firmare i link vecchi",
+      "esito": "scelta_di_nicola",
+      "domanda": "Da che data i link di disiscrizione v2 spediti dal 12/11 al 26/11/2026 smettono di funzionare (con «link non valido» sulle email vecchie), oppure si accettano per sempre?",
+      "prova": "lib/email/unsubscribe.ts:71 i gettoni nuovi sono v3 con chiave HKDF e firmaDisiscrizione fa solo v3; :76 la chiave v2 HMAC(segreto,'disiscrizione:cifratura:v2') è accettata senza data in verificaDisiscrizione (righe 133-134 alla base aac2350b09db195d6d2286f15f75a7d02ae590a1)",
+      "cosa_ho_fatto": "Il resto della voce è già chiuso sulla base: resta solo l'accettazione senza scadenza dei gettoni v2, che chiede una data a Nicola.",
+      "verificato_da": "collaudatore R25 (modello grande): i gettoni nuovi sono v3 HKDF (lib/email/unsubscribe.ts:69-72); resta solo chiaveDiCifraturaV2 (:75-77) per aprire i v2; nessun cammino fa firmare il dato che darebbe la chiave v2"
+    },
+    {
+      "id": "R25-003",
+      "chiave": "api-backend|la pulizia delle casse abbandonate chiude la rivendicazione anche se il codice non è tornato",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Difetto confermato e correzione scritta e provata nel commit 0df091a970c05f847ca1a7664055e39b120fed13 (rimessa regge), poi tolta col commit eae2609e6df1ac7375873f8683c489145f398aee: il collaudo ha visto che da sola fa rispondere 409 «Stock insufficiente» alla cassa con la carta, perché la rotta rilegge le scorte solo se liberati non è vuoto. La correzione intera tocca tre file, due non miei: va applicata tutta insieme.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/ordini/ordine-in-contanti-puo-nascere.ts",
+          "modifica": "Nel tipo RiserveLiberate (circa riga 39), dopo `liberati`, aggiungere `rimessiAScaffale?: string[];` (i tentativi la cui merce è tornata a scaffale, anche se il codice non è tornato)."
+        },
+        {
+          "file": "app/api/stripe/checkout/route.ts",
+          "modifica": "Riga 744: `if (riserveLiberate.liberati.length > 0) {` diventa `if (riserveLiberate.liberati.length > 0 || (riserveLiberate.rimessiAScaffale?.length ?? 0) > 0) {`, così le scorte si rileggono anche quando l'unico tentativo pulito ha il codice non tornato."
+        },
+        {
+          "file": "lib/ordini/riserve-abbandonate.ts",
+          "modifica": "(file di R25, da applicare insieme ai due sopra) Riprendere il diff del commit 0df091a970c05f847ca1a7664055e39b120fed13 (se release_coupon cade il tentativo non entra in liberati, così coupon_redemptions resta aperta) con la sua prova tests/unit/riparazione-r25-codice-non-tornato.test.ts, e in più: `const rimessiAScaffale: string[] = [];` accanto a `liberati`; `rimessiAScaffale.push(riga.id);` subito dopo `if (errPresa || !presi || ...) continue;`; `return { liberati, ancoraPagabili, rimessiAScaffale };`."
+        }
+      ],
+      "nota": "Provata dal collaudo con tutti e tre i pezzi applicati: la sonda carta→carta con release_coupon che cade torna 200, le 11 prove che importano riserve-abbandonate e la r26 verdi (57), tsc pulito. La cassa in contanti non è toccata (la pulizia gira prima della lettura dei prodotti, app/api/orders/cod/route.ts:810 e :884). Oggi il caso non si vede perché CARTA_ACCESA e CODICI_SCONTO_IN_CASSA sono spenti (lib/funzioni-al-lancio.ts:97,112).",
+      "verificato_da": "collaudatore R25 (modello grande): sonda carta→carta con release_coupon che cade, 409 con la sola correzione, 200 con i tre pezzi"
+    },
+    {
+      "id": "R25-009",
+      "chiave": "qa-flussi|il campanello del sito conta ancora gruppi e aggiornamenti d'ordine di chi li ha spenti",
+      "esito": "parziale",
+      "commit": "bc39cf2bce37ab0e0d29db2861a5bc040471f39c",
+      "file_toccati": [
+        "components/hooks/useNotificationsCount.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r25-campanello-gruppi-ordini.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r25-campanello-gruppi-ordini.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0df091a970c05f847ca1a7664055e39b120fed13 --file components/hooks/useNotificationsCount.ts --prove tests/unit/riparazione-r25-campanello-gruppi-ordini.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il campanello non conta più gli avvisi di gruppo di chi ha spento notif_groups (categorieDiNotificheSpente aggiunge 'group' solo se vale false). Nel primo commit cf70236d1d4607b9ab703e338cf843a7a9315d28 escludeva anche 'order'; il collaudo ha visto che così sparivano avvisi che non sono aggiornamenti d'ordine, e il commit bc39cf2bce37ab0e0d29db2861a5bc040471f39c lo toglie, con una prova che tiene contati gli 'order' anche con gli aggiornamenti spenti.",
+      "cosa_resta": "Gli aggiornamenti d'ordine spenti si contano ancora: nella categoria 'order' (anche per default della colonna) finiscono avvisi che non sono aggiornamenti d'ordine e partono comunque, quindi escluderla li nasconderebbe. Prima va data a quegli avvisi una categoria propria (per esempio 'system', già ammessa dal vincolo), in file non miei; poi nel hook basta rimettere `if (preferenze?.notif_order_updates === false) spente.push('order');` con notif_order_updates nella select.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/stripe/webhook/abbonamenti.ts",
+          "modifica": "Righe 156, 193, 271, 306: category 'order' → 'system' negli avvisi di abbonamento (due abbonamenti, abbonamento attivo, pagamento non riuscito)."
+        },
+        {
+          "file": "lib/stripe/webhook/servizi.ts",
+          "modifica": "Righe 91, 134: category 'order' → 'system'."
+        },
+        {
+          "file": "lib/stripe/webhook/sponsorizzati.ts",
+          "modifica": "Riga 159: category 'order' → 'system' (sponsorizzazione attiva)."
+        },
+        {
+          "file": "migrations/(nuova, di chi ha le funzioni)",
+          "modifica": "Ridefinire con category esplicita le funzioni che inseriscono senza categoria: premio invito (versione corrente in migrations/215_minori_s04_database.sql:551) e achievement (migrations/030_achievements_giftcards_subscriptions_sponsored.sql:77) → 'system'; SOS rider agli admin (migrations/037_rider_sos_admin_dashboard.sql:52) → 'system'; «ordine pronto per il ritiro» ai rider (migrations/215_minori_s04_database.sql:112) → da decidere se 'order'. Riportare dentro le correzioni delle migrazioni 880-970 se toccano le stesse funzioni."
+        },
+        {
+          "file": "components/hooks/useNotificationsCount.ts",
+          "modifica": "(file di R25, dopo i pezzi sopra) rimettere l'esclusione di 'order' quando notif_order_updates è false."
+        }
+      ],
+      "verificato_da": "collaudatore R25 (sonnet): non_regge sul primo commit ('order' nascondeva abbonamenti, sponsorizzazioni, premi, SOS rider); giro di correzione bc39cf2bce37ab0e0d29db2861a5bc040471f39c: rimessa 0, 5/5, le 5 prove che importano il hook 14/14, tsc 0"
+    },
+    {
+      "id": "R25-010",
+      "chiave": "qa-flussi|il campanello del sito e la lista delle notifiche contano ancora le promozioni (e le newsletter) di chi le ha spente",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il pezzo del campanello era già fatto: components/hooks/useNotificationsCount.ts:60-62 esclude promo e newsletter con category.not.in, coperto da tests/unit/riparazione-r12-campanello-senza-promo-spente.test.tsx (passa). categorieDiNotificheSpente è già esportata dal hook. Resta solo la lista, in un file non mio.",
+      "serve_file_altrui": [
+        {
+          "file": "app/notifications/page.tsx",
+          "modifica": "Aggiungere categorieDiNotificheSpente all'import esistente da '@/components/hooks/useNotificationsCount' (riga 15). Nella queryFn dell'elenco (chiave [...queryKeys.notifications.list, quante, userId]), sostituire `const { data, error } = await supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(quante);` (righe 77-82, subito dopo `if (!user) throw new Error(AUTH_RICHIESTA);`) con: `let lista = supabase.from('notifications').select('*').eq('user_id', user.id); const spente = await categorieDiNotificheSpente(user.id); if (spente.length > 0) lista = lista.or(`category.not.in.(${spente.join(',')})`); const { data, error } = await lista.order('created_at', { ascending: false }).limit(quante);`. La colonna category è NOT NULL (migrazione 115), quindi not.in non perde righe. Il filtro lato client della riga 251 e la query promoAccese (righe 102-111) possono restare o essere tolti. Le prove che montano la pagina con un Supabase finto (riparazione-r01-notifiche-*, r03-notifiche-carica-altre-con-tentativi, r10, r14-notifiche-promozioni-spente, r22-*, minori-s03-pagina-notifiche) devono rispondere a `.or(...)` su notifications e alla lettura di profiles con notif_promos, notif_newsletter, notif_groups, notif_order_updates."
+        }
+      ],
+      "nota": "Esito serve_file_altrui perché il pezzo che resta (la lista) sta in un file di un'altra sessione.",
+      "verificato_da": "collaudatore R25 (sonnet): classificazione giusta, campanello già a posto (hook:32-34), resta app/notifications/page.tsx:251"
+    },
+    {
+      "id": "R25-005",
+      "chiave": "architettura|se il registro degli invii non si legge, l'allarme dice «non partita, non è un intoppo di una notte» anche alla prima notte e per un'email forse arrivata",
+      "esito": "parziale",
+      "commit": "f27ebc347fadb37938c8b6dfc3989ac37f2b3152",
+      "file_toccati": [
+        "lib/privacy/avvisi-a-chi-aspetta.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r25-registro-invii-illeggibile.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r25-registro-invii-illeggibile.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f27ebc347fadb37938c8b6dfc3989ac37f2b3152^ --file lib/privacy/avvisi-a-chi-aspetta.ts --prove tests/unit/riparazione-r25-registro-invii-illeggibile.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "emailDovuta, quando il registro non si legge, risponde il nuovo esito 'registro-illeggibile' invece di 'bloccata'. recapitaAvvisi lo conta come prima (la notte resta rossa) e mette registroIlleggibile: true nella riga di emailBloccateAvvisi, distinto da forsePartita.",
+      "cosa_resta": "Il testo dell'allarme sta in app/api/cron/process-deletions/route.ts (file non mio): finché la rotta non legge il nuovo segno dice ancora «non è partita per email, e non è un intoppo di una notte sola». La rotta riceve già il segno nella riga.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/process-deletions/route.ts",
+          "modifica": "In avvisaUnaVoltaPerAvviso (circa riga 763): aggiungere `registroIlleggibile?: true` al tipo di avvisiFermi e destrutturarlo nel for (`for (const { id: idAvviso, userId, tappa, forsePartita, registroIlleggibile } of avvisiFermi)`). Nel corpo dell'allarme (circa righe 810-815), prima del ramo forsePartita, un terzo testo: `registroIlleggibile ? \"Non si sa se una spiegazione dell'attesa per la cancellazione sia partita per email: il registro degli invii non si legge, quindi non so quanti tentativi ci siano stati né se uno sia arrivato. \" : forsePartita ? <testo di oggi> : <testo di oggi>`. Il resto del corpo resta uguale. Prova: giro notturno con audit_logs in select che cade, e l'allarme che non contiene «non è partita per email»."
+        }
+      ],
+      "verificato_da": "collaudatore R25 (sonnet): nessun chiamante rotto (recapitaAvvisi conta registro-illeggibile come prima bloccata, lib/privacy/avvisi-a-chi-aspetta.ts:223-233), tsc 0; confermato che resta il testo in app/api/cron/process-deletions/route.ts:787 e :814"
+    },
+    {
+      "id": "R25-004",
+      "chiave": "api-backend|la rotta delle cancellazioni copia una stringa privata della libreria degli avvisi",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nella libreria non serve altro: lib/privacy/avvisi-a-chi-aspetta.ts esporta già emailRisultaPartita(admin, idAvviso), che legge lo stesso registro e lo stesso segno senza lanciare (prova tests/unit/riparazione-r14-email-partita-dalla-libreria.test.ts). Il difetto resta nella rotta.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/process-deletions/route.ts",
+          "modifica": "Aggiungere emailRisultaPartita all'import da '@/lib/privacy/avvisi-a-chi-aspetta' (riga 27). Togliere la costante EMAIL_PARTITA = 'privacy.avviso_cancellazione.email_partita' (riga 557) col suo commento (righe 553-557). Sostituire il corpo di emailGiaPartita (righe 560-571) con `return emailRisultaPartita(admin as unknown as ClienteAvvisi, idAvviso);` (o chiamare emailRisultaPartita direttamente a riga 536). Comportamento identico: se il registro non si legge, false."
+        }
+      ],
+      "nota": "Stesso file della modifica che resta per la voce sull'allarme del registro illeggibile: conviene farle insieme.",
+      "verificato_da": "collaudatore R25 (sonnet): classificazione giusta, la rotta ha la sua copia di EMAIL_PARTITA (route:557) e di emailGiaPartita (route:560-570); la libreria esporta già emailRisultaPartita (lib:518)"
+    },
+    {
+      "id": "R25-006",
+      "chiave": "performance|ogni pagina scarica due caratteri in corsivo che quasi nessuna pagina usa",
+      "esito": "scelta_di_nicola",
+      "domanda": "Il corsivo di Inter (50 KB) si precarica su ogni pagina perché next/font non separa il precarico per file: lo togliamo (a) con Inter senza precarico (il testo di ogni pagina arriva dopo), (b) togliendo il corsivo vero da Inter (torna il corsivo finto in note e citazioni di una decina di pagine), o (c) dividendo Inter in due famiglie con una regola in globals.css?",
+      "nota": "Fraunces è già a posto: preload:false (app/layout.tsx:84). Resta solo Inter corsivo (app/layout.tsx:56-60), che serve davvero in 27 punti (es. app/orders/[id]/page.tsx:941, app/seller/orders/[id]/page.tsx:645). tests/unit/il-corsivo-del-sito-e-un-corsivo-vero.test.ts vuole Inter precaricato con dritto e corsivo insieme: ogni strada ne cambia il comportamento atteso.",
+      "cosa_ho_fatto": "Controllato: metà della voce (Fraunces) era già chiusa; per Inter ogni correzione cambia un comportamento scelto (precarico o corsivo vero), quindi è una scelta.",
+      "verificato_da": "collaudatore R25 (sonnet): classificazione giusta, Fraunces già preload:false (app/layout.tsx:84), Inter corsivo usato e voluto da una prova esistente"
+    },
+    {
+      "id": "R25-008",
+      "chiave": "qa-flussi|il precarico proposto nel layout pesa su ogni pagina (costo dichiarato, da far decidere a chi lo applica)",
+      "esito": "scelta_di_nicola",
+      "domanda": "Teniamo il precarico delle categorie nel layout radice (un await in cache per 60 secondi e circa 72 righe di categorie nel codice di ogni pagina, /admin e /seller comprese) oppure lo limitiamo alle pagine pubbliche?",
+      "nota": "Costo dichiarato, non un guasto: app/layout.tsx precaricoDelSito righe 36-42, await ~239-240, HydrationBoundary ~291-305.",
+      "cosa_ho_fatto": "Verificato che il precarico c'è ancora e che la voce chiede per titolo una decisione di costo."
+    },
+    {
+      "id": "R25-011",
+      "chiave": "qa-flussi|la prova «sotto i 10 €» non controlla il taglio sul massimo",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "L'aiutante non è mio e non importa nessuno dei miei file: non toccato. Una prova nuova mia non chiude la voce, perché il finto comune risponde sbagliato al filtro or sul prezzo (lib/queries/griglia-prodotti.ts:177 passa price.lte.10,id.in.(…)).",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/finto-postgrest.ts",
+          "modifica": "In applica() (righe 125-127), il ramo f.tipo === 'or' oggi filtra sempre r.stock == null || Number(r.stock) > 0, qualunque sia f.espressione. Sostituirlo con un interprete dell'espressione: dividere f.espressione sulle virgole fuori dalle parentesi; per ogni clausola colonna.operatore.valore valutare is.null, eq, gt, gte, lt, lte (con la funzione confronta già presente), in.(a,b) e not.in.(a,b); tenere la riga se almeno una clausola è vera. Così stock.is.null,stock.gt.0 resta com'è oggi e price.lte.10,id.in.(a,b) taglia davvero sul massimo. Poi una prova con maxPrice 10 e idsScontatiSotto: un prodotto da 12 € non scontato resta fuori, uno da 10,00 € entra, uno da 12 € in promozione entra."
+        }
+      ],
+      "nota": "Il file è un aiutante comune delle prove.",
+      "verificato_da": "collaudatore R25 (sonnet): classificazione giusta, il difetto sta in tests/unit/aiuti/finto-postgrest.ts"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "chi spegne gli aggiornamenti d'ordine non riceve neanche gli avvisi di abbonamento, sponsorizzazione, premi e l'SOS dei rider, perché stanno nella categoria «order»",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "migrations/115_privacy_radiografia.sql:210 (category DEFAULT 'order') · vuole_notifica ~:228 · app/api/cron/send-push/route.ts:122,142 · lib/stripe/webhook/abbonamenti.ts:271,306",
+      "descrizione": "La colonna notifications.category vale 'order' di default, e anche diversi avvisi la mettono esplicita: pagamento dell'abbonamento non riuscito, abbonamento attivo, sponsorizzazione attiva, premio invito, achievement, SOS rider agli admin. Il server tratta 'order' come «aggiornamenti d'ordine»: chi li spegne perde anche queste notifiche push. Visto dal collaudo di R25 mentre guardava il campanello."
+    },
+    {
+      "titolo": "la prova di prima sulle rotte del collegamento a Stripe usa un database finto che ignora i filtri",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "tests/unit/riparazione-r06-stripe-connect-rotte.test.ts:63-68",
+      "descrizione": "Il finto risponde lo stesso profilo qualunque sia il filtro, quindi non vede una rotta che legge il profilo di un altro. Ora lo copre la prova nuova di R25 sul ruolo; quella di prima non è stata toccata."
+    }
+  ],
+  "domande_per_nicola": [
+    "R25-001: da che data i link di disiscrizione v2 spediti dal 12/11 al 26/11/2026 smettono di funzionare, oppure si accettano per sempre?",
+    "R25-006: il corsivo di Inter si precarica su ogni pagina: lo togliamo con Inter senza precarico, togliendo il corsivo vero da Inter, o dividendo Inter in due famiglie?",
+    "R25-008: il precarico delle categorie resta nel layout di tutte le pagine (anche /admin e /seller) o lo limitiamo alle pagine pubbliche?"
+  ],
+  "conto": {
+    "agenti": 5,
+    "subagenti": 5,
+    "nota": "lotto 1 modello grande; smentitore lotto 1 modello grande; lotto 2 sonnet; smentitore lotto 2 sonnet; giro di correzione modello grande (R25-007, R25-009)"
+  },
+  "costo_usd": 13.78
+}

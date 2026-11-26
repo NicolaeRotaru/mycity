@@ -11,6 +11,11 @@ import { useUtente, CHIAVE_UTENTE } from '@/components/hooks/useUtente';
  * newsletter, `notif_promos` e `notif_newsletter`): non le riceve in push
  * (`vuole_notifica`), e il campanello non le deve contare. Prima le contava, e il
  * pallino si accendeva per un avviso che la persona aveva chiesto di non avere.
+ * Lo stesso per i gruppi (`notif_groups`). Gli aggiornamenti d'ordine (`notif_order_updates`)
+ * invece no: nella categoria 'order' finiscono anche avvisi che non sono aggiornamenti d'ordine
+ * (il pagamento dell'abbonamento non riuscito, l'abbonamento attivo, la sponsorizzazione, il premio
+ * invito, l'SOS del fattorino agli amministratori, l'ordine pronto per il ritiro al fattorino), e
+ * spegnendo gli aggiornamenti d'ordine il campanello li nasconderebbe.
  * Se la preferenza non si legge si conta senza promozioni e newsletter, come il
  * campanello del negozio (SellerShell): un guasto sulla preferenza non deve spegnere
  * il pallino degli ordini.
@@ -18,14 +23,22 @@ import { useUtente, CHIAVE_UTENTE } from '@/components/hooks/useUtente';
 export async function categorieDiNotificheSpente(userId: string): Promise<string[]> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('notif_promos, notif_newsletter')
+    .select('notif_promos, notif_newsletter, notif_groups')
     .eq('id', userId)
     .limit(1);
-  type Preferenze = { notif_promos?: boolean | null; notif_newsletter?: boolean | null };
+  type Preferenze = {
+    notif_promos?: boolean | null;
+    notif_newsletter?: boolean | null;
+    notif_groups?: boolean | null;
+  };
   const preferenze = error ? null : ((data ?? []) as Preferenze[])[0] ?? null;
   const spente: string[] = [];
   if (preferenze?.notif_promos !== true) spente.push('promo');
   if (preferenze?.notif_newsletter !== true) spente.push('newsletter');
+  // I gruppi sono accesi di serie (`vuole_notifica` li legge con coalesce a true): restano fuori dal
+  // conto solo se la persona li ha spenti davvero. Se la preferenza non si legge si contano.
+  // 'order' non si toglie mai dal conto: vedi sopra.
+  if (preferenze?.notif_groups === false) spente.push('group');
   return spente;
 }
 

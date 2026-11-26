@@ -100,8 +100,13 @@ export type RapportoAvvisi = {
    * 24/11/2026 (R03-002) — `forsePartita`: una notte prima l'email può essere partita senza che il
    * segno «partita» si sia scritto (un tentativo senza esito nel registro). Allora l'allarme non può
    * dire «non è partita»: può dire solo che non risulta partita.
+   *
+   * 26/11/2026 (R25-005) — `registroIlleggibile`: il registro degli invii non si è letto (o non ha preso
+   * il turno): non si sa se l'email sia partita, né se sia la prima notte. Non è `forsePartita` (quello
+   * dice che il registro mostra un tentativo senza esito) e non è «non partita»: l'allarme deve dire
+   * che non si sa.
    */
-  emailBloccateAvvisi: Array<{ id: string; userId: string; forsePartita?: true }>;
+  emailBloccateAvvisi: Array<{ id: string; userId: string; forsePartita?: true; registroIlleggibile?: true }>;
   /**
    * 27/10/2026 (quarto giro, fase 2) — Gli avvisi la cui email è partita
    * stanotte. Se c'era un allarme («scrivile tu»), chi chiama lo chiude: la
@@ -215,11 +220,18 @@ export async function recapitaAvvisi(
     // vale per ogni avviso che è nel pannello, scritto stanotte o prima.
     if (posta) {
       const email = await emailDovuta(admin, posta, a, id, registro, adesso);
-      if (email === 'non-partita' || email === 'bloccata' || email === 'forse-partita') rapporto.emailNonPartite++;
-      if (email === 'bloccata' || email === 'forse-partita') {
+      if (email === 'non-partita' || email === 'bloccata' || email === 'forse-partita' || email === 'registro-illeggibile') {
+        rapporto.emailNonPartite++;
+      }
+      if (email === 'bloccata' || email === 'forse-partita' || email === 'registro-illeggibile') {
         rapporto.emailBloccate++;
         // Con la persona: l'allarme deve dire a chi scrivere.
-        rapporto.emailBloccateAvvisi.push({ id, userId: a.userId, ...(email === 'forse-partita' ? { forsePartita: true as const } : {}) });
+        rapporto.emailBloccateAvvisi.push({
+          id,
+          userId: a.userId,
+          ...(email === 'forse-partita' ? { forsePartita: true as const } : {}),
+          ...(email === 'registro-illeggibile' ? { registroIlleggibile: true as const } : {}),
+        });
       }
       // 5/11/2026 — Anche 'gia-partita': se la notte in cui è partita la chiusura
       // dell'allarme «scrivile tu» non è riuscita, così si ritenta le notti dopo.
@@ -307,7 +319,14 @@ export type PostaAvvisi = {
  * si legge — e senza un posto dove segnare «partita», spedire vorrebbe dire
  * una email ogni notte.
  */
-type EsitoEmail = 'partita' | 'gia-partita' | 'in-corso' | 'non-partita' | 'bloccata' | 'forse-partita';
+type EsitoEmail =
+  | 'partita'
+  | 'gia-partita'
+  | 'in-corso'
+  | 'non-partita'
+  | 'bloccata'
+  | 'forse-partita'
+  | 'registro-illeggibile';
 
 /**
  * 27/10/2026 (quarto giro) — UN TENTATIVO PER NOTTE, ANCHE CON DUE GIRI SFALSATI.
@@ -446,7 +465,9 @@ async function emailDovuta(
     registro.error('[avvisi-cancellazione] registro degli invii non disponibile: l email non si tenta, per non spedirla ogni notte', {
       userId: a.userId, tappa: a.tappa, errore: e instanceof Error ? e.message : 'errore',
     });
-    return 'bloccata';
+    // R25-005 — Non «bloccata»: quella dice che i tentativi sono finiti e nessuno è andato. Col registro
+    // che non si legge non si sa quanti tentativi ci siano stati né se uno sia arrivato.
+    return 'registro-illeggibile';
   }
 
   if (!(await speditaAncheTramitePosta(posta, a, registro, tentativo))) {
