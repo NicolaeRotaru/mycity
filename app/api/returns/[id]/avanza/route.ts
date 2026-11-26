@@ -35,6 +35,7 @@ import {
 import { bonificoDellaChiave } from '@/lib/stripe/elenco-dei-rimborsi';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { scriviCampanella } from '@/lib/ordini/campanella';
+import { formatPriceFromCents } from '@/lib/format';
 
 export const runtime = 'nodejs';
 
@@ -240,6 +241,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, cash_confirmed_at, payment_status, delivery_status, stripe_refund_id, discount_amount';
   let ordine: OrdineDaRimborsare | null = null;
   let importoRimborso = 0;
+  /** R04-012 — La cifra che il negozio aveva chiesto, quando sulla carta ne era già uscita un'altra. */
+  let cifraChiesta: number | null = null;
   /**
    * Riesame del 16/10, terzo giro — IL RIMBORSO E' GIA' PARTITO, MA IL RESO NON LO SA.
    *
@@ -320,6 +323,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     const giaSullaCarta =
       rimborsabile.perche !== 'ok' || importoRimborso > residuoCent ? await ilRimborsoDelResoGiaSullaCarta(ordine, ret) : null;
     // Si registra quello che e' uscito: `refundOrder` lo riconosce e non lo rifa'.
+    // 26/11/2026 (R04-012) — Ma non in silenzio: se il negozio aveva chiesto un'altra cifra, lo sa (campanella qui sotto).
+    if (giaSullaCarta && giaSullaCarta.centesimi !== importoRimborso) cifraChiesta = importoRimborso;
     if (giaSullaCarta) importoRimborso = giaSullaCarta.centesimi;
     if (!giaSullaCarta && rimborsabile.perche !== 'ok') {
       return ApiErrors.conflict(motivoNienteDaRestituire(rimborsabile.perche));
@@ -497,6 +502,16 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     body: body.note ?? null,
     link: ritiro ? `/seller/orders/${ret.order_id}` : `/orders/${ret.order_id}`,
   }, { dove: 'returns-avanza', ordine: ret.order_id, reso: ret.id });
+  if (body.stato === 'REFUNDED' && cifraChiesta !== null && comando.autorizzato && comando.sellerOrdine) {
+    await scriviCampanella(admin, {
+      category: 'order',
+      user_id: comando.sellerOrdine,
+      title: `Reso chiuso con ${formatPriceFromCents(importoRimborso)}: la cifra già uscita sulla carta`,
+      body: `Avevi indicato ${formatPriceFromCents(cifraChiesta)}, ma il rimborso con la carta di questo reso era già uscito per ` +
+        `${formatPriceFromCents(importoRimborso)}: il reso si chiude con quella cifra, e il rimborso non si rifà.`,
+      link: `/seller/orders/${ret.order_id}`,
+    }, { dove: 'returns-avanza', ordine: ret.order_id, reso: ret.id });
+  }
 
   return NextResponse.json({ ok: true, status: body.stato, refundId }, { status: 200 });
 }
