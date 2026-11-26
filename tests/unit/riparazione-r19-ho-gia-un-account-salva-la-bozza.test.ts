@@ -15,7 +15,7 @@ describe('R19-004 · «Ho già un account» salva la bozza prima di uscire', () 
     expect(m).not.toBeNull();
     expect(m![1]).toMatch(/onClick=\{salvaLaBozzaPerAccesso\}/);
   });
-  it('il salvataggio passa da bozzaDaSalvare (con la scadenza) ed è lo stesso di «Ordina»', () => {
+  it('il salvataggio passa da bozzaDaSalvare (che segna l\'ora del salvataggio, da cui la cassa conta le due ore) ed è lo stesso di «Ordina»', () => {
     const i = src.indexOf('const salvaLaBozzaPerAccesso');
     expect(i).toBeGreaterThan(0);
     expect(src.slice(i, i + 700)).toMatch(/localStorage\.setItem\('mc_checkout_draft', JSON\.stringify\(bozzaDaSalvare\(/);
@@ -62,7 +62,6 @@ async function rientraConLaBozza(indirizzi: unknown[], campi: Record<string, unk
     form: { fullName: 'Maria Rossi', address: 'Via Roma 10', city: 'Piacenza', zip: '29121', phone: '3339876543', notes: '', lat: null, lng: null, ...campi },
     metodoPagamento: 'cod',
     sceltaIl: adesso,
-    scadeIl: adesso + 60 * 60_000,
   }));
   g.__UTENTE__ = MARIA;
   g.__DATI_QUERY__ = (o: { queryKey: readonly unknown[] }) => {
