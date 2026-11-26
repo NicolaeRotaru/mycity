@@ -1,0 +1,131 @@
+{
+  "sessione": "R19",
+  "aggiornato": "2026-11-26 18:50",
+  "finita": true,
+  "testa": "be3ee840e67661bedead7c511ee5506223b3e090",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "be3ee840e67661bedead7c511ee5506223b3e090",
+    "nota": "tsc pulito; eslint 0 errori (121 avvisi); vitest 2235 file passati, 1 saltato già prima; 13653 prove passate."
+  },
+  "voci": [
+    {
+      "id": "R19-001",
+      "chiave": "pagamenti-stripe|dopo un guasto, chiudere il reso con i passi normali registra due volte lo stesso rimborso, e al negozio la sua parte viene tolta due volte",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: limite di spesa raggiunto (consegna al 70% di 25 $ come da nota della regia per R19, spesa a fine lotto 2 oltre 17 $). Da riassegnare."
+    },
+    {
+      "id": "R19-002",
+      "chiave": "pagamenti-stripe|la pagina guadagni, con i soli contanti, dice al negozio commissione zero e soldi mai versati",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: limite di spesa raggiunto (consegna al 70%). Da riassegnare DOPO la voce del bonifico del lunedì (stesso file lib/guadagni/negozio.ts)."
+    },
+    {
+      "id": "R19-003",
+      "chiave": "pagamenti-stripe|il bonifico del lunedì al negozio non si può segnare: i soldi dei contanti restano «in attesa» per sempre, sia per il negozio sia per nicola",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: limite di spesa raggiunto (consegna al 70%). Da riassegnare: lo smentitore ha visto che manca la funzione per segnare il bonifico manuale e che il vincolo orders_payout_status_check (130_reversal_failed.sql:35-47) rifiuta PAID_MANUALLY, quindi la cura chiede quasi certamente una migrazione; da questa voce dipende il valore pratico di R19-004."
+    },
+    {
+      "id": "R19-004",
+      "chiave": "pagamenti-stripe|un rimborso arrivato dopo il bonifico del lunedì non viene mai ripreso al negozio",
+      "esito": "riparato",
+      "commit": "be3ee840e67661bedead7c511ee5506223b3e090",
+      "file_toccati": [
+        "lib/stripe/payout.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r19-rimborso-dopo-il-bonifico-del-lunedi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-rimborso-dopo-il-bonifico-del-lunedi.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base be3ee840e67661bedead7c511ee5506223b3e090^ --file lib/stripe/payout.ts --prove tests/unit/riparazione-r19-rimborso-dopo-il-bonifico-del-lunedi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Su un ordine in contanti col bonifico del lunedì segnato fatto (PAID_MANUALLY), refundOrder manda agli amministratori «Togli <quota> dal prossimo bonifico a <negozio>», senza «se» e anche se quelle consegne le pagherebbe Stripe, una volta per chiave del rimborso anche se il rimborso si ripete: è lo stesso avviso che il codice manda già sugli ordini HELD. Prova con Stripe e Supabase finti e orologio finto: 18 € sul rimborso pieno, 9 € sul parziale, un solo debito sui ripetuti; con il bonifico partito da Stripe resta lo storno e nessun debito.",
+      "nota": "Il codice chiama «bonifico del lunedì» lo stato PAID_MANUALLY (lib/guadagni/negozio.ts:89-95, app/seller/earnings/page.tsx:64); la strada HELD era già coperta. Il debito si riprende con l'avviso, il meccanismo che il codice usa già per HELD; una sottrazione automatica dal «Da versare lunedì» chiederebbe un registro dei debiti, una migrazione e app/admin/payouts/page.tsx (non di R19). PAID_MANUALLY oggi non si scrive nel database (manca la funzione per segnare il bonifico manuale e il vincolo della migrazione 130 lo rifiuta): la correzione si accende quando il bonifico del lunedì diventa segnabile (la voce sul bonifico del lunedì dei contanti, ancora aperta). Nessuna migrazione. Avvertenza per chi ripara la voce del bonifico a mano (payout.ts:1186): per PAID_MANUALLY l'avviso del debito c'è già (chiave quota-da-trattenere:<chiave>), non aggiungerne un secondo; e se si smette di scrivere la quota in seller_payout_reversed_cents su PAID_MANUALLY, un rimborso pieno dopo uno parziale richiede di nuovo il netto intero (9 € e poi 18 € = 27 € chiesti su 18). ATTENZIONE per la regia: oggi la voce non si riproduce sul database vero perché lo stato PAID_MANUALLY non è raggiungibile; se la voce che rende segnabile il bonifico del lunedì non entra, questa va letta come chiusura preventiva (lo smentitore suggerisce gia_riparato_prima in quel caso).",
+      "verificato_da": "smentitore A (modello grande): REGGE, condizionato. Prova 6/6 e prova rimessa regge; 7 sonde vitest con database e Stripe finti: parziale poi pieno con e senza chiave (9+9 €, nessuna quota chiesta due volte, terzo rimborso rifiutato), rimborso ripetuto (un avviso), solo credito (un avviso da 18 €), storno già fallito (avviso «da recuperare a mano» come prima), carta in PAID_MANUALLY (nessun avviso, stato non raggiungibile), bonifico Stripe TRANSFERRED (si storna); suite unit 2235 file e tsc verdi. Condizione: PAID_MANUALLY oggi non si scrive (manca la funzione per segnare il bonifico manuale, il vincolo orders_payout_status_check di 130_reversal_failed.sql:35-47 lo rifiuta, il tasto di app/admin/payouts/page.tsx:133 chiama una funzione che non esiste) e su HELD l'avviso partiva già (sonda P0): la correzione vale da quando il bonifico del lunedì dei contanti diventa segnabile."
+    },
+    {
+      "id": "R19-005",
+      "chiave": "pagamenti-stripe|un rimborso dopo il bonifico a mano al negozio fa sparire i soldi da recuperare",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: limite di spesa raggiunto (consegna al 70%). Da riassegnare. Per chi la ripara: su PAID_MANUALLY l'avviso del debito c'è già da R19-004 (chiave quota-da-trattenere:<chiave>), non aggiungerne un secondo; payout.ts:1186 scrive la quota in seller_payout_reversed_cents come se il bonifico non fosse partito e payout.ts:2285 riscrive payout_status in REFUNDED sul rimborso pieno; se si smette di scrivere la quota, un rimborso pieno dopo uno parziale chiede di nuovo il netto intero."
+    },
+    {
+      "id": "R19-006",
+      "chiave": "pagamenti-stripe|se il cliente viene rimborsato prima che il suo ordine nasca, l'ordine nasce lo stesso come pagato e il negozio viene pagato",
+      "esito": "parziale",
+      "commit": "7950ffff666c60162b41664c8320794a452391b5",
+      "file_toccati": [
+        "lib/stripe/webhook/ordini.ts",
+        "lib/stripe/webhook/rimborsi.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r19-rimborso-prima-dell-ordine.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-rimborso-prima-dell-ordine.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7950ffff666c60162b41664c8320794a452391b5^ --file lib/stripe/webhook/ordini.ts,lib/stripe/webhook/rimborsi.ts --prove tests/unit/riparazione-r19-rimborso-prima-dell-ordine.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "In ordini.ts l'avviso del pagamento rilegge la carta: rimborsata per intero o contestata non fa nascere ordini, chiude il carrello e rimette in vendita la merce dei negozi non nati, con un avviso unico agli amministratori; rimborsata in parte senza ordini nati rimborsa il resto al cliente (chiave fissa) e lo avvisa; rimborsata in parte con ordini già nati (nostro annullo in un carrello nato a metà, il caso che il collaudo K02 aveva trovato rotto) fa nascere l'altro ordine come sulla base. In rimborsi.ts il rimborso col carrello aperto e nessun ordine nato si fa ripetere a Stripe. Tre commenti di ordini.ts accorciati per il tetto delle 600 righe.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/stripe/webhook/dispute.ts",
+          "modifica": "In handleDisputeCreated (riga 81), prima di findOrdersForDispute: leggere il carrello del pagamento (pending_checkout_id nei metadata del PaymentIntent letto con getStripe().paymentIntents.retrieve(pi), oppure transfer_group 'mc_<id>') e il suo status in pending_checkouts; nel ramo orders.length === 0 (riga 90), se il carrello è 'PENDING', lanciare new Error('[stripe] contestazione su un carrello ancora aperto: l\\'ordine può ancora nascere, si riprova') come rimborsi.ts:47-54 e :75, così la contestazione che arriva mentre l'ordine nasce si fa ripetere."
+        }
+      ],
+      "nota": "Restano fuori dalla strada della voce: (a) rimborso esterno che arriva nei millisecondi tra la nascita del primo e del secondo ordine dello stesso giro (chiuderla in rimborsi.ts farebbe ripetere per sempre il rimborso dei carrelli nati a metà); (b) una richiesta di informazioni della banca (warning_needs_response) vale come carta contestata: l'ordine non nasce e l'avviso agli amministratori chiede il rimborso a mano; (c) contestazione durante la nascita: serve_file_altrui su dispute.ts. Nessuna migrazione, nessuna prova esistente toccata. Prova: 6 casi su 9 rossi sulla base, 9 su 9 verdi; tests/unit intera verde (2234 file).",
+      "cosa_resta": "Variante a più negozi, uguale alla base (smentitore A, sonda S1): carrello di due negozi nato a metà (pane nato, ortolano no) e rimborso parziale fatto a mano dal cruscotto Stripe prima che l'ortolano nasca: rimborsi.ts:112 attribuisce tutto il rimborso al solo ordine nato (pane REFUNDED con consegna ancora NEW), poi ordini.ts:278 (condizione «tutta || natiDa.size === 0») vede un rimborso parziale con un ordine nato e fa nascere l'ortolano PAID con bonifico HELD. Cura da provare: distinguere i rimborsi fatti dal nostro sistema (metadati/chiave di refundOrder) da quelli esterni, e trattare come «carta tornata» l'importo rimborsato oltre i rimborsi nostri sugli ordini nati, senza far ripetere per sempre il rimborso dei carrelli nati a metà (expire-checkouts li salta). Restano anche: corsa di pochi istanti in rimborsi.ts:75 (rimborso pieno che arriva tra la nascita del primo e del secondo ordine dello stesso giro: l'ortolano nasce PAID su carta tutta rimborsata); ordini.ts:272-291 viene prima del controllo della fascia, quindi un giro che ha già rimborsato per fascia non più possibile e muore prima di chiudere il carrello al giro dopo non avvisa la cliente della fascia e manda agli amministratori «carta già tornata»; ordini.ts:283 scrittura del carrello non controllata (se fallisce la merce non torna in vendita e niente va nel registro).",
+      "verificato_da": "smentitore A (modello grande): prova del riparatore 9/9, prova rimessa regge (uscita 0); 8 sonde vitest con Stripe e database finti su commit e base: reggono 1 centesimo esterno, ripetizioni dell'avviso (nessun doppio rimborso o avviso), contestazione anche su carrello nato a metà, il caso del collaudo K02 a tre negozi, rimborso col carrello aperto (si ripete finché PENDING, si lavora a EXPIRED), chiave fissa del resto senza collisioni; NON regge la variante S1 (rimborso a mano dal cruscotto su carrello nato a metà, uguale alla base) → parziale; suite unit 2234 file verde, tsc pulito, ordini.ts 598 righe."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "carrello scaduto con la carta già rimborsata per intero: il rimborso automatico fallisce e lancia prima dell'avviso, Stripe ripete per tre giorni e agli amministratori non arriva niente",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/webhook/ordini.ts:158",
+      "descrizione": "Il rimborso automatico del carrello EXPIRED fallisce con charge_already_refunded prima dell'avviso agli amministratori; nessun ordine nasce, ma l'avviso non parte mai."
+    },
+    {
+      "titolo": "incasso diverso dal preventivo con la carta già rimborsata o contestata: l'avviso parte prima del rimborso che fallisce, e lo stesso avviso arriva più volte",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/webhook/ordini.ts:190",
+      "descrizione": "L'avviso a :190 parte prima del rimborso a :213-216; il rimborso fallisce, Stripe ripete e l'avviso si duplica. Nessun ordine nasce."
+    },
+    {
+      "titolo": "rimborso parziale mentre il bonifico Stripe al negozio è in partenza (PROCESSING): la quota risulta ripresa ma non rientra mai",
+      "dimensione": "pagamenti-stripe",
+      "severita": "grave",
+      "file": "lib/stripe/payout.ts:320",
+      "descrizione": "Provato dallo smentitore (sonda P3: storni [], debiti 0): il rimborso parziale arriva con l'ordine in PROCESSING; refundOrder scrive la quota in seller_payout_reversed_cents senza storno né avviso, poi il giro versa l'importo letto quando ha preso l'ordine e scrive TRANSFERRED (payout.ts:513): i soldi restano al negozio. Latente finché i bonifici Stripe sono spenti; vale per carta e contanti."
+    },
+    {
+      "titolo": "rimborso in solo credito sui contanti ripreso dopo un tentativo morto: la quota del negozio si scrive due volte",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/payout.ts (refundOrder, blocco dopo il credito MyCity)",
+      "descrizione": "Letto nel codice, non provato: se il tentativo muore fra la quota del negozio e il segno wallet:<chiave>, la ripresa riscrive la quota sull'ordine una seconda volta."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 3,
+    "subagenti": 3,
+    "nota": "3 lanci: riparatore lotto 1 (grande), riparatore lotto 2 (grande), smentitore A (grande) riusato con un messaggio per voce. Consegna al 70% del limite di 25 $ come da nota della regia."
+  },
+  "costo_usd": 19.34
+}
