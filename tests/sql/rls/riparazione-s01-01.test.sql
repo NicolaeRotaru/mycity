@@ -13,7 +13,8 @@
 --   ⑨ un nuovo prodotto del negozio parte da 'idle' con la data non oltre adesso;
 --   ⑩ il nuovo prodotto importato dal modulo tiene snapshot e data;
 --   ⑪ l'upsert sul proprio prodotto non cambia lo snapshot;
---   ⑫ un prodotto nuovo senza sincronizzazione resta con la data vuota.
+--   ⑫ un prodotto nuovo senza sincronizzazione resta con la data vuota, sia
+--     senza la colonna sia con la data mandata vuota.
 -- Senza la migrazione 990 ①, ⑧, ⑨ e ⑪ sono ROSSI; con la 990 senza la 996 ⑫.
 -- =============================================================================
 
@@ -158,8 +159,10 @@ INSERT INTO esiti SELECT '10 il nuovo prodotto importato dal modulo tiene snapsh
 INSERT INTO esiti SELECT '11 l''upsert sul proprio prodotto non cambia lo snapshot', n = -1, 'righe: ' || n
   FROM pg_temp.upsert('e9900000-0000-0000-0000-0000000000a1') AS n;
 INSERT INTO esiti SELECT '12 un prodotto nuovo senza sincronizzazione resta con la data vuota',
-  e = 'stato=idle data=vuota', e
-  FROM pg_temp.nativo('e9900000-0000-0000-0000-0000000000a4') AS e;
+  e = 'stato=idle data=vuota' AND v = 'stato=idle data=vuota snapshot={"price": 25, "currency": "EUR"}',
+  e || ' · ' || v
+  FROM pg_temp.nativo('e9900000-0000-0000-0000-0000000000a4') AS e,
+       pg_temp.inserisci('e9900000-0000-0000-0000-0000000000a5', NULL, NULL) AS v;
 
 -- L'amministratore, dal browser.
 SET LOCAL request.jwt.claims = '{"sub":"e9900000-0000-0000-0000-000000000003","role":"authenticated"}';
