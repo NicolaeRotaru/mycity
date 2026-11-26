@@ -11,7 +11,7 @@
 -- (stessa lettura della 810).
 --
 -- Si può rieseguire. NON si applica da sola: la applica Nicola, come ogni migrazione.
--- REVERSIBILE: DROP TRIGGER dei tre trigger qui sotto e DROP FUNCTION delle tre funzioni.
+-- REVERSIBILE: DROP TRIGGER dei trigger qui sotto e DROP FUNCTION delle tre funzioni.
 -- LE PROVE: tests/sql/rls/riparazione-s02-01.test.sql, tests/sql/rls/riparazione-s02-02.test.sql.
 
 BEGIN;
@@ -85,10 +85,12 @@ CREATE TRIGGER trg_recensioni_prima_dell_inserimento
   FOR EACH ROW EXECUTE FUNCTION public.recensioni_prima_dell_inserimento();
 
 -- (b) Un id è di una recensione sola, fra le due tabelle, per chiunque scriva.
---     Il nome del trigger comincia con «trg_si_» per girare dopo (a): i trigger dello
---     stesso evento partono in ordine alfabetico, e il controllo va fatto sull'id finale.
---     Il lucchetto sull'id fa aspettare due scritture in volo con lo stesso id, così la
---     seconda legge la prima.
+--     Trigger AFTER: guarda l'id finale della riga, qualunque cosa facciano i trigger
+--     BEFORE. Il lucchetto sull'id fa aspettare due scritture in volo con lo stesso id,
+--     e la seconda legge la prima: vale in READ COMMITTED (quello di PostgREST e del
+--     database), dove ogni lettura vede quello che è già stato confermato. Negli altri
+--     livelli la lettura non vedrebbe la scrittura in volo, quindi lì la scrittura di
+--     una recensione si rifiuta.
 CREATE OR REPLACE FUNCTION public.recensioni_id_unico()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -98,6 +100,10 @@ AS $$
 DECLARE
   usato boolean;
 BEGIN
+  IF current_setting('transaction_isolation') <> 'read committed' THEN
+    RAISE EXCEPTION 'recensioni: si scrivono solo in read committed' USING ERRCODE = '55000';
+  END IF;
+
   PERFORM pg_advisory_xact_lock(hashtextextended('recensioni_id_unico:' || NEW.id::text, 0));
 
   IF TG_TABLE_NAME = 'store_reviews' THEN
@@ -109,20 +115,20 @@ BEGIN
   IF usato THEN
     RAISE EXCEPTION 'recensioni: id gia'' usato' USING ERRCODE = '23505';
   END IF;
-  RETURN NEW;
+  RETURN NULL;
 END;
 $$;
 
 REVOKE ALL ON FUNCTION public.recensioni_id_unico() FROM PUBLIC, anon, authenticated;
 
-DROP TRIGGER IF EXISTS trg_si_recensioni_id_unico ON public.store_reviews;
-CREATE TRIGGER trg_si_recensioni_id_unico
-  BEFORE INSERT OR UPDATE OF id ON public.store_reviews
+DROP TRIGGER IF EXISTS trg_recensioni_id_unico ON public.store_reviews;
+CREATE TRIGGER trg_recensioni_id_unico
+  AFTER INSERT OR UPDATE OF id ON public.store_reviews
   FOR EACH ROW EXECUTE FUNCTION public.recensioni_id_unico();
 
-DROP TRIGGER IF EXISTS trg_si_recensioni_id_unico ON public.reviews;
-CREATE TRIGGER trg_si_recensioni_id_unico
-  BEFORE INSERT OR UPDATE OF id ON public.reviews
+DROP TRIGGER IF EXISTS trg_recensioni_id_unico ON public.reviews;
+CREATE TRIGGER trg_recensioni_id_unico
+  AFTER INSERT OR UPDATE OF id ON public.reviews
   FOR EACH ROW EXECUTE FUNCTION public.recensioni_id_unico();
 
 -- Le righe già scritte non si toccano: se due recensioni condividono già un id, lo si dice.
