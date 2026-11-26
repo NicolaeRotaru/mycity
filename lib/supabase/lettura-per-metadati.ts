@@ -86,7 +86,11 @@ function leggiConMemoria(
 ): Promise<unknown> {
   const adesso = Date.now();
 
-  const gia = memoria.get(chiave);
+  // 26/11/2026 (R06-004) — Con un client da fuori la memoria condivisa non si legge e non si
+  // riempie: la chiave non sa distinguere due client, e una riga letta con i permessi di una
+  // sessione non deve finire dove la ritrova chiunque.
+  const condivisa = !client;
+  const gia = condivisa ? memoria.get(chiave) : undefined;
   if (gia && adesso - gia.quando < MEMORIA_MS) return gia.riga;
 
   const lettura = (async () => {
@@ -109,6 +113,7 @@ function leggiConMemoria(
   })();
 
   // Una lettura fallita non resta in memoria: al prossimo giro si riprova davvero.
+  if (!condivisa) return lettura;
   lettura.catch(() => memoria.delete(chiave));
 
   memoria.set(chiave, { quando: adesso, riga: lettura });
