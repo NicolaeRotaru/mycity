@@ -1,0 +1,338 @@
+{
+  "sessione": "R17",
+  "aggiornato": "2026-11-26 20:20",
+  "finita": true,
+  "testa": "6ac6ccb6909353ac3802f660d0af7fff81f80eff",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "6ac6ccb6909353ac3802f660d0af7fff81f80eff",
+    "nota": "typecheck pulito, lint 0 errori (121 avvisi già presenti), vitest 2240 file passati e 1 saltato, 13670 prove verdi e 1 saltata. Prima verifica verde anche su ec00f9ce91c9e686d2a4ece8056dc9282b65198b, prima del giro di correzione."
+  },
+  "voci": [
+    {
+      "id": "R17-001",
+      "chiave": "deploy-sre|ogni unione su main pubblica in produzione senza aspettare la ci",
+      "esito": "non_codice",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "prova": "gh run view 45708983634 (Rilascio dopo CI verde, 25/11 21:57, commit ed12ed8ec8190e1132b690f6e034c30f0a5d55ba): PRONTO: false, «VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID non configurati»; vercel.json:8 \"main\": true",
+      "cosa_ho_fatto": "Ho verificato che il cancello dopo la CI è già nel workflow (workflow_run su CI completata in main; il lavoro parte solo con esito success, da push, dallo stesso deposito, su main). Ho verificato anche che oggi i segreti mancano. vercel.json NON è toccato: portare main a false lascerebbe main senza alcun rilascio, perché il rilascio dopo la CI non può partire senza i segreti.",
+      "nota": "DETTO CHIARO: il rilascio dopo la CI non funziona senza segreti che oggi non ci sono. Con main:false il sito smetterebbe di aggiornarsi del tutto. In più, una volta acceso, il lavoro applica da solo le migrazioni prima di pubblicare e si ferma se alla produzione ne mancano più di 20. Cosa fa Nicola, in quest'ordine: 1) su GitHub (Settings → Secrets → Actions) mette VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID, SUPABASE_DB_URL (Session pooler) e, consigliato, VERCEL_AUTOMATION_BYPASS_SECRET; 2) se mancano più di 20 migrazioni, riallinea il database di produzione con docs/migrazioni-baseline-produzione.md; 3) fa un rilascio di prova a mano (workflow_dispatch su main) e lo vede verde; 4) solo dopo, vercel.json:8 \"main\": true diventa false (una riga, da fare insieme a una prova che legga vercel.json). Facoltativo e senza segreti: accendere il ruleset «Main» (Settings → Rules) con il controllo «Main» obbligatorio. Precisazione del revisore sull'ordine: appena ci sono i quattro segreti, la prima unione su main con CI verde fa partire il lavoro da solo (applica fino a 20 migrazioni e pubblica) prima del rilascio di prova a mano: meglio riallineare le migrazioni prima di mettere SUPABASE_DB_URL, oppure mettere i segreti subito prima della prova a mano, senza unioni in mezzo. Alternativa da cruscotto da verificare: i «Deployment Checks» di Vercel (trattengono la produzione finché passano i controlli GitHub scelti). Il riferimento del registro deploy-dopo-ci.yml:58-70 è vecchio: il cancello vero sta a 178-272.",
+      "domanda": "Metti i segreti Vercel e SUPABASE_DB_URL su GitHub e riallinei il database, così si può portare main a false in vercel.json?",
+      "verificato_da": "revisore sul modello grande (solo lettura): regge. Cancello in deploy-dopo-ci.yml:178-183 e 226-231 (CI completata, success, push, stesso deposito, main), ricontrollo dell'ultimo commit 393-451; senza i tre segreti VERCEL_* pronto=false (238-272) e i passi di rilascio 461/490/610 non partono; gli ultimi 5 run del 25/11 falliscono in 10-14 s con PRONTO: false. Nessuna cura di solo codice sicura: git.deploymentEnabled è un sì/no fisso per ramo; un ignoreCommand che aspetta la CI via API pubblica di GitHub terrebbe la build 7-9 minuti, cade sul limite di 60 richieste l'ora e non si può provare senza una build Vercel vera."
+    },
+    {
+      "id": "R17-002",
+      "chiave": "deploy-sre|il commento del lavoro di rilascio dice ancora «se i candidati sono piu di uno»",
+      "esito": "riparato",
+      "commit": "f1e5979281a025d89b4e001fa240160b511e4460",
+      "file_toccati": [
+        ".github/workflows/deploy-dopo-ci.yml"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-commento-del-rilascio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r17-commento-del-rilascio.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f1e5979281a025d89b4e001fa240160b511e4460^ --file .github/workflows/deploy-dopo-ci.yml --prove tests/unit/riparazione-r17-commento-del-rilascio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il commento sopra la lettura del dominio ora dice la regola vera: si torna indietro solo al rilascio che il dominio dice, se è di un altro commit. Col commit che esce, l'elenco da solo non sceglie mai, nemmeno con un candidato solo. La prova legge il file e controlla anche che rilascioDaTornare faccia davvero così.",
+      "nota": "Verdi anche le 28 prove esistenti che leggono il workflow (275 casi).",
+      "verificato_da": "revisore sul modello piccolo (lotto 1, resto): regge: il diff è solo commento più la prova (nessuna riga di codice cambiata); il commento a deploy-dopo-ci.yml:653-658 combacia con rilascioDaTornare (scripts/prova-di-fumo.mjs:306-345); prova 3 verdi, prova rimessa uscita 0. Imprecisione minima: il commento non dice che il dominio deve anche essere READY e in produzione (il codice è più prudente del commento)."
+    },
+    {
+      "id": "R17-010",
+      "chiave": "qa-flussi|il testo di un errore vero arriva a sentry senza oscurare email e telefoni",
+      "esito": "parziale",
+      "commit": "23c3c08e1f12268ed9125e0e85ba01e38bd517ae",
+      "file_toccati": [
+        "lib/logger.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-telefoni-oscurati-a-sentry.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r17-telefoni-oscurati-a-sentry.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 23c3c08e1f12268ed9125e0e85ba01e38bd517ae^ --file lib/logger.ts --prove tests/unit/riparazione-r17-telefoni-oscurati-a-sentry.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La forma del telefono nel logger accetta un separatore (spazio, punto o trattino) fra una cifra e l'altra dopo il prefisso, così «333 12 34 567», «333 1234 567», «0523 12 34 56» e «06 123 45 678» escono oscurati nel messaggio e nella testa della pila dell'Error mandato a Sentry, e nella riga di log. Una data gg.mm.aaaa resta leggibile. Il resto della parte del logger (email, causa, Error nel contesto) era già chiuso alla base.",
+      "cosa_resta": "Gli errori che non passano dal logger arrivano a Sentry col testo in chiaro: instrumentation.ts:26-28 (onRequestError), captureError in lib/analytics/sentry.tsx:50 (usato da app/**/error.tsx, components/rider/SOSButton.tsx:125, 132, 195 e dalle promesse rifiutate a sentry.tsx:68), app/global-error.tsx:21; ripulisciEvento (lib/analytics/sentry-config.ts:71-145) non tocca exception.values, event.message né breadcrumbs[].message (11 console.error/warn scritti senza logger). Nel logger restano in chiaro i telefoni con parentesi, barra e spazio non separabile, che testoSenzaRecapiti di lib/analytics/filmato-senza-dati-personali.ts:184-196 già oscura.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/analytics/filmato-senza-dati-personali.ts",
+          "modifica": "spostarci da lib/logger.ts le forme di IBAN, codice fiscale e gettone (DATI_NEL_TESTO) ed esportare una funzione oscuraTesto(testo) che le applica insieme a testoSenzaRecapiti (righe 184-196); il modulo non dipende dal logger, quindi nessun ciclo. Poi lib/logger.ts (file di R17) la importa da lì al posto della sua regola dei telefoni"
+        },
+        {
+          "file": "lib/analytics/sentry-config.ts",
+          "modifica": "in ripulisciEvento (righe 71-145) passare da oscuraTesto event.message, event.logentry?.message, ogni event.exception?.values?.[i].value e ogni event.breadcrumbs?.[i].message. Non importare da lib/logger.ts: il giro logger → sentry.tsx → sentry-config → logger sarebbe un ciclo"
+        }
+      ],
+      "nota": "Verdi le 21 prove esistenti che usano il logger vero.",
+      "verificato_da": "revisore sul modello grande: parziale confermato. Prova 9/9, 19 prove col logger vero verdi (116 casi), prova rimessa uscita 0, nessun rallentamento (500.000 caratteri ostili sotto 1 ms), email con + e maiuscole oscurate, pila e formato della riga invariati. Escono ancora in chiaro (anche alla base): telefoni con parentesi «(0523) 123456», con barra «0523/123456», con spazio non separabile, con due spazi o « - »; un 02.12.3456 78 passa per l'eccezione delle date. Oscurati ora per sbaglio, casi rari: «05 11 2026», «15.01.2026 10 30», «0830-1230», «09.00.00.123», codici a gruppi di cifre."
+    },
+    {
+      "id": "R17-011",
+      "chiave": "qa-flussi|un bigint o un tojson che lancia nel contesto fanno perdere tutto il contesto della riga di log",
+      "esito": "riparato",
+      "commit": "6ac6ccb6909353ac3802f660d0af7fff81f80eff",
+      "file_toccati": [
+        "lib/logger.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-contesto-del-log-intero.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r17-contesto-del-log-intero.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6ac6ccb6909353ac3802f660d0af7fff81f80eff^ --file lib/logger.ts --prove tests/unit/riparazione-r17-contesto-del-log-intero.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In redact il BigInt esce come testo e una funzione (anche un toJSON proprio dell'oggetto) non si copia più, così JSON.stringify non lancia e il resto del contesto resta. Le date escono in formato ISO («Invalid Date» se non valide), una Map esce come oggetto con la regola delle chiavi (una chiave «email» resta oscurata), un Set come elenco. Una Map che contiene se stessa si ferma al limite di profondità. Dopo il collaudo: anche la lettura delle chiavi è protetta, e «__proto__» resta una chiave normale.",
+      "nota": "Primo commit 275eb855b9dd5bc86f4614c2ad591d59fb5d90dc; giro di correzione 6ac6ccb6909353ac3802f660d0af7fff81f80eff: Object.keys protetto (un valore con chiavi illeggibili diventa solo lui «[non leggibile]») e oggetto scritto con prototipo nullo (una chiave «__proto__» resta una chiave). Restano, minori: una Map con due chiavi oggetto collassa su «[object Object]», un Buffer grande esce come oggetto enorme (preesistente).",
+      "verificato_da": "revisore sul modello piccolo (lotto 1, resto): regge: prova 6 verdi, prova rimessa uscita 0, 22 varianti provate (BigInt annidato, toJSON che lancia annidato, getter che lancia, circolare, Error con proprietà extra, Date non valida, chiavi sensibili annidate in array e Map). Residui minori: Object.keys non protetto (un Proxy che lancia su ownKeys fa perdere il contesto), Map con due chiavi oggetto collassa su «[object Object]», chiave «__proto__» persa, Buffer grande esce come oggetto enorme (preesistente). Corretti nel giro di correzione il Proxy che lanciava su ownKeys e la chiave «__proto__» (due casi nuovi, prova rimessa uscita 0, 605 file di prove che usano il logger verdi)."
+    },
+    {
+      "id": "R17-003",
+      "chiave": "deploy-sre|chat e recensioni del negozio, senza la 181, scrivono un avviso a ogni apertura e non usano il ripiego dei nomi",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Ho scritto e provato la cura in lib/queries/controparte-della-chat.ts, poi l'ho tolta senza commit: con lei le due prove comuni diventano rosse (5 casi), e non esiste una cura che le lasci verdi. La prova 1 pretende «Cliente» senza la 181, mentre Maria ha l'ordine o1. La cura: in nomiDeiClienti, quando la funzione manca (PGRST202 o 42883), scrive l'avviso una volta per etichetta («${etichetta} nomi dei clienti senza la funzione della 181: letti dal nome di consegna degli ordini») e restituisce fetchNomiDeiClienti({ from: (t) => supa.from(t), rpc: async () => ({ data: null, error: e }) }, unici); fetchNomiDeiClienti va aggiunto all'import da seller-public-profiles. Così la funzione si chiama una volta sola per apertura. La prova nuova (da chiamare tests/unit/riparazione-r17-nomi-dei-clienti-col-ripiego.test.ts) dà 4 casi verdi con la cura e 3 rossi alla base; con la cura tsc ed eslint escono 0. riparazione-r09-avviso-chat-recensioni resta verde.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts",
+          "modifica": "prova comune, serve la firma di Nicola. Righe 214, 219 e 242: 'Cliente' diventa 'Maria Rossi'"
+        },
+        {
+          "file": "tests/unit/riparazione-r09-avviso-recensioni.test.tsx",
+          "modifica": "prova comune, serve la firma di Nicola. Nel finto supabase: from: (tabella: string) => tabella === 'orders' ? ({ select: () => ({ in: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }) : ({ ...il select/eq/order di oggi... })"
+        },
+        {
+          "file": "lib/queries/controparte-della-chat.ts",
+          "modifica": "la cura qui sopra (file di R17), da mettere nello stesso commit delle due prove e della prova nuova"
+        }
+      ],
+      "nota": "Modifica scritta per le due prove comuni verificata sul codice di oggi: ancora giusta. Copie modificate delle due prove, fatte girare fuori dall'albero: 18 casi verdi con la cura, 4 rossi alla base. La metà «avviso a ogni apertura» era già chiusa alla base. La cura e la sua prova sono pronte fuori dal ramo (patch nella sessione R17, scratchpad R17-003-cura.patch e R17-003-prova.test.ts).",
+      "verificato_da": "revisore sul modello piccolo (lotto 1, resto): serve_file_altrui confermato: applicata la patch, la prova dei nomi ha 4 rossi su 18 (righe 214, 219, 242 pretendono «Cliente» mentre gli ordini del mondo di prova danno «Maria Rossi»), la prova R09 1 rosso (3 avvisi invece di 1, dal finto supabase senza .in()). Nessuna cura nel solo controparte-della-chat.ts tiene verde la prova dei nomi; la prova R09 si potrebbe tenere verde con una lettura degli ordini propria con try/catch silenzioso, ma non basta a chiudere."
+    },
+    {
+      "id": "R17-009",
+      "chiave": "qa-flussi|il carrello si riempie di nuovo con la spesa già pagata o già tolta, se si usano due dispositivi o non si torna da stripe",
+      "esito": "parziale",
+      "commit": "3559deb26198a444cceded5105993850069597b5",
+      "file_toccati": [
+        "components/CartCrossDeviceSync.tsx",
+        "lib/cart.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-carrello-fra-dispositivi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r17-carrello-fra-dispositivi.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3559deb26198a444cceded5105993850069597b5^ --file components/CartCrossDeviceSync.tsx,lib/cart.ts --prove tests/unit/riparazione-r17-carrello-fra-dispositivi.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "L'allineamento ricorda due cose nella stessa chiave mc_cart_synced_at («locale:cloud»): la data locale del carrello allineato, con l'orologio di questo dispositivo, e la data del cloud, usata solo come segno di versione. Se il locale non è cambiato e il cloud sì, vince il cloud intero: una riga tolta, una quantità abbassata o la spesa pagata non tornano più. Se sono cambiati tutti e due si fondono come prima. Una chiave vecchia (solo un numero) segue la regola di prima. syncUp non riporta più indietro la data locale e l'orologio di un altro dispositivo non viene mai usato. Gli invii vanno uno dopo l'altro, non si rimanda su un carrello che il cloud ha già, e lib/cart.ts fa avanzare sempre la data a ogni modifica, anche con l'ora tornata indietro.",
+      "cosa_resta": "Con la carta, se il cliente non torna da Stripe, nessuno svuota user_carts quando l'ordine nasce. Dopo le righe qui sotto il resto basta già: alla riapertura i dispositivi col carrello non toccato si svuotano da soli. app/orders/page.tsx non serve toccarlo. Resta anche, dichiarato: con la chiave vecchia (solo un numero, scritta dalle versioni di prima) la prima apertura dopo l'uscita segue la regola di prima e una riga tolta altrove può tornare una volta; dalla volta dopo la chiave è nel formato nuovo. Non corretto apposta: la chiave vecchia vale l'ora del cloud (orologio di un altro dispositivo) o l'ora di questo, e un confronto con la data locale farebbe sparire un prodotto aggiunto qui se l'altro orologio è avanti.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/stripe/webhook/ordini.ts",
+          "modifica": "in handleCheckoutCompleted, quando tutti gli ordini della sessione sono creati: admin.from('user_carts').upsert({ user_id: <cliente dell'ordine>, items: [], updated_at: new Date().toISOString() }, { onConflict: 'user_id' }); un errore va solo nel registro e non blocca. Serve un upsert, non un delete: con la riga che manca il client non svuota"
+        },
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "stessa scrittura quando gli ordini in contanti sono confermati (rete di sicurezza: oggi il dispositivo che paga svuota da sé)"
+        }
+      ],
+      "nota": "Limite voluto: se tutti e due i dispositivi hanno cambiato il carrello dopo l'ultimo allineamento, una riga tolta dall'altro può tornare con la fusione (senza un segno per ogni riga tolta non si distingue). Verdi le 31 prove esistenti del carrello (244 casi).",
+      "verificato_da": "revisore sul modello piccolo (lotto 1, resto): regge: prova 6 verdi, prova rimessa uscita 0, 58 file di prove del carrello verdi (384 casi); provati con due dispositivi finti prodotto aggiunto durante un cloud cambiato, 5 riaperture senza invii in più, cloud svuotato altrove, ospite senza chiave, orologio indietro di 2 giorni, chiavi malformate. Limiti: con la chiave vecchia (solo un numero) la prima apertura dopo l'uscita può ancora far tornare una riga tolta; l'ospite con un carrello più nuovo e un cloud più vecchio non si fonde (preesistente, ramo uguale alla base)."
+    },
+    {
+      "id": "R17-004",
+      "chiave": "immagini-media|le prove di sviluppo seminano 240 foto di prodotto da placehold.co",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": "grep -c placehold seeds/001_piacenza_stores.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Niente nel seme: seeds/001_piacenza_stores.sql non contiene più placehold.co (le foto sono '[]'::jsonb dal commit ca1161715487ec1797d614ab9c666742d54274f6, già nella base); gli altri semi 002-007 non ne hanno. La voce nomina anche le storie di Storybook, che restano e non sono un file di R17.",
+      "prova": "grep -c placehold seeds/001_piacenza_stores.sql dà 0 sulla base aac2350b09db195d6d2286f15f75a7d02ae590a1 (commit ca1161715487ec1797d614ab9c666742d54274f6)",
+      "nota": "Il resto di placehold.co nel deposito è codice vivo (CSP in middleware.ts, next.config.js, elenchi in lib/): il registro lo dà come scelta di Nicola, con il controllo del database vero prima di toglierlo.",
+      "serve_file_altrui": [
+        {
+          "file": "stories/StoreAvatar.stories.tsx",
+          "modifica": "riga 22: logoUrl 'https://placehold.co/200x200/C0492C/fff?text=PR' diventa '/icon-192.png'; riga 34: logoUrl 'https://placehold.co/300x300/4A7C59/fff?text=Bio' diventa '/icon-512.png' (immagini locali già in public/), così nessuna fixture di sviluppo carica più da placehold.co"
+        }
+      ],
+      "verificato_da": "revisore sul modello piccolo (lotto 2): seme pulito confermato (grep 0, semi 002-007 puliti); restano stories/StoreAvatar.stories.tsx:22 e :34, nominati dalla voce: esito portato da gia_riparato_prima a serve_file_altrui."
+    },
+    {
+      "id": "R17-005",
+      "chiave": "layout-responsive|/come-funziona: anche il titolo grande e un h3 in riga flex possono uscire col testo al 200%",
+      "esito": "riparato",
+      "commit": "27e4aa2b02af88b2c7935dd415611a5b8f6eaef9",
+      "file_toccati": [
+        "app/come-funziona/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-come-funziona-titoli.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r17-come-funziona-titoli.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 27e4aa2b02af88b2c7935dd415611a5b8f6eaef9^ --file app/come-funziona/page.tsx --prove tests/unit/riparazione-r17-come-funziona-titoli.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "L'h1 ha break-words. I due h3 dei pulsanti finali hanno break-words, e il secondo anche min-w-0 con l'icona Store shrink-0. I due div che li contengono hanno min-w-0.",
+      "nota": "Le 11 prove esistenti che leggono la pagina sono verdi.",
+      "verificato_da": "revisore sul modello piccolo (lotto 2): regge: i 4 titoli della pagina coperti (h1 59, h2 80, h3 96 e 106); prova rimessa uscita 0; togliendo break-words dall'h1 o dal primo h3 la prova è rossa. Avvertenza: una parola lunghissima nell'h3 «Hai un negozio?» potrebbe ancora sporgere (con le parole di oggi no)."
+    },
+    {
+      "id": "R17-006",
+      "chiave": "layout-responsive|/privacy e /come-funziona possono scorrere di lato col testo al 200%",
+      "esito": "riparato",
+      "commit": "a99b25a8ae7780ffac87de3c6117879dca9874d7",
+      "file_toccati": [
+        "app/come-funziona/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-come-funziona-banda.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r17-come-funziona-banda.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a99b25a8ae7780ffac87de3c6117879dca9874d7^ --file app/come-funziona/page.tsx --prove tests/unit/riparazione-r17-come-funziona-banda.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nella banda di rassicurazione di /come-funziona la riga ha min-w-0, lo span dell'icona shrink-0, e l'h2 min-w-0 break-words (non [overflow-wrap:anywhere]). L'h1 di LegalLayout ha già break-words, quindi lì non è cambiato niente.",
+      "nota": "La modifica scritta nell'onda 1 era ancora giusta (righe spostate di una). LegalLayout non toccato: ha già [overflow-wrap:anywhere] sul contenuto (riga 71) e break-words hyphens-auto sull'h1 (riga 41). 17 prove esistenti che leggono la pagina o LegalLayout sono verdi. Non misurato a schermo: la prova controlla le classi.",
+      "verificato_da": "revisore sul modello piccolo (lotto 2): regge: prova rimessa uscita 0; /privacy non scorre di lato: LegalLayout.tsx:71 ha min-w-0 e [overflow-wrap:anywhere], l'h1 (41) break-words hyphens-auto, la tabella di app/privacy/page.tsx:142-148 scorre nel suo riquadro overflow-x-auto, niente pre/code."
+    },
+    {
+      "id": "R17-007",
+      "chiave": "privacy-legale|i termini chiamano i tempi di consegna «stimati e non vincolanti», mentre in cassa il cliente sceglie la sua fascia oraria",
+      "esito": "scelta_di_nicola",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "domanda": "La fascia oraria scelta in cassa è un impegno vincolante, oppure resta stimata? Se vincolante, cosa succede se si sfora (annullamento, rimborso o altro)?",
+      "cosa_ho_fatto": "Niente.",
+      "nota": "Il difetto c'è ancora: lib/legal/promessa-cliente-assente.ts:240-241 («stimati e non vincolanti, salvo diversa garanzia espressa»), mentre lib/promesse-pubbliche.ts:175 e DeliverySlotPicker.tsx promettono «nella fascia oraria che scegli». Allineare i testi vuol dire decidere cosa si promette. Il registro suggerisce anche di chiedere all'avvocato se la clausola regge. Se Nicola sceglie «indicativa», il testo pronto per la cassa è quello qui sopra, più ammorbidire le tre frasi di lib/promesse-pubbliche.ts. Se sceglie «vincolante», vanno cambiati i Termini (§6 e §13(b), app/terms/page.tsx, non di R17).",
+      "verificato_da": "revisore sul modello piccolo (lotto 2): scelta confermata: esiste una riga di solo testo in cassa («La fascia che scegli è indicativa: i tempi di consegna sono stimati e non vincolanti, come scritto nei Termini (§6).») ma smorza una promessa già fatta in lib/promesse-pubbliche.ts:125-126, 180, 193 (metadati e pagine pubbliche), e app/terms/page.tsx:403 (§13(b)) esclude la responsabilità per i ritardi anche verso il consumatore."
+    },
+    {
+      "id": "R17-008",
+      "chiave": "qa-flussi|un cliente che esiste già non ha una strada da solo per diventare fattorino",
+      "esito": "gia_riparato_prima",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": "grep -n gia-cliente-rider app/help/page.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Niente: app/help/page.tsx:103-109 ha già il paragrafo id=\"gia-cliente-rider\" con il link vero <Link href=\"/contact\"> e l'indicazione di scrivere con l'email dell'account; la scheda «Diventa rider» (riga 59) rimanda lì.",
+      "prova": "app/help/page.tsx:103-109 sulla base aac2350b09db195d6d2286f15f75a7d02ae590a1 (commit 897182db181e03c33bafb02f0c7161a6a49b7a14); app/contact esiste; tests/unit/riparazione-r13-aiuto-rider.test.ts lo verifica già",
+      "nota": ""
+    },
+    {
+      "id": "R17-012",
+      "chiave": "qa-flussi|una prova del collegamento stripe passa solo grazie al caso precedente: i tre flag non si azzerano tra un caso e l'altro",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/minori-s01-collegamento-stripe.test.ts",
+          "modifica": "Riga 77, nel beforeEach: `Object.assign(st, { scritturaCade: false, righe: 1, creati: 0, link: 0, linkCade: false, salvati: [] });` diventa `Object.assign(st, { scritturaCade: false, righe: 1, creati: 0, link: 0, linkCade: false, salvati: [], flag: null });`. Così st.flag, che porta i tre flag, riparte vuoto a ogni caso."
+        }
+      ],
+      "cosa_ho_fatto": "Niente: il file non è di R17 e non importa né legge per nome nessuno dei file di R17.",
+      "nota": "Il difetto c'è ancora: st.flag (riga 18) è un campo solo che porta i tre flag (stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted) e non viene azzerato in beforeEach (righe 75-79); il caso «salvando il conto nuovo i tre flag tornano falsi» (righe 126-131) lo legge anche se la rotta non salva.",
+      "verificato_da": "revisore sul modello piccolo (lotto 2): regge: con flag: null il file resta verde 7/7; simulando una rotta che non salva, oggi la prova resta verde per errore e con la modifica diventa rossa."
+    },
+    {
+      "id": "R17-013",
+      "chiave": "stati-ui|nella chat assistenza la bolla della risposta appiattisce a capo ed elenchi: una descrizione lunga diventa un muro di testo senza «leggi tutto»",
+      "esito": "riparato",
+      "commit": "bb1f8df081d684138fe3fa7b1854dda7face683e",
+      "file_toccati": [
+        "components/SupportProductAssistant.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-chat-risposta-lunga.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r17-chat-risposta-lunga.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bb1f8df081d684138fe3fa7b1854dda7face683e^ --file components/SupportProductAssistant.tsx --prove tests/unit/riparazione-r17-chat-risposta-lunga.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le bolle hanno whitespace-pre-line break-words, così a capo ed elenchi restano, senza HTML grezzo. Una risposta dell'assistente oltre 420 caratteri si ripiega su 6 righe (line-clamp-6) con il pulsante «Leggi tutto» / «Mostra meno» (aria-expanded). Dopo il collaudo: si ripiega anche una risposta con più di 8 righe.",
+      "nota": "Le 5 prove esistenti che leggono il componente sono verdi. Primo commit ec00f9ce91c9e686d2a4ece8056dc9282b65198b (a capo, elenchi, «Leggi tutto» sopra i 420 caratteri); giro di correzione bb1f8df081d684138fe3fa7b1854dda7face683e: si ripiega anche con più di 8 righe (RIGHE_LUNGHE = 8), perché il collaudo ha visto un elenco di 60 righe brevi (240 caratteri) restare un muro. Resta non ripiegato un messaggio lungo dell'utente (scelta, non difetto).",
+      "verificato_da": "revisore sul modello piccolo (lotto 2): prova rimessa uscita 0; niente streaming (la risposta arriva intera), lo stato aperto non passa a un altro messaggio, nessun HTML grezzo; la soglia era solo sui caratteri ('- a\\n'.repeat(60) non si ripiegava): corretto nel giro di correzione, caso nuovo rosso alla base del giro e verde dopo (prova rimessa uscita 0), 5 file di prove del componente verdi (76 casi)."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "le storie di Storybook di StoreAvatar usano ancora loghi da placehold.co",
+      "dimensione": "immagini-media",
+      "severita": "minore",
+      "file": "stories/StoreAvatar.stories.tsx:22",
+      "descrizione": "Righe 22 e 34: loghi placehold.co nelle storie, dopo che il seme non li usa più."
+    }
+  ],
+  "domande_per_nicola": [
+    "R17-001: metti VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID e SUPABASE_DB_URL su GitHub e riallinei il database? Solo dopo si può portare main a false in vercel.json.",
+    "R17-003: firmi le due modifiche alle prove comuni (i-nomi-dei-clienti-che-il-negozio-vede, riparazione-r09-avviso-recensioni)? Poi la cura già pronta si mette nello stesso commit.",
+    "R17-007: la fascia oraria scelta in cassa è un impegno vincolante, oppure resta stimata? Se vincolante, cosa succede se si sfora?"
+  ],
+  "conto": {
+    "agenti": 7,
+    "subagenti": 7,
+    "nota": "2 riparatori (lotto 1 sul modello grande, lotto 2 sul piccolo), 4 revisori (2 grandi per R17-001 e R17-010, 2 piccoli), 1 giro di correzione sul piccolo",
+    "costo_usd": 17.95
+  },
+  "costo_usd": 17.95
+}
