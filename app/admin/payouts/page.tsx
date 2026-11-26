@@ -175,7 +175,8 @@ const TETTO_PAYOUT = 1000;
  * i contanti più vecchi ancora da versare. Gli aperti si leggono da soli; i chiusi a parte, per
  * «Già pagato» e per l'elenco.
  */
-const STATI_CHIUSI = ['TRANSFERRED', 'PAID_MANUALLY', 'REFUNDED', 'REVERSED', 'CASH_IN_STORE'];
+// R22-001 — anche lo storno non riuscito: è fuori dai totali e non deve prendere il posto di un contante da versare.
+const STATI_CHIUSI = ['TRANSFERRED', 'PAID_MANUALLY', 'REFUNDED', 'REVERSED', 'REVERSAL_FAILED', 'CASH_IN_STORE'];
 /** R22-002 — Un ritiro al banco con la commissione ancora da regolare resta fra gli aperti. */
 const RITIRO_DA_REGOLARE = 'and(payout_status.eq.CASH_IN_STORE,payout_at.is.null)';
 
@@ -286,7 +287,9 @@ export default function AdminPayoutsPage() {
       const [daAperti, daChiusi] = await Promise.all([
         consegnati()
           .or(`payout_status.is.null,payout_status.not.in.(${STATI_CHIUSI.join(',')}),${RITIRO_DA_REGOLARE}`)
-          .order('created_at', { ascending: false })
+          // R22-001 — dal più vecchio: se l'elenco si taglia, restano fuori i più recenti (questa settimana),
+          // non i contanti da versare da più tempo.
+          .order('created_at', { ascending: true })
           // Una riga in più: se arriva, l'elenco è tagliato davvero (con 1000 esatte no).
           .limit(TETTO_PAYOUT + 1),
         consegnati().in('payout_status', STATI_CHIUSI).order('created_at', { ascending: false }).limit(TETTO_PAYOUT + 1),
@@ -462,9 +465,9 @@ export default function AdminPayoutsPage() {
         <div role="status" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
           <p>
-            <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PAYOUT} ordini consegnati col bonifico ancora aperto. Mancano i più
-            vecchi, cioè proprio quelli da pagare da più tempo. I totali di questa pagina, anche quelli dei singoli
-            negozi, possono essere più bassi del vero.
+            <strong>Elenco tagliato:</strong> mostro solo i {TETTO_PAYOUT} ordini consegnati più vecchi col bonifico ancora aperto.
+            Mancano i più recenti: i totali di questa pagina, anche quelli dei singoli negozi, possono essere più bassi
+            del vero.
           </p>
         </div>
       )}
