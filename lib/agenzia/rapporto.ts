@@ -387,7 +387,7 @@ export function leggiRapporto(scheda: SchedaCliente | null | undefined, adesso: 
   // 1 · La carta d'identità online: i controlli fatti sulle pagine del sito già scaricate.
   metti('identita_online', b('sito'), (x) => pezzo(x.etichetta, {
     voci: soloVoci([
-      x.dati.https === true ? voce('Il sito è sicuro (https)') : x.dati.https === false ? voce('Il sito non è sicuro: manca https') : null,
+      x.dati.https === true ? voce('Il sito è sicuro (https)') : x.dati.https === false ? voce('Il tuo sito non è protetto: manca https, e i browser lo segnalano a chi lo apre') : null,
       x.dati.viewport_mobile === true ? voce('Il sito è fatto per il telefono') : x.dati.viewport_mobile === false ? voce('Il sito non è fatto per il telefono') : null,
       x.dati.descrizione === true ? voce('Ha la descrizione che Google mostra sotto il nome') : x.dati.descrizione === false ? voce('Manca la descrizione che Google mostra sotto il nome') : null,
     ]),
