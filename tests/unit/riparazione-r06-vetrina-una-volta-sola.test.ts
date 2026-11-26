@@ -11,7 +11,9 @@
  * fare nei chiamanti, con React Query: e' nel referto.)
  */
 import { describe, it, expect, vi } from 'vitest';
-import { fetchSellerPublicMap, DURATA_MEMORIA_NEGOZIO_MS } from '@/lib/queries/seller-public-profiles';
+import { fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
+
+const DIECI_MINUTI = 10 * 60 * 1000;
 
 function vetrina(righe: Array<{ id: string; store_name: string; is_approved: boolean }>) {
   const domande: string[][] = [];
@@ -61,7 +63,7 @@ describe('R06-009 · la vetrina nel browser', () => {
     try {
       const { client, domande } = vetrina([PANE]);
       await fetchSellerPublicMap(client, ['pane']);
-      vi.setSystemTime(Date.now() + DURATA_MEMORIA_NEGOZIO_MS + 1);
+      vi.setSystemTime(Date.now() + DIECI_MINUTI);
       await fetchSellerPublicMap(client, ['pane']);
       expect(domande.length).toBe(2);
     } finally {

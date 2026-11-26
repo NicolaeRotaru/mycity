@@ -7,7 +7,9 @@
  * una sola lettura; scaduta la memoria, di nuovo una lettura.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { fetchSellerPublicMap, DURATA_MEMORIA_NEGOZIO_MS } from '@/lib/queries/seller-public-profiles';
+import { fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
+
+const DIECI_MINUTI = 10 * 60 * 1000;
 
 const PANE = { id: 'pane', store_name: 'Pane Quotidiano', is_approved: true };
 const LATTE = { id: 'latte', store_name: 'Latteria', is_approved: true };
@@ -56,7 +58,7 @@ describe('R15-002 · la vetrina tiene il negozio qualche minuto', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const { client, domande } = vetrina();
     await fetchSellerPublicMap(client, ['pane']);
-    vi.setSystemTime(Date.now() + DURATA_MEMORIA_NEGOZIO_MS + 1);
+    vi.setSystemTime(Date.now() + DIECI_MINUTI);
     await fetchSellerPublicMap(client, ['pane']);
     expect(domande.length).toBe(2);
   });
