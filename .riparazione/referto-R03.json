@@ -215,7 +215,7 @@
     },
     {
       "riservato": true,
-      "titolo": "Falla di sicurezza da chiudere (permessi sui prodotti importati): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
       "dimensione": "sicurezza",
       "severita": "minore",
       "file": "(nel referto privato)"
@@ -227,6 +227,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "6 subagenti su 8: lotto 1 (grande), lotto 2 (sonnet), smentitore R03-001 (grande), smentitore R03-006 (grande), smentitore delle altre cinque (sonnet), correzione R03-003 (sonnet). Spesa letta da get_session a metà turno: 11,58 $ (limite 25 $)."
-  }
+    "nota": "6 subagenti su 8: lotto 1 (grande), lotto 2 (sonnet), smentitore R03-001 (grande), smentitore R03-006 (grande), smentitore delle altre cinque (sonnet), correzione R03-003 (sonnet). Spesa letta da get_session (senza id) prima della consegna: 11,58 $ su un limite di 25 $; il numero si aggiorna a turno chiuso.",
+    "subagenti": 6
+  },
+  "costo_usd": 11.58
 }
