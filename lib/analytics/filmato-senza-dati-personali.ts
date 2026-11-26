@@ -253,15 +253,16 @@ function sembraUnEventoDelFilmato(valore: unknown): valore is { type: number } &
  * un evento rrweb, un elenco di eventi, o un elenco di elenchi — e torna la
  * stessa cosa senza gli indirizzi delle persone.
  *
- * Non lancia mai: la telemetria non deve poter rompere una pagina. Se qualcosa
- * va storto torna quello che ha in mano, e la seconda rete resta il fatto che
- * `/search` si puo' togliere dalle pagine filmabili.
+ * Non lancia mai: la telemetria non deve poter rompere una pagina.
  */
 export function filmatoSenzaDatiPersonali(datiDelFilmato: unknown): unknown {
   try {
     return unPezzoDiFilmato(datiDelFilmato, 0, { pezzi: 0 });
   } catch {
-    return datiDelFilmato;
+    // 26/11/2026 — In eccezione si chiude a chiave, come strutturaSenzaIndirizzi e
+    // come a fine budget: restituire il filmato originale portava fuori proprio
+    // gli indirizzi che il cancello doveva togliere.
+    return VALORE_NASCOSTO;
   }
 }
 
