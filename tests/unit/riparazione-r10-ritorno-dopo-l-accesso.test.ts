@@ -131,4 +131,30 @@ describe('R10-001 — il ritorno dopo l\'accesso vale per ogni ruolo', () => {
       expect(await accediCome('seller', verso(cattivo))).toBe('/seller/dashboard');
     },
   );
+
+  it('il fattorino rimandato da una pagina del negozio va sulla sua home, non nell\'area del negozio', async () => {
+    expect(await accediCome('rider', verso('/seller'))).toBe('/rider');
+  });
+
+  it('il negozio rimandato da una pagina dell\'area amministratore va sulla sua home', async () => {
+    expect(await accediCome('seller', verso('/admin/utenti'))).toBe('/seller/dashboard');
+  });
+
+  it.each(['/?x', '/#x', '/?x=1#y'])('l\'amministratore con ritorno %s va sulla sua home, non sulla home del sito', async (ritorno) => {
+    expect(await accediCome('admin', verso(ritorno))).toBe('/admin');
+  });
+
+  it('il fattorino con ritorno «/?x» va sulla sua home', async () => {
+    expect(await accediCome('rider', verso('/?x'))).toBe('/rider');
+  });
+
+  it('il ritorno nell\'area del proprio ruolo resta valido (negozio verso /seller, fattorino verso /rider/ordini)', async () => {
+    expect(await accediCome('seller', verso('/seller'))).toBe('/seller');
+    expect(await accediCome('rider', verso('/rider/ordini'))).toBe('/rider/ordini');
+  });
+
+  it('il cliente non cambia: un ritorno verso l\'area di un altro ruolo o verso «/?x» resta com\'è', async () => {
+    expect(await accediCome('buyer', verso('/seller'))).toBe('/seller');
+    expect(await accediCome('buyer', verso('/?x'))).toBe('/?x');
+  });
 });

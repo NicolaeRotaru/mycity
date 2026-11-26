@@ -58,6 +58,11 @@ function translateAuthError(msg: string): string {
   return 'Accesso non riuscito. Riprova.';
 }
 
+// Le aree riservate a un ruolo (le stesse di ROLE_PROTECTED nel portiere, lib/auth/decisione-portiere.ts)
+// e la home di ciascuno, dove si atterra dopo l'accesso.
+const AREA_DEL_RUOLO: Record<string, string> = { admin: '/admin', seller: '/seller', rider: '/rider' };
+const HOME_DEL_RUOLO: Record<string, string> = { admin: '/admin', seller: '/seller/dashboard', rider: '/rider' };
+
 const SignInForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -254,17 +259,22 @@ const SignInForm = () => {
       // Senza un ritorno atterra sulla home del ruolo (seller/rider/admin) così,
       // dopo un cambio account, non resti sulla pagina del ruolo precedente.
       // R10-001 — Un ritorno (già pulito da `safeInternalPath`: un indirizzo
-      // esterno diventa '/') vale per tutti i ruoli: prima amministratore,
-      // negozio e fattorino lo perdevano, per esempio verso /accetta-condizioni.
+      // esterno diventa '/') vale per tutti i ruoli, per esempio verso /accetta-condizioni;
+      // ma se il suo percorso è '/' (anche con ?query o #frammento) o sta nell'area di un
+      // ALTRO ruolo, amministratore, negozio e fattorino vanno sulla home del proprio.
       let dest = returnTo;
-      if (data?.user?.id && returnTo === '/') {
+      if (data?.user?.id) {
         try {
           const { data: prof } = await supabase
             .from('profiles').select('role').eq('id', data.user.id).single();
-          const r = prof?.role;
-          if (r === 'admin') dest = '/admin';
-          else if (r === 'seller') dest = '/seller/dashboard';
-          else if (r === 'rider') dest = '/rider';
+          const casa = prof?.role ? HOME_DEL_RUOLO[prof.role as string] : undefined;
+          if (casa) {
+            const percorso = returnTo.split(/[?#]/)[0];
+            const inAreaAltrui = Object.entries(AREA_DEL_RUOLO).some(
+              ([ruolo, area]) => ruolo !== prof?.role && (percorso === area || percorso.startsWith(`${area}/`)),
+            );
+            if (percorso === '/' || inAreaAltrui) dest = casa;
+          }
         } catch { /* fallback: returnTo */ }
       }
       router.push(dest);
