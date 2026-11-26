@@ -10,10 +10,15 @@
 --
 -- DUE TABELLE, SOLO DAL SERVER (come preventivi_con_codice, 708, e schede_clienti, 864):
 --   · inviti_agente — i link d'invito. Si tiene l'IMPRONTA del codice (sha256), mai il codice: chi leggesse la
---     tabella non avrebbe un link valido. Ogni link vale per `usi_max` persone (di serie 1) fino a `scade_il`;
+--     tabella non avrebbe un link valido. Nel link il codice sta dopo il «#» (/invito-agente#<codice>): quella
+--     parte il browser non la manda a nessun server, quindi non finisce nei registri né nelle statistiche
+--     (collaudo del 26/11: con il codice nel percorso finiva nei log e negli eventi di navigazione). Ogni link vale per `usi_max` persone (di serie 1) fino a `scade_il`;
 --     Admin lo può ritirare (`ritirato_il`). Niente si cancella: un link usato o ritirato resta, con la data.
 --   · agenti — chi è agente: l'utente, l'email con cui si è iscritto, da quale invito, e se è attivo.
---     Sospendere un agente = `attivo = false` (resta la riga, con `sospeso_il`).
+--     Sospendere un agente = `attivo = false` (resta la riga, con `sospeso_il`). Un agente sospeso lo riattiva
+--     solo Admin, non un altro link. Se la persona cancella il suo account (diritto all'oblio), la riga se ne
+--     va con lui (ON DELETE CASCADE, come le altre tabelle personali; elenco in lib/account/cancellazione.ts):
+--     col RESTRICT di prima la cancellazione dell'account falliva sempre (collaudo del 26/11).
 -- L'agente NON cambia ruolo: resta un account MyCity come gli altri (profiles.role non si tocca, e con lui
 -- nessuna delle regole sui ruoli). Essere agente vuol dire avere una riga attiva qui.
 --
@@ -42,7 +47,7 @@ CREATE TABLE IF NOT EXISTS public.inviti_agente (
 );
 
 CREATE TABLE IF NOT EXISTS public.agenti (
-  user_id      uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE RESTRICT,
+  user_id      uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email        text NOT NULL CHECK (char_length(email) BETWEEN 3 AND 254),
   invito_id    uuid REFERENCES public.inviti_agente(id) ON DELETE SET NULL,
   attivo       boolean NOT NULL DEFAULT true,
@@ -76,6 +81,25 @@ AS $$
   RETURNING id;
 $$;
 
+/** Restituisce un posto preso da un'iscrizione non riuscita, in un passaggio solo (mai sotto zero). */
+CREATE OR REPLACE FUNCTION public.restituisci_invito_agente(p_id uuid)
+RETURNS void
+LANGUAGE sql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+  UPDATE public.inviti_agente SET usi = usi - 1 WHERE id = p_id AND usi > 0;
+$$;
+
+-- Chi esegue una migrazione vecchia su un database dove la tabella c'era già col RESTRICT: si porta a CASCADE.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'agenti_user_id_fkey' AND confdeltype <> 'c') THEN
+    ALTER TABLE public.agenti DROP CONSTRAINT agenti_user_id_fkey;
+    ALTER TABLE public.agenti ADD CONSTRAINT agenti_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
 ALTER TABLE public.inviti_agente ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.agenti ENABLE ROW LEVEL SECURITY;
 
@@ -86,6 +110,8 @@ GRANT ALL ON public.agenti TO service_role;
 
 REVOKE ALL ON FUNCTION public.usa_invito_agente(text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.usa_invito_agente(text) TO service_role;
+REVOKE ALL ON FUNCTION public.restituisci_invito_agente(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.restituisci_invito_agente(uuid) TO service_role;
 
 COMMENT ON TABLE public.inviti_agente IS
   'I link d invito degli agenti (chi visita i negozi per i servizi SDG): impronta sha256 del codice, mai il codice; monouso e con scadenza di serie. Solo dal server (migrazione 865).';

@@ -1,10 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
+import { CHIAVE_CODICE, CODICE_INVITO, PERCORSO_INVITO } from '@/lib/agenti/codice';
 
 type Stato = 'valido' | 'usato' | 'scaduto' | 'ritirato' | 'inesistente' | 'guasto';
+
+/** Il codice dopo il «#»: lo tengo nella scheda del browser (serve se la persona va a fare l'accesso e torna) e lo tolgo dalla barra. */
+function prendiIlCodice(): string | null {
+  const dalLink = location.hash.slice(1);
+  if (CODICE_INVITO.test(dalLink)) {
+    try { sessionStorage.setItem(CHIAVE_CODICE, dalLink); } catch { /* memoria della scheda non disponibile: si usa e basta */ }
+    history.replaceState(null, '', location.pathname + location.search);
+    return dalLink;
+  }
+  try {
+    const tenuto = sessionStorage.getItem(CHIAVE_CODICE);
+    return tenuto && CODICE_INVITO.test(tenuto) ? tenuto : null;
+  } catch { return null; }
+}
+
+function dimenticaIlCodice() {
+  try { sessionStorage.removeItem(CHIAVE_CODICE); } catch { /* niente da togliere */ }
+}
 
 const CHIUSO: Record<Exclude<Stato, 'valido'>, string> = {
   usato: 'Questo link è già stato usato.',
@@ -16,14 +35,26 @@ const CHIUSO: Record<Exclude<Stato, 'valido'>, string> = {
 
 const campo = 'mt-1 w-full rounded-lg border border-cream-300 bg-surface-0 px-3 py-2.5 text-base text-ink-900';
 
-export default function InvitoAgente({ codice, stato, emailCollegata, giaAgente }: { codice: string; stato: Stato; emailCollegata: string | null; giaAgente: boolean }) {
+export default function InvitoAgente({ emailCollegata, giaAgente }: { emailCollegata: string | null; giaAgente: boolean }) {
+  const [codice, setCodice] = useState<string | null>(null);
+  const [stato, setStato] = useState<Stato | null>(null);
   const [email, setEmail] = useState('');
+  const [ripetiEmail, setRipetiEmail] = useState('');
   const [password, setPassword] = useState('');
   const [ripeti, setRipeti] = useState('');
   const [accetto, setAccetto] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [attesa, setAttesa] = useState(false);
-  const ritorno = `/invito-agente/${codice}`;
+
+  useEffect(() => {
+    const c = prendiIlCodice();
+    if (!c) { setStato('inesistente'); return; }
+    setCodice(c);
+    fetch('/api/invito-agente/stato', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ codice: c }), cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d: { data?: { stato?: Stato } }) => setStato(d?.data?.stato ?? 'guasto'))
+      .catch(() => setStato('guasto'));
+  }, []);
 
   async function chiama(indirizzo: string, corpo?: unknown) {
     const r = await fetch(indirizzo, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo ?? {}) });
@@ -34,10 +65,13 @@ export default function InvitoAgente({ codice, stato, emailCollegata, giaAgente 
   async function iscriviti(e: React.FormEvent) {
     e.preventDefault();
     setErrore(null);
+    // L'email non arriva a nessuno per conferma (il link vale già come conferma): scritta male, l'account si perde.
+    if (email.trim().toLowerCase() !== ripetiEmail.trim().toLowerCase()) { setErrore('Le due email non sono uguali.'); return; }
     if (password !== ripeti) { setErrore('Le due password non sono uguali.'); return; }
     setAttesa(true);
     try {
-      await chiama(`/api/invito-agente/${codice}/iscriviti`, { email, password, accettoCondizioni: accetto });
+      await chiama('/api/invito-agente/iscriviti', { codice, email, password, accettoCondizioni: accetto });
+      dimenticaIlCodice();
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
       if (error) { window.location.href = `/sign-in?returnTo=${encodeURIComponent('/agente')}`; return; }
       window.location.href = '/agente';
@@ -46,12 +80,12 @@ export default function InvitoAgente({ codice, stato, emailCollegata, giaAgente 
 
   async function attiva() {
     setErrore(null); setAttesa(true);
-    try { await chiama(`/api/invito-agente/${codice}/attiva`); window.location.href = '/agente'; }
+    try { await chiama('/api/invito-agente/attiva', { codice }); dimenticaIlCodice(); window.location.href = '/agente'; }
     catch (err) { setErrore(err instanceof Error ? err.message : 'Attivazione non riuscita.'); } finally { setAttesa(false); }
   }
 
   return (
-    <main className="mx-auto max-w-md px-4 py-10">
+    <div className="mx-auto max-w-md px-4 py-10">
       <p className="text-xs font-semibold uppercase tracking-wider text-ink-600">MyCity · SDG Agenzia</p>
       <h1 className="mt-1 font-serif text-3xl font-extrabold text-ink-900">Invito per gli agenti</h1>
       <p className="mt-2 text-sm text-ink-600">Con questo invito entri nella pagina degli agenti: incolli il link di Google Maps di un negozio e ricevi la scheda del cliente prima di entrare.</p>
@@ -61,6 +95,8 @@ export default function InvitoAgente({ codice, stato, emailCollegata, giaAgente 
           <p className="text-sm text-ink-900">Sei già un agente di MyCity.</p>
           <Link href="/agente" className="mt-3 inline-block rounded-lg bg-ink-900 px-4 py-2 text-sm font-bold text-white">Apri la pagina della scheda</Link>
         </div>
+      ) : stato === null ? (
+        <p className="mt-6 text-sm text-ink-600" role="status">Controllo il link…</p>
       ) : stato !== 'valido' ? (
         <div className="mt-6 rounded-xl border border-cream-200 bg-surface-0 p-4">
           <p className="text-sm text-ink-900">{CHIUSO[stato]}</p>
@@ -79,6 +115,9 @@ export default function InvitoAgente({ codice, stato, emailCollegata, giaAgente 
           <label className="block text-sm font-semibold text-ink-900">Email
             <input type="email" required autoComplete="email" inputMode="email" autoCapitalize="off" value={email} onChange={(e) => setEmail(e.target.value)} className={campo} />
           </label>
+          <label className="block text-sm font-semibold text-ink-900">Ripeti l’email
+            <input type="email" required autoComplete="off" inputMode="email" autoCapitalize="off" value={ripetiEmail} onChange={(e) => setRipetiEmail(e.target.value)} className={campo} />
+          </label>
           <label className="block text-sm font-semibold text-ink-900">Password (almeno 8 caratteri)
             <input type="password" required minLength={8} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className={campo} />
           </label>
@@ -93,9 +132,9 @@ export default function InvitoAgente({ codice, stato, emailCollegata, giaAgente 
             {attesa ? 'Un attimo…' : 'Crea il mio account da agente'}
           </button>
           {errore && <p role="alert" className="text-sm text-secondary-700">{errore}</p>}
-          <p className="text-sm text-ink-600">Hai già un account MyCity? <Link href={`/sign-in?returnTo=${encodeURIComponent(ritorno)}`} className="underline">Entra</Link> e poi riapri questo link.</p>
+          <p className="text-sm text-ink-600">Hai già un account MyCity? <Link href={`/sign-in?returnTo=${encodeURIComponent(PERCORSO_INVITO)}`} className="underline">Entra</Link>: torni qui da solo e premi «Attiva».</p>
         </form>
       )}
-    </main>
+    </div>
   );
 }

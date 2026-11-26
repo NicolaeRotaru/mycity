@@ -77,12 +77,14 @@ export const PATCH = withAdminAuth(async ({ req }) => {
   const admin = getAdminSupabase();
   const m = esito.data;
   const adesso = new Date().toISOString();
-  const { error } = m.azione === 'ritira'
-    ? await admin.from('inviti_agente').update({ ritirato_il: adesso }).eq('id', m.id).is('ritirato_il', null)
-    : await admin.from('agenti').update(m.azione === 'sospendi' ? { attivo: false, sospeso_il: adesso } : { attivo: true, sospeso_il: null }).eq('user_id', m.userId);
+  const { data, error } = m.azione === 'ritira'
+    ? await admin.from('inviti_agente').update({ ritirato_il: adesso }).eq('id', m.id).is('ritirato_il', null).select('id')
+    : await admin.from('agenti').update(m.azione === 'sospendi' ? { attivo: false, sospeso_il: adesso } : { attivo: true, sospeso_il: null }).eq('user_id', m.userId).select('user_id');
   if (error) {
     logger.error('[admin] modifica agenti non riuscita', { message: error.message });
     return ApiErrors.unavailable(`Non riesco a salvare. ${MIGRAZIONE}`);
   }
+  // Nessuna riga toccata: prima rispondeva «fatto» lo stesso, e Admin mostrava salvata una modifica mai avvenuta.
+  if (!data?.length) return ApiErrors.conflict(m.azione === 'ritira' ? 'Questo link era già ritirato, o non esiste più.' : 'Questo agente non si trova.');
   return NextResponse.json({ ok: true }, { headers: nessunaCache });
 });

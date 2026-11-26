@@ -14,7 +14,9 @@ CREATE TEMP TABLE esiti (nome text, ok boolean, dettaglio text) ON COMMIT DROP;
 GRANT ALL ON esiti TO anon, authenticated, service_role;
 
 INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
-  ('a8651111-1111-1111-1111-111111111111', 'curioso-865@test.it', '{"role":"customer"}');
+  ('a8651111-1111-1111-1111-111111111111', 'curioso-865@test.it', '{"role":"customer"}'),
+  ('a8652222-2222-2222-2222-222222222222', 'agente-865@test.it', '{"role":"customer"}');
+INSERT INTO public.agenti (user_id, email) VALUES ('a8652222-2222-2222-2222-222222222222', 'agente-865@test.it');
 
 INSERT INTO public.inviti_agente (codice_hash, creato_il, scade_il, usi_max, nota) VALUES
   (repeat('a', 64), now(), now() + interval '14 days', 1, 'monouso valido'),
@@ -74,8 +76,22 @@ BEGIN
   BEGIN INSERT INTO public.inviti_agente (codice_hash, scade_il) VALUES ('codice-in-chiaro', now() + interval '1 day'); storto := 'entrato';
   EXCEPTION WHEN check_violation THEN storto := 'rifiutato'; END;
   INSERT INTO esiti VALUES ('il codice in chiaro non entra (solo l impronta)', storto = 'rifiutato', storto);
+  PERFORM public.restituisci_invito_agente(primo);
+  PERFORM public.restituisci_invito_agente(primo);
+  INSERT INTO esiti VALUES ('il posto restituito torna libero, mai sotto zero',
+    (SELECT usi FROM public.inviti_agente WHERE id = primo) = 0, (SELECT usi FROM public.inviti_agente WHERE id = primo)::text);
 END $$;
 RESET ROLE;
+
+-- Il diritto all'oblio: l'account di un agente si cancella, e la sua riga se ne va con lui.
+DO $$
+DECLARE esito text; n int;
+BEGIN
+  BEGIN DELETE FROM auth.users WHERE id = 'a8652222-2222-2222-2222-222222222222'; esito := 'cancellato';
+  EXCEPTION WHEN foreign_key_violation THEN esito := 'bloccato dalla chiave esterna'; END;
+  SELECT count(*) INTO n FROM public.agenti WHERE user_id = 'a8652222-2222-2222-2222-222222222222';
+  INSERT INTO esiti VALUES ('l account di un agente si cancella, e la riga di agente con lui', esito = 'cancellato' AND n = 0, esito || ', righe rimaste ' || n);
+END $$;
 
 DO $$
 DECLARE r record; rossi int;

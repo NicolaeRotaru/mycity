@@ -119,7 +119,7 @@ export default function PaginaAgente() {
 
   return (
     <div className={c('radice')}>
-      <main className={c('pagina')}>
+      <div className={c('pagina')}>
         <div className={c('testata')}>
           <div className={c('barraAlta')}>
             <span className={c('marchio')}><b>MyCity</b> · Agenti</span>
@@ -158,7 +158,7 @@ export default function PaginaAgente() {
 
         <div id="scheda">{scheda && <Scheda s={scheda} />}</div>
         {fase === 'fatto' && lavoro && <p className={c('nota')}>La trovi fra «Le tue ultime schede», anche da un altro telefono dove entri col tuo account.</p>}
-      </main>
+      </div>
     </div>
   );
 }

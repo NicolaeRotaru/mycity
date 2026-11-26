@@ -4,22 +4,22 @@
 // creo un link dentro admin … solo chi ha quel link lì può iscriversi». Chi visita i negozi per i servizi SDG
 // qui si chiama AGENTE, perché in MyCity «venditore» vuol già dire «negozio».
 //
-// Il link: <sito>/invito-agente/<codice>, dove il codice sono 256 bit casuali. Nel database c'è solo la sua
-// impronta (sha256): chi leggesse la tabella non avrebbe un link valido. Di serie vale per una persona e per
+// Il link: <sito>/invito-agente#<codice>, dove il codice sono 256 bit casuali (perché dopo il «#»: lib/agenti/codice.ts).
+// Nel database c'è solo la sua impronta (sha256): chi leggesse la tabella non avrebbe un link valido. Di serie vale per una persona e per
 // 14 giorni; Admin lo può ritirare prima. Essere agente = avere una riga attiva in `agenti` (il ruolo del
 // profilo non cambia). Tutto con la chiave di servizio: il browser non legge né scrive queste tabelle.
 
 import { createHash, randomBytes } from 'node:crypto';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { env } from '@/lib/env';
+import { CODICE_INVITO, PERCORSO_INVITO } from './codice';
 
-export const CODICE_INVITO = /^[A-Za-z0-9_-]{43}$/;
+export { CODICE_INVITO, PERCORSO_INVITO };
 export const GIORNI_DI_SERIE = 14;
-export const PERCORSO_INVITO = '/invito-agente';
 
 export const improntaCodice = (codice: string) => createHash('sha256').update(codice, 'utf8').digest('hex');
 export const nuovoCodice = () => randomBytes(32).toString('base64url');
-export const linkInvito = (codice: string) => `${env.appUrl()}${PERCORSO_INVITO}/${codice}`;
+export const linkInvito = (codice: string) => `${env.appUrl()}${PERCORSO_INVITO}#${codice}`;
 
 export type Invito = { id: string; nota: string | null; creato_il: string; scade_il: string; usi_max: number; usi: number; ritirato_il: string | null };
 export type Agente = { user_id: string; email: string; invito_id: string | null; attivo: boolean; creato_il: string; sospeso_il: string | null };
@@ -60,19 +60,28 @@ export async function usaInvito(codice: string): Promise<string | null> {
   return typeof data === 'string' && data ? data : null;
 }
 
-/** Se l'account non si è creato dopo aver preso il posto, il posto torna libero. */
+/** Se l'iscrizione non è andata in fondo dopo aver preso il posto, il posto torna libero (in un passaggio solo). */
 export async function restituisciInvito(id: string): Promise<void> {
-  const admin = getAdminSupabase();
-  const { data } = await admin.from('inviti_agente').select('usi').eq('id', id).maybeSingle();
-  const usi = (data as { usi?: number } | null)?.usi ?? 0;
-  if (usi > 0) await admin.from('inviti_agente').update({ usi: usi - 1 }).eq('id', id).eq('usi', usi);
+  const { error } = await getAdminSupabase().rpc('restituisci_invito_agente', { p_id: id });
+  if (error) throw new Error(error.message);
 }
 
-/** Fa diventare agente un account (o lo riattiva, se Nicola gli ha mandato un link nuovo). */
+/** L'agente c'è già ma è sospeso: lo riattiva solo Admin, non un link nuovo. */
+export class AgenteSospeso extends Error {
+  constructor() { super('agente sospeso'); }
+}
+
+/**
+ * Fa diventare agente un account. Si scrive una riga nuova e basta: se la riga c'è già, l'agente è attivo (va
+ * bene così) oppure è stato sospeso da Admin, e allora resta sospeso (collaudo del 26/11: con l'«inserisci o
+ * aggiorna» di prima, un agente sospeso si riattivava da solo con qualunque link valido).
+ */
 export async function faiAgente({ userId, email, invitoId }: { userId: string; email: string; invitoId: string }): Promise<void> {
-  const { error } = await getAdminSupabase().from('agenti')
-    .upsert({ user_id: userId, email: email.toLowerCase(), invito_id: invitoId, attivo: true, sospeso_il: null }, { onConflict: 'user_id' });
-  if (error) throw new Error(error.message);
+  const { error } = await getAdminSupabase().from('agenti').insert({ user_id: userId, email: email.toLowerCase(), invito_id: invitoId, attivo: true });
+  if (!error) return;
+  if (error.code !== '23505') throw new Error(error.message);
+  const gia = await agenteDi(userId);
+  if (!gia?.attivo) throw new AgenteSospeso();
 }
 
 export async function agenteDi(userId: string): Promise<Agente | null> {
