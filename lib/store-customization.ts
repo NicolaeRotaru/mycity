@@ -349,7 +349,7 @@ const RISERVATI_TIKTOK = /^(?:t|tag|discover|video|music|search|share|embed|expl
  * sottopagina di un profilo («/pane-quotidiano/posts/1»).
  */
 const SOTTOPAGINE_DI_UN_PROFILO_FACEBOOK =
-  /^(?:posts|photos|videos|about|reviews|events|mentions|reels|live|menu|shop|services|followers|friends|community|grid|map)$/i;
+  /^(?:posts|photos|videos|about|reviews|events|mentions|reels|live|menu|shop|services|followers|friends|community|grid|map|timeline|info|photos_by|photos_of|photos_albums|photos_all|photos_stream|videos_by|videos_of|about_details|likes|following|groups|music|movies|tv|books|notes|photo|video|reviews_given|friends_mutual|sports|events_past|events_upcoming)$/i;
 function percorsoDiUnProfiloFacebook(nome: string, resto: string): boolean {
   if (/\.php$/i.test(nome)) return false;
   // R07-009 — Il nome di un profilo Facebook è fatto di lettere, cifre e punti, mai del trattino basso:
