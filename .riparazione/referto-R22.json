@@ -1,0 +1,138 @@
+{
+  "sessione": "R22",
+  "aggiornato": "2026-11-26 19:05",
+  "finita": false,
+  "testa": "a78523736fa526ae66c9cebf7e52dd0dc56e0861",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R22-011",
+      "chiave": "qa-flussi|negli strumenti di prova, il finto usesearchparams crea un oggetto nuovo a ogni giro (in next resta lo stesso): le prove montate non vedono le gare sull indirizzo",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/finti/next-navigation.mjs",
+          "modifica": "Prova comune (usata da tests/unit/aiuti/compila.mjs e da 7 prove di altre sessioni via vi.mock): serve la firma di Nicola. Sostituire `export const useSearchParams = () => new URLSearchParams(globalThis.__QUERY_FINTA__ ?? '');` con un oggetto tenuto finché la query non cambia: `let ultimaQuery; let ultimiParametri; export const useSearchParams = () => { const q = globalThis.__QUERY_FINTA__ ?? ''; if (ultimiParametri === undefined || q !== ultimaQuery) { ultimaQuery = q; ultimiParametri = new URLSearchParams(q); } return ultimiParametri; };` così un useEffect che dipende da searchParams scatta solo quando l'indirizzo cambia, come in Next."
+        }
+      ],
+      "nota": "Il file non è fra i miei e la modifica tocca una prova comune: resta la modifica già scritta nell'onda di prima, da firmare."
+    },
+    {
+      "id": "R22-003",
+      "chiave": "pagamenti-stripe|la rpc del tasto «bonifico fatto» dei negozi non è definita in nessuna migrazione del deposito",
+      "esito": "riparato",
+      "commit": "8fbe5f2aa91f877ac8181efca9d395d3c06603e4",
+      "file_toccati": [
+        "migrations/916_il_bonifico_fatto_ai_negozi_resta_scritto.sql",
+        "app/admin/payouts/page.tsx"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r22-bonifico-fatto.test.sql",
+        "tests/sql/rls/riparazione-r22-pagato-a-mano.test.sql"
+      ],
+      "prova_comando": "PGHOST=/var/run/postgresql PGUSER=root bash tests/sql/harness/apply.sh r22_test && bash tests/sql/harness/run.sh r22_test",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "PGHOST=/var/run/postgresql PGUSER=root timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8fbe5f2aa91f877ac8181efca9d395d3c06603e4^ --file migrations/916_il_bonifico_fatto_ai_negozi_resta_scritto.sql --prove tests/sql/rls/riparazione-r22-pagato-a-mano.test.sql --sql r22_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La 916 crea segna_bonifico_manuale (solo admin, tutto o niente, idempotente) e il registro privato dei bonifici a mano, con CRO, trattenuta dei ritiri al banco, importo versato e resto in fattura; PAID_MANUALLY entra nel vincolo della 130.",
+      "nota": "Migrazione 916 (dopo la 910, non tocca niente di 880/900/910/940/970). Con la prova SQL completa (25 controlli) la rimessa esce con 3: nomina funzioni e tabelle che crea solo la 916. Affiancata la prova del vincolo (4 controlli, nessun nome nuovo): uscita 0. Su database ricostruito dalle migrazioni run.sh è tutto verde; la 916 si riapplica due volte senza errori. Il tasto ora è tutto o niente: se un ordine cambia prima del clic non scrive niente e chiede di ricaricare (prima segnava una parte)."
+    },
+    {
+      "id": "R22-002",
+      "chiave": "pagamenti-stripe|il pannello dei bonifici non dice a nicola quanto versare a ogni negozio il lunedì",
+      "esito": "parziale",
+      "commit": "de6a11ddc51e17b52f513d6549569fac4cdf4301",
+      "file_toccati": [
+        "app/admin/payouts/page.tsx",
+        "tests/unit/riparazione-r05-bonifici-aperti.test.tsx",
+        "tests/unit/riparazione-r11-bonifico-non-due-volte.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-commissione-ritiri.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-commissione-ritiri.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base de6a11ddc51e17b52f513d6549569fac4cdf4301^ --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r22-commissione-ritiri.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il lunedì si versa contanti meno commissione dei ritiri al banco (31,50 − 3,50 = 28,00 €), e il tasto manda ritiri e importo alla 916. Con la commissione sopra i contanti c'è la compensazione senza CRO e il resto resta scritto in fattura per mese. «Già pagato» conta il bonifico partito davvero; la nota «automatico» compare solo a carta accesa.",
+      "cosa_resta": "(1) La pagina del negozio dice ancora «già versato» al netto pieno e «commissione … te la chiediamo noi» anche quando la commissione è già trattenuta: serve_file_altrui 1-2. (2) Con PAGAMENTI_CONTANTI_DA_STRIPE_DAL accesa gli HELD che paga Stripe restano «Da versare»: serve la rotta del punto 3, poi si tolgono quegli HELD dal lunedì nella pagina. (3) Un rimborso dopo un bonifico a mano: nessuno scrive che il negozio deve restituire la differenza («Già pagato» però non scende più).",
+      "serve_file_altrui": [
+        {
+          "file": "lib/guadagni/negozio.ts",
+          "modifica": "In OrdineNegozio aggiungere payout_at?: string | null. In riepilogoContanti commissioneDovutaCents somma application_fee_cents solo dei ritiri al banco con payout_at nullo: quelli con payout_at li ha già regolati un bonifico (migrazione 916). I commenti «migrazione 350» / «funzione 350» (righe ~91 e ~232) diventano 916."
+        },
+        {
+          "file": "app/seller/earnings/page.tsx",
+          "modifica": "Leggere supabase.rpc('bonifici_manuali_per_mese'), che dà al negozio solo le sue righe. «già versato» dei contanti (riga ~341) = somma importo_cents più il netto dei contanti TRANSFERRED, non il netto pieno dei PAID_MANUALLY. Nel riquadro dei ritiri al banco (righe ~346-351): «X € trattenuti dal bonifico del lunedì» (somma trattenuta_cents) e «Y € nella fattura di <mese>» (in_fattura_cents del mese). «e te la chiediamo noi» diventa «si toglie dal bonifico del lunedì; se non basta, va nella fattura del mese», sulla commissione ancora da regolare."
+        },
+        {
+          "file": "app/api/admin/contanti-da-stripe/route.ts (nuovo)",
+          "modifica": "GET solo admin (withAdminAuth) che restituisce { dal: inizioContantiDaStripe()?.toISOString() ?? null } da lib/stripe/payout.ts. Con quella rotta la pagina toglie dal lunedì e dal tasto gli HELD con delivered_at ≥ dal (etichetta «In sospeso · lo paga Stripe») e mostra la nota «automatico» anche quando dal è valida."
+        }
+      ],
+      "nota": "Nessuna 917: usa le funzioni della 916. Due prove esistenti che importano app/admin/payouts/page.tsx: il loro finto rpc ora risponde [] alla nuova lettura bonifici_manuali_per_mese (una riga ciascuna, nessun controllo tolto). Dei punti della voce: 1, 2 e 4 erano chiusi prima della base; 3 è chiuso con la 916; 5 è chiuso per CARTA_ACCESA, manca il pezzo PAGAMENTI_CONTANTI_DA_STRIPE_DAL."
+    },
+    {
+      "id": "R22-001",
+      "chiave": "pagamenti-stripe|i contanti vecchi ancora da versare spariscono dal pannello dei bonifici quando gli ordini consegnati superano mille",
+      "esito": "riparato",
+      "commit": "a78523736fa526ae66c9cebf7e52dd0dc56e0861",
+      "file_toccati": [
+        "app/admin/payouts/page.tsx",
+        "tests/unit/minori-s05-bonifici-prodotti.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-bonifici-aperti-vecchi.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-bonifici-aperti-vecchi.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a78523736fa526ae66c9cebf7e52dd0dc56e0861^ --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r22-bonifici-aperti-vecchi.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Gli aperti si leggono dal più vecchio, quindi oltre il tetto mancano i più recenti e non i contanti da versare da più tempo; REVERSAL_FAILED sta fra i chiusi; l'avviso dice il vero. Caso del collaudo provato: 1.001 HELD dall'1/10 più uno del 2/8, il 2/8 entra nel lunedì e nel tasto.",
+      "nota": "Regge insieme alla 916, che fa uscire i pagati dagli aperti come PAID_MANUALLY. La prova esistente minori-s05-bonifici-prodotti (importa la pagina) controllava il testo vecchio «Mancano i più vecchi»: ora controlla «Mancano i più recenti»."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "I commenti del calcolo dei guadagni citano una migrazione 350 che non c'è",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/guadagni/negozio.ts:91",
+      "descrizione": "«migrazione 350, segna_bonifico_manuale» e «funzione 350» (~:232): la funzione ora sta nella 916."
+    },
+    {
+      "titolo": "Se la lettura di resi e reclami cade, il pannello propone la compensazione dei soli ritiri al banco",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "app/admin/payouts/page.tsx:296",
+      "descrizione": "Con la lettura caduta ogni contante HELD conta come fermo: il conto del lunedì vede 0 € di contanti e offre «Segna la compensazione», che manderebbe in fattura una commissione che si poteva trattenere. Non si perdono soldi e la rilettura ogni 60 s lo sistema, ma il tasto andrebbe nascosto quando la lettura è caduta."
+    }
+  ],
+  "domande_per_nicola": [
+    "Applicata la 916, tutti i ritiri al banco CASH_IN_STORE di prima risultano «commissione da regolare» e il primo lunedì la commissione si toglie tutta insieme: se una parte l'hai già incassata in altro modo, va scritto payout_at su quei ritiri prima (dato del database vero, non codice)."
+  ],
+  "conto": {
+    "agenti": 1,
+    "nota": "lotto 1 fatto; spesa 9,86 $ a fine lotto 1"
+  }
+}
