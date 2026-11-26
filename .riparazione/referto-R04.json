@@ -1,13 +1,13 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-26 14:20",
+  "aggiornato": "2026-11-26 14:15",
   "finita": true,
-  "testa": "9c41ee20bc3936c7fef036f451f841a405083a7b",
+  "testa": "2a477dd2a1670f70ca1b2fb85cb9109d9145cc2c",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "9c41ee20bc3936c7fef036f451f841a405083a7b",
-    "nota": "2145 file di prova verdi (1 saltato già sulla base), typecheck e lint verdi"
+    "testa": "2a477dd2a1670f70ca1b2fb85cb9109d9145cc2c",
+    "nota": "2144 file di prova verdi (1 saltato già sulla base), typecheck e lint verdi; rifatto dopo il revert chiesto dalla regista"
   },
   "voci": [
     {
@@ -94,30 +94,18 @@
     {
       "id": "R04-011",
       "chiave": "api-backend|il negozio riceve «il cliente ha ritirato il reso» anche quando il rimborso approvato nello stesso momento è poi partito",
-      "esito": "riparato",
-      "insieme_a": [
-        "R04-013"
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/returns/[id]/avanza/route.ts",
+          "modifica": "Nel ramo del ritiro del cliente (dopo il controllo «La merce è già in viaggio o in negozio», circa riga 210), aggiungere: if (ret.status === 'APPROVED' && Number(ret.refund_amount_cents ?? 0) > 0) { return ApiErrors.conflict('Il negozio ha già approvato il reso con il rimborso: la richiesta non si può più ritirare. Se il rimborso non arriva, scrivi al negozio.'); } — solo decide scrive refund_amount_cents e lo toglie se il rimborso non parte, quindi APPROVED con la cifra vuol dire rimborso in corso o già uscito. Prova nuova: tests/unit/riparazione-r04-ritiro-durante-il-rimborso.test.ts, contenuto intero nel commit 51fd671bf67af8b3309b0bb674ff933a96426a5d (rimessa uscita 0 su quel commit)."
+        },
+        {
+          "file": "tests/unit/riparazione-r04-reso-nota-del-negozio.test.ts",
+          "modifica": "Nei due casi del ritiro (describe «la nota del negozio la scrive solo il negozio», «il cliente ritira la richiesta…» e «il cliente ritira con una nota sua…»), subito dopo stato.chiamante = ANNA aggiungere stato.reso.refund_amount_cents = null; (reso approvato senza rimborso immediato), asserzioni invariate. Prova comune: serve la firma di Nicola."
+        }
       ],
-      "commit": "51fd671bf67af8b3309b0bb674ff933a96426a5d",
-      "file_toccati": [
-        "app/api/returns/[id]/avanza/route.ts",
-        "tests/unit/riparazione-r04-reso-nota-del-negozio.test.ts"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r04-ritiro-durante-il-rimborso.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r04-ritiro-durante-il-rimborso.test.ts --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 51fd671bf67af8b3309b0bb674ff933a96426a5d^ --file app/api/returns/[id]/avanza/route.ts --prove tests/unit/riparazione-r04-ritiro-durante-il-rimborso.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il ritiro del cliente da un reso APPROVED con refund_amount_cents>0 (rimborso in corso o già uscito, solo decide scrive quella cifra) risponde 409; un reso approvato senza rimborso immediato si ritira come prima.",
-      "nota": "Modificata la prova esistente tests/unit/riparazione-r04-reso-nota-del-negozio.test.ts (importa solo avanza, file mio): nei due ritiri il reso parte con refund_amount_cents=null; asserzioni invariate.",
-      "verificato_da": "R04 capo (agente diverso dal riparatore): diff letto riga per riga, prove rilanciate verdi (3 file, 9 casi), modifica della prova esistente solo di partenza (refund_amount_cents=null), asserzioni invariate"
+      "nota": "prova comune: serve la firma di Nicola. La correzione (51fd671bf67af8b3309b0bb674ff933a96426a5d) è stata tolta con 2a477dd2a1670f70ca1b2fb85cb9109d9145cc2c: per stare verde cambiava lo scenario di tests/unit/riparazione-r04-reso-nota-del-negozio.test.ts, che fa vi.mock anche di file di altre sessioni dell'onda. Rotta e prova sono tornate uguali alla base."
     },
     {
       "id": "R04-012",
@@ -136,38 +124,18 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5676d452a3940164fac30d4f3a474a581fa6bfcb^ --file app/api/returns/[id]/avanza/route.ts --prove tests/unit/riparazione-r04-reso-chiuso-con-la-cifra-di-stripe.test.ts --json"
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ed12ed8ec8190e1132b690f6e034c30f0a5d55ba --file app/api/returns/[id]/avanza/route.ts --prove tests/unit/riparazione-r04-reso-chiuso-con-la-cifra-di-stripe.test.ts --json",
+        "nota": "Rifatta dopo il revert di 51fd671bf67af8b3309b0bb674ff933a96426a5d: sulla testa avanza/route.ts = base + solo la correzione di R04-012. Anche la prima, --base 5676d452a3940164fac30d4f3a474a581fa6bfcb^, aveva uscita 0."
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "La cifra registrata resta quella già uscita sulla carta (la vera); se il negozio ne aveva chiesta un'altra riceve una campanella con le due cifre.",
-      "verificato_da": "R04 capo (agente diverso dal riparatore): diff letto riga per riga, prove rilanciate verdi (3 file, 9 casi), modifica della prova esistente solo di partenza (refund_amount_cents=null), asserzioni invariate"
+      "verificato_da": "R04 capo (agente diverso dal riparatore): diff letto riga per riga, prove rilanciate verdi dopo il revert (23 file che importano avanza, 184 casi), rimessa dalla base uscita 0"
     },
     {
       "id": "R04-013",
       "chiave": "api-backend|reso ritirato mentre il negozio lo approva: per pochi secondi il negozio riceve «il cliente ha ritirato la richiesta» mentre il reso risulta rimborsato",
-      "esito": "riparato",
-      "insieme_a": [
-        "R04-011"
-      ],
-      "commit": "51fd671bf67af8b3309b0bb674ff933a96426a5d",
-      "file_toccati": [
-        "app/api/returns/[id]/avanza/route.ts",
-        "tests/unit/riparazione-r04-reso-nota-del-negozio.test.ts"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r04-ritiro-durante-il-rimborso.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r04-ritiro-durante-il-rimborso.test.ts --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 51fd671bf67af8b3309b0bb674ff933a96426a5d^ --file app/api/returns/[id]/avanza/route.ts --prove tests/unit/riparazione-r04-ritiro-durante-il-rimborso.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Stessa corsa vista da decide, chiusa alla sorgente in avanza: il ritiro mentre il credito esce risponde 409, niente campanella «ritirato», decide 200 e reso REFUNDED. decide/route.ts non toccato.",
-      "verificato_da": "R04 capo (agente diverso dal riparatore): diff letto riga per riga, prove rilanciate verdi (3 file, 9 casi), modifica della prova esistente solo di partenza (refund_amount_cents=null), asserzioni invariate"
+      "esito": "non_fatto",
+      "nota": "tolta insieme a R04-011, da rifare da sola (la correzione stava nello stesso commit 51fd671bf67af8b3309b0bb674ff933a96426a5d, tolto con 2a477dd2a1670f70ca1b2fb85cb9109d9145cc2c)."
     },
     {
       "id": "R04-014",
