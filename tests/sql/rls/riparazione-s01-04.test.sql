@@ -12,8 +12,11 @@
 --   ⑦ lo stesso con gli altri spazi di Unicode, i caratteri invisibili e i
 --     riempitivi, uno per volta, e nomi_pubblici dà la prima parola;
 --   ⑧ un nome fatto solo di spazi si salva vuoto (NULL), non '';
---   ⑨ lettere accentate, trattini, apostrofi ed emoji restano come sono.
--- Senza la migrazione 992 ①, ③, ④ e ⑥ sono ROSSI; senza la 997 ⑦ e ⑧.
+--   ⑨ lettere accentate, trattini, apostrofi ed emoji semplici restano come sono;
+--   ⑩ la regola, carattere per carattere, su tutta la classe dichiarata nella
+--     997, e i caratteri appena fuori restano;
+--   ⑪ i selettori di variante si tolgono senza spezzare la parola.
+-- Senza la migrazione 992 ①, ③, ④ e ⑥ sono ROSSI; senza la 997 ⑦, ⑧, ⑩ e ⑪.
 -- =============================================================================
 
 BEGIN;
@@ -33,7 +36,8 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('e9920000-0000-0000-0000-000000000007', 'x-s01-04@test.it',       '{"role":"buyer"}'),
   ('e9920000-0000-0000-0000-000000000008', 'e-s01-04@test.it',       '{"role":"buyer"}'),
   ('e9920000-0000-0000-0000-000000000009', 'f-s01-04@test.it',       '{"role":"buyer"}'),
-  ('e9920000-0000-0000-0000-00000000000a', 'g-s01-04@test.it',       '{"role":"buyer"}');
+  ('e9920000-0000-0000-0000-00000000000a', 'g-s01-04@test.it',       '{"role":"buyer"}'),
+  ('e9920000-0000-0000-0000-00000000000b', 'h-s01-04@test.it',       '{"role":"buyer"}');
 UPDATE public.profiles SET is_approved = true, approval_status = 'approved', store_name = 'Bottega S01-04',
        store_address = 'Via Roma 1', store_lat = 45.05, store_lng = 9.69, visibile_senza_abbonamento = true
  WHERE id = 'e9920000-0000-0000-0000-000000000001';
@@ -125,7 +129,7 @@ INSERT INTO esiti SELECT '7 gli altri spazi, gli invisibili e i riempitivi diven
     1, 31, 127, 159,                                                      -- controllo
     173, 847, 1564, 6068, 6069, 6155, 6158, 6159, 8203, 8204, 8205,       -- invisibili
     8206, 8207, 8234, 8238, 8288, 8289, 8290, 8291, 8292, 8294, 8297,
-    65024, 65039, 65279, 65520, 917505,
+    65279, 65520, 65531, 917505, 917536,
     4447, 4448, 10240, 12644, 65440                                       -- riempitivi
   ]) AS c, pg_temp.nome_con(c) AS e;
 
@@ -135,6 +139,10 @@ UPDATE public.profiles SET full_name = ' ' || chr(160) || chr(12644) || chr(8203
  WHERE id = 'e9920000-0000-0000-0000-000000000009';
 SET LOCAL request.jwt.claims = '{"sub":"e9920000-0000-0000-0000-00000000000a","role":"authenticated"}';
 UPDATE public.profiles SET full_name = 'Nicolò D''Angelo-Çelik ' || chr(128512) WHERE id = 'e9920000-0000-0000-0000-00000000000a';
+-- ⑪ Un ideogramma con il suo selettore di variante e un cuore con il selettore emoji.
+SET LOCAL request.jwt.claims = '{"sub":"e9920000-0000-0000-0000-00000000000b","role":"authenticated"}';
+UPDATE public.profiles SET full_name = chr(33883) || chr(917760) || chr(22478) || ' Hanako ' || chr(10084) || chr(65039)
+ WHERE id = 'e9920000-0000-0000-0000-00000000000b';
 RESET ROLE;
 
 INSERT INTO esiti SELECT '8 un nome di soli spazi si salva vuoto, non ''''',
@@ -143,6 +151,34 @@ INSERT INTO esiti SELECT '8 un nome di soli spazi si salva vuoto, non ''''',
 INSERT INTO esiti SELECT '9 accenti, trattini, apostrofi ed emoji restano',
   full_name = 'Nicolò D''Angelo-Çelik ' || chr(128512), full_name
   FROM public.profiles WHERE id = 'e9920000-0000-0000-0000-00000000000a';
+
+INSERT INTO esiti SELECT '11 i selettori di variante si tolgono senza spezzare la parola',
+  full_name = chr(33883) || chr(22478) || ' Hanako ' || chr(10084), full_name
+  FROM public.profiles WHERE id = 'e9920000-0000-0000-0000-00000000000b';
+
+-- ⑩ Tutta la classe della 997, un carattere per volta, con la funzione del trigger.
+CREATE TEMP TABLE classe_997 (da int, a int);
+INSERT INTO classe_997 VALUES (9, 13), (32, 32), (1, 31), (127, 159), (160, 160), (173, 173), (847, 847), (1536, 1541), (1564, 1564), (1757, 1757), (1807, 1807), (2192, 2193), (2274, 2274), (4447, 4447), (4448, 4448), (5760, 5760), (6068, 6068), (6069, 6069), (6155, 6159), (8192, 8207), (8232, 8239), (8287, 8303), (10240, 10240), (12288, 12288), (12644, 12644), (65279, 65279), (65440, 65440), (65520, 65531), (69821, 69821), (69837, 69837), (78896, 78914), (94180, 94180), (113824, 113827), (119129, 119129), (119155, 119162), (917504, 917759), (918000, 921599);
+DO $$
+DECLARE rotti text; fuori text;
+BEGIN
+  IF to_regprocedure('public.profiles_nome_normalizzato(text)') IS NULL THEN
+    INSERT INTO esiti VALUES ('10 tutta la classe, carattere per carattere', false, 'manca profiles_nome_normalizzato');
+    RETURN;
+  END IF;
+  EXECUTE $q$
+    SELECT string_agg('U+' || upper(to_hex(c)), ' ' ORDER BY c)
+      FROM (SELECT DISTINCT generate_series(da, a) AS c FROM classe_997) x
+     WHERE public.profiles_nome_normalizzato('Maria' || chr(c) || 'Rossi' || chr(c)) IS DISTINCT FROM 'Maria Rossi'
+  $q$ INTO rotti;
+  EXECUTE $q$
+    SELECT string_agg('U+' || upper(to_hex(c)), ' ' ORDER BY c)
+      FROM unnest(ARRAY[33, 45, 183, 1546, 2273, 8208, 8304, 10241, 12289, 12645, 65040, 65532, 917503, 921600]) AS c
+     WHERE public.profiles_nome_normalizzato('Maria' || chr(c) || 'Rossi') IS DISTINCT FROM 'Maria' || chr(c) || 'Rossi'
+  $q$ INTO fuori;
+  INSERT INTO esiti VALUES ('10 tutta la classe, carattere per carattere', rotti IS NULL AND fuori IS NULL,
+                            concat_ws(' · ', 'dentro e non normalizzati: ' || rotti, 'fuori e cambiati: ' || fuori));
+END $$;
 
 INSERT INTO esiti SELECT '6 il nome si salva con uno spazio solo fra le parole',
   string_agg(full_name, ' | ' ORDER BY id) = 'Maria Rossi | Luca Bianchi | Anna Verdi | Gianni Neri | Paolo Gialli',
@@ -168,7 +204,7 @@ BEGIN
     RAISE INFO '%  %  — %', CASE WHEN r.ok THEN 'ok  ' ELSE 'ROTTO' END, r.nome, r.dettaglio;
   END LOOP;
   SELECT count(*) INTO rossi FROM esiti WHERE ok IS NOT TRUE;
-  IF rossi > 0 OR (SELECT count(*) FROM esiti) <> 9 THEN
+  IF rossi > 0 OR (SELECT count(*) FROM esiti) <> 11 THEN
     RAISE EXCEPTION '% controlli su % sono rossi (S01-04)', rossi, (SELECT count(*) FROM esiti);
   END IF;
   RAISE INFO 'S01-04: % controlli verdi', (SELECT count(*) FROM esiti);
