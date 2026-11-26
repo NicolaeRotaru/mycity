@@ -71,6 +71,15 @@ export default function PrivacyPage() {
         <p>
           <strong>Contatti del Titolare:</strong>{' '}
           <a href={dovePerIDiritti.href} className="text-primary-700 underline">{dovePerIDiritti.testo}</a>
+          {/* 26/11/2026 — La PEC, quando c'e', e' un recapito del titolare (art. 13.1.a GDPR):
+              i Termini e il piede la stampavano gia', l'informativa no. */}
+          {ownerData.pec ? (
+            <>
+              <br />
+              <strong>PEC:</strong>{' '}
+              <a href={`mailto:${ownerData.pec}`} className="text-primary-700 underline">{ownerData.pec}</a>
+            </>
+          ) : null}
           {ownerData.emailDpo ? (
             <>
               <br />
@@ -122,7 +131,7 @@ export default function PrivacyPage() {
           <li><strong>Prodotti che hai guardato («Ultimi visti»):</strong> se hai fatto l&apos;accesso e attivi i cookie analytics, i prodotti che apri e quando, per mostrarteli di nuovo nel riquadro «Ultimi visti».</li>
           {/* 13/11/2026 (R21-007) — Le segnalazioni non comparivano: né come dato raccolto né come
               finalità. Chi segnala può lasciare email e testo anche senza account. */}
-          <li><strong>Segnalazioni di contenuti illeciti:</strong> il motivo, il testo che scrivi e, se la lasci, la tua email, per scriverti della segnalazione e del suo esito; se hai fatto l&apos;accesso, anche il collegamento al tuo account.</li>
+          <li><strong>Segnalazioni di contenuti illeciti:</strong> il motivo, il testo che scrivi, se li dai il tuo nome e la dichiarazione di buona fede (vanno in testa al testo) e, se la lasci, la tua email, per scriverti della segnalazione e del suo esito; se hai fatto l&apos;accesso, anche il collegamento al tuo account.</li>
         </ul>
       </LegalSection>
 
@@ -223,7 +232,7 @@ export default function PrivacyPage() {
               {/* 13/11/2026 (R21-007) — L'email e il testo di chi segnala restavano per sempre, e qui
                   non c'era la riga. I mesi sono quelli della potatura notturna (lib/privacy/potature-ritenzione.ts):
                   la prova riparazione-r21-segnalazioni-email fa girare la potatura e pretende lo stesso numero. */}
-              <tr><td className="border px-3 py-2">Segnalazioni di contenuti illeciti (email di contatto e testo della segnalazione)</td><td className="border px-3 py-2">Obbligo di legge: ricevere le segnalazioni e comunicarne l&apos;esito (Reg. UE 2022/2065 sui servizi digitali, artt. 16-17; art. 6.1.c GDPR)</td><td className="border px-3 py-2">12 mesi dalla decisione sulla segnalazione: dopo, email e testo vengono cancellati</td></tr>
+              <tr><td className="border px-3 py-2">Segnalazioni di contenuti illeciti (email di contatto, nome se lo dai e testo della segnalazione)</td><td className="border px-3 py-2">Obbligo di legge: ricevere le segnalazioni e comunicarne l&apos;esito (Reg. UE 2022/2065 sui servizi digitali, artt. 16-17; art. 6.1.c GDPR)</td><td className="border px-3 py-2">12 mesi dalla decisione sulla segnalazione: dopo, email e testo vengono cancellati</td></tr>
               <tr><td className="border px-3 py-2">Gestione reclami e contenzioso</td><td className="border px-3 py-2">Legittimo interesse</td><td className="border px-3 py-2">Fino a prescrizione (10 anni)</td></tr>
             </tbody>
           </table>
@@ -269,7 +278,11 @@ export default function PrivacyPage() {
               dell'account, e le finestre arrivano a 24 ore (lib/rate-limit.ts). */}
           <li><strong>Upstash Inc.</strong> (Stati Uniti — SCC) — protezione dagli abusi: memorizza, da un minuto fino a 24 ore, contatori legati all&apos;indirizzo IP, all&apos;email usata per accedere o all&apos;identificativo dell&apos;account, per fermare chi tenta troppe richieste di fila.</li>
           <li><strong>Verifica dei documenti d&apos;identità (KYC):</strong> l&apos;esame dei documenti di Venditori e Rider è svolto internamente da MyCity. Se in futuro verrà affidato a un fornitore esterno, il suo nome comparirà qui prima che il primo documento gli venga inviato.</li>
-          <li><strong>OpenStreetMap Foundation</strong> (Regno Unito) — geocoding indirizzi.</li>
+          {/* 26/11/2026 — Diceva solo «geocoding indirizzi». Ma le mappe del sito (components/DeliveryMap.tsx,
+              NearbyStoresMap.tsx, StoreLocationPicker.tsx) scaricano le tessere da tile.openstreetmap.org, e
+              «Naviga» del Rider (app/rider/orders/[id]/page.tsx) apre Google Maps con la destinazione. */}
+          <li><strong>OpenStreetMap Foundation</strong> (Regno Unito) — ricerca degli indirizzi (geocoding) e immagini delle mappe. Quando si apre una mappa del sito (la consegna del tuo ordine, i negozi vicini a te, la posizione del negozio), il browser scarica le tessere della mappa direttamente dai server di OpenStreetMap: ricevono l&apos;indirizzo IP del dispositivo e la zona mostrata, che può essere quella del tuo indirizzo di consegna o della tua posizione.</li>
+          <li><strong>Google Ireland Ltd. / Google LLC (Google Maps)</strong> — non è nostro responsabile: è titolare autonomo, e tratta i dati secondo le proprie regole. Quando il Rider tocca «Naviga», si apre Google Maps con la destinazione della consegna: le coordinate o l&apos;indirizzo dell&apos;Acquirente (o del negozio, per il ritiro). Allo stesso modo, il collegamento alla mappa nella vetrina di un negozio apre Google Maps con l&apos;indirizzo del negozio.</li>
           {/* 27/8/2026 (R055) — La frase diceva «vengono mascherati i campi di
               inserimento»: vero, e insufficiente. Il testo GIA' SCRITTO nella
               pagina finiva nel filmato così com'era, e sulla pagina degli

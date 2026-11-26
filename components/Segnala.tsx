@@ -10,6 +10,15 @@ import { Modal } from '@/components/ui/Modal';
 const FORMA_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
+ * 26/11/2026 (R02-016) — Gli stessi limiti della rotta (app/api/segnalazioni/route.ts): con nome o
+ * dichiarazione di buona fede il server mette due righe in testa al testo, e al testo restano
+ * 2000 - 300 caratteri, così la segnalazione non cade sul limite del database.
+ */
+const NOME_MASSIMO = 100;
+const DETTAGLIO_MASSIMO = 2000;
+const RISERVA_DATI = 300;
+
+/**
  * «Segnala»: il modo per dirci che un contenuto è illecito.
  *
  * 22/8/2026 — NON C'ERA. Sul sito non esisteva nessun canale per segnalare un
@@ -56,8 +65,13 @@ export function Segnala({
   const [motivo, setMotivo] = useState(motivi[0].valore);
   const [dettaglio, setDettaglio] = useState('');
   const [email, setEmail] = useState('');
+  const [nome, setNome] = useState('');
+  const [buonaFede, setBuonaFede] = useState(false);
   const [inCorso, setInCorso] = useState(false);
   const [erroreEmail, setErroreEmail] = useState<string | null>(null);
+  const [erroreDettaglio, setErroreDettaglio] = useState<string | null>(null);
+  const conDatiDiChiSegnala = nome.trim() !== '' || buonaFede;
+  const limiteDettaglio = conDatiDiChiSegnala ? DETTAGLIO_MASSIMO - RISERVA_DATI : DETTAGLIO_MASSIMO;
 
   const invia = async () => {
     // 5/11/2026 (S05) — L'email scritta male si dice sotto il campo, prima di
@@ -68,6 +82,14 @@ export function Segnala({
       return;
     }
     setErroreEmail(null);
+    if (dettaglio.trim().length > limiteDettaglio) {
+      setErroreDettaglio(
+        `Con il nome o la dichiarazione il testo può avere al massimo ${limiteDettaglio} caratteri: ` +
+        `accorcialo di ${dettaglio.trim().length - limiteDettaglio}.`,
+      );
+      return;
+    }
+    setErroreDettaglio(null);
     setInCorso(true);
     try {
       const res = await fetch('/api/segnalazioni', {
@@ -79,6 +101,8 @@ export function Segnala({
           motivo,
           dettaglio: dettaglio.trim() || undefined,
           emailContatto: email.trim() || undefined,
+          nomeSegnalante: nome.trim() || undefined,
+          buonaFede: buonaFede || undefined,
         }),
       });
       if (!res.ok) {
@@ -96,9 +120,19 @@ export function Segnala({
         }
         throw new Error('Segnalazione non inviata');
       }
-      toast.success('Segnalazione ricevuta: la esaminiamo.');
+      // 26/11/2026 (R02-010) — Il numero si vede subito, e chi ha lasciato l'email sa che la
+      // ricevuta con lo stesso numero gli è stata mandata (la rotta lo dice in `conferma`).
+      let ricevuta: { id?: string; conferma?: string } | null = null;
+      try { ricevuta = (await res.json()) as { id?: string; conferma?: string } | null; } catch { ricevuta = null; }
+      const numero = ricevuta?.id ? ` Numero: ${ricevuta.id}.` : '';
+      toast.success(
+        ricevuta?.conferma === 'inviata'
+          ? `Segnalazione ricevuta: la esaminiamo.${numero} Ti abbiamo mandato una conferma per email.`
+          : `Segnalazione ricevuta: la esaminiamo.${numero}`,
+      );
       setAperto(false);
       setDettaglio('');
+      setBuonaFede(false);
     } catch {
       toast.error('Non è stato possibile inviare la segnalazione. Riprova.');
     } finally {
@@ -154,9 +188,28 @@ export function Segnala({
         <textarea
           id="segnala-dettaglio"
           value={dettaglio}
-          onChange={(e) => setDettaglio(e.target.value)}
+          onChange={(e) => { setDettaglio(e.target.value); setErroreDettaglio(null); }}
           rows={3}
-          maxLength={2000}
+          maxLength={limiteDettaglio}
+          aria-invalid={erroreDettaglio ? true : undefined}
+          aria-describedby={erroreDettaglio ? 'segnala-dettaglio-errore' : undefined}
+          className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2 text-sm"
+        />
+        {erroreDettaglio && (
+          <p id="segnala-dettaglio-errore" role="alert" className="mt-1 text-xs font-semibold text-secondary-700">{erroreDettaglio}</p>
+        )}
+
+        {/* 26/11/2026 (R02-016) — Nome e buona fede (regolamento sui servizi digitali, art. 16.2 c-d): facoltativi. */}
+        <label htmlFor="segnala-nome" className="mt-3 block text-sm font-medium text-ink-700">
+          Il tuo nome o quello dell&apos;ente per cui segnali (facoltativo)
+        </label>
+        <input
+          id="segnala-nome"
+          type="text"
+          autoComplete="name"
+          value={nome}
+          onChange={(e) => { setNome(e.target.value); setErroreDettaglio(null); }}
+          maxLength={NOME_MASSIMO}
           className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2 text-sm"
         />
 
@@ -175,6 +228,17 @@ export function Segnala({
         {erroreEmail && (
           <p id="segnala-email-errore" role="alert" className="mt-1 text-xs font-semibold text-secondary-700">{erroreEmail}</p>
         )}
+
+        <label htmlFor="segnala-buona-fede" className="mt-3 flex items-start gap-2 text-sm text-ink-700">
+          <input
+            id="segnala-buona-fede"
+            type="checkbox"
+            checked={buonaFede}
+            onChange={(e) => { setBuonaFede(e.target.checked); setErroreDettaglio(null); }}
+            className="mt-0.5"
+          />
+          <span>Dichiaro in buona fede che le informazioni e le accuse di questa segnalazione sono esatte e complete (facoltativo).</span>
+        </label>
       </Modal>
     </>
   );
