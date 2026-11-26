@@ -403,6 +403,17 @@ async function getPosthog() {
     return consented ? posthogInstance : null;
   }
   if (!consented) return null;
+  // Piu' chiamate in parallelo (consenso + primo evento + pagina vista) aspettano
+  // lo stesso avvio: un `init` solo, non due o tre.
+  if (!avvioInCorso) {
+    avvioInCorso = avviaPosthog().finally(() => { avvioInCorso = null; });
+  }
+  return avvioInCorso;
+}
+
+let avvioInCorso: Promise<PostHogLike | null> | null = null;
+
+async function avviaPosthog(): Promise<PostHogLike | null> {
   // Lazy import per non gonfiare bundle
   const { default: posthog } = await import('posthog-js').catch(() => ({ default: null }));
   if (!posthog) return null;
