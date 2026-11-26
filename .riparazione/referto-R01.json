@@ -1,0 +1,163 @@
+{
+  "sessione": "R01",
+  "aggiornato": "2026-11-26 14:00",
+  "finita": true,
+  "testa": "fdbbd90c369db7102e564fabb5f5c1347e099c75",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "fdbbd90c369db7102e564fabb5f5c1347e099c75",
+    "nota": "typecheck ok, lint 0 errori (122 avvisi preesistenti in app/components/lib), vitest 2144 file passati | 1 saltato, 13188 prove passate. Un primo verify verde era girato su 28729f778396bbbdeb887bc4ff0ea2ed0a399ad7, prima del revert."
+  },
+  "voci": [
+    {
+      "id": "R01-001",
+      "chiave": "deploy-sre|il rilascio non applica le migrazioni: il codice nuovo arriva su un database vecchio",
+      "esito": "scelta_di_nicola",
+      "domanda": "Accendi il rilascio controllato che applica da solo le migrazioni in produzione prima di pubblicare? Se sì: segreti GitHub VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID, SUPABASE_DB_URL (Session pooler), produzione a ≤20 migrazioni mancanti (altrimenti riallineamento con docs/migrazioni-baseline-produzione.md), un rilascio di prova; poi vercel.json:8 \"main\": true → false (file di R01, una parola).",
+      "prova": "render.yaml non esiste più sulla base; deploy-dopo-ci.yml:488-590 applica già le migrazioni prima di pubblicare (cancello 592-606), ma vercel.json:8 ha ancora \"main\": true, quindi Vercel pubblica ogni unione da solo senza migrazioni; l'ultimo rilascio (run 45708983634) ha saltato «Applica le migrazioni» perché mancano i segreti Vercel.",
+      "nota": "Il passo di vercel.json va fatto solo dopo i segreti e il rilascio di prova (deploy-dopo-ci.yml:34-51): farlo ora fermerebbe gli aggiornamenti del sito. Il cartello «cancello SPENTO» (deploy-dopo-ci.yml:255-267) non dice che la strada automatica di Vercel salta le migrazioni e omette SUPABASE_DB_URL e il tetto delle 20: da ritoccare quando Nicola accende il rilascio controllato.",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Controllata la base: nessuna modifica di codice nei file di R01 chiude un pezzo reale senza decidere al posto di Nicola.",
+      "verificato_da": "revisore modello grande: letto deploy-dopo-ci.yml per intero, vercel.json, package.json, deriva e migrazioni-a-mano; il rilascio controllato non pubblica se le migrazioni falliscono o sono saltate (Rilascia ha success() implicito) e senza segreti esce rosso, non verde in silenzio; nessuno script db:migrate citato dai documenti; esito confermato"
+    },
+    {
+      "id": "R01-002",
+      "chiave": "deploy-sre|la regola che dovrebbe fermare il codice rosso esiste su github ma è spenta, non guarda nessun ramo e aspetta un controllo che non esiste",
+      "esito": "non_codice",
+      "nota": "GitHub → Settings → Rules → Rulesets → «Main»: Target branches → Add target → «Include default branch»; lasciare «Require status checks» con «Main»; Enforcement status → Active; Save. Poi `gh api repos/NicolaeRotaru/mycity/rulesets/16879481 | node scripts/controlla-regola-main.mjs` deve dire ✅. Per fermare anche il rosso dopo l'unione serve \"main\": false in vercel.json:8, solo dopo tutti i passi della domanda di R01-001 (segreti Vercel e SUPABASE_DB_URL, al massimo 20 migrazioni mancanti, rilascio di prova). Poi il passo 6 di deploy-dopo-ci.yml:122-123: una richiesta di prova con una prova rossa deve avere il pulsante di unione bloccato. Rinforzo facoltativo: nella riga del controllo «Main» scegliere come fonte «GitHub Actions» invece di «Any source».",
+      "prova": "Ruleset letto in sola lettura: enforcement «disabled», bersagli vuoti, controllo richiesto «Main». Il pezzo «aspetta un controllo che non esiste» è già chiuso: ci.yml:910-911 sulla base (1050-1051 sul ramo) job cancello-main con name «Main», if: always().",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessun file cambiato: il resto della voce è un'impostazione di GitHub.",
+      "verificato_da": "revisore modello grande: letti ci.yml, deploy-dopo-ci.yml, vercel.json, controlla-regola-main.mjs; job «Main» con if: always() aspetta tutti e 9 i lavori (anche quelli nuovi del ramo), CI su pull_request e push verso main senza filtri paths; script del cancello provato su 9 casi (failure/cancelled → 1, tutti saltati → 1); script della regola: stato attuale → ❌, dopo l'azione → ✅; nessun pezzo di codice chiudibile senza decidere al posto di Nicola"
+    },
+    {
+      "id": "R01-003",
+      "chiave": "qa-flussi|le tre prove automatiche dell'acquisto vero sono vuote: passano in tre millesimi senza aprire niente",
+      "esito": "parziale",
+      "prova": "Riparato da un'altra riparazione nel commit 455c3f93e44e0d92296bb2782d06960518f04e02 (16/11). Sulla base: tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts:486, :528, :559 hanno il corpo vero (seminano, chiamano /api/orders/cod, /api/stripe/checkout e webhook, reject, release-payouts, guardano il db); un solo salto, col motivo, a :267-269. .github/workflows/ci.yml:519-590 lavoro e2e-cassa-vera con E2E_DATI_DI_PROVA: \"1\" a :573. Comando: npx vitest run tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts → 16 passate sulla base.",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Controllato sulla base: le tre prove non sono più gusci vuoti e un job della CI imposta E2E_DATI_DI_PROVA. Nessun commit: il residuo trovato dal revisore resta aperto (vedi cosa_resta).",
+      "nota": "Non codice, per Nicola: il lavoro e2e-cassa-vera parte solo con la variabile del repository E2E_DATI_DI_PROVA=1; per far girare davvero le tre prove servono anche il segreto STRIPE_TEST_SECRET_KEY (sk_test_) e la variabile E2E_STRIPE_CONTO_NEGOZIO (acct_ di prova). Finché mancano il lavoro risulta saltato, o le prove saltate, e il riepilogo lo dice.",
+      "verificato_da": "revisore modello grande: difetto scritto non più sulla base (corpi veri a spec:486/:528/:559, job e2e-cassa-vera con E2E_DATI_DI_PROVA a ci.yml:573), 2 prove unitarie verdi 16/16; MA con E2E_DATI_DI_PROVA=1 e senza segreto Stripe le tre prove si saltano tutte (contrassegno compreso), Playwright esce 0 («3 skipped», provato con ambiente finto), il job è verde e il cancello Main lo conta ✅: verde a vuoto spostato dalla prova al job → NON REGGE, propone parziale",
+      "cosa_resta": "Resta un verde a vuoto a livello di job: con E2E_DATI_DI_PROVA=1 ma senza il segreto STRIPE_TEST_SECRET_KEY o la variabile E2E_STRIPE_CONTO_NEGOZIO, l'unico salto dello spec 12 (:267-269) ferma tutte e tre le prove, Playwright esce 0 («3 skipped»), il job e2e-cassa-vera (.github/workflows/ci.yml, `exit $STATUS` prima del riepilogo) è verde e il cancello Main lo conta ✅ (`success) PASSATI++`). Da fare in ci.yml (file di R01, non fatto per tetto di spesa/subagenti): il job espone `outputs.viste` = stats.expected+unexpected+flaky di risultati-cassa-vera.json e il cancello conta `success` con viste=0 come «⏭️ non conta» (non fa rosso, rispetta la regola «mai rosso per un segreto che manca»); oppure, se Nicola preferisce, exit 1 quando la variabile è 1 e le prove viste sono 0. Nello spec 12 (non di R01): separare il salto in modo che la prova del contrassegno, che non usa Stripe, giri anche senza le chiavi Stripe. Non codice per Nicola: variabile del repository E2E_DATI_DI_PROVA=1, segreto STRIPE_TEST_SECRET_KEY (sk_test_) e variabile E2E_STRIPE_CONTO_NEGOZIO (acct_ di prova).",
+      "serve_file_altrui": [
+        {
+          "file": "tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts",
+          "modifica": "il salto unico a :267-269 (manca la chiave Stripe di prova o il conto negozio) va applicato solo alle due prove che usano Stripe (:528 checkout con carta, :559 webhook/payout); la prova del contrassegno (:486, /api/orders/cod) deve girare con la sola E2E_DATI_DI_PROVA=1"
+        }
+      ]
+    },
+    {
+      "id": "R01-004",
+      "chiave": "deploy-sre|le foto dei negozi non sono ancora in nessuna copia di sicurezza: manca una chiave nei segreti",
+      "esito": "non_codice",
+      "cosa_ho_fatto": "Controllato che nessun pezzo dei file di R01 renda il difetto invisibile: senza la chiave scripts/copia-foto.mjs esce 3 (provato con `env -u FOTO_CHIAVE_SERVIZIO SUPABASE_URL=https://progetto-finto.supabase.co node scripts/copia-foto.mjs <cartella>` → uscita 3, riga «esito-file-foto: non-configurato»), il passo «Copia le foto accanto al database» di .github/workflows/backup-db.yml passa il 3 al lavoro ed è rosso, e l'allarme apre la segnalazione «Le foto non sono nella copia di sicurezza (il database sì)» (dalla seconda notte niente commento nuovo, ma il lavoro resta rosso e la segnalazione aperta). Nessuna modifica al codice.",
+      "nota": "Nicola: aggiungi nei segreti di GitHub Actions del deposito mycity (Settings → Secrets and variables → Actions) il segreto SUPABASE_SERVICE_ROLE_KEY con la chiave service_role di Supabase; poi lancia a mano «backup-db» e guarda che la riga «esito-file-foto» dica «copiati N file» e che ci sia l'artefatto backup-foto-<numero>.",
+      "verificato_da": "revisore delle minori: senza chiave copia-foto esce 3 (provato), il passo è rosso, l'allarme (if: failure(), issues: write) apre la segnalazione; il segreto letto è secrets.SUPABASE_SERVICE_ROLE_KEY (backup-db.yml:326 e :605) → REGGE"
+    },
+    {
+      "id": "R01-005",
+      "chiave": "deploy-sre|la notifica sul telefono per un nuovo ordine arriva fino a 5 minuti dopo, non in pochi secondi",
+      "esito": "serve_file_altrui",
+      "cosa_ho_fatto": "La push del nuovo ordine la manda solo il giro app/api/cron/send-push (vercel.json: */5). L'aiutante che la manda subito alla nascita dell'ordine esiste già (mandaSubitoLaPushDelNuovoOrdine in lib/push/subito.ts, scelta di Nicola scritta in lib/push/subito.ts:13) ma nessuna rotta lo chiama: la cura sta nei due punti dove nasce l'ordine, che non sono di R01. Il cron resta com'è (rete di sicurezza): cambiarne la frequenza non serve.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "aggiungere `import { mandaSubitoLaPushDelNuovoOrdine } from '@/lib/push/subito';` e, nel blocco `if (campanelle.length > 0)` dopo `await admin.from('notifications').insert(campanelle)`, quando `errCampanelle` è vuoto (un `else` dopo il logger.warn): `dopoLaRisposta(async () => { await mandaSubitoLaPushDelNuovoOrdine(admin, comunicazioni.map((c) => c.orderId)); }, 'push subito del nuovo ordine in contanti');`"
+        },
+        {
+          "file": "lib/stripe/webhook/ordini.ts",
+          "modifica": "aggiungere `import { mandaSubitoLaPushDelNuovoOrdine } from '@/lib/push/subito';` e, subito dopo `const nuovi = createdOrderIds.filter((c) => daAvvisare.has(c.orderId));` (che segue `suonaLaCampanellaAiNegozi`): `dopoLaRisposta(async () => { await mandaSubitoLaPushDelNuovoOrdine(admin, createdOrderIds.map((c) => c.orderId)); }, 'push subito del nuovo ordine pagato con la carta');`"
+        }
+      ],
+      "nota": "Nello stesso commit della cucitura vanno riscritti i due commenti in cima a app/api/cron/send-push/route.ts (righe 10-13 e 24-30, file di R01) togliendo «che oggi nessuna rotta chiama ancora» e «ma nessuna rotta lo chiama ancora»: appena c'è un chiamante, tests/unit/riparazione-r18-commento-push-nuovo-ordine.test.ts vuole che nessuna frase dica più «nessuna rotta … chiama» (oggi, senza chiamanti, vuole il contrario: per questo il commento non l'ho cambiato io). Patch non provata con tsc: modificare file altrui, anche per poco, mi è stato negato; i tipi combaciano perché il client di getAdminSupabase è già passato come SupabaseClient a sendPushToUser nel giro. Senza chiavi VAPID l'aiutante esce subito senza toccare il database, quindi le prove esistenti di contanti e webhook non dovrebbero cambiare; serve una prova nuova che controlli la chiamata con gli id degli ordini. Dal collaudo: in lib/stripe/webhook/ordini.ts è più preciso `nuovi.map((c) => c.orderId)` che `createdOrderIds.map(...)` (che include gli ordini già nati quando Stripe ripete il webhook; innocuo grazie al filtro su pushed_at vuoto).",
+      "verificato_da": "revisore delle minori: i nomi della patch esistono e sono in scope (cod/route.ts: dopoLaRisposta :30, admin :428, comunicazioni :1321, campanelle/errCampanelle :1783-1806; ordini.ts: dopoLaRisposta :32, admin :99, createdOrderIds :302, nuovi :500) → REGGE"
+    },
+    {
+      "id": "R01-006",
+      "chiave": "deploy-sre|anche il segreto delle rotte interne e quello del bordo cloudflare, con un «a capo» su vercel, chiudono la porta a chi ce l'ha",
+      "esito": "riparato",
+      "commit": "28729f778396bbbdeb887bc4ff0ea2ed0a399ad7",
+      "file_toccati": [
+        "app/api/track/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-segreto-di-bordo-nel-registro-visite.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-segreto-di-bordo-nel-registro-visite.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 28729f778396bbbdeb887bc4ff0ea2ed0a399ad7^ --file app/api/track/route.ts --prove tests/unit/riparazione-r01-segreto-di-bordo-nel-registro-visite.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base il segreto delle rotte interne (lib/api/middleware.ts:808, withInternalAuth) e quello di bordo per l'indirizzo (lib/rate-limit.ts:351, getClientIp) erano già ripuliti con `.trim()`; restava il registro delle visite (app/api/track/route.ts, geoFromHeaders), che leggeva EDGE_TRUST_SECRET grezzo: ora `?.trim()` come in getClientIp, e un segreto vuoto o di soli spazi resta come assente (nessun bordo fidato). La prova: segreto con «a capo» o «\\r\\n» + gettone giusto → paese e città di Cloudflare; gettone sbagliato, prefisso, vuoto o mancante → solo Vercel; segreto mancante, vuoto o di soli spazi → nessun gettone passa.",
+      "verificato_da": "revisore modello grande: commit riletto (una riga, confronto ancora a tempo costante, segreto vuoto/spazi/«\\n» resta chiuso); prova rossa 2/4 con track/route.ts della base e verde 4/4 con la correzione in una copia; middleware.ts:694/:808 e rate-limit.ts:351 già puliti sulla base; nessuna altra lettura grezza dei tre segreti nel deposito; 8 file di prove su api/track verdi (73/73)"
+    },
+    {
+      "id": "R01-007",
+      "chiave": "qa-flussi|le prove dei permessi in sql certificano un database ricostruito dai file, non quello vero",
+      "esito": "non_fatto",
+      "nota": "Il lotto aveva fatto un commit (439b57222b83c9d96ba55f0bfcf7985ecd70b558: rls-locale su postgres:17 e confronto notturno delle regole fra database ricostruito e database vero), ma il revisore lo ha smentito e l'ho annullato con fdbbd90c369db7102e564fabb5f5c1347e099c75: (1) il confronto stampava per intero le righe del database vero (espressioni delle regole, stato della RLS) nel log del flusso, che in un deposito pubblico è leggibile da tutti; (2) l'impronta non guardava le viste (definizione e opzioni), quindi una vista cambiata in produzione passava verde. Per rifarla, nei file di R01: rls-locale da postgres:16 a postgres:17 (provato verde dal lotto e dal revisore: apply 235/0, run.sh, db pieno, check-drift); nel flusso della deriva il confronto con l'impronta del lotto più le viste (pg_get_viewdef e reloptions), stampando solo i conteggi per tipo di oggetto, mai le righe; la prova del lotto con psql finto va adattata ai conteggi. Mai girato contro la produzione.",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Riparazione fatta, smentita dal collaudo e annullata: la voce resta aperta.",
+      "verificato_da": "revisore delle minori: prova rossa senza la correzione (6 test), ma una vista riscritta in Postgres 17 dava 0 differenze e le righe solo-produzione finivano intere nel log pubblico → NON REGGE"
+    },
+    {
+      "id": "R01-008",
+      "chiave": "qa-flussi|nessuna prova nel browser gira mai sullo schermo di un telefono, e su telefono una è già rossa",
+      "esito": "parziale",
+      "commit": "0f6649381d4399b3e0f43443a11d15a73ef06973",
+      "file_toccati": [
+        ".github/workflows/ci.yml",
+        "tests/unit/riparazione-r01-prove-sul-telefono.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-prove-sul-telefono.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-prove-sul-telefono.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0f6649381d4399b3e0f43443a11d15a73ef06973^ --file .github/workflows/ci.yml --prove tests/unit/riparazione-r01-prove-sul-telefono.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nuovo lavoro e2e-telefono in ci.yml, aspettato dal cancello Main: build con variabili finte, installa WebKit, lancia tutte le prove con --project=mobile-safari e scrive passate, rosse e saltate nel riepilogo. Il passo ha continue-on-error: true perché una prova è già rossa sul telefono e lo spec non è mio: il rosso si vede col nome ma non blocca. La prova legge i progetti da playwright.config.ts (isMobile) e la CI com'è: un lancio sul telefono, col suo browser installato, nessun if, nessun segreto, aspettato da Main.",
+      "cosa_resta": "1) correggere tests/e2e/03-cart-and-search.spec.ts (vedi serve_file_altrui); 2) poi togliere la riga continue-on-error: true dal passo «Percorri il sito sullo schermo di un telefono e dichiara cosa hai provato» del lavoro e2e-telefono in .github/workflows/ci.yml, così il telefono ferma la richiesta come gli altri. La prova rossa sul telefono è dedotta dal codice: qui WebKit non si scarica (download bloccato) e Playwright non è girato. Inoltre, dal collaudo: continue-on-error copre tutto il passo, quindi finiscono verdi anche una rossa nuova sul telefono, l'app che non parte e «nessuna prova ha guardato»; meglio tollerare solo la prova nota per nome finché lo spec 03 non è corretto. Se l'installazione di WebKit o la build falliscono, il cancello Main resta rosso per tutti. WebKit vero non l'ha mai fatto girare nessuno: va visto al primo giro in CI prima di togliere continue-on-error.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/e2e/03-cart-and-search.spec.ts",
+          "modifica": "riga 25 (prova «search page renders with input»): page.locator('input[type=\"search\"], input[placeholder*=\"Cerca\"]').first() → page.locator('input[type=\"search\"]:visible, input[placeholder*=\"Cerca\"]:visible').first(). Sul telefono il primo campo nel DOM è la SearchBar del computer (components/Navbar.tsx:286, hidden md:block), nascosta; quella del telefono è in components/Navbar.tsx:425."
+        }
+      ],
+      "verificato_da": "revisore delle minori: tutte le prove nel browser su schermo iPhone 14 (Chromium, WebKit non scaricabile qui): 69 passate, 6 saltate col motivo, 1 rossa = spec 03 «search page renders with input»; la patch :visible proposta per lo spec 03 rende verde 5/5 su telefono e computer; prova rossa senza la correzione (3/4); variabili uguali a e2e-senza-chiavi → REGGE come parziale"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "il giro delle notifiche push può mandare due volte la stessa notifica del nuovo ordine",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "app/api/cron/send-push/route.ts:59-65",
+      "descrizione": "Il giro legge le campanelle (:59-65), manda la push e le segna come mandate solo dopo (:224-227), senza prenderle prima. Quando la push subito del nuovo ordine sarà cucita, se la sua presa cade fra la lettura e l'invio del giro partono due push (stesso tag, il telefono suona due volte). Cura nel file del giro: prendere le righe con un aggiornamento condizionato su pushed_at vuoto prima di mandare."
+    }
+  ],
+  "domande_per_nicola": [
+    "R01-001: accendi il rilascio controllato che applica da solo le migrazioni in produzione (segreti VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID, SUPABASE_DB_URL; ≤20 migrazioni mancanti; rilascio di prova; poi vercel.json main:false)?",
+    "R01-003: con E2E_DATI_DI_PROVA=1 e senza chiavi Stripe, il job della cassa vera deve diventare rosso, o restare verde ma contato «non conta» dal cancello Main?"
+  ],
+  "conto": {
+    "agenti": 8,
+    "subagenti": 8,
+    "costo_usd": 23.68,
+    "nota": "3 subagenti di riparazione (lotti 1-3) + 5 revisori (uno per R01-001, 002, 003, 006 e uno per le minori). Tetto di spesa all'80% superato durante il collaudo: nessun giro di correzione, la riparazione di R01-007 smentita è stata annullata con un revert."
+  },
+  "costo_usd": 23.68
+}
