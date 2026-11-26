@@ -27,28 +27,6 @@ let pending: Array<Record<string, unknown>> = [];
 let erroreLettura = false;
 let rpcErrore = false;
 
-/**
- * 26/11/2026 — Il giro prende le notifiche prima di mandarle (`pushed_at` all'ora della presa, solo
- * dove è vuoto) e alla fine ridà vuote quelle non mandate. `segnate` quindi è lo stato finale: le righe
- * che restano con `pushed_at` pieno. Il database finto conferma le righe toccate.
- */
-function scritturaSuPushedAt(valore: string | null, ids: string[]) {
-  if (valore !== null) {
-    for (const id of ids) if (!segnate.includes(id)) segnate.push(id);
-  } else {
-    for (const id of ids) {
-      const k = segnate.indexOf(id);
-      if (k >= 0) segnate.splice(k, 1);
-    }
-  }
-  const esito = { data: ids.map((id) => ({ id })), error: null };
-  const c: Record<string, unknown> = {
-    is: () => c, eq: () => c, select: () => c,
-    then: (ok: (v: unknown) => unknown) => Promise.resolve(esito).then(ok),
-  };
-  return c;
-}
-
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     rpc: async () => (rpcErrore ? { data: null, error: { message: 'timeout' } } : { data: true, error: null }),
@@ -58,15 +36,15 @@ vi.mock('@/lib/supabase/server', () => ({
       Object.assign(b, {
         select: sel, is: sel, gte: sel, order: sel,
         limit: async () => (erroreLettura ? { data: null, error: { message: 'permission denied' } } : { data: pending, error: null }),
-        update: (v: { pushed_at?: string | null }) => ((b._update = true), (b._valore = v.pushed_at ?? null), b),
-        in: (_c: string, valori: string[]) => {
-          if (b._update) return scritturaSuPushedAt(b._valore as string | null, valori);
+        update: () => ((b._update = true), b),
+        in: async (_c: string, valori: string[]) => {
+          if (b._update) { segnate.push(...valori); return { error: null }; }
           if (tabella === 'push_subscriptions') {
-            return Promise.resolve(erroreIscrizioni
+            return erroreIscrizioni
               ? { data: null, error: { message: 'canceling statement due to statement timeout' } }
-              : { data: valori.map((u) => ({ id: `s-${u}`, user_id: u, endpoint: 'e', p256dh: 'p', auth: 'a' })), error: null });
+              : { data: valori.map((u) => ({ id: `s-${u}`, user_id: u, endpoint: 'e', p256dh: 'p', auth: 'a' })), error: null };
           }
-          return Promise.resolve({ data: [], error: null });
+          return { data: [], error: null };
         },
       });
       return b;
