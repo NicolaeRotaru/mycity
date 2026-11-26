@@ -11,6 +11,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import StoreHoursEditor from '@/components/seller/StoreHoursEditor';
 import { isStoreClosedForOrder, negozioPuoServire, romeNow, type StoreHours } from '@/lib/store-hours';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
+import { orariPerLoSchema } from '@/components/store-sections/orari-schema';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -108,5 +109,14 @@ describe('«Chiuso fino al»', () => {
     e.chiusoFinoAl('');
     expect('chiusoFinoAl' in e.ultimo()).toBe(false);
     expect(negozioPuoServire(e.ultimo(), OGGI)).toBe(true);
+  });
+});
+
+describe('la scheda pubblica', () => {
+  it('un negozio sospeso non si dichiara aperto, uno che serve sì', () => {
+    expect(orariPerLoSchema(APERTO_SEMPRE)).toBeDefined();
+    expect(orariPerLoSchema({ ...APERTO_SEMPRE, finitoOggiIl: '2026-11-25' })).toBeUndefined();
+    expect(orariPerLoSchema({ ...APERTO_SEMPRE, chiusoFinoAl: '2026-11-27' })).toBeUndefined();
+    expect(orariPerLoSchema({ ...APERTO_SEMPRE, chiusoFinoAl: '2026-11-24' })).toBeDefined();
   });
 });
