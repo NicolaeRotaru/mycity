@@ -1,0 +1,271 @@
+{
+  "sessione": "R14",
+  "aggiornato": "2026-11-26 15:15",
+  "finita": true,
+  "testa": "ce1b25a5c85d7a82d8c604a9ec9bd9f33d612349",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "ce1b25a5c85d7a82d8c604a9ec9bd9f33d612349",
+    "nota": "typecheck + lint (0 errori, 122 avvisi già presenti) + vitest: 2147 file, 13193 prove verdi"
+  },
+  "voci": [
+    {
+      "id": "R14-001",
+      "chiave": "api-backend|il preventivo accettato due volte nello stesso giorno con scelte diverse lascia avvisi che si contraddicono",
+      "esito": "riparato",
+      "commit": "5ec787d5fb746855fffc11764889f509aeb23b4a",
+      "file_toccati": [
+        "app/api/seller/preventivo/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-preventivo-scelte-diverse.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-preventivo-scelte-diverse.test.ts tests/unit/il-preventivo-accettato-arriva-a-nicola.test.ts tests/unit/modalita-demo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5ec787d5fb746855fffc11764889f509aeb23b4a^ --file app/api/seller/preventivo/route.ts --prove tests/unit/riparazione-r14-preventivo-scelte-diverse.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima di scrivere l'avviso della fascia scelta, la rotta toglie con togliLAvvisoAgliAmministratori gli avvisi delle altre fasce dello stesso preventivo del giorno: resta solo l'ultima scelta, anche nel giro Base → Premium → Base. I vecchi si tolgono prima di scrivere il nuovo, così se la scrittura cade il cliente legge «riprova».",
+      "nota": "La prova comune il-preventivo-accettato-arriva-a-nicola non è stata toccata e resta verde (il suo vi.mock non ha togliLAvvisoAgliAmministratori: la rotta la chiama dentro Promise.allSettled come pulizia). Resta un caso marginale visto dallo smentitore: due fasce diverse scelte nello stesso istante lasciano due avvisi.",
+      "verificato_da": "smentitore (subagente generico, modello grande): regge: la chiave è per cliente+numero preventivo del giorno+fascia, si tolgono solo le altre due fasce dello stesso preventivo; il TypeError del mock comune diventa una promessa rifiutata raccolta da allSettled. Resta il caso di due fasce scelte nello stesso istante (due avvisi)."
+    },
+    {
+      "id": "R14-002",
+      "chiave": "api-backend|la rotta delle cancellazioni copia una stringa privata della libreria degli avvisi",
+      "esito": "parziale",
+      "commit": "de93ca89d08e621191806fa881a6016fe19cad5f",
+      "file_toccati": [
+        "lib/privacy/avvisi-a-chi-aspetta.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-email-partita-dalla-libreria.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-email-partita-dalla-libreria.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base de93ca89d08e621191806fa881a6016fe19cad5f^ --file lib/privacy/avvisi-a-chi-aspetta.ts --prove tests/unit/riparazione-r14-email-partita-dalla-libreria.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La libreria esporta emailRisultaPartita(admin, idAvviso): legge lo stesso registro e lo stesso segno «partita» che scrive, e risponde false se il registro non si legge. La rotta non deve più copiare 'audit_logs', il filtro e la stringa privata. La rimessa esce 3 perché da parte mia c'è solo un nome nuovo esportato: il comportamento cambia nella rotta.",
+      "cosa_resta": "Far usare la funzione alla rotta del giro notturno (non è un file di R14).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/process-deletions/route.ts",
+          "modifica": "1) Nell'import da '@/lib/privacy/avvisi-a-chi-aspetta' aggiungere `emailRisultaPartita,` prima di `identificativoAvviso,`. 2) Riga 529: `emailGiaPartita(admin, identificativoAvviso(d.chiave))` → `emailRisultaPartita(admin as unknown as ClienteAvvisi, identificativoAvviso(d.chiave))`. 3) Cancellare le righe 546-565: il commento «21/11/2026 … Il segno che…», `const EMAIL_PARTITA = …` e tutta `async function emailGiaPartita`. Provata in locale e tolta: 2 righe aggiunte e 22 tolte, le prove esistenti delle email già partite e dell'allarme forse-partita verdi, eslint pulito."
+        }
+      ],
+      "verificato_da": "smentitore (subagente generico, modello grande): regge: emailRisultaPartita fa la stessa lettura di emailDovuta (audit_logs, target_table notifications, target_id, action EMAIL_PARTITA) e coincide riga per riga con la copia della rotta; il serve_file_altrui funziona col cast ClienteAvvisi e togliendo anche la costante EMAIL_PARTITA."
+    },
+    {
+      "id": "R14-003",
+      "chiave": "api-backend|l'invio subito delle notifiche push prende le righe guardando solo pushed_at, e può correre col giro del cron",
+      "esito": "serve_file_altrui",
+      "copre_tutta_la_voce": false,
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/send-push/route.ts",
+          "modifica": "Il giro non prende le righe: le legge con pushed_at vuoto (righe 58-64) e le segna solo DOPO l'invio (righe 222-227). Cura: subito dopo la lettura (e dopo l'eventuale rilettura degli urgenti) prendere le righe con una scrittura sola, come fa lib/push/subito.ts: `const { data: prese } = await supa.from('notifications').update({ pushed_at: nowIso }).in('id', pending.map(n => n.id)).is('pushed_at', null).select('id, user_id, title, body, link, category')`, con nowIso spostato prima, e lavorare solo su `prese`. Le righe rimandate (preferenza o iscrizioni non lette) e quelle ritentate si ridanno al giro con `update({ pushed_at: null }).in('id', ids).eq('pushed_at', nowIso)`. Il passo ④ (segnatura finale) sparisce."
+        }
+      ],
+      "cosa_ho_fatto": "Nessun commit. lib/push/subito.ts prende già le righe in modo atomico (update condizionato su pushed_at null), con le stesse regole del giro. Il doppio invio viene dal giro, che non prende le righe: da subito.ts non si chiude.",
+      "nota": "Nessuna migrazione: basta la scrittura condizionata già usata da subito.ts."
+    },
+    {
+      "id": "R14-004",
+      "chiave": "architettura|audit_logs, il registro delle azioni amministrative, diventa il lucchetto delle email, scritto fuori da lib/audit.ts e dal catalogo",
+      "esito": "scelta_di_nicola",
+      "domanda": "Il lucchetto delle email a chi aspetta la cancellazione va spostato da audit_logs in una tabella sua (migrazione nuova che copia le righe 'privacy.avviso_cancellazione.%', e codice da pubblicare solo dopo la migrazione), o resta in audit_logs e la pagina /admin/audit lo nasconde?",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Niente cambiato. La cura vera è spostare il lucchetto rispettando l'ordine fra migrazione e pubblicazione: se il codice esce prima della migrazione ogni email finisce 'bloccata' e suonano gli allarmi.",
+      "nota": "Nella pagina non si possono filtrare le righe con .in(catalogo): nasconderebbe azioni vere fuori catalogo (es. 'order.delivery_closed_by_admin' della migrazione 360). Un filtro .not('action','like','privacy.avviso_cancellazione.%') rompe il finto comune tests/unit/aiuti/cabina-admin.tsx (senza .not), usato da 5 prove comuni: prova comune, serve la firma di Nicola."
+    },
+    {
+      "id": "R14-005",
+      "chiave": "architettura|avvisi-a-chi-aspetta.ts tiene insieme pannello, lucchetto email, indirizzo, html e invio; l'email parte solo se il pannello riesce",
+      "esito": "gia_riparato_prima",
+      "prova": "lib/privacy/avvisi-a-chi-aspetta.ts:206-208: il continue è stato tolto il 5/11; dopo il catch del pannello si arriva sempre a if (posta) (:216). npx vitest run tests/unit/minori-s08-avvisi.test.ts --reporter=dot → verde; rimettendo continue la prova «se il pannello della prima persona fallisce, le email partono lo stesso» diventa rossa.",
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il comportamento della voce è già riparato e la prova esistente lo sorveglia.",
+      "nota": "Non ho diviso il file: è solo struttura senza comportamento. Se Nicola la vuole, è un lavoro a parte."
+    },
+    {
+      "id": "R14-006",
+      "chiave": "architettura|email partita ma non segnata: la notte dopo riparte, e se fallisce l'allarme dice «non partita» per un'email già arrivata",
+      "esito": "scelta_di_nicola",
+      "prova": "Il pezzo dell'allarme è già chiuso: lib/privacy/avvisi-a-chi-aspetta.ts:431-434 e :464-465 (tentativo senza esito → 'forse-partita') e app/api/cron/process-deletions/route.ts:803-807 (testo «può essere arrivata»). npx vitest run tests/unit/riparazione-r03-email-partita.test.ts tests/unit/riparazione-r09-allarme-forse-partita.test.ts tests/unit/riparazione-r05-email-partita-e-segnata.test.ts --reporter=dot → verde",
+      "domanda": "Quando il segno «partita» non si scrive (il registro lo rifiuta 3 volte), la notte dopo l'email si rispedisce (scelta del 27/10, «meglio due volte che nessuna»): la teniamo così, o un tentativo senza esito non si rispedisce, accettando il rischio di zero email per un avviso dovuto per legge?",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Controllato che l'allarme falso non c'è più e che le prove lo coprono. Resta solo il secondo invio, che è voluto: si cambia solo se lo decide Nicola."
+    },
+    {
+      "id": "R14-007",
+      "chiave": "layout-responsive|la home a 320 px col testo al 200% scorre ancora di lato di 18 px",
+      "esito": "gia_riparato_prima",
+      "prova": "Alla base ed12ed8ec8190e1132b690f6e034c30f0a5d55ba components/home/HowItWorks.tsx:75-81 ha flex flex-wrap sulla riga cerchio+titolo, min-w-0 grow basis-24 break-words sul titolo e il margine della scheda !p-[min(1.5rem,7vw)]. npx vitest run tests/unit/riparazione-r12-testo-grande.test.ts --reporter=dot",
+      "copre_tutta_la_voce": true,
+      "verificato_da": "smentitore (subagente generico, modello grande): misurata: componente HowItWorks reso con il Tailwind del progetto e i font veri in Chromium headless, html al 200%, a 320 e 280 px nessun elemento sborda (eccedenza 0 px). La home intera non è stata misurata (vuole Supabase)."
+    },
+    {
+      "id": "R14-008",
+      "chiave": "mobile-pwa|quando la sessione scade da sola, il telefono perde le notifiche in silenzio e al nuovo accesso nessuno le riaccende",
+      "esito": "gia_riparato_prima",
+      "prova": "components/Navbar.tsx:232: a fine sessione, se il telefono viene disiscritto, resta un segno con l'identificativo della persona; Navbar.tsx:243 → 136-147: al nuovo accesso (SIGNED_IN/INITIAL_SESSION) compare l'avviso «Le notifiche su questo dispositivo si sono spente alla fine della sessione» con il bottone «Riattiva». middleware.ts:507 raccoglie i cookie rinnovati e li versa su ogni risposta. npx vitest run tests/unit/riparazione-r19-notifiche-spente-dette-al-rientro.test.ts tests/unit/riparazione-r01-notifiche-sessione-scaduta-al-caricamento.test.ts --reporter=dot → 2 file, 12 prove verdi",
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Verificato che la cura «avvisare al nuovo accesso» c'è già, con le sue prove. Il registro punta a righe di una versione vecchia di Navbar.tsx (82-88)."
+    },
+    {
+      "id": "R14-009",
+      "chiave": "privacy-legale|la pagina cms (chi siamo) carica ancora i video senza chiedere",
+      "esito": "gia_riparato_prima",
+      "prova": "Alla base ed12ed8ec8190e1132b690f6e034c30f0a5d55ba components/cms/CmsBlockRenderer.tsx:98 renderizza <VideoAlClic .../> (l'iframe nasce solo al clic; nel file non c'è nessun <iframe). npx vitest run tests/unit/riparazione-r11-video-cms-al-clic.test.tsx --reporter=dot → verde",
+      "copre_tutta_la_voce": true
+    },
+    {
+      "id": "R14-010",
+      "chiave": "qa-flussi|la campanella del sito mostra le promozioni anche a chi le ha spente",
+      "esito": "parziale",
+      "commit": "17946354d243253f3289437fa342d66ce65361c4",
+      "file_toccati": [
+        "app/notifications/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-notifiche-promozioni-spente.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-notifiche-promozioni-spente.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 17946354d243253f3289437fa342d66ce65361c4^ --file app/notifications/page.tsx --prove tests/unit/riparazione-r14-notifiche-promozioni-spente.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La pagina legge profiles.notif_promos e toglie dall'elenco le righe con category 'promo' se le promozioni sono spente o la preferenza non si legge (come SellerShell); il filtro è sul render, così «Carica altre» guarda ancora le righe lette. Le 10 prove esistenti che leggono la pagina restano verdi.",
+      "verificato_da": "smentitore (subagente generico, modello grande): dubbio: colonna e valore giusti (notif_promos 054:10, 'promo' nel CHECK 115:211), coerente con SellerShell; ma il numerino del campanello conta ancora le promozioni nascoste.",
+      "cosa_resta": "Il numerino del campanello (Navbar, AccountShell) viene da components/hooks/useNotificationsCount.ts, che conta tutte le non lette: chi ha spento le promozioni vede ancora il numero delle promozioni nascoste. «Segna tutte come lette» le segna lette e così il numero si azzera.",
+      "serve_file_altrui": [
+        {
+          "file": "components/hooks/useNotificationsCount.ts",
+          "modifica": "Nel queryFn, prima del conteggio: `const { data: pref, error: errPref } = await supabase.from('profiles').select('notif_promos').eq('id', userId).limit(1);` e `const promoAccese = !errPref && (pref as { notif_promos?: boolean | null }[] | null)?.[0]?.notif_promos === true;`. Poi costruire la query del conteggio in una variabile e, se `!promoAccese`, aggiungere `.or('category.is.null,category.neq.promo')` prima di eseguirla. Stessa regola della pagina app/notifications/page.tsx (R14-010): promozioni contate solo a chi le ha accese."
+        }
+      ]
+    },
+    {
+      "id": "R14-011",
+      "chiave": "qa-flussi|due regole diverse per il tetto del portiere sulla sessione",
+      "esito": "serve_file_altrui",
+      "copre_tutta_la_voce": false,
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r06-tetto-per-getuser.test.ts",
+          "modifica": "prova comune: serve la firma di Nicola (importa lib/auth/decisione-portiere, non di R14). Righe 21-23: il caso «tessera buona per un'ora» deve aspettarsi TETTO_RINNOVO_MS e non TETTO_PORTIERE_MS, titolo cambiato di conseguenza. Con la firma, nei file di R14: in lib/auth/cookie-di-sessione.ts tettoPerGetUser diventa `return tettoPerChiedereChiSei(cookie);` (il middleware non cambia testo) e una prova nuova tests/unit/riparazione-r14-tetto-unico.test.ts controlla che le due funzioni diano lo stesso verdetto sulla tessera leggibile e buona e su quella illeggibile."
+        }
+      ],
+      "cosa_ho_fatto": "Nessun commit. Le due regole (tettoPerChiedereChiSei: qualunque tessera → 10 s; tettoPerGetUser, usata dal middleware: 10 s solo se la tessera scade) sono fissate da due prove comuni (il-rinnovo-oltre-i-tre-secondi-arriva-al-browser e riparazione-r06-tetto-per-getuser) che danno verdetti opposti sulla tessera leggibile e buona: qualunque regola unica fa diventare rossa una delle due.",
+      "nota": "Regola scelta, la più stretta: 10 s con qualunque tessera, la «parte severa» che il codice stesso nomina (meglio aspettare di più una lettura che buttare via un rinnovo). Nessun controllo di accesso cambia: il tetto decide solo quanto si aspetta."
+    },
+    {
+      "id": "R14-012",
+      "chiave": "qa-flussi|la risposta del negozio svuotata e riscritta dall api riavvisa il cliente ogni volta",
+      "esito": "riparato",
+      "commit": "20b107a48c2d66adea796f9d3f4ac50d8529291b",
+      "file_toccati": [
+        "migrations/930_la_risposta_riscritta_non_riavvisa_chi_ha_chiesto.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r14-risposta-riscritta.test.sql"
+      ],
+      "prova_comando": "PGHOST=/var/run/postgresql PGUSER=root bash tests/sql/harness/apply.sh r14_rimessa && psql -q -X -d r14_rimessa -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r14-risposta-riscritta.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 20b107a48c2d66adea796f9d3f4ac50d8529291b^ --file migrations/930_la_risposta_riscritta_non_riavvisa_chi_ha_chiesto.sql --prove tests/sql/rls/riparazione-r14-risposta-riscritta.test.sql --sql r14_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La 930 ridefinisce risposta_avvisa_chi_ha_chiesto(): la voce nella campanella ha id md5('mycity:risposta-alla-domanda:'||NEW.id)::uuid con ON CONFLICT (id) DO NOTHING, il resto della 822 resta uguale. Sulla base svuotare e riscrivere dall'API portava il cliente a 5 voci; ora resta a 1.",
+      "nota": "Migrazione nuova migrations/930_la_risposta_riscritta_non_riavvisa_chi_ha_chiesto.sql, da non applicare a mano. Le domande risposte prima della 930 possono riavvisare al massimo una volta in più. Suite SQL intera verde sul database ricostruito con la 930.",
+      "verificato_da": "smentitore (subagente generico, modello grande): regge: la 930 è uguale alla 822 (SECURITY DEFINER, search_path, REVOKE) tranne id deterministico e ON CONFLICT; database locale ricostruito con le 236 migrazioni, prova SQL verde."
+    },
+    {
+      "id": "R14-013",
+      "chiave": "stati-ui|oncount della griglia non sa dire «non so»: con la griglia ferma al tetto la categoria può restare su un numero vecchio",
+      "esito": "parziale",
+      "commit": "ce1b25a5c85d7a82d8c604a9ec9bd9f33d612349",
+      "file_toccati": [
+        "app/category/[slug]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-categoria-conto-sconosciuto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-categoria-conto-sconosciuto.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ce1b25a5c85d7a82d8c604a9ec9bd9f33d612349^ --file app/category/[slug]/page.tsx --prove tests/unit/riparazione-r14-categoria-conto-sconosciuto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La pagina tiene il conto insieme ai filtri con cui è stato dato: cambiati i filtri il numero vecchio sparisce, e il callback accetta null («non so») che lo toglie.",
+      "cosa_resta": "La griglia non dice mai «non so»: con contoNonSiSa non chiama onCount e, con keepPreviousData, al cambio di filtro ridice subito il numero vecchio, che poi resta. Senza la modifica a components/ProductGrid.tsx la correzione della pagina non chiude il caso vero.",
+      "serve_file_altrui": [
+        {
+          "file": "components/ProductGrid.tsx",
+          "modifica": "Riga 164: `onCount?: (count: number | null) => void;`. Nell'effetto delle righe 544-547: se `!onCount || caricando || inErrore || totaleInAttesa` return; se `contoNonSiSa` chiama `onCount(null)` e return; altrimenti `onCount(totaleVero ?? filtered.length)`. Controllare con tsc gli altri chiamanti (StoreProductExplorer.tsx:13, ProductGridSection) che tipano la callback."
+        }
+      ],
+      "verificato_da": "smentitore (subagente generico, modello grande): regge come parziale: nessuna regressione, ma da sola non chiude il caso vero perché la griglia (keepPreviousData) richiama onCount col numero vecchio e non manda mai null: serve la modifica a components/ProductGrid.tsx."
+    },
+    {
+      "id": "R14-014",
+      "chiave": "stati-ui|sotto un lavoro sul catalogo chiuso che dice di chiedere all'assistenza prima di ripartire, il pulsante «avvia sul catalogo» resta lì",
+      "esito": "gia_riparato_prima",
+      "prova": "Alla base ed12ed8ec8190e1132b690f6e034c30f0a5d55ba lib/ai/statoLavoroCatalogo.ts:40 ha `puoAvviareLavoro = !job || (lavoroChiuso(job.status) && !vietaDiRipartire(job))`, e la pagina ai-batch usa puoAvviareLavoro a riga 516. npx vitest run tests/unit/riparazione-r01-avvio-dopo-assistenza.test.ts --reporter=dot → 5 verdi",
+      "copre_tutta_la_voce": true
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "se il registro degli invii non si legge, l'allarme dice «non partita, non è un intoppo di una notte» anche alla prima notte e per un'email forse arrivata",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "lib/privacy/avvisi-a-chi-aspetta.ts:445-449",
+      "descrizione": "emailDovuta risponde 'bloccata' senza forsePartita quando la lettura del registro fallisce; per correggerlo serve anche un terzo testo nella rotta app/api/cron/process-deletions/route.ts."
+    },
+    {
+      "titolo": "l'azione 'order.delivery_closed_by_admin' non è nel catalogo delle azioni: in /admin/audit non ha etichetta e il filtro non la offre",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "lib/audit-azioni.ts (azione scritta da migrations/360:122)",
+      "descrizione": "Manca la voce nel catalogo lib/audit-azioni.ts."
+    },
+    {
+      "titolo": "il giro delle notifiche push può mandare due volte se due giri si sovrappongono (ritentativo di Vercel o chiamata a mano)",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/cron/send-push/route.ts:58-64,222-227",
+      "descrizione": "Il giro legge le righe con pushed_at vuoto senza prenderle e le segna solo dopo l'invio; la stessa cura proposta per R14-003 chiude anche questo caso."
+    }
+  ],
+  "domande_per_nicola": [
+    "R14-004: il lucchetto delle email di cancellazione esce da audit_logs in una tabella sua, o resta e /admin/audit lo nasconde?",
+    "R14-006: un'email il cui segno «partita» non si scrive va rispedita la notte dopo (oggi sì) o no?",
+    "R14-011: il tetto del portiere sulla sessione diventa una regola sola (10 s con qualunque tessera, la più stretta)? Serve la firma sulla prova comune riparazione-r06-tetto-per-getuser."
+  ],
+  "conto": {
+    "agenti": 4,
+    "nota": "3 riparatori (lotti 1-2 modello grande, lotto 3 sonnet) + 1 smentitore sul modello grande per tutte le voci con commit e la misura di R14-007. costo_usd letto con get_session (senza id) alle 15:02, prima della consegna: 13,20 $ su 20 $.",
+    "subagenti": 4
+  },
+  "costo_usd": 13.2
+}
