@@ -221,7 +221,7 @@ export default async function AboutPage() {
 
         {/* CTA band scura */}
         <section className="pb-16">
-          <div className="bg-ink-900 text-white rounded-2xl p-8 md:p-11 flex flex-col md:flex-row md:items-center md:justify-between gap-7">
+          <div className="bg-ink-900 text-white rounded-2xl p-8 max-sm:p-[min(2rem,10vw)] md:p-11 flex flex-col md:flex-row md:items-center md:justify-between gap-7">
             <div className="min-w-0">
               <h2 className="font-serif text-2xl md:text-3xl font-extrabold text-white mb-2 break-words hyphens-auto">
                 Vuoi farne parte?
@@ -231,16 +231,17 @@ export default async function AboutPage() {
                 città — c’è posto per te.
               </p>
             </div>
-            <div className="flex flex-wrap gap-3">
+            {/* R28-004 — Sotto sm i pulsanti vanno uno sotto l'altro a tutta larghezza e l'icona può andare sopra il testo; sotto sm il margine interno si stringe solo se lo schermo è più stretto di 320 px (min(2rem,10vw)), e fino a 300 px il testo è un po' più piccolo: a 280 px col testo al 200% le parole vanno a capo intere, senza uscire dalla fascia. A 100% e sopra i 300 px nulla cambia. */}
+            <div className="flex flex-wrap max-sm:flex-col gap-3 min-w-0 max-w-full">
               <Link
                 href="/lavora-con-noi"
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 max-[300px]:px-3 max-[300px]:max-w-full font-bold text-base bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors"
+                className="inline-flex flex-wrap items-center justify-center max-sm:text-center gap-x-2 gap-y-1 rounded-full px-5 max-sm:px-3 py-3 max-[300px]:px-3 max-[300px]:max-w-full max-w-full font-bold text-base max-[300px]:text-sm bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors"
               >
                 <Briefcase size={18} strokeWidth={2.2} aria-hidden /> Lavora con noi
               </Link>
               <Link
                 href="/sell"
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 max-[300px]:px-3 max-[300px]:max-w-full font-bold text-base bg-white/10 text-white border border-white/25 hover:bg-white/20 transition-colors"
+                className="inline-flex flex-wrap items-center justify-center max-sm:text-center gap-x-2 gap-y-1 rounded-full px-5 max-sm:px-3 py-3 max-[300px]:px-3 max-[300px]:max-w-full max-w-full font-bold text-base max-[300px]:text-sm bg-white/10 text-white border border-white/25 hover:bg-white/20 transition-colors"
               >
                 <Store size={18} strokeWidth={2.2} aria-hidden /> Apri un negozio
                 <ArrowRight size={16} strokeWidth={2.2} aria-hidden />
