@@ -43,6 +43,9 @@ export const runtime = 'nodejs';
 const Corpo = z.object({
   passwordAttuale: z.string().min(1).max(200),
   nuovaPassword: z.string().min(LUNGHEZZA_MINIMA).max(200),
+  // 26/11/2026 (R28-012) — Il gettone anti-robot della pagina, se lo manda: col CAPTCHA acceso su
+  // Supabase la prova della password attuale (un accesso vero) senza gettone viene rifiutata.
+  captchaToken: z.string().max(4096).optional(),
 });
 
 /** I fornitori con cui l'account accede (`email`, `google`…), da app_metadata o dalle identità. */
@@ -113,8 +116,17 @@ export const POST = withAuthRateLimit(
     const { error: erroreVerifica } = await prova.auth.signInWithPassword({
       email,
       password: corpo.passwordAttuale,
+      options: { captchaToken: corpo.captchaToken || undefined },
     });
     if (erroreVerifica) {
+      // 26/11/2026 (R28-012) — Col CAPTCHA acceso su Supabase, un gettone assente o scaduto non
+      // dice niente della password: Supabase non l'ha nemmeno provata. Prima finiva nel ramo
+      // «Password attuale non corretta» e chi la sapeva giusta credeva di averla dimenticata.
+      if (erroreVerifica.code === 'captcha_failed') {
+        return ApiErrors.invalidRequest(
+          "Il controllo anti-robot non è andato a buon fine, quindi la password attuale non si è potuta verificare: la password non c'entra. Ricarica la pagina e riprova.",
+        );
+      }
       // Si prova comunque la password (chi è entrato con Google può averne impostata una col
       // recupero): solo se non combacia e l'account non ha l'email fra i fornitori, la risposta
       // giusta è «accedi senza password», non «password non corretta».
