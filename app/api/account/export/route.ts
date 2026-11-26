@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { schedaPerIlNegozio } from '@/lib/agenzia/scheda-del-negozio';
+import { schedaComeLaVedeIlNegozio } from '@/lib/agenzia/scheda-del-negozio';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { sullaPortaDeiDiritti } from '@/lib/privacy/porta-dei-diritti';
@@ -203,7 +203,8 @@ const scarica = withAuthRateLimit(
     // Del link non si esporta il codice: è una chiave, non un dato della persona.
     // 26/11/2026 — La scheda esce come la vede il negozio (revisione di sicurezza di mycity#336): prima del
     // pagamento senza il rapporto intero, dopo solo con le parti del suo abbonamento (lib/agenzia/scheda-del-negozio.ts).
-    scheda_del_locale: schedaPerIlNegozio(admin, userId).then((s): Lettura => (s.errore ? { data: null, error: { message: s.errore } } : { data: s.scheda ? [{ id_attivita: userId, scheda: s.scheda }] : [], error: null })),
+    // Si legge come le altre sezioni; le regole della dashboard si applicano sotto, con `schedaComeLaVedeIlNegozio`.
+    scheda_del_locale: tutta((da, a) => admin.from('schede_clienti').select('id_attivita, scheda, origine, ricevuta_il, aggiornata_il').eq('id_attivita', userId).order('id_attivita').range(da, a)),
     // 24/11/2026 — L'analisi del business (sito e canali) e la bozza del sito scritta dall'AD (migrazione 711).
     analisi_del_negozio: tutta((da, a) => admin.from('analisi_negozi').select('*').eq('id_attivita', userId).order('id_attivita').range(da, a)),
     bozza_del_sito: tutta((da, a) => admin.from('bozze_sito').select('*').eq('id_attivita', userId).order('id_attivita').range(da, a)),
@@ -276,6 +277,17 @@ const scarica = withAuthRateLimit(
       altre[chiave] = sezione(chiave, (await domanda) as Lettura);
     }),
   );
+
+  // 26/11/2026 — La scheda del locale esce come la vede il negozio (revisione di sicurezza di mycity#336): prima del
+  // pagamento senza il rapporto intero, dopo solo con le parti del suo abbonamento (lib/agenzia/scheda-del-negozio.ts).
+  if (Array.isArray(altre.scheda_del_locale)) {
+    const abbonamenti = (Array.isArray(altre.abbonamenti_dei_servizi) ? altre.abbonamenti_dei_servizi : []) as Array<{ fascia?: unknown; stato?: unknown }>;
+    const visibile = (profile.data as Record<string, unknown> | null)?.visibile_senza_abbonamento;
+    altre.scheda_del_locale = altre.scheda_del_locale.map((riga) => {
+      const r = riga as Record<string, unknown>;
+      return { ...r, scheda: schedaComeLaVedeIlNegozio(r.scheda, { visibileSenzaAbbonamento: visibile, abbonamenti }) };
+    });
+  }
 
   // Il profilo: «nessuna riga» (PGRST116) vuol dire davvero che non c'è, ed è
   // un'informazione vera. Un errore diverso vuol dire che non siamo riusciti a

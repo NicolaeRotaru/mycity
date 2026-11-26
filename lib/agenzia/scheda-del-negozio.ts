@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { leggiSchedaSalvata, type SchedaCliente } from './scheda-cliente';
-import { leggiSchedaEPagellaAperte, schedaPerIlSito } from './scheda-dopo-abbonamento';
+import { leggiSchedaEPagellaAperte, schedaEPagellaAperte, schedaPerIlSito } from './scheda-dopo-abbonamento';
 import { analisiPerLaFascia } from './rapporto';
 import { ABBONAMENTI, type Abbonamento } from './preventivo';
 
@@ -18,6 +18,25 @@ import { ABBONAMENTI, type Abbonamento } from './preventivo';
  */
 export type SchedaDelNegozio = { scheda: SchedaCliente | null; aperta: boolean; fascia: Abbonamento | null; errore: string | null };
 
+/** La fascia dell'abbonamento attivo (active o past_due), dalle righe di `abbonamenti_servizi`; `null` se non c'è. */
+export function fasciaAttiva(righe: ReadonlyArray<{ fascia?: unknown; stato?: unknown }> | null | undefined): Abbonamento | null {
+  const riga = (righe ?? []).find((r) => r.stato === 'active' || r.stato === 'past_due');
+  return riga && (ABBONAMENTI as readonly unknown[]).includes(riga.fascia) ? (riga.fascia as Abbonamento) : null;
+}
+
+/**
+ * Le stesse regole, senza rete: dalla scheda salvata, da `visibile_senza_abbonamento` e dalle righe degli abbonamenti.
+ * La usa l'export, che quelle righe le ha già lette.
+ */
+export function schedaComeLaVedeIlNegozio(
+  grezza: unknown,
+  d: { visibileSenzaAbbonamento: unknown; abbonamenti: ReadonlyArray<{ fascia?: unknown; stato?: unknown }> | null | undefined },
+): SchedaCliente | null {
+  const aperta = schedaEPagellaAperte({ visibileSenzaAbbonamento: d.visibileSenzaAbbonamento, statiAbbonamenti: (d.abbonamenti ?? []).map((r) => r.stato) });
+  const intera = schedaPerIlSito(leggiSchedaSalvata(grezza), aperta);
+  return intera && aperta ? { ...intera, analisi: analisiPerLaFascia(intera.analisi, fasciaAttiva(d.abbonamenti)) } : intera;
+}
+
 export async function schedaPerIlNegozio(admin: SupabaseClient, idAttivita: string): Promise<SchedaDelNegozio> {
   const [letta, aperta, abbonamenti] = await Promise.all([
     admin.from('schede_clienti').select('scheda').eq('id_attivita', idAttivita).limit(1).maybeSingle(),
@@ -26,8 +45,7 @@ export async function schedaPerIlNegozio(admin: SupabaseClient, idAttivita: stri
   ]);
   if (letta.error) logger.warn('[scheda-del-negozio] scheda non letta', { idAttivita, message: letta.error.message });
   const intera = letta.error ? null : schedaPerIlSito(leggiSchedaSalvata((letta.data as { scheda?: unknown } | null)?.scheda), aperta);
-  const riga = abbonamenti.error ? null : ((abbonamenti.data as Array<{ fascia?: string; stato?: string }> | null) ?? []).find((r) => r.stato === 'active' || r.stato === 'past_due');
-  const fascia = riga && (ABBONAMENTI as readonly string[]).includes(String(riga.fascia)) ? (riga.fascia as Abbonamento) : null;
+  const fascia = abbonamenti.error ? null : fasciaAttiva(abbonamenti.data as Array<{ fascia?: unknown; stato?: unknown }> | null);
   const scheda = intera && aperta ? { ...intera, analisi: analisiPerLaFascia(intera.analisi, fascia) } : intera;
   return { scheda, aperta, fascia, errore: letta.error ? letta.error.message : null };
 }

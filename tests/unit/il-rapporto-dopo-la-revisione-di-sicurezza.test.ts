@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { analisiDaSalvare, analisiPerChiNonHaPagato, analisiPerLaFascia } from '@/lib/agenzia/rapporto';
 import { linkGoogleMaps } from '@/lib/indirizzi-pubblici';
+import { schedaComeLaVedeIlNegozio } from '@/lib/agenzia/scheda-del-negozio';
 
 /**
  * IL RAPPORTO DOPO LA REVISIONE DI SICUREZZA (26/11/2026, mycity#336, testa f2f0170).
@@ -68,10 +69,20 @@ describe('3 e 4 · quello che arriva al browser è ripulito anche da una riga ve
 });
 
 describe('1 · «Scarica i miei dati» non manda il rapporto intero', () => {
-  it('l’export legge la scheda dalla stessa strada della pagina del negozio, non con select(*)', () => {
+  it('l’export legge la scheda con le regole della pagina del negozio, non con select(*) e basta', () => {
     const src = readFileSync(path.join(RADICE, 'app/api/account/export/route.ts'), 'utf8');
     expect(src).not.toMatch(/from\('schede_clienti'\)\.select\('\*'\)/);
-    expect(src).toContain('schedaPerIlNegozio');
+    expect(src).toContain('schedaComeLaVedeIlNegozio');
+  });
+
+  it('le regole: chi non ha pagato non ha il rapporto, il Base non ha le parti escluse', () => {
+    const grezza = { tipo: 'scheda-cliente', id_attivita: ID, campi: {}, analisi: { fatti: { ricerche: { stato: 'letto', fonte: 'https://dataforseo.com/', fonte_nome: 'DataForSEO', letto_il: LETTO, dati: { parole: [] } } }, business: { piano_30_giorni: [{ settimana: 1, azione: 'x', fonte: 'https://x.it' }] } } };
+    const inProva = schedaComeLaVedeIlNegozio(grezza, { visibileSenzaAbbonamento: false, abbonamenti: [] })!;
+    // In prova resta l'assaggio (le ricerche ne fanno parte), non le sezioni del rapporto.
+    expect(JSON.stringify(inProva.analisi)).not.toContain('piano_30_giorni');
+    const base = schedaComeLaVedeIlNegozio(grezza, { visibileSenzaAbbonamento: false, abbonamenti: [{ fascia: 'base', stato: 'active' }] })!;
+    expect(JSON.stringify(base.analisi)).not.toContain('ricerche');
+    expect(JSON.stringify(base.analisi)).toContain('piano_30_giorni');
   });
 });
 

@@ -97,7 +97,7 @@ export async function leggiSchedaDelNegozio(): Promise<SchedaCliente | null> {
  * un Premium vedeva «Scegli l'abbonamento» mentre la seconda caricava, e per sempre se falliva). Se la lettura non
  * riesce l'errore sale a chi chiama: la pagina lo dice, invece di trattare il negozio come non abbonato.
  */
-export const CHIAVE_SCHEDA_E_APERTA = ['seller', 'scheda-cliente', 'con-abbonamento'] as const;
+export const CHIAVE_SCHEDA_E_APERTA = ['seller', 'scheda-e-abbonamento'] as const;
 export async function leggiSchedaEAperta(): Promise<{ scheda: SchedaCliente | null; aperta: boolean }> {
   const r = await fetch('/api/seller/scheda-cliente', { cache: 'no-store' });
   if (!r.ok) throw new Error('La scheda non si è letta.');

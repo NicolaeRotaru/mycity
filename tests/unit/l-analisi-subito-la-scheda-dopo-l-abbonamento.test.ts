@@ -140,7 +140,8 @@ describe('dopo il primo pagamento la bozza del sito si rifà coi dati della sche
 
 describe('il preventivo nel link si cuce sull analisi', () => {
   it('nel link resta solo l analisi del business (con le fonti); punti di forza, idee e domande senza fonte no', () => {
-    const business = { prime_mosse: [{ testo: 'Mettere gli orari giusti sulla scheda Google.', fonte: 'https://maps.google.com/x' }] };
+    // 26/11/2026 — Fonte che non è una pagina di Google Maps: quelle non si tengono più (parere legale).
+    const business = { prime_mosse: [{ testo: 'Mettere gli orari giusti sulla scheda Google.', fonte: 'https://www.esempio.it/orari' }] };
     const conB = { ...SCHEDA, analisi: { ...SCHEDA.analisi, punti_di_forza: ['Scrivete a info@barroma.it'], business } };
     const chiusa = schedaPerIlSito(conB, false);
     const link = conLAnalisi(soloConfermati(chiusa), chiusa)!;
