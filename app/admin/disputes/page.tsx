@@ -78,7 +78,10 @@ export default function AdminDisputesPage() {
         `)
         .order('created_at', { ascending: false })
         .limit(LIMITE_RECLAMI);
-      if (filter !== 'all') q = q.eq('status', filter);
+      // «Aperto» è il filtro d'apertura e vale per i reclami ancora da chiudere: anche quelli già «in
+      // valutazione», dove porta il link della scheda ordine (prima li lasciava fuori).
+      if (filter === 'open') q = q.in('status', ['open', 'under_review']);
+      else if (filter !== 'all') q = q.eq('status', filter);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as unknown as Dispute[];
@@ -203,13 +206,13 @@ export default function AdminDisputesPage() {
         body: `${topOpener.count} reclami ancora aperti. Pattern da verificare per possibili abusi.`,
       });
     }
-    const openCount = disputes.filter((d) => d.status === 'open').length;
+    const openCount = disputes.filter((d) => d.status === 'open' || d.status === 'under_review').length;
     if (openCount >= 1) {
       signals.push({
         icon: ShieldAlert,
         high: openCount >= 5,
         title: 'Reclami da gestire',
-        body: `${openCount} ${openCount === 1 ? 'reclamo aperto' : 'reclami aperti'} in attesa di una decisione. Riducili per tenere alta la fiducia.`,
+        body: `${openCount} ${openCount === 1 ? 'reclamo' : 'reclami'} da decidere. Riducili per tenere alta la fiducia.`,
       });
     }
     return signals;

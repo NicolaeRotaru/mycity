@@ -1,0 +1,233 @@
+{
+  "sessione": "R07",
+  "aggiornato": "2026-11-26 13:41",
+  "finita": true,
+  "testa": "64f68b97cf18d58b212f6163eb34d7e3309fd50b",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "64f68b97cf18d58b212f6163eb34d7e3309fd50b",
+    "nota": "typecheck pulito, lint 0 errori (122 avvisi già presenti), vitest 2146 file passati e 1 saltato, 13201 prove passate e 1 saltata; SHA preso con git rev-parse HEAD prima e dopo il comando, uguale."
+  },
+  "voci": [
+    {
+      "id": "R07-001",
+      "chiave": "sicurezza-auth|il gettone anti-robot si consuma due volte: accendendo il captcha su supabase, accesso e iscrizione con email si rompono",
+      "esito": "parziale",
+      "commit": "38c8ec0bfb73f3444e50bf2bf71d758677e6ca29",
+      "file_toccati": [
+        "app/api/auth/signin/route.ts",
+        "tests/unit/riparazione-r07-captcha-una-volta.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-captcha-una-volta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-captcha-una-volta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 38c8ec0bfb73f3444e50bf2bf71d758677e6ca29^ --file app/api/auth/signin/route.ts --prove tests/unit/riparazione-r07-captcha-una-volta.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sull'accesso il gettone lo verifica uno solo, deciso dalla nuova variabile server CAPTCHA_SU_SUPABASE_ACCESO (1/true): accesa, il server non chiama siteverify e il gettone va a Supabase; spenta o assente, il server verifica come oggi. Un captcha_failed di Supabase ora risponde 400 'CAPTCHA non valido' invece di 'Email o password non corretti'.",
+      "cosa_resta": "La rotta app/api/auth/signup/route.ts ha lo stesso doppio uso (verifyTurnstileToken righe 39-43, poi captchaToken a Supabase riga 48); oggi non la chiama nessuno (app/sign-up/page.tsx:160 chiama Supabase dal browser), ma non è un mio file.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/auth/signup/route.ts",
+          "modifica": "righe 39-43: eseguire verifyTurnstileToken solo se CAPTCHA_SU_SUPABASE_ACCESO non vale 1/true (stessa regola /^(1|true)$/i.test(trim) di signin); dentro if (error) dopo authServer.signUp: se error.code === 'captcha_failed' rispondere ApiErrors.invalidRequest('CAPTCHA non valido')"
+        },
+        {
+          "file": ".env.example",
+          "modifica": "dopo TURNSTILE_SECRET_KEY (riga 82) aggiungere CAPTCHA_SU_SUPABASE_ACCESO= col commento: 1 solo insieme al CAPTCHA Turnstile acceso su Supabase, mai prima"
+        }
+      ],
+      "nota": "Per accendere il CAPTCHA su Supabase: in Supabase Auth > Attack Protection scegliere Turnstile con la stessa chiave segreta e, nello stesso momento, impostare su Vercel CAPTCHA_SU_SUPABASE_ACCESO=1 (mai prima, perché nel frattempo nessuno controllerebbe il gettone). Va provato prima in palestra. Prima di accenderlo vanno sistemati anche recupero e cambio password (vedi nuovi_difetti_visti). Con la variabile spenta il gettone va ancora anche a Supabase (che col CAPTCHA spento lo ignora) perché tests/unit/api-auth.test.ts:167-172, prova comune, se lo aspetta. Con la variabile accesa e il CAPTCHA di Supabase spento non controlla nessuno (per questo mai prima); col CAPTCHA acceso il gettone mancante risponde «CAPTCHA non valido» invece di «CAPTCHA mancante».",
+      "verificato_da": "verificatore (modello grande, copia separata): prove rilanciate (7 file, 94 test verdi; 19 file captcha, 201 verdi), correzione tolta → 2 rossi sul comportamento (expected 401 to be 200), 31 scenari base/riparazione a variabile spenta identici salvo captcha_failed ora 400, valori strani della variabile innocui, tsc ed eslint verdi; conferma parziale."
+    },
+    {
+      "id": "R07-002",
+      "chiave": "layout-responsive|/privacy e /come-funziona possono scorrere di lato col testo al 200%",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessuna modifica: la parte /privacy è già sulla base (components/ui/LegalLayout.tsx:41 h1 con break-words hyphens-auto, contenitore dei figli con min-w-0 e [overflow-wrap:anywhere]); /come-funziona non usa LegalLayout, quindi la cura non sta nel mio file.",
+      "serve_file_altrui": [
+        {
+          "file": "app/come-funziona/page.tsx",
+          "modifica": "riga 76: <div className=\"mb-2 flex items-center gap-2.5\"> diventa className=\"mb-2 flex min-w-0 items-center gap-2.5\"; riga 77: aggiungere shrink-0 allo <span> dell'icona (h-10 w-10 shrink-0); riga 80: <h2 className=\"font-serif font-bold text-ink-900\"> diventa className=\"min-w-0 font-serif font-bold text-ink-900 [overflow-wrap:anywhere]\""
+        }
+      ],
+      "verificato_da": "verificatore (copia separata): LegalLayout.tsx:41 e :71 già corretti, /come-funziona non usa LegalLayout, righe e classi della modifica proposta corrispondono al file."
+    },
+    {
+      "id": "R07-003",
+      "chiave": "mobile-pwa|il manifest blocca l'app in verticale e non ha le schermate per la finestra d'installazione",
+      "esito": "non_codice",
+      "file_toccati": [],
+      "prova": "public/manifest.json: nessun campo \"orientation\"; riga 5 \"id\": \"/\"; riga 7 \"display_override\": [\"standalone\", \"minimal-ui\"]; manca solo \"screenshots\".",
+      "nota": "Nicola deve fornire 2 PNG veri del sito con dati veri (uno narrow circa 1080x1920, uno wide circa 1280x720) in public/screenshots/; poi si aggiunge a public/manifest.json l'array screenshots con src, sizes, type, form_factor (narrow/wide) e label.",
+      "verificato_da": "verificatore (copia separata): manifest senza orientation, con id e display_override; nessun altro manifest o fonte di orientation nell'albero."
+    },
+    {
+      "id": "R07-004",
+      "chiave": "performance-percepita|il traduttore degli errori dei moduli (zod) viaggia in ogni pagina, anche dove non c'è nessun modulo",
+      "esito": "gia_riparato_prima",
+      "file_toccati": [],
+      "prova": "lib/errors.ts:18 importa solo FRASI_ZOD da './zod-frasi' (file senza zod); components/providers/QueryProvider.tsx:93 carica il traduttore con import('@/lib/zod-i18n') dentro un useEffect; gli unici import statici di lib/zod-i18n sono app/api/contact/route.ts:21 e lib/api/responses.ts:4 (lato server).",
+      "nota": "zod stesso resta nella radice per lib/site-branding.ts (fuori da questa voce, già nel registro).",
+      "verificato_da": "verificatore (copia separata): grep di tutti gli import di zod-i18n e zod-frasi; lib/zod-frasi.ts senza import; nessun importatore statico nel layout radice o nei componenti client comuni."
+    },
+    {
+      "id": "R07-005",
+      "chiave": "qa-flussi|collegare stripe da un'anteprima che usa il database vero sostituirebbe il conto del negozio con uno di prova",
+      "esito": "riparato",
+      "commit": "50b5beda40e5392de63c7a1185ba7531f75ec8f2",
+      "commit_voce": [
+        "3e8e1885c23a03084737184b08374fdf94653998",
+        "50b5beda40e5392de63c7a1185ba7531f75ec8f2"
+      ],
+      "file_toccati": [
+        "lib/stripe/client.ts",
+        "tests/unit/riparazione-r07-conto-stripe-anteprima.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-conto-stripe-anteprima.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-conto-stripe-anteprima.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3e8e1885c23a03084737184b08374fdf94653998^ --file lib/stripe/client.ts --prove tests/unit/riparazione-r07-conto-stripe-anteprima.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In createConnectOnboardingLink, con chiave sk_test_/rk_test_ e VERCEL_ENV === 'preview' (lo stesso criterio di chiaveStripeFuoriPosto) un conto salvato che la chiave non conosce non viene più sostituito: errore ContoSconosciutoAllaChiaveDiProva, niente accounts.create, niente salvaConto. Fuori dall'anteprima il comportamento del 5/11 resta (la prova comune che lo fissa resta verde).",
+      "nota": "Rischio che resta: sviluppo in locale collegato al database vero con chiave di prova (vedi domande_per_nicola). Alla persona la rotta mostra ancora un generico «Errore Stripe», il messaggio chiaro va nei log.",
+      "verificato_da": "verificatore (modello grande, copia separata): 232 file che importano lib/stripe/client verdi (1523 prove, prova comune compresa); correzione tolta → 2 prove nuove su 5 rosse sul comportamento; prova propria sulle rotte negozio e fattorino in anteprima con chiave di prova 9/9 (resource_missing, account_invalid/403, 404: niente create né salvataggio; senza conto, development e produzione invariati); tsc ed eslint verdi."
+    },
+    {
+      "id": "R07-006",
+      "chiave": "stati-ui|il link al reclamo nella scheda ordine porta all'elenco filtrato sui reclami aperti e non mostra quelli in esame",
+      "esito": "parziale",
+      "commit": "64f68b97cf18d58b212f6163eb34d7e3309fd50b",
+      "file_toccati": [
+        "app/admin/disputes/page.tsx",
+        "tests/unit/riparazione-r07-reclami-in-esame.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-reclami-in-esame.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-reclami-in-esame.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fe24a1fb7bc00a5b78173c795e9b846000575c61^ --file app/admin/disputes/page.tsx --prove tests/unit/riparazione-r07-reclami-in-esame.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il filtro d'apertura «Aperto» ora legge status in ('open','under_review'): il link della scheda ordine porta a un elenco che mostra anche i reclami in esame. Il segnale «Reclami da gestire» conta ora open + under_review («N reclami da decidere»), coerente con l'elenco e col segnale «Cliente». Altri filtri e azioni invariati.",
+      "cosa_resta": "La pagina non ha un indirizzo per singolo reclamo: servirebbe un parametro in app/admin/disputes/page.tsx e il cambio del link nella scheda ordine (file non mio). L'etichetta «Aperto» ora copre anche gli «In valutazione».",
+      "commit_voce": [
+        "fe24a1fb7bc00a5b78173c795e9b846000575c61",
+        "64f68b97cf18d58b212f6163eb34d7e3309fd50b"
+      ],
+      "verificato_da": "verificatore (copia separata): 26 prove su admin/disputes verdi, correzione tolta → prova rossa; ha trovato il contatore «Reclami da gestire» fermo ai soli open (corretto nel giro di correzione: 26 file, 261 test verdi, prova rimessa 0) e la metà della voce sull'indirizzo per singolo reclamo scoperta → parziale."
+    },
+    {
+      "id": "R07-007",
+      "chiave": "stati-ui|nella pagina guadagni i due pulsanti di stripe possono dirsi il contrario",
+      "esito": "riparato",
+      "commit": "b9be0570dfad5dcafaeca520a820a6a27c3e31de",
+      "file_toccati": [
+        "components/seller/StripeDashboardButton.tsx",
+        "tests/unit/riparazione-r07-pulsanti-stripe.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-pulsanti-stripe.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-pulsanti-stripe.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b9be0570dfad5dcafaeca520a820a6a27c3e31de^ --file components/seller/StripeDashboardButton.tsx --prove tests/unit/riparazione-r07-pulsanti-stripe.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "StripeDashboardButton ora usa stripePronto (components/seller/pronto-a-incassare.ts: conto + versamenti), la stessa regola che fa dire «Pagamenti attivi» a StripeConnectButton. Prova di render con conto, versamenti accesi e incassi spenti: il pulsante c'è.",
+      "nota": "Lato server niente da cambiare: app/api/stripe/connect/login/route.ts chiede solo stripe_account_id.",
+      "verificato_da": "verificatore (modello grande, copia separata): 5 file sui due pulsanti 21/21; correzione tolta → 2 prove su 3 rosse; caso in più solo versamenti accesi con incassi spenti, dove il login link si crea (login/route.ts:31 chiede solo stripe_account_id); CARTA_ACCESA rispettata come prima; tsc ed eslint verdi."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Col CAPTCHA acceso su Supabase il recupero password fallirebbe: resetPasswordForEmail parte senza gettone",
+      "dimensione": "sicurezza-auth",
+      "severita": "minore",
+      "file": "app/sign-in/page.tsx:291",
+      "descrizione": "app/sign-in/page.tsx:291 e app/reset-password/page.tsx:260 chiamano resetPasswordForEmail senza captchaToken: latente finché il CAPTCHA su Supabase è spento."
+    },
+    {
+      "titolo": "Col CAPTCHA acceso su Supabase il cambio password fallirebbe sempre, con l'errore letto come «password non corretta»",
+      "dimensione": "sicurezza-auth",
+      "severita": "minore",
+      "file": "app/api/account/cambia-password/route.ts:86",
+      "descrizione": "signInWithPassword di controllo chiamato senza captchaToken: latente finché il CAPTCHA su Supabase è spento. Il captcha_failed diventa «Password attuale non corretta» (riga 107)."
+    },
+    {
+      "titolo": "Col CAPTCHA acceso su Supabase il reinvio della mail di conferma fallirebbe: resend parte senza gettone",
+      "dimensione": "sicurezza-auth",
+      "severita": "minore",
+      "file": "lib/auth/conferma-email.ts:262",
+      "descrizione": "resend chiamato senza captchaToken: latente finché il CAPTCHA su Supabase è spento."
+    },
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (accessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "sicurezza-auth",
+      "severita": "minore",
+      "file": "(nel referto privato)"
+    },
+    {
+      "titolo": "Una prova del collegamento Stripe passa solo grazie al caso precedente: i tre flag non si azzerano tra un caso e l'altro",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "tests/unit/minori-s01-collegamento-stripe.test.ts:126",
+      "descrizione": "Il beforeEach non azzera st.flag, così il caso «tre flag tornano falsi» passa col valore lasciato dal caso prima e da solo non prova niente."
+    },
+    {
+      "titolo": "Collegando Stripe in anteprima con un conto di prova vecchio la persona legge solo «Errore Stripe»: il consiglio di togliere il conto dal profilo resta nei registri",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/api/stripe/connect/onboarding/route.ts:48-53",
+      "descrizione": "L'errore ContoSconosciutoAllaChiaveDiProva finisce nel catch generico (anche rider-onboarding/route.ts:49-54) e diventa 500 «Errore Stripe»; non lascia stati a metà."
+    },
+    {
+      "titolo": "Dopo «Aggiorna stato» il riquadro Stripe usa ancora la regola vecchia (incassi E versamenti) per il messaggio di conferma",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "components/seller/StripeConnectButton.tsx:85",
+      "descrizione": "Con incassi spenti e versamenti accesi il riquadro dice «Pagamenti attivi» ma dopo l'aggiornamento non compare «Pagamenti attivati!» e può comparire «completa l'onboarding»."
+    },
+    {
+      "titolo": "/come-funziona: anche il titolo grande e un h3 in riga flex possono uscire col testo al 200%",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "app/come-funziona/page.tsx:59",
+      "descrizione": "L'h1 text-3xl md:text-5xl non ha break-words; un h3 in riga flex senza min-w-0 nello stesso file. Non misurato."
+    }
+  ],
+  "domande_per_nicola": [
+    "R07-005: lo sviluppo in locale collegato al Supabase vero con chiave Stripe di prova sostituirebbe ancora il conto vero del negozio con uno di prova: bloccare anche lì (cambia la prova comune del 5/11 sul conto sconosciuto)?"
+  ],
+  "conto": {
+    "agenti": 7,
+    "nota": "7 subagenti aperti, nessuno fermato: 3 riparatori (2 sul modello grande, 1 piccolo), 3 verificatori (2 grandi, 1 piccolo), 1 giro di correzione (piccolo). costo_usd letto con get_session senza id prima della consegna: 11,42 $ (tetto 25 $).",
+    "subagenti": 7
+  },
+  "costo_usd": 11.42
+}
