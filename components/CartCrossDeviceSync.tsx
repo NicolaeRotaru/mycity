@@ -92,17 +92,6 @@ export default function CartCrossDeviceSync() {
         return;
       }
       if (cloudUpdated > localUpdated && cloudItems.length > 0) {
-        // R16-011 — Se il locale non è cambiato dopo l'ultimo allineamento riuscito, è solo la copia
-        // vecchia del cloud: vince il cloud più recente, intero. Con la fusione (quantità più alta)
-        // una riga tolta o una quantità abbassata sull'altro dispositivo tornava qui, e poi, rimandata
-        // su, di nuovo dappertutto. Si fonde solo quando il locale ha roba nuova mai salita.
-        const allineatoIl = getSyncedAt();
-        if (allineatoIl > 0 && localUpdated <= allineatoIl) {
-          saveCart(cloudItems, { dallAltroDispositivo: true });
-          setLocalUpdatedAt(cloudUpdated);
-          setSyncedAt(cloudUpdated);
-          return;
-        }
         // 27/8/2026 (R092) — QUI IL CLOUD SOSTITUIVA IL LOCALE, E LA SPESA DELL'ALTRO
         // DISPOSITIVO SPARIVA SENZA UN AVVISO. Adesso si fondono: tutte e due le liste, e per la
         // stessa riga la quantità più alta.
