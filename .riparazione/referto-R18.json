@@ -66,7 +66,39 @@
   },
   {
    "id": "R18-003",
-   "chiave": "privacy-legale|le recensioni dei clienti non si possono segnalare, mentre i termini promettono di togliere quelle non genuine"
+   "chiave": "privacy-legale|le recensioni dei clienti non si possono segnalare, mentre i termini promettono di togliere quelle non genuine",
+   "esito": "parziale",
+   "commit": "bb3fd0d56e6197033fceaffa756ccff476eed581",
+   "file_toccati": [
+    "app/api/segnalazioni/route.ts",
+    "app/terms/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-recensione-si-toglie.test.ts",
+    "tests/unit/riparazione-r18-termini-recensioni-segnalabili.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-recensione-si-toglie.test.ts tests/unit/riparazione-r18-termini-recensioni-segnalabili.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bb3fd0d56e6197033fceaffa756ccff476eed581^ --file app/api/segnalazioni/route.ts,app/terms/page.tsx --prove tests/unit/riparazione-r18-recensione-si-toglie.test.ts,tests/unit/riparazione-r18-termini-recensioni-segnalabili.test.tsx --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Segnalare una recensione era già possibile sulla base (Segnala tipo=recensione in app/product/[id]/page.tsx:1722 e components/store-sections/ReviewsSection.tsx:235; la rotta la accetta e la salva; il CHECK del database accetta recensione e domanda). Mancava il modo di toglierla: l'amministratore non ha DELETE né UPDATE su reviews e store_reviews. Ora PATCH /api/segnalazioni, su una segnalazione accolta di tipo recensione, toglie la recensione col client di servizio (con le foto nel secchio reviews), avvisa l'autore con motivazione e come contestare, e solo dopo manda «rimosso»; senza motivazione o se la cancellazione cade: 409 e non parte niente. I Termini (16-bis) dicono che «Segnala» c'è anche sotto ogni recensione. Gli avvisi della rotta passano da un solo aiutante (avvisoDiServizio).",
+   "serve_file_altrui": [
+    {
+     "file": "app/admin/segnalazioni/page.tsx",
+     "modifica": "(1) riga 93: const puoTogliere = s.tipo === 'prodotto' || s.tipo === 'negozio' || s.tipo === 'recensione' || s.tipo === 'domanda'; con il commento: la recensione la toglie PATCH /api/segnalazioni quando parte l'esito, perché il client del browser non ha DELETE su reviews. (2) In mutationFn, dopo il blocco del negozio: if (decisione === 'accolta' && s.tipo === 'recensione' && !window.confirm('Accogliere la segnalazione toglie la recensione e le sue foto per sempre e avvisa chi l\\'ha scritta. Confermi?')) throw new Error('Decisione annullata: la recensione resta online.'); (3) Etichetta dell'opzione accolta (righe 222-226): prima del ripiego : s.tipo === 'recensione' ? 'Accolta: la recensione viene tolta e chi l\\'ha scritta viene avvisato'. (4) NOME_CANALE (righe 61-65): aggiungere autore: \"l'avviso a chi ha scritto la recensione\" (la rotta ora risponde autore: 'fallita' con 502)."
+    },
+    {
+     "file": "tests/unit/riparazione-r02-segnalazione-accolta-negozio.test.tsx",
+     "modifica": "Prova comune (importa la pagina admin). Il caso 'recensione: «Accolta» è spenta' (righe 107-113) diventa 'recensione: «Accolta» è accesa (la toglie la rotta dell'esito)' con expect(opzione.disabled).toBe(false); si aggiunge lo stesso caso con RIGA.tipo = 'messaggio' e toBe(true), così la guardia sull'opzione spenta resta; aggiornare il commento di riga 5."
+    }
+   ],
+   "cosa_resta": "Il pannello deve accendere «Accolta» per le recensioni (serve_file_altrui): finché non lo fa, la rotta sa togliere una recensione ma lo staff non ha un pulsante per chiederlo.",
+   "nota": "Nessuna migrazione. La recensione si cancella e non si nasconde: reviews non ha una colonna per nasconderla e aggiungerla vorrebbe dire cambiare tutte le letture, in file non miei. Se un ricorso dà ragione all'autore la recensione non si può rimettere. La prova comune riparazione-r02-segnalazione-esito-solo-se-tolto ('recensione accolta: 409') resta verde, ora per la motivazione mancante nel suo finto database."
   },
   {
    "id": "R18-004",
@@ -163,7 +195,39 @@
   },
   {
    "id": "R18-014",
-   "chiave": "privacy-legale|le domande sotto i prodotti si pubblicano subito, non si possono segnalare una per una e nessuno può toglierle"
+   "chiave": "privacy-legale|le domande sotto i prodotti si pubblicano subito, non si possono segnalare una per una e nessuno può toglierle",
+   "esito": "parziale",
+   "commit": "d2927b046f3d4f2703ce2c803fbb3dc172653eaa",
+   "file_toccati": [
+    "components/Segnala.tsx",
+    "app/api/segnalazioni/route.ts",
+    "components/ProductQA.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-domanda-segnalabile.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-domanda-segnalabile.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d2927b046f3d4f2703ce2c803fbb3dc172653eaa^ --file app/api/segnalazioni/route.ts,components/Segnala.tsx,components/ProductQA.tsx --prove tests/unit/riparazione-r18-domanda-segnalabile.test.tsx --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Segnala accetta il tipo 'domanda' con motivi da domanda (offensivo o molesto, illecito, altro). La rotta accetta 'domanda' (TABELLE_DELL_OGGETTO domanda: ['product_questions']): la segnalazione si salva solo se la domanda esiste; in contenutoAncoraOnline per 'domanda' legge product_questions.is_public e, se è true, si ferma con «La domanda è ancora visibile: nascondila prima di comunicare «rimosso».». ProductQA monta <Segnala tipo=\"domanda\" oggettoId={q.id} /> in fondo a ogni domanda. Il pulsante «Nascondi» dell'admin sotto la domanda c'era già.",
+   "serve_file_altrui": [
+    {
+     "file": "lib/admin/segnalazioni-testi.ts",
+     "modifica": "In OGGETTI aggiungere domanda: 'una domanda sotto un prodotto' (oggi avviso e ricevuta dicono «Segnalato domanda»)."
+    },
+    {
+     "file": "app/admin/segnalazioni/page.tsx",
+     "modifica": "(1) dove(): per 'domanda' il link alla scheda del prodotto, con product_id letto da supabase.from('product_questions').select('product_id').eq('id', s.oggetto_id).maybeSingle() (l'admin lo legge, regola qa_admin_legge). (2) puoTogliere comprende 'domanda'. (3) In mutationFn, con decisione 'accolta' e s.tipo 'domanda', prima di registrare: const { error } = await supabase.from('product_questions').update({ is_public: false }).eq('id', s.oggetto_id).select('id'); if (error) throw error; (zero righe = l'autore l'ha già cancellata, la rotta lo accetta). (4) Etichetta: s.tipo === 'domanda' ? 'Accolta: la domanda viene nascosta'. Da applicare insieme a quella della voce sulle recensioni: toccano le stesse righe."
+    }
+   ],
+   "cosa_resta": "(a) Il pannello e i testi delle segnalazioni (serve_file_altrui). (c) La moderazione prima della pubblicazione e il pulsante del negozio per nascondere le domande sui suoi prodotti sono una scelta di Nicola.",
+   "domanda": "Le domande sotto i prodotti devono restare nascoste finché un admin o il negozio non le approva, e il negozio deve poter nascondere da solo quelle sui suoi prodotti?"
   },
   {
    "id": "R18-015",
@@ -188,14 +252,22 @@
    "severita": "minore",
    "file": "app/privacy/page.tsx:424 · app/cookies/page.tsx:178-183",
    "descrizione": "Stesso schema della riga corretta in R18-009: usano recapitoPrivacy invece di stradaDeiDiritti. La voce non le nomina, quindi non toccate."
+  },
+  {
+   "titolo": "nel pannello delle segnalazioni lo staff decide su una recensione senza vederla: nessun link e nessun testo",
+   "dimensione": "privacy-legale",
+   "severita": "minore",
+   "file": "app/admin/segnalazioni/page.tsx:79-83",
+   "descrizione": "dove() restituisce null per 'recensione' e oggetto_id non dice se è una recensione di prodotto (reviews) o di negozio (store_reviews): per decidere lo staff deve cercarla a mano."
   }
  ],
  "domande_per_nicola": [
   "R18-001: la partita IVA è aperta? Nome legale, sede, P.IVA e PEC da mettere nelle NEXT_PUBLIC_TITOLARE_* su Vercel produzione?",
-  "R18-004: col commercialista, quale documento fiscale si emette per la consegna (ricavo di MyCity), con quale regime e aliquota?"
+  "R18-004: col commercialista, quale documento fiscale si emette per la consegna (ricavo di MyCity), con quale regime e aliquota?",
+  "R18-014: le domande sotto i prodotti devono restare nascoste finché un admin o il negozio non le approva, e il negozio deve poter nascondere da solo quelle sui suoi prodotti?"
  ],
  "conto": {
-  "agenti": 1,
+  "agenti": 2,
   "nota": ""
  }
 }
