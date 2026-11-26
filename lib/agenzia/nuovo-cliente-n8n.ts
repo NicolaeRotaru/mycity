@@ -60,6 +60,8 @@ export type NuovaAttivitaPerIlFlusso = {
 
 export type IndiziDelTitolare = { instagram?: string; google_maps?: string };
 
+const LINK_DI_UN_LUOGO = /^https:\/\/(maps\.app\.goo\.gl\/[\w-]+\/?$|goo\.gl\/maps\/[\w-]+\/?$|g\.page\/|g\.co\/kgs\/|(www\.)?google\.[a-z.]+\/maps\/place\/|maps\.google\.[a-z.]+\/(maps)?\?(.*&)?cid=\d+)/i;
+
 /** Gli indizi ripuliti col controllo dei canali; uno storto o vuoto si lascia fuori. `null` se non ne resta nessuno. */
 export function indiziDelTitolare(instagram: string | null | undefined, googleMaps: string | null | undefined): IndiziDelTitolare | null {
   const fuori: IndiziDelTitolare = {};
@@ -68,6 +70,9 @@ export function indiziDelTitolare(instagram: string | null | undefined, googleMa
     if (!v) continue;
     const esito = controllaCanali({ [chiave]: v });
     const pulito = esito.ok ? esito.canali[chiave] : undefined;
+    // Della scheda Google Maps solo un link a un luogo: un profilo di chi recensisce (/contrib/) o un percorso
+    // (/dir/, con dentro l'indirizzo di partenza) sono dati di persone, e non partono (dal collaudo del 26/11).
+    if (chiave === 'google_maps' && pulito && !LINK_DI_UN_LUOGO.test(pulito)) continue;
     if (pulito) fuori[chiave] = pulito;
   }
   return Object.keys(fuori).length ? fuori : null;

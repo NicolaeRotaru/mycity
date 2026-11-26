@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { SERVIZI_AGENZIA, giornoDiPiacenza, type ServizioAgenzia } from './preventivo';
 import { senzaPrezzo, vociSenzaPrezzo, type SchedaCliente } from './scheda-cliente';
+import { pareDatoDiGoogle } from './rapporto';
 
 /**
  * L'ANALISI DEL BUSINESS — il quarto servizio (24/11/2026).
@@ -178,7 +179,8 @@ export const AnalisiCanaliInArrivo = z.object({
 export type AnalisiCanali = z.infer<typeof AnalisiCanaliInArrivo>;
 
 const senzaContatti = (v: string[]) => v.filter((x) => !TELEFONO_O_EMAIL.test(x));
-const senzaCifreSeGoogle = (canale: string, v: string[]) => (canale === 'google' ? v.filter((x) => !/\d/.test(x)) : v);
+/** Google: via le frasi con una cifra. Ogni canale: via le frasi che ricopiano un voto o le recensioni di Google o TripAdvisor. */
+const senzaCifreSeGoogle = (canale: string, v: string[]) => v.filter((x) => !(canale === 'google' && /\d/.test(x)) && !pareDatoDiGoogle(x));
 
 /**
  * 26/11/2026 — NESSUN NUMERO DI GOOGLE SI SALVA NÉ SI MOSTRA (parere legale, termini EEA di Google Maps dall'8/7/2025):
@@ -451,7 +453,9 @@ export function analisiAziendale(scheda: SchedaCliente | null | undefined): Anal
           }
           return frase;
         })
-        .filter((v) => v.testo.length >= 10 && v.testo.length <= 300 && senzaPrezzo(v.testo.replace(VOTO, 'voto')) && !CONTATTO.test(v.testo) && !INDIRIZZO_WEB.test(v.testo) && fonteHttps.safeParse(v.fonte).success)
+        // 26/11/2026 — Parere legale: niente voti né conti di recensioni di Google o TripAdvisor, né frasi prese da
+        // una loro pagina (lib/agenzia/rapporto.ts, `pareDatoDiGoogle`).
+        .filter((v) => v.testo.length >= 10 && v.testo.length <= 300 && senzaPrezzo(v.testo.replace(VOTO, 'voto')) && !CONTATTO.test(v.testo) && !INDIRIZZO_WEB.test(v.testo) && fonteHttps.safeParse(v.fonte).success && !pareDatoDiGoogle(v.testo, v.fonte))
         .slice(0, 3);
       quante += pulite.length;
       return [s, pulite];

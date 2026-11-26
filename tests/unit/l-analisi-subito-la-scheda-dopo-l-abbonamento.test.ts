@@ -151,9 +151,11 @@ describe('il preventivo nel link si cuce sull analisi', () => {
     expect(conLAnalisi(soloConfermati(SCHEDA), SCHEDA)?.analisi).toBeUndefined();
     expect(conLAnalisi(null, null)).toBeNull();
   });
-  it('un voto in stelle non è un prezzo', () => {
-    const a = analisiAziendale({ ...SCHEDA, analisi: { business: { clienti: [{ testo: 'Media 4,6 su 5 da duecento recensioni su Google.', fonte: 'https://maps.google.com/x' }] } } });
+  it('un voto in stelle non è un prezzo (ma un voto di Google non si mostra più)', () => {
+    const a = analisiAziendale({ ...SCHEDA, analisi: { business: { clienti: [{ testo: 'Media 4,6 su 5 fra i clienti del sondaggio del locale.', fonte: 'https://www.esempio.it/sondaggio' }] } } });
     expect(a?.clienti).toHaveLength(1);
+    // 26/11/2026 — Parere legale: un voto o un conto di recensioni di Google non si copia nel preventivo.
+    expect(analisiAziendale({ ...SCHEDA, analisi: { business: { clienti: [{ testo: 'Media 4,6 su 5 da duecento recensioni su Google.', fonte: 'https://maps.google.com/x' }] } } })).toBeNull();
   });
 });
 
@@ -194,7 +196,8 @@ describe('l analisi del business, come l AD analizza MyCity come azienda', () =>
     expect(analisiAziendale(null)).toBeNull();
   });
   it('vale subito: anche con la scheda chiusa (in demo) l analisi del business resta', () => {
-    const s = conBusiness({ prime_mosse: [{ testo: 'Mettere gli orari giusti sulla scheda Google.', fonte: 'https://maps.google.com/x' }] });
+    // 26/11/2026 — La fonte non è più una pagina di Google Maps: niente contenuti presi da Google (parere legale).
+    const s = conBusiness({ prime_mosse: [{ testo: 'Mettere gli orari giusti sulla scheda Google.', fonte: 'https://www.esempio.it/orari' }] });
     expect(analisiAziendale(schedaPerIlSito(s, false))?.prime_mosse).toHaveLength(1);
   });
 });

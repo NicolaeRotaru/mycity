@@ -6,7 +6,7 @@ import { segretiCombaciano } from '@/lib/api/segreti';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { SchedaInArrivo } from '@/lib/agenzia/scheda-cliente';
-import { analisiDaSalvare } from '@/lib/agenzia/rapporto';
+import { analisiDaSalvare, campiDaSalvare } from '@/lib/agenzia/rapporto';
 import { analizzaSitoDopoLaRisposta } from '@/lib/agenzia/sito-pagespeed';
 import { indirizzoWebPubblico } from '@/lib/indirizzi-pubblici';
 
@@ -67,9 +67,9 @@ export async function POST(req: Request): Promise<NextResponse> {
     const primo = esito.error.issues[0];
     return ApiErrors.invalidRequest(`Scheda non valida: ${primo?.path.join('.') || 'corpo'} — ${primo?.message ?? ''}`.trim());
   }
-  // 26/11/2026 — Parere legale: i dati di Google non si salvano. Della scheda Google resta solo il place_id
-  // (lib/agenzia/rapporto.ts, `analisiDaSalvare`).
-  const scheda = { ...esito.data, analisi: analisiDaSalvare(esito.data.analisi) };
+  // 26/11/2026 — Parere legale: i dati di Google non si salvano. Della scheda Google resta solo il place_id, e i
+  // campi letti da una pagina di Google Maps o TripAdvisor non entrano (lib/agenzia/rapporto.ts).
+  const scheda = { ...esito.data, campi: campiDaSalvare(esito.data.campi), analisi: analisiDaSalvare(esito.data.analisi) };
   const id = scheda.id_attivita.toLowerCase();
   if (id.startsWith(PREFISSO_DI_SISTEMA)) return ApiErrors.invalidRequest('I negozi di sistema non hanno una scheda cliente.');
 
