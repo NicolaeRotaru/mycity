@@ -1,0 +1,337 @@
+{
+  "sessione": "R15",
+  "aggiornato": "2026-11-26 15:04",
+  "finita": false,
+  "testa": "",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R15-001",
+      "chiave": "architettura|il parametro propostail di negoziopuoservire non lo passa nessuno",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r03-fascia-domani-proposta.test.ts",
+          "modifica": "prova comune: serve la firma di Nicola. Il primo caso chiama motivoFasciaRifiutata(FASCIA, negozi, undefined, propostaIl): va riscritto sul riporto che le rotte usano già, cioè expect(motivoFasciaRifiutata(fasciaAlGiornoDellOrdine(FASCIA, new Date('2026-11-23T22:59:00Z'), new Date()) ?? FASCIA, negozi)).toBeNull() con l'orologio a 2026-11-23T23:01:00Z (fasciaAlGiornoDellOrdine da lib/ordini/fascia-leggibile.ts dà «Oggi · 9:00–11:00»). Il secondo caso resta com'è."
+        },
+        {
+          "file": "lib/store-hours.ts",
+          "modifica": "togliere il parametro propostaIl da negozioPuoServire (riga ~311), ultimoRitiroDellaFascia (~348) e finestraDelRitiro (~233; per «domani» usare now.getDay()+1): nessuno lo passa, il giorno di «Domani» lo riportano già la rotta dei contanti (app/api/orders/cod/route.ts:416-425) e il webhook (lib/stripe/webhook/ordini.ts:288-292). Insieme, in lib/quando-arriva.ts:222-235 (file di R15) si toglie il quarto parametro di motivoFasciaRifiutata e si chiama negozioPuoServire(n.orari, fascia, ora)."
+        }
+      ],
+      "nota": "Il parametro arriva sempre undefined (rotta dei contanti :1013, rotta della carta :522, webhook :292). Usarlo nella rotta della carta sarebbe sbagliato: il webhook conta «Domani» da session.created e rotta e ordine guarderebbero due giorni diversi. Toglierlo dal file di R15 da solo fa rossa la prova comune: nessun commit, la parte di R15 va applicata insieme alla firma."
+    },
+    {
+      "id": "R15-002",
+      "chiave": "architettura|in home ogni sezione chiede di nuovo alla vetrina lo stesso negozio, e ogni fascia compare un giro di rete più tardi",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "lib/queries/fasce-prodotti.ts, lib/queries/negozio-del-mese.ts, lib/queries/griglia-prodotti.ts, lib/queries/catalogo.ts e i componenti della home che li chiamano (Drop del giorno, storie, Ordina di nuovo, tendenze)",
+          "modifica": "far passare la lettura dei negozi da React Query: queryClient.fetchQuery({ queryKey: ['vetrina-negozio', id, colonne], queryFn: () => fetchSellerPublicMap(client, [id]), staleTime: qualche minuto }) per negozio, così le sezioni dopo la prima trovano il negozio già pronto. lib/queries/seller-public-profiles.ts resta senza memoria a tempo: unisce già le domande in volo (R06-009)."
+        }
+      ],
+      "nota": "Tentata una memoria di 3 minuti dentro lib/queries/seller-public-profiles.ts (commit f5b81ca4c6a8a53f18577eb4b2dbca549e6c99fd e 18ab8baab264022b88f18df2cd759d21276c4c8b), poi tolta col commit dd75ab71 perché nascondeva ai lettori successivi i dati nuovi e le letture cadute: 8 casi rossi in tre prove comuni (la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi, riparazione-r03-bacheca-attesa-crescente, riparazione-r04-carosello-a-turno). La memoria a tempo va nei chiamanti, come già scritto nella prova di R06-009."
+    },
+    {
+      "id": "R15-003",
+      "chiave": "architettura|un altro finto scritto a mano risponde alle letture degli avvisi nelle prove della cancellazione",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/minori-s08-cancellazione.test.ts",
+          "modifica": "prova comune: serve la firma di Nicola — sostituire il finto scritto a mano delle righe 42-68 (adminFinto: letture degli avvisi per account/delete → motivoDellAttesa) con il finto unico di tests/unit/aiuti/finto-giro-notturno.ts"
+        }
+      ]
+    },
+    {
+      "id": "R15-004",
+      "chiave": "deploy-sre|senza la 164 la lettura dei nomi pubblici scrive «vista nomi_pubblici assente» a ogni chiamata",
+      "esito": "riparato",
+      "commit": "9a4a541cadea646d2ba33aace382f64f3c4e6f92",
+      "file_toccati": [
+        "lib/queries/seller-public-profiles.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-avviso-senza-la-164-una-volta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-avviso-senza-la-164-una-volta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9a4a541cadea646d2ba33aace382f64f3c4e6f92^ --file lib/queries/seller-public-profiles.ts --prove tests/unit/riparazione-r15-avviso-senza-la-164-una-volta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stesso schema della 181: flag di modulo avvisoSenzaLaVistaDato, l'avviso «vista nomi_pubblici assente» si scrive una volta per processo; il ripiego su profiles lavora a ogni chiamata. Prova: tre chiamate, nome sempre letto, avviso una volta."
+    },
+    {
+      "id": "R15-005",
+      "chiave": "immagini-media|le prove di sviluppo seminano 240 foto di prodotto da placehold.co",
+      "esito": "parziale",
+      "commit": "ca1161715487ec1797d614ab9c666742d54274f6",
+      "file_toccati": [
+        "seeds/001_piacenza_stores.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-seme-senza-placehold.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-seme-senza-placehold.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ca1161715487ec1797d614ab9c666742d54274f6^ --file seeds/001_piacenza_stores.sql --prove tests/unit/riparazione-r15-seme-senza-placehold.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "L'interfaccia mostra già il segnaposto locale /foto-mancante.svg quando la lista di foto è vuota (components/ProductCard.tsx:70, images?.[0] ?? FOTO_MANCANTE): nel seme i 240 prodotti hanno images = '[]'. Righe prodotto sempre 240, nessun placehold.co rimasto, nessun host nuovo.",
+      "cosa_resta": "Storybook altrui (stories/StoreAvatar.stories.tsx:22,34, loghi placehold.co) e, lato Nicola, il controllo del database vero (prodotti con indirizzi placehold.co) prima di togliere placehold.co dalla politica delle immagini.",
+      "serve_file_altrui": [
+        {
+          "file": "stories/StoreAvatar.stories.tsx",
+          "modifica": "righe 22 e 34: sostituire i loghi placehold.co con nessun logo (logo_url assente), così l'avatar mostra il ripiego dell'interfaccia, come nel seme (lista di foto vuota)"
+        }
+      ]
+    },
+    {
+      "id": "R15-006",
+      "chiave": "layout-responsive|in chi siamo i due pulsanti della fascia scura finale escono dalla fascia a 280 px col testo al 200%",
+      "esito": "riparato",
+      "commit": "f2b9a86e2c6bb48c5bada6887d2151252714d1a6",
+      "file_toccati": [
+        "app/about/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-chi-siamo-fascia-finale-280.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-chi-siamo-fascia-finale-280.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f2b9a86e2c6bb48c5bada6887d2151252714d1a6^ --file app/about/page.tsx --prove tests/unit/riparazione-r15-chi-siamo-fascia-finale-280.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Fascia scura: aggiunti max-sm:p-5 e max-[300px]:p-4 (p-8 e md:p-11 restano, li esige la prova comune riparazione-r02-chi-siamo-280), contenitore dei pulsanti min-w-0 max-w-full, i due Link min-w-0 max-w-full [overflow-wrap:anywhere]. Prova leggera sulle classi; non misurato in un browser vero."
+    },
+    {
+      "id": "R15-007",
+      "chiave": "layout-responsive|col testo al 200% il voto del negozio nella scheda resta tagliato",
+      "esito": "riparato",
+      "commit": "7b1df06ab6aca90206977d9f578242c37d866a59",
+      "file_toccati": [
+        "components/StorePreviewCard.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-voto-scheda-negozio-a-capo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-voto-scheda-negozio-a-capo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7b1df06ab6aca90206977d9f578242c37d866a59^ --file components/StorePreviewCard.tsx --prove tests/unit/riparazione-r15-voto-scheda-negozio-a-capo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il contenitore del voto passa da inline-flex gap-1 a inline-flex max-w-full min-w-0 flex-wrap gap-x-1: stesso aspetto normale, a capo col testo grande. Prova leggera sulle classi; non misurato in un browser vero."
+    },
+    {
+      "id": "R15-008",
+      "chiave": "pagamenti-stripe|la pulizia gira prima di ogni convalida del carrello: un tentativo respinto uccide una cassa ancora buona",
+      "esito": "riparato",
+      "commit": "07d2fd8b5214f2b95f076d94bd757a55c6d59772",
+      "file_toccati": [
+        "app/api/stripe/checkout/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-pulizia-dopo-i-rifiuti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-pulizia-dopo-i-rifiuti.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 07d2fd8b5214f2b95f076d94bd757a55c6d59772^ --file app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r15-pulizia-dopo-i-rifiuti.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base la strada principale era già sistemata (la pulizia pigra pulisci() gira dopo i rifiuti, route.ts:634): il caso della voce dava già 409 senza chiudere niente. Restava il ramo del riuso: con una riga identica la cui pagina Stripe non è più pagabile la pulizia girava prima delle convalide, e un rifiuto successivo (fascia finita, negozio chiuso) chiudeva la cassa A. Ora in quel ramo la pulizia gira solo se c'è una pagina da restituire; se no si va avanti e la pulizia gira dopo i rifiuti. Prova: caso della voce, caso del riuso (rosso sulla base), caso valido che pulisce ancora; 42 file di prove della rotta verdi."
+    },
+    {
+      "id": "R15-009",
+      "chiave": "privacy-legale|«chi siamo» e «lavora con noi» raccontano una flotta di rider, una crescita e quattro posti di lavoro che oggi non esistono",
+      "esito": "riparato",
+      "commit": "6484d56ad071b7e29f3f8b67c8a71430725497f5",
+      "file_toccati": [
+        "app/lavora-con-noi/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-lavora-senza-posti-inventati.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-lavora-senza-posti-inventati.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6484d56ad071b7e29f3f8b67c8a71430725497f5^ --file app/lavora-con-noi/page.tsx --prove tests/unit/riparazione-r15-lavora-senza-posti-inventati.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "JOBS ora è un array vuoto tipizzato (le quattro posizioni inventate tolte), sezione #posizioni e .map intatti; con JOBS vuoto la sezione dice «Oggi non abbiamo posizioni aperte» con il link alla candidatura spontanea. Le due prove comuni (r03-ancore, r12-pagine-200) restano verdi, non toccate. «Chi siamo» era già riparato sulla base: app/about/page.tsx:214 «Partiamo dal centro di Piacenza, con i primi negozi…», niente flotta né crescita, STATS senza numeri inventati."
+    },
+    {
+      "id": "R15-010",
+      "chiave": "qa-flussi|due veloci pagate con la carta nello stesso momento con un fattorino solo passano tutte e due",
+      "esito": "scelta_di_nicola",
+      "domanda": "Con la carta la veloce prenota il fattorino all'apertura della pagina di Stripe: per quanti minuti lo tiene (oggi la pagina resta pagabile fino a 2 ore, il minimo di Stripe è 30 minuti), e se il pagamento arriva a prenotazione scaduta e senza fattorino libero si rimborsa subito come la fascia persa o si accetta la veloce in ritardo?",
+      "nota": "Non fatto: servono la durata e la regola alla scadenza, oltre a file non di R15. Scelta la durata N: (1) migrazione nuova nella fascia 950-959 prenota_fattorino_veloce(p_pending uuid), SECURITY DEFINER, stesso lucchetto della 840, che conta fattorini accesi contro veloci in corso più prenotazioni vive e scrive veloce_prenotata_fino = now()+N o dà 23514 'veloce_senza_fattorino_libero'; nella stessa migrazione CREATE OR REPLACE della funzione 840 perché la veloce in contanti conti anche le prenotazioni vive. (2) app/api/stripe/checkout/route.ts: dopo l'insert di pending_checkouts e prima della sessione, se veloce, rpc della funzione; con 23514 si libera la riga e 409; expires_at della sessione = min(riserva, N). (3)-(4) nei file altrui qui sotto. (5) la pulizia e il cron expire-checkouts portano già la riga fuori da PENDING.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/ordini/consegna-veloce.ts",
+          "modifica": "contaVelociInCorso: sommare per cliente le prenotazioni vive (pending_checkouts PENDING con delivery->>'slot' = ETICHETTA_ADESSO e delivery->>'veloce_prenotata_fino' > now)"
+        },
+        {
+          "file": "lib/stripe/webhook/ordini.ts",
+          "modifica": "alla nascita di una veloce da una riga con veloce_prenotata_fino passata: rimborso o accettazione secondo la scelta di Nicola"
+        }
+      ]
+    },
+    {
+      "id": "R15-011",
+      "chiave": "qa-flussi|il testo di un errore vero arriva a sentry senza oscurare email e telefoni",
+      "esito": "riparato",
+      "commit": "d2fe8242b744944f99e484a07642fc11aea6a8ae",
+      "file_toccati": [
+        "lib/logger.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-errore-oscurato-a-sentry.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-errore-oscurato-a-sentry.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d2fe8242b744944f99e484a07642fc11aea6a8ae^ --file lib/logger.ts --prove tests/unit/riparazione-r15-errore-oscurato-a-sentry.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "logger.error manda a Sentry (server e browser) una copia dell'Error, senza toccare quello di chi chiama: stesso prototipo e nome; oscurati messaggio, testa della pila (le righe «at» restano), causa ed errors con la stessa regola, e i testi delle altre proprietà. Un DOMException diventa un Error semplice col suo nome. Anche l'errore del database che arriva come oggetto semplice passa da redact. Le prove esistenti del logger restano verdi."
+    },
+    {
+      "id": "R15-012",
+      "chiave": "qa-flussi|un contesto circolare passato al logger fa lanciare un errore invece di scrivere la riga",
+      "esito": "riparato",
+      "commit": "5231c6fd3e098d906a0f2f41422f8a8ed58e110f",
+      "file_toccati": [
+        "lib/logger.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-logger-circolare.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-logger-circolare.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5231c6fd3e098d906a0f2f41422f8a8ed58e110f^ --file lib/logger.ts --prove tests/unit/riparazione-r15-logger-circolare.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "line() ora serializza con un ripiego che sostituisce i riferimenti circolari con \"[circolare]\" e, se JSON.stringify lancia comunque, scrive una riga minima (livello, messaggio, ora). Contesti normali e oscuramento invariati; le prove esistenti del logger (5 file) restano verdi."
+    },
+    {
+      "id": "R15-013",
+      "chiave": "qa-flussi|la cassa accetta ordini senza limite nella stessa fascia oraria, mentre il tetto deciso è 5",
+      "esito": "parziale",
+      "commit": "c5ee6712b1116f98e29c1c25bfe2ef2a6ad56042",
+      "file_toccati": [
+        "lib/quando-arriva.ts",
+        "app/api/stripe/checkout/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-fascia-piena.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-fascia-piena.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c5ee6712b1116f98e29c1c25bfe2ef2a6ad56042^ --file app/api/stripe/checkout/route.ts,lib/quando-arriva.ts --prove tests/unit/riparazione-r15-fascia-piena.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "In quando-arriva: ORDINI_PER_FASCIA = 5 e MOTIVO_FASCIA_PIENA. Nella rotta della carta, dopo la regola della fascia e prima della pulizia, si contano gli ordini con le etichette della stessa finestra nati nelle ultime 48 ore, col giorno contato da created_at («Domani» di ieri = «Oggi»); annullati e ritiri non contano; un giro per cliente (carrello con più negozi = un giro; il cliente che ha già un giro nella fascia passa). Al sesto giro 409 «fascia piena». Un conteggio caduto non ferma la carta (tetto morbido, errore nei log).",
+      "cosa_resta": "La rotta dei contanti, il numero modificabile dal pannello, la fascia spenta in cassa, il lucchetto (trigger tipo 840 per i contanti). Le pagine della carta ancora da pagare non contano come giri e il webhook non ricontrolla: una fascia si può riempire fra l'apertura della pagina e il pagamento; contare le pagine aperte o rimborsare al webhook è una scelta di Nicola.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "dopo il blocco motivoFasciaRifiutata (~1013-1018): if (!body.pickupInStore && !consegnaVeloce && body.deliverySlot) { const giri = await giriNellaFascia(admin, body.deliverySlot, user.id, new Date()); if (giri && !giri.mio && giri.altri + 1 > ORDINI_PER_FASCIA) return esciERilascia(ApiErrors.conflict(MOTIVO_FASCIA_PIENA)); }. Portare giornoEFinestra e giriNellaFascia da app/api/stripe/checkout/route.ts in un file lib condiviso. Con un trigger col lucchetto (BEFORE INSERT, pg_advisory_xact_lock per giorno e fascia, 23514 'fascia_piena'), mappare il 23514 in 409 come eLaVeloceSenzaFattorinoLibero (:218, :1703)."
+        },
+        {
+          "file": "app/admin/delivery/page.tsx",
+          "modifica": "campo «Ordini per fascia» (5 di partenza) salvato in site_settings: servono una migrazione con colonna jsonb di consegna in site_settings e una nuova app/api/admin/delivery/route.ts (withAdminAuth + getAdminSupabase, come app/api/admin/branding/route.ts); le due rotte leggono il numero con ripiego su ORDINI_PER_FASCIA."
+        },
+        {
+          "file": "components/checkout/DeliverySlotPicker.tsx",
+          "modifica": "le fasce piene, oggi e domani, spente (disabled, sottotitolo «Piena»), come quelle fuori orario (~184-186); il dato da app/checkout/page.tsx (~1541) via un nuovo endpoint (per esempio app/api/consegna/fasce-piene/route.ts) con lo stesso conteggio."
+        }
+      ]
+    },
+    {
+      "id": "R15-014",
+      "chiave": "qa-flussi|la lettura dei negozi della griglia non va a blocchi",
+      "esito": "riparato",
+      "commit": "1f0083ca3ed081d0bf0eb6f336c8fec065943b6c",
+      "file_toccati": [
+        "lib/queries/seller-public-profiles.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-vetrina-a-blocchi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-vetrina-a-blocchi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1f0083ca3ed081d0bf0eb6f336c8fec065943b6c^ --file lib/queries/seller-public-profiles.ts --prove tests/unit/riparazione-r15-vetrina-a-blocchi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "leggiDallaVista (anche nel ripiego senza migrazione 124) legge ora con leggiInBlocchi di lib/supabase/blocchi.ts (blocchi da 100) e riunisce le righe; un blocco che cade fa cadere la lettura. Prova: 250 id, più .in, ciascuna al massimo 100, mappa completa."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "«Lavora con noi» promette ancora un lavoro da rider con compenso fisso e turni, e «Entra nel team» rimanda a posizioni che non ci sono",
+      "dimensione": "privacy-legale",
+      "severita": "minore",
+      "file": "app/lavora-con-noi/page.tsx:33-44",
+      "descrizione": "La carta «Diventa rider» (compenso fisso, turni, «Candidati come rider»), la carta «Entra nel team» con «Vedi le posizioni», «rider» nel testo introduttivo e nei metadata (righe 10, 14, 117) e il sottotitolo «alcune posizioni sono ibride» (riga ~188) raccontano un'organizzazione che oggi non c'è (consegne fatte da Nicola). Fuori dalla voce, non toccati."
+    },
+    {
+      "titolo": "con la carta, «Domani» premuto alle 23:59 e arrivato dopo mezzanotte vale il giorno dopo",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/api/stripe/checkout/route.ts:142",
+      "descrizione": "La rotta della carta non legge delivery_date, che la cassa manda (app/checkout/page.tsx:1168): la rotta dei contanti fa il riporto (cod/route.ts:416-425), la carta no, e il webhook conta da session.created. Non è una voce di R15: non toccato."
+    }
+  ],
+  "domande_per_nicola": [
+    "R15-013: se il conteggio dei giri nella fascia non riesce, la carta lascia passare il pagamento (scritto nei log) invece di rispondere 503: va bene così?",
+    "R15-010: per quanti minuti la veloce con la carta tiene il fattorino, e cosa si fa se il pagamento arriva a prenotazione scaduta senza fattorino libero (rimborso subito o veloce in ritardo)?"
+  ],
+  "conto": {
+    "agenti": 3,
+    "nota": ""
+  }
+}
