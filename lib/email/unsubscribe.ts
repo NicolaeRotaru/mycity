@@ -117,7 +117,13 @@ function apriFirmato(token: string): string | null {
     return null;
   }
 
-  const atteso = crypto.createHmac('sha256', segreto()).update(dato).digest('base64url');
+  let atteso: string;
+  try {
+    // Come per i gettoni cifrati: senza segreto il link vale «non valido», non un errore 500.
+    atteso = crypto.createHmac('sha256', segreto()).update(dato).digest('base64url');
+  } catch {
+    return null;
+  }
   // Confronto a tempo costante: non far capire dove la firma inizia a divergere.
   const a = Buffer.from(firma);
   const b = Buffer.from(atteso);
