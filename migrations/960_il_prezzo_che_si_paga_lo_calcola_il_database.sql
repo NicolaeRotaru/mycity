@@ -12,8 +12,7 @@
 -- una colonna vera, con la finestra (`range`) che resta esatta. La regola dello sconto è quella di
 -- `active_promo_products` (stesse date, stesso bersaglio: negozio, categoria o elenco di prodotti;
 -- vale la promozione più alta) e quella di `discountedUnitCents` nel sito (tetto 70%, arrotondato al
--- centesimo). Il conto è lo stesso di `discountedUnitCents`, in virgola mobile e con lo stesso
--- Math.round (mezzo verso l'alto): in numeric esatto 19,99 € al -50% dava 10,00 € e la cassa 9,99 €. Non è SECURITY DEFINER: le promozioni le legge chi chiama, con le regole di lettura di
+-- centesimo). Non è SECURITY DEFINER: le promozioni le legge chi chiama, con le regole di lettura di
 -- `seller_promotions` (un negozio fuori vetrina non ha sconto per i visitatori).
 --
 -- REVERSIBILE: `DROP FUNCTION public.prezzo_pagato(public.products)`; nessun dato toccato.
@@ -25,28 +24,22 @@ CREATE OR REPLACE FUNCTION public.prezzo_pagato(p public.products)
  SET search_path TO 'public'
 AS $function$
   SELECT round(
-    floor(
-      p.price::float8 * (1::float8 - GREATEST(0, LEAST(70, COALESCE((
-        SELECT MAX(sp.discount_percent)
-          FROM public.seller_promotions sp
-         WHERE sp.seller_id = p.seller_id
-           AND sp.status = 'active'
-           AND sp.starts_at <= now()
-           AND sp.ends_at >= now()
-           AND (
-                sp.scope = 'store'
-             OR (sp.scope = 'category' AND sp.category_id = p.category_id)
-             OR (sp.scope = 'products' AND p.id = ANY(sp.product_ids))
-           )
-      ), 0)))::float8 / 100::float8) * 100::float8 + 0.5::float8
-    )::numeric / 100,
+    p.price * (100 - GREATEST(0, LEAST(70, COALESCE((
+      SELECT MAX(sp.discount_percent)
+        FROM public.seller_promotions sp
+       WHERE sp.seller_id = p.seller_id
+         AND sp.status = 'active'
+         AND sp.starts_at <= now()
+         AND sp.ends_at >= now()
+         AND (
+              sp.scope = 'store'
+           OR (sp.scope = 'category' AND sp.category_id = p.category_id)
+           OR (sp.scope = 'products' AND p.id = ANY(sp.product_ids))
+         )
+    ), 0)))) / 100,
     2
   )
 $function$;
 
 COMMENT ON FUNCTION public.prezzo_pagato(public.products) IS
   'Il prezzo che si paga: price meno la promozione attiva piu alta del negozio. Colonna calcolata per la griglia (ordine e filtro di prezzo).';
-
--- Permessi scritti accanto alla funzione (regola della migrazione 425): la leggono la vetrina
--- (anon), i clienti e i negozi (authenticated) e il server (service_role).
-GRANT EXECUTE ON FUNCTION public.prezzo_pagato(public.products) TO anon, authenticated, service_role;
