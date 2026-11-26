@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from '@/lib/email/client';
-import { requireSupabaseService } from '@/lib/env';
+import { getAdminSupabase } from '@/lib/supabase/server';
 import { preparaEmailCicloDiVita, TEMPLATE_DI_SERVIZIO } from '@/lib/email/templates';
 import { withCronAuth } from '@/lib/api/middleware';
 import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
@@ -260,11 +259,10 @@ function personaInesistente(errore: unknown): boolean {
 const handler = withCronAuth(async (req): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
-  let supaCfg;
-  try { supaCfg = requireSupabaseService(); } catch (e) {
+  let supa;
+  try { supa = getAdminSupabase(); } catch (e) {
     return ApiErrors.unavailable(e instanceof Error ? e.message : 'config error');
   }
-  const supa = createClient(supaCfg.url, supaCfg.key, { auth: { persistSession: false, autoRefreshToken: false } });
 
   // 0) R22-002 — Le scadute escono dalla fila prima della presa (vedi `chiudiLeScaduteInBlocco`).
   const scaduteInBlocco = await chiudiLeScaduteInBlocco(supa);
