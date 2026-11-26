@@ -88,7 +88,7 @@
     "tests/unit/riparazione-r09-la-bozza-della-cassa-non-scade.test.ts"
    ],
    "prova_comando": "npx vitest run tests/unit/riparazione-r09-la-bozza-della-cassa-non-scade.test.ts tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts --reporter=dot",
-   "prova_tipo": "leggera",
+   "prova_tipo": "comando",
    "prova_eseguita": true,
    "rimessa": {
     "esito": "regge",
@@ -330,7 +330,8 @@
  ],
  "conto": {
   "agenti": 5,
-  "nota": "L1 opus, L2 sonnet, L3 opus, revisore opus (5 voci), revisore sonnet (3 voci). Spesa a fine controlli 15,78 $ su 20: chiuso all'80%, nessun giro di correzione."
+  "nota": "L1 opus, L2 sonnet, L3 opus, revisore opus (5 voci), revisore sonnet (3 voci). Spesa a fine controlli 15,78 $ su 20: chiuso all'80%, nessun giro di correzione.",
+  "subagenti": 5
  },
  "aggiornato": "2026-11-26 13:55",
  "testa": "40ee988e4e28d4685b9a48f1a01e04322d549d6f",
@@ -339,5 +340,6 @@
   "esito": "verde",
   "testa": "40ee988e4e28d4685b9a48f1a01e04322d549d6f",
   "nota": "typecheck pulito, lint 0 errori (121 avvisi già presenti), vitest 2148 file / 13197 prove passate, 1 saltato preesistente"
- }
+ },
+ "costo_usd": 15.78
 }
