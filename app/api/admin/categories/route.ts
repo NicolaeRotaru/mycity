@@ -22,6 +22,9 @@ const baseFields = {
   parent_id: z.string().uuid().nullable().optional(),
   sort_order: z.number().int().min(0).max(9999).optional(),
   featured: z.boolean().optional(),
+  // R18-015 — L'obbligo di allergeni e ingredienti è una proprietà della categoria principale (migrazione 363),
+  // non del suo nome. Il database non lo lascia togliere: dal pannello si può solo accendere.
+  richiede_dichiarazioni_alimentari: z.boolean().optional(),
   // La foto della tessera in home (migrazione 159). Vuota = nessuna foto: si salva null. Il messaggio
   // è quello di fotoDiCategoria, cioè dice esattamente cosa la home accetta e cosa no.
   image_url: z
@@ -62,6 +65,14 @@ async function genitoreNonAmmesso(admin: ClientAdmin, id: string | null, parentI
   }
   return null;
 }
+
+/** R18-015 — I messaggi del guardiano delle categorie (23514) sull'obbligo alimentare si dicono com'è; ogni altro 23514 è la foto. */
+function messaggioDi23514(message: string | undefined): string {
+  if (message && /allergeni e ingredienti/i.test(message)) return message;
+  return 'Foto non ammessa dal database: https://… oppure un percorso del sito /…';
+}
+const AVVISO_RADICE_SENZA_OBBLIGO =
+  'Categoria principale creata senza l\'obbligo di allergeni e ingredienti: i suoi prodotti non avranno campi obbligatori. Se vende alimenti, spunta «richiede allergeni e ingredienti».';
 const updateSchema = z.object({ id: z.string().uuid(), ...baseFields }).partial({ name: true, slug: true });
 
 export const POST = withAdminAuth(async ({ req, user }) => {
@@ -75,6 +86,7 @@ export const POST = withAdminAuth(async ({ req, user }) => {
   if (d.parent_id) {
     const no = await genitoreNonAmmesso(admin, null, d.parent_id);
     if (no) return ApiErrors.invalidRequest(no);
+    if (d.richiede_dichiarazioni_alimentari) return ApiErrors.invalidRequest('L\'obbligo di allergeni e ingredienti si imposta sulla categoria principale');
   }
   const { data, error } = await admin
     .from('categories')
@@ -84,16 +96,18 @@ export const POST = withAdminAuth(async ({ req, user }) => {
       // Solo se è stata mandata: senza la migrazione 159 la colonna non c'è, e una categoria senza
       // foto si deve poter creare lo stesso.
       ...(d.image_url !== undefined ? { image_url: d.image_url || null } : {}),
+      ...(d.richiede_dichiarazioni_alimentari ? { richiede_dichiarazioni_alimentari: true } : {}),
     })
     .select('id')
     .single();
   if (error) {
     if (error.code === '23505') return ApiErrors.invalidRequest('Slug già esistente');
-    if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…');
+    if (error.code === '23514') return ApiErrors.invalidRequest(messaggioDi23514(error.message));
     return ApiErrors.internal('Impossibile creare la categoria');
   }
   await writeAudit({ actorId: user.id, action: 'category.create', targetTable: 'categories', targetId: data.id, metadata: { name: d.name, slug: d.slug } });
-  return apiSuccess({ id: data.id });
+  const avviso = !d.parent_id && !d.richiede_dichiarazioni_alimentari ? AVVISO_RADICE_SENZA_OBBLIGO : undefined;
+  return apiSuccess({ id: data.id, ...(avviso ? { avviso } : {}) });
 });
 
 export const PATCH = withAdminAuth(async ({ req, user }) => {
@@ -111,6 +125,7 @@ export const PATCH = withAdminAuth(async ({ req, user }) => {
   if (rest.sort_order !== undefined) patch.sort_order = rest.sort_order;
   if (rest.featured !== undefined) patch.featured = rest.featured;
   if (rest.image_url !== undefined) patch.image_url = rest.image_url || null;
+  if (rest.richiede_dichiarazioni_alimentari !== undefined) patch.richiede_dichiarazioni_alimentari = rest.richiede_dichiarazioni_alimentari;
   if (Object.keys(patch).length === 0) return ApiErrors.invalidRequest('Nessun campo da aggiornare');
 
   const admin = getAdminSupabase();
@@ -118,10 +133,18 @@ export const PATCH = withAdminAuth(async ({ req, user }) => {
     const no = await genitoreNonAmmesso(admin, id, rest.parent_id);
     if (no) return ApiErrors.invalidRequest(no);
   }
+  if (rest.richiede_dichiarazioni_alimentari !== undefined) {
+    // Solo le categorie principali portano l'obbligo (le sottocategorie lo ereditano dal padre).
+    const { data: cur, error: eCur } = await admin.from('categories').select('parent_id').eq('id', id).maybeSingle();
+    if (eCur) return ApiErrors.internal('Impossibile aggiornare la categoria');
+    if (!cur) return ApiErrors.notFound('Categoria non trovata');
+    const futuroGenitore = rest.parent_id !== undefined ? rest.parent_id : (cur as { parent_id: string | null }).parent_id;
+    if (futuroGenitore && rest.richiede_dichiarazioni_alimentari) return ApiErrors.invalidRequest('L\'obbligo di allergeni e ingredienti si imposta sulla categoria principale');
+  }
   const { error } = await admin.from('categories').update(patch).eq('id', id);
   if (error) {
     if (error.code === '23505') return ApiErrors.invalidRequest('Slug già esistente');
-    if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…');
+    if (error.code === '23514') return ApiErrors.invalidRequest(messaggioDi23514(error.message));
     return ApiErrors.internal('Impossibile aggiornare la categoria');
   }
   await writeAudit({ actorId: user.id, action: 'category.update', targetTable: 'categories', targetId: id, metadata: { campi: Object.keys(patch) } });

@@ -66,7 +66,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   const [{ data: row }, { data: categoriesData }] = await Promise.all([
     admin.from('products').select(`${PRODUCT_SNAPSHOT_COLS}, seller_id`).eq('id', productId).single(),
-    admin.from('categories').select('id, name, slug, parent_id').order('name'),
+    admin.from('categories').select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari').order('name'),
   ]);
 
   if (!row) return ApiErrors.notFound('Prodotto non trovato.');

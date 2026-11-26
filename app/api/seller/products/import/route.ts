@@ -48,7 +48,7 @@ async function handler(req: NextRequest, user: { id: string }, db: ClientDiChiCh
   if (righe.length > MASSIMO_RIGHE_DAL_FILE) {
     return ApiErrors.invalidRequest(`Al massimo ${MASSIMO_RIGHE_DAL_FILE} righe per caricamento.`);
   }
-  const { data: categorie, error: erroreCategorie } = await db.from('categories').select('id, slug, parent_id');
+  const { data: categorie, error: erroreCategorie } = await db.from('categories').select('id, slug, parent_id, richiede_dichiarazioni_alimentari');
   if (erroreCategorie) {
     logger.error('[seller-products-import] categorie non lette', { userId: user.id, message: erroreCategorie.message });
     return ApiErrors.internal('Non sono riuscito a leggere le categorie. Riprova.');
