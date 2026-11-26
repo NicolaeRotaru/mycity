@@ -281,7 +281,33 @@ function contaErroreDelSito(adesso: number = Date.now()): void {
 
 // Emette una riga di log strutturata (JSON) con contesto redatto (🟡-10).
 function line(level: string, msg: string, ctx?: LogContext): string {
-  return JSON.stringify({ level, msg: oscuraTesto(msg), ts: new Date().toISOString(), ...(toCtx(ctx) ?? {}) });
+  const riga = { level, msg: oscuraTesto(msg), ts: new Date().toISOString(), ...(toCtx(ctx) ?? {}) };
+  return scriviRiga(riga, level, riga.msg, riga.ts);
+}
+
+/**
+ * R15-012 — La riga di log non lancia mai. Un contesto che contiene se stesso (o un valore che
+ * JSON.stringify non sa scrivere, come un BigInt) faceva salire un TypeError a chi chiamava, e la
+ * riga si perdeva. Il riferimento circolare diventa `[circolare]`; se JSON.stringify lancia comunque,
+ * resta una riga minima con livello, messaggio e ora.
+ */
+function scriviRiga(riga: Record<string, unknown>, level: string, msg: string, ts: string): string {
+  try {
+    const visti = new WeakSet<object>();
+    return JSON.stringify(riga, (_chiave, valore: unknown) => {
+      if (typeof valore === 'object' && valore !== null) {
+        if (visti.has(valore)) return '[circolare]';
+        visti.add(valore);
+      }
+      return valore;
+    });
+  } catch {
+    try {
+      return JSON.stringify({ level, msg, ts, contesto: '[non scrivibile]' });
+    } catch {
+      return `{"level":"${level}","contesto":"[non scrivibile]"}`;
+    }
+  }
 }
 
 /**
