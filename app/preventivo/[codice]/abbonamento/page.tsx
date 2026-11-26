@@ -4,6 +4,7 @@ import { CheckCircle2 } from 'lucide-react';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { FASCE, FRASE_PARTNER } from '@/lib/agenzia/preventivo';
 import { CODICE_VALIDO } from '@/lib/agenzia/preventivo-col-codice';
+import { PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagamento-servizi';
 import { leggiDemoDalLink } from '@/lib/agenzia/demo-dal-link';
 import { indirizziDemo } from '@/lib/agenzia/indirizzi-demo';
 import { fasciaDaIndirizzo, hrefFascia } from '@/lib/agenzia/indirizzi-servizi';
@@ -76,7 +77,15 @@ export default async function PreventivoDalLink({
             Controlliamo i dati del negozio e poi va online.
           </p>
         </div>
-        {!attivo && (
+        {/* 26/11/2026 — Per ora si paga in contanti (lib/agenzia/pagamento-servizi.ts): niente «Paga» qui. */}
+        {!attivo && !PAGAMENTO_ONLINE_SERVIZI && (
+          <div className="mt-4 rounded-2xl border-2 border-cream-300 bg-surface-0 p-5">
+            <p className="text-sm text-ink-700">
+              L’abbonamento {pc.fasciaScelta ? FASCE[pc.fasciaScelta].nome : ''} si paga in contanti, di persona: ti contattiamo noi per fissare l’inizio.
+            </p>
+          </div>
+        )}
+        {!attivo && PAGAMENTO_ONLINE_SERVIZI && (
           <div className="mt-4 rounded-2xl border-2 border-cream-300 bg-surface-0 p-5">
             {pagato === '1' ? (
               <p className="text-sm text-ink-700">Se hai appena pagato, l’abbonamento si attiva in pochi secondi: ricarica la pagina fra un momento.</p>
@@ -102,7 +111,7 @@ export default async function PreventivoDalLink({
         <p className="mt-1 text-sm text-ink-600">{descriviAttivita(p.tipoAttivita)} · {FRASE_PARTNER}</p>
       </header>
 
-      {pagato === '0' && (
+      {PAGAMENTO_ONLINE_SERVIZI && pagato === '0' && (
         <p role="status" className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-ink-800">
           Il pagamento non è stato completato. Puoi riprovare qui sotto.
         </p>

@@ -7,6 +7,7 @@ import { isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
 import { ABBONAMENTI } from '@/lib/agenzia/preventivo';
 import { apriCassaDalLink } from '@/lib/agenzia/cassa-dal-link';
+import { pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
 import { accettaPreventivoColCodice, CODICE_VALIDO, leggiPreventivoColCodice } from '@/lib/agenzia/preventivo-col-codice';
 
 export const runtime = 'nodejs';
@@ -19,6 +20,9 @@ export const runtime = 'nodejs';
  * e apre subito la cassa Stripe dell'abbonamento, con l'email appena data. Se la cassa non si apre,
  * l'accettazione vale lo stesso: il titolare paga più tardi dal pulsante «Paga» dello stesso link.
  * Il canone lo rilegge il server; il browser manda solo il nome della fascia.
+ *
+ * 26/11/2026 — Nicola: per ora si paga in contanti, di persona (lib/agenzia/pagamento-servizi.ts).
+ * Con il pagamento online spento si accetta e basta: nessuna cassa, `url` sempre null.
  */
 
 const Richiesta = z.object({
@@ -62,7 +66,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
     return ApiErrors.conflict(accettato.messaggio);
   }
 
-  if (!isStripeConfigured()) {
+  if (!pagamentoOnlineAttivo() || !isStripeConfigured()) {
     return NextResponse.json({ ok: true, data: { url: null, accessoInviato: accettato.accessoInviato } }, { status: 200 });
   }
   const cassa = await apriCassaDalLink({ codice, sellerId: accettato.sellerId, email, fascia: abbonamento });
