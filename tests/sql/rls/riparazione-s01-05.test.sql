@@ -16,8 +16,12 @@
 --   ⑨ il negozio toglie la risposta (vuota o solo spazi): firma e data tornano
 --     vuote;
 --   ⑩ cancellato l'account di chi ha firmato una risposta, anche in una
---     sessione di un altro utente: la firma diventa vuota, la risposta resta.
--- Senza la migrazione 993 ①, ④ e ⑤ sono ROSSI; senza la 995 ⑦, ⑧, ⑨ e ⑩.
+--     sessione di un altro utente: la firma diventa vuota, la risposta resta;
+--   ⑪ il negozio che ha fatto una domanda sul suo prodotto non riceve l'avviso,
+--     chiunque risponda (lui stesso, lo staff, il server).
+-- Senza la migrazione 993 ①, ④ e ⑤ sono ROSSI; senza la 995 ⑦, ⑧, ⑨ e ⑩;
+-- con la funzione dell'avviso della 993 di prima (senza il controllo sul
+-- negozio del prodotto) ⑪.
 -- =============================================================================
 
 BEGIN;
@@ -49,7 +53,10 @@ INSERT INTO public.product_questions (id, product_id, author_id, question) VALUE
   ('e9930000-2222-0000-0000-000000000008', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000b', 'Si può avere affettato?'),
   ('e9930000-2222-0000-0000-000000000009', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000c', 'Va bene per i bambini?'),
   ('e9930000-2222-0000-0000-00000000000a', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000b', 'Quanto dura fresco?'),
-  ('e9930000-2222-0000-0000-00000000000b', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000c', 'Ha il sesamo?');
+  ('e9930000-2222-0000-0000-00000000000b', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000c', 'Ha il sesamo?'),
+  ('e9930000-2222-0000-0000-00000000000c', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000a', 'Domanda del negozio, due'),
+  ('e9930000-2222-0000-0000-00000000000d', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000a', 'Domanda del negozio, tre'),
+  ('e9930000-2222-0000-0000-00000000000e', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000a', 'Domanda del negozio, quattro');
 RESET mycity.allow_profile_write;
 
 -- Il negozio risponde dal browser con l'answered_by indicato.
@@ -227,6 +234,38 @@ INSERT INTO esiti SELECT '9 risposta tolta (vuota o spazi): firma e data tornano
        pg_temp.negozio('e9930000-2222-0000-0000-000000000008', $s$answer = NULL$s$) AS c,
        pg_temp.negozio('e9930000-2222-0000-0000-000000000009', $s$answer = '   '$s$) AS d;
 
+-- ⑪ Domande fatte dal negozio sul suo prodotto: risponde lui, lo staff, il server.
+CREATE FUNCTION pg_temp.risponde_come(p_domanda uuid, p_claims text) RETURNS text
+LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claims', p_claims, true);
+  SET LOCAL ROLE authenticated;
+  UPDATE public.product_questions SET answer = 'Sì, certo.' WHERE id = p_domanda;
+  RESET ROLE;
+  RETURN 'ok';
+EXCEPTION WHEN OTHERS THEN
+  RESET ROLE;
+  RETURN SQLSTATE || ' ' || SQLERRM;
+END $$;
+CREATE FUNCTION pg_temp.risponde_il_server(p_domanda uuid) RETURNS text
+LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  SET LOCAL ROLE service_role;
+  UPDATE public.product_questions SET answer = 'Sì, certo.' WHERE id = p_domanda;
+  RESET ROLE;
+  RETURN 'ok';
+EXCEPTION WHEN OTHERS THEN
+  RESET ROLE;
+  RETURN SQLSTATE || ' ' || SQLERRM;
+END $$;
+INSERT INTO esiti SELECT '11 il negozio che ha fatto la domanda non riceve l''avviso, chiunque risponda',
+  a = 'ok' AND b = 'ok' AND c = 'ok' AND pg_temp.voci('e9930000-0000-0000-0000-00000000000a') = 0,
+  concat_ws(' / ', a, b, c, 'avvisi al negozio: ' || pg_temp.voci('e9930000-0000-0000-0000-00000000000a'))
+  FROM pg_temp.risponde_come('e9930000-2222-0000-0000-00000000000c', '{"sub":"e9930000-0000-0000-0000-00000000000a","role":"authenticated"}') AS a,
+       pg_temp.risponde_come('e9930000-2222-0000-0000-00000000000d', '{"sub":"e9930000-0000-0000-0000-00000000000d","role":"authenticated"}') AS b,
+       pg_temp.risponde_il_server('e9930000-2222-0000-0000-00000000000e') AS c;
+
 DO $$
 DECLARE r record; rossi int;
 BEGIN
@@ -234,7 +273,7 @@ BEGIN
     RAISE INFO '%  %  — %', CASE WHEN r.ok THEN 'ok  ' ELSE 'ROTTO' END, r.nome, r.dettaglio;
   END LOOP;
   SELECT count(*) INTO rossi FROM esiti WHERE ok IS NOT TRUE;
-  IF rossi > 0 OR (SELECT count(*) FROM esiti) <> 10 THEN
+  IF rossi > 0 OR (SELECT count(*) FROM esiti) <> 11 THEN
     RAISE EXCEPTION '% controlli su % sono rossi (S01-05)', rossi, (SELECT count(*) FROM esiti);
   END IF;
   RAISE INFO 'S01-05: % controlli verdi', (SELECT count(*) FROM esiti);

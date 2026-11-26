@@ -1,8 +1,11 @@
 -- 993 — La risposta a una domanda avvisa chi l'ha fatta: chi risponde
 --
--- ① risposta_avvisa_chi_ha_chiesto: stessa funzione della 822, riga per riga;
---   la condizione «chi risponde a una domanda sua non avvisa se stesso» guarda
---   auth.uid().
+-- ① risposta_avvisa_chi_ha_chiesto: la funzione della 822 con due controlli:
+--   «chi risponde a una domanda sua non avvisa se stesso» guarda auth.uid(), e
+--   il negozio del prodotto che ha fatto la domanda non si avvisa, chiunque
+--   scriva la risposta. È identica, riga per riga, a quella dell'altra
+--   migrazione della campagna che ridefinisce la stessa funzione: l'ordine in
+--   cui le due si applicano non cambia il risultato.
 -- ② domanda_non_si_riscrive (guardiano della 215, stesso trigger): per chi non
 --   è amministratore né servizio, is_public resta com'è e answered_by è chi
 --   scrive la risposta (auth.uid()).
@@ -23,6 +26,7 @@ SET search_path = public
 AS $$
 DECLARE
   v_prodotto text;
+  v_negozio uuid;
 BEGIN
   IF NEW.is_public IS NOT TRUE
      OR coalesce(btrim(NEW.answer), '') = ''
@@ -31,7 +35,11 @@ BEGIN
     RETURN NULL;
   END IF;
   BEGIN
-    SELECT p.name INTO v_prodotto FROM public.products p WHERE p.id = NEW.product_id;
+    SELECT p.name, p.seller_id INTO v_prodotto, v_negozio FROM public.products p WHERE p.id = NEW.product_id;
+    -- Chi ha chiesto e' il negozio del prodotto: risponde a se stesso, anche senza answered_by.
+    IF NEW.author_id IS NOT DISTINCT FROM v_negozio THEN
+      RETURN NULL;
+    END IF;
     INSERT INTO public.notifications (user_id, category, title, body, link)
     VALUES (
       NEW.author_id,
