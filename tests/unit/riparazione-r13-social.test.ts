@@ -4,7 +4,7 @@ import { normalizzaSocials, storeCustomizationSchema, campoDellErrore } from '@/
 const fb = (url: string) => normalizzaSocials({ facebook: url })?.facebook;
 
 describe('R13-005 — le sottopagine vere di un profilo Facebook tengono il nome', () => {
-  it.each(['timeline', 'info', 'photos_by', 'photos_of', 'photos_albums', 'videos_by', 'about_details', 'likes', 'following'])(
+  it.each(['timeline', 'info', 'photos_by', 'photos_of', 'photos_albums', 'videos_by', 'about_details', 'likes', 'following', 'about_overview', 'about_contact_and_basic_info', 'about_work_and_education', 'friends_all', 'offers', 'jobs'])(
     'facebook.com/nome/%s si riduce a «nome»',
     (sotto) => {
       expect(fb(`https://www.facebook.com/panequotidiano/${sotto}`)).toBe('panequotidiano');
