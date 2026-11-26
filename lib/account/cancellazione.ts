@@ -575,6 +575,14 @@ export async function togliDallaNewsletter(admin: Admin, userId: string): Promis
   });
   try {
     const { data: utenteAuth, error: erroreLettura } = await admin.auth.admin.getUserById(userId);
+    // L'utente di accesso già cancellato (giro precedente o cancellazione parallela):
+    // la newsletter è stata ripulita prima di cancellarlo, non c'è niente da togliere.
+    // Stessa regola del «già chiuso» del passo ③.
+    const utenteGiaTolto = !!erroreLettura && (
+      (erroreLettura as { code?: string }).code === 'user_not_found' ||
+      ((erroreLettura as { status?: number }).status === 404 && /^user not found$/i.test(String(erroreLettura.message ?? '').trim()))
+    );
+    if (utenteGiaTolto) return null;
     if (erroreLettura) {
       logger.warn('[cancellazione] lettura email per la newsletter fallita', { userId, err: erroreLettura.message });
       return nonRiuscita(`email non letta (${erroreLettura.message})`);

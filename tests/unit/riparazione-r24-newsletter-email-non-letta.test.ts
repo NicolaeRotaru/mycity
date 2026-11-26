@@ -93,4 +93,15 @@ describe('R24-015 · la lettura dell’email caduta non lascia l’indirizzo nel
     expect(esito.ok).toBe(true);
     expect(deleteUser).toHaveBeenCalledTimes(1);
   });
+
+  it('l’utente di accesso è già cancellato (404 user_not_found): niente da togliere, la cancellazione non resta bloccata', async () => {
+    const nonTrovato = { message: 'User not found', status: 404, code: 'user_not_found' };
+    const { giro, deleteUser } = unAccount(async () => ({ data: { user: null }, error: nonTrovato }));
+    deleteUser.mockImplementation(async () => ({ error: nonTrovato }) as never);
+
+    const esito = await cancellaAccount(giro.admin as never, ID);
+
+    expect(esito.ok, 'un account già tolto dal servizio di accesso resterebbe in coda per sempre').toBe(true);
+    expect(deleteUser).toHaveBeenCalledTimes(1);
+  });
 });
