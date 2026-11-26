@@ -1,23 +1,24 @@
 {
   "sessione": "R22",
-  "aggiornato": "2026-11-26 19:55",
+  "aggiornato": "2026-11-26 23:35",
   "finita": true,
-  "testa": "a4c36f355df844cae05667e9998cde08f311aa06",
+  "testa": "35df99bed24d6c7293e6f874f59555d73542d82e",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "a4c36f355df844cae05667e9998cde08f311aa06",
-    "nota": "typecheck, lint (0 errori, 121 avvisi) e test: 2238 file, 13656 prove passate; SHA preso con git rev-parse HEAD nello stesso comando."
+    "testa": "35df99bed24d6c7293e6f874f59555d73542d82e",
+    "nota": "typecheck, lint (0 errori, 121 avvisi) e test: 2237 file passati e 1 saltato, 13659 prove passate e 1 saltata. Il salto è condizionato all'ambiente (skipIf/runIf già nella suite) e non viene dal ramo: nel diff delle prove contro la base non c'è nessun .skip né skipIf. SHA preso con git rev-parse HEAD nello stesso comando."
   },
   "voci": [
     {
       "id": "R22-001",
       "chiave": "pagamenti-stripe|i contanti vecchi ancora da versare spariscono dal pannello dei bonifici quando gli ordini consegnati superano mille",
       "esito": "parziale",
-      "commit": "a4c36f355df844cae05667e9998cde08f311aa06",
+      "commit": "f92c4262310a55b164b4ba74197945a0e8ceed9e",
       "file_toccati": [
         "app/admin/payouts/page.tsx",
-        "tests/unit/minori-s05-bonifici-prodotti.test.tsx"
+        "tests/unit/riparazione-r22-bonifici-aperti-vecchi.test.tsx",
+        "tests/unit/riparazione-r22-pagabili-a-parte.test.tsx"
       ],
       "prova_file": [
         "tests/unit/riparazione-r22-bonifici-aperti-vecchi.test.tsx",
@@ -29,11 +30,11 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a4c36f355df844cae05667e9998cde08f311aa06^ --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r22-pagabili-a-parte.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f92c4262310a55b164b4ba74197945a0e8ceed9e^ --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r22-bonifici-aperti-vecchi.test.tsx,tests/unit/minori-s05-bonifici-prodotti.test.tsx --json"
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Primo giro: gli aperti si leggono dal più vecchio, l'avviso dice il vero. Correzione: i pagabili (contanti HELD e ritiri al banco da regolare) hanno una lettura e un tetto loro, ordinati per consegna e poi id, e vengono solo da lì: 1.000 contanti dal fattorino + un HELD del 17/11 → «Da versare lunedì 18,00 €» e il tasto; 1.000 HELD creati dall'1/10 e consegnati il 23/11 + uno del 12/11 → il 12/11 entra. «almeno» della cifra del lunedì segue i pagabili; con i pagabili tagliati il tasto dice «(solo una parte)» e la conferma lo spiega. Lo storno non riuscito ha una lettura sua: non esce dietro mille chiusi.",
-      "nota": "La prova esistente minori-s05-bonifici-prodotti (primo giro) controlla «Mancano i più recenti». La prova del primo giro riparazione-r22-bonifici-aperti-vecchi: il finto server ora applica più ordinamenti come PostgREST (nessun controllo tolto).",
+      "nota": "Giro corto chiesto dalla regia (guardia-ramo, regola delle prove comuni): l'elenco generale degli aperti torna dal più recente come alla base, e l'avviso torna a dire «Mancano i più vecchi», vero per le righe ferme; i contanti da versare non si perdono perché vengono dalla lettura a parte dei pagabili (commit a4c36f355df844cae05667e9998cde08f311aa06), che chiude la voce. La prova comune minori-s05-bonifici-prodotti è di nuovo identica alla base aac2350b09db195d6d2286f15f75a7d02ae590a1 e verde. La prova r22 controlla anche la cifra del lunedì (999×9 € + 18 €).",
       "cosa_resta": "Solo quando i pagabili superano il tetto: un ritiro al banco da regolare (CASH_IN_STORE senza payout_at) rimasto fuori dalla finestra dei pagabili rientra dalla lettura dei chiusi (CASH_IN_STORE sta in STATI_CHIUSI e quel filtro non esclude i pagabili, app/admin/payouts/page.tsx:381-384 e :390-392) senza il controllo di resi e reclami; con un reso aperto la pagina lo manda in p_ritiri e la 916 rifiuta tutto con BONIFICO_CAMBIATO, così il bonifico resta bloccato finché il reso è aperto. Cura (file mio, non fatta per il tetto di spesa): nella lettura dei chiusi escludere i ritiri con payout_at nullo (payout_at.not.is.null per CASH_IN_STORE), oppure far passare anche quelle righe per il controllo resi/reclami di contantiHeld.",
       "verificato_da": "primo giro: revisore indipendente (modello grande) → parziale con 4 difetti, tutti corretti nel commit a4c36f355df844cae05667e9998cde08f311aa06; revisore della correzione (modello grande): vitest r22 21/21, prova-rimessa regge, esperimento col finto server che legge returns → resta il caso del ritiro con reso oltre il tetto (cosa_resta)."
     },
@@ -41,12 +42,11 @@
       "id": "R22-002",
       "chiave": "pagamenti-stripe|il pannello dei bonifici non dice a nicola quanto versare a ogni negozio il lunedì",
       "esito": "parziale",
-      "commit": "c591bd96699b2532c168961ada4f5d0138b98782",
+      "commit": "ce8f8e36e8ab76cb9155c3c30836c3038dbb29ae",
       "file_toccati": [
         "app/admin/payouts/page.tsx",
         "migrations/916_il_bonifico_fatto_ai_negozi_resta_scritto.sql",
-        "tests/unit/riparazione-r05-bonifici-aperti.test.tsx",
-        "tests/unit/riparazione-r11-bonifico-non-due-volte.test.tsx"
+        "tests/unit/riparazione-r22-commissione-ritiri.test.tsx"
       ],
       "prova_file": [
         "tests/unit/riparazione-r22-commissione-ritiri.test.tsx",
@@ -58,11 +58,11 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c591bd96699b2532c168961ada4f5d0138b98782^ --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r22-commissione-ritiri.test.tsx --json && PGHOST=/var/run/postgresql PGUSER=root timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c591bd96699b2532c168961ada4f5d0138b98782^ --file migrations/916_il_bonifico_fatto_ai_negozi_resta_scritto.sql --prove tests/sql/rls/riparazione-r22-credito-ritiri.test.sql --sql r22c_rimessa --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ce8f8e36e8ab76cb9155c3c30836c3038dbb29ae^ --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r22-commissione-ritiri.test.tsx,tests/unit/riparazione-r05-bonifici-aperti.test.tsx,tests/unit/riparazione-r11-bonifico-non-due-volte.test.tsx --json"
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Primo giro: il lunedì si versa contanti meno commissione dei ritiri al banco, il tasto manda ritiri e importo alla 916, compensazione senza CRO e resto in fattura per mese, «Già pagato» = bonifici partiti davvero, nota «automatico» solo a carta accesa. Correzione: per ogni ritiro MyCity deve al negozio il credito MyCity usato dal cliente meno la commissione (orders.wallet_applied_cents; il negozio in cassa ha il lordo meno il credito): pagina e 916 fanno lo stesso conto, bonifico = contanti + credito − commissione (contanti 10 € + ritiro 20 € con 5 € di credito e 2 € di commissione = 13,00 €; la 916 scrive credito_cents); con la commissione uguale ai contanti conferma ed esito non parlano di «0,00 € in fattura»; un contante HELD con un bonifico Stripe già scritto non entra nella cifra né nel tasto (la 916 lo rifiuta: il bonifico Stripe potrebbe essere partito) e resta «Fermo: bonifico Stripe da controllare».",
-      "cosa_resta": "(1) La pagina del negozio dice ancora «già versato» al netto pieno, «commissione … te la chiediamo noi» anche quando è già trattenuta, e non vede il credito dei ritiri: serve_file_altrui 1-2. (2) Con PAGAMENTI_CONTANTI_DA_STRIPE_DAL accesa gli HELD che paga Stripe restano «Da versare»: serve la rotta del punto 3. (3) Un rimborso dopo un bonifico a mano ora compare in /admin/payouts come «Da recuperare dal negozio» (commit 7ff546125e4c9a2a1f4605c21f30ad71575f2006), ma non si toglie dal lunedì dopo: resta come scritto in quella voce. (4) Il credito MyCity versato al negozio per un ritiro poi rimborsato non si può recuperare: la 916 scrive per il ritiro solo la commissione, non il credito (916:285), e contanti_da_recuperare guarda solo le righe di tipo contanti (916:404).",
+      "cosa_resta": "(1) La pagina del negozio dice ancora «già versato» al netto pieno, «commissione … te la chiediamo noi» anche quando è già trattenuta, e non vede il credito dei ritiri: serve_file_altrui 1-2. (2) Con PAGAMENTI_CONTANTI_DA_STRIPE_DAL accesa gli HELD che paga Stripe restano «Da versare»: serve la rotta del punto 3. (3) Un rimborso dopo un bonifico a mano ora compare in /admin/payouts come «Da recuperare dal negozio» (commit 7ff546125e4c9a2a1f4605c21f30ad71575f2006), ma non si toglie dal lunedì dopo: resta come scritto in quella voce. (4) Il credito MyCity versato al negozio per un ritiro poi rimborsato non si può recuperare: la 916 scrive per il ritiro solo la commissione, non il credito (916:285), e contanti_da_recuperare guarda solo le righe di tipo contanti (916:404). (5) Limite a scala: la lettura dei bonifici a mano parte solo se fra gli ordini letti c'è una traccia (PAID_MANUALLY, o contanti/ritiri con payout_at senza bonifico Stripe): un bonifico a mano con tutti gli ordini fuori dai 1000 chiusi più recenti non si somma in «Già pagato».",
       "serve_file_altrui": [
         {
           "file": "lib/guadagni/negozio.ts",
@@ -77,19 +77,17 @@
           "modifica": "GET solo admin (withAdminAuth) che restituisce { dal: inizioContantiDaStripe()?.toISOString() ?? null } da lib/stripe/payout.ts. Con quella rotta la pagina toglie dal lunedì e dal tasto gli HELD con delivered_at ≥ dal (etichetta «In sospeso · lo paga Stripe») e mostra la nota «automatico» anche quando dal è valida."
         }
       ],
-      "nota": "La 916 cambia anche in questo commit (dichiarato): colonna credito_cents e il conto col credito; nessuna 917. Due rimesse, tutte e due uscita 0: pagina con la prova montata, 916 con la prova SQL del credito (nessun nome nuovo usato). Prove esistenti che importano la pagina: verdi (10 file). Dei punti della voce: 1, 2 e 4 erano chiusi prima della base; 3 è chiuso con la 916; 5 è chiuso per CARTA_ACCESA, manca il pezzo PAGAMENTI_CONTANTI_DA_STRIPE_DAL.",
+      "nota": "La 916 cambia anche in questo commit (dichiarato): colonna credito_cents e il conto col credito; nessuna 917. Due rimesse, tutte e due uscita 0: pagina con la prova montata, 916 con la prova SQL del credito (nessun nome nuovo usato). Prove esistenti che importano la pagina: verdi (10 file). Dei punti della voce: 1, 2 e 4 erano chiusi prima della base; 3 è chiuso con la 916; 5 è chiuso per CARTA_ACCESA, manca il pezzo PAGAMENTI_CONTANTI_DA_STRIPE_DAL. Giro corto chiesto dalla regia: la lettura bonifici_manuali_per_mese parte solo con una traccia di bonifico a mano fra gli ordini letti, e un esito strano o un'eccezione vale come lettura caduta («almeno»); così le prove comuni riparazione-r05-bonifici-aperti e riparazione-r11-bonifico-non-due-volte sono di nuovo identiche alla base e verdi.",
       "verificato_da": "primo giro: revisore indipendente (modello grande) → parziale (credito MyCity dei ritiri, testo 0,00 €, HELD con bonifico Stripe appeso), corretti nel commit c591bd96699b2532c168961ada4f5d0138b98782; revisore della correzione: cifra 1300 cent in pagina e nella 916, riga 1000/500/200/1300/0, HELD con stripe_transfer_id fuori, mai sotto zero → resta il credito non recuperabile dopo un rimborso (cosa_resta 4)."
     },
     {
       "id": "R22-003",
       "chiave": "pagamenti-stripe|la rpc del tasto «bonifico fatto» dei negozi non è definita in nessuna migrazione del deposito",
       "esito": "parziale",
-      "commit": "7ff546125e4c9a2a1f4605c21f30ad71575f2006",
+      "commit": "35df99bed24d6c7293e6f874f59555d73542d82e",
       "file_toccati": [
         "migrations/916_il_bonifico_fatto_ai_negozi_resta_scritto.sql",
         "app/admin/payouts/page.tsx",
-        "tests/unit/riparazione-r05-bonifici-aperti.test.tsx",
-        "tests/unit/riparazione-r11-bonifico-non-due-volte.test.tsx",
         "tests/unit/riparazione-r22-bonifici-aperti-vecchi.test.tsx",
         "tests/unit/riparazione-r22-commissione-ritiri.test.tsx"
       ],
@@ -106,18 +104,18 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "PGHOST=/var/run/postgresql PGUSER=root timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7ff546125e4c9a2a1f4605c21f30ad71575f2006^ --file migrations/916_il_bonifico_fatto_ai_negozi_resta_scritto.sql --prove tests/sql/rls/riparazione-r22-bonifico-cancelli.test.sql --sql r22c_rimessa --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7ff546125e4c9a2a1f4605c21f30ad71575f2006^ --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r22-da-recuperare.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 35df99bed24d6c7293e6f874f59555d73542d82e^ --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r22-da-recuperare.test.tsx,tests/unit/riparazione-r05-bonifici-aperti.test.tsx,tests/unit/riparazione-r11-bonifico-non-due-volte.test.tsx --json"
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Primo giro: la 916 crea segna_bonifico_manuale (solo admin, tutto o niente, idempotente), il registro privato dei bonifici a mano e PAID_MANUALLY nel vincolo della 130. Correzione: contanti_da_recuperare (solo admin, SECURITY DEFINER, search_path='') dice per ordine quanto riprendere dal negozio quando un contante già versato a mano viene rimborsato (versato col bonifico − netto di adesso; tutto se REFUNDED), e la pagina lo mostra per negozio come «Da recuperare dal negozio», anche per un negozio senza ordini in elenco, con un avviso se la lettura cade; i ritiri al banco con reso, reclamo, contestazione o rimborso anche parziale non entrano nel bonifico (916 e pagina, stessa regola); il secondo clic con un CRO o una cifra diversi risponde BONIFICO_GIA_SEGNATO col CRO già scritto e la pagina lo mostra.",
-      "cosa_resta": "(1) La causa sta in lib/stripe/payout.ts: il rimborso di un PAID_MANUALLY scrive REFUNDED sopra il segno del bonifico e non avvisa nessuno (serve_file_altrui). (2) La quota da recuperare NON si toglie dal bonifico del lunedì dopo e non c'è un segno «recuperato»: la riga resta in pagina finché l'ordine non cambia. Toglierla dal lunedì vuol dire scrivere nel bonifico quale recupero copre (una colonna/tabella in più nella 916), e se compensare o chiedere indietro è una regola che non c'è: domanda per Nicola.",
+      "cosa_resta": "(1) La causa sta in lib/stripe/payout.ts: il rimborso di un PAID_MANUALLY scrive REFUNDED sopra il segno del bonifico e non avvisa nessuno (serve_file_altrui). (2) La quota da recuperare NON si toglie dal bonifico del lunedì dopo e non c'è un segno «recuperato»: la riga resta in pagina finché l'ordine non cambia. Toglierla dal lunedì vuol dire scrivere nel bonifico quale recupero copre (una colonna/tabella in più nella 916), e se compensare o chiedere indietro è una regola che non c'è: domanda per Nicola. (3) Stesso limite di finestra: contanti_da_recuperare parte con la stessa traccia, quindi un contante versato a mano e rimborsato fuori dai 1000 chiusi non la fa partire se non c'è nessun'altra traccia.",
       "serve_file_altrui": [
         {
           "file": "lib/stripe/payout.ts",
           "modifica": "(a) refundOrder, statoDelNegozio (~riga 2276): `isFull && order.payout_status !== 'REVERSAL_FAILED' && order.payout_status !== 'PAID_MANUALLY'` — su PAID_MANUALLY lo stato non si tocca (il bonifico a mano è partito; payment_status REFUNDED dice già il rimborso). (b) Dopo il blocco REVERSAL_FAILED (~riga 2531) aggiungere: `if (order.payout_status === 'PAID_MANUALLY' && sellerShare > 0) { try { await notifyAdmins('⚠️ Quota del negozio da recuperare a mano', `Il rimborso di ${formatPriceFromCents(safeAmountCents)} sull'ordine ${order.id} è uscito dopo il bonifico a mano al negozio: ${formatPriceFromCents(sellerShare)} non si tolgono più da un bonifico futuro. Riprendili dal negozio: sono in /admin/payouts, «Da recuperare dal negozio».`, '/admin/payouts', { unaVoltaPer: `quota-a-mano:${order.id}:${chiave}` }); } catch (e) { logger.error('[refundOrder] avviso della quota da recuperare a mano non inviato', { orderId: order.id, centesimi: sellerShare, e }); } }`. (c) addebitaQuotaVenditoreSeNonPagato (~riga 1186): lasciare la scrittura di seller_payout_reversed_cents anche su PAID_MANUALLY (è la traccia che contanti_da_recuperare della 916 legge: versato − netto di adesso) e cambiare il commento: su PAID_MANUALLY la quota non si toglie da un bonifico futuro, si riprende a mano. avvisaDellaQuotaDaTrattenere resta solo su HELD (com'è)."
         }
       ],
-      "nota": "Nessuna 917: la 916 è nuova in questo ramo e mai applicata, corretta lì (si riapplica due volte senza errori). Rimessa SQL con la prova dei cancelli (nessun nome nuovo): uscita 0; rimessa della pagina con la prova montata: uscita 0. La prova SQL delle quote da recuperare nomina la funzione nuova (darebbe 3 da sola): gira verde nella suite. Quattro prove esistenti che importano la pagina: il finto rpc risponde [] alla nuova lettura contanti_da_recuperare (una riga ciascuna, nessun controllo tolto). Suite SQL intera (run.sh, 241 migrazioni) verde.",
+      "nota": "Nessuna 917: la 916 è nuova in questo ramo e mai applicata, corretta lì (si riapplica due volte senza errori). Rimessa SQL con la prova dei cancelli (nessun nome nuovo): uscita 0; rimessa della pagina con la prova montata: uscita 0. La prova SQL delle quote da recuperare nomina la funzione nuova (darebbe 3 da sola): gira verde nella suite. Quattro prove esistenti che importano la pagina: il finto rpc risponde [] alla nuova lettura contanti_da_recuperare (una riga ciascuna, nessun controllo tolto). Suite SQL intera (run.sh, 241 migrazioni) verde. Giro corto chiesto dalla regia: contanti_da_recuperare parte solo con la traccia di bonifico a mano (dipende dal commit ce8f8e36e8ab76cb9155c3c30836c3038dbb29ae), e un esito strano o un'eccezione mostra l'avviso «Non riesco a leggere…», mai un crash; le due prove comuni sono di nuovo identiche alla base. La 916 non è cambiata.",
       "verificato_da": "primo giro: revisore indipendente (modello grande) → rompe_altro (rimborso dopo PAID_MANUALLY, causa in lib/stripe/payout.ts) più 2 minori nella 916; correzione nel commit 7ff546125e4c9a2a1f4605c21f30ad71575f2006 (esito portato a parziale, serve_file_altrui per payout.ts); revisore della correzione: contanti_da_recuperare solo admin (42501 a negozio e anon), secondo clic diverso → BONIFICO_GIA_SEGNATO, ritiri con reso/reclamo/PARTIALLY_REFUNDED rifiutati; resta che una quota da recuperare non si chiude mai (nessun segno «recuperato», 916:391-407, pagina :687-690), già in cosa_resta (2)."
     },
     {
@@ -202,9 +200,9 @@
     "Una quota del negozio rimborsata al cliente dopo il bonifico a mano (contanti già PAID_MANUALLY) si toglie dal bonifico del lunedì dopo, o si chiede indietro al negozio? Oggi /admin/payouts la mostra come «Da recuperare dal negozio» ma non la toglie da sola."
   ],
   "conto": {
-    "agenti": 6,
-    "nota": "6 subagenti aperti: 1 lotto che ripara, 3 smentite del lotto, 1 giro di correzione, 1 smentita della correzione. costo_usd 23,80 da get_session (senza id) prima della consegna; lotti 2 e 3 non lavorati per il tetto di spesa.",
-    "subagenti": 6
+    "agenti": 7,
+    "nota": "7 subagenti: 1 lotto che ripara, 3 smentite, 1 giro di correzione, 1 smentita della correzione, 1 giro corto chiesto dalla regia (prove comuni rimesse alla base). costo_usd 28,37 da get_session (senza id) prima della consegna: oltre i 25 $ per il giro di correzione dei difetti nati dal lotto 1 (margine di 5 $) e per il giro corto chiesto dalla regia (limite suo 6 $).",
+    "subagenti": 7
   },
-  "costo_usd": 23.8
+  "costo_usd": 28.37
 }
