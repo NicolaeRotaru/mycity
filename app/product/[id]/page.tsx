@@ -396,6 +396,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       return Number(data) || 0;
     },
     staleTime: 60_000,
+    // R18-007 — La scheda lasciata aperta oltre la fine della promo la rilegge ogni minuto, invece di
+    // tenere lo sconto letto all'apertura (cassa e carrello restano il presidio).
+    refetchInterval: 60_000,
   });
 
   useBottomSheetA11y(lightbox, lightboxRef, zoomTriggerRef, () => setLightbox(false));
