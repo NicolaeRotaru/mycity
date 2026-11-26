@@ -22,8 +22,6 @@ vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     from: (t: string) => (t === 'orders' ? catena(() => stato.ordini, stato.ordini.length) : t === 'returns' ? catena(() => stato.resi) : catena(() => [])),
     rpc: vi.fn(async (_n: string, args: unknown) => {
-      // R22-002 — la pagina legge anche i bonifici fatti a mano, sommati per mese: qui non ce ne sono.
-      if (_n === 'bonifici_manuali_per_mese') return { data: [], error: null };
       // R22-003 — e i contanti da recuperare dai negozi: qui non ce ne sono.
       if (_n === 'contanti_da_recuperare') return { data: [], error: null };
       stato.chiamate.push(args);

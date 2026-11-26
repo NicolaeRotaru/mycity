@@ -415,27 +415,43 @@ export default function AdminPayoutsPage() {
     },
   });
   const { data: letti = [], refetch } = query;
-  // R22-002 — I bonifici fatti a mano, sommati per negozio e mese: l'importo partito davvero (al netto
-  // della commissione trattenuta) e il resto in fattura. Se non si leggono, «Già pagato» è un minimo.
+  // R22-002 — Le letture dei bonifici a mano partono solo se fra gli ordini letti (aperti e chiusi) ce n'è
+  // una traccia: un contante segnato PAID_MANUALLY, o un contante / ritiro al banco con payout_at e senza
+  // bonifico Stripe. Senza traccia non c'è niente da sommare e nessuna chiamata parte. Limite: un bonifico a
+  // mano i cui ordini sono tutti fuori dalla finestra dei chiusi (oltre i mille più recenti) non si somma.
+  const servonoManuali = useMemo(
+    () =>
+      [...letti, ...((letti as LettiPayout).chiusi ?? [])].some(
+        (o) =>
+          o.payout_status === 'PAID_MANUALLY' ||
+          (!!o.payout_at && o.payout_status !== 'TRANSFERRED' && !o.stripe_transfer_id && (o.payment_method === 'cod' || o.payout_status === 'CASH_IN_STORE')),
+      ),
+    [letti],
+  );
+  // I bonifici fatti a mano, sommati per negozio e mese: l'importo partito davvero (al netto della
+  // commissione trattenuta) e il resto in fattura. Se non si leggono (errore, eccezione, esito che non è
+  // un elenco), «Già pagato» è un minimo: la pagina non cade.
   const manuali = useQuery({
     queryKey: ['admin', 'payouts', 'bonifici-manuali'],
+    enabled: servonoManuali,
     refetchInterval: 60_000,
     queryFn: async (): Promise<BonificiDelMese[]> => {
       const { data, error } = await supabase.rpc('bonifici_manuali_per_mese');
       if (error) throw error;
-      return Array.isArray(data) ? (data as BonificiDelMese[]) : [];
+      if (!Array.isArray(data)) throw new Error('bonifici a mano: esito non previsto');
+      return data as BonificiDelMese[];
     },
   });
-  const manualiLetti = manuali.isSuccess && Array.isArray(manuali.data);
+  const manualiLetti = !servonoManuali || (manuali.isSuccess && Array.isArray(manuali.data));
   const righeManuali = useMemo(
     () =>
-      (Array.isArray(manuali.data) ? (manuali.data as Partial<BonificiDelMese>[]) : []).map((r) => ({
-        seller_id: String(r.seller_id ?? ''),
-        mese: String(r.mese ?? ''),
-        importo_cents: centesimi(r.importo_cents),
-        in_fattura_cents: centesimi(r.in_fattura_cents),
+      (servonoManuali && Array.isArray(manuali.data) ? (manuali.data as Partial<BonificiDelMese>[]) : []).map((r) => ({
+        seller_id: String(r?.seller_id ?? ''),
+        mese: String(r?.mese ?? ''),
+        importo_cents: centesimi(r?.importo_cents),
+        in_fattura_cents: centesimi(r?.in_fattura_cents),
       })),
-    [manuali.data],
+    [servonoManuali, manuali.data],
   );
   // R22-003 — Contanti già versati a mano e poi rimborsati al cliente: il bonifico è partito, la quota
   // del negozio non si toglie più da un bonifico futuro. Va ripresa dal negozio: la pagina la mostra.
@@ -456,7 +472,8 @@ export default function AdminPayoutsPage() {
   const righeRecuperi = useMemo(() => recuperi.data ?? [], [recuperi.data]);
   const rileggi = () => {
     void refetch();
-    void manuali.refetch();
+    // refetch() parte anche a lettura spenta: senza traccia di bonifici a mano non si chiama.
+    if (servonoManuali) void manuali.refetch();
     void recuperi.refetch();
   };
 

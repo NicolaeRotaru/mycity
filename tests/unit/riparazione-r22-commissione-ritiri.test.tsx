@@ -21,6 +21,8 @@ const stato = vi.hoisted(() => ({
   ordini: [] as Record<string, unknown>[],
   manuali: [] as Record<string, unknown>[],
   chiamate: [] as Record<string, unknown>[],
+  letture: [] as string[],
+  lancia: false,
 }));
 
 function spezza(s: string): string[] {
@@ -96,7 +98,11 @@ vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     from: (t: string) => tabella(t),
     rpc: vi.fn(async (n: string, args: Record<string, unknown>) => {
-      if (n === 'bonifici_manuali_per_mese') return { data: stato.manuali, error: null };
+      stato.letture.push(n);
+      if (n === 'bonifici_manuali_per_mese') {
+        if (stato.lancia) throw new Error('rete giù');
+        return { data: stato.manuali, error: null };
+      }
       if (n === 'contanti_da_recuperare') return { data: [], error: null };
       stato.chiamate.push({ n, ...args });
       return { data: (args.p_order_ids as string[]).length, error: null };
@@ -112,6 +118,8 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-11-23T08:00:00Z'));
   stato.chiamate = [];
   stato.manuali = [];
+  stato.letture = [];
+  stato.lancia = false;
 });
 afterEach(() => {
   chiudi?.();
@@ -299,5 +307,35 @@ describe('R22-002 (giro di correzione) — credito MyCity sui ritiri, compensazi
     vi.stubGlobal('prompt', vi.fn(() => 'CRO-0099887766'));
     await premi(tastoIn(blocco)!);
     expect(stato.chiamate[0]).toMatchObject({ p_order_ids: ['c1'], p_importo_cents: 1800 });
+  });
+});
+
+describe('R22-002 (giro corto) — la lettura dei bonifici a mano parte solo se serve e non fa cadere la pagina', () => {
+  it('senza traccia di bonifici a mano la lettura per mese non parte: al server arriva solo il bonifico', async () => {
+    stato.ordini = [contante('c1', 1350, '2026-11-18')];
+    const host = await apri();
+    const blocco = bloccoDi(host, 'Pane Quotidiano');
+    expect(riquadri(host)[2], 'niente da leggere: «Già pagato» non è un minimo').not.toMatch(/almeno/);
+    vi.stubGlobal('prompt', vi.fn(() => 'CRO-0011223344'));
+    await premi(tastoIn(blocco)!);
+    expect(stato.letture, 'la pagina chiama la lettura per mese senza un bonifico a mano').not.toContain('bonifici_manuali_per_mese');
+    expect(stato.chiamate[0]).toMatchObject({ n: 'segna_bonifico_manuale', p_order_ids: ['c1'] });
+  });
+
+  it('con un contante versato a mano la lettura parte; esito strano o eccezione: «Già pagato» è un minimo e la pagina regge', async () => {
+    const versato = () => [contante('c1', 1350, '2026-11-18', { payout_status: 'PAID_MANUALLY', payout_at: '2026-11-23T08:00:00Z' })];
+    stato.ordini = versato();
+    stato.manuali = { importo_cents: 1350 } as unknown as Record<string, unknown>[];
+    let host = await apri();
+    expect(stato.letture).toContain('bonifici_manuali_per_mese');
+    expect(riquadri(host)[2], 'un esito che non è un elenco vale come lettura caduta').toMatch(/^almeno /);
+    chiudi?.();
+    chiudi = null;
+
+    stato.ordini = versato();
+    stato.lancia = true;
+    host = await apri();
+    expect(host.textContent, 'un\'eccezione nella lettura fa cadere la pagina').toMatch(/Pane Quotidiano/);
+    expect(riquadri(host)[2]).toMatch(/^almeno /);
   });
 });
