@@ -560,16 +560,36 @@ export async function anonimizzaTestoLibero(admin: Admin, userId: string): Promi
 /**
  * Toglie l'iscrizione alla newsletter, che vive per indirizzo email e non per
  * profilo. L'email va letta PRIMA di cancellare l'utente: dopo non esiste più.
+ *
+ * 26/11/2026 (R24-015) — SE L'EMAIL NON SI LEGGE, LA NEWSLETTER NON È RIPULITA.
+ * L'errore della lettura si buttava via: con la lettura caduta l'email valeva
+ * null, si usciva come per un utente senza email, senza una riga nel registro,
+ * e poi l'account si cancellava lasciando l'indirizzo iscritto per sempre (dopo
+ * la cancellazione non c'è più niente che lo ritrovi). Adesso ogni pulizia non
+ * riuscita torna a chi chiama come una riga che sopravvive: la cancellazione si
+ * ferma prima del passo irreversibile (②bis), la notte è rossa e si riprova.
  */
-export async function togliDallaNewsletter(admin: Admin, userId: string): Promise<void> {
+export async function togliDallaNewsletter(admin: Admin, userId: string): Promise<PuliziaNonRiuscita | null> {
+  const nonRiuscita = (errore: string): PuliziaNonRiuscita => ({
+    tabella: 'newsletter_subscribers', colonna: 'email', sopravvive: true, errore,
+  });
   try {
-    const { data: utenteAuth } = await admin.auth.admin.getUserById(userId);
+    const { data: utenteAuth, error: erroreLettura } = await admin.auth.admin.getUserById(userId);
+    if (erroreLettura) {
+      logger.warn('[cancellazione] lettura email per la newsletter fallita', { userId, err: erroreLettura.message });
+      return nonRiuscita(`email non letta (${erroreLettura.message})`);
+    }
     const emailUtente = utenteAuth?.user?.email ?? null;
-    if (!emailUtente) return;
+    if (!emailUtente) return null;
     const { error } = await admin.from('newsletter_subscribers').delete().ilike('email', emailUtente);
-    if (error) logger.warn('[cancellazione] newsletter non ripulita', { userId, err: error.message });
+    if (error) {
+      logger.warn('[cancellazione] newsletter non ripulita', { userId, err: error.message });
+      return nonRiuscita(error.message);
+    }
+    return null;
   } catch (e) {
     logger.warn('[cancellazione] lettura email per la newsletter fallita', { userId, e });
+    return nonRiuscita(`email non letta (${e instanceof Error ? e.message : 'errore'})`);
   }
 }
 
@@ -989,7 +1009,9 @@ export async function cancellaAccount(
   if ((fermo = fuoriTempo())) return fermo;
   const puliziaFallita = await anonimizzaTestoLibero(admin, userId);
   if ((fermo = fuoriTempo())) return fermo;
-  await togliDallaNewsletter(admin, userId);
+  // R24-015 — Una newsletter non ripulita ferma la cancellazione al ②bis, come le righe che sopravvivono.
+  const newsletter = await togliDallaNewsletter(admin, userId);
+  if (newsletter) puliziaFallita.push(newsletter);
 
   if ((fermo = fuoriTempo())) return fermo;
   const file = await cancellaFilePersonali(admin, userId);
