@@ -73,9 +73,21 @@ function oscuraTesto(testo: string): string {
   return t;
 }
 
+/**
+ * R15-012 — Oltre il limite di profondità non esce mai il valore com'è: esce questo segnaposto.
+ * Prima redact restituiva l'oggetto originale, e chi lo scriveva dopo (la riga di log, l'extra di
+ * Sentry) lo scriveva in chiaro: un contesto che tornava su se stesso rimetteva l'email della
+ * radice nella riga. Anche una chiave che non si riesce a leggere (un getter che lancia) diventa un
+ * segnaposto, invece di far lanciare il logger.
+ */
+const TROPPO_PROFONDO = '[troppo profondo]';
+const NON_LEGGIBILE = '[non leggibile]';
+
 function redact(value: unknown, depth = 0): unknown {
-  if (depth > 4 || value == null) return value;
+  if (value == null) return value;
   if (typeof value === 'string') return oscuraTesto(value);
+  if (typeof value !== 'object') return value;
+  if (depth > 4) return TROPPO_PROFONDO;
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
   // #232 — Un Error va trattato per quello che è, PRIMA del ramo «oggetto».
   // Un Error non ha proprietà enumerabili: Object.entries() su di lui torna
@@ -92,8 +104,19 @@ function redact(value: unknown, depth = 0): unknown {
   }
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = PII_KEYS.test(k) ? '[redacted]' : redact(v, depth + 1);
+    for (const k of Object.keys(value)) {
+      if (PII_KEYS.test(k)) {
+        out[k] = '[redacted]';
+        continue;
+      }
+      let v: unknown;
+      try {
+        v = (value as Record<string, unknown>)[k];
+      } catch {
+        out[k] = NON_LEGGIBILE;
+        continue;
+      }
+      out[k] = redact(v, depth + 1);
     }
     return out;
   }
@@ -158,6 +181,15 @@ function toCtx(ctx: unknown): Record<string, unknown> | undefined {
   else if (typeof ctx === 'object') obj = ctx as Record<string, unknown>;
   else obj = { value: ctx };
   return redact(obj) as Record<string, unknown>;
+}
+
+/** R15-012 — Il contesto oscurato, senza mai lanciare: se non si riesce a leggerlo resta un segnaposto. */
+function ctxSicuro(ctx: unknown): Record<string, unknown> | undefined {
+  try {
+    return toCtx(ctx);
+  } catch {
+    return { contesto: NON_LEGGIBILE };
+  }
 }
 
 /**
@@ -332,14 +364,17 @@ function contaErroreDelSito(adesso: number = Date.now()): void {
 
 // Emette una riga di log strutturata (JSON) con contesto redatto (🟡-10).
 function line(level: string, msg: string, ctx?: LogContext): string {
-  const riga = { level, msg: oscuraTesto(msg), ts: new Date().toISOString(), ...(toCtx(ctx) ?? {}) };
-  return scriviRiga(riga, level, riga.msg, riga.ts);
+  const testo = oscuraTesto(String(msg));
+  const ts = new Date().toISOString();
+  return scriviRiga({ level, msg: testo, ts, ...(ctxSicuro(ctx) ?? {}) }, level, testo, ts);
 }
 
 /**
  * R15-012 — La riga di log non lancia mai. Un contesto che contiene se stesso (o un valore che
  * JSON.stringify non sa scrivere, come un BigInt) faceva salire un TypeError a chi chiamava, e la
- * riga si perdeva. Il riferimento circolare diventa `[circolare]`; se JSON.stringify lancia comunque,
+ * riga si perdeva. Il contesto arriva qui già oscurato e finito (redact non restituisce mai
+ * l'originale: oltre il limite c'è `[troppo profondo]`, e una chiave illeggibile è `[non leggibile]`,
+ * `ctxSicuro`); se un riferimento si ripete resta `[circolare]`, e se JSON.stringify lancia comunque
  * resta una riga minima con livello, messaggio e ora.
  */
 function scriviRiga(riga: Record<string, unknown>, level: string, msg: string, ts: string): string {
@@ -394,7 +429,7 @@ export const logger = {
   warn: (msg: string, ctx?: LogContext) => {
     // Sempre: un avviso in produzione e' esattamente quello che si va a cercare.
     console.warn(line('warn', msg, ctx));
-    if (!eServer) void captureClientWarning(oscuraTesto(msg), toCtx(ctx));
+    if (!eServer) void captureClientWarning(oscuraTesto(String(msg)), ctxSicuro(ctx));
   },
 
   error: (err: unknown, ctx?: LogContext) => {
@@ -419,7 +454,7 @@ export const logger = {
     if (eServer || process.env.NODE_ENV !== 'production') {
       console.error(line('error', errore instanceof Error ? errore.message : String(errore), contesto));
     }
-    const c = toCtx(contesto);
+    const c = ctxSicuro(contesto);
     if (typeof window === 'undefined') {
       // Server (API/cron/webhook): cattura diretta sul SDK server già init'd.
       void captureServerError(errore, c);
