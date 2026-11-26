@@ -1,13 +1,13 @@
 {
   "sessione": "S01",
-  "aggiornato": "2026-11-26 16:45",
+  "aggiornato": "2026-11-26 17:50",
   "finita": true,
-  "testa": "391cba45514ef948bab4ffbd592062b83ee1888c",
+  "testa": "94e1515d",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "391cba45514ef948bab4ffbd592062b83ee1888c",
-    "nota": "typecheck ok, lint 0 errori (122 avvisi già presenti), vitest 2144/2144 file. Suite SQL intera (tests/sql/harness/run.sh) verde sul database ricostruito dalle 239 migrazioni. valida-referto non lanciato: per questa campagna riservata non c è una cartella in ad-mycity da passare a --cartella."
+    "testa": "94e1515d",
+    "nota": "typecheck ok, lint 0 errori (122 avvisi già presenti), vitest 2144/2144 file (13199 test). Database ricostruito da 243 migrazioni (0 fallite), suite SQL intera (tests/sql/harness/run.sh, 102 file) verde. Prova rimessa per 994, 995, 996, 997 con ricostruzione completa: rossa senza, verde con."
   },
   "voci": [
     {
@@ -31,7 +31,30 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Controllo più stretto su alcune colonne dei prodotti, con prova SQL.",
-      "verificato_da": "subagente generico (modello grande) con mandato di smentire: prova rilanciata con e senza la migrazione, varianti, scritture legittime del server, suite SQL intera; la sua riserva è stata chiusa nello stesso commit"
+      "verificato_da": "subagente generico (modello grande) con mandato di smentire: prova rilanciata con e senza la migrazione, varianti, scritture legittime del server, suite SQL intera; la sua riserva è stata chiusa nello stesso commit",
+      "secondo_giro": {
+        "esito": "riparato",
+        "commit": [
+          "9ef88e2",
+          "62e9abf"
+        ],
+        "file_toccati": [
+          "migrations/996_prodotti_data_sincronizzazione_vuota.sql",
+          "migrations/990_prodotti_campi_di_sincronizzazione.sql (solo commento)"
+        ],
+        "prova_file": [
+          "tests/sql/rls/riparazione-s01-01.test.sql"
+        ],
+        "controlli": 12,
+        "rimessa": {
+          "esito": "regge",
+          "senza": "rosso (12)",
+          "con": "verde",
+          "comando": "scratchpad/rimessa/rimessa.sh <migrazione> <prova>: copia di migrazioni e prova, database s01_rimessa ricostruito senza la migrazione (prova ROSSA) e poi con (prova VERDE). Lo strumento prova-rimessa.mjs di ad-mycity non c era in questo contenitore."
+        },
+        "cosa_ho_fatto": "Controllo più stretto sull inserimento di un prodotto, con un controllo SQL in più. Corretta la nota sul rinnovo automatico: non vale finché è spenta una funzione al lancio (dettagli alla regista). La chiusura completa è una scelta di prodotto: domanda alla regista.",
+        "verificato_da": "subagente generico (modello grande) con mandato di smentire: nessuna smentita; la sua piccola lacuna sulla prova è chiusa in 62e9abf"
+      }
     },
     {
       "id": "S01-03",
@@ -54,7 +77,30 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Controllo più stretto su alcuni campi del profilo del fattorino, con prova SQL; le prove esistenti restano verdi.",
-      "verificato_da": "subagente generico (modello grande) con mandato di smentire, sulla prima versione: nessuna smentita, riserve sugli effetti accanto. Quelle riserve e le precisazioni della regista hanno portato alla versione finale, provata con la prova SQL (12 controlli), con la suite SQL intera e con la prova rimessa; la versione finale non è stata rivista da un secondo subagente"
+      "verificato_da": "subagente generico (modello grande) con mandato di smentire, sulla prima versione: nessuna smentita, riserve sugli effetti accanto. Quelle riserve e le precisazioni della regista hanno portato alla versione finale, provata con la prova SQL (12 controlli), con la suite SQL intera e con la prova rimessa; la versione finale non è stata rivista da un secondo subagente",
+      "secondo_giro": {
+        "esito": "riparato",
+        "commit": [
+          "a9e036e",
+          "901aa46"
+        ],
+        "file_toccati": [
+          "migrations/994_fattorino_cambio_mezzo_rinnovo.sql",
+          "migrations/991_fattorino_cambio_mezzo.sql (solo commento)"
+        ],
+        "prova_file": [
+          "tests/sql/rls/riparazione-s01-03.test.sql"
+        ],
+        "controlli": 17,
+        "rimessa": {
+          "esito": "regge",
+          "senza": "rosso (14, 15, 16)",
+          "con": "verde",
+          "comando": "scratchpad/rimessa/rimessa.sh <migrazione> <prova>: copia di migrazioni e prova, database s01_rimessa ricostruito senza la migrazione (prova ROSSA) e poi con (prova VERDE). Lo strumento prova-rimessa.mjs di ad-mycity non c era in questo contenitore."
+        },
+        "cosa_ho_fatto": "Controllo più stretto sul profilo del fattorino che non blocca più il rinnovo né le consegne già sue, con prova SQL. Il controllo ⑬ del primo giro è tornato com era; aggiunti ⑭-⑱. Una scelta di prodotto scritta come domanda alla regista.",
+        "verificato_da": "due subagenti generici (modello grande) con mandato di smentire: il primo ha trovato una regressione nella prima versione, chiusa in 901aa46; il secondo, sulla versione finale, non ha trovato smentite. Restano casi già presenti prima, elencati alla regista"
+      }
     },
     {
       "id": "S01-02",
@@ -77,7 +123,11 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Controllo più stretto in un aiutante dei percorsi interni, con prova unitaria.",
-      "verificato_da": "subagente generico (modello grande) con mandato di smentire: ricerca automatica su centinaia di migliaia di input contro i consumatori reali, test dei consumatori; la sua riserva (troppo severo fuori dal percorso) è stata chiusa nello stesso commit"
+      "verificato_da": "subagente generico (modello grande) con mandato di smentire: ricerca automatica su centinaia di migliaia di input contro i consumatori reali, test dei consumatori; la sua riserva (troppo severo fuori dal percorso) è stata chiusa nello stesso commit",
+      "secondo_giro": {
+        "esito": "regge",
+        "nota": "il collaudo la dà per buona: non toccata"
+      }
     },
     {
       "id": "S01-04",
@@ -100,7 +150,30 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Valutate le viste dello schema public una per una; una correzione sui dati del profilo, senza toccare le viste, con prova SQL. Dettagli alla regista.",
-      "verificato_da": "subagente generico (modello grande) con mandato di smentire la valutazione delle viste: valutazione confermata. La correzione nasce da una sua riserva ed è provata con la prova SQL e con la prova rimessa; non è stata rivista da un secondo subagente"
+      "verificato_da": "subagente generico (modello grande) con mandato di smentire la valutazione delle viste: valutazione confermata. La correzione nasce da una sua riserva ed è provata con la prova SQL e con la prova rimessa; non è stata rivista da un secondo subagente",
+      "secondo_giro": {
+        "esito": "riparato",
+        "commit": [
+          "46cbaac",
+          "94e1515"
+        ],
+        "file_toccati": [
+          "migrations/997_profili_nome_spazi_unicode.sql",
+          "migrations/992_profili_nome_spazi.sql (solo commento)"
+        ],
+        "prova_file": [
+          "tests/sql/rls/riparazione-s01-04.test.sql"
+        ],
+        "controlli": 11,
+        "rimessa": {
+          "esito": "regge",
+          "senza": "rosso (7, 8, 10, 11)",
+          "con": "verde",
+          "comando": "scratchpad/rimessa/rimessa.sh <migrazione> <prova>: copia di migrazioni e prova, database s01_rimessa ricostruito senza la migrazione (prova ROSSA) e poi con (prova VERDE). Lo strumento prova-rimessa.mjs di ad-mycity non c era in questo contenitore."
+        },
+        "cosa_ho_fatto": "Normalizzazione del nome allargata, nome vuoto salvato NULL, con prova SQL anche carattere per carattere. L aggiornamento delle righe vecchie resta: nella migrazione le due letture da fare prima del rilascio.",
+        "verificato_da": "subagente generico (modello grande) con mandato di smentire: le sue riserve (pochi caratteri rari, prova a campione, selettori di variante) sono chiuse in 94e1515; la versione finale non è stata rivista da un secondo subagente"
+      }
     },
     {
       "id": "S01-05",
@@ -122,8 +195,31 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 391cba45^ --file migrations/993_risposta_avvisa_chi_ha_chiesto.sql --prove tests/sql/rls/riparazione-s01-05.test.sql --sql s01_rimessa --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Una migrazione sola con due controlli più stretti sulla stessa tabella; va applicata dopo la 900 di un altro ramo. Prova SQL.",
-      "verificato_da": "senza subagente: cure indicate dalla regista; qui prova SQL con e senza la migrazione (6 controlli), prova rimessa, suite SQL intera e varianti provate a mano"
+      "cosa_ho_fatto": "Una migrazione sola con due controlli più stretti sulla stessa tabella. Prova SQL.",
+      "verificato_da": "senza subagente: cure indicate dalla regista; qui prova SQL con e senza la migrazione (6 controlli), prova rimessa, suite SQL intera e varianti provate a mano",
+      "secondo_giro": {
+        "esito": "riparato",
+        "commit": [
+          "8678df8",
+          "a872bed"
+        ],
+        "file_toccati": [
+          "migrations/995_domanda_data_della_risposta.sql",
+          "migrations/993_risposta_avvisa_chi_ha_chiesto.sql (solo commento)"
+        ],
+        "prova_file": [
+          "tests/sql/rls/riparazione-s01-05.test.sql"
+        ],
+        "controlli": 10,
+        "rimessa": {
+          "esito": "regge",
+          "senza": "rosso (7, 8, 9, 10)",
+          "con": "verde",
+          "comando": "scratchpad/rimessa/rimessa.sh <migrazione> <prova>: copia di migrazioni e prova, database s01_rimessa ricostruito senza la migrazione (prova ROSSA) e poi con (prova VERDE). Lo strumento prova-rimessa.mjs di ad-mycity non c era in questo contenitore."
+        },
+        "cosa_ho_fatto": "Controllo più stretto sulla risposta a una domanda, con prova SQL. L intestazione della 993 non dipende più da un numero di un altro ramo. Resta una scelta di prodotto (domanda alla regista).",
+        "verificato_da": "subagente generico (modello grande) con mandato di smentire: il controllo regge; le due lacune della prova e un effetto latente sono chiusi in a872bed, con le versioni sbagliate apposta che ora fanno diventare rossa la prova"
+      }
     }
   ],
   "nuovi_difetti_visti": [
@@ -154,15 +250,38 @@
       "severita": "minore",
       "file": "app/admin/events/page.tsx:25",
       "descrizione": "Lo scrive solo lo staff; conviene usare lo stesso controllo dei percorsi interni."
+    },
+    {
+      "titolo": "Casi già presenti prima, vicino a S01-03: i dettagli restano fuori dal deposito pubblico",
+      "dimensione": "sicurezza",
+      "severita": "minore",
+      "file": "(nel messaggio alla regista)",
+      "riservato": true
+    },
+    {
+      "titolo": "Casi già presenti prima, vicino a S01-05: i dettagli restano fuori dal deposito pubblico",
+      "dimensione": "sicurezza",
+      "severita": "minore",
+      "file": "(nel messaggio alla regista)",
+      "riservato": true
+    },
+    {
+      "titolo": "tests/sql/harness/run.sh non mostra le righe di dettaglio dei controlli",
+      "dimensione": "prove",
+      "severita": "minore",
+      "file": "tests/sql/harness/run.sh:22",
+      "descrizione": "Cerca le righe che cominciano con INFO:, ma psql -f le stampa con davanti file e riga: il verde dipende solo dal codice d uscita, che resta giusto."
     }
   ],
   "domande_per_nicola": [
-    "S01-03: va bene la regola scelta per questa voce, o preferisci l altra strada? (dettagli nel messaggio alla regista)",
-    "Dopo l applicazione delle migrazioni 990-993: un controllo sul database vero (dettagli nel messaggio alla regista).",
-    "S01-05: la migrazione 993 va applicata DOPO la 900 di un altro ramo, che ridefinisce la stessa funzione."
+    "S01-03: per il rinnovo dei documenti del fattorino ho scelto la strada che non rompe le consegne; c è un alternativa (dettagli nel messaggio alla regista).",
+    "S01-01: chiudere del tutto questa voce chiede una scelta di prodotto (dettagli nel messaggio alla regista).",
+    "S01-05: chiudere del tutto questa voce chiede una scelta su come la scheda mostra le domande (dettagli nel messaggio alla regista).",
+    "S01-04: prima del rilascio, le due letture scritte nella migrazione 997.",
+    "Dopo l applicazione delle migrazioni 990-997: un controllo sul database vero (dettagli nel messaggio alla regista)."
   ],
   "conto": {
-    "agenti": 5,
-    "nota": "5 subagenti generici sul modello grande, solo per smentire (nessuno per riparare)"
+    "agenti": 10,
+    "nota": "primo giro: 5 subagenti generici sul modello grande; secondo giro: 5 subagenti generici sul modello grande (uno per voce più un secondo su S01-03), solo per smentire"
   }
 }
