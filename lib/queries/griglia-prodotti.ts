@@ -87,6 +87,69 @@ export interface DomandaGriglia {
 const COLONNE = 'id, name, price, compare_at_price, images, stock, has_variants, created_at, seller_id, category_id';
 
 /**
+ * 26/11/2026 (R21-003) — IL PREZZO CHE SI PAGA LO SA IL DATABASE.
+ *
+ * I filtri e l'ordine di prezzo guardavano il prezzo pieno (`price`), mentre la scheda mostra e la
+ * cassa addebita quello scontato: con «minimo 10 €» un prodotto da 12 € al -25% (9 € alla cassa)
+ * restava nell'elenco. La migrazione 911 dà a `products` la colonna calcolata `prezzo_pagato` (il
+ * pieno meno la promozione attiva, con la regola di `product_active_discounts` e l'arrotondamento di
+ * `discountedUnitCents`) e la lettura taglia su quella.
+ *
+ * IL RIPIEGO, PERCHÉ IL CODICE ARRIVA PRIMA DELLA MIGRAZIONE. Il sito va online a ogni unione, le
+ * migrazioni le applica Nicola dopo: senza la colonna PostgREST risponde 42703 e la griglia andava
+ * in errore (/regali già all'apertura). Allora prima di usarla si chiede se c'è (`cePrezzoPagato`,
+ * una riga, una volta per client), e se una lettura cade lo stesso perché manca la si rifà alla
+ * vecchia maniera, sul prezzo pieno. Con la migrazione applicata il ripiego non scatta più.
+ */
+const COLONNA_PREZZO_PAGATO = 'prezzo_pagato';
+/** Senza la colonna si richiede dopo cinque minuti: la migrazione può arrivare con la pagina aperta. */
+const RICHIEDI_SENZA_PREZZO_PAGATO_MS = 5 * 60_000;
+const notiPrezzoPagato = new WeakMap<object, { c: boolean; finoA: number }>();
+
+/** L'errore dice che la colonna calcolata non c'è (migrazione 911 non applicata)? */
+function mancaPrezzoPagato(error: unknown): boolean {
+  const e = (error ?? {}) as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown };
+  const codice = String(e.code ?? '');
+  if (codice === '42703' || codice === '42883') return true;
+  return codice.startsWith('PGRST') && `${e.message ?? ''} ${e.details ?? ''} ${e.hint ?? ''}`.includes(COLONNA_PREZZO_PAGATO);
+}
+
+function segnaSenzaPrezzoPagato(supabase: SupabaseClient): void {
+  notiPrezzoPagato.set(supabase, { c: false, finoA: Date.now() + RICHIEDI_SENZA_PREZZO_PAGATO_MS });
+}
+
+/**
+ * La colonna `prezzo_pagato` c'è? Una riga sola, e la risposta si ricorda per questo client. Una
+ * risposta che non porta la colonna (uno schema vecchio, un database finto delle prove) vale «no»;
+ * una lettura caduta per un altro motivo vale «no» solo per questa volta.
+ */
+async function cePrezzoPagato(supabase: SupabaseClient): Promise<boolean> {
+  const noto = notiPrezzoPagato.get(supabase);
+  if (noto && (noto.c || Date.now() < noto.finoA)) return noto.c;
+  try {
+    const { data, error } = await supabase.from('products').select(`id, ${COLONNA_PREZZO_PAGATO}`).limit(1);
+    if (error) {
+      if (mancaPrezzoPagato(error)) segnaSenzaPrezzoPagato(supabase);
+      return false;
+    }
+    const prima = (Array.isArray(data) ? data[0] : undefined) as Record<string, unknown> | undefined;
+    if (prima !== undefined && !(COLONNA_PREZZO_PAGATO in prima)) {
+      segnaSenzaPrezzoPagato(supabase);
+      return false;
+    }
+    notiPrezzoPagato.set(supabase, { c: true, finoA: Infinity });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** La domanda guarda il prezzo (filtro o ordine)? Solo allora serve sapere se `prezzo_pagato` c'è. */
+function guardaIlPrezzo(d: Pick<DomandaGriglia, 'minPrice'>): boolean {
+  return d.minPrice !== undefined;
+}
+
+/**
  * 17/11/2026 (R02-012) — «CARICA ALTRI» SI FERMAVA SE IL FILTRO IN FONDO SCARTAVA RIGHE.
  *
  * La pagina si chiede al database piena (la `finestra`), poi in fondo a `leggiProdottiDellaGriglia`
@@ -167,6 +230,8 @@ function applicaFiltriComuni<Q extends { in: any; eq: any; lte: any; gte: any; o
   q: Q,
   d: Pick<DomandaGriglia, 'sellerId' | 'maxPrice' | 'idsScontatiSotto' | 'minPrice' | 'onlyInStock' | 'apertiOra' | 'creatiDal'>,
   categorie: string[] | null,
+  /** La colonna `prezzo_pagato` c'è (migrazione 911): i filtri di prezzo guardano lei. */
+  pagato: boolean,
 ): Q {
   if (categorie) q = q.in('category_id', categorie);
   if (d.sellerId) q = q.eq('seller_id', d.sellerId);
@@ -177,7 +242,9 @@ function applicaFiltriComuni<Q extends { in: any; eq: any; lte: any; gte: any; o
       ? q.or(`price.lte.${d.maxPrice},id.in.(${scontati.join(',')})`)
       : q.lte('price', d.maxPrice);
   }
-  if (d.minPrice !== undefined) q = q.gte('price', d.minPrice);
+  // R21-003 — «Prezzo minimo» è il prezzo che si paga: un 12 € al -25% (9 €) con minimo 10 € non entra.
+  // Senza la migrazione 911 resta il prezzo pieno, come prima.
+  if (d.minPrice !== undefined) q = q.gte(pagato ? COLONNA_PREZZO_PAGATO : 'price', d.minPrice);
   // #91 — «Solo disponibili» lo decide il database. Attenzione: `stock` a NULL vuol dire
   // disponibilità illimitata.
   if (d.onlyInStock) q = q.or('stock.is.null,stock.gt.0');
@@ -263,6 +330,23 @@ export async function leggiProdottiDellaGriglia(
   supabase: SupabaseClient,
   d: DomandaGriglia,
 ): Promise<PaginaGriglia> {
+  if (!guardaIlPrezzo(d)) return leggiLaGriglia(supabase, d, false);
+  const pagato = await cePrezzoPagato(supabase);
+  try {
+    return await leggiLaGriglia(supabase, d, pagato);
+  } catch (errore) {
+    // R21-003 — Il ripiego: la colonna non c'è (migrazione 911 non applicata) → la lettura di prima.
+    if (!pagato || !mancaPrezzoPagato(errore)) throw errore;
+    segnaSenzaPrezzoPagato(supabase);
+    return leggiLaGriglia(supabase, d, false);
+  }
+}
+
+async function leggiLaGriglia(
+  supabase: SupabaseClient,
+  d: DomandaGriglia,
+  pagato: boolean,
+): Promise<PaginaGriglia> {
   const termine = d.search ? d.search.replace(/[%_]/g, '\\$&').slice(0, 100) : undefined;
 
   // La pertinenza la sa solo il database: la si chiede prima, e poi si vanno a prendere le righe
@@ -318,7 +402,7 @@ export async function leggiProdottiDellaGriglia(
     // una riga saltata o una riga vista due volte fra una pagina e l'altra.
     q = q.order('id', { ascending: false });
 
-    q = applicaFiltriComuni(q, d, categorieDaLeggere);
+    q = applicaFiltriComuni(q, d, categorieDaLeggere, pagato);
     // Col ramo pertinenza il filtro sul testo l'ha già fatto il database, meglio di così.
     if (termine && !perPertinenza) q = q.ilike('name', `%${termine}%`);
     // Il taglio sugli id col voto NON sta qui: lo mette `leggiFraGliIdsColVoto`, a blocchi (R02-010).
@@ -441,6 +525,8 @@ export async function contaProdottiDellaGriglia(
         ? await conLeSueSottocategorie(supabase, d.categoryId)
         : null;
   const termine = d.search ? d.search.replace(/[%_]/g, '\\$&').slice(0, 100) : undefined;
+  // R21-003 — Gli stessi filtri di prezzo della lettura, con lo stesso ripiego se `prezzo_pagato` non c'è.
+  let pagato = guardaIlPrezzo(d) && (await cePrezzoPagato(supabase));
   // R11-010 R11-011 — Il numero conta solo i prodotti dei negozi approvati, come la griglia: il
   // negozio si aggancia con `!inner` alla vista pubblica, NOMINANDO il vincolo (fra products e la
   // vista ci sono due strade: senza nome PostgREST risponde 300). Se l'aggancio non va si conta com'era (`senzaAggancio`) invece di non dare nessun numero.
@@ -448,7 +534,7 @@ export async function contaProdottiDellaGriglia(
   const conta = (blocco?: string[]) => {
     const colonne = senzaAggancio ? 'id' : 'id, negozio:seller_public_profiles!products_seller_id_fkey!inner(id)';
     let q = supabase.from('products').select(colonne, { count: 'exact', head: true }).eq('status', 'available');
-    q = applicaFiltriComuni(q, d, categorie);
+    q = applicaFiltriComuni(q, d, categorie, pagato);
     if (termine) q = q.ilike('name', `%${termine}%`);
     if (blocco) q = q.in('id', blocco);
     return q;
@@ -463,6 +549,12 @@ export async function contaProdottiDellaGriglia(
     // su QUALSIASI errore della lettura agganciata, mai sul codice.
     if (error && !senzaAggancio) {
       senzaAggancio = true;
+      ({ count, error } = await conta(blocco));
+    }
+    // R21-003 — Ancora in errore guardando `prezzo_pagato`: la colonna può non esserci (la HEAD non dà
+    // il codice per saperlo). Si conta come prima, sul prezzo pieno.
+    if (error && pagato) {
+      pagato = false;
       ({ count, error } = await conta(blocco));
     }
     if (error || count == null) return null;
