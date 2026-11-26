@@ -52,11 +52,27 @@ function segreto(): string {
  *
  * I gettoni vecchi restano validi: sono già nelle email spedite, e chi clicca
  * «smetti» su una email di ieri deve poter smettere.
+ *
+ * 26/11/2026 (R08-001) — LA CHIAVE DI CIFRATURA NON SI CALCOLA PIÙ COME UNA FIRMA.
+ *
+ * La chiave dei gettoni v2 era HMAC(segreto, 'disiscrizione:cifratura:v2'): lo stesso
+ * calcolo con cui `apriFirmato` verifica i gettoni v1, HMAC(segreto, dato). Reggeva
+ * solo perché «cifratura» non è un ambito valido. Adesso i gettoni nuovi sono `v3.…`,
+ * cifrati con una chiave ricavata con HKDF (sale e contesto propri): non coincide con
+ * nessuna firma fatta col segreto. I v2 già spediti si aprono ancora con la chiave di
+ * prima, solo loro; i v1 restano come erano.
  */
-const VERSIONE_CIFRATA = 'v2';
+const VERSIONE_CIFRATA = 'v3';
+/** Il formato cifrato dal 12/11 al 26/11/2026: si apre e basta, non se ne fanno più. */
+const VERSIONE_CIFRATA_V2 = 'v2';
 
 function chiaveDiCifratura(): Buffer {
-  // Una chiave diversa da quella della firma, dallo stesso segreto: le due cose non si mescolano.
+  // Una derivazione apposta (HKDF), separata da quella delle firme: le due cose non si mescolano.
+  return Buffer.from(crypto.hkdfSync('sha256', segreto(), 'mycity:disiscrizione', 'cifratura:v3', 32));
+}
+
+/** La chiave dei gettoni v2 già spediti: serve solo ad aprirli. */
+function chiaveDiCifraturaV2(): Buffer {
   return crypto.createHmac('sha256', segreto()).update('disiscrizione:cifratura:v2').digest();
 }
 
@@ -69,14 +85,16 @@ export function firmaDisiscrizione(email: string, ambito: AmbitoDisiscrizione): 
   return `${VERSIONE_CIFRATA}.${Buffer.concat([iv, cifrato, etichetta]).toString('base64url')}`;
 }
 
-function apriCifrato(corpo: string): string | null {
+function apriCifrato(corpo: string, chiave: () => Buffer): string | null {
   try {
+    // La chiave si calcola qui dentro: senza segreto il link vale «non valido», non un errore.
+    const k = chiave();
     const tutto = Buffer.from(corpo, 'base64url');
     if (tutto.length < 12 + 16 + 3) return null;
     const iv = tutto.subarray(0, 12);
     const etichetta = tutto.subarray(tutto.length - 16);
     const cifrato = tutto.subarray(12, tutto.length - 16);
-    const apri = crypto.createDecipheriv('aes-256-gcm', chiaveDiCifratura(), iv);
+    const apri = crypto.createDecipheriv('aes-256-gcm', k, iv);
     apri.setAuthTag(etichetta);
     return Buffer.concat([apri.update(cifrato), apri.final()]).toString('utf8');
   } catch {
@@ -111,8 +129,10 @@ export function verificaDisiscrizione(
   token: string,
 ): { email: string; ambito: AmbitoDisiscrizione } | null {
   const dato = token.startsWith(`${VERSIONE_CIFRATA}.`)
-    ? apriCifrato(token.slice(VERSIONE_CIFRATA.length + 1))
-    : apriFirmato(token);
+    ? apriCifrato(token.slice(VERSIONE_CIFRATA.length + 1), chiaveDiCifratura)
+    : token.startsWith(`${VERSIONE_CIFRATA_V2}.`)
+      ? apriCifrato(token.slice(VERSIONE_CIFRATA_V2.length + 1), chiaveDiCifraturaV2)
+      : apriFirmato(token);
   if (!dato) return null;
 
   const [email, ambito] = dato.split(':');

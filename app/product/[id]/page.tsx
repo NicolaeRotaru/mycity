@@ -77,6 +77,50 @@ const GIA_RECENSITO = 'Hai già recensito questo prodotto: resta pubblicata la r
  * precarica il prodotto sul server e lo consegna dentro l'HTML.
  */
 
+/**
+ * R08-005 — La quantita' netta scritta dal negozio («190 g», «1kg», «1,5 L», «75cl»), letta in modo
+ * tollerante. Torna la quantita' in grammi o in millilitri e la famiglia (peso o volume), oppure
+ * null se non e' un numero con un'unita' riconosciuta («6 pezzi», «boh», «0 g»).
+ * Il punto con tre cifre dopo e' quello delle migliaia, all'italiana: «1.000 g» sono mille grammi.
+ * Fuori da 1 g/ml … 50 kg/l per un pezzo o una confezione il dato e' sbagliato: nessuna riga.
+ */
+function leggiQuantitaNetta(v: unknown): { quantita: number; famiglia: 'kg' | 'l' } | null {
+  if (typeof v !== 'string') return null;
+  const m = /^\s*(\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)\s*(kg|g|gr|grammi|l|lt|litri|litro|ml|cl|dl)\.?\s*$/i.exec(v);
+  if (!m) return null;
+  const cifre = /^\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(m[1]) ? m[1].replace(/\./g, '') : m[1];
+  const n = Number(cifre.replace(',', '.'));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const u = m[2].toLowerCase();
+  const per =
+    u === 'kg' || u === 'l' || u === 'lt' || u === 'litri' || u === 'litro' ? 1000 : u === 'cl' ? 10 : u === 'dl' ? 100 : 1;
+  const quantita = n * per;
+  if (quantita < 1 || quantita > 50000) return null;
+  const famiglia = u === 'kg' || u === 'g' || u === 'gr' || u === 'grammi' ? 'kg' : 'l';
+  return { quantita, famiglia };
+}
+
+/**
+ * R08-005 — Il prezzo per unita' di misura (Codice del Consumo): € al chilo o al litro, al centesimo.
+ * Solo quando il prezzo e' a pezzo o a confezione e la quantita' netta e' leggibile; altrimenti null
+ * (nessuna riga, mai un numero inventato).
+ */
+function prezzoPerUnitaDiMisura(
+  prezzo: unknown,
+  unitaDiVendita: string | null | undefined,
+  quantitaNetta: unknown,
+): { valore: number; unita: 'kg' | 'l' } | null {
+  if (unitaDiVendita && unitaDiVendita !== 'pezzo' && unitaDiVendita !== 'confezione') return null;
+  const p = typeof prezzo === 'number' ? prezzo : Number(prezzo);
+  if (!Number.isFinite(p) || p <= 0) return null;
+  const q = leggiQuantitaNetta(quantitaNetta);
+  if (!q) return null;
+  // Il conto si fa in centesimi interi: 3,15 € per 400 g sono 7,875 → 7,88, come 1,25 € per 400 g → 3,13.
+  const centesimi = Math.round((Math.round(p * 100) * 1000) / q.quantita);
+  if (centesimi <= 0) return null;
+  return { valore: centesimi / 100, unita: q.famiglia };
+}
+
 export default function ProductPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
   const { id } = params;
@@ -548,6 +592,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const comparePct = compareValid ? Math.round((1 - prezzoPieno / compareAtNum) * 100) : 0;
   const unitRaw = (product as { unit?: string | null }).unit ?? null;
   const unitSuffix = unitRaw && unitRaw !== 'pezzo' ? (UNIT_SUFFIX[unitRaw as ProductUnit] ?? '') : '';
+  // R08-005 — Per gli alimenti, accanto al prezzo il prezzo al chilo o al litro (Codice del Consumo),
+  // calcolato dalla quantita' netta dichiarata. Senza quantita' leggibile non si scrive niente.
+  const attributiProdotto = (product.attributes ?? {}) as Record<string, unknown>;
+  const eAlimento = product.categories?.slug === 'alimentari'
+    || 'allergeni' in attributiProdotto || 'ingredienti' in attributiProdotto;
+  const prezzoUnitario = eAlimento ? prezzoPerUnitaDiMisura(price, unitRaw, attributiProdotto.peso) : null;
   const conditionRaw = (product as { condition?: string | null }).condition ?? null;
   const conditionLabel = conditionRaw ? (CONDITION_LABELS[conditionRaw as ProductCondition] ?? conditionRaw) : null;
   // Varianti: i selettori derivano dalle varianti; la disponibilità mostrata è
@@ -1018,6 +1068,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 {formatPrice(price)}
                 {unitSuffix && <span className="text-base font-semibold text-ink-400">{unitSuffix}</span>}
               </span>
+              {prezzoUnitario && (
+                <span className="text-sm text-ink-600" data-testid="prezzo-unitario">
+                  ({formatPrice(prezzoUnitario.valore)}/{prezzoUnitario.unita === 'kg' ? 'kg' : 'L'})
+                </span>
+              )}
               {scontoPromo > 0 && (
                 <span className="text-lg text-ink-400 line-through">
                   <span className="sr-only">Prezzo pieno </span>{formatPrice(prezzoPieno)}

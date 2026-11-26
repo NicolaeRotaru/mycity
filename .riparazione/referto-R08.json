@@ -1,0 +1,399 @@
+{
+  "sessione": "R08",
+  "aggiornato": "2026-11-26 15:40",
+  "finita": true,
+  "testa": "8a303ad09dfc69cfec1949902c01a04bf01e8f00",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "8a303ad09dfc69cfec1949902c01a04bf01e8f00",
+    "nota": "typecheck pulito, lint 0 errori (122 avvisi già presenti), 2149 file di prove e 13204 prove passate, uscita 0; preso con git rev-parse HEAD nello stesso comando."
+  },
+  "voci": [
+    {
+      "id": "R08-001",
+      "chiave": "api-backend|la chiave di cifratura del link di disiscrizione si ricava con lo stesso calcolo usato per firmare i link vecchi",
+      "esito": "parziale",
+      "commit": "48d9a8aef942056d72e6782508251ad57a77add9",
+      "file_toccati": [
+        "lib/email/unsubscribe.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-chiave-disiscrizione.test.ts",
+        "tests/unit/riparazione-r08-disiscrizione-senza-segreto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-chiave-disiscrizione.test.ts tests/unit/riparazione-r08-disiscrizione-senza-segreto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 48d9a8aef942056d72e6782508251ad57a77add9^ --file lib/email/unsubscribe.ts --prove tests/unit/riparazione-r08-chiave-disiscrizione.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "I gettoni nuovi sono `v3.` e si cifrano con una chiave ricavata con HKDF (sale e contesto propri), che non coincide con nessun HMAC(segreto, testo). I gettoni `v2.` già spediti si aprono solo con la chiave HMAC di prima; i v1 firmati restano come erano.",
+      "nota": "Nessuna migrazione. La prova esistente tests/unit/riparazione-r08-il-link-per-smettere-non-mostra-l-email.test.ts non è stata toccata e resta verde, ma il suo caso «gettone nuovo manomesso» ora passa un corpo v3 come `v2.`: la manomissione di un gettone nuovo la copre la prova nuova. Giro del collaudo: il calcolo della chiave era uscito dal try dell'apertura, e in produzione senza UNSUBSCRIBE_SECRET la rotta rispondeva 500 invece di «link non valido»; rimesso dentro con il commit 5be18c849c97eb925e4d72cf3a1f4050e04b3932 e una prova apposta. Se si torna indietro con la messa online, il codice di prima non apre i v3.",
+      "commit_giro_collaudo": "5be18c849c97eb925e4d72cf3a1f4050e04b3932",
+      "rimessa_giro_collaudo": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5be18c849c97eb925e4d72cf3a1f4050e04b3932^ --file lib/email/unsubscribe.ts --prove tests/unit/riparazione-r08-disiscrizione-senza-segreto.test.ts --json"
+      },
+      "cosa_resta": "I gettoni v2 già spediti (12/11-26/11) si aprono ancora, senza scadenza, con la chiave di prima HMAC(segreto, 'disiscrizione:cifratura:v2'): per loro il difetto della voce resta vero finché si accettano. Chiuderli con una data è una scelta di Nicola (un link di disiscrizione in un'email vecchia smetterebbe di funzionare).",
+      "verificato_da": "collaudatore (modello grande): utenti dei gettoni, incroci di prefisso v1/v2/v3, HKDF con segreti strani, link già spediti, prova rimessa uscita 0; riserva sul 500 senza segreto corretta nel giro. Secondo collaudatore (modello grande) sul giro: prova rimessa uscita 0; la rotta vera senza segreto in produzione risponde 307/303 verso link-non-valido per v3, v2, gettoni vuoti o finti; il v1 lancia ancora come sulla base (non è una regressione)."
+    },
+    {
+      "id": "R08-002",
+      "chiave": "api-backend|il webhook della sessione scaduta restituisce il codice di benvenuto senza chiudere la rivendicazione",
+      "esito": "riparato",
+      "commit": "9bd3fc8c5f24f9a8a449a224ff055a7949a35b2f",
+      "file_toccati": [
+        "lib/stripe/webhook/carrello-scaduto.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-benvenuto-dopo-la-sessione-scaduta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-benvenuto-dopo-la-sessione-scaduta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9bd3fc8c5f24f9a8a449a224ff055a7949a35b2f^ --file lib/stripe/webhook/carrello-scaduto.ts --prove tests/unit/riparazione-r08-benvenuto-dopo-la-sessione-scaduta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dopo un release_coupon riuscito il gestore checkout.session.expired chiude la rivendicazione coupon_redemptions indicata in delivery.rivendicazione (released_at=now, solo se ancora aperta), come rilasciaCoupon nella cassa. Se il codice non torna, la rivendicazione resta aperta.",
+      "nota": "Nessuna migrazione, Supabase finto, niente Stripe vero. Residuo fuori dalla voce e dai miei file: se la cassa arriva a claim_coupon prima che il webhook chiuda la rivendicazione (un giro col database) quella richiesta legge ancora «non disponibile», ma senza più il blocco di 2 minuti; per chiudere del tutto la pulizia in lib/ordini/riserve-abbandonate.ts:269-275 dovrebbe chiudere delivery.rivendicazione anche quando perde il passaggio a EXPIRED.",
+      "verificato_da": "collaudatore (modello grande): nome del campo delivery.rivendicazione scritto dalla cassa, stessa forma di rilasciaCoupon, errore solo registrato, nessuna strada di uso doppio (eventi ripetuti, ordine già nato, contanti, tre schede), 4 rotture del codice che fanno rossa la prova, 180 file di prove vicine verdi, prova rimessa uscita 0."
+    },
+    {
+      "id": "R08-003",
+      "chiave": "performance|ogni ricerca rilegge tutte le email degli iscritti",
+      "esito": "riparato",
+      "commit": "15a04f01665ac4243ea357726313b3c1534eec5e",
+      "file_toccati": [
+        "app/admin/users/page.tsx",
+        "migrations/940_la_ricerca_per_email_la_fa_il_database.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r08-ricerca-email-nel-database.test.sql",
+        "tests/unit/riparazione-r08-ricerca-email-nel-database.test.ts"
+      ],
+      "prova_comando": "bash tests/sql/harness/apply.sh r08_prova && psql -X -d r08_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r08-ricerca-email-nel-database.test.sql && npx vitest run tests/unit/riparazione-r08-ricerca-email-nel-database.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 15a04f01665ac4243ea357726313b3c1534eec5e^ --file migrations/940_la_ricerca_per_email_la_fa_il_database.sql --prove tests/sql/rls/riparazione-r08-ricerca-email-nel-database.test.sql --sql r08_rimessa --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 15a04f01665ac4243ea357726313b3c1534eec5e^ --file app/admin/users/page.tsx --prove tests/unit/riparazione-r08-ricerca-email-nel-database.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La migrazione 940 aggiunge la forma admin_list_user_emails(p_termine text, p_ids uuid[]) che cerca nel database fra email e telefono di auth.users (massimo 200 risultati) più i contatti degli id già trovati per nome; la ricerca della pagina la usa al posto della lettura di tutte le email, e con PGRST202 (940 non applicata) torna alla lettura di prima.",
+      "nota": "MIGRAZIONE NUOVA migrations/940_la_ricerca_per_email_la_fa_il_database.sql, non applicata (la applica Nicola). SECURITY DEFINER, search_path vuoto, is_admin() altrimenti 42501, REVOKE da PUBLIC e anon; la prova SQL controlla catalogo e rifiuto a cliente e anon. run.sh intero, migrazione-su-database-pieno, 940 applicata due volte, db:check-drift e db:types verdi sul Postgres locale. Fuori dalla voce: l'elenco all'apertura e l'esportazione CSV leggono ancora tutte le email con la forma senza argomenti. Rilievi minori del collaudo, lasciati come sono: il GRANT a service_role non serve (is_admin() è falso per lui); [1:500] taglia solo la prima dimensione di p_ids (solo un admin potrebbe passare un array a due dimensioni); LIMIT 200 nel SQL va tenuto uguale a TETTO_RISULTATI_RICERCA della pagina; con più di 200 corrispondenze restano le 200 più recenti invece delle 200 più vecchie.",
+      "verificato_da": "collaudatore (modello grande): anon, clienti (anche con p_ids altrui o metadata che dicono admin), venditore, rider e service_role ricevono 42501 su tutte e due le forme; nessuna ambiguità PostgREST fra le due forme, ripiego PGRST202 provato, migrazione applicata due volte, tipi rigenerati senza differenze, harness SQL intero e db:check-drift verdi sul Postgres locale, 29 prove della pagina e 80 delle migrazioni verdi, due prove rimesse uscita 0."
+    },
+    {
+      "id": "R08-004",
+      "chiave": "privacy-legale|l'obbligo di dichiarare allergeni e ingredienti vale solo finché la categoria principale si chiama esattamente «alimentari», e dal pannello quel nome si può cambiare",
+      "esito": "serve_file_altrui",
+      "nota": "Mezza voce era già chiusa sulla base ed12ed8ec8190e1132b690f6e034c30f0a5d55ba da migrations/363_l_obbligo_degli_allergeni_e_una_proprieta_della_categoria.sql: categories.richiede_dichiarazioni_alimentari, trigger 195 sulla colonna, slug/obbligo/spostamento/cancellazione della radice alimentari bloccati; lib/category-attributes.ts:302/:312 leggono già la colonna (npx vitest run tests/unit/riparazione-r12-allergeni-per-proprieta.test.ts → 5 passate). Il collaudo ha provato sul Postgres locale che resta aperta l'altra metà: una radice nuova «gastronomia» creata come fa il pannello, con «pane» sotto, pubblica il pane senza allergeni né ingredienti (available). Quello che manca sta tutto in file non miei; nel mio file non c'è altro da cambiare.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/admin/categories/route.ts",
+          "modifica": "POST (righe ~80-88) e PATCH (righe ~111-119): accettare e scrivere richiede_dichiarazioni_alimentari per le categorie principali; alla creazione di una radice nuova rispondere con un avviso che nasce senza campi obbligatori se il flag è falso. Righe ~92 e ~124: non tradurre ogni 23514 in «Foto non ammessa dal database…» (oggi è il messaggio anche quando il database blocca la modifica dello slug della radice alimentare)."
+        },
+        {
+          "file": "app/admin/categories/page.tsx",
+          "modifica": "per le categorie principali, una casella «richiede allergeni e ingredienti (alimenti)» collegata a richiede_dichiarazioni_alimentari, e l'avviso quando si crea una radice senza."
+        },
+        {
+          "file": "app/seller/products/new/page.tsx",
+          "modifica": "riga ~81: aggiungere richiede_dichiarazioni_alimentari al select delle categorie ('id, name, slug, parent_id, richiede_dichiarazioni_alimentari'), così getAttributesForCategory legge la colonna e non ricade sul nome."
+        },
+        {
+          "file": "app/seller/products/[id]/edit/page.tsx",
+          "modifica": "riga ~193: lo stesso select allargato con richiede_dichiarazioni_alimentari."
+        },
+        {
+          "file": "app/admin/products/new/page.tsx",
+          "modifica": "lo stesso select delle categorie allargato con richiede_dichiarazioni_alimentari."
+        },
+        {
+          "file": "app/admin/products/[id]/edit/page.tsx",
+          "modifica": "lo stesso select delle categorie allargato con richiede_dichiarazioni_alimentari."
+        },
+        {
+          "file": "app/api/ai/* (catalog-chat, catalog-apply, catalog-batch/start, copilot) e app/api/seller/products/import",
+          "modifica": "dove si legge l'albero delle categorie passato a getAttributesForCategory o statoAlCaricamentoDaFile, aggiungere richiede_dichiarazioni_alimentari al select."
+        }
+      ],
+      "verificato_da": "collaudatore (modello grande): prove r12 unit 5/5 e SQL 10/10 sulla base; scenario della radice nuova dal pannello rifatto sul Postgres locale: il pane senza dichiarazioni esce available. Da gia_riparato_prima a serve_file_altrui."
+    },
+    {
+      "id": "R08-005",
+      "chiave": "privacy-legale|sugli alimenti confezionati il peso netto è facoltativo e il prezzo al chilo non compare mai",
+      "esito": "parziale",
+      "commit": "ddf05f6fa9c11c4df07eeaa156b3addd95def5dc",
+      "file_toccati": [
+        "app/product/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-prezzo-al-chilo-scheda.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-prezzo-al-chilo-scheda.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ddf05f6fa9c11c4df07eeaa156b3addd95def5dc^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r08-prezzo-al-chilo-scheda.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La scheda di un alimento venduto a pezzo, a confezione o senza unità calcola dalla quantità netta (attributo peso, letto in modo tollerante: «250 g», «1kg», «1,5 L», «75cl», «500ml») il prezzo al chilo o al litro sul prezzo pagato davvero e lo scrive accanto al prezzo: 5,90 € per 190 g → «(31,05 €/kg)». Senza quantità valida, con unità a peso/volume o per i non alimenti non compare niente. Giro del collaudo: «1.000 g» si legge come mille grammi (punto delle migliaia all'italiana), fuori da 1 g/ml … 50 kg/l nessuna riga, conto in centesimi interi (3,15 € per 400 g → 7,88), «/L» come UNIT_SUFFIX.",
+      "cosa_resta": "Manca l'obbligo del peso netto come numero più unità per gli alimenti: va messo required e un controllo di formato sul campo 'peso' di alimentari in lib/category-attributes.ts:50 (file mio) insieme alle modifiche dei file altrui qui sotto, perché da solo rompe 11 casi di due prove comuni. I prodotti già pubblicati senza peso vanno completati dai negozi (non è codice).",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/ProductForm.tsx",
+          "modifica": "riga ~872: il controllo di pubblicazione deve chiedere che 'peso' sia una quantità valida (numero più g/kg/ml/cl/l) e saltarlo se 'peso' è un asse di varianti già valorizzato (variantAxes, riga ~415: toggleVariantAxis azzera attributes.peso)."
+        },
+        {
+          "file": "lib/products/prontoPerLaVendita.ts",
+          "modifica": "riga 66 (campiObbligatoriVuoti): il peso conta come mancante se vuoto o non è una quantità valida, con lo stesso trattamento per il peso come asse di varianti."
+        },
+        {
+          "file": "tests/unit/dalla-chat-un-alimento-non-va-in-vendita-senza-i-controlli-del-modulo.test.ts",
+          "modifica": "aggiornare le fixture (10 casi) quando il peso diventa obbligatorio per gli alimenti."
+        },
+        {
+          "file": "tests/unit/un-alimento-caricato-da-file-non-va-in-vendita-senza-allergeni-e-ingredienti.test.tsx",
+          "modifica": "riga 121: i mancanti attesi diventano ['Ingredienti', 'Peso / Quantità'] (o la fixture prende un peso valido)."
+        }
+      ],
+      "nota": "Nessuna migrazione. lib/category-attributes.ts e lib/products/schema.ts restano uguali alla base. Domanda in domande_per_nicola. Resta un caso di dati vecchi o importati con sia l'attributo peso sia varianti di peso: la riga ignora la variante scelta (le varianti non hanno prezzo proprio, e il modulo svuota peso quando diventa un asse).",
+      "commit_giro_collaudo": "8a303ad09dfc69cfec1949902c01a04bf01e8f00",
+      "rimessa_giro_collaudo": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8a303ad09dfc69cfec1949902c01a04bf01e8f00^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r08-prezzo-al-chilo-scheda.test.tsx --json"
+      },
+      "verificato_da": "collaudatore (modello grande): prova rimessa uscita 0, 46 prove della pagina verdi, scheda vera con molte quantità; ha trovato «1.000 g» letto come 1 g (prezzo al chilo mille volte troppo alto), valori assurdi senza limite e mezzi centesimi incoerenti, corretti nel giro 8a303ad09dfc69cfec1949902c01a04bf01e8f00 con i casi nella prova."
+    },
+    {
+      "id": "R08-006",
+      "chiave": "qa-flussi|se le email non arrivano, l'elenco dei più recenti le mostra vuote senza una riga che lo dica",
+      "esito": "riparato",
+      "commit": "00746362871bc61609e34ed261ca50c286a0374c",
+      "file_toccati": [
+        "app/admin/users/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-email-non-arrivate.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-email-non-arrivate.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 00746362871bc61609e34ed261ca50c286a0374c^ --file app/admin/users/page.tsx --prove tests/unit/riparazione-r08-email-non-arrivate.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Quando la RPC delle email fallisce, l'elenco segna le righe con email_non_letta e sotto i filtri compare una riga role=status «Le email degli utenti non sono arrivate…».",
+      "nota": "Nessuna migrazione. La prova esegue la queryFn vera contro un supabase finto con la RPC caduta e controlla anche il caso opposto (nessun avviso).",
+      "verificato_da": "collaudatore (modello grande): prova rimessa uscita 0, 8 prove che montano la pagina verdi; l'avviso resta coi filtri di ruolo e sparisce quando le email tornano. La sua riserva riguarda la ricerca (l'avviso sparisce e la ricerca restituisce [] quando la RPC cade): la voce parla dell'elenco aperto senza ricerca, quindi resta riparata; la ricerca è nei nuovi difetti visti."
+    },
+    {
+      "id": "R08-007",
+      "chiave": "tipografia|otto spaziature diverse per la stessa etichetta maiuscola",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/admin/disputes/page.tsx",
+          "modifica": "riga 332: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/admin/funnel/page.tsx",
+          "modifica": "righe 440, 447, 451, 469: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/admin/payouts/page.tsx",
+          "modifica": "riga 358: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/admin/today/page.tsx",
+          "modifica": "riga 184: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/category/[slug]/page.tsx",
+          "modifica": "righe 311, 330, 357: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/come-funziona/page.tsx",
+          "modifica": "riga 56: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/favorites/page.tsx",
+          "modifica": "riga 105: tracking-[0.05em] → tracking-label"
+        },
+        {
+          "file": "app/profile/achievements/page.tsx",
+          "modifica": "riga 155: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/profile/gift-cards/page.tsx",
+          "modifica": "riga 226: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/profile/loyalty/page.tsx",
+          "modifica": "righe 198, 263, 273: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/profile/referral/page.tsx",
+          "modifica": "riga 126: tracking-widest → tracking-label (la riga 129 è un codice non maiuscolo, da lasciare)"
+        },
+        {
+          "file": "app/profile/returns/page.tsx",
+          "modifica": "riga 42: tracking-[0.05em] → tracking-label"
+        },
+        {
+          "file": "app/rider/help/page.tsx",
+          "modifica": "riga 116: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/rider/history/page.tsx",
+          "modifica": "riga 149: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/rider/orders/[id]/page.tsx",
+          "modifica": "riga 528: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/rider/page.tsx",
+          "modifica": "righe 121, 575: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/rider/profile/page.tsx",
+          "modifica": "righe 254, 283: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/seller/earnings/page.tsx",
+          "modifica": "riga 397: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/seller/orders/[id]/page.tsx",
+          "modifica": "riga 565: tracking-widest → tracking-label"
+        },
+        {
+          "file": "app/seller/promotions/page.tsx",
+          "modifica": "riga 262: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/CollectionHeader.tsx",
+          "modifica": "riga 79: tracking-[0.05em] → tracking-label"
+        },
+        {
+          "file": "components/LiveActivityFeed.tsx",
+          "modifica": "righe 60, 158: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/SponsoredCarousel.tsx",
+          "modifica": "riga 112: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/StoreProductExplorer.tsx",
+          "modifica": "righe 127, 145, 163, 190: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/account/AccountSidebar.tsx",
+          "modifica": "riga 143: tracking-[0.08em] → tracking-label"
+        },
+        {
+          "file": "components/admin/AdminUI.tsx",
+          "modifica": "riga 27: tracking-[0.06em] → tracking-label; riga 40: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "components/home-sections/HomeSectionRenderer.tsx",
+          "modifica": "righe 230, 322, 354: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/home-sections/ReorderRail.tsx",
+          "modifica": "riga 179: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/home/PromoDeals.tsx",
+          "modifica": "riga 43: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/home/TrendingNow.tsx",
+          "modifica": "riga 64: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/products/VendutoDa.tsx",
+          "modifica": "riga 59: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "components/seller/SellerHealthScore.tsx",
+          "modifica": "riga 172: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/seller/SellerPageTitle.tsx",
+          "modifica": "riga 37: tracking-[0.06em] → tracking-label"
+        },
+        {
+          "file": "components/store-sections/HoursSection.tsx",
+          "modifica": "riga 58: tracking-wider → tracking-label"
+        }
+      ],
+      "nota": "tailwind.config.ts non toccato: ridefinire tracking-wide/wider cambierebbe anche il testo normale. tracking-wide vale già 0.04em come tracking-label dal 5/11, quindi i maiuscoli con tracking-wide o tracking-[0.04em] sono già giusti nella resa. Elenco fatto sulle righe con uppercase e tracking insieme: le classi spezzate su più righe non sono coperte (da guardare a mano anche app/events/page.tsx:265). Un componente Eyebrow unico resta la cura migliore. Collaudo: 15 righe controllate a mano tutte esatte, e uno script su tutti i ts/tsx/css non trova righe uppercase con un tracking diverso fuori elenco, né classi spezzate o in cn()/clsx. Gruppo non contato: etichette maiuscole senza nessun tracking (0em) in app/rider/earnings/page.tsx:134,138, app/rider/profile/page.tsx:229,235, app/u/[handle]/page.tsx:160, app/admin/products/page.tsx:206, components/admin/ExternalDataPanel.tsx:77: lì va aggiunto tracking-label.",
+      "verificato_da": "collaudatore (modello grande): elenco affidabile."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "L'elenco utenti e l'esportazione CSV perdono le email oltre le prime mille righe",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/admin/users/page.tsx:158",
+      "descrizione": "admin_list_user_emails() senza argomenti si legge in una chiamata sola: oltre il tetto di righe di PostgREST (1000 su Supabase) l'elenco e l'esportazione CSV (riga ~580) restano senza le email degli iscritti fuori dal tetto."
+    },
+    {
+      "titolo": "Una ricerca per email con la RPC caduta risponde «nessun utente» invece di dire che non ha potuto cercare",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/admin/users/page.tsx:183-185",
+      "descrizione": "Se la RPC fallisce con un errore diverso da PGRST202 la ricerca restituisce [] in silenzio e la pagina dice «Nessun utente corrisponde… Ho cercato su tutti». C'era già sulla base. La ricerca nuova lo mantiene, senza neanche un logger.warn: in una richiesta di cancellazione dati la pagina direbbe «non esiste» senza aver guardato le email. In ricerca sparisce anche l'avviso delle email non arrivate. L'esportazione CSV (riga ~579) con la RPC caduta esporta tutte le email vuote senza avviso."
+    },
+    {
+      "titolo": "Quando un pagamento viene rimborsato perché l'importo o la fascia non tornano, il codice di benvenuto torna ma la sua rivendicazione resta aperta",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "lib/stripe/webhook/quadratura.ts:114-118 · lib/stripe/webhook/fascia-al-pagamento.ts:97-101",
+      "descrizione": "Stessa classe del difetto del webhook della sessione scaduta: release_coupon senza chiudere coupon_redemptions; se si paga entro 2 minuti dalla rivendicazione il benvenuto resta bloccato per il resto dei 2 minuti."
+    },
+    {
+      "titolo": "La pulizia delle casse abbandonate chiude la rivendicazione anche se il codice non è tornato",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "lib/ordini/riserve-abbandonate.ts:289-294",
+      "descrizione": "La pulizia mette il carrello fra i liberati anche quando release_coupon fallisce e la cassa chiude comunque la rivendicazione, mentre il webhook e rilasciaCoupon la lasciano aperta. Nessun danno sui soldi, solo incoerenza."
+    },
+    {
+      "titolo": "Un link di disiscrizione vecchio (v1) senza il segreto in produzione dà errore 500 invece di «link non valido»",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "lib/email/unsubscribe.ts:113",
+      "descrizione": "apriFirmato chiama segreto() fuori da un try: senza UNSUBSCRIBE_SECRET in produzione un gettone v1, o qualunque gettone con un punto che non comincia per v2./v3., fa lanciare la rotta. C'era già sulla base."
+    }
+  ],
+  "domande_per_nicola": [
+    "R08-001: fino a quando i link di disiscrizione v2 già spediti (12/11-26/11) devono continuare ad aprirsi? Con una data si chiude anche per loro la chiave vecchia.",
+    "R08-005: un alimento già pubblicato senza peso netto va bloccato alla prossima modifica, o resta in vendita finché il negozio non lo completa?",
+    "R08-004: va dato al pannello admin il modo di segnare una radice nuova come «richiede allergeni e ingredienti»? Oggi una radice nuova creata dal pannello nasce senza obbligo (le modifiche sono nei file altrui elencati nella voce)."
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "2 riparatori (lotto 1 modello grande, lotto 2 sonnet) e 4 collaudatori sul modello grande; i due giri di correzione chiesti dal collaudo (R08-001, R08-005) li ho fatti io perché il tetto dei subagenti era raggiunto. Spesa letta da get_session: 19,12 $ su un tetto di 20 $; consegnato all'80% come da regole.",
+    "subagenti": 6
+  },
+  "costo_usd": 19.12
+}
