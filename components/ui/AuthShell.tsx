@@ -41,7 +41,7 @@ const BENEFITS: { Icon: LucideIcon; text: string }[] = [
   // gratuito su tutto — adesso nascono dalle promesse pubbliche, dove sono derivate dal codice.
   { Icon: Banknote, text: frasePagamento() },
   { Icon: Truck, text: `${CONSEGNA_ALL_ORA_CHE_SCEGLI}, dai negozi della tua città` },
-  { Icon: BadgeCheck, text: '100% commercianti locali verificati' },
+  { Icon: BadgeCheck, text: 'Commercianti locali' },
   { Icon: RotateCcw, text: FRASE_RESO },
 ];
 

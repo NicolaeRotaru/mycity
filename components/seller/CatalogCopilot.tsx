@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Sparkles, Loader2, Send, Check, PackagePlus } from 'lucide-react';
+import { Sparkles, Loader2, Send, Check, PackagePlus, RotateCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { avvisoDopoLApplicazione, type AvvisoCopilot } from '@/lib/ai/esitoCopilot';
@@ -24,9 +24,37 @@ type Change = { product_id: string; name: string; patch: Record<string, unknown>
 
 type Message =
   | { id: string; role: 'user'; text: string }
-  /** `esito`: com'e' andata l'applicazione; c'e' solo dopo «Applica tutte». */
-  | { id: string; role: 'assistant'; text: string; changes: Change[]; esito?: AvvisoCopilot }
+  /**
+   * `esito`: com'e' andata l'applicazione; c'e' solo dopo «Applica tutte».
+   * `rimaste`: le voci che la rotta ha lasciato fuori per il tempo, da rimandare da sole (R10-002).
+   */
+  | { id: string; role: 'assistant'; text: string; changes: Change[]; esito?: AvvisoCopilot; rimaste?: string[] }
   | { id: string; role: 'typing' };
+
+/** Gli esiti di una scheda finora: il primo invio più i rimandi, per un avviso solo su tutte le voci. */
+type EsitiFinora = { applied: number; results: Record<string, unknown>[] };
+
+const esitiDellaRisposta = (json: unknown): Record<string, unknown>[] => {
+  const results = (json as { results?: unknown } | null)?.results;
+  return (Array.isArray(results) ? results : []).filter(
+    (r): r is Record<string, unknown> => !!r && typeof r === 'object',
+  );
+};
+
+/** Le voci che la risposta da' per scritte (ok: true). */
+const scritteDellaRisposta = (json: unknown): string[] =>
+  esitiDellaRisposta(json).filter((r) => r.ok === true).map((r) => String(r.productId));
+
+/**
+ * R10-002 — Le voci rimaste fuori (`rimaste` della rotta: id dei prodotti non controllati o non
+ * scritti in tempo, che la rotta non ha toccato). Solo fra quelle mandate, e mai una gia' scritta.
+ */
+function rimasteDellaRisposta(json: unknown, mandate: Change[], scritte: Set<string>): string[] {
+  const rimaste = (json as { rimaste?: unknown } | null)?.rimaste;
+  if (!Array.isArray(rimaste)) return [];
+  const mandati = new Set(mandate.map((c) => c.product_id));
+  return Array.from(new Set(rimaste.map(String))).filter((id) => mandati.has(id) && !scritte.has(id));
+}
 
 const SUGGESTIONS = [
   'Abbassa del 10% l\'elettronica',
@@ -74,6 +102,14 @@ export default function CatalogCopilot() {
   const [loading, setLoading] = useState(false);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  /**
+   * R10-002 — Per scheda: un invio alla volta (un doppio clic non manda due volte), le voci gia'
+   * scritte (non si rimandano mai, neanche da un clic rimasto indietro) e gli esiti finora.
+   * Nei ref, non nello stato: si leggono e si aggiornano subito, senza aspettare il disegno.
+   */
+  const inVolo = useRef(new Set<string>());
+  const scritte = useRef(new Map<string, Set<string>>());
+  const esitiFinora = useRef(new Map<string, EsitiFinora>());
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -105,8 +141,18 @@ export default function CatalogCopilot() {
     }
   };
 
-  const applyChanges = async (msgId: string, changes: Change[]) => {
-    if (changes.length === 0) return;
+  /**
+   * `soloQueste`: R10-002 — il rimando delle voci rimaste fuori. Stesso invio in blocco, con le
+   * stesse modifiche gia' proposte (non ricalcolate), filtrato su quelle voci.
+   */
+  const applyChanges = async (msgId: string, changes: Change[], soloQueste?: string[]) => {
+    if (inVolo.current.has(msgId)) return;
+    const giaScritte = scritte.current.get(msgId) ?? new Set<string>();
+    const daMandare = changes.filter(
+      (c) => (!soloQueste || soloQueste.includes(c.product_id)) && !giaScritte.has(c.product_id),
+    );
+    if (daMandare.length === 0) return;
+    inVolo.current.add(msgId);
     setApplyingId(msgId);
     try {
       /**
@@ -125,17 +171,33 @@ export default function CatalogCopilot() {
        * prodotti una volta, fa i controlli di conformita' in parallelo e scrive.
        */
       const json = await authedFetch('/api/ai/catalog-apply-bulk', {
-        changes: changes.map((c) => ({ productId: c.product_id, patch: c.patch })),
+        changes: daMandare.map((c) => ({ productId: c.product_id, patch: c.patch })),
       });
+      for (const id of scritteDellaRisposta(json)) giaScritte.add(id);
+      scritte.current.set(msgId, giaScritte);
+      // Gli esiti delle voci mandate ora prendono il posto dei loro esiti di prima.
+      const mandati = new Set(daMandare.map((c) => c.product_id));
+      const prima = esitiFinora.current.get(msgId);
+      const applied = typeof json?.applied === 'number' ? json.applied : 0;
+      const finora: EsitiFinora = {
+        applied: (prima?.applied ?? 0) + applied,
+        results: [
+          ...(prima?.results ?? []).filter((r) => !mandati.has(String(r.productId))),
+          ...esitiDellaRisposta(json),
+        ],
+      };
+      esitiFinora.current.set(msgId, finora);
+      const rimaste = rimasteDellaRisposta(json, daMandare, giaScritte);
       // Quello che non e' passato non passera' nemmeno riprovando: o non e'
       // un prodotto tuo, o la modifica non era valida, o il controllo sui
       // contenuti l'ha fermata, o (R36) manca qualcosa per metterlo in vendita.
       // Dirlo col nome del prodotto e il motivo, invece di far ritentare a vuoto.
-      const avviso = avvisoDopoLApplicazione(json, changes);
+      // R10-002 — Tranne le voci rimaste fuori per il tempo: quelle si rimandano da sole.
+      const avviso = avvisoDopoLApplicazione(finora, changes);
       if (avviso.tipo === 'successo') toast.success(avviso.testo);
       else toast.warning(avviso.testo, { duration: 20_000 });
       setMessages((m) =>
-        m.map((x) => (x.id === msgId && x.role === 'assistant' ? { ...x, esito: avviso } : x)),
+        m.map((x) => (x.id === msgId && x.role === 'assistant' ? { ...x, esito: avviso, rimaste } : x)),
       );
     } catch (err) {
       if (err instanceof TroppeRichieste) {
@@ -149,6 +211,7 @@ export default function CatalogCopilot() {
         toast.error(friendlyError(err));
       }
     } finally {
+      inVolo.current.delete(msgId);
       setApplyingId(null);
     }
   };
@@ -203,6 +266,8 @@ export default function CatalogCopilot() {
                   esito={m.esito}
                   applying={applyingId === m.id}
                   onApply={() => void applyChanges(m.id, m.changes)}
+                  rimaste={m.rimaste?.length ?? 0}
+                  onRimanda={() => void applyChanges(m.id, m.changes, m.rimaste ?? [])}
                 />
               )}
             </div>
@@ -261,12 +326,15 @@ function Dot({ delay }: { delay: string }) {
 
 /** Anteprima ricca delle modifiche proposte, dentro la bolla dell'assistente. */
 function ChangesPreview({
-  changes, esito, applying, onApply,
+  changes, esito, applying, onApply, rimaste, onRimanda,
 }: {
   changes: Change[];
   esito?: AvvisoCopilot;
   applying: boolean;
   onApply: () => void;
+  /** R10-002 — Quante voci la rotta ha lasciato fuori per il tempo. */
+  rimaste: number;
+  onRimanda: () => void;
 }) {
   return (
     <div className="w-full overflow-hidden rounded-xl border border-cream-300 bg-white shadow-warm-sm">
@@ -295,7 +363,21 @@ function ChangesPreview({
             <Check size={16} strokeWidth={2.6} aria-hidden /> Applicato.
           </p>
         ) : esito ? (
-          <p className="text-sm text-ink-800">{esito.testo}</p>
+          <>
+            <p className="text-sm text-ink-800">{esito.testo}</p>
+            {/* R10-002 — L'avviso dice «rimandalo»: qui si rimandano solo le voci rimaste fuori. */}
+            {rimaste > 0 && (
+              <button
+                type="button"
+                onClick={onRimanda}
+                disabled={applying}
+                className="mt-2 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
+              >
+                {applying ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <RotateCw size={16} strokeWidth={2.4} aria-hidden />}
+                {rimaste === 1 ? 'Rimanda la voce rimasta fuori' : `Rimanda le ${rimaste} voci rimaste fuori`}
+              </button>
+            )}
+          </>
         ) : (
           <button
             type="button"
