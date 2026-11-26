@@ -1,13 +1,13 @@
 {
  "sessione": "R23",
- "aggiornato": "2026-11-26 18:15",
- "finita": false,
+ "aggiornato": "2026-11-26 18:30",
+ "finita": true,
  "testa": "c830d57da23f3d4010491103958293100eb88f47",
  "verifica": {
   "comando": "npm run verify",
-  "esito": "",
-  "testa": "",
-  "nota": ""
+  "esito": "verde",
+  "testa": "4df3ecb5bddb835ab7d8763152d7ce2d399de9dd",
+  "nota": "typecheck pulito, lint 0 errori (121 avvisi), vitest 2242 file e 13679 prove verdi; 4df3ecb5 viene dopo la testa e tocca solo il referto"
  },
  "voci": [
   {
@@ -30,7 +30,7 @@
    "id": "R23-002",
    "chiave": "sicurezza-auth|chi chiede la nuova password dal computer e apre l'email dal telefono non riesce a cambiarla, e la pagina non dice perché",
    "esito": "non_codice",
-   "nota": "Cosa deve fare Nicola su Supabase: 1) Authentication → URL Configuration: Site URL = l'indirizzo pubblico del sito. 2) Email Templates → «Reset password»: link = {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery. 3) «Confirm signup»: {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next={{ .RedirectTo }}. 4) Subito dopo, prova a mano: reset chiesto dal computer, email aperta dal telefono, password cambiata; poi un'iscrizione confermata da un altro dispositivo. Se fallisce, rimettere i modelli di prima. Il codice è già pronto alla base aac2350b09db195d6d2286f15f75a7d02ae590a1: app/auth/confirm/route.ts:141 verifyOtp({token_hash,type}) funziona da qualunque dispositivo; app/reset-password/page.tsx:184-191 e 312-315 dicono il motivo (altro browser o link scaduto, lib/auth/link-email.ts:308-336); app/auth/callback/route.ts:62-68 rimanda a /sign-in col motivo «scambio-fallito», letto da app/sign-in/page.tsx:107 e 151. Prova: npx vitest run tests/unit/il-link-della-password-si-apre-da-qualunque-dispositivo.test.ts tests/unit/minori-s10-nuova-password.test.ts tests/unit/il-link-di-recupero-passato-dalla-conferma-porta-al-modulo.test.ts --reporter=dot → 38/38 verdi. I modelli email non stanno nel deposito (supabase/config.toml non ne ha). Finché i modelli restano quelli predefiniti, il link ?code= (PKCE) funziona solo nel browser che ha chiesto il reset. In alternativa dal codice si potrebbe chiedere il reset col flusso implicito, ma cambia come il link è protetto: è una scelta di Nicola, non fatta."
+   "nota": "Cosa deve fare Nicola su Supabase: 1) Authentication → URL Configuration: Site URL = l'indirizzo pubblico del sito. 2) Email Templates (SiteURL, TokenHash e RedirectTo sono le variabili del modello di Supabase, scritte fra doppie graffe) → «Reset password»: link = <SiteURL>/auth/confirm?token_hash=<TokenHash>&type=recovery. 3) «Confirm signup»: <SiteURL>/auth/confirm?token_hash=<TokenHash>&type=email&next=<RedirectTo>. 4) Subito dopo, prova a mano: reset chiesto dal computer, email aperta dal telefono, password cambiata; poi un'iscrizione confermata da un altro dispositivo. Se fallisce, rimettere i modelli di prima. Il codice è già pronto alla base aac2350b09db195d6d2286f15f75a7d02ae590a1: app/auth/confirm/route.ts:141 verifyOtp({token_hash,type}) funziona da qualunque dispositivo; app/reset-password/page.tsx:184-191 e 312-315 dicono il motivo (altro browser o link scaduto, lib/auth/link-email.ts:308-336); app/auth/callback/route.ts:62-68 rimanda a /sign-in col motivo «scambio-fallito», letto da app/sign-in/page.tsx:107 e 151. Prova: npx vitest run tests/unit/il-link-della-password-si-apre-da-qualunque-dispositivo.test.ts tests/unit/minori-s10-nuova-password.test.ts tests/unit/il-link-di-recupero-passato-dalla-conferma-porta-al-modulo.test.ts --reporter=dot → 38/38 verdi. I modelli email non stanno nel deposito (supabase/config.toml non ne ha). Finché i modelli restano quelli predefiniti, il link ?code= (PKCE) funziona solo nel browser che ha chiesto il reset. In alternativa dal codice si potrebbe chiedere il reset col flusso implicito, ma cambia come il link è protetto: è una scelta di Nicola, non fatta."
   },
   {
    "id": "R23-003",
@@ -62,7 +62,7 @@
    "copre_tutta_la_voce": true,
    "cosa_ho_fatto": "La callback legge il ruolo e applica la stessa regola dell'accesso con email e password: se il ritorno è '/' o sta nell'area di un altro ruolo, amministratore, negozio e fattorino vanno sulla home del proprio. Vale anche per il next passato a /accetta-condizioni. Con la correzione l'amministratore non ha aree di un altro ruolo: tornaDaGoogle('admin','/seller/orders') porta a '/seller/orders'.",
    "nota": "Due commit: 5dfdf8436b19223c637118e6e35f4056af403d9f (la regola di ruolo nella callback, prova tests/unit/riparazione-r23-ritorno-google-ruolo.test.ts, rimessa uscita 0) e la correzione 15ec90de01df5eaea5a6d28637db2c491c5a4951 chiesta dal collaudo (l'amministratore non ha aree di un altro ruolo: con Google torna su /seller e /rider come prima). Il ruolo si legge col client amministrativo con chiediConTetto e TETTO_VERBALE_MS, in parallelo al verbale: col database muto si entra lo stesso entro il tetto. Vale per ogni sessione aperta in /auth/callback, anche il link di conferma email. Le tabelle area/home sono ricopiate da app/sign-in/page.tsx (i file page/route non possono esportare, e un aiutante condiviso in un file nuovo dà 3 alla prova rimessa).",
-   "verificato_da_primo_giro": "collaudo interno K23 (modello grande): rompe_altro minore: app/auth/callback/route.ts:42-45 tratta /seller e /rider come aree altrui anche per l'amministratore, che il portiere lì lascia entrare; con Google next=/seller/orders prima tornava lì, ora va su /admin. Giro di correzione nel lotto 4"
+   "verificato_da": "collaudo interno K23 (modello grande) sul primo commit: rompe_altro per l'amministratore (rimandato su /admin da /seller e /rider); collaudo interno K23b (modello piccolo, sola lettura) sul giro di correzione: regge, app/auth/callback/route.ts:44 ruolo !== 'admin', '/' va ancora alla casa, altri ruoli invariati"
   },
   {
    "id": "R23-005",
@@ -86,7 +86,8 @@
    },
    "copre_tutta_la_voce": true,
    "cosa_ho_fatto": "Nella pagina di accesso la regola dell'area di un altro ruolo non vale più per l'amministratore, che il portiere fa entrare in /seller e /rider: il ritorno lì resta. Senza ritorno, o con '/', va ancora su /admin; per negozio e fattorino la regola non cambia.",
-   "nota": "Prima scritta gia_riparato_prima; il collaudo interno ha trovato il caso dell'amministratore ancora aperto, ed è riparato qui. La metà Google della voce (dall'iscrizione) è chiusa nel commit 9bd177a207a0d2819a390131e3163d70ac65ce16 di questo ramo, con la sua prova rossa alla base. Il primo collaudo: collaudo interno K23 (modello grande): non regge come gia_riparato_prima: alla base l'amministratore con ritorno /seller/* o /rider/* lo perde (app/sign-in/page.tsx:272-276 alla base), e Google dall'iscrizione perdeva il ritorno (chiuso dal commit 9bd177a207a0d2819a390131e3163d70ac65ce16 di questo ramo). Giro di correzione nel lotto 4"
+   "nota": "Prima scritta gia_riparato_prima; il collaudo interno ha trovato il caso dell'amministratore ancora aperto, ed è riparato qui. La metà Google della voce (dall'iscrizione) è chiusa nel commit 9bd177a207a0d2819a390131e3163d70ac65ce16 di questo ramo, con la sua prova rossa alla base.",
+   "verificato_da": "primo giro: collaudo interno K23 (modello grande) trova il caso dell'amministratore ancora aperto; collaudo interno K23b (modello piccolo, sola lettura) sul giro di correzione: regge, app/sign-in/page.tsx:288 lascia /seller e /rider all'amministratore, '/', '/admin', '/seller/../admin' e le forme codificate restano giuste, negozio e fattorino invariati, nessun open redirect nuovo; 35 file di prova dei file toccati, 314 test verdi"
   },
   {
    "id": "R23-006",
@@ -172,7 +173,8 @@
    },
    "copre_tutta_la_voce": true,
    "cosa_ho_fatto": "Nessuno legge .required di DocDef (gli obblighi li dice solo obbligatorio()): tolto il campo dal tipo e dalle sei righe di DOCS, con un commento che rimanda alla regola vera. A video non cambia niente.",
-   "nota": "Prova leggera: legge il sorgente (niente required in DocDef né in DOCS) e controlla la regola per mezzo (in bici la patente non serve)."
+   "nota": "Prova leggera: legge il sorgente (niente required in DocDef né in DOCS) e controlla la regola per mezzo (in bici la patente non serve).",
+   "verificato_da": "collaudo interno K23b (modello piccolo, sola lettura) sul giro di correzione: regge, nessuno legge più required (obbligatorio() a :285-286 e :384), a video non sparisce nulla"
   },
   {
    "id": "R23-010",
@@ -237,7 +239,7 @@
    "copre_tutta_la_voce": true,
    "cosa_ho_fatto": "«Password dimenticata?» nella pagina di accesso passa captchaToken a resetPasswordForEmail e poi rigenera il gettone; in /reset-password la vista «richiedi link» monta il riquadro Turnstile (se NEXT_PUBLIC_TURNSTILE_SITE_KEY è impostata), passa il gettone e lo rigenera.",
    "nota": "Due commit: 66548ed053234018a451890f2fc336a4a5abda97 (il gettone passa a resetPasswordForEmail e si rigenera) e la correzione 1957c39fe39ecd44586bcf4bd567b35e0937b6e2 chiesta dal collaudo (il gettone si toglie dallo stato prima dell'attesa: un «Accedi» premuto nel frattempo non lo riusa). Senza gettone la richiesta parte lo stesso: voluto, per non bloccare col captcha di Supabase spento.",
-   "verificato_da_primo_giro": "collaudo interno K23 (modello grande): regge; supabase-js manda gotrue_meta_security sia al recupero sia al reinvio. Due resti piccoli: lo stesso gettone può partire due volte se si preme «Accedi» mentre la richiesta del link è in corso (giro di correzione nel lotto 4); senza gettone la richiesta parte lo stesso (scelta voluta, per non bloccare col captcha di Supabase spento)"
+   "verificato_da": "collaudo interno K23 (modello grande) sul primo commit: regge, con il resto del gettone riusato; collaudo interno K23b (modello piccolo, sola lettura) sul giro di correzione: regge, lo stato si svuota prima dell'attesa (sign-in :316-318, reset-password :263-265), la rigenerazione nel finally gira anche se la richiesta fallisce, un «Accedi» nel frattempo si ferma a :193 senza riusare il gettone"
   },
   {
    "id": "R23-014",
@@ -273,7 +275,7 @@
  ],
  "nuovi_difetti_visti": [
   {
-   "titolo": "Falla di sicurezza da chiudere (controllo delle aree riservate): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+   "titolo": "Falla di sicurezza da chiudere (accessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
    "dimensione": "sicurezza-auth",
    "severita": "minore",
    "file": "(nel referto privato)",
@@ -294,10 +296,16 @@
    "descrizione": "public.salva_prodotto_e_varianti (405, 709) è pronta e provata, ma né la rotta admin né la pagina del negozio la usano; i client finti delle prove lanciano a ogni rpc diversa da salva_varianti, così chi prova a usarla rompe prove di altri."
   }
  ],
- "domande_per_nicola": [],
+ "domande_per_nicola": [
+  "R23-003: il fattorino non approvato deve poter caricare i documenti da /rider/onboarding (riapri il reclutamento dal sito), oppure la registrazione smette di offrire «Rider»?",
+  "R23-012: tetto unico del portiere a 10 s con qualunque tessera, rovesciando l'attesa della prova r06 (da 3 s a 10 s per chi ha la tessera buona per un'ora)?",
+  "R23-002: cambi su Supabase i modelli delle email «Reset password» e «Confirm signup» verso /auth/confirm col token_hash (dettagli nella voce)?"
+ ],
  "conto": {
-  "agenti": 4,
-  "subagenti": 4,
-  "nota": "riparatori dei lotti 2, 3, 4 e il collaudo interno del lotto 3; le voci R23-001, 003, 008, 010, 012 classificate dal capo squadra con grep e prove esistenti"
- }
+  "agenti": 5,
+  "subagenti": 5,
+  "nota": "riparatori dei lotti 2, 3 e 4 (modello grande), collaudo del lotto 3 (modello grande), collaudo del lotto 4 (modello piccolo); R23-001, 003, 008, 010, 012 classificate dal capo squadra con grep e prove esistenti",
+  "costo_usd": 17.83
+ },
+ "costo_usd": 17.83
 }
