@@ -13,6 +13,7 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ibanValido, normalizzaIban } from '@/app/sell/iban';
 import { MAX_DETTAGLIO_ATTIVITA, TIPI_ATTIVITA, descriviAttivita } from '@/lib/agenzia/tipi-attivita';
 import { cittaDallIndirizzo, inviaNuovaAttivitaAlFlusso } from '@/lib/agenzia/nuovo-cliente-n8n';
+import { dentroLAreaServita, FRASE_NEGOZIO_FUORI_AREA } from '@/lib/ordini/zona-di-consegna';
 
 export const runtime = 'nodejs';
 
@@ -180,6 +181,11 @@ export const POST = withAuthRateLimit(
       return ApiErrors.invalidRequest(esito.error.issues[0]?.message ?? 'Dati non validi');
     }
     const f = esito.data;
+
+    // 26/11/2026 — Qui passava qualunque numero finito: un negozio salvato nella Via Roma di un'altra
+    // città (il «Cerca» del selettore prendeva il primo risultato d'Italia) veniva approvato e poi
+    // ogni consegna ai clienti di Piacenza era «fuori zona». Fuori da Piacenza e dintorni non si scrive.
+    if (!dentroLAreaServita(f.storeLat, f.storeLng)) return ApiErrors.invalidRequest(FRASE_NEGOZIO_FUORI_AREA);
 
     // 25/11/2026 — La data di nascita arriva solo dal modulo vecchio: se c'è, si controlla come prima.
     if (f.legalBirthDate !== undefined) {

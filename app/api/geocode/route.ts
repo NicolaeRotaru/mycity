@@ -46,5 +46,7 @@ export async function POST(req: Request) {
     return NextResponse.json(SERVIZIO_NON_DISPONIBILE, { status: 503 });
   }
   if (esito.esito === 'nessuno') return NextResponse.json({ lat: null, lng: null });
-  return NextResponse.json({ lat: esito.lat, lng: esito.lng });
+  // 26/11/2026 — Anche il nome del posto trovato: il negozio che cerca «Via Roma 12» legge sotto il
+  // campo in quale città è finito, invece di vedere solo un segnaposto su una mappa.
+  return NextResponse.json({ lat: esito.lat, lng: esito.lng, ...(esito.nome ? { nome: esito.nome } : {}) });
 }

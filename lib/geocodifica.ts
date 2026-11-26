@@ -1,5 +1,6 @@
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { AREA_SERVITA, dentroLAreaServita } from '@/lib/ordini/zona-di-consegna';
 
 /**
  * Trovare le coordinate di un indirizzo, dal server.
@@ -60,14 +61,21 @@ export async function coordinateDiUnIndirizzo(indirizzo: {
  * Senza città (il negozio che scrive solo la via) non c'è niente da strutturare: resta il
  * testo, ma chiuso nel riquadro.
  */
-export const RIQUADRO_DI_PIACENZA = { ovest: 9.55, sud: 44.93, est: 9.85, nord: 45.15 } as const;
+// Il riquadro è quello dove può stare un negozio (lib/ordini/zona-di-consegna.ts): uno solo.
+export const RIQUADRO_DI_PIACENZA = AREA_SERVITA;
 
 export type EsitoDellaRicerca =
-  | { esito: 'trovato'; lat: number; lng: number }
+  // `nome`: il posto trovato come lo scrivono le mappe («Via Roma, Piacenza, …»), da far leggere a chi cerca.
+  | { esito: 'trovato'; lat: number; lng: number; nome: string | null }
   | { esito: 'nessuno' }
   | { esito: 'servizio_giu'; status: number | null };
 
-type RisultatoDelleMappe = { lat?: string; lon?: string; address?: Record<string, string | undefined> };
+type RisultatoDelleMappe = {
+  lat?: string;
+  lon?: string;
+  display_name?: string;
+  address?: Record<string, string | undefined>;
+};
 
 // I nomi del posto in cui cade un risultato: il comune e, per chi scrive la frazione, la frazione.
 const NOMI_DEL_POSTO = ['city', 'town', 'village', 'municipality', 'hamlet', 'suburb', 'quarter', 'city_district', 'neighbourhood'];
@@ -95,11 +103,6 @@ function pezziDellaDomanda(q: string): { via: string; citta: string; cap: string
   return { via: testo, citta: '', cap: '', testo };
 }
 
-function dentroIlRiquadro(lat: number, lng: number): boolean {
-  const r = RIQUADRO_DI_PIACENZA;
-  return lat >= r.sud && lat <= r.nord && lng >= r.ovest && lng <= r.est;
-}
-
 /**
  * ③ Un risultato vale se cade nel comune scritto e ha il CAP scritto. Quando le mappe non dicono il
  * comune: dentro il riquadro si tiene, fuori no (lì il comune scritto è l'unica garanzia).
@@ -108,7 +111,7 @@ function affidabile(
   r: RisultatoDelleMappe,
   scritto: { citta: string; cap: string },
   comuneObbligatorio: boolean,
-): { lat: number; lng: number } | null {
+): { lat: number; lng: number; nome: string | null } | null {
   const lat = r.lat != null ? parseFloat(r.lat) : NaN;
   const lng = r.lon != null ? parseFloat(r.lon) : NaN;
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
@@ -121,7 +124,7 @@ function affidabile(
     const cap = a.postcode.split(/[;,]/).map((c) => c.replace(/\D/g, '')).filter(Boolean);
     if (cap.length > 0 && !cap.includes(scritto.cap)) return null;
   }
-  return { lat, lng };
+  return { lat, lng, nome: typeof r.display_name === 'string' && r.display_name.trim() ? r.display_name.trim() : null };
 }
 
 async function chiediAlleMappe(
@@ -162,7 +165,7 @@ export async function cercaUnIndirizzo(domanda: string): Promise<EsitoDellaRicer
     if (!Array.isArray(vicino)) return { esito: 'servizio_giu', status: vicino.giu };
     for (const ris of vicino) {
       const p = affidabile(ris, scritto, false);
-      if (p && dentroIlRiquadro(p.lat, p.lng)) return { esito: 'trovato', ...p };
+      if (p && dentroLAreaServita(p.lat, p.lng)) return { esito: 'trovato', ...p };
     }
     if (!citta) return { esito: 'nessuno' };
 
