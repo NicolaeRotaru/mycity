@@ -880,6 +880,12 @@ export type EsitoCancellazione = {
    * irreversibile non l'ha fatto questa chiamata (chi chiama non lo registra due volte).
    */
   giaCancellato?: boolean;
+  /**
+   * 26/11/2026 (R24-006) — Non fatta perché la scadenza data da chi chiama era passata: non si è
+   * cominciato nessun passo dopo quella scadenza. Non è un guasto né un rinvio deciso da noi: il
+   * giro notturno la tratta come una richiesta non presa in carico, che riparte la notte dopo.
+   */
+  tempoFinito?: true;
   fileRimossi: number;
   erroriFile: string[];
 };
@@ -929,7 +935,29 @@ const MOTIVO_PER_ESITO_CASSA: Record<EsitoCassa, 'cassa_da_versare' | null> = {
   non_verificabile: null,
 };
 
-export async function cancellaAccount(admin: Admin, userId: string): Promise<EsitoCancellazione> {
+export async function cancellaAccount(
+  admin: Admin,
+  userId: string,
+  opzioni: { scadenza?: number } = {},
+): Promise<EsitoCancellazione> {
+  // 26/11/2026 (R24-006) — LA CANCELLAZIONE HA UN TEMPO SUO. Il giro notturno dà una scadenza (in
+  // millisecondi, come Date.now()) e smette di aspettare quando passa: da lì l'account per lui è
+  // rimandato alla notte dopo. Qui, passata la scadenza, non si comincia un passo nuovo, così niente
+  // succede alle sue spalle — tanto meno il passo irreversibile (③). Senza scadenza (l'amministratore)
+  // tutto come prima. Fermarsi fra un passo e l'altro è sicuro: è lo stesso punto in cui si ferma un
+  // guasto, e la notte dopo si riprende da capo.
+  const fuoriTempo = (fileRimossi = 0, erroriFile: string[] = []): EsitoCancellazione | null =>
+    opzioni.scadenza !== undefined && Date.now() >= opzioni.scadenza
+      ? {
+          ok: false,
+          tempoFinito: true,
+          errore: 'Il tempo del giro è finito prima che la cancellazione fosse completa: si riprova.',
+          fileRimossi,
+          erroriFile,
+        }
+      : null;
+  let fermo: EsitoCancellazione | null;
+
   // ① Prima di toccare qualsiasi cosa: i soldi degli altri.
   const cassa = await contantiAncoraDaVersare(admin, userId);
   if (cassa.bloccante) {
@@ -955,11 +983,15 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
 
   // ② I documenti d'identità e l'IBAN non aspettano: non si vedono a video,
   // toglierli non lascia nessuno con un account a metà.
+  if ((fermo = fuoriTempo())) return fermo;
   await anonimizzaDatiSensibili(admin, userId);
 
+  if ((fermo = fuoriTempo())) return fermo;
   const puliziaFallita = await anonimizzaTestoLibero(admin, userId);
+  if ((fermo = fuoriTempo())) return fermo;
   await togliDallaNewsletter(admin, userId);
 
+  if ((fermo = fuoriTempo())) return fermo;
   const file = await cancellaFilePersonali(admin, userId);
   if (file.errori.length > 0) {
     logger.warn('[cancellazione] file personali non tutti rimossi', { userId, errori: file.errori });
@@ -967,6 +999,7 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
 
   // Le prove di consegna stanno nella cartella del fattorino: si arriva a
   // quelle di questa persona solo passando dai suoi ordini (R058).
+  if ((fermo = fuoriTempo(file.rimossi, file.errori))) return fermo;
   const prove = await cancellaProveDiConsegna(admin, userId);
   if (prove.errori.length > 0) {
     logger.warn('[cancellazione] prove di consegna non tutte rimosse', { userId, errori: prove.errori });
@@ -1014,6 +1047,7 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
 
   // ②ter Chi tiene una copia dei dati fuori da qui. Va fatto adesso: dopo il
   // ③ la riga del profilo non c'è più, e con lei il codice del cliente Stripe.
+  if ((fermo = fuoriTempo(file.rimossi + prove.rimossi))) return fermo;
   const fuori = await propagaLaCancellazioneAStripe(admin, userId);
   if (!fuori.ok) {
     return {
@@ -1029,6 +1063,7 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
   // ③ Il passo che può fallire. Fin qui non abbiamo toccato niente di ciò che
   // la persona vede: se va male, il suo account resta intero e la richiesta
   // viene ritentata.
+  if ((fermo = fuoriTempo(file.rimossi + prove.rimossi))) return fermo;
   const { error: errAuth } = await admin.auth.admin.deleteUser(userId);
   // 13/11/2026 (R14-007, R14-015) — «Utente non trovato» vuol dire che l'account non c'è già
   // più: l'ha chiuso un'altra cancellazione dello stesso account partita insieme a questa (due

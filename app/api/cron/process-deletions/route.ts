@@ -258,6 +258,8 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   let annullateNelFrattempo = 0;
   const tentativi: TentativoCancellazione[] = [];
   let presiInCarico = 0;
+  // R24-006 — Il tetto del ciclo è rigido: è anche la scadenza di ogni account preso (vedi `entroLaScadenza`).
+  const scadenzaDelCiclo = adesso + TETTO_CANCELLAZIONI_MS;
 
   for (const riga of scadute) {
     // R03-005 — Il tetto si guarda prima di prendere in carico un account, dall'inizio del giro.
@@ -272,12 +274,27 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     // 5/11/2026 — La lista si legge una volta a inizio notte: chi intanto ha annullato la richiesta
     // (deletion_requested_at tornato vuoto) non si cancella. Se la rilettura non riesce si va avanti
     // come prima: la richiesta letta dalla RPC era valida.
-    if (await haAnnullatoNelFrattempo(admin, userId)) {
+    // R24-006 — L'account preso ha un tempo suo, che finisce col tetto del ciclo: prima un account
+    // preso a ridosso del tetto poteva durare quanto voleva, e la notte sforava i 300 secondi della
+    // piattaforma prima di arrivare alla sveglia e alle email. Finito il tempo non lo si aspetta più:
+    // conta come non preso in carico (la richiesta resta, la riprende la notte dopo, il tetto lo
+    // dice agli amministratori) e cancellaAccount, con la stessa scadenza, non comincia altri passi.
+    const annullata = await entroLaScadenza(haAnnullatoNelFrattempo(admin, userId), scadenzaDelCiclo);
+    if (annullata === null) {
+      presiInCarico--;
+      break;
+    }
+    if (annullata) {
       annullateNelFrattempo++;
       logger.info('[cron-deletions] richiesta annullata durante il giro: account saltato', { userId });
       continue;
     }
-    const esito = await cancellaAccount(admin, userId);
+    const esito = await entroLaScadenza(cancellaAccount(admin, userId, { scadenza: scadenzaDelCiclo }), scadenzaDelCiclo);
+    if (esito === null || esito.tempoFinito) {
+      presiInCarico--;
+      logger.warn('[cron-deletions] tetto di tempo raggiunto durante una cancellazione: account rimandato', { userId });
+      break;
+    }
     tentativi.push({
       userId,
       ok: esito.ok,
@@ -471,6 +488,24 @@ async function sveglia(admin: Admin, verdetto: VerdettoGiro): Promise<void> {
     verdetto.riga ?? 'Il giro notturno delle cancellazioni non e andato a buon fine.',
     chiave,
   );
+}
+
+/**
+ * 26/11/2026 (R24-006) — Un passo del ciclo delle cancellazioni si aspetta al massimo fino alla
+ * scadenza: dopo, `null`, e il ciclo va avanti senza di lui. Il passo lasciato indietro non diventa
+ * un rifiuto senza padrone se poi cade; e non fa altro, perché cancellaAccount ha la stessa scadenza.
+ */
+async function entroLaScadenza<T>(passo: Promise<T>, scadenza: number): Promise<T | null> {
+  passo.catch(() => undefined);
+  let sveglia: ReturnType<typeof setTimeout> | undefined;
+  const tempo = new Promise<null>((risolvi) => {
+    sveglia = setTimeout(() => risolvi(null), Math.max(0, scadenza - Date.now()));
+  });
+  try {
+    return await Promise.race([passo, tempo]);
+  } finally {
+    clearTimeout(sveglia);
+  }
 }
 
 /**
