@@ -101,6 +101,8 @@ const WELCOME =
 
 /** Oltre questa lunghezza la risposta dell'assistente si ripiega e porta «Leggi tutto». */
 const RISPOSTA_LUNGA = 420;
+/** Anche tante righe brevi (un elenco) si ripiegano: oltre questo numero di righe. */
+const RIGHE_LUNGHE = 8;
 
 /**
  * Il testo di una risposta: a capo ed elenchi restano (`whitespace-pre-line` sulla bolla, niente
@@ -108,7 +110,7 @@ const RISPOSTA_LUNGA = 420;
  */
 function TestoDellaRisposta({ testo }: { testo: string }) {
   const [aperta, setAperta] = useState(false);
-  const lunga = testo.length > RISPOSTA_LUNGA;
+  const lunga = testo.length > RISPOSTA_LUNGA || testo.split('\n').length > RIGHE_LUNGHE;
   if (!lunga) return <>{testo}</>;
   return (
     <>

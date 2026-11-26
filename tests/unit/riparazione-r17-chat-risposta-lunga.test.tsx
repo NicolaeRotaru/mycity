@@ -73,4 +73,12 @@ describe('R17-013 la bolla della risposta', () => {
     expect(div!.textContent).toMatch(/Mostra meno/);
     expect(div!.textContent).toContain(risposta.trim());
   });
+
+  it('un elenco di tante righe brevi si ripiega anche se il testo è corto', async () => {
+    risposta = '- a\n'.repeat(60);
+    await scrivi('elenco');
+    expect(risposta.length).toBeLessThan(420);
+    expect(leggiTutto()).toBeTruthy();
+    expect(div!.querySelector('[data-testid="risposta-lunga"]')!.className).toMatch(/line-clamp/);
+  });
 });
