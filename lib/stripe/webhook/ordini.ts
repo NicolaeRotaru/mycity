@@ -2,19 +2,8 @@
  * Il webhook Stripe che crea gli ordini, e quello che gestisce un carrello
  * scaduto. È la strada su cui passano tutti i soldi del marketplace.
  *
- * #12 — Perché sta qui e non in `app/api/stripe/webhook/route.ts`.
- *
- * Quel file era uno solo, da mille righe, con dentro otto mestieri senza
- * rapporto fra loro: creazione ordini, buoni regalo, spazi sponsorizzati,
- * abbonamenti, rimborsi, contestazioni, storni, esiti dei pagamenti. Ogni
- * modifica ai buoni regalo si portava dietro il rischio di toccare la
- * creazione degli ordini, perché stavano nello stesso file e la revisione
- * mostrava un diff dentro un blocco da mille righe. È la strada su cui
- * passano tutti i soldi del marketplace: è l'ultimo posto dove si vuole una
- * revisione difficile da leggere.
- *
- * Nessuna logica è cambiata in questo spostamento: le prove esistenti sul
- * webhook sono la dimostrazione che non si è rotto niente.
+ * #12 — Sta qui e non in `app/api/stripe/webhook/route.ts`: quel file era uno solo, da mille
+ * righe, con otto mestieri senza rapporto fra loro (il perché intero in testa a `rimborsi.ts`).
  */
 import type Stripe from 'stripe';
 import { getStripe, computeOrderSplit } from '@/lib/stripe/client';
@@ -254,26 +243,36 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : null;
   const transferGroup = `mc_${pendingCheckoutId}`;
 
-  // Recupera la latest_charge dal PaymentIntent per popolare stripe_charge_id
-  // (serve a /api/stripe/payout per usare source_transaction).
+  // La latest_charge dà stripe_charge_id (il bonifico al negozio usa source_transaction) e dice
+  // se la carta è già tornata indietro: rimborsata o contestata mentre questo avviso falliva.
   let stripeChargeId: string | null = null;
+  let cartaTornata = false;
   if (paymentIntent) {
     try {
       const pi = await stripe.paymentIntents.retrieve(paymentIntent, { expand: ['latest_charge'] });
       const lc = pi.latest_charge;
       stripeChargeId = typeof lc === 'string' ? lc : (lc?.id ?? null);
+      cartaTornata = !!lc && typeof lc === 'object' && (lc.refunded || (lc.amount_refunded ?? 0) > 0 || lc.disputed);
     } catch (e) {
-      // 052 — Questo NON è un dettaglio best-effort. Senza `stripe_charge_id` il
-      // pagamento al negozio parte senza `source_transaction`: Stripe lo prende
-      // dal saldo della piattaforma, che sui conti nuovi è vuoto, e il
-      // trasferimento resta bloccato per sempre. Il negozio non viene pagato e
-      // nessuno sa perché.
-      // Meglio far fallire l'evento: Stripe lo riconsegna, e la creazione degli
-      // ordini è già protetta dall'indice unico su (sessione, negozio).
+      // 052 — Non è best-effort: senza `stripe_charge_id` il bonifico al negozio parte dal saldo
+      // della piattaforma (vuoto sui conti nuovi) e resta bloccato. Stripe riconsegna l'evento, e
+      // gli ordini sono protetti dall'indice unico su (sessione, negozio).
       logger.error('[stripe] retrieve PI per charge_id fallita: evento respinto per riconsegna', {
         sessionId: session.id, paymentIntent, e,
       });
       throw e;
+    }
+  }
+  // R04-005 — Carta già rimborsata o contestata, o carrello chiuso apposta (CANCELED, MISMATCH): nessun
+  // ordine PAID col netto pieno al negozio. Con ordini già nati da un tentativo di prima si fa nascere il
+  // resto: il rimborso, che aspetta il carrello non più aperto (rimborsi.ts), li annulla tutti insieme.
+  if (cartaTornata || pending.status === 'CANCELED' || pending.status === 'MISMATCH') {
+    const { data: giaNati, error: errNati } = await admin.from('orders').select('id').eq('stripe_session_id', session.id);
+    if (errNati) throw new Error(`[stripe] carta tornata o carrello chiuso: ordini non letti (${errNati.message})`);
+    if (!giaNati?.length) {
+      await chiudiIlCarrelloPerQuadratura(admin, pendingCheckoutId);
+      await notifyAdmins('⚠️ Pagamento senza ordine', `Sul carrello ${pendingCheckoutId} (${pending.status}) la carta risulta già rimborsata o contestata, o il carrello era chiuso: nessun ordine creato. Guarda su Stripe se il cliente ha riavuto tutto.`, '/admin/orders', { unaVoltaPer: `pagato-senza-ordine:${pendingCheckoutId}` });
+      return;
     }
   }
 

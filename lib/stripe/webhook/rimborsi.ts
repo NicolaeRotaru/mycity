@@ -40,6 +40,18 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   const pi = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
   if (!pi) return;
 
+  // R04-005 — Il carrello di questo pagamento è ancora aperto: l'avviso del pagamento non è passato e gli
+  // ordini possono ancora nascere, pagati e col netto pieno al negozio. Si fa ripetere a Stripe. Il carrello
+  // si legge PRIMA degli ordini: COMPLETED si scrive solo quando sono nati tutti (ordini.ts).
+  const carrello = charge.metadata?.pending_checkout_id ?? (charge.transfer_group?.startsWith('mc_') ? charge.transfer_group.slice(3) : null);
+  if (carrello) {
+    const { data: delCarrello, error: errCarrello } = await admin.from('pending_checkouts').select('status').eq('id', carrello).maybeSingle();
+    if (errCarrello) throw new Error(`[stripe] carrello del rimborso non letto: ${errCarrello.message}`);
+    if ((delCarrello as { status?: string } | null)?.status === 'PENDING') {
+      throw new Error(`[stripe] rimborso su un carrello ancora aperto (${carrello}): gli ordini possono ancora nascere, si riprova`);
+    }
+  }
+
   // Multi-seller: una charge può avere N ordini (uno per seller).
   const { data: orders, error: errOrdini } = await admin
     .from('orders')
