@@ -144,4 +144,52 @@ describe('dal terzo collaudo', () => {
   });
 });
 
+describe('dal ricontrollo di sicurezza su 88a2d67', () => {
+  const blocco = (dati: Record<string, unknown>, altro: Record<string, unknown> = {}) => ({ stato: 'letto', fonte: 'https://www.openstreetmap.org/', fonte_nome: 'OpenStreetMap', letto_il: LETTO, dati, ...altro });
+
+  it('3a · le frasi dentro i fatti e il motivo della busta: niente voti di Google né nomi di persona, anche a chi non ha pagato', () => {
+    const a = { fatti: {
+      posizione: blocco({ lat: 45, lon: 9, nota: 'Bar con 4,6 stelle su Google' }),
+      vicini: blocco({ raggio_m: 400, concorrenti: { numero: 2, elenco: [{ nome: 'Bar Roma', distanza_m: 80 }] } }, { stato: 'vuoto', motivo: 'Mario Rossi ha 4,6 stelle su Google' }),
+    } };
+    for (const t of [JSON.stringify(analisiDaSalvare(a)), JSON.stringify(analisiPerChiNonHaPagato(a))]) {
+      expect(t).not.toMatch(/4,6|Mario/);
+    }
+    // I nomi delle attività restano: sono nomi di negozi, non di persone.
+    expect(JSON.stringify(analisiDaSalvare(a))).toContain('Bar Roma');
+  });
+
+  it('3b · nomi di persona nel pubblico, chiave «name» nei post, tema con la fonte di un profilo Google: tutto fuori', () => {
+    const salvata = analisiDaSalvare({
+      pubblico: 'Lo consiglia Mario Rossi',
+      fatti: { instagram: blocco({ follower: 10, migliori: [{ link: 'https://www.instagram.com/p/x', name: 'Mario Rossi' }] }, { fonte_nome: 'Instagram' }) },
+      business: { reputazione_temi: [{ tema: 'il caffè', tono: 'positivo', quante: 5, fonte: 'https://www.google.com/maps/contrib/1234567890' }] },
+    }) as Record<string, unknown>;
+    const t = JSON.stringify(salvata);
+    expect(t).not.toMatch(/Mario|contrib/);
+    expect(salvata.pubblico).toBeUndefined();
+    expect((salvata.business as Record<string, unknown[]>).reputazione_temi).toEqual([]);
+  });
+
+  it('3c · DataForSEO vale solo per ricerche e recensioni; un campo senza fonte, o da DataForSEO, non si salva', () => {
+    const salvata = analisiDaSalvare({ fatti: {
+      sito: blocco({ titolo: 'Bar Roma' }, { fonte: 'https://api.dataforseo.com/v3/business_data/google/my_business_info', fonte_nome: 'DataForSEO' }),
+      ricerche: blocco({ parole: [{ parola: 'bar piacenza', ricerche_al_mese: 900 }] }, { fonte: 'https://dataforseo.com/', fonte_nome: 'DataForSEO' }),
+    }, business: { occasioni: [{ cosa: 'Aperto la domenica', fonte: 'https://dataforseo.com/x' }] } }) as { fatti: Record<string, unknown>; business: Record<string, unknown[]> };
+    expect(Object.keys(salvata.fatti)).toEqual(['ricerche']);
+    expect(salvata.business.occasioni).toEqual([]);
+    const campi = campiDaSalvare({
+      orari: { valore: 'Lun-Sab 7-19', stato: 'da_confermare', fonte: null },
+      indirizzo: { valore: 'Via Roma 1', stato: 'da_confermare', fonte: 'https://api.dataforseo.com/v3/business_data/google/x' },
+      telefono: { valore: '0523 123456', stato: 'confermato', fonte: 'https://www.bar.it/contatti' },
+    });
+    expect(Object.keys(campi)).toEqual(['telefono']);
+  });
+
+  it('export: gli abbonamenti dal più recente, come la dashboard', () => {
+    const src = readFileSync(path.join(RADICE, 'app/api/account/export/route.ts'), 'utf8');
+    expect(src).toMatch(/from\('abbonamenti_servizi'\)[^\n]*order\('creato_il', \{ ascending: false \}\)/);
+  });
+});
+
 void ID;

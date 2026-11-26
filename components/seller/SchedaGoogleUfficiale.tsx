@@ -37,7 +37,11 @@ function caricaPlaces(chiave: string): Promise<boolean> {
     s.async = true;
     s.src = `https://maps.googleapis.com/maps/api/js?${new URLSearchParams({ key: chiave, v: 'weekly', loading: 'async', language: 'it', region: 'IT' })}`;
     s.onload = pronta;
-    s.onerror = () => risolvi(false);
+    // Se lo script non arriva, si toglie: così «Riprova» lo chiede di nuovo, invece di ritrovarlo rotto (ricontrollo di mycity#336).
+    s.onerror = () => {
+      s.remove();
+      risolvi(false);
+    };
     document.head.appendChild(s);
   }).then((ok) => {
     if (!ok) caricamento = null;
@@ -50,6 +54,7 @@ export const schedaGoogleCollegata = () => CHIAVE.length > 0;
 
 export default function SchedaGoogleUfficiale({ placeId }: { placeId: string | null }) {
   const [stato, setStato] = useState<'attesa' | 'pronta' | 'errore'>('attesa');
+  const [tentativo, setTentativo] = useState(0);
   const riquadro = useRef<HTMLDivElement | null>(null);
 
   // 26/11/2026 — Se Google non riesce a disegnare la scheda (place_id scaduto, chiave rifiutata), il riquadro
@@ -69,11 +74,20 @@ export default function SchedaGoogleUfficiale({ placeId }: { placeId: string | n
     return () => {
       vivo = false;
     };
-  }, [placeId]);
+  }, [placeId, tentativo]);
 
   if (!placeId) return <p className="text-xs text-ink-400" data-testid="scheda-google">La tua scheda Google: non ancora collegata.</p>;
   if (!CHIAVE) return <p className="text-xs text-ink-400" data-testid="scheda-google">La tua scheda Google: la mostriamo qui appena è collegata.</p>;
-  if (stato === 'errore') return <p className="text-xs text-ink-500" data-testid="scheda-google">La tua scheda Google non si è caricata: riprova fra poco.</p>;
+  if (stato === 'errore') {
+    return (
+      <p className="text-xs text-ink-500" data-testid="scheda-google">
+        La tua scheda Google non si è caricata.{' '}
+        <button type="button" className="font-semibold text-primary-700 underline" onClick={() => { setStato('attesa'); setTentativo((t) => t + 1); }}>
+          Riprova
+        </button>
+      </p>
+    );
+  }
   if (stato === 'attesa') return <p className="text-xs text-ink-400" data-testid="scheda-google">Carico la tua scheda Google…</p>;
   // Gli elementi di Google si creano senza JSX: React 18 non conosce i loro tipi.
   return (

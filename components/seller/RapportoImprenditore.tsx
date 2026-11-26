@@ -13,6 +13,7 @@ import {
   assaggio,
   leggiRapporto,
   placeIdDi,
+  motivoDellaParte,
   type CosaSappiamo,
   type PezzoParte,
 } from '@/lib/agenzia/rapporto';
@@ -61,7 +62,7 @@ export default function RapportoImprenditore({ scheda, canali, sito, haPagato, l
     );
   }
   const sappiamo = { haSito, instagramScritto: Boolean((canaliScritti?.instagram ?? '').trim()) };
-  return haPagato ? <RapportoIntero scheda={scheda} fascia={fascia ?? null} adesso={adesso} /> : <Assaggio scheda={scheda} canali={canali} sito={sito} sappiamo={sappiamo} adesso={adesso} />;
+  return haPagato ? <RapportoIntero scheda={scheda} canali={canali} sito={sito} sappiamo={sappiamo} fascia={fascia ?? null} adesso={adesso} /> : <Assaggio scheda={scheda} canali={canali} sito={sito} sappiamo={sappiamo} adesso={adesso} />;
 }
 
 function Cornice({ titolo, sotto, children }: { titolo: string; sotto: string; children: React.ReactNode }) {
@@ -106,8 +107,10 @@ function Assaggio({ scheda, canali, sito, sappiamo, adesso }: { scheda: Props['s
   );
 }
 
-function RapportoIntero({ scheda, fascia, adesso }: { scheda: Props['scheda']; fascia: Abbonamento | null; adesso: Date }) {
+function RapportoIntero({ scheda, canali, sito, sappiamo, fascia, adesso }: { scheda: Props['scheda']; canali: Props['canali']; sito: Props['sito']; sappiamo: CosaSappiamo; fascia: Abbonamento | null; adesso: Date }) {
   const rapporto = leggiRapporto(scheda, adesso);
+  // Il motivo vero di una parte vuota, come nell'assaggio (ricontrollo di mycity#336).
+  const numeri = assaggio({ scheda, canali, sito, ...sappiamo }, adesso);
   // Senza un abbonamento attivo (disdetto, o negozio online da prima della demo) vale il Base, come sul server:
   // mai più parti di quelle pagate (dal collaudo del 26/11).
   const compresa = (nome: (typeof PARTI_RAPPORTO)[number]) => ANALISI_PER_FASCIA[fascia ?? 'base'].parti[nome] !== null;
@@ -137,7 +140,7 @@ function RapportoIntero({ scheda, fascia, adesso }: { scheda: Props['scheda']; f
               <li key={nome} data-parte={nome} className="rounded-lg border border-cream-200 bg-white p-3">
                 <h4 className="text-sm font-bold text-ink-900">{i + 1}. {TITOLI_PARTI[nome]}</h4>
                 {nome === 'mycity' && parte === null && <p className="mt-1 text-sm text-ink-600">I numeri del tuo negozio su MyCity sono nella pagella, in questa pagina.</p>}
-                {nome !== 'mycity' && parte === null && <p className="mt-1 text-sm text-ink-400">Non ancora letta.</p>}
+                {nome !== 'mycity' && parte === null && <p className="mt-1 text-sm text-ink-600">{motivoDellaParte(nome, numeri) ?? 'Non ancora letta.'}</p>}
                 {parte === 'in_arrivo' && <p className="mt-1 text-sm text-ink-400">In arrivo: questa fonte non è ancora accesa.</p>}
                 {parte === 'da_rileggere' && <p className="mt-1 text-sm text-ink-400">Da rileggere: i dati letti sono scaduti, li leggiamo di nuovo.</p>}
                 {Array.isArray(parte) && parte.map((pz, k) => <ContenutoParte key={k} parte={pz} />)}

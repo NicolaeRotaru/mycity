@@ -199,7 +199,8 @@ const scarica = withAuthRateLimit(
       .select('*')
       .or(`user_id.eq.${userId},seller_id.eq.${userId}`).order('id').range(da, a)),
     // 24/11/2026 — Gli abbonamenti dei servizi (MyCity tramite SDG), migrazione 706.
-    abbonamenti_dei_servizi: tutta((da, a) => admin.from('abbonamenti_servizi').select('*').eq('seller_id', userId).order('id').range(da, a)),
+    // 26/11/2026 — Dal più recente, come la dashboard: con due abbonamenti attivi la fascia è la stessa (scheda-del-negozio.ts).
+    abbonamenti_dei_servizi: tutta((da, a) => admin.from('abbonamenti_servizi').select('*').eq('seller_id', userId).order('creato_il', { ascending: false }).order('id').range(da, a)),
     // 24/11/2026 — La scheda del locale mandata da n8n e il preventivo col link (migrazione 708).
     // Del link non si esporta il codice: è una chiave, non un dato della persona.
     // 26/11/2026 — La scheda esce come la vede il negozio (revisione di sicurezza di mycity#336): prima del

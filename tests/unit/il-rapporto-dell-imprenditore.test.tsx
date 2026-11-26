@@ -66,6 +66,8 @@ const ADESSO = new Date('2026-11-26T14:00:00Z');
 const LETTO = '2026-11-26T09:00:00Z';
 const ID = 'aaaaaaaa-0000-0000-0000-000000000001';
 const DFS = 'https://dataforseo.com/';
+/** Una fonte pubblica per le sezioni dell'AD: DataForSEO vale solo per ricerche e temi delle recensioni. */
+const WEB = 'https://www.comune.piacenza.it/eventi';
 
 const scheda = (analisi: Record<string, unknown>): SchedaCliente =>
   ({ tipo: 'scheda-cliente', id_attivita: ID, campi: {}, analisi } as unknown as SchedaCliente);
@@ -195,13 +197,13 @@ describe('prova 3 — dopo una lettura Google, nel database e nella scheda c’�
 
 describe('prova 4 (parte del sito) — fonte spenta e dati scaduti', () => {
   it('una fonte spenta è «in arrivo», mai «0» né «non trovato»', () => {
-    const s = scheda({ fatti: { ricerche: blocco(null, { stato: 'spento', motivo: 'credenziale finta', fonte: DFS, fonte_nome: 'DataForSEO' }) } });
+    const s = scheda({ fatti: { ricerche: blocco(null, { stato: 'spento', motivo: 'credenziale finta', fonte: WEB, fonte_nome: 'DataForSEO' }) } });
     expect(leggiRapporto(s, ADESSO)!.ricerche).toBe('in_arrivo');
     expect(assaggio({ scheda: s }, ADESSO).find((n) => n.id === 'ricerche')!.inArrivo).toBe(true);
   });
 
   it('passata conserva_fino_al (DataForSEO) i dati non si mostrano più: «da rileggere», senza cancellare niente', () => {
-    const scaduta = blocco({ zona: 'Piacenza', parole: [{ parola: 'bar piacenza', ricerche_al_mese: 900, posizione: 4 }] }, { fonte: DFS, fonte_nome: 'DataForSEO', conserva_fino_al: '2026-11-20T00:00:00Z' });
+    const scaduta = blocco({ zona: 'Piacenza', parole: [{ parola: 'bar piacenza', ricerche_al_mese: 900, posizione: 4 }] }, { fonte: WEB, fonte_nome: 'DataForSEO', conserva_fino_al: '2026-11-20T00:00:00Z' });
     const s = scheda({ fatti: { ricerche: scaduta } });
     expect(leggiRapporto(s, ADESSO)!.ricerche).toBe('da_rileggere');
     expect(assaggio({ scheda: s }, ADESSO).find((n) => n.id === 'ricerche')!.valore).toBeNull();
@@ -223,12 +225,12 @@ describe('prova 5 — una recensione con «Mario Rossi»', () => {
   });
 
   it('nelle voci niente prezzi, telefoni, link, menzioni o numeri di Google', () => {
-    const occasioni = (cose: Array<Record<string, unknown>>) => scheda({ business_fatta_il: LETTO, business: { occasioni: [{ cosa: 'Mercato in piazza Cavalli', fonte: DFS }, ...cose] } });
+    const occasioni = (cose: Array<Record<string, unknown>>) => scheda({ business_fatta_il: LETTO, business: { occasioni: [{ cosa: 'Mercato in piazza Cavalli', fonte: WEB }, ...cose] } });
     const cattive = [
-      { cosa: 'Il caffè costa 1,20 € in zona', fonte: DFS }, { cosa: 'Chiama il 333 123 4567', fonte: DFS },
-      { cosa: 'Leggi su www.esempio.it', fonte: DFS }, { cosa: 'Scrivi a (@mario.rossi) per info', fonte: DFS },
-      { cosa: 'Il Caffè Verdi ha 4,5 su Google', fonte: DFS }, { cosa: 'Su TripAdvisor sei a 4,5 su 5', fonte: DFS },
-      { cosa: 'Voto medio quattro e mezzo su cinque', fonte: DFS }, { cosa: 'Un menù da 25 a persona', fonte: DFS },
+      { cosa: 'Il caffè costa 1,20 € in zona', fonte: WEB }, { cosa: 'Chiama il 333 123 4567', fonte: WEB },
+      { cosa: 'Leggi su www.esempio.it', fonte: WEB }, { cosa: 'Scrivi a (@mario.rossi) per info', fonte: WEB },
+      { cosa: 'Il Caffè Verdi ha 4,5 su Google', fonte: WEB }, { cosa: 'Su TripAdvisor sei a 4,5 su 5', fonte: WEB },
+      { cosa: 'Voto medio quattro e mezzo su cinque', fonte: WEB }, { cosa: 'Un menù da 25 a persona', fonte: WEB },
       { cosa: 'Senza fonte non esce' },
     ];
     // Una alla volta, accanto a una buona (la sezione ne tiene al massimo 5).
@@ -291,7 +293,7 @@ describe('prova 8 — il preventivo di ogni fascia elenca incluse ed escluse, da
   });
 
   it('dopo il pagamento il rapporto mostra le parti della fascia e dice quelle non comprese', () => {
-    const s = scheda({ business_fatta_il: LETTO, business: { idee_dal_confronto: [{ idea: 'I concorrenti pubblicano video ogni giorno', perche: 'piacciono', fonte: DFS }] } });
+    const s = scheda({ business_fatta_il: LETTO, business: { idee_dal_confronto: [{ idea: 'I concorrenti pubblicano video ogni giorno', perche: 'piacciono', fonte: WEB }] } });
     const { container } = render(<RapportoImprenditore scheda={s} canali={null} sito={null} haPagato fascia="base" adesso={ADESSO} />);
     expect(container.querySelector('[data-parte="concorrenti_web"]')?.textContent).toContain('Non compresa nel Base');
     expect(container.textContent).not.toContain('I concorrenti pubblicano video');
@@ -307,7 +309,7 @@ describe('l’assaggio prima di pagare, il rapporto intero dopo', () => {
       bandi: blocco({ elenco: [{ titolo: 'Contributo per le vetrine del centro', fonte: 'https://www.comune.piacenza.it/' }] }, { fonte_nome: 'Comune di Piacenza', licenza: null }),
     },
     business_fatta_il: LETTO,
-    business: { situazione: [{ testo: 'Bar in centro da dieci anni', fonte: 'https://example.org' }], piano_30_giorni: [{ settimana: 1, azione: 'Fotografare le brioche del mattino', servizio: 'foto_video', fonte: DFS }] },
+    business: { situazione: [{ testo: 'Bar in centro da dieci anni', fonte: 'https://example.org' }], piano_30_giorni: [{ settimana: 1, azione: 'Fotografare le brioche del mattino', servizio: 'foto_video', fonte: WEB }] },
   });
 
   it('chi non ha pagato non riceve il rapporto dal server: solo i numeri dell’assaggio e il place_id', () => {
@@ -335,7 +337,7 @@ describe('l’assaggio prima di pagare, il rapporto intero dopo', () => {
     expect(container.querySelector('[data-parte="bandi"]')?.textContent).toContain('Contributo per le vetrine del centro');
     expect(container.querySelector('[data-parte="piano_30_giorni"]')?.textContent).toContain('Settimana 1 — Fotografare le brioche del mattino');
     expect(container.querySelector('[data-parte="zona"]')?.textContent).toContain('Fermate dell’autobus: 3');
-    expect(container.querySelector('[data-parte="ricerche"]')?.textContent).toContain('Non ancora letta');
+    expect(container.querySelector('[data-parte="ricerche"]')?.textContent).toContain('Non ancora letto');
   });
 });
 
@@ -415,7 +417,7 @@ describe('dal collaudo del 26/11', () => {
   it('chi ha pagato il Base non riceve dal server le parti escluse; senza fascia vale il Base', () => {
     const a = {
       fatti: { ricerche: blocco({ parole: [] }), concorrenti_canali: blocco({ elenco: [] }), vicini: vicini(3) },
-      business: { idee_dal_confronto: [{ idea: 'x' }], confronto_concorrenti: [{ nome: 'Bar X', differenza: 'apre prima', meglio: 'video', fonte: DFS }], piano_30_giorni: [] },
+      business: { idee_dal_confronto: [{ idea: 'x' }], confronto_concorrenti: [{ nome: 'Bar X', differenza: 'apre prima', meglio: 'video', fonte: WEB }], piano_30_giorni: [] },
     };
     for (const fascia of ['base', null] as const) {
       const v = analisiPerLaFascia(a, fascia) as { fatti: object; business: Record<string, Array<Record<string, unknown>>> };
@@ -478,12 +480,12 @@ describe('dal secondo collaudo e dal contratto v1.3', () => {
   });
 
   it('una voce dell’AD presa da una pagina di Google Maps non si mostra; le voci dell’AD hanno la data', () => {
-    const s = scheda({ business_fatta_il: LETTO, business: { occasioni: [{ cosa: 'Aperto fino alle due di notte', fonte: 'https://www.google.com/maps/place/x' }, { cosa: 'Mercato in piazza Cavalli', fonte: DFS }] } });
+    const s = scheda({ business_fatta_il: LETTO, business: { occasioni: [{ cosa: 'Aperto fino alle due di notte', fonte: 'https://www.google.com/maps/place/x' }, { cosa: 'Mercato in piazza Cavalli', fonte: WEB }] } });
     const parte = leggiRapporto(s, ADESSO)!.calendario as PezzoParte[];
     expect(parte.flatMap((p) => p.voci.map((v) => v.titolo))).toEqual(['Mercato in piazza Cavalli']);
     expect(parte[0].fonte).toContain('del 26/11');
     // Senza nessuna data, le voci dell'AD non si mostrano.
-    expect(leggiRapporto(scheda({ business: { occasioni: [{ cosa: 'Mercato in piazza Cavalli', fonte: DFS }] } }), ADESSO)).toBeNull();
+    expect(leggiRapporto(scheda({ business: { occasioni: [{ cosa: 'Mercato in piazza Cavalli', fonte: WEB }] } }), ADESSO)).toBeNull();
   });
 
   it('il Business riceve 3 concorrenti sui social e sul web, il Premium 5', () => {
@@ -507,7 +509,7 @@ describe('dal secondo collaudo e dal contratto v1.3', () => {
   });
 
   it('il piano dei 30 giorni dice anche cosa facciamo noi (contratto v1.3, `proposta`)', () => {
-    const s = scheda({ business_fatta_il: LETTO, business: { piano_30_giorni: [{ settimana: 2, azione: 'Mostrare le brioche del mattino', servizio: 'social', proposta: 'Pubblichiamo tre storie a settimana', fonte: DFS }] } });
+    const s = scheda({ business_fatta_il: LETTO, business: { piano_30_giorni: [{ settimana: 2, azione: 'Mostrare le brioche del mattino', servizio: 'social', proposta: 'Pubblichiamo tre storie a settimana', fonte: WEB }] } });
     const v = (leggiRapporto(s, ADESSO)!.piano_30_giorni as PezzoParte[])[0].voci[0];
     expect(v).toEqual({ titolo: 'Settimana 2', dettaglio: 'Mostrare le brioche del mattino · lo facciamo noi: Pubblichiamo tre storie a settimana' });
   });
@@ -519,7 +521,7 @@ describe('dal secondo collaudo e dal contratto v1.3', () => {
     };
     const r = await manda({
       tipo: 'scheda-cliente', id_attivita: ID, parziale: true, campi: {},
-      analisi: { tipo_di_locale: '', fatti: { vicini: blocco(null, { stato: 'errore', motivo: 'Overpass non risponde' }), meteo: blocco({ giorni: [] }, { fonte_nome: 'MET Norway', licenza: 'CC BY 4.0' }) }, business: { situazione: [], occasioni: [{ cosa: 'Mercato', fonte: DFS }] } },
+      analisi: { tipo_di_locale: '', fatti: { vicini: blocco(null, { stato: 'errore', motivo: 'Overpass non risponde' }), meteo: blocco({ giorni: [] }, { fonte_nome: 'MET Norway', licenza: 'CC BY 4.0' }) }, business: { situazione: [], occasioni: [{ cosa: 'Mercato', fonte: WEB }] } },
     });
     expect(r.status).toBe(200);
     const salvata = db.salvate[0].scheda as { campi: Record<string, unknown>; analisi: { tipo_di_locale: string; fatti: Record<string, { stato: string }>; business: Record<string, unknown[]> } };
@@ -545,27 +547,54 @@ describe('dal secondo revisore (pagine e logica)', () => {
     expect(fallita.container.textContent).toContain('Non riesco a leggere');
   });
 
-  it('M1 · con Instagram spento nel rapporto, l’assaggio non prende i follower dall’altra lettura', () => {
+  it('M1 · con Instagram spento nel rapporto, l’assaggio usa i follower letti per la pagina «Analisi» (ricontrollo del 26/11)', () => {
     const s = scheda({ fatti: { instagram: blocco(null, { stato: 'spento', motivo: 'x', fonte_nome: 'Instagram' }) } });
-    const canali = { tipo: 'analisi-canali', id_attivita: ID, fatta_il: LETTO, canali: { instagram: { stato: 'fatta', numeri: { follower: 900 } } } } as unknown as Parameters<typeof assaggio>[0]['canali'];
-    expect(assaggio({ scheda: s, canali }, ADESSO).find((x) => x.id === 'follower')!.valore).toBeNull();
+    const canali = { tipo: 'analisi-canali', id_attivita: ID, fatta_il: LETTO, canali: { instagram: { stato: 'fatta', numeri: { follower: 1234 } } } } as unknown as Parameters<typeof assaggio>[0]['canali'];
+    expect(assaggio({ scheda: s, canali }, ADESSO).find((x) => x.id === 'follower')!.valore).toBe(`${(1234).toLocaleString('it-IT')} su Instagram`);
+    // Senza i canali, resta «non attiva».
+    expect(assaggio({ scheda: s }, ADESSO).find((x) => x.id === 'follower')!.inArrivo).toBe(true);
+  });
+
+  it('Instagram «vuoto» con follower 0: il motivo, non «0 su Instagram»', () => {
+    const s = scheda({ fatti: { instagram: { ...instagram(0), stato: 'vuoto' } } });
+    const f = assaggio({ scheda: s }, ADESSO).find((x) => x.id === 'follower')!;
+    expect(f.valore).toBeNull();
+    expect(f.motivo).toContain('Non abbiamo trovato un profilo Instagram');
+  });
+
+  it('dopo il pagamento le parti vuote dicono il motivo vero (sito, social), non «Non ancora letta» per sempre', () => {
+    const s = scheda({ fatti: { vicini: vicini(3) } });
+    const { container } = render(<RapportoImprenditore scheda={s} canali={null} sito={null} haPagato fascia="premium" adesso={ADESSO} />);
+    expect(container.querySelector('[data-parte="sito"]')?.textContent).toContain('Non hai ancora un sito');
+    expect(container.querySelector('[data-parte="identita_online"]')?.textContent).toContain('Non hai ancora un sito');
+    expect(container.querySelector('[data-parte="social"]')?.textContent).toContain('Non conosciamo ancora il tuo Instagram');
+  });
+
+  it('i nomi di persona: «Mario Rossi» no; «Google Maps», «Natale», «Piazza Cavalli» sì (al salvataggio e in lettura)', () => {
+    const buone = ['Aggiorna la scheda su Google Maps con le foto nuove', 'Per Natale prepara una vetrina con le luci', 'Partecipa al mercato di Piazza Cavalli'];
+    const s = scheda({ business_fatta_il: LETTO, business: { piano_30_giorni: [...buone, 'Lo consiglia Mario Rossi', 'Mario Rossi ha 4,6 stelle su Google'].map((azione, i) => ({ settimana: (i % 4) + 1, azione, fonte: WEB })) } });
+    const salvata = analisiDaSalvare(s.analisi as Record<string, unknown>) as Record<string, unknown>;
+    const dettagli = (leggiRapporto(scheda(salvata), ADESSO)!.piano_30_giorni as PezzoParte[])[0].voci.map((v) => v.dettaglio);
+    expect(dettagli).toEqual(buone);
+    expect(analisiDaSalvare({ pubblico: 'Lo consiglia Mario Rossi' })).toEqual({});
+    expect(analisiDaSalvare({ pubblico: 'Chi passa per Via Giuseppe Verdi la mattina' })).toEqual({ pubblico: 'Chi passa per Via Giuseppe Verdi la mattina' });
   });
 
   it('M3 · una settimana del piano senza azione non si mostra', () => {
-    const s = scheda({ business_fatta_il: LETTO, business: { piano_30_giorni: [{ settimana: 2, azione: '', fonte: DFS }, { settimana: 3, azione: 'Fotografare la vetrina di Natale', fonte: DFS }] } });
+    const s = scheda({ business_fatta_il: LETTO, business: { piano_30_giorni: [{ settimana: 2, azione: '', fonte: WEB }, { settimana: 3, azione: 'Fotografare la vetrina di Natale', fonte: WEB }] } });
     expect((leggiRapporto(s, ADESSO)!.piano_30_giorni as PezzoParte[])[0].voci.map((v) => v.titolo)).toEqual(['Settimana 3']);
   });
 
   it('M5 · niente «AD» visibile nel rapporto', () => {
-    const s = scheda({ business_fatta_il: LETTO, business: { occasioni: [{ cosa: 'Mercato in piazza Cavalli', fonte: DFS }] } });
+    const s = scheda({ business_fatta_il: LETTO, business: { occasioni: [{ cosa: 'Mercato in piazza Cavalli', fonte: WEB }] } });
     const { container } = render(<RapportoImprenditore scheda={s} canali={null} sito={null} haPagato fascia="premium" adesso={ADESSO} />);
     expect(container.textContent).not.toMatch(/\bAD\b/);
   });
 
   it('M6 · un nome di persona nelle frasi dell’AD (idee, piano, confronto) non passa', () => {
     const s = scheda({ business_fatta_il: LETTO, business: {
-      idee_dal_confronto: [{ idea: 'Fare come Mario Rossi con i video del forno', perche: 'piace', fonte: DFS }, { idea: 'Video brevi del forno al mattino', perche: 'piacciono', fonte: DFS }],
-      piano_30_giorni: [{ settimana: 1, azione: 'Chiamare Giulia Bianchi per le foto', fonte: DFS }],
+      idee_dal_confronto: [{ idea: 'Fare come Mario Rossi con i video del forno', perche: 'piace', fonte: WEB }, { idea: 'Video brevi del forno al mattino', perche: 'piacciono', fonte: WEB }],
+      piano_30_giorni: [{ settimana: 1, azione: 'Chiamare Giulia Bianchi per le foto', fonte: WEB }],
     } });
     const t = JSON.stringify(leggiRapporto(s, ADESSO));
     expect(t).not.toMatch(/Mario|Giulia/);

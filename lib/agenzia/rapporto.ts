@@ -1,5 +1,6 @@
 import type { Abbonamento } from './preventivo';
 import { senzaPrezzo, type SchedaCliente } from './scheda-cliente';
+import { haUnNomeDiPersona } from './nomi-di-persona';
 import type { AnalisiCanali, RisultatoSito } from './analisi';
 
 /**
@@ -81,7 +82,11 @@ const INDIRIZZO_WEB = /https?:\/\/|www\.|\b[\w-]+\.(?:it|com|net|org|eu|info|biz
 /** Un voto («4,6 su 5», «4.5 stelle») non è un prezzo. */
 const VOTO = /\d[.,]\d\s*(su\s*5|\/\s*5|stell[ae])/gi;
 /** Due parole di fila con la maiuscola («Mario Rossi»): quasi sempre un nome di persona. */
-const NOME_E_COGNOME = /\b[A-ZÀ-Ý][a-zà-ÿ']+\s+[A-ZÀ-Ý][a-zà-ÿ']+/;
+/**
+ * Un nome e cognome di persona («Mario Rossi»), riconosciuto da un elenco di nomi propri (lib/agenzia/nomi-di-persona.ts):
+ * «Google Maps», «Natale», «Piazza Cavalli» restano (ricontrollo di mycity#336). Ha la forma di una RegExp (`test`).
+ */
+const NOME_E_COGNOME = { test: (t: string) => haUnNomeDiPersona(t) };
 /** «@nome», anche fra parentesi: nel rapporto non si citano persone né profili altrui (chi recensisce, chi commenta). */
 const MENZIONE = /[@＠]\s*[\p{L}\d_.]{2,}/u;
 /** Un indirizzo email detto a parole («mario @ gmail punto com»). */
@@ -266,16 +271,19 @@ export function assaggio(
   const statoIg = statoDi(fatti, 'instagram');
   const f = letto(ig) ? intero(ig.dati.follower) : null;
   let follower: Valore;
-  if (letto(ig) && f !== null) follower = conValore(`${it(f)} su Instagram`, ig.etichetta);
-  else if (statoIg) follower = senza(motivoDelloStato(statoIg, 'Instagram non vale per la tua attività.', 'Non abbiamo trovato un profilo Instagram dell’attività.') ?? NON_ANCORA_LETTO, statoIg === 'spento');
+  // Stato `vuoto` = Instagram non c'è: il motivo, non «0 su Instagram» (ricontrollo di mycity#336).
+  if (letto(ig) && f !== null && !ig.vuoto) follower = conValore(`${it(f)} su Instagram`, ig.etichetta);
+  else if (statoIg && statoIg !== 'spento') follower = senza(motivoDelloStato(statoIg, 'Instagram non vale per la tua attività.', 'Non abbiamo trovato un profilo Instagram dell’attività.') ?? NON_ANCORA_LETTO);
   else {
-    // Solo se il rapporto non ha il blocco: Instagram letto da n8n per la pagina «Analisi» (porta analisi-canali).
+    // Il rapporto non ha i follower (blocco assente o spento): quelli letti da n8n per la pagina «Analisi», se ci sono
+    // (ricontrollo di mycity#336: con Instagram spento l'assaggio diceva «non attiva» mentre i follower si sapevano).
     const c = d.canali?.canali.instagram;
     const quando = c?.letto_il ?? d.canali?.fatta_il ?? null;
     const nc = c?.stato === 'fatta' ? c.numeri?.follower : undefined;
     if (nc !== undefined && dataDiLetturaValida(quando, adesso)) follower = conValore(`${it(nc)} su Instagram`, etichettaFonte('Instagram', quando));
     else if (c?.stato === 'non_trovato') follower = senza('Non abbiamo trovato il profilo Instagram che ci hai scritto: controlla il nome.');
     else if (c?.stato === 'privato') follower = senza('Il profilo Instagram è privato: dai dati pubblici non si legge.');
+    else if (statoIg === 'spento') follower = senza(LETTURA_NON_ATTIVA, true);
     else follower = senza(d.instagramScritto ? NON_ANCORA_LETTO : 'Non conosciamo ancora il tuo Instagram: scrivilo qui sotto, in «I tuoi canali».');
   }
 
@@ -298,6 +306,19 @@ export function assaggio(
     { id: 'follower', titolo: 'Chi ti segue', nota: notaBase('social'), ...follower },
     { id: 'ricerche', titolo: 'Chi ti cerca su Google', nota: notaBase('ricerche'), ...ricerche },
   ];
+}
+
+/**
+ * Perché una parte del rapporto non ha contenuto, detto come nell'assaggio (ricontrollo di mycity#336: dopo il
+ * pagamento le parti 1, 6 e 7 dicevano «Non ancora letta» per sempre). `null` = nessun motivo noto.
+ */
+export function motivoDellaParte(parte: ParteRapporto, numeri: readonly NumeroAssaggio[]): string | null {
+  const di = (id: NumeroAssaggio['id']) => numeri.find((n) => n.id === id)?.motivo ?? null;
+  if (parte === 'identita_online' || parte === 'sito') return di('velocita_sito');
+  if (parte === 'social') return di('follower');
+  if (parte === 'concorrenti' || parte === 'zona') return di('concorrenti');
+  if (parte === 'ricerche') return di('ricerche');
+  return null;
 }
 
 /**
@@ -351,7 +372,7 @@ function sezioneAd(business: Record<string, unknown> | null, chiave: string, com
   const voci = soloVoci(elenco(business?.[chiave]).slice(0, max).map((x) => {
     const o = comeOggetto(x);
     const f = o ? https(o.fonte) : null;
-    return o && f && !pareDatoDiGoogle('', f) ? comeVoce(o) : null;
+    return o && f && !pareDatoDiGoogle('', f) && !fonteDataForSeo(f) ? comeVoce(o) : null;
   }));
   return pezzo(etichetta, { voci });
 }
@@ -401,7 +422,7 @@ export function leggiRapporto(scheda: SchedaCliente | null | undefined, adesso: 
     const tema = fraseMostrabile(o?.tema, 2, 80);
     const tono = o?.tono === 'positivo' || o?.tono === 'negativo' || o?.tono === 'misto' ? o.tono : null;
     const q = intero(o?.quante);
-    if (!o || !https(o.fonte) || !tema || !tono || q === null || q < RECENSIONI_MINIME_PER_TEMA) return [];
+    if (!o || !https(o.fonte) || fonteDiGoogle(String(o.fonte)) || !tema || !tono || q === null || q < RECENSIONI_MINIME_PER_TEMA) return [];
     if (!temaMostrabile(tema)) return [];
     return [{ tema, tono, quante: q }];
   });
@@ -739,7 +760,8 @@ export function campiDaSalvare<T extends Record<string, { fonte?: string | null 
   return Object.fromEntries(
     Object.entries(campi).filter(([nome, c]) => {
       if (CHIAVE_VIETATA.test(nome) || CHIAVE_DI_VOTO.test(nome)) return false;
-      if (typeof c?.fonte === 'string' && fonteDiGoogle(c.fonte)) return false;
+      // Un campo senza fonte, o letto da Google, TripAdvisor o DataForSEO, non si salva (ricontrollo del 26/11).
+      if (typeof c?.fonte !== 'string' || !c.fonte.trim() || fonteDiGoogle(c.fonte) || fonteDataForSeo(c.fonte)) return false;
       // Un valore che ricopia un voto o le recensioni («4,6 su 5 su Google») non si salva, qualunque sia il nome.
       const valore = (c as { valore?: unknown } | undefined)?.valore;
       return !(typeof valore === 'string' && (pareDatoDiGoogle(valore) || UN_VOTO.test(valore)));
@@ -762,7 +784,7 @@ const VOCI_DELLE_SEZIONI: Record<string, readonly string[]> = {
 /** Una chiave che dice un voto o recensioni («stelle», «rating», «numero_recensioni»): nei fatti non si salva. */
 const CHIAVE_DI_VOTO = /voto|stell|rating|recension|review/i;
 /** Una chiave che dice una persona (chi scrive, chi commenta): non si salva mai, da nessuna parte (revisione del 26/11). */
-const CHIAVE_DI_PERSONA = /^(autore|autori|author|authors|utente|utenti|user|users|username|nome_autore|commenti|comments|commentatori)$/i;
+const CHIAVE_DI_PERSONA = /^(autore|autori|author|authors|utente|utenti|user|users|username|name|nome_autore|commenti|comments|commentatori)$/i;
 /** Le sezioni di prima dell'AD (analisi.ts, `SEZIONI_BUSINESS`) e le chiavi di ogni loro frase. */
 const SEZIONI_DI_PRIMA = ['situazione', 'mercato', 'clienti', 'opportunita', 'rischi', 'prime_mosse'] as const;
 const VOCE_DI_PRIMA = ['testo', 'fonte', 'servizio', 'proposta'] as const;
@@ -772,6 +794,40 @@ const ELENCHI_DI_TESTO = ['punti_di_forza', 'idee_contenuti', 'cosa_chiedere_al_
 
 /** Un testo che non ricopia un voto o le recensioni di Google o TripAdvisor. */
 const testoPulito = (v: unknown): v is string => typeof v === 'string' && !pareDatoDiGoogle(v);
+/** Un testo descrittivo: oltre ai dati di Google, niente nomi di persona (ricontrollo di sicurezza del 26/11). */
+const testoDescrittivo = (v: unknown): v is string => testoPulito(v) && !UN_VOTO.test(v) && !NOME_E_COGNOME.test(v);
+
+/** Un indirizzo di DataForSEO. Il parere legale lo tiene solo per ricerche, posizioni e temi delle recensioni. */
+export function fonteDataForSeo(indirizzo: unknown): boolean {
+  if (typeof indirizzo !== 'string') return false;
+  try {
+    return /(^|\.)dataforseo\.com$/i.test(new URL(indirizzo).hostname);
+  } catch {
+    return /dataforseo/i.test(indirizzo);
+  }
+}
+/** I soli blocchi dei fatti che possono venire da DataForSEO. */
+const BLOCCHI_DA_DATAFORSEO = new Set(['ricerche', 'recensioni']);
+/** Le chiavi di testo libero dentro i fatti: lì niente nomi di persona. I nomi di attività, eventi e bandi stanno in altre chiavi. */
+const CHIAVE_DESCRITTIVA = /^(motivo|nota|note|descrizione|commento|osservazion[ie]|testo|perche|didascalia|caption)$/i;
+const CHIAVE_INDIRIZZO = /^(fonte|link|indirizzo|url|profilo)$/i;
+
+/**
+ * Le frasi dentro i fatti, non solo le chiavi: una stringa che ricopia un voto o le recensioni di Google si toglie;
+ * in una chiave descrittiva (nota, motivo…) anche un nome di persona (ricontrollo di sicurezza del 26/11).
+ */
+function frasiPulite(v: unknown, chiave = '', profondita = 0): unknown {
+  if (profondita > 8) return null;
+  if (typeof v === 'string') {
+    if (CHIAVE_INDIRIZZO.test(chiave)) return v;
+    if (pareDatoDiGoogle(v) || UN_VOTO.test(v)) return null;
+    return CHIAVE_DESCRITTIVA.test(chiave) && NOME_E_COGNOME.test(v) ? null : v;
+  }
+  if (Array.isArray(v)) return v.map((x) => frasiPulite(x, chiave, profondita + 1));
+  const o = comeOggetto(v);
+  if (!o) return v;
+  return Object.fromEntries(Object.entries(o).map(([k, x]) => [k, frasiPulite(x, k, profondita + 1)]));
+}
 
 const soloChiavi = (o: Record<string, unknown>, chiavi: readonly string[]) => Object.fromEntries(chiavi.filter((k) => k in o).map((k) => [k, o[k]]));
 
@@ -806,21 +862,25 @@ export function analisiDaSalvare<T extends Record<string, unknown> | undefined>(
     for (const k of BLOCCHI_DEI_FATTI) {
       const b = comeOggetto(fg[k]);
       if (!b) continue;
-      const busta = soloChiavi(b, BUSTA_DEL_BLOCCO);
+      const busta = frasiPulite(soloChiavi(b, BUSTA_DEL_BLOCCO)) as Record<string, unknown>;
+      // DataForSEO vale solo per ricerche e recensioni: un blocco d'altro tipo letto da lì (orari, indirizzo presi da
+      // Google attraverso DataForSEO) non si salva (ricontrollo di sicurezza del 26/11, parere legale).
+      if (fonteDataForSeo(b.fonte) && !BLOCCHI_DA_DATAFORSEO.has(k)) continue;
       const d = comeOggetto(b.dati);
       let dati: unknown = null;
       if (d && k === 'google') dati = typeof d.place_id === 'string' && PLACE_ID.test(d.place_id.trim()) ? { place_id: d.place_id.trim() } : null;
       else if (d && k === 'tripadvisor') dati = typeof d.location_id === 'string' && LOCATION_ID.test(d.location_id.trim()) ? { location_id: d.location_id.trim() } : null;
       else if (d && k === 'recensioni') dati = soloChiavi(d, ['lette', 'con_risposta', 'ultima_il']);
-      else if (d) dati = senzaVoti(senzaChiaviVietate(d, [], true));
+      else if (d) dati = frasiPulite(senzaVoti(senzaChiaviVietate(d, [], true)));
       f[k] = { ...busta, dati };
     }
     a.fatti = f;
   }
 
   // I testi della lettura di n8n: niente voti o recensioni di Google ricopiati.
-  for (const k of ['tipo_di_locale', 'pubblico'] as const) if (k in a && !testoPulito(a[k])) delete a[k];
-  for (const k of ELENCHI_DI_TESTO) if (k in a) a[k] = elenco(a[k]).filter(testoPulito);
+  // I testi della lettura di n8n: niente voti o recensioni di Google ricopiati, niente nomi di persona.
+  for (const k of ['tipo_di_locale', 'pubblico'] as const) if (k in a && !testoDescrittivo(a[k])) delete a[k];
+  for (const k of ELENCHI_DI_TESTO) if (k in a) a[k] = elenco(a[k]).filter(testoDescrittivo);
 
   // Il giudizio del sito: solo le sue chiavi, la nota senza dati di Google.
   const gs = comeOggetto(a.giudizio_sito);
@@ -845,7 +905,7 @@ export function analisiDaSalvare<T extends Record<string, unknown> | undefined>(
         const o = comeOggetto(x);
         if (!o) return [];
         const v = soloChiavi(o, VOCE_DI_PRIMA);
-        return https(v.fonte) && typeof v.testo === 'string' && !pareDatoDiGoogle(v.testo, String(v.fonte)) ? [v] : [];
+        return https(v.fonte) && !fonteDataForSeo(v.fonte) && typeof v.testo === 'string' && !pareDatoDiGoogle(v.testo, String(v.fonte)) ? [v] : [];
       });
     }
     for (const [sezione, chiavi] of Object.entries(VOCI_DELLE_SEZIONI)) {
@@ -856,7 +916,7 @@ export function analisiDaSalvare<T extends Record<string, unknown> | undefined>(
         // Dal terzo collaudo: fonti solo https e non di Google o TripAdvisor; testi senza voti, recensioni o nomi
         // di persona (un testo storto si toglie; la voce resta se ha ancora la sua fonte).
         const fonte = https(v.fonte);
-        if (!fonte || fonteDiGoogle(fonte)) return [];
+        if (!fonte || fonteDiGoogle(fonte) || fonteDataForSeo(fonte)) return [];
         v.fonte = fonte;
         if ('fonte_canali' in v) v.fonte_canali = https(v.fonte_canali) && !fonteDiGoogle(String(v.fonte_canali)) ? v.fonte_canali : null;
         for (const [k, val] of Object.entries(v)) {
@@ -873,7 +933,8 @@ export function analisiDaSalvare<T extends Record<string, unknown> | undefined>(
         const q = intero(o?.quante);
         const tono = o?.tono === 'positivo' || o?.tono === 'negativo' || o?.tono === 'misto' ? o.tono : null;
         const fonte = https(o?.fonte);
-        return o && tono && fonte && temaMostrabile(o.tema) && q !== null && q >= RECENSIONI_MINIME_PER_TEMA ? [{ tema: o.tema, tono, quante: q, fonte }] : [];
+        // Mai una fonte di Google: «…/maps/contrib/<id>» è il profilo di chi ha scritto (ricontrollo del 26/11).
+        return o && tono && fonte && !fonteDiGoogle(fonte) && temaMostrabile(o.tema) && q !== null && q >= RECENSIONI_MINIME_PER_TEMA ? [{ tema: o.tema, tono, quante: q, fonte }] : [];
       });
     }
     const parti = comeOggetto(bz.parti);
