@@ -135,7 +135,7 @@ export default function AdminDashboard() {
       // tentativi scelti a caso dal database (il suo tetto per richiesta), e la
       // percentuale si presentava come quella dei trenta giorni. Ora si leggono
       // TUTTI i tentativi del periodo, a finestre ordinate.
-      const { data, error } = await leggiTutteLeRighe<TentativoPagamento>((da, a) =>
+      const { data, error, troncato } = await leggiTutteLeRighe<TentativoPagamento>((da, a) =>
         supabase
           .from('payment_attempts')
           .select('status, decline_code, error_code')
@@ -145,7 +145,10 @@ export default function AdminDashboard() {
           .range(da, a) as unknown as PromiseLike<{ data: TentativoPagamento[] | null; error: { message?: string } | null }>,
       );
       if (error) throw error;
-      return tassoAutorizzazione(data);
+      // R16-002 — Oltre il tetto della lettura (ventimila righe) si contano solo i tentativi più
+      // recenti: è un campione, e la Panoramica lo dice con la sua dimensione invece di presentarlo
+      // come il conto dei trenta giorni.
+      return { ...tassoAutorizzazione(data), campione: troncato ? data.length : null };
     },
     refetchInterval: 60_000,
     retry: false,
@@ -266,14 +269,14 @@ export default function AdminDashboard() {
           <HealthTile
             icon={CreditCard}
             tone={pagamentiDaGuardare ? 'accent' : 'primary'}
-            label="Pagamenti riusciti (30 giorni)"
+            label={pagamenti?.campione ? 'Pagamenti riusciti (campione dei 30 giorni)' : 'Pagamenti riusciti (30 giorni)'}
             value={tassoPagamenti === null ? '—' : `${(tassoPagamenti * 100).toFixed(1).replace('.', ',')}%`}
             hint={
               // 5/11/2026 (S05) — Una lettura caduta non è «nessun tentativo».
               pagamentiNonLetti && !pagamenti
                 ? 'non riesco a leggere i tentativi'
                 : pagamenti && pagamenti.tentativi > 0
-                  ? `${pagamenti.riusciti} su ${pagamenti.tentativi} tentativi con carta${motivoPrincipale ? ` · piu frequente: ${motivoPrincipale.codice}` : ''}`
+                  ? `${pagamenti.riusciti} su ${pagamenti.tentativi} tentativi con carta${pagamenti.campione ? ` · campione: solo gli ultimi ${pagamenti.campione.toLocaleString('it-IT')} tentativi, non tutti i 30 giorni` : ''}${motivoPrincipale ? ` · piu frequente: ${motivoPrincipale.codice}` : ''}`
                   : 'nessun tentativo con carta registrato'
             }
           />
