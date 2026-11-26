@@ -84,6 +84,12 @@ export interface DomandaGriglia {
   finestra?: readonly [number, number];
 }
 
+/**
+ * R10-003 — Il prezzo che il cliente paga, colonna calcolata di `products` (migrazione 960):
+ * il prezzo pieno meno la promozione attiva. Ordine e taglio di prezzo guardano lui, non `price`.
+ */
+const COLONNA_PREZZO_PAGATO = 'prezzo_pagato';
+
 const COLONNE = 'id, name, price, compare_at_price, images, stock, has_variants, created_at, seller_id, category_id';
 
 /**
@@ -177,7 +183,9 @@ function applicaFiltriComuni<Q extends { in: any; eq: any; lte: any; gte: any; o
       ? q.or(`price.lte.${d.maxPrice},id.in.(${scontati.join(',')})`)
       : q.lte('price', d.maxPrice);
   }
-  if (d.minPrice !== undefined) q = q.gte('price', d.minPrice);
+  // R10-003 — «Prezzo minimo» è il prezzo che si paga, non il pieno: il database lo calcola (`prezzo_pagato`,
+  // migrazione 960) con le stesse promozioni attive della cassa. Un 12 € al -25% (9 €) con minimo 10 € non entra.
+  if (d.minPrice !== undefined) q = q.gte(COLONNA_PREZZO_PAGATO, d.minPrice);
   // #91 — «Solo disponibili» lo decide il database. Attenzione: `stock` a NULL vuol dire
   // disponibilità illimitata.
   if (d.onlyInStock) q = q.or('stock.is.null,stock.gt.0');
