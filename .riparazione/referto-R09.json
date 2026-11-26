@@ -1,0 +1,351 @@
+{
+ "sessione": "R09",
+ "finita": true,
+ "voci": [
+  {
+   "id": "R09-001",
+   "chiave": "architettura|la regola che vieta i tipi «qualunque» non è accesa: 46 sono passati, e 40 permessi di saltare il controllo non saltano niente",
+   "esito": "parziale",
+   "commit": "1f5a9ad76f8454dbb94c8efb8db537077c744510",
+   "file_toccati": [
+    "app/api/cron/send-emails/route.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r09-lint-regola-any-e-direttive.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-lint-regola-any-e-direttive.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f172ac68a7d7a0108ec6ac34af608f87f81ce56a^ --file app/api/cron/send-emails/route.ts --prove tests/unit/riparazione-r09-lint-regola-any-e-direttive.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Sulla base la regola no-explicit-any è già accesa in .eslintrc.json ('error', con 'warn' su 16 file elencati), reportUnusedDisableDirectives è già true e tsconfig.json ha strict: true: lì niente da cambiare. Tolta la direttiva morta della rotta delle email a orario. La prova legge la configurazione calcolata con l'API ESLint e controlla che la regola sia accesa e che la rotta non abbia direttive morte. Commit f172ac68a7d7a0108ec6ac34af608f87f81ce56a (correzione) e 1f5a9ad76f8454dbb94c8efb8db537077c744510 (tipo della prova).",
+   "cosa_resta": "28 direttive eslint-disable morte in file non di R09 e 36 any a livello warn in 15 file (10 nella rotta delle email a orario: tipizzarli va oltre la modifica più piccola). Quando saranno tipizzati si toglie l'elenco di override 'warn' da .eslintrc.json.",
+   "serve_file_altrui": [
+    {
+     "file": "(28 file, una riga ciascuno)",
+     "modifica": "Togliere solo la riga eslint-disable morta a: app/admin/products/page.tsx:197; app/product/[id]/layout.tsx:219; app/product/[id]/opengraph-image.tsx:65; app/product/[id]/page.tsx:914; app/seller/orders/[id]/page.tsx:656; app/seller/products/ai-batch/page.tsx:303; app/store/[id]/opengraph-image.tsx:63; components/CategoryShowcase.tsx:257; components/ImageUrlField.tsx:113; components/StoreListRow.tsx:92; components/StoreMediaManager.tsx:166; components/StorePreviewCard.tsx:149; components/SupportProductAssistant.tsx:361,408,421,516,660; components/account/AccountSidebar.tsx:116; components/seller/BackgroundRemovalPreview.tsx:147,161; components/seller/BarcodeScanner.tsx:130; components/seller/BulkPhotoCreate.tsx:287; components/seller/CameraCapture.tsx:159; components/seller/ProductForm.tsx:1420; components/seller/ProductImagesField.tsx:199; components/seller/ReturnRequestCard.tsx:219; components/seller/site/SitePreview.tsx:267; lib/email/avviso-messaggio-negozio.ts:64 (la direttiva sta una riga sopra l'any: spostarla o togliere l'any)."
+    }
+   ],
+   "verificato_da": "revisore sonnet: confermato che sulla base la regola era già accesa (.eslintrc.json:54) e che la direttiva tolta era morta (lintText sulla base: Unused eslint-disable directive); la prova morde sul file della base; campione di 3 direttive dell'elenco confermato morto"
+  },
+  {
+   "id": "R09-002",
+   "chiave": "architettura|la rotta delle email a orario si crea un suo client admin",
+   "esito": "serve_file_altrui",
+   "commit": null,
+   "file_toccati": [],
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/l-allarme-della-coda-email-segue-quanto-in-fretta-la-svuotiamo.test.ts",
+     "modifica": "Nel vi.mock('@/lib/supabase/server') (riga ~77) far restituire a getAdminSupabase lo stesso oggetto che oggi restituisce il mock di '@supabase/supabase-js' createClient (righe ~79-87): { rpc: (nome, argomenti) => { if (nome === 'claim_pending_emails') stato.presiDaUnGiro = Number(argomenti.p_max); return Promise.resolve({ data: stato.righeDaSpedire, error: null }); }, from: (t) => fintaTabella(t), auth: { admin: { getUserById: async () => ({ data: null }) } } }. Poi il vi.mock('@supabase/supabase-js') non serve più."
+    },
+    {
+     "file": "app/api/cron/send-emails/route.ts (di R09, solo dopo la modifica sopra)",
+     "modifica": "Riapplicare il commit 191f58354f899505d20d4eec245b4177b29e6433: il client viene da getAdminSupabase() di lib/supabase/server.ts invece di createClient + requireSupabaseService; se la configurazione manca resta il 503."
+    }
+   ],
+   "nota": "La correzione nella rotta (commit 191f58354f899505d20d4eec245b4177b29e6433, prova rimessa uscita 0) rendeva rossa una prova comune (2 casi) che importa anche la rotta operational-alerts: tolta col commit 43bd832fdd30b3f9b1b84daa53464dedcb2589e5 per tenere verde npm run verify."
+  },
+  {
+   "id": "R09-003",
+   "chiave": "architettura|una prova sul webhook di stripe controlla l'ordine delle righe cercando una parola, e basta togliere uno spazio per ingannarla",
+   "esito": "parziale",
+   "commit": "40ee988e4e28d4685b9a48f1a01e04322d549d6f",
+   "file_toccati": [
+    "tests/unit/webhook-diviso-per-mestiere.test.ts",
+    "tests/unit/riparazione-r09-la-prova-del-webhook-non-si-inganna.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r09-la-prova-del-webhook-non-si-inganna.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-la-prova-del-webhook-non-si-inganna.test.ts tests/unit/webhook-diviso-per-mestiere.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e45635a9995880f66dd9ea73319d8072cd2fae06^ --file tests/unit/webhook-diviso-per-mestiere.test.ts --prove tests/unit/riparazione-r09-la-prova-del-webhook-non-si-inganna.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "La prova anti-doppione legge la rotta col compilatore TypeScript: ogni proprietà processed che non vale false deve stare dentro switch (event.type) o dopo, nello stesso blocco, mai prima né nel ramo dell'errore; spazi, a capo e virgolette non contano più. La rotta non cambia. La prova nuova fa girare quella prova su copie guastate della rotta vera (marcatura prima dello smistamento scritta processed:true, marcatura su più righe nel catch): verdi con la prova vecchia, rosse con la nuova. Commit e45635a9995880f66dd9ea73319d8072cd2fae06 (correzione) e 40ee988e4e28d4685b9a48f1a01e04322d549d6f (solo commento); rimessa sui due insieme.",
+   "cosa_resta": "La lettura sull'albero chiude i due casi della voce (processed:true senza spazio, marcatura su più righe nel catch) e boccia processed: !false prima dello switch. Ma: (1) la prova con i vitest figli (riparazione-r09-la-prova-del-webhook-non-si-inganna.test.ts:41) filtra con -t 'anti-doppione', che prende anche il caso «la rotta fa solo firma, anti-doppione e smistamento» (meno di 250 righe, la rotta ne ha 248): le copie guastate diventano rosse per il numero di righe, non per la marcatura; va filtrato col nome esatto del caso. (2) webhook-diviso-per-mestiere.test.ts:91 conta solo PropertyAssignment: non vede la forma breve (const processed = true; update({ processed })) né la chiave calcolata (['processed']: true). (3) :103 salta tutto ciò che sta dentro lo switch: una marcatura dentro un case prima del suo gestore passa (buco che c'era già).",
+   "verificato_da": "revisore opus: rilanciate le varianti con ROTTA_DEL_WEBHOOK_DA_LEGGERE su copie guastate; M2 (forma breve), M5 (chiave calcolata), M3 (case prima del gestore) restano verdi sulla prova anti-doppione → parziale"
+  },
+  {
+   "id": "R09-004",
+   "chiave": "architettura|il commento e la prova dicono che la bozza della cassa scade, ma la scadenza è stata tolta",
+   "esito": "parziale",
+   "commit": "0dfa00b0097e4fed9c1fad936e2b097ffef32a3d",
+   "file_toccati": [
+    "app/checkout/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r09-la-bozza-della-cassa-non-scade.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-la-bozza-della-cassa-non-scade.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0dfa00b0097e4fed9c1fad936e2b097ffef32a3d^ --file app/checkout/page.tsx --prove tests/unit/riparazione-r09-la-bozza-della-cassa-non-scade.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Il commento di salvaLaBozzaPerAccesso in app/checkout/page.tsx dice che la bozza segna quando è stata scelta (sceltaIl) e non ha una scadenza; la scadenza non è stata rimessa. Il titolo della prova R19 era stato corretto, ma per il programma quella prova è comune: rimesso identico alla base col commit R09-varie 18e96d23fa0a66e66039f0c751107bed137300a6.",
+   "verificato_da": "revisore sonnet: rilanciate le due prove (7/7), cercati altri commenti o prove che promettano la scadenza (nessuno); nota: la prova nuova è leggera, guarda il testo del commento",
+   "cosa_resta": "La prova comune dice ancora «(con la scadenza)» nel titolo di un caso.",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts",
+     "modifica": "Riga 18: nel titolo del caso togliere « (con la scadenza)»: 'il salvataggio passa da bozzaDaSalvare ed è lo stesso di «Ordina»'. Asserzioni invariate."
+    }
+   ]
+  },
+  {
+   "id": "R09-005",
+   "chiave": "architettura|la frase della zona vive in quattro posti (cassa, spedizioni, rifiuto, tendina della posizione) piu' faq e «vicino a te»: le tiene allineate solo una prova",
+   "esito": "parziale",
+   "commit": "046137a201d91636564b112acafd1646883a56ca",
+   "file_toccati": [
+    "lib/ordini/zona-di-consegna.ts",
+    "components/checkout/ShippingAddressForm.tsx",
+    "app/shipping/page.tsx",
+    "components/LocationPill.tsx",
+    "lib/promesse-pubbliche.ts",
+    "app/near/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r09-la-frase-della-zona-ha-una-fonte-sola.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-la-frase-della-zona-ha-una-fonte-sola.test.ts tests/unit/le-frasi-della-zona-dicono-il-confine-della-cassa.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 21ddc1638b403af39c6978d2de7c2f686461acf6^ --file components/checkout/ShippingAddressForm.tsx,app/shipping/page.tsx,lib/ordini/zona-di-consegna.ts,components/LocationPill.tsx,lib/promesse-pubbliche.ts,app/near/page.tsx --prove tests/unit/riparazione-r09-la-frase-della-zona-ha-una-fonte-sola.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "In lib/ordini/zona-di-consegna.ts nascono CONFINE_DELLA_ZONA, FINO_AL_CONFINE e FRASE_DELLA_ZONA, importati da cassa, pillola della posizione, Spedizioni, rifiuto motivoFuoriZona, FAQ e «Vicino a te». Testo per il cliente identico. Tre commit con lo stesso id (21ddc1638b403af39c6978d2de7c2f686461acf6 la correzione, 88781e19e398a14fd79003ef42d3cbb5974fdf70 e 046137a201d91636564b112acafd1646883a56ca solo la prova); rimessa sui tre insieme.",
+   "cosa_resta": "Il revisore ha trovato due copie scritte a mano della frase nei metadati, fuori dai file di R09: app/near/layout.tsx:7 e app/category/[slug]/layout.tsx:18. Il commento di lib/ordini/zona-di-consegna.ts:4-5 («una volta sola») sarà vero solo dopo. Il titolo della prova nuova dice «sei posti» ma l'elenco ne ha cinque.",
+   "serve_file_altrui": [
+    {
+     "file": "app/near/layout.tsx",
+     "modifica": "Riga 7: al posto di `con consegna fino a ${RAGGIO_CONSEGNA_KM} km dal negozio` usare `con consegna ${FINO_AL_CONFINE}` importando FINO_AL_CONFINE da '@/lib/ordini/zona-di-consegna' (testo reso identico)."
+    },
+    {
+     "file": "app/category/[slug]/layout.tsx",
+     "modifica": "Riga 18: al posto di `consegnati fino a ${RAGGIO_CONSEGNA_KM} km dal negozio` usare `consegnati ${FINO_AL_CONFINE}` importando FINO_AL_CONFINE da '@/lib/ordini/zona-di-consegna'. Poi aggiungere i due file all'elenco ALTRI di tests/unit/riparazione-r09-la-frase-della-zona-ha-una-fonte-sola.test.ts."
+    }
+   ],
+   "verificato_da": "revisore sonnet: stringhe rese identiche al prima (confronto per sostituzione), nessun file client importa roba solo server; trovate due copie nei metadati fuori dai file di R09 → parziale"
+  },
+  {
+   "id": "R09-006",
+   "chiave": "architettura|il conto del carrello ha una seconda copia che nessuna pagina usa, e la prova «lo schermo fa lo stesso conto del server» controlla proprio quella",
+   "esito": "parziale",
+   "commit": "83bdd55b4ad6fcb8daa0b9bc239b5e9b0a2b909d",
+   "file_toccati": [
+    "tests/unit/lo-schermo-e-il-server-fanno-lo-stesso-conto.test.ts",
+    "components/checkout/useTotaliCarrello.ts"
+   ],
+   "prova_file": [
+    "tests/unit/lo-schermo-e-il-server-fanno-lo-stesso-conto.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/lo-schermo-e-il-server-fanno-lo-stesso-conto.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "La prova «lo schermo fa lo stesso conto del server» ora importa riepilogoDaMostrare (il conto che la cassa mostra) con centesimi uguali al server, righe che tornano col totale, totale mai negativo, credito solo col contrassegno e mai sopra il totale, più un caso con la veloce. Il commento di useTotaliCarrello.ts dice che non è il conto a schermo. Prova esistente modificata dichiarata: importa solo lib/ordini/riepilogo-cassa.ts e lib/ordini/prezzi.ts (file di R09). Provato a mano che morde: con riepilogo-cassa.ts guastato diventa rossa; la versione vecchia restava verde.",
+   "cosa_resta": "Cancellare components/checkout/useTotaliCarrello.ts dopo le due modifiche in serve_file_altrui; il controllo CI sui moduli orfani sta in .github/workflows/ci.yml (non di R09); per le due rotte AI serve la decisione di Nicola.",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/la-consegna-costa-3-o-4-euro-per-negozio.test.ts",
+     "modifica": "Togliere la riga 4 (import calcolaTotali da @/components/checkout/useTotaliCarrello), il blocco const schermo = calcolaTotali({...}).centesimi (righe 74-83) e le due righe che confrontano schermo.gruppi[k]; dopo il forEach aggiungere if (Math.round(cassa.feeConsegna * 100) !== server.gruppi.reduce((t, g) => t + g.deliveryFeeCents, 0)) errori.push(`consegna a schermo diversa: ${merci.join('+')}`);"
+    },
+    {
+     "file": "tests/unit/la-consegna-e-una-sola-per-tutto-il-carrello.test.ts",
+     "modifica": "Togliere la riga 50 (import calcolaTotali). Al posto delle righe 164-171 (const schermo = calcolaTotali(...) e il suo forEach): const cassa = riepilogoDaMostrare({ ...i, usaCredito: false, creditoDisponibileCents: 0 }); if (Math.round(cassa.feeConsegna * 100) !== server.grandDeliveryFeeCents) errori.push(`schermo diverso ${merci.join('+')}`);"
+    }
+   ],
+   "domanda": "Le rotte /api/ai/answer-qa e /api/ai/reviews-summary, che nessuna pagina chiama, vanno collegate a una pagina o tolte?",
+   "verificato_da": "revisore opus: riepilogoDaMostrare è davvero il conto a schermo (app/checkout/page.tsx:816, :861-891); la prova nuova diventa rossa solo se il riepilogo smette di leggere il server (attese che ripetono riepilogo-cassa.ts:69-71) e non tocca il passaggio euro→centesimi della pagina (:805-814) → parziale confermato"
+  },
+  {
+   "id": "R09-007",
+   "chiave": "architettura|la misura della velocità manda a ga4 da una porta sua, fuori dall'aiutante comune",
+   "esito": "serve_file_altrui",
+   "commit": null,
+   "file_toccati": [],
+   "serve_file_altrui": [
+    {
+     "file": "lib/analytics/events.ts",
+     "modifica": "Esportare ga (oggi function ga(...) privata a riga 36), col cancello del consenso dentro; oppure spostarla in un file nuovo lib/analytics/ga4.ts importato da events.ts e da posthog.tsx (evita l'import circolare events.ts↔posthog.tsx)."
+    },
+    {
+     "file": "lib/analytics/posthog.tsx (di R09, dopo il passo sopra)",
+     "modifica": "In mandaMisuraDiVelocita sostituire il blocco if (!window.gtag) return; try { window.gtag('event','web_vital',{...}) } con ga('web_vital', { metric_name: name, value: Math.round(name === 'CLS' ? metric.value * 1000 : metric.value), metric_rating: metric.rating, non_interaction: true }). Le prove riparazione-r15-velocita-clienti-veri e riparazione-r23-velocita-vista-dai-clienti devono restare verdi."
+    }
+   ],
+   "nota": "Nessuna modifica dentro i file di R09 chiude la voce: l'aiutante comune ga non è esportato."
+  },
+  {
+   "id": "R09-008",
+   "chiave": "architettura|le email mandate dopo la risposta aspettano in una fila sola per tutto il server: in una raffica l'ultima può non partire",
+   "esito": "riparato",
+   "commit": "6fb4fefdc472161cef5635750ccabe5b2c19d557",
+   "file_toccati": [
+    "lib/api/dopo-la-risposta.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r09-dopo-la-risposta-una-fila-per-richiesta.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-dopo-la-risposta-una-fila-per-richiesta.test.ts tests/unit/riparazione-r05-email-dopo-la-risposta-in-fila.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6fb4fefdc472161cef5635750ccabe5b2c19d557^ --file lib/api/dopo-la-risposta.ts --prove tests/unit/riparazione-r09-dopo-la-risposta-una-fila-per-richiesta.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La fila non è più una variabile del modulo: ogni richiesta ha la sua, legata allo stato della richiesta di Next (WeakMap su workAsyncStorage), presa al momento di registrare il lavoro. Fuori da una richiesta resta una fila sola. Tetto di 10 s per turno invariato. Nota: importa next/dist/server/app-render/work-async-storage.external, percorso interno di Next 15.",
+   "verificato_da": "revisore opus: il percorso interno esiste in next 15.5.29 e resta esterno in build (handle-externals.js:43); nessuna rotta edge importa il file; fuori da una richiesta resta la fila unica; prove R05 verdi; il callback di after() gira col contesto della richiesta. Minore: la prova finge il modulo interno"
+  },
+  {
+   "id": "R09-009",
+   "chiave": "architettura|il codice pgrst204 su una colonna della 124 ora fa scattare il ripiego per tutti: con la cache dello schema di postgrest vecchia, la scrittura salta gross_total_cents anche a migrazione applicata",
+   "esito": "scelta_di_nicola",
+   "domanda": "Con la 124 applicata ma la memoria dello schema di PostgREST vecchia, una scrittura con gross_total_cents o payout_tentativo deve fallire e farsi ripetere, oppure passare senza quelle colonne con l'avviso nel registro come fa oggi?",
+   "nota": "Il difetto c'è ancora: lib/db/migrazione-124.ts:139 (un PGRST204 che nomina una colonna della 124 vale sempre «schema indietro»). Da PGRST204 non si distingue colonna mancante da memoria vecchia senza una lettura asincrona del database (la stessa strada già bocciata da un collaudo, rompe_altro). Farla bene tocca lib/stripe/webhook/dispute.ts, lib/stripe/webhook/contestazione-parziale-vinta.ts:43 e lib/ordini/annulla.ts, non di R09. Caso raro: Supabase ricarica lo schema da solo."
+  },
+  {
+   "id": "R09-010",
+   "chiave": "architettura|la scrittura della contestazione vinta toglie il numero del tentativo del bonifico anche quando a mancare è solo la cache di postgrest",
+   "esito": "scelta_di_nicola",
+   "domanda": "Con la memoria di PostgREST vecchia, la scrittura della contestazione vinta deve fallire e farsi ripetere da Stripe oppure passare senza payout_tentativo come fa oggi?",
+   "nota": "Il caso di payout_tentativo lo decide prima lib/db/migrazione-148.ts:77 (eSchemaIndietro, la stessa scelta della voce sul PGRST204 della 124). La riga 81 serve a dispute.ts, contestazione-parziale-vinta.ts e giftcard.ts per scrivere senza le colonne 126/148 che in produzione non ci sono ancora: cambiarla le rompe. colonnaNonTrovata è sincrona e usata in cinque file non di R09."
+  },
+  {
+   "id": "R09-011",
+   "chiave": "architettura|il conto della cassa riceve ancora le coordinate di negozio e consegna, che non entrano più in nessun conto",
+   "esito": "scelta_di_nicola",
+   "domanda": "La spedizione a pagamento a distanza (a chilometro) deve poter tornare un giorno? Se no, si tolgono dal conto le coordinate e gli ingressi della spedizione e si cambiano le prove del carrello che le tengono vive per quel giorno.",
+   "nota": "Provato senza commit: prezziDelCarrello senza coordinate rende rossa tests/unit/riparazione-r03-carrello-consegna.test.ts, e tests/unit/il-carrello-e-la-cassa-dicono-lo-stesso-numero.test.ts:162-172 pretende le coordinate «per il giorno che torna»: toglierle cambia il senso di prove esistenti. Piano pronto per il «no»: campi facoltativi deprecati e ignorati in prezzi.ts, la cassa smette di passarli, poi app/cart/page.tsx:531-533, app/api/stripe/checkout/route.ts:830-832, app/api/orders/cod/route.ts:1237-1239 tolgono le tre righe, infine i campi escono dal tipo e da circa 30 prove."
+  },
+  {
+   "id": "R09-012",
+   "chiave": "architettura|anche il freno della veloce trova il carrello in contanti solo dalla riga di cod_checkout_attempts",
+   "esito": "serve_file_altrui",
+   "serve_file_altrui": [
+    {
+     "file": "migrations/95x_gli_ordini_in_contanti_portano_la_chiave_del_carrello.sql (nuova, fascia di R09, da scrivere solo insieme alla rotta)",
+     "modifica": "ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS carrello_contanti text; CREATE INDEX IF NOT EXISTS orders_carrello_contanti_idx ON public.orders (user_id, carrello_contanti) WHERE carrello_contanti IS NOT NULL; NOTIFY pgrst, 'reload schema';"
+    },
+    {
+     "file": "app/api/orders/cod/route.ts",
+     "modifica": "Dopo i blocchi che scrivono la riga del tentativo e del carrello (righe ~2014-2050): if (createdOrderIds.length > 1) { const { error: e } = await admin.from('orders').update({ carrello_contanti: chiaveCarrello }).in('id', createdOrderIds); if (e) logger.warn('[cod] chiave del carrello non scritta sugli ordini', { chiave: chiaveCarrello, message: e.message }); } — in una scrittura a parte, non dentro rigaOrdine."
+    },
+    {
+     "file": "lib/ordini/veloce-non-confermata.ts e lib/ordini/annulla.ts (dopo i due passi sopra)",
+     "modifica": "In ordiniDelCarrello, quando la riga manca: leggere admin.from('orders').select(c).eq('user_id', o.user_id).eq('carrello_contanti', <chiave dell'ordine>) (colonna aggiunta a COLONNE e tolta nel ripiego); solo senza chiave chiamare segnalaIlCarrelloSenzaRiga. Lo stesso in annulla.ts."
+    }
+   ],
+   "nota": "Senza la riga non esiste una chiave certa per ritrovare il carrello in contanti sugli ordini. La parte «senza dirlo a nessuno» è chiusa nella voce gemella sullo stesso file (commit e72dec28e4965338080da800ca876e93e5b7437b)."
+  },
+  {
+   "id": "R09-013",
+   "chiave": "architettura|il freno della veloce in contanti, se manca la riga del carrello, tratta ogni ordine da solo senza dirlo a nessuno",
+   "esito": "riparato",
+   "commit": "e72dec28e4965338080da800ca876e93e5b7437b",
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts",
+    "tests/unit/riparazione-r09-veloce-contanti-senza-riga.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r09-veloce-contanti-senza-riga.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-veloce-contanti-senza-riga.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e72dec28e4965338080da800ca876e93e5b7437b^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r09-veloce-contanti-senza-riga.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Senza la riga in cod_checkout_attempts il freno cerca altri ordini in contanti vivi dello stesso cliente, nati entro due minuti e senza riga: se ce ne sono scrive logger.warn e avvisa gli amministratori una volta per gruppo, con i codici. Non unisce niente per vicinanza di tempo.",
+   "verificato_da": "revisore opus: 448 prove verdi su 65 file, tsc pulito; il freno non unisce niente (torna sempre null e poi [o]); unaVoltaPer salvata nel database, niente spam a ogni giro; lettura fallita dentro try/catch. Minori rimasti: catena di ordini a 2 minuti mobili dà più avvisi per lo stesso cliente (veloce-non-confermata.ts:277,288); una lettura fallita di cod_checkout_attempts per un vicino lo conta come senza riga (:273); senza user_id esce senza log (:248)"
+  },
+  {
+   "id": "R09-014",
+   "chiave": "architettura|la funzione della spedizione in centesimi accetta ancora i sette ingressi che non servono",
+   "esito": "scelta_di_nicola",
+   "domanda": "La stessa della voce sulle coordinate nel conto della cassa: la spedizione a distanza deve poter tornare? Se no, shippingCentsFor perde il parametro e IngressiSpedizione.",
+   "nota": "Togliere il parametro rende rosso tsc in 7 prove (shipping.test.ts, una-sola-regola-per-la-spedizione, il-carrello-condiviso-non-perde-il-negozio, riparazione-r01/r02/r03 carrello, soldi-storni-sconti-e-compensi.test.ts:139,175 — quest'ultima comune, importa lib/stripe/payout.ts)."
+  },
+  {
+   "id": "R09-015",
+   "chiave": "architettura|una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo",
+   "esito": "serve_file_altrui",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/stripe/checkout/route.ts",
+     "modifica": "(a) In Body (righe 69-91) aggiungere delivery_date: z.string().max(40).optional().nullable(), (la cassa lo manda già, app/checkout/page.tsx:1168; oggi zod lo scarta). (b) Dopo la riga 142 (if (!body.pickupInStore && !body.deliverySlot) return …) lo stesso blocco di app/api/orders/cod/route.ts:416-425: if (!body.pickupInStore && body.deliverySlot && body.delivery_date) { const riportata = fasciaDelGiornoDellaRichiesta(body.deliverySlot, body.delivery_date, new Date()); if (riportata === null) return ApiErrors.conflict('La fascia che hai scelto è già passata. Scegline una ancora disponibile, oppure ordina per domani.'); body.deliverySlot = riportata; }. Prova: come tests/unit/riparazione-r05-fascia-domani-dopo-mezzanotte.test.ts, sulla rotta della carta."
+    },
+    {
+     "file": "app/api/orders/cod/route.ts",
+     "modifica": "Spostare fasciaDelGiornoDellaRichiesta (righe 52-72) in lib/ordini/fascia-leggibile.ts come export e importarla nelle due rotte (oppure copiarla nella rotta della carta senza toccare questa)."
+    }
+   ],
+   "prova": "La parte nella funzione c'è già sulla base: lib/store-hours.ts:229-246 e 307-326 (negozioPuoServire/finestraDelRitiro con propostaIl facoltativo; la rotta dei contanti la usa via delivery_date). Orologio finto lun 23:59 → mar 00:00:30: con propostaIl vero, senza falso; npx vitest run tests/unit/riparazione-r03-fascia-domani-proposta.test.ts verde.",
+   "nota": "Resta solo la rotta della carta: non legge delivery_date e chiama motivoFasciaRifiutata senza propostaIl; il webhook usa session.created, già dopo mezzanotte."
+  },
+  {
+   "id": "R09-016",
+   "chiave": "frontend-ux|tornando dall'accesso con un indirizzo già scritto, la cassa lo nasconde e non segna nessun indirizzo come scelto",
+   "esito": "gia_riparato_prima",
+   "prova": "app/checkout/page.tsx:561-586: la mattonella della bozza «Appena scritto» sta in testa a indirizziDaMostrare ed è passata come savedAddresses a ShippingAddressForm (:1501), scelta perché coincide col modulo (components/checkout/ShippingAddressForm.tsx:158-163). npx vitest run tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts --reporter=dot → 5 passate.",
+   "verificato_da": "revisore opus: confermato sulla base ed12ed8ec8190e1132b690f6e034c30f0a5d55ba (app/checkout/page.tsx:569-586, :1502; ShippingAddressForm.tsx:158-164)"
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "La contestazione parziale vinta, con la memoria di PostgREST vecchia, scrive il tentativo nuovo ma lascia il promemoria della quota: una ripetizione di Stripe rifà il bonifico con una chiave nuova",
+   "dimensione": "pagamenti",
+   "severita": "minore",
+   "file": "lib/stripe/webhook/contestazione-parziale-vinta.ts:43",
+   "descrizione": "Il ripiego scritto a mano toglie dispute_seller_reversed_cents ma scrive payout_tentativo+1. Se qualcosa dopo nello stesso evento lancia, Stripe ripete l'evento: quota ancora presente, tentativo nuovo, chiave anti-doppione nuova, secondo bonifico."
+  },
+  {
+   "titolo": "L'email della veloce dice sempre «la tua spesa arriva in una fascia» anche quando si è spostato un ordine solo del carrello",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "lib/email/templates.ts:302",
+   "descrizione": "Titolo e oggetto fissi (righe 302 e 314); la campanella invece dice «tranne l'ordine …»."
+  }
+ ],
+ "domande_per_nicola": [
+  "R09-009/R09-010: con la memoria dello schema di PostgREST vecchia, le scritture con le colonne 124/148 devono fallire e farsi ripetere, o passare senza quelle colonne come oggi?",
+  "R09-006: le rotte /api/ai/answer-qa e /api/ai/reviews-summary, che nessuna pagina chiama, vanno collegate o tolte?",
+  "R09-011/R09-014: la spedizione a pagamento a distanza (a chilometro) deve poter tornare? Se no, si tolgono coordinate e ingressi morti dal conto e dalla spedizione (piano pronto nel referto)."
+ ],
+ "conto": {
+  "agenti": 5,
+  "nota": "L1 opus, L2 sonnet, L3 opus, revisore opus (5 voci), revisore sonnet (3 voci). Spesa a fine controlli 15,78 $ su 20: chiuso all'80%, nessun giro di correzione.",
+  "subagenti": 5
+ },
+ "aggiornato": "2026-11-26 14:10",
+ "testa": "18e96d23fa0a66e66039f0c751107bed137300a6",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "18e96d23fa0a66e66039f0c751107bed137300a6",
+  "nota": "rilanciato sulla nuova testa dopo il commit che rimette la prova R19 identica alla base: typecheck pulito, lint 0 errori (121 avvisi già presenti), vitest 2148 file / 13197 prove passate, 1 saltato preesistente; guardia-ramo verde"
+ },
+ "costo_usd": 15.78
+}
