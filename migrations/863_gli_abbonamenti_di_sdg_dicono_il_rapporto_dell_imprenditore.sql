@@ -35,7 +35,7 @@ Cosa comprende:
 · Foto e video: Foto all’avvio e una nuova sessione ogni tre mesi, più un video al mese.
 · Sito web professionale: Un sito completo di più pagine, col tuo nome.
 · Gestione dei social e di Google Maps: 12 post al mese, 3 a settimana, con 2 video brevi. Scheda Google Maps sistemata, più le risposte alle recensioni scritte da noi.
-· Analisi del business: Il rapporto completo all’avvio e aggiornato ogni mese, con le ricerche su Google e i tuoi 3 concorrenti principali sui social e sul web: cosa è cambiato e cosa fare il mese dopo.
+· Analisi del business: Il rapporto all’avvio e ogni mese: le ricerche su Google, i tuoi 3 concorrenti principali sui social e sul web, cosa è cambiato.
 · Vetrina: Vetrina su MyCity con ordini, consegna e ritiro in negozio, in evidenza nella tua categoria una settimana al mese.
 · Assistenza: Su WhatsApp, risposta entro 4 ore lavorative.
 
@@ -53,6 +53,7 @@ Cosa comprende:
 
 Si attiva dalla pagina Abbonamento del tuo negozio, non dal carrello. Nessun vincolo di durata: disdici quando vuoi, con 30 giorni di preavviso. Il primo mese costa la metà.
 I servizi li realizza SDG Agenzia, il partner di MyCity per foto, video, social e web.')
+
 ) AS v(id, description)
 WHERE p.id = v.id
   AND p.seller_id = '11111111-1111-1111-1111-5d9000000001'::uuid;

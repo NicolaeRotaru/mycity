@@ -93,16 +93,17 @@ export async function leggiSchedaDelNegozio(): Promise<SchedaCliente | null> {
 }
 
 /**
- * 26/11/2026 — Se il negozio ha già pagato un abbonamento (la scheda è «aperta»): il rapporto dell'imprenditore
- * intero si mostra solo allora, prima c'è l'assaggio (lib/agenzia/rapporto.ts). Lo decide il server; se la
- * lettura non riesce vale «no».
+ * 26/11/2026 — La scheda e se il negozio ha pagato, dalla STESSA risposta (revisione di mycity#336: con due chiamate
+ * un Premium vedeva «Scegli l'abbonamento» mentre la seconda caricava, e per sempre se falliva). Se la lettura non
+ * riesce l'errore sale a chi chiama: la pagina lo dice, invece di trattare il negozio come non abbonato.
  */
-export const CHIAVE_SCHEDA_APERTA = ['seller', 'scheda-cliente', 'aperta'] as const;
-export async function leggiSeHaPagato(): Promise<boolean> {
-  const r = await fetch('/api/seller/scheda-cliente', { cache: 'no-store' }).catch(() => null);
-  if (!r || !r.ok) return false;
-  const corpo = (await r.json().catch(() => null)) as { ok?: boolean; data?: { aperta?: unknown } } | null;
-  return corpo?.ok === true && corpo.data?.aperta === true;
+export const CHIAVE_SCHEDA_E_APERTA = ['seller', 'scheda-cliente', 'con-abbonamento'] as const;
+export async function leggiSchedaEAperta(): Promise<{ scheda: SchedaCliente | null; aperta: boolean }> {
+  const r = await fetch('/api/seller/scheda-cliente', { cache: 'no-store' });
+  if (!r.ok) throw new Error('La scheda non si è letta.');
+  const corpo = (await r.json().catch(() => null)) as { ok?: boolean; data?: { scheda?: unknown; aperta?: unknown } } | null;
+  if (!corpo?.ok) throw new Error('La scheda non si è letta.');
+  return { scheda: corpo.data?.scheda ? leggiSchedaSalvata(corpo.data.scheda) : null, aperta: corpo.data?.aperta === true };
 }
 
 /* ───────────── 24/11/2026 — L'analisi del business e la bozza del sito dell'AD ───────────── */

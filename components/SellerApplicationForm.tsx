@@ -15,7 +15,7 @@ import { FRASE_PREZZO_NEGOZI, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earni
 import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
 import { Store, Send } from 'lucide-react';
 import { MAX_DETTAGLIO_ATTIVITA, SCHEDE_ATTIVITA, TIPI_ATTIVITA, tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
-import { controllaCanali } from '@/lib/agenzia/canali';
+import { instagramDelTitolare, schedaGoogleDelTitolare } from '@/lib/agenzia/indizi-del-titolare';
 
 /**
  * Il modulo per chiedere di vendere su MyCity.
@@ -76,10 +76,13 @@ const SellerSchema = z.object({
   if (d.businessType === 'altro' && (d.businessTypeDetail ?? '').trim().length < 2) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['businessTypeDetail'], message: 'Scrivi in poche parole che attività hai' });
   }
-  const esito = controllaCanali({ instagram: d.instagram ?? '', google_maps: d.googleMaps ?? '' });
-  if (!esito.ok) {
-    if (esito.errori.instagram) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['instagram'], message: esito.errori.instagram });
-    if (esito.errori.google_maps) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['googleMaps'], message: esito.errori.google_maps });
+  // 26/11/2026 — Le stesse regole del server (lib/agenzia/indizi-del-titolare.ts): un indizio che il server
+  // scarterebbe, il modulo lo dice subito, invece di perderlo in silenzio.
+  if ((d.instagram ?? '').trim() && !instagramDelTitolare(d.instagram)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['instagram'], message: 'Scrivi il nome del profilo Instagram dell’attività, per esempio @iltuonegozio, oppure lascia vuoto.' });
+  }
+  if ((d.googleMaps ?? '').trim() && !schedaGoogleDelTitolare(d.googleMaps)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['googleMaps'], message: 'Incolla il link della scheda del locale: in Google Maps apri il locale e premi «Condividi». Oppure lascia vuoto.' });
   }
 });
 

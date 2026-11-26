@@ -152,7 +152,7 @@ export const FASCE: Record<Abbonamento, Fascia> = {
       foto_video: 'Foto all’avvio e una nuova sessione ogni tre mesi, più un video al mese.',
       sito_web: 'Un sito completo di più pagine, col tuo nome.',
       social: '12 post al mese, 3 a settimana, con 2 video brevi. Scheda Google Maps sistemata, più le risposte alle recensioni scritte da noi.',
-      analisi: 'Il rapporto completo all’avvio e aggiornato ogni mese, con le ricerche su Google e i tuoi 3 concorrenti principali sui social e sul web: cosa è cambiato e cosa fare il mese dopo.',
+      analisi: 'Il rapporto all’avvio e ogni mese: le ricerche su Google, i tuoi 3 concorrenti principali sui social e sul web, cosa è cambiato.',
     },
     vetrina: 'Vetrina su MyCity con ordini, consegna e ritiro in negozio, in evidenza nella tua categoria una settimana al mese.',
     assistenza: 'Su WhatsApp, risposta entro 4 ore lavorative.',

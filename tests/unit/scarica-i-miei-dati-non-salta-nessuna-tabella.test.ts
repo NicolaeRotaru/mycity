@@ -31,6 +31,8 @@ const MIGRAZIONI = join(process.cwd(), 'migrations');
  */
 const FUORI_DALL_EXPORT: Record<string, string> = {
   profiles: 'è il profilo stesso: esce già come «profile»',
+  // 26/11/2026 — Non è esclusa: esce come «scheda_del_locale», ma dalla strada della dashboard (rapporto per fascia).
+  schede_clienti: 'esce come «scheda_del_locale», letta da schedaPerIlNegozio (lib/agenzia/scheda-del-negozio.ts) con le regole della dashboard',
   products: 'catalogo del negozio, non dati della persona: esce dagli ordini',
   site_settings: 'impostazioni del sito, il legame è chi le ha modificate',
   cms_pages: 'pagine pubbliche del sito',

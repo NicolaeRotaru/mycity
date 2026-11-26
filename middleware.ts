@@ -304,7 +304,9 @@ function dominiGoogleMaps(): { script: string; connect: string; img: string; fon
   return {
     script: ' https://maps.googleapis.com',
     connect: ' https://maps.googleapis.com https://places.googleapis.com',
-    img: ' https://maps.gstatic.com https://maps.googleapis.com https://*.googleusercontent.com https://*.ggpht.com',
+    // Le foto dei luoghi del riquadro arrivano da lh3-lh6.googleusercontent.com: solo quelli, non tutto
+    // googleusercontent.com, che ospita anche contenuti degli utenti (revisione di sicurezza di mycity#336).
+    img: ' https://maps.gstatic.com https://maps.googleapis.com https://lh3.googleusercontent.com https://lh4.googleusercontent.com https://lh5.googleusercontent.com https://lh6.googleusercontent.com',
     font: ' https://fonts.gstatic.com',
     style: ' https://fonts.googleapis.com',
   };

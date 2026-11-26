@@ -16,13 +16,14 @@ import {
   leggiRapporto,
   partiDellaFascia,
   placeIdDi,
+  PARTI_DEI_BLOCCHI,
   type PezzoParte,
 } from '@/lib/agenzia/rapporto';
 import { analisiAziendale, leggiAnalisiCanali } from '@/lib/agenzia/analisi';
 import { ABBONAMENTI, FASCE } from '@/lib/agenzia/preventivo';
 import { schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
 import { indiziDelTitolare, inviaNuovaAttivitaAlFlusso } from '@/lib/agenzia/nuovo-cliente-n8n';
-import type { SchedaCliente } from '@/lib/agenzia/scheda-cliente';
+import { leggiSchedaSalvata, type SchedaCliente } from '@/lib/agenzia/scheda-cliente';
 import RapportoImprenditore from '@/components/seller/RapportoImprenditore';
 import CosaCeNellAnalisi from '@/components/seller/CosaCeNellAnalisi';
 
@@ -87,12 +88,24 @@ describe('prova 1 — La Ragazzetta, nessun sito', () => {
     expect(c.fonte).toBe('Fonte: OpenStreetMap, letto il 26/11, licenza ODbL');
   });
 
-  it('senza sito la velocità dice «non ancora letto», mai uno zero', () => {
+  it('senza sito la velocità dice il motivo vero, mai uno zero', () => {
     const v = assaggio({ scheda: ragazzetta }, ADESSO).find((n) => n.id === 'velocita_sito')!;
     expect(v.valore).toBeNull();
     const { container } = render(<RapportoImprenditore scheda={ragazzetta} canali={null} sito={null} haPagato={false} adesso={ADESSO} />);
-    expect(container.querySelector('[data-numero="velocita_sito"]')?.textContent).toContain('non ancora letto');
+    expect(container.querySelector('[data-numero="velocita_sito"]')?.textContent).toContain('Non hai ancora un sito');
     expect(container.querySelector('[data-numero="velocita_sito"]')?.textContent).not.toMatch(/\b0\b/);
+  });
+
+  it('G5 · ogni numero che manca dice perché: Instagram non scritto, ricerche non attive (e il Base non le ha)', () => {
+    const s = scheda({ fatti: { vicini: vicini(7), ricerche: blocco(null, { stato: 'spento', motivo: 'credenziale finta', fonte: 'https://dataforseo.com/', fonte_nome: 'DataForSEO' }) } });
+    const n = assaggio({ scheda: s, haSito: true }, ADESSO);
+    expect(n.find((x) => x.id === 'velocita_sito')!.motivo).toContain('non l’abbiamo ancora misurato');
+    expect(n.find((x) => x.id === 'follower')!.motivo).toContain('Non conosciamo ancora il tuo Instagram');
+    const r = n.find((x) => x.id === 'ricerche')!;
+    expect(r.motivo).toContain('non è ancora attiva');
+    expect(r.motivo).not.toContain('credenziale');
+    expect(r.nota).toContain('Base non c’è');
+    expect(assaggio({ scheda: s, instagramScritto: true }, ADESSO).find((x) => x.id === 'follower')!.motivo).toContain('Non ancora letto');
   });
 
   it('di Google c’è solo il place_id; con google spento non c’è', () => {
@@ -121,7 +134,7 @@ describe('prova 2 — un locale con Instagram professionale', () => {
     expect(f.valore).toBeNull();
     expect(f.inArrivo).toBe(true);
     const { container } = render(<RapportoImprenditore scheda={s} canali={null} sito={null} haPagato={false} adesso={ADESSO} />);
-    expect(container.querySelector('[data-numero="follower"]')?.textContent).toContain('in arrivo');
+    expect(container.querySelector('[data-numero="follower"]')?.textContent).toContain('non è ancora attiva');
   });
 });
 
@@ -518,6 +531,62 @@ describe('dal secondo collaudo e dal contratto v1.3', () => {
     expect(salvata.analisi.business.situazione).toHaveLength(1);
     expect(salvata.analisi.business.occasioni).toHaveLength(1);
     db.esistente = null;
+  });
+});
+
+describe('dal secondo revisore (pagine e logica)', () => {
+  it('G6 · finché non si sa se ha pagato, né assaggio né rapporto; se la lettura fallisce, lo dice', () => {
+    const s = scheda({ fatti: { vicini: vicini(3) } });
+    const inLettura = render(<RapportoImprenditore scheda={s} canali={null} sito={null} haPagato={null} adesso={ADESSO} />);
+    expect(inLettura.container.querySelector('[data-testid="assaggio"]')).toBeNull();
+    expect(inLettura.container.textContent).not.toContain('Scegli l');
+    expect(inLettura.container.textContent).toContain('Sto leggendo');
+    const fallita = render(<RapportoImprenditore scheda={s} canali={null} sito={null} haPagato={null} letturaFallita adesso={ADESSO} />);
+    expect(fallita.container.textContent).toContain('Non riesco a leggere');
+  });
+
+  it('M1 · con Instagram spento nel rapporto, l’assaggio non prende i follower dall’altra lettura', () => {
+    const s = scheda({ fatti: { instagram: blocco(null, { stato: 'spento', motivo: 'x', fonte_nome: 'Instagram' }) } });
+    const canali = { tipo: 'analisi-canali', id_attivita: ID, fatta_il: LETTO, canali: { instagram: { stato: 'fatta', numeri: { follower: 900 } } } } as unknown as Parameters<typeof assaggio>[0]['canali'];
+    expect(assaggio({ scheda: s, canali }, ADESSO).find((x) => x.id === 'follower')!.valore).toBeNull();
+  });
+
+  it('M3 · una settimana del piano senza azione non si mostra', () => {
+    const s = scheda({ business_fatta_il: LETTO, business: { piano_30_giorni: [{ settimana: 2, azione: '', fonte: DFS }, { settimana: 3, azione: 'Fotografare la vetrina di Natale', fonte: DFS }] } });
+    expect((leggiRapporto(s, ADESSO)!.piano_30_giorni as PezzoParte[])[0].voci.map((v) => v.titolo)).toEqual(['Settimana 3']);
+  });
+
+  it('M5 · niente «AD» visibile nel rapporto', () => {
+    const s = scheda({ business_fatta_il: LETTO, business: { occasioni: [{ cosa: 'Mercato in piazza Cavalli', fonte: DFS }] } });
+    const { container } = render(<RapportoImprenditore scheda={s} canali={null} sito={null} haPagato fascia="premium" adesso={ADESSO} />);
+    expect(container.textContent).not.toMatch(/\bAD\b/);
+  });
+
+  it('M6 · un nome di persona nelle frasi dell’AD (idee, piano, confronto) non passa', () => {
+    const s = scheda({ business_fatta_il: LETTO, business: {
+      idee_dal_confronto: [{ idea: 'Fare come Mario Rossi con i video del forno', perche: 'piace', fonte: DFS }, { idea: 'Video brevi del forno al mattino', perche: 'piacciono', fonte: DFS }],
+      piano_30_giorni: [{ settimana: 1, azione: 'Chiamare Giulia Bianchi per le foto', fonte: DFS }],
+    } });
+    const t = JSON.stringify(leggiRapporto(s, ADESSO));
+    expect(t).not.toMatch(/Mario|Giulia/);
+    expect(t).toContain('Video brevi del forno al mattino');
+  });
+
+  it('M7 · la mappa blocchi→parti copre tutti i blocchi del contratto, e sito e vicini escono anche dal Base', () => {
+    for (const k of ['posizione', 'vicini', 'meteo', 'eventi', 'bandi', 'sito', 'google', 'tripadvisor', 'recensioni', 'ricerche', 'instagram', 'concorrenti_canali']) expect(PARTI_DEI_BLOCCHI[k], k).toBeDefined();
+    const v = analisiPerLaFascia({ fatti: { sito: blocco({ https: true }), vicini: vicini(2), ricerche: blocco({ parole: [] }) } }, 'base') as { fatti: object };
+    expect(Object.keys(v.fatti).sort()).toEqual(['sito', 'vicini']);
+  });
+
+  it('G7 · il link condiviso dal telefono passa, e share.google anche; un dominio finto no', () => {
+    expect(indiziDelTitolare('', 'https://maps.app.goo.gl/AbC123?g_st=ic')).toEqual({ google_maps: 'https://maps.app.goo.gl/AbC123' });
+    expect(indiziDelTitolare('', 'https://share.google/AbC123xyz')).toEqual({ google_maps: 'https://share.google/AbC123xyz' });
+    expect(indiziDelTitolare('', 'https://google.qzx.me/maps/place/Bar')).toBeNull();
+  });
+
+  it('G8 · una scheda salvata prima con gli orari presi da Google: in lettura gli orari non ci sono più', () => {
+    const s = leggiSchedaSalvata({ tipo: 'scheda-cliente', id_attivita: ID, campi: { orari: { valore: 'Lun-Dom 7-20', stato: 'da_confermare', fonte: 'https://www.google.com/maps/place/x' }, indirizzo: { valore: 'Via Roma 1', stato: 'confermato', fonte: 'https://www.bar.it' } } })!;
+    expect(Object.keys(s.campi)).toEqual(['indirizzo']);
   });
 });
 

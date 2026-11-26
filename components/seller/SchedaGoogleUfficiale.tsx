@@ -1,6 +1,6 @@
 'use client';
 
-import { createElement, useEffect, useState } from 'react';
+import { createElement, useEffect, useRef, useState } from 'react';
 
 /**
  * LA SCHEDA GOOGLE, SOLO COL RIQUADRO UFFICIALE DI GOOGLE — 26/11/2026.
@@ -50,6 +50,17 @@ export const schedaGoogleCollegata = () => CHIAVE.length > 0;
 
 export default function SchedaGoogleUfficiale({ placeId }: { placeId: string | null }) {
   const [stato, setStato] = useState<'attesa' | 'pronta' | 'errore'>('attesa');
+  const riquadro = useRef<HTMLDivElement | null>(null);
+
+  // 26/11/2026 — Se Google non riesce a disegnare la scheda (place_id scaduto, chiave rifiutata), il riquadro
+  // manda `gmp-error`: allora lo si dice, invece di lasciare un riquadro vuoto (revisione di mycity#336).
+  useEffect(() => {
+    const el = riquadro.current;
+    if (stato !== 'pronta' || !el) return;
+    const quandoSbaglia = () => setStato('errore');
+    el.addEventListener('gmp-error', quandoSbaglia, true);
+    return () => el.removeEventListener('gmp-error', quandoSbaglia, true);
+  }, [stato]);
 
   useEffect(() => {
     if (!CHIAVE || !placeId) return;
@@ -62,11 +73,11 @@ export default function SchedaGoogleUfficiale({ placeId }: { placeId: string | n
 
   if (!placeId) return <p className="text-xs text-ink-400" data-testid="scheda-google">La tua scheda Google: non ancora collegata.</p>;
   if (!CHIAVE) return <p className="text-xs text-ink-400" data-testid="scheda-google">La tua scheda Google: la mostriamo qui appena è collegata.</p>;
-  if (stato === 'errore') return <p className="text-xs text-ink-400" data-testid="scheda-google">La tua scheda Google non si è caricata: riprova fra poco.</p>;
+  if (stato === 'errore') return <p className="text-xs text-ink-500" data-testid="scheda-google">La tua scheda Google non si è caricata: riprova fra poco.</p>;
   if (stato === 'attesa') return <p className="text-xs text-ink-400" data-testid="scheda-google">Carico la tua scheda Google…</p>;
   // Gli elementi di Google si creano senza JSX: React 18 non conosce i loro tipi.
   return (
-    <div data-testid="scheda-google" className="overflow-hidden rounded-lg border border-cream-200 bg-white">
+    <div ref={riquadro} data-testid="scheda-google" className="overflow-hidden rounded-lg border border-cream-200 bg-white">
       {createElement(
         'gmp-place-details',
         null,

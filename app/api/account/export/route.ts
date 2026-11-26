@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { schedaPerIlNegozio } from '@/lib/agenzia/scheda-del-negozio';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { sullaPortaDeiDiritti } from '@/lib/privacy/porta-dei-diritti';
@@ -200,7 +201,9 @@ const scarica = withAuthRateLimit(
     abbonamenti_dei_servizi: tutta((da, a) => admin.from('abbonamenti_servizi').select('*').eq('seller_id', userId).order('id').range(da, a)),
     // 24/11/2026 — La scheda del locale mandata da n8n e il preventivo col link (migrazione 708).
     // Del link non si esporta il codice: è una chiave, non un dato della persona.
-    scheda_del_locale: tutta((da, a) => admin.from('schede_clienti').select('*').eq('id_attivita', userId).order('id_attivita').range(da, a)),
+    // 26/11/2026 — La scheda esce come la vede il negozio (revisione di sicurezza di mycity#336): prima del
+    // pagamento senza il rapporto intero, dopo solo con le parti del suo abbonamento (lib/agenzia/scheda-del-negozio.ts).
+    scheda_del_locale: schedaPerIlNegozio(admin, userId).then((s): Lettura => (s.errore ? { data: null, error: { message: s.errore } } : { data: s.scheda ? [{ id_attivita: userId, scheda: s.scheda }] : [], error: null })),
     // 24/11/2026 — L'analisi del business (sito e canali) e la bozza del sito scritta dall'AD (migrazione 711).
     analisi_del_negozio: tutta((da, a) => admin.from('analisi_negozi').select('*').eq('id_attivita', userId).order('id_attivita').range(da, a)),
     bozza_del_sito: tutta((da, a) => admin.from('bozze_sito').select('*').eq('id_attivita', userId).order('id_attivita').range(da, a)),

@@ -21,7 +21,7 @@ import {
   type Voto,
 } from '@/lib/agenzia/analisi';
 import { haCanali } from '@/lib/agenzia/canali';
-import { CHIAVE_ANALISI, CHIAVE_CANALI, CHIAVE_PAGELLA, CHIAVE_SCHEDA_APERTA, analizzaIlSito, leggiAnalisiDelNegozio, leggiCanali, leggiPagella, leggiSeHaPagato } from '@/components/seller/preventivo-agenzia';
+import { CHIAVE_ANALISI, CHIAVE_CANALI, CHIAVE_PAGELLA, analizzaIlSito, leggiAnalisiDelNegozio, leggiCanali, leggiPagella } from '@/components/seller/preventivo-agenzia';
 import type { Pagella } from '@/lib/agenzia/pagella';
 
 /**
@@ -75,7 +75,7 @@ function Elenco({ titolo, voci }: { titolo: string; voci: string[] }) {
   );
 }
 
-export default function AnalisiDelBusiness({ scheda, fascia }: { scheda?: SchedaCliente | null; fascia?: Abbonamento | null }) {
+export default function AnalisiDelBusiness({ scheda, fascia, haPagato = null, letturaFallita = false }: { scheda?: SchedaCliente | null; fascia?: Abbonamento | null; haPagato?: boolean | null; letturaFallita?: boolean }) {
   const qc = useQueryClient();
   const { data: analisi } = useQuery({ queryKey: CHIAVE_ANALISI, queryFn: leggiAnalisiDelNegozio });
   const { data: canali } = useQuery({ queryKey: CHIAVE_CANALI, queryFn: leggiCanali });
@@ -83,8 +83,6 @@ export default function AnalisiDelBusiness({ scheda, fascia }: { scheda?: Scheda
   // dà `null` e il blocco non si mostra. Anche se la lettura non riesce non si mostra niente: meglio
   // nessun blocco che uno davanti a chi è in demo. Se la lettura non riesce lo si dice, senza parlare di pagella.
   const { data: pagella, isError: pagellaNonLetta } = useQuery({ queryKey: CHIAVE_PAGELLA, queryFn: leggiPagella });
-  // 26/11/2026 — Il rapporto dell'imprenditore: l'assaggio prima di pagare, le 11 parti dopo (Nicola). Lo dice il server.
-  const { data: haPagato } = useQuery({ queryKey: CHIAVE_SCHEDA_APERTA, queryFn: leggiSeHaPagato });
   const attivita = analisiDellAttivita(scheda);
   const sito = analisi?.sito ?? null;
   const haSito = Boolean((canali?.website ?? '').trim());
@@ -108,7 +106,7 @@ export default function AnalisiDelBusiness({ scheda, fascia }: { scheda?: Scheda
         Già pronta con quello che sappiamo oggi. Usiamo solo fonti pubbliche e gratuite; dove un’analisi non c’è ancora, te lo diciamo.
       </p>
 
-      <RapportoImprenditore scheda={scheda} canali={analisi?.canali} sito={sito} haPagato={haPagato === true} fascia={fascia} />
+      <RapportoImprenditore scheda={scheda} canali={analisi?.canali} sito={sito} haPagato={haPagato} letturaFallita={letturaFallita} fascia={fascia} haSito={haSito || !!sito} canaliScritti={canali ?? null} />
 
       {pagella && (
         <Blocco icona={ClipboardCheck} titolo="La tua pagella su MyCity">

@@ -1,5 +1,5 @@
 import { logger } from '@/lib/logger';
-import { controllaCanali } from './canali';
+import type { IndiziDelTitolare } from './indizi-del-titolare';
 
 const ATTESA_MASSIMA_MS = 5_000;
 
@@ -58,48 +58,9 @@ export type NuovaAttivitaPerIlFlusso = {
   indizi?: IndiziDelTitolare | null;
 };
 
-export type IndiziDelTitolare = { instagram?: string; google_maps?: string };
-
-const LINK_DI_UN_LUOGO = /^https:\/\/(maps\.app\.goo\.gl\/[\w-]+\/?$|goo\.gl\/maps\/[\w-]+\/?$|g\.page\/|g\.co\/kgs\/|(www\.)?google\.[a-z.]+\/maps\/place\/|maps\.google\.[a-z.]+\/(maps)?\?(.*&)?cid=\d+)/i;
-/** Pezzi che dicono una persona: il profilo di chi recensisce, una recensione, un percorso, un account. */
-const PEZZI_DI_PERSONE = /\/contrib\/|\/dir\/|\/review|authuser|@[^/]*@|[\w.+-]+@[\w-]+\.|%40/i;
-
-/**
- * Il link della scheda Google ridotto al luogo: solo i link a un luogo, senza pezzi che dicono una persona, e
- * senza la parte dopo «?» (dove stanno account ed email), tranne il `cid` che identifica la scheda.
- */
-function soloIlLuogo(link: string): string | null {
-  if (!LINK_DI_UN_LUOGO.test(link) || PEZZI_DI_PERSONE.test(link)) return null;
-  try {
-    const u = new URL(link);
-    const cid = u.searchParams.get('cid');
-    u.search = cid && /^\d{1,30}$/.test(cid) ? `?cid=${cid}` : '';
-    u.hash = '';
-    return u.toString();
-  } catch {
-    return null;
-  }
-}
-
-/** Gli indizi ripuliti col controllo dei canali; uno storto o vuoto si lascia fuori. `null` se non ne resta nessuno. */
-export function indiziDelTitolare(instagram: string | null | undefined, googleMaps: string | null | undefined): IndiziDelTitolare | null {
-  const fuori: IndiziDelTitolare = {};
-  for (const [chiave, valore] of [['instagram', instagram], ['google_maps', googleMaps]] as const) {
-    const v = (valore ?? '').trim();
-    if (!v) continue;
-    const esito = controllaCanali({ [chiave]: v });
-    const pulito = esito.ok ? esito.canali[chiave] : undefined;
-    // Della scheda Google Maps solo un link a un luogo: un profilo di chi recensisce (/contrib/) o un percorso
-    // (/dir/, con dentro l'indirizzo di partenza) sono dati di persone, e non partono (dal collaudo del 26/11).
-    if (chiave === 'google_maps') {
-      const luogo = pulito ? soloIlLuogo(pulito) : null;
-      if (luogo) fuori.google_maps = luogo;
-      continue;
-    }
-    if (pulito) fuori[chiave] = pulito;
-  }
-  return Object.keys(fuori).length ? fuori : null;
-}
+// 26/11/2026 — Gli indizi si controllano uguali nel modulo e qui: le regole stanno in un file solo, senza
+// dipendenze dal server (lib/agenzia/indizi-del-titolare.ts).
+export { indiziDelTitolare, type IndiziDelTitolare } from './indizi-del-titolare';
 
 /**
  * 25/11/2026 — LA CITTÀ DALL'INDIRIZZO DEL NEGOZIO.
