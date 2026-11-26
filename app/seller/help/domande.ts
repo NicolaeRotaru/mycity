@@ -49,8 +49,7 @@ export const TOPICS: ArgomentoAiuto[] = [
       { q: 'Posso rifiutare un ordine?',
         // 12/11/2026 (R09-021, collaudo) — «riceve rimborso automatico» valeva solo per la carta: coi contanti
         // non ha pagato niente, e lo si dice.
-        // 26/11/2026 — Il motivo è facoltativo, come dice il riquadro del rifiuto («Motivo del rifiuto (opzionale)»).
-        a: 'Sì, se non puoi prepararlo. Il motivo è facoltativo, ma aiuta il cliente (es. prodotto esaurito). Il cliente viene avvisato: se paga alla consegna non ha pagato niente, se aveva pagato con carta gli torna tutto in automatico.' },
+        a: 'Sì, se non puoi prepararlo. Fornisci sempre un motivo (es. prodotto esaurito). Il cliente viene avvisato: se paga alla consegna non ha pagato niente, se aveva pagato con carta gli torna tutto in automatico.' },
       { q: 'Come segnalo l\'ordine pronto?',
         a: `Dalla pagina dell'ordine premi "${etichettaPronto(false)}" (oppure "${etichettaPronto(true)}" se il cliente passa in negozio). Il fattorino o il cliente vengono avvisati.` },
     ],
