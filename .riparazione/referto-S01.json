@@ -1,13 +1,13 @@
 {
   "sessione": "S01",
-  "aggiornato": "2026-11-26 17:50",
+  "aggiornato": "2026-11-26 18:20",
   "finita": true,
-  "testa": "94e1515d",
+  "testa": "1a317e6",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "94e1515d",
-    "nota": "typecheck ok, lint 0 errori (122 avvisi già presenti), vitest 2144/2144 file (13199 test). Database ricostruito da 243 migrazioni (0 fallite), suite SQL intera (tests/sql/harness/run.sh, 102 file) verde. Prova rimessa per 994, 995, 996, 997 con ricostruzione completa: rossa senza, verde con."
+    "testa": "1a317e6",
+    "nota": "typecheck ok, lint 0 errori (122 avvisi già presenti), vitest 2145/2145 file (13201 test). Database ricostruito da 243 migrazioni (0 fallite), suite SQL intera (tests/sql/harness/run.sh, 102 file) verde. Prova rimessa per 994, 995, 996, 997 con ricostruzione completa: rossa senza, verde con; per il terzo ritocco di S01-04 anche con la 997 del giro prima: rossa."
   },
   "voci": [
     {
@@ -155,24 +155,26 @@
         "esito": "riparato",
         "commit": [
           "46cbaac",
-          "94e1515"
+          "94e1515",
+          "1a317e6"
         ],
         "file_toccati": [
           "migrations/997_profili_nome_spazi_unicode.sql",
           "migrations/992_profili_nome_spazi.sql (solo commento)"
         ],
         "prova_file": [
-          "tests/sql/rls/riparazione-s01-04.test.sql"
+          "tests/sql/rls/riparazione-s01-04.test.sql",
+          "tests/unit/riparazione-s01-04.test.ts"
         ],
-        "controlli": 11,
+        "controlli": 13,
         "rimessa": {
           "esito": "regge",
-          "senza": "rosso (7, 8, 10, 11)",
+          "senza": "senza la 997: rosso (7, 8, 10, 11, 13); con la 997 del giro prima: rosso (10, 12, 13), e la prova unitaria rossa",
           "con": "verde",
           "comando": "scratchpad/rimessa/rimessa.sh <migrazione> <prova>: copia di migrazioni e prova, database s01_rimessa ricostruito senza la migrazione (prova ROSSA) e poi con (prova VERDE). Lo strumento prova-rimessa.mjs di ad-mycity non c era in questo contenitore."
         },
-        "cosa_ho_fatto": "Normalizzazione del nome allargata, nome vuoto salvato NULL, con prova SQL anche carattere per carattere. L aggiornamento delle righe vecchie resta: nella migrazione le due letture da fare prima del rilascio.",
-        "verificato_da": "subagente generico (modello grande) con mandato di smentire: le sue riserve (pochi caratteri rari, prova a campione, selettori di variante) sono chiuse in 94e1515; la versione finale non è stata rivista da un secondo subagente"
+        "cosa_ho_fatto": "Normalizzazione del nome allargata, nome vuoto salvato NULL, con prova SQL anche carattere per carattere. Terzo ritocco: i caratteri che fanno parte della parola restano come sono e i nomi veri d esempio restano interi; l aggiornamento delle righe vecchie tocca solo quelle che cambiano per gli spazi. Nella migrazione la lettura da fare prima del rilascio. Una scelta diversa dalla lista della regista, spiegata nel messaggio alla regista.",
+        "verificato_da": "subagente generico (modello grande) con mandato di smentire sulla seconda versione, riserve chiuse in 94e1515; il collaudo della regista ha trovato nomi veri spezzati, chiuso in 1a317e6 con prova SQL, prova unitaria e prova rimessa; il terzo ritocco non è stato rivisto da un subagente"
       }
     },
     {
@@ -277,7 +279,7 @@
     "S01-03: per il rinnovo dei documenti del fattorino ho scelto la strada che non rompe le consegne; c è un alternativa (dettagli nel messaggio alla regista).",
     "S01-01: chiudere del tutto questa voce chiede una scelta di prodotto (dettagli nel messaggio alla regista).",
     "S01-05: chiudere del tutto questa voce chiede una scelta su come la scheda mostra le domande (dettagli nel messaggio alla regista).",
-    "S01-04: prima del rilascio, le due letture scritte nella migrazione 997.",
+    "S01-04: prima del rilascio, la lettura scritta nella migrazione 997 (righe che l aggiornamento riscrive).",
     "Dopo l applicazione delle migrazioni 990-997: un controllo sul database vero (dettagli nel messaggio alla regista)."
   ],
   "conto": {
