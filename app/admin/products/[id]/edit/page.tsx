@@ -67,7 +67,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.categories.form,
     queryFn: async (): Promise<Category[]> => {
-      const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari').order('name');
+      const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id').order('name');
       if (error) throw error;
       return (data ?? []) as Category[];
     },

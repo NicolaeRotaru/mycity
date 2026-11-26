@@ -297,7 +297,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       .eq('seller_id', user.id)
       .order('created_at', { ascending: false })
       .limit(MAX_CATALOG),
-    admin.from('categories').select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari').order('name'),
+    admin.from('categories').select('id, name, slug, parent_id').order('name'),
   ]);
 
   const products = (productsData ?? []) as ProductRow[];
@@ -349,7 +349,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (focused) {
     const snap = snapshot(focused, categories);
     const { fields } = getAttributesForCategory(
-      categories.map((c) => ({ id: c.id, slug: c.slug, parent_id: c.parent_id, richiede_dichiarazioni_alimentari: (c as { richiede_dichiarazioni_alimentari?: boolean | null }).richiede_dichiarazioni_alimentari })),
+      categories.map((c) => ({ id: c.id, slug: c.slug, parent_id: c.parent_id })),
       focused.category_id,
     );
     const attrLines = fields

@@ -206,7 +206,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       .eq('seller_id', user.id)
       .order('created_at', { ascending: false })
       .limit(MAX_CATALOG),
-    admin.from('categories').select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari').order('name'),
+    admin.from('categories').select('id, name, slug, parent_id').order('name'),
   ]);
   const products = (productsData ?? []) as ProductRow[];
   const categories = (categoriesData ?? []) as CategoryRow[];

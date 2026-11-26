@@ -162,7 +162,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       .in('status', ['available', 'draft'])
       .order('created_at', { ascending: false })
       .limit(MAX_PRODUCTS),
-    admin.from('categories').select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari').order('name'),
+    admin.from('categories').select('id, name, slug, parent_id').order('name'),
   ]);
 
   const tutti = (productsData ?? []) as ProductRow[];

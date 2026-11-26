@@ -24,8 +24,6 @@ type Cat = {
   parent_id: string | null; sort_order: number | null; featured: boolean | null;
   /** Migrazione 159: senza, `select('*')` non la porta e il campo resta vuoto. */
   image_url?: string | null;
-  /** R18-015 — Migrazione 363: l'obbligo di allergeni e ingredienti è della categoria, non del suo nome. */
-  richiede_dichiarazioni_alimentari?: boolean | null;
 };
 
 /**
@@ -63,7 +61,6 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli
   const [sortOrder, setSortOrder] = useState(cat.sort_order ?? 0);
   const [featured, setFeatured] = useState(!!cat.featured);
   const [imageUrl, setImageUrl] = useState(cat.image_url ?? '');
-  const [alimentare, setAlimentare] = useState(!!cat.richiede_dichiarazioni_alimentari);
 
   const save = useMutation({
     mutationFn: async () => authedFetch('PATCH', {
@@ -71,8 +68,6 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli
       // Solo se è cambiata: senza la migrazione 159 la colonna non c'è e il salvataggio degli altri
       // campi deve riuscire lo stesso.
       ...(imageUrl.trim() !== (cat.image_url ?? '') ? { image_url: imageUrl.trim() } : {}),
-      // R18-015 — Solo se è cambiata, e mai per una sottocategoria (eredita dal padre).
-      ...(!parentId && alimentare !== !!cat.richiede_dichiarazioni_alimentari ? { richiede_dichiarazioni_alimentari: alimentare } : {}),
     }),
     onSuccess: () => { toast.success('Categoria aggiornata'); onDone(); },
     onError: (e: unknown) => toast.error(friendlyError(e)),
@@ -97,15 +92,6 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli
         </Select>
         <Input label="Ordine" containerClassName="w-20" type="number" min={0} value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value) || 0)} />
         <Checkbox containerClassName="mb-2.5" label="In evidenza" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
-        {!parentId && (
-          <Checkbox
-            containerClassName="mb-2.5"
-            label="Richiede allergeni e ingredienti (alimenti)"
-            checked={alimentare}
-            disabled={!!cat.richiede_dichiarazioni_alimentari}
-            onChange={(e) => setAlimentare(e.target.checked)}
-          />
-        )}
         <Input label="Foto della tessera (https://… o /…)" containerClassName="flex-1 min-w-[220px]" value={imageUrl} error={sopraIlTetto(imageUrl, 500)} placeholder="Vuota = gradiente del marchio" onChange={(e) => setImageUrl(e.target.value)} />
         <Button className="mb-0.5" size="sm" type="button" loading={save.isPending} onClick={() => save.mutate()}>Salva</Button>
         <button type="button" onClick={() => {
@@ -128,7 +114,6 @@ export default function AdminCategoriesPage() {
   const [newIcon, setNewIcon] = useState('');
   const [newParent, setNewParent] = useState('');
   const [newImage, setNewImage] = useState('');
-  const [newAlimentare, setNewAlimentare] = useState(false);
 
   const { data: cats = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.categories,
@@ -155,19 +140,12 @@ export default function AdminCategoriesPage() {
   const create = useMutation({
     mutationFn: async () => {
       if (!newName.trim()) throw new Error('Inserisci un nome');
-      const r = await authedFetch('POST', {
+      await authedFetch('POST', {
         name: newName.trim(), slug: slugify(newName), icon: newIcon, parent_id: newParent || null,
         ...(newImage.trim() ? { image_url: newImage.trim() } : {}),
-        ...(!newParent && newAlimentare ? { richiede_dichiarazioni_alimentari: true } : {}),
       });
-      return (r?.data?.avviso as string | undefined) ?? null;
     },
-    onSuccess: (avviso) => {
-      toast.success('Categoria creata');
-      // R18-015 — Una principale nata senza l'obbligo non chiede allergeni e ingredienti: si dice.
-      if (avviso) toast.warning(avviso, { duration: 12000 });
-      setNewAlimentare(false); setNewName(''); setNewIcon(''); setNewParent(''); setNewImage(''); invalidate();
-    },
+    onSuccess: () => { toast.success('Categoria creata'); setNewName(''); setNewIcon(''); setNewParent(''); setNewImage(''); invalidate(); },
     onError: (e: unknown) => toast.error(friendlyError(e)),
   });
 
@@ -188,9 +166,6 @@ export default function AdminCategoriesPage() {
           <option value="">— Principale —</option>
           {tops.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </Select>
-        {!newParent && (
-          <Checkbox containerClassName="mb-2.5" label="Richiede allergeni e ingredienti (alimenti)" checked={newAlimentare} onChange={(e) => setNewAlimentare(e.target.checked)} />
-        )}
         <Button type="submit" loading={create.isPending}><Plus size={16} aria-hidden /> Aggiungi</Button>
       </form>
 
