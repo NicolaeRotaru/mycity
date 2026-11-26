@@ -490,6 +490,25 @@ async function emailDovuta(
 }
 
 /**
+ * 26/11/2026 (R14-002) — L'email di questo avviso risulta partita? Chi sta fuori da questo file (il
+ * giro notturno) chiede qui, invece di copiarsi il registro e il segno «partita», che restano privati:
+ * se cambiano qui, una copia altrove smetterebbe di vederli senza dirlo. Se il registro non si legge: no.
+ */
+export async function emailRisultaPartita(admin: ClienteAvvisi, idAvviso: string): Promise<boolean> {
+  try {
+    const letto = await admin
+      .from(REGISTRO_INVII)
+      .select('action')
+      .eq('target_table', 'notifications')
+      .eq('target_id', idAvviso);
+    if (letto.error || !Array.isArray(letto.data)) return false;
+    return letto.data.some((r) => (r as { action?: unknown }).action === EMAIL_PARTITA);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 27/10/2026 (quarto giro) — L'EMAIL PORTA I COLLEGAMENTI, NON SOLO IL TESTO.
  *
  * Il corpo è scritto per il pannello: senza casella privacy dice «scrivi a noi
