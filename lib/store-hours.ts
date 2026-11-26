@@ -10,16 +10,12 @@ import { RITIRO_IN_NEGOZIO_ATTIVO } from './ritiro-in-negozio';
 export type HoursInterval = [string, string];
 export type StoreHours = Partial<
   Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', HoursInterval[]>
->;
-
-/** I due segni di sospensione, accanto ai giorni (tipo a parte: `keyof StoreHours` resta i soli sette giorni). */
-export type SegniDiSospensione = {
+> & {
   /** AAAA-MM-GG, ultimo giorno di chiusura incluso («chiuso fino al…»). */
   chiusoFinoAl?: string;
   /** AAAA-MM-GG di Roma del giorno in cui il negoziante ha premuto «finito per oggi». */
   finitoOggiIl?: string;
 };
-export type StoreHoursConSegni = StoreHours & SegniDiSospensione;
 
 export const DAY_KEYS: (keyof StoreHours)[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
@@ -114,7 +110,7 @@ export function giornoDiRoma(now: Date = romeNow()): string {
  */
 export function sospesoIl(storeHours: unknown, giorno: string): boolean {
   if (!storeHours || typeof storeHours !== 'object') return false;
-  const { chiusoFinoAl, finitoOggiIl } = storeHours as SegniDiSospensione;
+  const { chiusoFinoAl, finitoOggiIl } = storeHours as StoreHours;
   if (typeof chiusoFinoAl === 'string' && giorno <= chiusoFinoAl) return true;
   return typeof finitoOggiIl === 'string' && finitoOggiIl === giorno;
 }
@@ -445,7 +441,7 @@ export function motivoNegozioChiuso(
   // 26/11/2026 — Il motivo vero quando il negozio ha detto «chiuso fino al…» o «finito per oggi».
   const giorno = giornoDellaFascia(fascia, now, propostaIl);
   if (sospesoIl(storeHours, giorno)) {
-    const fino = (storeHours as SegniDiSospensione).chiusoFinoAl;
+    const fino = (storeHours as StoreHours).chiusoFinoAl;
     if (typeof fino === 'string' && giorno <= fino) {
       const [, mm, gg] = fino.split('-');
       return `${nomeNegozio} è chiuso fino al ${gg}/${mm}. Scegli un altro negozio, oppure riprova dopo.`;
