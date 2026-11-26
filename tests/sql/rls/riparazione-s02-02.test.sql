@@ -4,7 +4,9 @@
 -- Dal browser l'id di una recensione (al negozio o al prodotto) lo sceglie il
 -- database: quello mandato non conta. L'amministratore e il server scelgono ancora
 -- l'id che vogliono, se è libero. Per chiunque scriva, un id già usato nell'altra
--- tabella delle recensioni è rifiutato (23505), anche cambiando l'id dopo. Le
+-- tabella delle recensioni è rifiutato (23505), anche cambiando l'id dopo. Dal
+-- browser anche la data la sceglie il database, e una recensione al negozio nasce
+-- senza risposta del negozio e senza voti «utile»; il server li scrive. Le
 -- recensioni normali entrano come prima. Fuori da READ COMMITTED una recensione
 -- non si scrive (55000).
 -- Migrazione: migrations/998_s02_controlli_piu_stretti.sql.
@@ -35,18 +37,19 @@ INSERT INTO public.products (id, name, price, seller_id, status, images, stock) 
   ('5e020200-0000-0000-0000-0000000000a1', 'Pane s0202',  2.50, '5e020200-0000-0000-0000-000000000001', 'available', '[]'::jsonb, 100),
   ('5e020200-0000-0000-0000-0000000000a2', 'Torta s0202', 9.00, '5e020200-0000-0000-0000-000000000001', 'available', '[]'::jsonb, 100);
 
--- Ordini consegnati: A c1 c2 c3, B c4 c8, C c5 c6 c9, amministratore c7.
+-- Ordini consegnati: A c1 c2 c3 ca, B c4 c8 cb, C c5 c6 c9, amministratore c7.
 INSERT INTO public.orders (id, user_id, seller_id, total_price, payment_status, delivery_status)
 SELECT ('5e020200-0000-0000-0000-0000000000' || o)::uuid, ('5e020200-0000-0000-0000-00000000000' || u)::uuid,
        '5e020200-0000-0000-0000-000000000001', 2.50, 'PAID', 'DELIVERED'
-  FROM (VALUES ('c1', '2'), ('c2', '2'), ('c3', '2'), ('c4', '3'), ('c8', '3'),
+  FROM (VALUES ('c1', '2'), ('c2', '2'), ('c3', '2'), ('ca', '2'), ('c4', '3'), ('c8', '3'), ('cb', '3'),
                ('c5', '4'), ('c6', '4'), ('c9', '4'), ('c7', '5')) AS v(o, u);
 INSERT INTO public.order_items (order_id, product_id, quantity, unit_price) VALUES
   ('5e020200-0000-0000-0000-0000000000c1', '5e020200-0000-0000-0000-0000000000a1', 1, 2.50),
   ('5e020200-0000-0000-0000-0000000000c4', '5e020200-0000-0000-0000-0000000000a1', 1, 2.50),
   ('5e020200-0000-0000-0000-0000000000c4', '5e020200-0000-0000-0000-0000000000a2', 1, 9.00),
   ('5e020200-0000-0000-0000-0000000000c5', '5e020200-0000-0000-0000-0000000000a2', 1, 9.00),
-  ('5e020200-0000-0000-0000-0000000000c7', '5e020200-0000-0000-0000-0000000000a1', 1, 2.50);
+  ('5e020200-0000-0000-0000-0000000000c7', '5e020200-0000-0000-0000-0000000000a1', 1, 2.50),
+  ('5e020200-0000-0000-0000-0000000000ca', '5e020200-0000-0000-0000-0000000000a2', 1, 9.00);
 
 RESET mycity.allow_order_write;
 RESET mycity.allow_profile_write;
@@ -102,6 +105,36 @@ BEGIN
 END $$;
 GRANT EXECUTE ON FUNCTION pg_temp.al_prodotto(text, uuid, uuid, uuid) TO anon, authenticated, service_role;
 
+-- Una recensione al negozio con risposta del negozio, voti «utile» e data già scritti.
+CREATE FUNCTION pg_temp.al_negozio_compilata(p_caso text, p_utente uuid, p_ordine uuid)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  BEGIN
+    INSERT INTO public.store_reviews (store_id, user_id, order_id, rating, comment,
+                                      seller_reply, seller_reply_at, helpful_count, created_at)
+    VALUES ('5e020200-0000-0000-0000-000000000001', p_utente, p_ordine, 1, 'pessimo',
+            'Risposta del negozio scritta dal cliente', '2026-01-02 10:00+01', 9999, '2020-01-01 10:00+01');
+    INSERT INTO risposte VALUES (p_caso, 'ok');
+  EXCEPTION WHEN others THEN
+    INSERT INTO risposte VALUES (p_caso, SQLSTATE);
+  END;
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.al_negozio_compilata(text, uuid, uuid) TO anon, authenticated, service_role;
+
+-- Una recensione al prodotto con la data già scritta.
+CREATE FUNCTION pg_temp.al_prodotto_datata(p_caso text, p_utente uuid, p_prodotto uuid)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  BEGIN
+    INSERT INTO public.reviews (product_id, user_id, rating, comment, created_at)
+    VALUES (p_prodotto, p_utente, 5, 'buono', '2019-01-01 10:00+01');
+    INSERT INTO risposte VALUES (p_caso, 'ok');
+  EXCEPTION WHEN others THEN
+    INSERT INTO risposte VALUES (p_caso, SQLSTATE);
+  END;
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.al_prodotto_datata(text, uuid, uuid) TO anon, authenticated, service_role;
+
 -- Cambia l'id di una riga in quello di una riga dell'altra tabella.
 CREATE FUNCTION pg_temp.cambia_id(p_caso text, p_tabella text, p_da uuid, p_a uuid)
 RETURNS void LANGUAGE plpgsql AS $$
@@ -138,6 +171,12 @@ SELECT pg_temp.al_negozio('a-negozio-normale', NULL,
 -- al prodotto con l'id di una recensione al negozio di un altro
 SELECT pg_temp.al_prodotto('a-prodotto-id-di-store-reviews', '5e020200-0000-0000-0000-0000000000e2',
                            '5e020200-0000-0000-0000-000000000002', '5e020200-0000-0000-0000-0000000000a1');
+-- al negozio con la risposta del negozio, i voti «utile» e la data già scritti
+SELECT pg_temp.al_negozio_compilata('a-negozio-finta-risposta',
+                                    '5e020200-0000-0000-0000-000000000002', '5e020200-0000-0000-0000-0000000000ca');
+-- al prodotto con la data già scritta
+SELECT pg_temp.al_prodotto_datata('a-prodotto-data-scelta',
+                                  '5e020200-0000-0000-0000-000000000002', '5e020200-0000-0000-0000-0000000000a2');
 RESET ROLE;
 RESET request.jwt.claims;
 
@@ -173,6 +212,8 @@ SELECT pg_temp.al_negozio('server-negozio-id-libero', '5e020200-0000-0000-0000-0
                           '5e020200-0000-0000-0000-000000000003', '5e020200-0000-0000-0000-0000000000c8');
 SELECT pg_temp.al_prodotto('server-prodotto-id-di-store-reviews', '5e020200-0000-0000-0000-0000000000e4',
                            '5e020200-0000-0000-0000-000000000004', '5e020200-0000-0000-0000-0000000000a1');
+SELECT pg_temp.al_negozio_compilata('server-negozio-compilata',
+                                    '5e020200-0000-0000-0000-000000000003', '5e020200-0000-0000-0000-0000000000cb');
 -- store_reviews …f2 prende l'id della recensione di B alla torta (nata nel caso 2)
 SELECT pg_temp.cambia_id('server-cambia-id-in-store-reviews', 'store_reviews', '5e020200-0000-0000-0000-0000000000f2',
   (SELECT id FROM public.reviews WHERE product_id = '5e020200-0000-0000-0000-0000000000a2'
@@ -247,6 +288,32 @@ BEGIN
     stato = '23505', 'risposta ' || stato FROM risposte WHERE caso = 'server-cambia-id-in-store-reviews';
   INSERT INTO esiti SELECT 'server: cambiare l id di una recensione al prodotto in uno di store_reviews e'' rifiutato (23505)',
     stato = '23505', 'risposta ' || stato FROM risposte WHERE caso = 'server-cambia-id-in-reviews';
+
+  INSERT INTO esiti VALUES ('cliente: la recensione al negozio nasce senza risposta del negozio, senza voti «utile» e con la data di adesso',
+    EXISTS (SELECT 1 FROM public.store_reviews
+             WHERE order_id = '5e020200-0000-0000-0000-0000000000ca' AND user_id = '5e020200-0000-0000-0000-000000000002'
+               AND seller_reply IS NULL AND seller_reply_at IS NULL AND helpful_count = 0 AND created_at = now()),
+    coalesce((SELECT format('risposta=%s risposta_at=%s utile=%s created_at=%s',
+                            coalesce(seller_reply, '∅'), coalesce(seller_reply_at::text, '∅'), helpful_count,
+                            CASE WHEN created_at = now() THEN 'adesso' ELSE created_at::text END)
+                FROM public.store_reviews
+               WHERE order_id = '5e020200-0000-0000-0000-0000000000ca' AND user_id = '5e020200-0000-0000-0000-000000000002'),
+             'riga assente'));
+  INSERT INTO esiti VALUES ('cliente: la recensione al prodotto nasce con la data di adesso',
+    EXISTS (SELECT 1 FROM public.reviews
+             WHERE product_id = '5e020200-0000-0000-0000-0000000000a2' AND user_id = '5e020200-0000-0000-0000-000000000002'
+               AND created_at = now()),
+    coalesce((SELECT CASE WHEN created_at = now() THEN 'adesso' ELSE created_at::text END
+                FROM public.reviews
+               WHERE product_id = '5e020200-0000-0000-0000-0000000000a2' AND user_id = '5e020200-0000-0000-0000-000000000002'),
+             'riga assente'));
+  INSERT INTO esiti SELECT 'server: la recensione al negozio tiene risposta, voti «utile» e data che manda',
+    stato = 'ok' AND EXISTS (SELECT 1 FROM public.store_reviews
+             WHERE order_id = '5e020200-0000-0000-0000-0000000000cb' AND user_id = '5e020200-0000-0000-0000-000000000003'
+               AND seller_reply = 'Risposta del negozio scritta dal cliente'
+               AND seller_reply_at = '2026-01-02 10:00+01' AND helpful_count = 9999
+               AND created_at = '2020-01-01 10:00+01'),
+    'risposta ' || stato FROM risposte WHERE caso = 'server-negozio-compilata';
 
   INSERT INTO esiti VALUES ('nessun id sta in tutte e due le tabelle',
     NOT EXISTS (SELECT 1 FROM public.store_reviews s JOIN public.reviews r ON r.id = s.id),

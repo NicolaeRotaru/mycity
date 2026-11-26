@@ -2,9 +2,11 @@
 -- S02-01 — una riga nuova di segnalazioni
 -- =============================================================================
 -- Dal browser (anonimo o con account) la riga nasce «ricevuta», senza esito, senza
--- chi ha deciso e senza data della decisione, qualunque cosa mandi. L'amministratore
--- e il server scrivono quello che mandano, e così chi lavora direttamente sul database.
+-- chi ha deciso, senza data della decisione, con la data di adesso e con un id
+-- scelto dal database, qualunque cosa mandi. L'amministratore e il server scrivono
+-- quello che mandano, e così chi lavora direttamente sul database.
 -- La regola sull'autore resta com'era.
+-- Ogni invio si riconosce dal suo «dettaglio», che porta il nome del caso.
 -- Migrazione: migrations/998_s02_controlli_piu_stretti.sql.
 -- Gira dopo tests/sql/harness/apply.sh. Transazione con ROLLBACK finale.
 -- =============================================================================
@@ -24,56 +26,56 @@ UPDATE public.profiles SET role = 'admin' WHERE id = '5e020100-0000-0000-0000-00
 
 RESET mycity.allow_profile_write;
 
-CREATE TEMP TABLE risposte (caso text PRIMARY KEY, stato text) ON COMMIT DROP;
+CREATE TEMP TABLE risposte (caso text PRIMARY KEY, stato text, id_mandato uuid) ON COMMIT DROP;
 GRANT ALL ON risposte TO anon, authenticated, service_role;
 
--- Una segnalazione con id deciso dalla prova (per ritrovarla), stato e decisione già scritti.
+-- Una segnalazione con id, stato e decisione già scritti.
 CREATE FUNCTION pg_temp.manda(p_caso text, p_id uuid, p_autore uuid, p_stato text,
                               p_esito text, p_deciso_da uuid, p_deciso_at timestamptz,
                               p_creata timestamptz)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
   BEGIN
-    INSERT INTO public.segnalazioni (id, tipo, oggetto_id, motivo, segnalante_id,
+    INSERT INTO public.segnalazioni (id, tipo, oggetto_id, motivo, dettaglio, segnalante_id,
                                      stato, esito_motivato, deciso_da, deciso_at, created_at)
-    VALUES (p_id, 'recensione', '5e020100-0000-0000-0000-0000000000ff', 'altro', p_autore,
+    VALUES (p_id, 'recensione', '5e020100-0000-0000-0000-0000000000ff', 'altro', p_caso, p_autore,
             p_stato, p_esito, p_deciso_da, p_deciso_at, p_creata);
-    INSERT INTO risposte VALUES (p_caso, 'ok');
+    INSERT INTO risposte VALUES (p_caso, 'ok', p_id);
   EXCEPTION WHEN others THEN
-    INSERT INTO risposte VALUES (p_caso, SQLSTATE);
+    INSERT INTO risposte VALUES (p_caso, SQLSTATE, p_id);
   END;
 END $$;
 GRANT EXECUTE ON FUNCTION pg_temp.manda(text, uuid, uuid, text, text, uuid, timestamptz, timestamptz)
   TO anon, authenticated, service_role;
 
--- Una segnalazione come la manda chi segnala davvero: solo i campi del modulo.
-CREATE FUNCTION pg_temp.manda_semplice(p_caso text, p_id uuid, p_autore uuid)
+-- Una segnalazione come la manda chi segnala davvero: solo i campi del modulo, niente id.
+CREATE FUNCTION pg_temp.manda_semplice(p_caso text, p_autore uuid)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
   BEGIN
-    INSERT INTO public.segnalazioni (id, tipo, oggetto_id, motivo, segnalante_id, dettaglio)
-    VALUES (p_id, 'prodotto', '5e020100-0000-0000-0000-0000000000fe', 'ingannevole', p_autore, 'testo');
-    INSERT INTO risposte VALUES (p_caso, 'ok');
+    INSERT INTO public.segnalazioni (tipo, oggetto_id, motivo, segnalante_id, dettaglio)
+    VALUES ('prodotto', '5e020100-0000-0000-0000-0000000000fe', 'ingannevole', p_autore, p_caso);
+    INSERT INTO risposte VALUES (p_caso, 'ok', NULL);
   EXCEPTION WHEN others THEN
-    INSERT INTO risposte VALUES (p_caso, SQLSTATE);
+    INSERT INTO risposte VALUES (p_caso, SQLSTATE, NULL);
   END;
 END $$;
-GRANT EXECUTE ON FUNCTION pg_temp.manda_semplice(text, uuid, uuid) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION pg_temp.manda_semplice(text, uuid) TO anon, authenticated, service_role;
 
--- La stessa, scritta da una funzione coi permessi del suo proprietario (SECURITY DEFINER):
+-- La prima, scritta da una funzione coi permessi del suo proprietario (SECURITY DEFINER):
 -- conta chi ha fatto la richiesta, non il proprietario della funzione.
 CREATE FUNCTION pg_temp.manda_come_proprietario(p_caso text, p_id uuid, p_autore uuid)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   BEGIN
-    INSERT INTO public.segnalazioni (id, tipo, oggetto_id, motivo, segnalante_id,
+    INSERT INTO public.segnalazioni (id, tipo, oggetto_id, motivo, dettaglio, segnalante_id,
                                      stato, esito_motivato, deciso_da, deciso_at, created_at)
-    VALUES (p_id, 'recensione', '5e020100-0000-0000-0000-0000000000ff', 'altro', p_autore,
+    VALUES (p_id, 'recensione', '5e020100-0000-0000-0000-0000000000ff', 'altro', p_caso, p_autore,
             'accolta', 'esito da una funzione', '5e020100-0000-0000-0000-000000000001',
             '2026-01-01 10:00+01', '2025-01-01 10:00+01');
-    INSERT INTO risposte VALUES (p_caso, 'ok');
+    INSERT INTO risposte VALUES (p_caso, 'ok', p_id);
   EXCEPTION WHEN others THEN
-    INSERT INTO risposte VALUES (p_caso, SQLSTATE);
+    INSERT INTO risposte VALUES (p_caso, SQLSTATE, p_id);
   END;
 END $$;
 GRANT EXECUTE ON FUNCTION pg_temp.manda_come_proprietario(text, uuid, uuid) TO anon, authenticated, service_role;
@@ -94,7 +96,7 @@ SELECT pg_temp.manda('anon-accolta', '5e020100-0000-0000-0000-00000000a001', NUL
                      '2026-01-01 10:00+01', '2025-01-01 10:00+01');
 SELECT pg_temp.manda('anon-respinta', '5e020100-0000-0000-0000-00000000a002', NULL, 'respinta',
                      'altro esito', NULL, '2026-02-01 10:00+01', '2025-02-01 10:00+01');
-SELECT pg_temp.manda_semplice('anon-semplice', '5e020100-0000-0000-0000-00000000a003', NULL);
+SELECT pg_temp.manda_semplice('anon-semplice', NULL);
 SELECT pg_temp.manda_come_proprietario('anon-da-funzione', '5e020100-0000-0000-0000-00000000a004', NULL);
 RESET ROLE;
 
@@ -109,10 +111,8 @@ SELECT pg_temp.manda('cliente-accolta', '5e020100-0000-0000-0000-00000000b001',
 SELECT pg_temp.manda('cliente-in-esame', '5e020100-0000-0000-0000-00000000b002',
                      '5e020100-0000-0000-0000-000000000002', 'in_esame', NULL,
                      '5e020100-0000-0000-0000-000000000002', NULL, '2025-03-01 10:00+01');
-SELECT pg_temp.manda_semplice('cliente-semplice', '5e020100-0000-0000-0000-00000000b003',
-                              '5e020100-0000-0000-0000-000000000002');
-SELECT pg_temp.manda_semplice('cliente-a-nome-di-un-altro', '5e020100-0000-0000-0000-00000000b004',
-                              '5e020100-0000-0000-0000-000000000003');
+SELECT pg_temp.manda_semplice('cliente-semplice', '5e020100-0000-0000-0000-000000000002');
+SELECT pg_temp.manda_semplice('cliente-a-nome-di-un-altro', '5e020100-0000-0000-0000-000000000003');
 SELECT pg_temp.manda_come_proprietario('cliente-da-funzione', '5e020100-0000-0000-0000-00000000b005',
                                        '5e020100-0000-0000-0000-000000000002');
 RESET ROLE;
@@ -136,97 +136,97 @@ SET LOCAL ROLE service_role;
 SELECT pg_temp.manda('server-respinta', '5e020100-0000-0000-0000-00000000d001', NULL, 'respinta',
                      'esito del server', '5e020100-0000-0000-0000-000000000001',
                      '2026-01-01 10:00+01', '2025-01-01 10:00+01');
-SELECT pg_temp.manda_semplice('server-semplice', '5e020100-0000-0000-0000-00000000d002', NULL);
+SELECT pg_temp.manda_semplice('server-semplice', NULL);
 RESET ROLE;
 
 -- =============================================================================
 -- Controlli
 -- =============================================================================
-CREATE FUNCTION pg_temp.nata_pulita(p_id uuid) RETURNS boolean LANGUAGE sql AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.segnalazioni
-     WHERE id = p_id
-       AND stato = 'ricevuta'
-       AND esito_motivato IS NULL
-       AND deciso_da IS NULL
-       AND deciso_at IS NULL
-       AND created_at = now()
-  );
+-- Nata dal browser: ricevuta, senza decisione, data di adesso, e non con l'id mandato.
+CREATE FUNCTION pg_temp.nata_pulita(p_caso text) RETURNS boolean LANGUAGE sql AS $$
+  SELECT (SELECT count(*) FROM public.segnalazioni WHERE dettaglio = p_caso) = 1
+     AND EXISTS (
+       SELECT 1 FROM public.segnalazioni s
+        WHERE s.dettaglio = p_caso
+          AND s.stato = 'ricevuta'
+          AND s.esito_motivato IS NULL
+          AND s.deciso_da IS NULL
+          AND s.deciso_at IS NULL
+          AND s.created_at = now()
+          AND s.id IS DISTINCT FROM (SELECT id_mandato FROM risposte WHERE caso = p_caso))
+     AND NOT EXISTS (
+       SELECT 1 FROM public.segnalazioni
+        WHERE id = (SELECT id_mandato FROM risposte WHERE caso = p_caso));
 $$;
 
-CREATE FUNCTION pg_temp.come_e(p_id uuid) RETURNS text LANGUAGE sql AS $$
+-- Scritta da chi decide: tutto come l'ha mandato, id compreso.
+CREATE FUNCTION pg_temp.come_mandata(p_caso text, p_id uuid, p_stato text, p_esito text) RETURNS boolean
+LANGUAGE sql AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.segnalazioni
+     WHERE dettaglio = p_caso
+       AND id = p_id
+       AND stato = p_stato
+       AND esito_motivato = p_esito
+       AND deciso_da = '5e020100-0000-0000-0000-000000000001'
+       AND deciso_at = '2026-01-01 10:00+01'
+       AND created_at = '2025-01-01 10:00+01');
+$$;
+
+CREATE FUNCTION pg_temp.come_e(p_caso text) RETURNS text LANGUAGE sql AS $$
   SELECT coalesce(
-    (SELECT format('stato=%s esito=%s deciso_da=%s deciso_at=%s created_at=%s',
+    (SELECT string_agg(format('id=%s stato=%s esito=%s deciso_da=%s deciso_at=%s created_at=%s',
+                   CASE WHEN id = (SELECT id_mandato FROM risposte WHERE caso = p_caso) THEN 'quello mandato'
+                        ELSE 'nuovo' END,
                    stato, coalesce(esito_motivato, '∅'), coalesce(deciso_da::text, '∅'),
                    coalesce(deciso_at::text, '∅'),
-                   CASE WHEN created_at = now() THEN 'adesso' ELSE created_at::text END)
-       FROM public.segnalazioni WHERE id = p_id),
+                   CASE WHEN created_at = now() THEN 'adesso' ELSE created_at::text END), ' | ')
+       FROM public.segnalazioni WHERE dettaglio = p_caso),
     'riga assente');
 $$;
 
 DO $$
 BEGIN
-  -- Ogni invio dal browser e dal server deve essere entrato (tranne quello a nome di un altro).
+  -- Ogni invio deve essere entrato (tranne quello a nome di un altro).
   INSERT INTO esiti
   SELECT 'l invio ' || caso || ' entra', stato = 'ok', 'risposta ' || stato
     FROM risposte WHERE caso <> 'cliente-a-nome-di-un-altro';
 
-  INSERT INTO esiti VALUES ('anon: «accolta» con esito, chi ha deciso e date nasce ricevuta e senza decisione',
-    pg_temp.nata_pulita('5e020100-0000-0000-0000-00000000a001'), pg_temp.come_e('5e020100-0000-0000-0000-00000000a001'));
+  INSERT INTO esiti VALUES ('anon: «accolta» con id, esito, chi ha deciso e date nasce ricevuta, senza decisione e con un id nuovo',
+    pg_temp.nata_pulita('anon-accolta'), pg_temp.come_e('anon-accolta'));
   INSERT INTO esiti VALUES ('anon: «respinta» con esito nasce ricevuta e senza decisione',
-    pg_temp.nata_pulita('5e020100-0000-0000-0000-00000000a002'), pg_temp.come_e('5e020100-0000-0000-0000-00000000a002'));
-  INSERT INTO esiti VALUES ('anon: anche da una funzione SECURITY DEFINER nasce ricevuta e senza decisione',
-    pg_temp.nata_pulita('5e020100-0000-0000-0000-00000000a004'), pg_temp.come_e('5e020100-0000-0000-0000-00000000a004'));
-  INSERT INTO esiti VALUES ('cliente: anche da una funzione SECURITY DEFINER nasce ricevuta e senza decisione',
-    pg_temp.nata_pulita('5e020100-0000-0000-0000-00000000b005'), pg_temp.come_e('5e020100-0000-0000-0000-00000000b005'));
-
-  INSERT INTO esiti VALUES ('database diretto (semine, migrazioni): scrive stato, esito, chi ha deciso e date',
-    EXISTS (SELECT 1 FROM public.segnalazioni
-             WHERE id = '5e020100-0000-0000-0000-00000000e001'
-               AND stato = 'accolta'
-               AND esito_motivato = 'esito della semina'
-               AND deciso_da = '5e020100-0000-0000-0000-000000000001'
-               AND deciso_at = '2026-01-01 10:00+01'
-               AND created_at = '2025-01-01 10:00+01'),
-    pg_temp.come_e('5e020100-0000-0000-0000-00000000e001'));
-
+    pg_temp.nata_pulita('anon-respinta'), pg_temp.come_e('anon-respinta'));
   INSERT INTO esiti VALUES ('anon: la segnalazione del modulo nasce ricevuta',
-    pg_temp.nata_pulita('5e020100-0000-0000-0000-00000000a003'), pg_temp.come_e('5e020100-0000-0000-0000-00000000a003'));
+    pg_temp.nata_pulita('anon-semplice'), pg_temp.come_e('anon-semplice'));
+  INSERT INTO esiti VALUES ('anon: anche da una funzione SECURITY DEFINER nasce ricevuta e senza decisione',
+    pg_temp.nata_pulita('anon-da-funzione'), pg_temp.come_e('anon-da-funzione'));
 
-  INSERT INTO esiti VALUES ('cliente: «accolta» con esito, chi ha deciso e date nasce ricevuta e senza decisione',
-    pg_temp.nata_pulita('5e020100-0000-0000-0000-00000000b001'), pg_temp.come_e('5e020100-0000-0000-0000-00000000b001'));
+  INSERT INTO esiti VALUES ('cliente: «accolta» con id, esito, chi ha deciso e date nasce ricevuta, senza decisione e con un id nuovo',
+    pg_temp.nata_pulita('cliente-accolta'), pg_temp.come_e('cliente-accolta'));
   INSERT INTO esiti VALUES ('cliente: «in_esame» con chi ha deciso nasce ricevuta e senza decisione',
-    pg_temp.nata_pulita('5e020100-0000-0000-0000-00000000b002'), pg_temp.come_e('5e020100-0000-0000-0000-00000000b002'));
+    pg_temp.nata_pulita('cliente-in-esame'), pg_temp.come_e('cliente-in-esame'));
   INSERT INTO esiti VALUES ('cliente: la segnalazione del modulo nasce ricevuta',
-    pg_temp.nata_pulita('5e020100-0000-0000-0000-00000000b003'), pg_temp.come_e('5e020100-0000-0000-0000-00000000b003'));
+    pg_temp.nata_pulita('cliente-semplice'), pg_temp.come_e('cliente-semplice'));
+  INSERT INTO esiti VALUES ('cliente: anche da una funzione SECURITY DEFINER nasce ricevuta e senza decisione',
+    pg_temp.nata_pulita('cliente-da-funzione'), pg_temp.come_e('cliente-da-funzione'));
 
   INSERT INTO esiti SELECT 'cliente: a nome di un altro resta vietata (42501)', stato = '42501', 'risposta ' || stato
     FROM risposte WHERE caso = 'cliente-a-nome-di-un-altro';
   INSERT INTO esiti VALUES ('cliente: a nome di un altro non lascia righe',
-    NOT EXISTS (SELECT 1 FROM public.segnalazioni WHERE id = '5e020100-0000-0000-0000-00000000b004'),
-    pg_temp.come_e('5e020100-0000-0000-0000-00000000b004'));
+    NOT EXISTS (SELECT 1 FROM public.segnalazioni WHERE dettaglio = 'cliente-a-nome-di-un-altro'),
+    pg_temp.come_e('cliente-a-nome-di-un-altro'));
 
-  INSERT INTO esiti VALUES ('amministratore: scrive stato, esito, chi ha deciso e date',
-    EXISTS (SELECT 1 FROM public.segnalazioni
-             WHERE id = '5e020100-0000-0000-0000-00000000c001'
-               AND stato = 'accolta'
-               AND esito_motivato = 'esito dell amministratore'
-               AND deciso_da = '5e020100-0000-0000-0000-000000000001'
-               AND deciso_at = '2026-01-01 10:00+01'
-               AND created_at = '2025-01-01 10:00+01'),
-    pg_temp.come_e('5e020100-0000-0000-0000-00000000c001'));
-
-  INSERT INTO esiti VALUES ('server: scrive stato, esito, chi ha deciso e date',
-    EXISTS (SELECT 1 FROM public.segnalazioni
-             WHERE id = '5e020100-0000-0000-0000-00000000d001'
-               AND stato = 'respinta'
-               AND esito_motivato = 'esito del server'
-               AND deciso_da = '5e020100-0000-0000-0000-000000000001'
-               AND deciso_at = '2026-01-01 10:00+01'
-               AND created_at = '2025-01-01 10:00+01'),
-    pg_temp.come_e('5e020100-0000-0000-0000-00000000d001'));
+  INSERT INTO esiti VALUES ('database diretto (semine, migrazioni): scrive id, stato, esito, chi ha deciso e date',
+    pg_temp.come_mandata('database-accolta', '5e020100-0000-0000-0000-00000000e001', 'accolta', 'esito della semina'),
+    pg_temp.come_e('database-accolta'));
+  INSERT INTO esiti VALUES ('amministratore: scrive id, stato, esito, chi ha deciso e date',
+    pg_temp.come_mandata('admin-accolta', '5e020100-0000-0000-0000-00000000c001', 'accolta', 'esito dell amministratore'),
+    pg_temp.come_e('admin-accolta'));
+  INSERT INTO esiti VALUES ('server: scrive id, stato, esito, chi ha deciso e date',
+    pg_temp.come_mandata('server-respinta', '5e020100-0000-0000-0000-00000000d001', 'respinta', 'esito del server'),
+    pg_temp.come_e('server-respinta'));
   INSERT INTO esiti VALUES ('server: la segnalazione del modulo nasce ricevuta',
-    pg_temp.nata_pulita('5e020100-0000-0000-0000-00000000d002'), pg_temp.come_e('5e020100-0000-0000-0000-00000000d002'));
+    pg_temp.nata_pulita('server-semplice'), pg_temp.come_e('server-semplice'));
 END $$;
 
 -- =============================================================================

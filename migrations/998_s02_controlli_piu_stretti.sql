@@ -33,6 +33,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  NEW.id             := gen_random_uuid();
   NEW.stato          := 'ricevuta';
   NEW.esito_motivato := NULL;
   NEW.deciso_da      := NULL;
@@ -50,7 +51,8 @@ CREATE TRIGGER trg_segnalazioni_prima_dell_inserimento
   FOR EACH ROW EXECUTE FUNCTION public.segnalazioni_prima_dell_inserimento();
 
 -- ── S02-02 ──────────────────────────────────────────────────────────────────
--- (a) Dal browser l'id di una recensione lo sceglie il database.
+-- (a) Dal browser l'id e la data di una recensione li sceglie il database, e una
+--     recensione al negozio nasce senza risposta e senza voti «utile».
 CREATE OR REPLACE FUNCTION public.recensioni_prima_dell_inserimento()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -67,7 +69,13 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  NEW.id := gen_random_uuid();
+  NEW.id         := gen_random_uuid();
+  NEW.created_at := now();
+  IF TG_TABLE_NAME = 'store_reviews' THEN
+    NEW.seller_reply    := NULL;
+    NEW.seller_reply_at := NULL;
+    NEW.helpful_count   := 0;
+  END IF;
   RETURN NEW;
 END;
 $$;
