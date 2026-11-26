@@ -29,6 +29,10 @@ export const runtime = 'nodejs';
  * registrazione è una segnalazione che non arriva. Chi lascia un recapito ha
  * diritto a un esito motivato.
  */
+/** I limiti dei campi di chi segnala (R02-016: vedi sotto `dettaglioConDatiDiChiSegnala`). */
+const NOME_MASSIMO = 100;
+const DETTAGLIO_MASSIMO = 2000;
+const RISERVA_DATI = 300;
 const Corpo = z.object({
   tipo: z.enum(['prodotto', 'negozio', 'recensione', 'messaggio']),
   oggettoId: z.string().uuid(),
@@ -38,7 +42,52 @@ const Corpo = z.object({
   ]),
   dettaglio: z.string().max(2000).optional(),
   emailContatto: z.string().email().max(320).optional(),
+  // 26/11/2026 (R02-016) — Nome e dichiarazione di buona fede, tutti e due facoltativi.
+  nomeSegnalante: z.string().max(NOME_MASSIMO).optional(),
+  buonaFede: z.boolean().optional(),
 });
+
+/**
+ * 26/11/2026 (R02-016) — CHI SEGNALA PUÒ DARE IL SUO NOME E DICHIARARE LA BUONA FEDE.
+ *
+ * Il regolamento sui servizi digitali (art. 16.2, lettere c e d) chiede che il canale consenta il
+ * nome di chi segnala e la dichiarazione di buona fede; non chiede di rifiutare chi non li dà.
+ * Prima il modulo aveva solo motivo, testo ed email.
+ *
+ * Dove si salvano: in testa al testo della segnalazione (`dettaglio`), senza colonne nuove. Una
+ * colonna nuova farebbe cadere OGNI segnalazione finché la migrazione non è applicata (il
+ * database rifiuta la scrittura intera), e il testo ha già il suo tempo di conservazione (la
+ * potatura delle segnalazioni lo azzera con l'email) e lo legge solo l'amministrazione e chi l'ha
+ * scritto (esportazione dei dati). Senza nome né dichiarazione il testo resta esattamente com'era.
+ * Le due righe sono dichiarazioni di chi segnala, come il resto del testo: il server non aggiunge
+ * niente che lui non abbia scritto o spuntato, quindi non c'è un «timbro» da falsificare.
+ *
+ * La lunghezza: il database tiene al massimo `DETTAGLIO_MASSIMO` caratteri. Con nome o
+ * dichiarazione il modulo lascia al testo `DETTAGLIO_MASSIMO - RISERVA_DATI` caratteri (le righe
+ * aggiunte non arrivano mai alla riserva), e qui un testo che insieme alle righe non ci sta si
+ * rifiuta con un 400 che dice di quanto accorciare, invece di un guasto alla scrittura.
+ */
+const DICHIARAZIONE_BUONA_FEDE =
+  'Chi segnala dichiara in buona fede che le informazioni e le accuse di questa segnalazione sono esatte e complete.';
+
+/** Il nome su una riga sola: a capo e caratteri di controllo diventano spazi. */
+function nomeSuUnaRiga(nome: string | undefined): string | null {
+  const pulito = (nome ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return pulito || null;
+}
+
+function dettaglioConDatiDiChiSegnala(
+  dettaglio: string | undefined,
+  nome: string | null,
+  buonaFede: boolean,
+): string | null {
+  const righe: string[] = [];
+  if (nome) righe.push(`Nome di chi segnala: ${nome}`);
+  if (buonaFede) righe.push(DICHIARAZIONE_BUONA_FEDE);
+  if (righe.length === 0) return dettaglio ?? null;
+  const testo = (dettaglio ?? '').trim();
+  return testo ? `${righe.join('\n')}\n\n${testo}` : righe.join('\n');
+}
 
 /**
  * 26/11/2026 (R02-010) — CHI LASCIA L'EMAIL RICEVE LA RICEVUTA.
@@ -148,6 +197,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       autoreId = null;
     }
 
+    const nome = nomeSuUnaRiga(corpo.nomeSegnalante);
+    const dettaglio = dettaglioConDatiDiChiSegnala(corpo.dettaglio, nome, corpo.buonaFede === true);
+    if (dettaglio !== null && dettaglio.length > DETTAGLIO_MASSIMO) {
+      return ApiErrors.invalidRequest(
+        `Con il nome o la dichiarazione il testo può avere al massimo ${DETTAGLIO_MASSIMO - RISERVA_DATI} caratteri: ` +
+        `accorcialo di ${dettaglio.length - DETTAGLIO_MASSIMO} o più.`,
+      );
+    }
+
     const admin = getAdminSupabase();
 
     // 5/11/2026 (S05) — Si segnala qualcosa che esiste: prima un codice qualunque
@@ -184,7 +242,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         tipo: corpo.tipo,
         oggetto_id: corpo.oggettoId,
         motivo: corpo.motivo,
-        dettaglio: corpo.dettaglio ?? null,
+        dettaglio,
         segnalante_id: autoreId,
         email_contatto: corpo.emailContatto ?? null,
       })
