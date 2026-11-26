@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { readConsent } from '@/lib/consent';
+import { ga } from '@/lib/analytics/events';
 import { POSTHOG_ACCESO } from '@/lib/funzioni-al-lancio';
 import type { CaptureResult } from 'posthog-js';
 import {
@@ -458,15 +459,12 @@ export async function track(event: string, properties?: Record<string, unknown>)
 export function mandaMisuraDiVelocita(name: string, metric: { value: number; rating: string }): void {
   if (typeof window === 'undefined' || !readConsent()?.analytics) return;
   void track('web_vital', { metric: name, value: metric.value, rating: metric.rating });
-  if (!window.gtag) return;
-  try {
-    window.gtag('event', 'web_vital', {
-      metric_name: name,
-      value: Math.round(name === 'CLS' ? metric.value * 1000 : metric.value),
-      metric_rating: metric.rating,
-      non_interaction: true,
-    });
-  } catch { /* noop */ }
+  ga('web_vital', {
+    metric_name: name,
+    value: Math.round(name === 'CLS' ? metric.value * 1000 : metric.value),
+    metric_rating: metric.rating,
+    non_interaction: true,
+  });
 }
 
 /**
