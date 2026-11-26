@@ -8,6 +8,12 @@ import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
 import { LUNGHEZZA_MINIMA, PASSWORD_UGUALE } from '@/lib/account/cambio-password';
 import { esitoErroreDiAccesso } from '@/lib/auth/errore-di-accesso';
+import {
+  PASSWORD_RUBATA,
+  PASSWORD_SEMPLICE,
+  traduciErroreNuovaPassword,
+  type ErroreDiSupabase,
+} from '@/lib/auth/errori-nuova-password';
 
 export const runtime = 'nodejs';
 
@@ -44,6 +50,27 @@ function fornitoriDiAccesso(user: { app_metadata?: { providers?: unknown }; iden
   const daiMetadati = user.app_metadata?.providers;
   if (Array.isArray(daiMetadati)) return daiMetadati.filter((p): p is string => typeof p === 'string');
   return (user.identities ?? []).map((i) => i.provider).filter((p): p is string => typeof p === 'string');
+}
+
+/**
+ * 26/11/2026 (R28-005) — LA NUOVA PASSWORD DEBOLE O RUBATA NON È UN GUASTO.
+ *
+ * Supabase la rifiuta con `weak_password` (motivi `pwned`, `length`,
+ * `characters`) e qui diventava un 500 «Non è stato possibile aggiornare la
+ * password»: la persona riprovava la stessa. È un rifiuto della richiesta: 400
+ * con la frase di /reset-password. Un testo che l'aiutante non riconosce lo farebbe
+ * ripiegare su una frase dei link di reset, che qui non ci sono: col codice
+ * `weak_password` il rifiuto è comunque della password, e vale «troppo semplice».
+ */
+function ePasswordRifiutata(errore: { code?: unknown; name?: unknown; reasons?: unknown }): boolean {
+  return errore.code === 'weak_password' || errore.name === 'AuthWeakPasswordError' || Array.isArray(errore.reasons);
+}
+
+function fraseDellaPasswordRifiutata(errore: ErroreDiSupabase): string {
+  const frase = traduciErroreNuovaPassword(errore);
+  return frase === PASSWORD_RUBATA || frase === PASSWORD_SEMPLICE || frase.startsWith('La password è troppo corta')
+    ? frase
+    : PASSWORD_SEMPLICE;
 }
 
 export const POST = withAuthRateLimit(
@@ -111,6 +138,9 @@ export const POST = withAuthRateLimit(
       password: corpo.nuovaPassword,
     });
     if (erroreCambio) {
+      if (ePasswordRifiutata(erroreCambio)) {
+        return ApiErrors.invalidRequest(fraseDellaPasswordRifiutata(erroreCambio));
+      }
       logger.error('[cambia-password] scrittura fallita', { userId: user.id, message: erroreCambio.message });
       return ApiErrors.internal('Non è stato possibile aggiornare la password');
     }

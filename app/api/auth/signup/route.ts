@@ -5,6 +5,12 @@ import { verifyTurnstileToken } from '@/lib/captcha';
 import { env } from '@/lib/env';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import {
+  PASSWORD_RUBATA,
+  PASSWORD_SEMPLICE,
+  traduciErroreNuovaPassword,
+  type ErroreDiSupabase,
+} from '@/lib/auth/errori-nuova-password';
 
 export const runtime = 'nodejs';
 
@@ -42,6 +48,27 @@ function datiDellIscrizione(body: { role?: unknown; full_name?: unknown; version
  * `CAPTCHA_SU_SUPABASE_ACCESO=1` (insieme al CAPTCHA acceso su Supabase, mai
  * prima): verifica Supabase. Spenta: verifica il server, come prima.
  */
+/**
+ * 26/11/2026 (R28-005) — LA PASSWORD DEBOLE O RUBATA SI DICE, IN ITALIANO.
+ *
+ * Supabase la rifiuta con `weak_password` (e i motivi: `pwned`, `length`,
+ * `characters`), e qui diventava «Controlla i dati e riprova»: la persona non
+ * sapeva che il problema era la password. Le frasi sono quelle di /reset-password.
+ * Un testo che l'aiutante non riconosce lo farebbe ripiegare su una frase dei link
+ * di reset («richiedi un nuovo link qui sotto»), che qui non c'è: col codice
+ * `weak_password` il rifiuto è comunque della password, e vale «troppo semplice».
+ */
+function ePasswordRifiutata(errore: { code?: unknown; name?: unknown; reasons?: unknown }): boolean {
+  return errore.code === 'weak_password' || errore.name === 'AuthWeakPasswordError' || Array.isArray(errore.reasons);
+}
+
+function fraseDellaPasswordRifiutata(errore: ErroreDiSupabase): string {
+  const frase = traduciErroreNuovaPassword(errore);
+  return frase === PASSWORD_RUBATA || frase === PASSWORD_SEMPLICE || frase.startsWith('La password è troppo corta')
+    ? frase
+    : PASSWORD_SEMPLICE;
+}
+
 function captchaVerificatoDaSupabase(): boolean {
   return /^(1|true)$/i.test((process.env.CAPTCHA_SU_SUPABASE_ACCESO ?? '').trim());
 }
@@ -97,6 +124,7 @@ export async function POST(request: Request) {
     if (error) {
       // Il gettone rifiutato da Supabase si dice come nella rotta di accesso.
       if (error.code === 'captcha_failed') return ApiErrors.invalidRequest('CAPTCHA non valido');
+      if (ePasswordRifiutata(error)) return ApiErrors.invalidRequest(fraseDellaPasswordRifiutata(error));
       return ApiErrors.invalidRequest('Registrazione non riuscita. Controlla i dati e riprova.');
     }
     return NextResponse.json(data, { status: 201 });
