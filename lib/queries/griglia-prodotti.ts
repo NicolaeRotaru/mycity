@@ -38,6 +38,8 @@ export type RigaGriglia = {
   created_at: string;
   seller_id: string | null;
   category_id: string | null;
+  /** R21-005 — Solo ordinando per prezzo, con la migrazione 911: il prezzo che si paga. */
+  prezzo_pagato?: string | number | null;
   profiles?: SellerPublicProfile | null;
 };
 
@@ -145,8 +147,8 @@ async function cePrezzoPagato(supabase: SupabaseClient): Promise<boolean> {
 }
 
 /** La domanda guarda il prezzo (filtro o ordine)? Solo allora serve sapere se `prezzo_pagato` c'è. */
-function guardaIlPrezzo(d: Pick<DomandaGriglia, 'minPrice'>): boolean {
-  return d.minPrice !== undefined;
+function guardaIlPrezzo(d: Pick<DomandaGriglia, 'minPrice'> & { sort?: OrdineGriglia }): boolean {
+  return d.minPrice !== undefined || d.sort === 'price_asc' || d.sort === 'price_desc';
 }
 
 /**
@@ -299,8 +301,11 @@ function nellOrdineDelDatabase(sort: OrdineGriglia): (a: RigaGriglia, b: RigaGri
   const crescente = sort === 'price_asc';
   const confronta = (x: string | number, y: string | number) => (x === y ? 0 : x < y ? -1 : 1);
   return (a, b) => {
-    const primo = perPrezzo ? confronta(Number(a.price), Number(b.price)) : confronta(a.created_at, b.created_at);
+    // R21-005 R21-014 — Come `base()`: il prezzo che si paga (dove manca, il pieno), poi il pieno, poi l'id.
+    const primo = perPrezzo ? confronta(Number(a.prezzo_pagato ?? a.price), Number(b.prezzo_pagato ?? b.price)) : confronta(a.created_at, b.created_at);
     if (primo !== 0) return crescente ? primo : -primo;
+    const secondo = perPrezzo ? confronta(Number(a.price), Number(b.price)) : 0;
+    if (secondo !== 0) return crescente ? secondo : -secondo;
     return -confronta(a.id, b.id);
   };
 }
@@ -387,12 +392,22 @@ async function leggiLaGriglia(
         ? await conLeSueSottocategorie(supabase, d.categoryId)
         : null;
 
+  const perPrezzo = d.sort === 'price_asc' || d.sort === 'price_desc';
   const base = (colonne: string = COLONNE) => {
-    let q = supabase.from('products').select(colonne).eq('status', 'available');
+    // R21-005 — Ordinando per prezzo le righe portano anche il prezzo pagato: serve a rimettere
+    // nell'ordine del database le righe lette a blocchi (`leggiFraGliIdsColVoto`).
+    const conPagato = pagato && perPrezzo && colonne === COLONNE;
+    let q = supabase.from('products').select(conPagato ? `${colonne}, ${COLONNA_PREZZO_PAGATO}` : colonne).eq('status', 'available');
 
+    // R21-005 R21-014 — Con la migrazione 911 si ordina sul prezzo che si paga, quello che la griglia
+    // mostra e la cassa addebita; a parità decide il prezzo pieno. Senza, sul pieno come prima.
     switch (d.sort) {
-      case 'price_asc':  q = q.order('price', { ascending: true }); break;
-      case 'price_desc': q = q.order('price', { ascending: false }); break;
+      case 'price_asc':
+        q = pagato ? q.order(COLONNA_PREZZO_PAGATO, { ascending: true }).order('price', { ascending: true }) : q.order('price', { ascending: true });
+        break;
+      case 'price_desc':
+        q = pagato ? q.order(COLONNA_PREZZO_PAGATO, { ascending: false }).order('price', { ascending: false }) : q.order('price', { ascending: false });
+        break;
       default:           q = q.order('created_at', { ascending: false });
     }
     // 30/8/2026 (R080) — Il secondo criterio d'ordine non e' un dettaglio: con
