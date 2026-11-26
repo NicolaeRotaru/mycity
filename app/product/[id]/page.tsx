@@ -396,6 +396,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       return Number(data) || 0;
     },
     staleTime: 60_000,
+    // R18-007 — La scheda lasciata aperta oltre la fine della promo la rilegge ogni minuto, invece di
+    // tenere lo sconto letto all'apertura (cassa e carrello restano il presidio).
+    refetchInterval: 60_000,
   });
 
   useBottomSheetA11y(lightbox, lightboxRef, zoomTriggerRef, () => setLightbox(false));
@@ -588,7 +591,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // Prezzo pieno barrato + unità + condizione (campi di primo livello).
   const compareAt = (product as { compare_at_price?: number | string | null }).compare_at_price;
   const compareAtNum = compareAt != null ? Number(compareAt) : null;
-  const compareValid = compareAtNum != null && compareAtNum > prezzoPieno;
+  // R18-006 — Con la promozione attiva il prezzo di listino non si mostra: ci sarebbero due prezzi barrati
+  // e un «Risparmi» calcolato sul pieno (come fa già la scheda delle griglie).
+  const compareValid = compareAtNum != null && compareAtNum > prezzoPieno && !(scontoPromo > 0);
   const comparePct = compareValid ? Math.round((1 - prezzoPieno / compareAtNum) * 100) : 0;
   const unitRaw = (product as { unit?: string | null }).unit ?? null;
   const unitSuffix = unitRaw && unitRaw !== 'pezzo' ? (UNIT_SUFFIX[unitRaw as ProductUnit] ?? '') : '';
@@ -597,7 +602,6 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const attributiProdotto = (product.attributes ?? {}) as Record<string, unknown>;
   const eAlimento = product.categories?.slug === 'alimentari'
     || 'allergeni' in attributiProdotto || 'ingredienti' in attributiProdotto;
-  const prezzoUnitario = eAlimento ? prezzoPerUnitaDiMisura(price, unitRaw, attributiProdotto.peso) : null;
   const conditionRaw = (product as { condition?: string | null }).condition ?? null;
   const conditionLabel = conditionRaw ? (CONDITION_LABELS[conditionRaw as ProductCondition] ?? conditionRaw) : null;
   // Varianti: i selettori derivano dalle varianti; la disponibilità mostrata è
@@ -612,6 +616,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     daScegliere: needsVariantChoice,
   } = statoSceltaVarianti(variants, selectedOptions, hasVariants);
   const COMBINAZIONE_CHE_NON_CE = 'Questa combinazione non c\'è: prova un\'altra opzione.';
+  // R18-010 — Se il peso è un asse delle varianti, il prezzo al chilo usa il peso del formato scelto (e nessuna
+  // riga finché non se ne sceglie uno), non quello del prodotto base.
+  const pesoVariabile = variants.some((v) => typeof v.options?.peso === 'string');
+  const pesoPerPrezzoUnitario = pesoVariabile ? selectedVariant?.options?.peso : attributiProdotto.peso;
+  const prezzoUnitario = eAlimento ? prezzoPerUnitaDiMisura(price, unitRaw, pesoPerPrezzoUnitario) : null;
 
   const stock: number | undefined = hasVariants
     ? (selectedVariant ? selectedVariant.stock : undefined)

@@ -179,8 +179,11 @@ export default function TermsPage() {
           Modalità accettate: {conCarta ? <>pagamento in contanti alla consegna oppure con carta di credito o debito al momento dell&apos;ordine</> : <>pagamento in contanti alla consegna</>}.
           Si può pagare solo con i metodi proposti al momento dell&apos;ordine.
         </p>
+        {/* 26/11/2026 — Diceva che il Rider consegna i contanti a MyCity: in realtà se ne tiene
+            prima il compenso della consegna e versa il resto (compensoDalContante in lib/shipping.ts). */}
         <p>
-          I contanti li riceve il Rider alla consegna e li consegna a MyCity. MyCity versa al
+          I contanti li riceve il Rider alla consegna: ne trattiene il proprio compenso per la
+          consegna e consegna il resto a MyCity. MyCity versa al
           Venditore quanto gli spetta, al netto della commissione di servizio, con un bonifico
           <strong> ogni lunedì</strong> per le consegne della settimana precedente.
         </p>

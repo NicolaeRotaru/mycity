@@ -1,0 +1,406 @@
+{
+ "sessione": "R18",
+ "aggiornato": "2026-11-26 22:20",
+ "finita": true,
+ "testa": "ec87a59d3500e45da4c0fa50889dfcbe59ff4954",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "ec87a59d3500e45da4c0fa50889dfcbe59ff4954",
+  "nota": "typecheck, lint e 2242 file di prove verdi; una prova (un-invito-scritto-a-mano-non-paga) si è saltata da sola perché il Postgres locale era spento: riacceso, rilanciata da sola, verde."
+ },
+ "voci": [
+  {
+   "id": "R18-001",
+   "chiave": "privacy-legale|il sito non dice chi c'è dietro: niente nome, sede, partita iva né pec, il titolare risulta solo «mycity»",
+   "esito": "parziale",
+   "commit": "45687f3272d3c2f5c7b92ed62d656c5fa930509b",
+   "file_toccati": [
+    "lib/legal/titolare.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-il-marchio-non-e-il-titolare.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-il-marchio-non-e-il-titolare.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 45687f3272d3c2f5c7b92ed62d656c5fa930509b^ --file lib/legal/titolare.ts --prove tests/unit/riparazione-r18-il-marchio-non-e-il-titolare.test.tsx --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "titolare() (lib/legal/titolare.ts, nomeLegale) non prende più per nome legale un NEXT_PUBLIC_TITOLARE_NOME uguale al marchio (MyCity in qualunque grafia) o un segnaposto: in quel caso informativa, Termini, piede e modulo di recesso nominano la persona che gestisce (costante già presente nel file) invece di «MyCity».",
+   "cosa_resta": "Sede, P.IVA e PEC (più REA e capitale se è una società) sono dati di Nicola: vanno messi su Vercel produzione nelle NEXT_PUBLIC_TITOLARE_* (NOME, INDIRIZZO, PIVA, PEC, EMAIL_PRIVACY) e il sito va ripubblicato (variabili NEXT_PUBLIC lette anche nel browser). Il codice le stampa già. Il revisore ha visto che varianti del marchio («MyCity Marketplace», «mycity-marketplace.com») e altri segnaposto («-», «N/A», «TODO», «Nome Cognome») passano ancora per nome legale: con i dati veri su Vercel il problema sparisce.",
+   "domanda": "La partita IVA è aperta? Quali sono nome legale, sede, P.IVA e PEC da mettere nelle NEXT_PUBLIC_TITOLARE_* su Vercel produzione? (la sede è dovuta anche senza P.IVA)",
+   "nota": "«MyCity S.r.l.» resta accettato come nome legale: non si può sapere se la società esiste, e tre prove esistenti lo usano come nome vero.",
+   "verificato_da": "revisore grande: prova rimessa (regge); titolare() provato con 20 varianti del nome; piede del browser e server dicono la stessa cosa. Parziale come dichiarato."
+  },
+  {
+   "id": "R18-002",
+   "chiave": "privacy-legale|lo sconto scritto su un evento appare ai clienti come «-20%», ma la cassa non lo applica mai",
+   "esito": "parziale",
+   "commit": "5282cfd6a7e20c3558288024b875f38b7bbda08b",
+   "file_toccati": [
+    "tests/sql/rls/riparazione-r18-sconti-eventi-gia-salvati.test.sql"
+   ],
+   "prova_file": [
+    "tests/sql/rls/riparazione-r18-sconti-eventi-gia-salvati.test.sql"
+   ],
+   "prova_comando": "PGHOST=/var/run/postgresql PGUSER=root tests/sql/harness/apply.sh r18_prova && psql -q -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r18-sconti-eventi-gia-salvati.test.sql",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Punto (2): una prova SQL nuova riporta il database a prima della 880 (vincolo tolto, eventi con sconto 20, 35, 0 e uno senza), riesegue il file vero della migrazione con \\ir e controlla: nessuno sconto resta, il vincolo torna e respinge lo sconto, titolo e stato non cambiano, rieseguita non tocca niente. Controprova a mano: senza l'UPDATE della 880 la prova è rossa. La prova rimessa non si applica: la prova copre la 880 esistente, non c'è una correzione mia da togliere. Il modulo admin (mio file) è già a posto: scrive sempre null.",
+   "cosa_resta": "(1) l'archivio degli sconti prima dell'azzeramento nella 880 e (3) il badge in app/events/page.tsx: tutti e due fuori dai miei file, vedi serve_file_altrui.",
+   "serve_file_altrui": [
+    {
+     "file": "migrations/880_un_evento_non_promette_uno_sconto_che_la_cassa_non_applica.sql",
+     "modifica": "Subito prima di «UPDATE public.marketplace_events SET discount_percent = NULL», creare la tabella d'archivio e copiarci gli sconti: CREATE TABLE IF NOT EXISTS public.marketplace_events_sconti_tolti (event_id uuid PRIMARY KEY, title text NOT NULL, discount_percent integer NOT NULL, status text NOT NULL, starts_at timestamptz NOT NULL, ends_at timestamptz NOT NULL, event_created_at timestamptz NOT NULL, tolto_il timestamptz NOT NULL DEFAULT now()); ALTER TABLE public.marketplace_events_sconti_tolti ENABLE ROW LEVEL SECURITY; REVOKE ALL ON public.marketplace_events_sconti_tolti FROM anon, authenticated; INSERT INTO public.marketplace_events_sconti_tolti (event_id,title,discount_percent,status,starts_at,ends_at,event_created_at) SELECT id,title,discount_percent,status,starts_at,ends_at,created_at FROM public.marketplace_events WHERE discount_percent IS NOT NULL ON CONFLICT (event_id) DO NOTHING; — la patch esatta è nel campo patch. Provata in locale su un database costruito con questa 880: 240 migrazioni, run.sh verde su 105 file; l'archivio prende gli eventi al 20% e al 35%, rieseguita non duplica, authenticated non lo legge. Dopo, nella prova SQL di R18 si può aggiungere un controllo: 3 righe in marketplace_events_sconti_tolti per gli id 'e1820000-%' dopo il primo \\ir, sempre 3 dopo il secondo.",
+     "patch": "--- a/migrations/880_un_evento_non_promette_uno_sconto_che_la_cassa_non_applica.sql\n+++ b/migrations/880_un_evento_non_promette_uno_sconto_che_la_cassa_non_applica.sql\n@@ -27,6 +27,31 @@\n --   ALTER TABLE public.marketplace_events DROP CONSTRAINT IF EXISTS marketplace_events_niente_sconto_senza_cassa;\n -- LA PROVA: tests/sql/rls/riparazione-r02-niente-sconto-sugli-eventi.test.sql.\n \n+-- PRIMA DI TOGLIERLI, SI ARCHIVIANO. Lo sconto salvato e' l'unica prova di quale evento ha mostrato\n+-- «-n%» ai clienti, e quando: serve a rispondere a chi ha visto «-20%» e ha pagato il prezzo pieno.\n+-- Il registro attivita' scrive l'azzeramento come «***»: senza questa copia il dato si perde.\n+-- La tabella la legge solo chi ha la chiave di servizio (RLS accesa, nessuna policy, niente permessi\n+-- ad anon e authenticated). Rieseguita, non duplica: un evento si archivia una volta sola.\n+CREATE TABLE IF NOT EXISTS public.marketplace_events_sconti_tolti (\n+  event_id         uuid PRIMARY KEY,\n+  title            text NOT NULL,\n+  discount_percent integer NOT NULL,\n+  status           text NOT NULL,\n+  starts_at        timestamptz NOT NULL,\n+  ends_at          timestamptz NOT NULL,\n+  event_created_at timestamptz NOT NULL,\n+  tolto_il         timestamptz NOT NULL DEFAULT now()\n+);\n+ALTER TABLE public.marketplace_events_sconti_tolti ENABLE ROW LEVEL SECURITY;\n+REVOKE ALL ON public.marketplace_events_sconti_tolti FROM anon, authenticated;\n+\n+INSERT INTO public.marketplace_events_sconti_tolti\n+       (event_id, title, discount_percent, status, starts_at, ends_at, event_created_at)\n+SELECT id, title, discount_percent, status, starts_at, ends_at, created_at\n+  FROM public.marketplace_events\n+ WHERE discount_percent IS NOT NULL\n+ON CONFLICT (event_id) DO NOTHING;\n+\n UPDATE public.marketplace_events\n    SET discount_percent = NULL\n  WHERE discount_percent IS NOT NULL;\n"
+    },
+    {
+     "file": "app/events/page.tsx",
+     "modifica": "Togliere il blocco alle righe 270-274 ({ev.discount_percent ? (<Badge variant=\"discount\" …>-{ev.discount_percent}%</Badge>) : null}), come già fatto in components/home/HomeEvents.tsx, e l'import ormai inutile alla riga 16: import { Badge } from '@/components/ui/Badge';"
+    }
+   ],
+   "verificato_da": "revisore grande: database rifatto con apply.sh (240 migrazioni), run.sh verde su 105 file; tolto l'UPDATE dalla 880 in una copia la prova è rossa; il database resta pulito dopo la prova."
+  },
+  {
+   "id": "R18-003",
+   "chiave": "privacy-legale|le recensioni dei clienti non si possono segnalare, mentre i termini promettono di togliere quelle non genuine",
+   "esito": "scelta_di_nicola",
+   "domanda": "Una recensione segnalata e accolta si nasconde (reversibile se il riesame dà ragione all'autore: serve una colonna e cambiare tutte le letture delle recensioni) o si cancella con un archivio per il riesame? Finché non si decide, i Termini promettono di togliere le recensioni non genuine ma lo staff non ha uno strumento per farlo.",
+   "nota": "Segnalare una recensione era già possibile sulla base (Segnala tipo=recensione in app/product/[id]/page.tsx e components/store-sections/ReviewsSection.tsx; la rotta la salva; il database accetta il tipo). Il lotto 2 aveva aggiunto nella PATCH di /api/segnalazioni la cancellazione definitiva della recensione accolta (commit bb3fd0d56e6197033fceaffa756ccff476eed581): il revisore grande l'ha smentita (cancellazione senza archivio, quindi non reversibile dopo un riesame, e altri problemi di progetto) e la correzione è stata tolta col commit 7532ed80e0026080e3f395b1d165d2f733df41fa (revert, la parte sulle domande resta). Per chiudere la voce servono la scelta qui sopra, una migrazione e il pannello admin (app/admin/segnalazioni/page.tsx, non mio). Dettagli del controllo nel messaggio alla regista.",
+   "verificato_da": "revisore grande: diff, middleware, regole del database e prove rilanciate; la correzione non reggeva ed è stata tolta"
+  },
+  {
+   "id": "R18-004",
+   "chiave": "privacy-legale|la consegna è un incasso di mycity, ma per quei soldi non nasce nessun documento fiscale e i termini mandano il cliente a chiedere la fattura al negozio",
+   "esito": "scelta_di_nicola",
+   "domanda": "Col commercialista: per la consegna (3 € più supplementi, ricavo di MyCity) quale documento fiscale emettiamo (documento commerciale giornaliero, procedura web dell'Agenzia o fattura su richiesta), con quale regime e quale aliquota?",
+   "nota": "La parte di testo è già corretta sulla base: app/terms/page.tsx:203-209 non manda più al negozio la fattura della consegna («Per le spese di consegna rivolgiti a MyCity») e non promette un documento che non esiste; prova tests/unit/riparazione-r02-termini-chi-documenta-la-consegna.test.tsx verde. Resta solo il documento fiscale, che è una scelta. Nessun file toccato."
+  },
+  {
+   "id": "R18-005",
+   "chiave": "architettura|senza la casella vera, l'unico recapito del titolare nell'informativa e nella cookie policy è il modulo web",
+   "esito": "non_codice",
+   "nota": "Nicola: creare la casella privacy sul dominio mycity-marketplace.com, impostare NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY su Vercel produzione e ripubblicare. recapitoPrivacy (lib/legal/titolare.ts:254) la usa già al posto del modulo, nell'informativa e nella cookie policy. Il secondo canale, la posta, arriva con la sede (NEXT_PUBLIC_TITOLARE_INDIRIZZO); la PEC, quando c'è, l'informativa la stampa già. Inventare un indirizzo nel codice sarebbe peggio."
+  },
+  {
+   "id": "R18-006",
+   "chiave": "flussi-conversione|con la promozione e il prezzo barrato insieme, la scheda prodotto mostra due prezzi barrati e un risparmio sbagliato",
+   "esito": "riparato",
+   "commit": "9ca26a90e79c201230e86f5761bde65b681407b0",
+   "file_toccati": [
+    "app/product/[id]/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-listino-con-promo.test.tsx"
+   ],
+   "cosa_ho_fatto": "Con lo sconto della promozione attivo il listino barrato, il «Risparmi» e il badge -% del listino non si mostrano più (compareValid guarda scontoPromo), come già fa la scheda delle griglie. La prova monta la scheda vera con la promo sull'orologio finto: dentro la finestra un solo prezzo barrato, fuori restano listino e «Risparmi 2,00».",
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-listino-con-promo.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9ca26a90e79c201230e86f5761bde65b681407b0^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r18-listino-con-promo.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "verificato_da": "revisore piccolo (sonnet): prova e prova rimessa rilanciate (rossa alla base, verde con la correzione); letto compareValid: con promo attiva non restano badge né «Risparmi», a promo finita tornano. Regge."
+  },
+  {
+   "id": "R18-007",
+   "chiave": "frontend-ux|la scheda prodotto aperta oltre la fine della promozione continua a mostrare il prezzo scontato",
+   "esito": "riparato",
+   "commit": "afad25c3310de9e580632182e4c0a69bcd010357",
+   "file_toccati": [
+    "app/product/[id]/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-promo-scaduta-a-scheda-aperta.test.tsx"
+   ],
+   "cosa_ho_fatto": "La domanda dello sconto della scheda ha refetchInterval: 60_000: la scheda lasciata aperta rilegge lo sconto ogni minuto e a promo finita torna al prezzo pieno. La prova usa la scheda vera, React Query e l'orologio finto: aperta alle 21:50 mostra 8 €, passate le 22:00 mostra 10 € senza ricaricare.",
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-promo-scaduta-a-scheda-aperta.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base afad25c3310de9e580632182e4c0a69bcd010357^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r18-promo-scaduta-a-scheda-aperta.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "verificato_da": "revisore piccolo (sonnet): prova e prova rimessa rilanciate; refetchInterval sulla stessa chiave del badge; il carrello rilegge il prezzo di oggi e la cassa lo ricalcola dal database. Resta un margine fino a 60 s in cui la scheda mostra ancora il prezzo scontato, corretto dal carrello. Regge."
+  },
+  {
+   "id": "R18-008",
+   "chiave": "privacy-legale|la conferma della newsletter scatta appena il link viene aperto, anche da un antivirus, e funziona anche con la newsletter spenta",
+   "esito": "serve_file_altrui",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/newsletter/confirm/route.ts + lib/funzioni-al-lancio.ts + tests/unit/riparazione-r18-newsletter-conferma-col-pulsante.test.ts (nuova) + tests/unit/le-porte-pubbliche-che-scrivono-hanno-un-freno.test.ts + tests/unit/riparazione-r32-newsletter-riscritto-dopo-disiscrizione.test.ts",
+     "modifica": "Da applicare tutta insieme in un commit (patch nel campo patch, git apply --check ok su 45962b39e281d73ac1049620e509e9cba14da3cf). Rotta: la GET non scrive più; con il flag acceso e un gettone base64url leggibile risponde 200 con una pagina e un modulo method=post action=/api/newsletter/confirm?token=…, altrimenti redirect a /?newsletter=link-non-valido. La POST conferma (stesso freno e stesso UPDATE di prima) e risponde 303 su /?newsletter=confermata o link-non-valido. Con NEWSLETTER_ACCESA falso nessuna delle due conferma. Il flag cambia solo nel commento. Le due prove comuni cambiano esattamente come scritto nella scheda: GET→POST, vi.mock di funzioni-al-lancio con NEWSLETTER_ACCESA: true, 307→303, method: 'POST' nella Request. Verificato in locale: prova nuova 5/5 verde con la rotta nuova e 5/5 rossa (asserzioni) con la rotta della base; le due comuni modificate verdi; ogni-interruttore-del-lancio e le-funzioni-spente verdi; tsc ed eslint puliti. Per la prova rimessa: --file app/api/newsletter/confirm/route.ts da solo.",
+     "patch": "diff --git a/app/api/newsletter/confirm/route.ts b/app/api/newsletter/confirm/route.ts\nindex 3365352..feb09f0 100644\n--- a/app/api/newsletter/confirm/route.ts\n+++ b/app/api/newsletter/confirm/route.ts\n@@ -1,6 +1,7 @@\n import { NextResponse } from 'next/server';\n import { getAdminSupabase } from '@/lib/supabase/server';\n import { env } from '@/lib/env';\n+import { NEWSLETTER_ACCESA } from '@/lib/funzioni-al-lancio';\n import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';\n \n export const runtime = 'nodejs';\n@@ -11,9 +12,78 @@ export const runtime = 'nodejs';\n  * È il momento in cui l'iscrizione diventa attiva. Prima non esisteva: si\n  * finiva in lista senza che nessuno avesse verificato di possedere la casella,\n  * quindi si poteva iscrivere l'indirizzo di un altro.\n+ *\n+ * 26/11/2026 — APRIRE IL LINK NON CONFERMA PIÙ: SERVE IL PULSANTE.\n+ *\n+ * La GET scriveva subito `active: true` e `confirmed_at`: i filtri antispam, gli\n+ * antivirus aziendali e le anteprime aprono i link delle email da soli, e il\n+ * registro mostrava un consenso confermato che nessuno aveva dato. Il doppio\n+ * consenso serve proprio a provare che il titolare della casella ha voluto\n+ * iscriversi. Adesso, come per la disiscrizione, la GET mostra una pagina con un\n+ * pulsante e solo la POST conferma. E con la newsletter spenta\n+ * (`NEWSLETTER_ACCESA` falso) non conferma nessuno dei due: i gettoni creati\n+ * prima dello spegnimento non riaccendono un'iscrizione.\n+ */\n+\n+/** Il gettone ha una forma che vale la pena guardare? (base64url, al massimo 200 caratteri). */\n+function gettoneLeggibile(token: string): boolean {\n+  return token.length > 0 && token.length <= 200 && /^[A-Za-z0-9_-]+$/.test(token);\n+}\n+\n+/**\n+ * L'indirizzo da cui è arrivata la richiesta: dopo la POST del modulo un rinvio\n+ * verso un altro indirizzo lo blocca `form-action 'self'`. Se la richiesta non\n+ * porta un indirizzo leggibile, quello pubblico del sito.\n  */\n+function stessoIndirizzo(request: Request): string {\n+  try {\n+    return new URL(request.url).origin;\n+  } catch {\n+    // NEXT_PUBLIC_SITE_URL non esiste in questo progetto: il punto unico è env.appUrl().\n+    return env.appUrl();\n+  }\n+}\n+\n+/** Apre il link: mostra la domanda con il pulsante, non scrive niente. */\n export async function GET(request: Request) {\n-  // 27/8/2026 (R140) — GET PUBBLICO NUDO CHE SCRIVE SUL DATABASE. Ogni\n+  const token = new URL(request.url).searchParams.get('token') ?? '';\n+  const base = stessoIndirizzo(request);\n+  if (!NEWSLETTER_ACCESA || !gettoneLeggibile(token)) {\n+    return NextResponse.redirect(`${base}/?newsletter=link-non-valido`);\n+  }\n+  const azione = `/api/newsletter/confirm?token=${encodeURIComponent(token)}`;\n+  const pagina = `<!doctype html>\n+<html lang=\"it\">\n+<head>\n+<meta charset=\"utf-8\">\n+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n+<meta name=\"robots\" content=\"noindex, nofollow\">\n+<title>Conferma l'iscrizione · MyCity</title>\n+</head>\n+<body style=\"font-family:system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem;color:#1f2937\">\n+<h1 style=\"font-size:1.5rem\">Confermi l'iscrizione alla newsletter di MyCity?</h1>\n+<p>Premi il pulsante per ricevere le nostre email. Se non hai chiesto tu l'iscrizione, chiudi questa pagina: non succede niente.</p>\n+<form method=\"post\" action=\"${azione}\">\n+<button type=\"submit\" style=\"font-size:1rem;padding:.75rem 1.25rem;border-radius:.5rem;border:0;background:#065f46;color:#fff;cursor:pointer\">Sì, confermo l'iscrizione</button>\n+</form>\n+</body>\n+</html>`;\n+  return new NextResponse(pagina, {\n+    status: 200,\n+    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },\n+  });\n+}\n+\n+/** Il pulsante della pagina: la conferma vera. */\n+export async function POST(request: Request) {\n+  const base = stessoIndirizzo(request);\n+  // 303: dopo una POST il browser apre la pagina dell'esito con una GET.\n+  const vaiA = (esito: string) => NextResponse.redirect(`${base}/?newsletter=${esito}`, 303);\n+\n+  // Newsletter spenta: un gettone rimasto da prima non riaccende niente.\n+  if (!NEWSLETTER_ACCESA) return vaiA('link-non-valido');\n+\n+  // 27/8/2026 (R140) — PORTA PUBBLICA CHE SCRIVE SUL DATABASE. Ogni\n   // chiamata, anche con un gettone inventato, faceva partire un UPDATE su\n   // `newsletter_subscribers`: un client solo poteva tenere occupato il\n   // database con richieste anonime. Il conto e' largo — un link di conferma si\n@@ -25,19 +95,12 @@ export async function GET(request: Request) {\n   });\n \n   const token = new URL(request.url).searchParams.get('token') ?? '';\n-  // NEXT_PUBLIC_SITE_URL non esiste in questo progetto: valeva stringa vuota, e un\n-  // indirizzo relativo fa lanciare NextResponse.redirect. Il punto unico e env.appUrl().\n-  const base = env.appUrl();\n \n   // Sopra soglia si manda alla stessa pagina del link non valido: chi abusa non\n   // costa una scrittura, e chi ha cliccato davvero vede una pagina, non un errore.\n-  if (!freno.allowed) {\n-    return NextResponse.redirect(`${base}/?newsletter=link-non-valido`);\n-  }\n+  if (!freno.allowed) return vaiA('link-non-valido');\n \n-  if (!token || token.length > 200) {\n-    return NextResponse.redirect(`${base}/?newsletter=link-non-valido`);\n-  }\n+  if (!token || token.length > 200) return vaiA('link-non-valido');\n \n   const admin = getAdminSupabase();\n   // 17/11/2026 (R32-012) — Chi si era disiscritto e si iscrive di nuovo riparte da una riga con\n@@ -51,8 +114,6 @@ export async function GET(request: Request) {\n     .select('id')\n     .maybeSingle();\n \n-  if (error || !data) {\n-    return NextResponse.redirect(`${base}/?newsletter=link-non-valido`);\n-  }\n-  return NextResponse.redirect(`${base}/?newsletter=confermata`);\n+  if (error || !data) return vaiA('link-non-valido');\n+  return vaiA('confermata');\n }\ndiff --git a/lib/funzioni-al-lancio.ts b/lib/funzioni-al-lancio.ts\nindex 73d67d9..e9c5a30 100644\n--- a/lib/funzioni-al-lancio.ts\n+++ b/lib/funzioni-al-lancio.ts\n@@ -58,7 +58,9 @@ export const DROP_DEL_GIORNO_ACCESO: boolean = false;\n \n /** Iscrizione alla newsletter. Per riaccendere: chiave di servizio Supabase e\n  *  posta (Resend) in produzione; e nessun regalo promesso finché non esiste un\n- *  buono vero legato all'iscrizione. Conferma e disiscrizione restano vive. */\n+ *  buono vero legato all'iscrizione. Resta viva solo la disiscrizione: spenta,\n+ *  la conferma non riaccende un gettone rimasto da prima\n+ *  (app/api/newsletter/confirm/route.ts). */\n export const NEWSLETTER_ACCESA: boolean = false;\n \n /** Strumenti di intelligenza artificiale per i negozi. Per riaccendere:\ndiff --git a/tests/unit/riparazione-r18-newsletter-conferma-col-pulsante.test.ts b/tests/unit/riparazione-r18-newsletter-conferma-col-pulsante.test.ts\nnew file mode 100644\nindex 0000000..2444748\n--- /dev/null\n+++ b/tests/unit/riparazione-r18-newsletter-conferma-col-pulsante.test.ts\n@@ -0,0 +1,103 @@\n+import { describe, it, expect, vi, beforeEach } from 'vitest';\n+\n+/**\n+ * 26/11/2026 — LA CONFERMA DELLA NEWSLETTER SCATTAVA APPENA IL LINK VENIVA APERTO.\n+ *\n+ * Il link nell'email era una GET che scriveva subito `active: true` e `confirmed_at`. I filtri\n+ * antispam, gli antivirus aziendali e le anteprime aprono i link da soli: qualcuno iscrive\n+ * ufficio@studio-piacenza.it, il filtro dello studio apre il link, e il registro mostra un\n+ * consenso confermato che nessuno ha dato. In più confermava anche con la newsletter spenta.\n+ *\n+ * Adesso aprire il link (GET) mostra una pagina con un pulsante e non scrive niente; la conferma\n+ * è la POST del pulsante; con NEWSLETTER_ACCESA falso nessuna delle due conferma.\n+ */\n+\n+const interruttore = { acceso: true };\n+const scritture: Array<{ cambio: Record<string, unknown>; token: unknown }> = [];\n+\n+vi.mock('@/lib/funzioni-al-lancio', async (o) => ({\n+  ...((await o()) as Record<string, unknown>),\n+  get NEWSLETTER_ACCESA() {\n+    return interruttore.acceso;\n+  },\n+}));\n+vi.mock('@/lib/env', () => ({ env: { appUrl: () => 'https://mycity.test' } }));\n+vi.mock('@/lib/supabase/server', () => ({\n+  getAdminSupabase: () => ({\n+    from: () => ({\n+      update: (cambio: Record<string, unknown>) => ({\n+        eq: (_k: string, token: unknown) => ({\n+          select: () => ({\n+            maybeSingle: async () => {\n+              scritture.push({ cambio, token });\n+              return { data: { id: 'n1' }, error: null };\n+            },\n+          }),\n+        }),\n+      }),\n+    }),\n+  }),\n+}));\n+\n+import * as rotta from '@/app/api/newsletter/confirm/route';\n+import { __resetRateLimitBuckets } from '@/lib/rate-limit';\n+\n+const GETTONE = 'Ab3_dEf-0123456789xyzXYZ0123abcd';\n+const LINK = `https://mycity.test/api/newsletter/confirm?token=${GETTONE}`;\n+\n+function porta(metodo: 'GET' | 'POST'): (r: Request) => Promise<Response> {\n+  const h = (rotta as Record<string, unknown>)[metodo];\n+  expect(typeof h, `la rotta della conferma deve rispondere a ${metodo}`).toBe('function');\n+  return h as (r: Request) => Promise<Response>;\n+}\n+\n+const apri = () => porta('GET')(new Request(LINK, { headers: { 'x-forwarded-for': '93.40.30.7' } }));\n+const premi = () =>\n+  porta('POST')(new Request(LINK, { method: 'POST', headers: { 'x-forwarded-for': '93.40.30.7' } }));\n+\n+beforeEach(() => {\n+  interruttore.acceso = true;\n+  scritture.length = 0;\n+  __resetRateLimitBuckets();\n+});\n+\n+describe('la conferma della newsletter vuole il pulsante', () => {\n+  it('IL CASO CHE ROMPEVA — aprire il link (come fa un antivirus) non conferma niente', async () => {\n+    const res = await apri();\n+    expect(scritture, 'la GET ha scritto la conferma sul database').toHaveLength(0);\n+    expect(res.status).toBe(200);\n+  });\n+\n+  it('la pagina aperta dal link ha il pulsante che manda la POST con lo stesso gettone', async () => {\n+    const res = await apri();\n+    const html = await res.text();\n+    expect(html).toMatch(/<form[^>]*method=\"post\"/i);\n+    expect(html).toContain(`action=\"/api/newsletter/confirm?token=${GETTONE}\"`);\n+    expect(html).toMatch(/<button[^>]*type=\"submit\"/);\n+  });\n+\n+  it('il pulsante (POST) conferma, e porta all’esito con 303', async () => {\n+    const res = await premi();\n+    expect(scritture).toHaveLength(1);\n+    expect(scritture[0].token).toBe(GETTONE);\n+    expect(scritture[0].cambio).toMatchObject({ active: true, confirm_token: null, unsubscribed_at: null });\n+    expect(res.status).toBe(303);\n+    expect(res.headers.get('location')).toBe('https://mycity.test/?newsletter=confermata');\n+  });\n+});\n+\n+describe('con la newsletter spenta la conferma non scatta', () => {\n+  it('IL CASO CHE ROMPEVA — spenta, aprire il link non scrive e non offre il pulsante', async () => {\n+    interruttore.acceso = false;\n+    const res = await apri();\n+    expect(scritture).toHaveLength(0);\n+    expect(res.headers.get('location')).toBe('https://mycity.test/?newsletter=link-non-valido');\n+  });\n+\n+  it('spenta, nemmeno la POST conferma un gettone rimasto da prima', async () => {\n+    interruttore.acceso = false;\n+    const res = await premi();\n+    expect(scritture).toHaveLength(0);\n+    expect(res.headers.get('location')).toBe('https://mycity.test/?newsletter=link-non-valido');\n+  });\n+});\n--- a/tests/unit/le-porte-pubbliche-che-scrivono-hanno-un-freno.test.ts\t2026-11-26 16:42:34.601166723 +0000\n+++ b/tests/unit/le-porte-pubbliche-che-scrivono-hanno-un-freno.test.ts\t2026-11-26 16:42:34.618092466 +0000\n@@ -20,6 +20,7 @@\n const scritture = { newsletter: 0, disiscrizioni: 0 };\n \n vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));\n+vi.mock('@/lib/funzioni-al-lancio', async (o) => ({ ...((await o()) as Record<string, unknown>), NEWSLETTER_ACCESA: true }));\n vi.mock('@/lib/env', () => ({ env: { appUrl: () => 'https://mycity.test' } }));\n vi.mock('@/lib/email/unsubscribe', () => ({\n   verificaDisiscrizione: () => ({ email: 'mario@example.com', ambito: 'marketing' }),\n@@ -45,7 +46,7 @@\n   }),\n }));\n \n-import { GET as CONFERMA } from '@/app/api/newsletter/confirm/route';\n+import { POST as CONFERMA } from '@/app/api/newsletter/confirm/route';\n // 5/11/2026 — La disiscrizione vera è la POST (la GET chiede la conferma): il freno sta lì.\n import { POST as DISISCRIVI } from '@/app/api/unsubscribe/route';\n import { __resetRateLimitBuckets } from '@/lib/rate-limit';\n@@ -73,7 +74,7 @@\n       scritture.newsletter,\n       'ogni richiesta anonima continua a costare una scrittura sul database',\n     ).toBe(scrittePrima);\n-    expect(res.status, 'chi ha cliccato davvero deve vedere una pagina, non un errore').toBe(307);\n+    expect(res.status, 'chi ha cliccato davvero deve vedere una pagina, non un errore').toBe(303);\n   });\n \n   it('chi arriva da un altro indirizzo passa: il freno non è una porta chiusa', async () => {\n--- a/tests/unit/riparazione-r32-newsletter-riscritto-dopo-disiscrizione.test.ts\t2026-11-26 16:42:34.603101965 +0000\n+++ b/tests/unit/riparazione-r32-newsletter-riscritto-dopo-disiscrizione.test.ts\t2026-11-26 16:42:34.618183122 +0000\n@@ -50,7 +50,7 @@\n vi.mock('@/lib/env', () => ({ env: { appUrl: () => 'https://mycity.test' } }));\n \n import { POST as iscrivi } from '@/app/api/newsletter/route';\n-import { GET as conferma } from '@/app/api/newsletter/confirm/route';\n+import { POST as conferma } from '@/app/api/newsletter/confirm/route';\n import { __resetRateLimitBuckets } from '@/lib/rate-limit';\n \n const ADESSO = new Date('2026-11-17T10:00:00Z');\n@@ -102,6 +102,7 @@\n     expect(token, 'nell\\'email non c\\'è il link di conferma').not.toBe('');\n \n     const res = await conferma(new Request(`https://mycity.test/api/newsletter/confirm?token=${encodeURIComponent(token)}`, {\n+      method: 'POST',\n       headers: { 'x-forwarded-for': '93.40.30.7' },\n     }));\n     expect(res.headers.get('location')).toBe('https://mycity.test/?newsletter=confermata');\n"
+    }
+   ],
+   "nota": "Nessun commit. Le due prove esistenti hanno vi.mock di file di altre sessioni dell'onda (lib/logger.ts in tutte e due, lib/email/unsubscribe.ts nella prima, lib/email/client.ts nella seconda): il programma conta vi.mock come import, quindi sono prove comuni e non le ho toccate. La rotta corretta da sola le fa diventare rosse (2 casi): per questo è tutto nella patch per la regista. Prove esistenti modificate: nessuna."
+  },
+  {
+   "id": "R18-009",
+   "chiave": "privacy-legale|l'informativa propone il modulo dei contatti come contatto del titolare anche quando il modulo non arriva a nessuno",
+   "esito": "riparato",
+   "commit": "0d3ab694d545ab8e69bf07bee9d4f5b76c52e44e",
+   "file_toccati": [
+    "app/privacy/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-contatti-del-titolare.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-contatti-del-titolare.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0d3ab694d545ab8e69bf07bee9d4f5b76c52e44e^ --file app/privacy/page.tsx --prove tests/unit/riparazione-r18-contatti-del-titolare.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "«Contatti del Titolare» (app/privacy/page.tsx:72-85) usa stradaDeiDiritti come la sezione 5: la casella se c'è, il modulo solo se arriva a qualcuno; se no una frase onesta che il guasto è nostro e che resta il reclamo al Garante; se c'è la PEC, quella. La prova copre 5 casi.",
+   "verificato_da": "revisore piccolo (sonnet): prova e prova rimessa rilanciate; il modulo compare solo se arriva a qualcuno, con PEC e senza recapito resta la PEC. Regge; accanto resta la sezione 9 (privacy:424), già in nuovi_difetti_visti."
+  },
+  {
+   "id": "R18-010",
+   "chiave": "privacy-legale|il prezzo al chilo usa il peso del prodotto base anche quando si sceglie un formato diverso",
+   "esito": "riparato",
+   "commit": "5598ded857a42cfbad6a07bfd3c59d1715d4cbc1",
+   "file_toccati": [
+    "app/product/[id]/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-prezzo-al-chilo-del-formato.test.tsx"
+   ],
+   "cosa_ho_fatto": "Se il peso è un asse delle varianti (options.peso), il €/kg usa il peso della variante scelta (10 € su 1 kg = 10 €/kg, su 500 g = 20 €/kg); finché non se ne sceglie una non scrive nessuna riga. Senza varianti resta il peso del prodotto. Il calcolo di prezzoUnitario è spostato dopo statoSceltaVarianti.",
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-prezzo-al-chilo-del-formato.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5598ded857a42cfbad6a07bfd3c59d1715d4cbc1^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r18-prezzo-al-chilo-del-formato.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "verificato_da": "revisore piccolo (sonnet): prova e prova rimessa rilanciate; «1,5 kg», «500g», «1 l» accettati; variante senza peso = nessuna riga; senza asse peso resta il peso del prodotto. Regge."
+  },
+  {
+   "id": "R18-011",
+   "chiave": "privacy-legale|il venditore può rimettere in vendita da solo un prodotto tolto dopo una segnalazione accolta",
+   "esito": "non_fatto",
+   "nota": "Non lavorata per il limite di spesa (a 14,5 $ dopo due lotti su 25 $, la voce da sola chiedeva un lotto col modello grande, una migrazione e una prova SQL). Per chi la riprende, dal collaudo dell'onda 1: il blocco va messo anche dove scrive la chiave di servizio (rotte AI del venditore: app/api/ai/catalog-apply/route.ts, app/api/ai/catalog-apply-bulk/route.ts, lib/products/aiPatch.ts SELLER_STATUSES), sulle copie INSERT (Duplica in app/seller/products/new/page.tsx, import in blocco) e sul cambio di id; lo sblocco dello staff deve durare (un prodotto rimesso in vendita dallo staff non deve tornare bloccato dopo Disattiva/Attiva o dopo l'esaurimento), e un'attivazione in blocco non deve cadere intera per un solo prodotto tolto. Fascia libera: 886-889."
+  },
+  {
+   "id": "R18-012",
+   "chiave": "privacy-legale|buco nelle prove (variante): macchina: regge. le due prove della bocciatura vecchia ora passano (cb6/riacc 2/2 e cb6r 2/2), quindi il motivo è chiuso",
+   "esito": "gia_riparato_prima",
+   "prova": "Il testo della voce è un verdetto di chiusura (riaccettazione dei Termini 3.0: «regge… il motivo è chiuso»). La regola sta in lib/auth/accettazione-testi.ts:130-137; le varianti sono coperte e verdi: npx vitest run tests/unit/la-riaccettazione-guarda-la-versione-a-verbale-non-la-data.test.ts tests/unit/chi-ha-accettato-i-termini-vecchi-li-riaccetta-prima-di-pagare.test.ts --reporter=dot → verde (13 casi nella prima).",
+   "nota": "La prova citata (cB6) era in una copia di lavoro di un'altra sessione e non esiste più: scriverne una nuova vorrebbe dire inventare il buco. Da chiudere nel registro."
+  },
+  {
+   "id": "R18-013",
+   "chiave": "privacy-legale|i termini dicono che il fattorino consegna i contanti a mycity, ma il fattorino si tiene prima il suo compenso",
+   "esito": "riparato",
+   "commit": "45962b39e281d73ac1049620e509e9cba14da3cf",
+   "file_toccati": [
+    "app/terms/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-termini-contanti-del-rider.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-termini-contanti-del-rider.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 45962b39e281d73ac1049620e509e9cba14da3cf^ --file app/terms/page.tsx --prove tests/unit/riparazione-r18-termini-contanti-del-rider.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "§5 (app/terms/page.tsx:185) ora dice che i contanti li riceve il Rider alla consegna, ne trattiene il proprio compenso e consegna il resto a MyCity, come fa compensoDalContante (lib/shipping.ts:168). La prova controlla anche il calcolo: 19 € incassati, 3 € trattenuti, 16 € rimessi.",
+   "verificato_da": "revisore piccolo (sonnet): prova e prova rimessa rilanciate; testo confrontato con compensoDalContante (lib/shipping.ts): vero. Imprecisione accanto: non dice il caso del contante che non basta (il residuo arriva al rider per bonifico)."
+  },
+  {
+   "id": "R18-014",
+   "chiave": "privacy-legale|le domande sotto i prodotti si pubblicano subito, non si possono segnalare una per una e nessuno può toglierle",
+   "esito": "parziale",
+   "commit": "d2927b046f3d4f2703ce2c803fbb3dc172653eaa",
+   "file_toccati": [
+    "components/Segnala.tsx",
+    "app/api/segnalazioni/route.ts",
+    "components/ProductQA.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-domanda-segnalabile.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-domanda-segnalabile.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d2927b046f3d4f2703ce2c803fbb3dc172653eaa^ --file app/api/segnalazioni/route.ts,components/Segnala.tsx,components/ProductQA.tsx --prove tests/unit/riparazione-r18-domanda-segnalabile.test.tsx --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Segnala accetta il tipo 'domanda' con motivi da domanda (offensivo o molesto, illecito, altro). La rotta accetta 'domanda' (TABELLE_DELL_OGGETTO domanda: ['product_questions']): la segnalazione si salva solo se la domanda esiste; in contenutoAncoraOnline per 'domanda' legge product_questions.is_public e, se è true, si ferma con «La domanda è ancora visibile: nascondila prima di comunicare «rimosso».». ProductQA monta <Segnala tipo=\"domanda\" oggettoId={q.id} /> in fondo a ogni domanda. Il pulsante «Nascondi» dell'admin sotto la domanda c'era già.",
+   "serve_file_altrui": [
+    {
+     "file": "lib/admin/segnalazioni-testi.ts",
+     "modifica": "In OGGETTI aggiungere domanda: 'una domanda sotto un prodotto' (oggi avviso e ricevuta dicono «Segnalato domanda»)."
+    },
+    {
+     "file": "app/admin/segnalazioni/page.tsx",
+     "modifica": "(1) dove(): per 'domanda' il link alla scheda del prodotto, con product_id letto da supabase.from('product_questions').select('product_id').eq('id', s.oggetto_id).maybeSingle() (l'admin lo legge, regola qa_admin_legge). (2) puoTogliere comprende 'domanda'. (3) In mutationFn, con decisione 'accolta' e s.tipo 'domanda', prima di registrare: const { error } = await supabase.from('product_questions').update({ is_public: false }).eq('id', s.oggetto_id).select('id'); if (error) throw error; (zero righe = l'autore l'ha già cancellata, la rotta lo accetta). (4) Etichetta: s.tipo === 'domanda' ? 'Accolta: la domanda viene nascosta'. Da applicare insieme a quella della voce sulle recensioni: toccano le stesse righe."
+    }
+   ],
+   "cosa_resta": "(a) Il pannello e i testi delle segnalazioni (serve_file_altrui). (c) La moderazione prima della pubblicazione e il pulsante del negozio per nascondere le domande sui suoi prodotti sono una scelta di Nicola. Funziona solo se la migrazione 364 è applicata in produzione (se no «Segnala» sotto una domanda dà 500: da verificare da Nicola). Chi ha scritto la domanda nascosta non riceve una motivazione (app/api/segnalazioni/esito/comunica.ts:196, non mio).",
+   "domanda": "Le domande sotto i prodotti devono restare nascoste finché un admin o il negozio non le approva, e il negozio deve poter nascondere da solo quelle sui suoi prodotti?",
+   "verificato_da": "revisore grande: prova rimessa (regge); 12 file di prove sulle segnalazioni verdi; domanda inesistente 404, freno invariato. Regge, con due note in cosa_resta."
+  },
+  {
+   "id": "R18-015",
+   "chiave": "privacy-legale|l'obbligo di dichiarare allergeni e ingredienti vale solo finché la categoria principale si chiama esattamente «alimentari», e dal pannello quel nome si può cambiare",
+   "esito": "serve_file_altrui",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/admin/categories/route.ts, app/admin/categories/page.tsx, app/seller/products/new/page.tsx, app/seller/products/[id]/edit/page.tsx, app/admin/products/new/page.tsx, app/admin/products/[id]/edit/page.tsx, app/api/ai/catalog-chat/route.ts, app/api/ai/catalog-apply/route.ts, app/api/ai/catalog-batch/start/route.ts, app/api/ai/copilot/route.ts, app/api/seller/products/import/route.ts + tests/unit/riparazione-r18-obbligo-alimentare-della-categoria.test.ts (nuova)",
+     "modifica": "Da applicare tutta insieme, così com'era nel commit d2bac7187f3c594bb5c8bfe8f1826fe11971bce4 (prova rimessa uscita 0 e revisore piccolo «regge» su quel commit), poi tolto col commit ec87a59d3500e45da4c0fa50889dfcbe59ff4954 perché 5 file (le 4 rotte AI e l'import) non sono di R18 in quest'onda. Il modo più semplice: git cherry-pick d2bac7187f3c594bb5c8bfe8f1826fe11971bce4 sul ramo di chi ha quei file. Cosa fa: la rotta admin categorie accetta e scrive richiede_dichiarazioni_alimentari in POST e PATCH solo sulle categorie principali (400 sulle sottocategorie), crea una principale senza il flag con un avviso nella risposta, e non traduce più ogni 23514 in «Foto non ammessa» (i messaggi del guardiano sull'obbligo passano com'è); il pannello categorie ha la casella «Richiede allergeni e ingredienti (alimenti)», disattivata se l'obbligo c'è già, e l'avviso alla creazione; il select delle categorie aggiunge richiede_dichiarazioni_alimentari nelle pagine prodotto venditore e admin (nuovo e modifica), in catalog-chat (dove si toglie anche la mappa che scartava la colonna), catalog-apply, catalog-batch/start, copilot e seller/products/import. Il diff esatto dei file del sito è nel campo patch; la prova nuova è nel commit.",
+     "patch": "diff --git a/app/admin/categories/page.tsx b/app/admin/categories/page.tsx\nindex ffc997f..0a20e12 100644\n--- a/app/admin/categories/page.tsx\n+++ b/app/admin/categories/page.tsx\n@@ -24,6 +24,8 @@ type Cat = {\n   parent_id: string | null; sort_order: number | null; featured: boolean | null;\n   /** Migrazione 159: senza, `select('*')` non la porta e il campo resta vuoto. */\n   image_url?: string | null;\n+  /** R18-015 — Migrazione 363: l'obbligo di allergeni e ingredienti è della categoria, non del suo nome. */\n+  richiede_dichiarazioni_alimentari?: boolean | null;\n };\n \n /**\n@@ -61,6 +63,7 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli\n   const [sortOrder, setSortOrder] = useState(cat.sort_order ?? 0);\n   const [featured, setFeatured] = useState(!!cat.featured);\n   const [imageUrl, setImageUrl] = useState(cat.image_url ?? '');\n+  const [alimentare, setAlimentare] = useState(!!cat.richiede_dichiarazioni_alimentari);\n \n   const save = useMutation({\n     mutationFn: async () => authedFetch('PATCH', {\n@@ -68,6 +71,8 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli\n       // Solo se è cambiata: senza la migrazione 159 la colonna non c'è e il salvataggio degli altri\n       // campi deve riuscire lo stesso.\n       ...(imageUrl.trim() !== (cat.image_url ?? '') ? { image_url: imageUrl.trim() } : {}),\n+      // R18-015 — Solo se è cambiata, e mai per una sottocategoria (eredita dal padre).\n+      ...(!parentId && alimentare !== !!cat.richiede_dichiarazioni_alimentari ? { richiede_dichiarazioni_alimentari: alimentare } : {}),\n     }),\n     onSuccess: () => { toast.success('Categoria aggiornata'); onDone(); },\n     onError: (e: unknown) => toast.error(friendlyError(e)),\n@@ -92,6 +97,15 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli\n         </Select>\n         <Input label=\"Ordine\" containerClassName=\"w-20\" type=\"number\" min={0} value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value) || 0)} />\n         <Checkbox containerClassName=\"mb-2.5\" label=\"In evidenza\" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />\n+        {!parentId && (\n+          <Checkbox\n+            containerClassName=\"mb-2.5\"\n+            label=\"Richiede allergeni e ingredienti (alimenti)\"\n+            checked={alimentare}\n+            disabled={!!cat.richiede_dichiarazioni_alimentari}\n+            onChange={(e) => setAlimentare(e.target.checked)}\n+          />\n+        )}\n         <Input label=\"Foto della tessera (https://… o /…)\" containerClassName=\"flex-1 min-w-[220px]\" value={imageUrl} error={sopraIlTetto(imageUrl, 500)} placeholder=\"Vuota = gradiente del marchio\" onChange={(e) => setImageUrl(e.target.value)} />\n         <Button className=\"mb-0.5\" size=\"sm\" type=\"button\" loading={save.isPending} onClick={() => save.mutate()}>Salva</Button>\n         <button type=\"button\" onClick={() => {\n@@ -114,6 +128,7 @@ export default function AdminCategoriesPage() {\n   const [newIcon, setNewIcon] = useState('');\n   const [newParent, setNewParent] = useState('');\n   const [newImage, setNewImage] = useState('');\n+  const [newAlimentare, setNewAlimentare] = useState(false);\n \n   const { data: cats = [], isLoading, isError, refetch } = useQuery({\n     queryKey: queryKeys.admin.categories,\n@@ -140,12 +155,19 @@ export default function AdminCategoriesPage() {\n   const create = useMutation({\n     mutationFn: async () => {\n       if (!newName.trim()) throw new Error('Inserisci un nome');\n-      await authedFetch('POST', {\n+      const r = await authedFetch('POST', {\n         name: newName.trim(), slug: slugify(newName), icon: newIcon, parent_id: newParent || null,\n         ...(newImage.trim() ? { image_url: newImage.trim() } : {}),\n+        ...(!newParent && newAlimentare ? { richiede_dichiarazioni_alimentari: true } : {}),\n       });\n+      return (r?.data?.avviso as string | undefined) ?? null;\n+    },\n+    onSuccess: (avviso) => {\n+      toast.success('Categoria creata');\n+      // R18-015 — Una principale nata senza l'obbligo non chiede allergeni e ingredienti: si dice.\n+      if (avviso) toast.warning(avviso, { duration: 12000 });\n+      setNewAlimentare(false); setNewName(''); setNewIcon(''); setNewParent(''); setNewImage(''); invalidate();\n     },\n-    onSuccess: () => { toast.success('Categoria creata'); setNewName(''); setNewIcon(''); setNewParent(''); setNewImage(''); invalidate(); },\n     onError: (e: unknown) => toast.error(friendlyError(e)),\n   });\n \n@@ -166,6 +188,9 @@ export default function AdminCategoriesPage() {\n           <option value=\"\">— Principale —</option>\n           {tops.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}\n         </Select>\n+        {!newParent && (\n+          <Checkbox containerClassName=\"mb-2.5\" label=\"Richiede allergeni e ingredienti (alimenti)\" checked={newAlimentare} onChange={(e) => setNewAlimentare(e.target.checked)} />\n+        )}\n         <Button type=\"submit\" loading={create.isPending}><Plus size={16} aria-hidden /> Aggiungi</Button>\n       </form>\n \ndiff --git a/app/admin/products/[id]/edit/page.tsx b/app/admin/products/[id]/edit/page.tsx\nindex b227d57..3a696f3 100644\n--- a/app/admin/products/[id]/edit/page.tsx\n+++ b/app/admin/products/[id]/edit/page.tsx\n@@ -67,7 +67,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri\n   const { data: categories = [] } = useQuery({\n     queryKey: queryKeys.categories.form,\n     queryFn: async (): Promise<Category[]> => {\n-      const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id').order('name');\n+      const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari').order('name');\n       if (error) throw error;\n       return (data ?? []) as Category[];\n     },\ndiff --git a/app/admin/products/new/page.tsx b/app/admin/products/new/page.tsx\nindex eef3e80..b2d64ee 100644\n--- a/app/admin/products/new/page.tsx\n+++ b/app/admin/products/new/page.tsx\n@@ -32,7 +32,7 @@ export default function AdminNewProductPage() {\n   const { data: categoriesData, isError: categoriesReadError, refetch: refetchCategories } = useQuery({\n     queryKey: queryKeys.categories.form,\n     queryFn: async (): Promise<Category[]> => {\n-      const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id').order('name');\n+      const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari').order('name');\n       if (error) throw error;\n       return (data ?? []) as Category[];\n     },\ndiff --git a/app/api/admin/categories/route.ts b/app/api/admin/categories/route.ts\nindex 818f1a7..57080df 100644\n--- a/app/api/admin/categories/route.ts\n+++ b/app/api/admin/categories/route.ts\n@@ -22,6 +22,9 @@ const baseFields = {\n   parent_id: z.string().uuid().nullable().optional(),\n   sort_order: z.number().int().min(0).max(9999).optional(),\n   featured: z.boolean().optional(),\n+  // R18-015 — L'obbligo di allergeni e ingredienti è una proprietà della categoria principale (migrazione 363),\n+  // non del suo nome. Il database non lo lascia togliere: dal pannello si può solo accendere.\n+  richiede_dichiarazioni_alimentari: z.boolean().optional(),\n   // La foto della tessera in home (migrazione 159). Vuota = nessuna foto: si salva null. Il messaggio\n   // è quello di fotoDiCategoria, cioè dice esattamente cosa la home accetta e cosa no.\n   image_url: z\n@@ -62,6 +65,14 @@ async function genitoreNonAmmesso(admin: ClientAdmin, id: string | null, parentI\n   }\n   return null;\n }\n+\n+/** R18-015 — I messaggi del guardiano delle categorie (23514) sull'obbligo alimentare si dicono com'è; ogni altro 23514 è la foto. */\n+function messaggioDi23514(message: string | undefined): string {\n+  if (message && /allergeni e ingredienti/i.test(message)) return message;\n+  return 'Foto non ammessa dal database: https://… oppure un percorso del sito /…';\n+}\n+const AVVISO_RADICE_SENZA_OBBLIGO =\n+  'Categoria principale creata senza l\\'obbligo di allergeni e ingredienti: i suoi prodotti non avranno campi obbligatori. Se vende alimenti, spunta «richiede allergeni e ingredienti».';\n const updateSchema = z.object({ id: z.string().uuid(), ...baseFields }).partial({ name: true, slug: true });\n \n export const POST = withAdminAuth(async ({ req, user }) => {\n@@ -75,6 +86,7 @@ export const POST = withAdminAuth(async ({ req, user }) => {\n   if (d.parent_id) {\n     const no = await genitoreNonAmmesso(admin, null, d.parent_id);\n     if (no) return ApiErrors.invalidRequest(no);\n+    if (d.richiede_dichiarazioni_alimentari) return ApiErrors.invalidRequest('L\\'obbligo di allergeni e ingredienti si imposta sulla categoria principale');\n   }\n   const { data, error } = await admin\n     .from('categories')\n@@ -84,16 +96,18 @@ export const POST = withAdminAuth(async ({ req, user }) => {\n       // Solo se è stata mandata: senza la migrazione 159 la colonna non c'è, e una categoria senza\n       // foto si deve poter creare lo stesso.\n       ...(d.image_url !== undefined ? { image_url: d.image_url || null } : {}),\n+      ...(d.richiede_dichiarazioni_alimentari ? { richiede_dichiarazioni_alimentari: true } : {}),\n     })\n     .select('id')\n     .single();\n   if (error) {\n     if (error.code === '23505') return ApiErrors.invalidRequest('Slug già esistente');\n-    if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…');\n+    if (error.code === '23514') return ApiErrors.invalidRequest(messaggioDi23514(error.message));\n     return ApiErrors.internal('Impossibile creare la categoria');\n   }\n   await writeAudit({ actorId: user.id, action: 'category.create', targetTable: 'categories', targetId: data.id, metadata: { name: d.name, slug: d.slug } });\n-  return apiSuccess({ id: data.id });\n+  const avviso = !d.parent_id && !d.richiede_dichiarazioni_alimentari ? AVVISO_RADICE_SENZA_OBBLIGO : undefined;\n+  return apiSuccess({ id: data.id, ...(avviso ? { avviso } : {}) });\n });\n \n export const PATCH = withAdminAuth(async ({ req, user }) => {\n@@ -111,6 +125,7 @@ export const PATCH = withAdminAuth(async ({ req, user }) => {\n   if (rest.sort_order !== undefined) patch.sort_order = rest.sort_order;\n   if (rest.featured !== undefined) patch.featured = rest.featured;\n   if (rest.image_url !== undefined) patch.image_url = rest.image_url || null;\n+  if (rest.richiede_dichiarazioni_alimentari !== undefined) patch.richiede_dichiarazioni_alimentari = rest.richiede_dichiarazioni_alimentari;\n   if (Object.keys(patch).length === 0) return ApiErrors.invalidRequest('Nessun campo da aggiornare');\n \n   const admin = getAdminSupabase();\n@@ -118,10 +133,18 @@ export const PATCH = withAdminAuth(async ({ req, user }) => {\n     const no = await genitoreNonAmmesso(admin, id, rest.parent_id);\n     if (no) return ApiErrors.invalidRequest(no);\n   }\n+  if (rest.richiede_dichiarazioni_alimentari !== undefined) {\n+    // Solo le categorie principali portano l'obbligo (le sottocategorie lo ereditano dal padre).\n+    const { data: cur, error: eCur } = await admin.from('categories').select('parent_id').eq('id', id).maybeSingle();\n+    if (eCur) return ApiErrors.internal('Impossibile aggiornare la categoria');\n+    if (!cur) return ApiErrors.notFound('Categoria non trovata');\n+    const futuroGenitore = rest.parent_id !== undefined ? rest.parent_id : (cur as { parent_id: string | null }).parent_id;\n+    if (futuroGenitore && rest.richiede_dichiarazioni_alimentari) return ApiErrors.invalidRequest('L\\'obbligo di allergeni e ingredienti si imposta sulla categoria principale');\n+  }\n   const { error } = await admin.from('categories').update(patch).eq('id', id);\n   if (error) {\n     if (error.code === '23505') return ApiErrors.invalidRequest('Slug già esistente');\n-    if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…');\n+    if (error.code === '23514') return ApiErrors.invalidRequest(messaggioDi23514(error.message));\n     return ApiErrors.internal('Impossibile aggiornare la categoria');\n   }\n   await writeAudit({ actorId: user.id, action: 'category.update', targetTable: 'categories', targetId: id, metadata: { campi: Object.keys(patch) } });\ndiff --git a/app/api/ai/catalog-apply/route.ts b/app/api/ai/catalog-apply/route.ts\nindex 2747eb8..d20263b 100644\n--- a/app/api/ai/catalog-apply/route.ts\n+++ b/app/api/ai/catalog-apply/route.ts\n@@ -66,7 +66,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse>\n \n   const [{ data: row }, { data: categoriesData }] = await Promise.all([\n     admin.from('products').select(`${PRODUCT_SNAPSHOT_COLS}, seller_id`).eq('id', productId).single(),\n-    admin.from('categories').select('id, name, slug, parent_id').order('name'),\n+    admin.from('categories').select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari').order('name'),\n   ]);\n \n   if (!row) return ApiErrors.notFound('Prodotto non trovato.');\ndiff --git a/app/api/ai/catalog-batch/start/route.ts b/app/api/ai/catalog-batch/start/route.ts\nindex 3a8d775..1fec3bb 100644\n--- a/app/api/ai/catalog-batch/start/route.ts\n+++ b/app/api/ai/catalog-batch/start/route.ts\n@@ -162,7 +162,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse>\n       .in('status', ['available', 'draft'])\n       .order('created_at', { ascending: false })\n       .limit(MAX_PRODUCTS),\n-    admin.from('categories').select('id, name, slug, parent_id').order('name'),\n+    admin.from('categories').select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari').order('name'),\n   ]);\n \n   const tutti = (productsData ?? []) as ProductRow[];\ndiff --git a/app/api/ai/catalog-chat/route.ts b/app/api/ai/catalog-chat/route.ts\nindex 151e6a7..d392409 100644\n--- a/app/api/ai/catalog-chat/route.ts\n+++ b/app/api/ai/catalog-chat/route.ts\n@@ -297,7 +297,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse>\n       .eq('seller_id', user.id)\n       .order('created_at', { ascending: false })\n       .limit(MAX_CATALOG),\n-    admin.from('categories').select('id, name, slug, parent_id').order('name'),\n+    admin.from('categories').select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari').order('name'),\n   ]);\n \n   const products = (productsData ?? []) as ProductRow[];\n@@ -349,7 +349,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse>\n   if (focused) {\n     const snap = snapshot(focused, categories);\n     const { fields } = getAttributesForCategory(\n-      categories.map((c) => ({ id: c.id, slug: c.slug, parent_id: c.parent_id })),\n+      categories.map((c) => ({ id: c.id, slug: c.slug, parent_id: c.parent_id, richiede_dichiarazioni_alimentari: (c as { richiede_dichiarazioni_alimentari?: boolean | null }).richiede_dichiarazioni_alimentari })),\n       focused.category_id,\n     );\n     const attrLines = fields\ndiff --git a/app/api/ai/copilot/route.ts b/app/api/ai/copilot/route.ts\nindex d5cdcf7..1367ff1 100644\n--- a/app/api/ai/copilot/route.ts\n+++ b/app/api/ai/copilot/route.ts\n@@ -206,7 +206,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse>\n       .eq('seller_id', user.id)\n       .order('created_at', { ascending: false })\n       .limit(MAX_CATALOG),\n-    admin.from('categories').select('id, name, slug, parent_id').order('name'),\n+    admin.from('categories').select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari').order('name'),\n   ]);\n   const products = (productsData ?? []) as ProductRow[];\n   const categories = (categoriesData ?? []) as CategoryRow[];\ndiff --git a/app/api/seller/products/import/route.ts b/app/api/seller/products/import/route.ts\nindex db0baee..2aad517 100644\n--- a/app/api/seller/products/import/route.ts\n+++ b/app/api/seller/products/import/route.ts\n@@ -48,7 +48,7 @@ async function handler(req: NextRequest, user: { id: string }, db: ClientDiChiCh\n   if (righe.length > MASSIMO_RIGHE_DAL_FILE) {\n     return ApiErrors.invalidRequest(`Al massimo ${MASSIMO_RIGHE_DAL_FILE} righe per caricamento.`);\n   }\n-  const { data: categorie, error: erroreCategorie } = await db.from('categories').select('id, slug, parent_id');\n+  const { data: categorie, error: erroreCategorie } = await db.from('categories').select('id, slug, parent_id, richiede_dichiarazioni_alimentari');\n   if (erroreCategorie) {\n     logger.error('[seller-products-import] categorie non lette', { userId: user.id, message: erroreCategorie.message });\n     return ApiErrors.internal('Non sono riuscito a leggere le categorie. Riprova.');\ndiff --git a/app/seller/products/[id]/edit/page.tsx b/app/seller/products/[id]/edit/page.tsx\nindex 49677dd..b05f83e 100644\n--- a/app/seller/products/[id]/edit/page.tsx\n+++ b/app/seller/products/[id]/edit/page.tsx\n@@ -190,7 +190,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>\n   const { data: categories = [], isError: categorieNonLette, isLoading: categorieInLettura, isPending: categorieSenzaDati, fetchStatus: categorieFetchStatus, refetch: rileggiCategorie } = useQuery({\n     queryKey: queryKeys.categories.form,\n     queryFn: async (): Promise<Category[]> => {\n-      const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id').order('name');\n+      const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari').order('name');\n       if (error) throw error;\n       return (data ?? []) as Category[];\n     },\ndiff --git a/app/seller/products/new/page.tsx b/app/seller/products/new/page.tsx\nindex 3a660d5..aa2c867 100644\n--- a/app/seller/products/new/page.tsx\n+++ b/app/seller/products/new/page.tsx\n@@ -78,7 +78,7 @@ function NewProductInner() {\n     queryFn: async (): Promise<Category[]> => {\n       const { data, error } = await supabase\n         .from('categories')\n-        .select('id, name, slug, parent_id')\n+        .select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari')\n         .order('name');\n       if (error) throw error;\n       return (data ?? []) as Category[];\n"
+    },
+    {
+     "file": "lib/products/aiPatch.ts",
+     "modifica": "righe 51-56: in CategoryRow aggiungere richiede_dichiarazioni_alimentari?: boolean | null; (le chiamate a getAttributesForCategory alla riga 519 passano già la lista intera)."
+    },
+    {
+     "file": "lib/ai/catalogBatch.ts",
+     "modifica": "riga 209: la mappa categories.map((c) => ({ id: c.id, slug: c.slug, parent_id: c.parent_id })) aggiunge richiede_dichiarazioni_alimentari: c.richiede_dichiarazioni_alimentari."
+    },
+    {
+     "file": "lib/products/prontoPerLaVendita.ts",
+     "modifica": "riga 155: la mappa albero aggiunge richiede_dichiarazioni_alimentari: c.richiede_dichiarazioni_alimentari."
+    },
+    {
+     "file": "lib/products/draftFromVision.ts",
+     "modifica": "riga 147: la mappa aggiunge richiede_dichiarazioni_alimentari: c.richiede_dichiarazioni_alimentari."
+    },
+    {
+     "file": "lib/products/righe-dal-file.ts",
+     "modifica": "riga 17: in CategoriaDelFile aggiungere richiede_dichiarazioni_alimentari?: boolean | null; (la riga 42 passa già la lista intera)."
+    },
+    {
+     "file": "app/api/ai/catalog-apply-bulk/route.ts",
+     "modifica": "riga 141: select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari')."
+    },
+    {
+     "file": "lib/products/salvataggio-tracciato.ts",
+     "modifica": "riga 394: select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari')."
+    },
+    {
+     "file": "lib/queries/precarico.ts",
+     "modifica": "riga 97: il select delle categorie aggiunge richiede_dichiarazioni_alimentari (file di R20)."
+    },
+    {
+     "file": "app/seller/products/import/page.tsx",
+     "modifica": "riga 90: select('id, slug, parent_id, richiede_dichiarazioni_alimentari')."
+    },
+    {
+     "file": "app/api/ai/catalog-batch/apply/route.ts, app/api/ai/catalog-create/route.ts, app/api/ai/catalog-create-bulk/route.ts, app/api/ai/vision/extract-products/route.ts, components/seller/site/CategorySelect.tsx",
+     "modifica": "Trovati dal revisore: nel select delle categorie (catalog-batch/apply:143, catalog-create:131, catalog-create-bulk:114, vision/extract-products:253, CategorySelect:25) aggiungere richiede_dichiarazioni_alimentari, dove l'albero finisce in getAttributesForCategory o nel controllo dei campi obbligatori. Da verificare quali lo usano davvero."
+    }
+   ],
+   "nota": "La correzione era fatta e provata (commit d2bac7187f3c594bb5c8bfe8f1826fe11971bce4, prova tests/unit/riparazione-r18-obbligo-alimentare-della-categoria.test.ts, prova rimessa uscita 0, revisore piccolo «regge»), ma 5 dei file toccati (app/api/ai/catalog-apply, catalog-batch/start, catalog-chat, copilot, app/api/seller/products/import) non sono di R18 in quest'onda: la voce della scheda li elencava in una riga sola che la guardia non riconosce. Tolta col revert ec87a59d3500e45da4c0fa50889dfcbe59ff4954 su richiesta della regia. Gli altri serve_file_altrui (lib/products/aiPatch.ts e seguenti) restano necessari anche dopo, per i file che ricadono ancora sul nome della categoria.",
+   "verificato_da": "revisore piccolo (sonnet) sul commit d2bac7187f3c594bb5c8bfe8f1826fe11971bce4: prova, prova rimessa e tsc rilanciati; rotta dentro withAdminAuth; sottocategoria col flag rifiutata."
+  },
+  {
+   "id": "R18-016",
+   "chiave": "privacy-legale|sugli alimenti confezionati il peso netto è facoltativo e il prezzo al chilo non compare mai",
+   "esito": "parziale",
+   "commit": "d3b281295d722314869a5a292d0b823af9e584e8",
+   "file_toccati": [
+    "lib/category-attributes.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-peso-netto-dice-a-cosa-serve.test.ts"
+   ],
+   "cosa_ho_fatto": "La parte «il prezzo al chilo non compare mai» era già chiusa sulla base (prezzoPerUnitaDiMisura e la riga prezzo-unitario in app/product/[id]/page.tsx:104-125). La parte senza scelte: il campo «Peso / Quantità» degli alimenti ha un testo di aiuto che chiede quantità e unità e dice che serve al prezzo al chilo o al litro. Resta facoltativo.",
+   "cosa_resta": "Rendere obbligatorio il peso netto, come numero più unità invece del testo libero, è una scelta di business (toccherebbe lib/products/schema.ts e il modulo). Il testo di aiuto non compare quando il peso è un asse delle varianti (components/seller/AttributesFields.tsx:244, non mio), e il segnaposto suggerisce ancora «6 pezzi».",
+   "domanda": "Il peso netto diventa obbligatorio per tutti gli alimenti o solo per i confezionati (escludendo per esempio pane e sfuso)? I prodotti già in vendita senza peso tornano bozza alla prima modifica o si chiede prima il dato ai negozi? Va bene un campo numero più unità (g, kg, ml, l) al posto del testo libero?",
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-peso-netto-dice-a-cosa-serve.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d3b281295d722314869a5a292d0b823af9e584e8^ --file lib/category-attributes.ts --prove tests/unit/riparazione-r18-peso-netto-dice-a-cosa-serve.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "verificato_da": "revisore grande: prova rimessa (regge); helpText mostrato da AttributesFields col valore singolo; leggiQuantitaNetta legge «500 g», «1 kg», «750 ml»."
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "dopo la conferma della newsletter il sito porta in home con ?newsletter=confermata, ma nessuna pagina legge quel parametro: chi conferma non vede nessun esito",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "app/page.tsx · app/api/newsletter/confirm/route.ts:57",
+   "descrizione": "In app, components e lib nessuno legge newsletter=confermata o link-non-valido: la persona torna in home senza un messaggio. La disiscrizione invece ha la sua pagina (app/disiscrizione/page.tsx)."
+  },
+  {
+   "titolo": "l'informativa (versioni precedenti) e la cookie policy propongono ancora il modulo dei contatti anche quando non arriva a nessuno",
+   "dimensione": "privacy-legale",
+   "severita": "minore",
+   "file": "app/privacy/page.tsx:424 · app/cookies/page.tsx:178-183",
+   "descrizione": "Stesso schema della riga corretta in R18-009: usano recapitoPrivacy invece di stradaDeiDiritti. La voce non le nomina, quindi non toccate."
+  },
+  {
+   "titolo": "nel pannello delle segnalazioni lo staff decide su una recensione senza vederla: nessun link e nessun testo",
+   "dimensione": "privacy-legale",
+   "severita": "minore",
+   "file": "app/admin/segnalazioni/page.tsx:79-83",
+   "descrizione": "dove() restituisce null per 'recensione' e oggetto_id non dice se è una recensione di prodotto (reviews) o di negozio (store_reviews): per decidere lo staff deve cercarla a mano."
+  },
+  {
+   "titolo": "cancellare una categoria con l'obbligo degli allergeni dà un errore generico invece del motivo del database",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "app/api/admin/categories/route.ts:182",
+   "descrizione": "Il ramo DELETE gestisce solo 23503 e risponde «Impossibile eliminare»; il 23514 del guardiano («non si cancella…») non passa con il suo messaggio. La voce nominava solo POST e PATCH."
+  },
+  {
+   "titolo": "i Termini sul contrassegno non dicono cosa succede quando il contante non basta a coprire il compenso del rider",
+   "dimensione": "privacy-legale",
+   "severita": "minore",
+   "file": "app/terms/page.tsx:185",
+   "descrizione": "Con credito scalato il rider trattiene meno del compenso (il codice prende il minimo) e il residuo gli arriva per bonifico (residuoDovutoCents): il testo non lo dice. Imprecisione, non falsità."
+  },
+  {
+   "riservato": true,
+   "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+   "dimensione": "sicurezza",
+   "severita": "grave",
+   "file": "(nel referto privato)"
+  }
+ ],
+ "domande_per_nicola": [
+  "R18-001: la partita IVA è aperta? Nome legale, sede, P.IVA e PEC da mettere nelle NEXT_PUBLIC_TITOLARE_* su Vercel produzione?",
+  "R18-004: col commercialista, quale documento fiscale si emette per la consegna (ricavo di MyCity), con quale regime e aliquota?",
+  "R18-014: le domande sotto i prodotti devono restare nascoste finché un admin o il negozio non le approva, e il negozio deve poter nascondere da solo quelle sui suoi prodotti?",
+  "R18-016: il peso netto diventa obbligatorio per tutti gli alimenti o solo per i confezionati? Che fare dei prodotti già in vendita senza peso? Campo numero più unità al posto del testo libero?",
+  "R18-003: una recensione accolta si nasconde (reversibile) o si cancella con un archivio per il riesame?",
+  "R18-014: la migrazione 364 (domande sotto i prodotti) è applicata in produzione?"
+ ],
+ "conto": {
+  "agenti": 5,
+  "nota": "5 subagenti: lotti 1, 2, 4 (lotto 4 e un revisore su sonnet), 2 revisori. Lotto 3 (R18-011) saltato per il limite di spesa. Un revisore grande per R18-003/014/001/002/016, uno piccolo per 006/007/009/010/013/015. Giro corto della sesta regia (revert di R18-015): costo letto con get_session a turno in corso, 22,80 $ fino al turno prima.",
+  "subagenti": 5
+ },
+ "costo_usd": 22.8
+}

@@ -70,7 +70,17 @@ export default function PrivacyPage() {
         </p>
         <p>
           <strong>Contatti del Titolare:</strong>{' '}
-          <a href={dovePerIDiritti.href} className="text-primary-700 underline">{dovePerIDiritti.testo}</a>
+          {/* 26/11/2026 — Proponeva il modulo dei contatti anche quando non arriva a nessuno
+              (senza chiave di servizio e senza inoltro per email). La strada e' quella della
+              sezione 5 (`stradaDeiDiritti`): il modulo solo se arriva, se no lo si dice. */}
+          {strada.recapito ? (
+            <a href={strada.recapito.href} className="text-primary-700 underline">{strada.recapito.testo}</a>
+          ) : ownerData.pec ? null : (
+            <>
+              in questo momento non abbiamo un canale attivo per scriverci: è un guasto nostro, non
+              tuo. Resta il reclamo al Garante (sezione 5).
+            </>
+          )}
           {/* 26/11/2026 — La PEC, quando c'e', e' un recapito del titolare (art. 13.1.a GDPR):
               i Termini e il piede la stampavano gia', l'informativa no. */}
           {ownerData.pec ? (

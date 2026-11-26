@@ -53,15 +53,25 @@ const MOTIVI_RECENSIONE: Array<{ valore: string; etichetta: string }> = [
   { valore: 'altro', etichetta: 'Altro' },
 ];
 
+/**
+ * 26/11/2026 (R18-014) — Una domanda sotto un prodotto non è né un prodotto né una recensione:
+ * quello che ci si può trovare è un testo offensivo, o dati di altri (un numero di telefono).
+ */
+const MOTIVI_DOMANDA: Array<{ valore: string; etichetta: string }> = [
+  { valore: 'odio_o_molestie', etichetta: 'Contenuto offensivo o molesto' },
+  { valore: 'illecito', etichetta: 'Contenuto illecito (per esempio dati personali di altri)' },
+  { valore: 'altro', etichetta: 'Altro' },
+];
+
 export function Segnala({
   tipo,
   oggettoId,
 }: {
-  tipo: 'prodotto' | 'negozio' | 'recensione' | 'messaggio';
+  tipo: 'prodotto' | 'negozio' | 'recensione' | 'messaggio' | 'domanda';
   oggettoId: string;
 }) {
   const [aperto, setAperto] = useState(false);
-  const motivi = tipo === 'recensione' ? MOTIVI_RECENSIONE : MOTIVI;
+  const motivi = tipo === 'recensione' ? MOTIVI_RECENSIONE : tipo === 'domanda' ? MOTIVI_DOMANDA : MOTIVI;
   const [motivo, setMotivo] = useState(motivi[0].valore);
   const [dettaglio, setDettaglio] = useState('');
   const [email, setEmail] = useState('');

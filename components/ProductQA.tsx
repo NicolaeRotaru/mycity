@@ -13,6 +13,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { fetchNomiPubblici } from '@/lib/queries/seller-public-profiles';
 import { Button } from '@/components/ui/Button';
+import { Segnala } from '@/components/Segnala';
 
 type Question = {
   id: string;
@@ -306,6 +307,11 @@ export default function ProductQA({ productId, sellerId }: Props) {
               ) : (
                 <p className="pl-9 ml-3 text-xs text-ink-400 italic">In attesa di risposta dal venditore.</p>
               )}
+              {/* 26/11/2026 (R18-014) — Una domanda (e la risposta che le sta sotto) si segnala da sola:
+                  prima si poteva solo segnalare il prodotto e descriverla nel testo libero. */}
+              <div className="ml-9">
+                <Segnala tipo="domanda" oggettoId={q.id} />
+              </div>
             </div>
           ))}
         </div>
