@@ -8,13 +8,14 @@ import { Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiVistiDiRecente, type VistoDiRecente } from '@/lib/queries/fasce-prodotti';
 import { useUtente } from '@/components/hooks/useUtente';
 import { useEffect, useState } from 'react';
 import { hasConsent, readConsent } from '@/lib/consent';
 
-type Item = VistoDiRecente;
+type Item = VistoDiRecente & { sconto?: number };
 
 type Props = {
   /** Esclude un prodotto dal carosello (utile su scheda prodotto stesso) */
@@ -69,7 +70,12 @@ export default function RecentlyViewed({ excludeId, className = '' }: Props) {
     // l'esclusione dentro la lettura, con una chiave senza il prodotto, faceva vedere dalla memoria
     // il prodotto che si sta guardando, e mancava quello appena lasciato. Si rilegge a ogni
     // apertura (si mostra intanto quella di prima), perché una visita nuova si scrive di continuo.
-    queryFn: (): Promise<Item[]> => leggiVistiDiRecente(supabase, { userId: userId! }),
+    // R21-011 — Prezzo scontato della cassa se c'e' una promozione attiva; senza lettura, prezzo pieno.
+    queryFn: async (): Promise<Item[]> => {
+      const visti = await leggiVistiDiRecente(supabase, { userId: userId! });
+      const sconti = await fetchActiveDiscounts(supabase, visti.map((it) => it.product.id)).catch(() => new Map<string, number>());
+      return visti.map((it) => ({ ...it, sconto: sconti.get(it.product.id) ?? 0 }));
+    },
     staleTime: 0,
   });
   const visibili = items.filter((it) => it.product.id !== excludeId);
@@ -107,7 +113,7 @@ export default function RecentlyViewed({ excludeId, className = '' }: Props) {
               <div className="p-2 space-y-0.5">
                 <p className="text-xs text-ink-500 truncate">{p.profiles?.store_name}</p>
                 <p className="text-sm font-semibold text-ink-900 line-clamp-2 leading-snug min-h-[2.5rem]">{p.name}</p>
-                <p className="text-sm font-bold text-primary-700">{formatPrice(p.price)}</p>
+                <p className="text-sm font-bold text-primary-700">{formatPrice(it.sconto ? discountedUnitCents(p.price, it.sconto) / 100 : p.price)}</p>
               </div>
             </Link>
           );
