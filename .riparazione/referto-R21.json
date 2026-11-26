@@ -468,6 +468,9 @@
   ],
   "conto": {
     "agenti": 8,
-    "nota": "8 subagenti: 4 riparatori (lotti 1-3 modello grande, lotto 4 sonnet) e 4 smentitori (lotti 1-2 grande, 3-4 sonnet), in una copia separata (worktree) per non sporcare l'albero."
-  }
+    "nota": "8 subagenti: 4 riparatori (lotti 1-3 modello grande, lotto 4 sonnet) e 4 smentitori (lotti 1-2 grande, 3-4 sonnet), in una copia separata (worktree) per non sporcare l'albero.",
+    "subagenti": 8,
+    "costo_usd": 23.73
+  },
+  "costo_usd": 23.73
 }
