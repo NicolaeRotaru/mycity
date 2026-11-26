@@ -41,6 +41,38 @@ const Body = z.object({
 });
 
 /**
+ * 26/11/2026 — IL PANE È ESCLUSO DAL RECESSO ANCHE SE IL NEGOZIO NON L'HA SPUNTATO.
+ * La spunta `non_recedibile` (migrazione 180) parte spenta: un pane creato senza
+ * toccarla accettava «Cambio idea» (HTTP 201). Il fatto `legale.recesso-esclusi`
+ * dice che pane, dolci, salumi, latticini e gli altri freschi sono esclusi: la
+ * categoria del prodotto lo sa già. Vale la categoria o uno dei suoi padri (una
+ * sottocategoria del Panificio creata dal pannello resta pane). La spunta del
+ * negozio resta e si somma: serve per le ordinazioni e i freschi fuori da queste.
+ */
+const CATEGORIE_DEPERIBILI = new Set([
+  'panificio',
+  'alimentari-dolci',
+  'salumeria',
+  'alimentari-latticini',
+  'alimentari-pasta-fresca',
+  'frutta-verdura',
+]);
+type CategoriaPerIlRecesso = { id: string; slug: string; parent_id: string | null };
+
+function segnaIDeperibili<P extends { category_id?: unknown }>(prodotti: P[], categorie: CategoriaPerIlRecesso[]): P[] {
+  const perId = new Map(categorie.map((c) => [c.id, c]));
+  const deperibile = (id: unknown): boolean => {
+    let cur = typeof id === 'string' ? perId.get(id) : undefined;
+    for (let passi = 0; cur && passi < 20; passi++) {
+      if (CATEGORIE_DEPERIBILI.has(cur.slug)) return true;
+      cur = cur.parent_id ? perId.get(cur.parent_id) : undefined;
+    }
+    return false;
+  };
+  return prodotti.map((p) => (deperibile(p.category_id) ? { ...p, non_recedibile: true } : p));
+}
+
+/**
  * Apre una richiesta di reso. Vincoli:
  *  - L'ordine deve essere DELIVERED
  *  - L'utente deve esserne il buyer
@@ -125,7 +157,8 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
    * resta escluso. Se la lettura non riesce non si decide al buio.
    * `*` e non la colonna per nome: prima della migrazione 180 la colonna non
    * c'e', la riga arriva senza, e vale «nessun prodotto escluso» (vero: nessun
-   * negozio ha ancora potuto segnarne uno). Dopo la 180 e i tipi rigenerati
+   * negozio ha ancora potuto segnarne uno), salvo la categoria (CATEGORIE_DEPERIBILI,
+   * 26/11: il pane resta escluso anche senza spunta). Dopo la 180 e i tipi rigenerati
    * (lib/database.types.ts) si puo' tornare a 'id, name, non_recedibile'.
    */
   // Ordine misto (torta esclusa + miele): il reso nasce, e la nota dice al negozio cosa non rimborsare.
@@ -151,8 +184,17 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
         logger.error(pErr, { context: 'returns-recesso-prodotti' });
         return ApiErrors.internal('Non riesco a verificare se i prodotti sono esclusi dal recesso: riprova fra poco.');
       }
+      let elenco = (prodotti ?? []) as Array<ProdottoPerIlRecesso & { id?: string; category_id?: unknown }>;
+      if (elenco.some((p) => typeof p.category_id === 'string')) {
+        const { data: categorie, error: cErr } = await getAdminSupabase().from('categories').select('id, slug, parent_id');
+        if (cErr) {
+          logger.error(cErr, { context: 'returns-recesso-categorie' });
+          return ApiErrors.internal('Non riesco a verificare se i prodotti sono esclusi dal recesso: riprova fra poco.');
+        }
+        elenco = segnaIDeperibili(elenco, (categorie ?? []) as CategoriaPerIlRecesso[]);
+      }
       // Un prodotto per riga: quella col prodotto tolto dal catalogo conta come recedibile.
-      const perRiga = prodottiDelleRighe(righeOrdine, (prodotti ?? []) as Array<ProdottoPerIlRecesso & { id?: string }>);
+      const perRiga = prodottiDelleRighe(righeOrdine, elenco);
       const rifiuto = rifiutoDelRecesso(body.reason, perRiga);
       if (rifiuto) return ApiErrors.invalidRequest(rifiuto);
       notaRecesso = notaDegliEsclusi(body.reason, perRiga);
