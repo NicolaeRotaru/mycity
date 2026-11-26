@@ -115,11 +115,47 @@
   },
   {
    "id": "R18-006",
-   "chiave": "flussi-conversione|con la promozione e il prezzo barrato insieme, la scheda prodotto mostra due prezzi barrati e un risparmio sbagliato"
+   "chiave": "flussi-conversione|con la promozione e il prezzo barrato insieme, la scheda prodotto mostra due prezzi barrati e un risparmio sbagliato",
+   "esito": "riparato",
+   "commit": "9ca26a90e79c201230e86f5761bde65b681407b0",
+   "file_toccati": [
+    "app/product/[id]/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-listino-con-promo.test.tsx"
+   ],
+   "cosa_ho_fatto": "Con lo sconto della promozione attivo il listino barrato, il «Risparmi» e il badge -% del listino non si mostrano più (compareValid guarda scontoPromo), come già fa la scheda delle griglie. La prova monta la scheda vera con la promo sull'orologio finto: dentro la finestra un solo prezzo barrato, fuori restano listino e «Risparmi 2,00».",
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-listino-con-promo.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9ca26a90e79c201230e86f5761bde65b681407b0^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r18-listino-con-promo.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true
   },
   {
    "id": "R18-007",
-   "chiave": "frontend-ux|la scheda prodotto aperta oltre la fine della promozione continua a mostrare il prezzo scontato"
+   "chiave": "frontend-ux|la scheda prodotto aperta oltre la fine della promozione continua a mostrare il prezzo scontato",
+   "esito": "riparato",
+   "commit": "afad25c3310de9e580632182e4c0a69bcd010357",
+   "file_toccati": [
+    "app/product/[id]/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-promo-scaduta-a-scheda-aperta.test.tsx"
+   ],
+   "cosa_ho_fatto": "La domanda dello sconto della scheda ha refetchInterval: 60_000: la scheda lasciata aperta rilegge lo sconto ogni minuto e a promo finita torna al prezzo pieno. La prova usa la scheda vera, React Query e l'orologio finto: aperta alle 21:50 mostra 8 €, passate le 22:00 mostra 10 € senza ricaricare.",
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-promo-scaduta-a-scheda-aperta.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base afad25c3310de9e580632182e4c0a69bcd010357^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r18-promo-scaduta-a-scheda-aperta.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true
   },
   {
    "id": "R18-008",
@@ -158,11 +194,31 @@
   },
   {
    "id": "R18-010",
-   "chiave": "privacy-legale|il prezzo al chilo usa il peso del prodotto base anche quando si sceglie un formato diverso"
+   "chiave": "privacy-legale|il prezzo al chilo usa il peso del prodotto base anche quando si sceglie un formato diverso",
+   "esito": "riparato",
+   "commit": "5598ded857a42cfbad6a07bfd3c59d1715d4cbc1",
+   "file_toccati": [
+    "app/product/[id]/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-prezzo-al-chilo-del-formato.test.tsx"
+   ],
+   "cosa_ho_fatto": "Se il peso è un asse delle varianti (options.peso), il €/kg usa il peso della variante scelta (10 € su 1 kg = 10 €/kg, su 500 g = 20 €/kg); finché non se ne sceglie una non scrive nessuna riga. Senza varianti resta il peso del prodotto. Il calcolo di prezzoUnitario è spostato dopo statoSceltaVarianti.",
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-prezzo-al-chilo-del-formato.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5598ded857a42cfbad6a07bfd3c59d1715d4cbc1^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r18-prezzo-al-chilo-del-formato.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true
   },
   {
    "id": "R18-011",
-   "chiave": "privacy-legale|il venditore può rimettere in vendita da solo un prodotto tolto dopo una segnalazione accolta"
+   "chiave": "privacy-legale|il venditore può rimettere in vendita da solo un prodotto tolto dopo una segnalazione accolta",
+   "esito": "non_fatto",
+   "nota": "Non lavorata per il limite di spesa (a 14,5 $ dopo due lotti su 25 $, la voce da sola chiedeva un lotto col modello grande, una migrazione e una prova SQL). Per chi la riprende, dal collaudo dell'onda 1: il blocco va messo anche dove scrive la chiave di servizio (rotte AI del venditore: app/api/ai/catalog-apply/route.ts, app/api/ai/catalog-apply-bulk/route.ts, lib/products/aiPatch.ts SELLER_STATUSES), sulle copie INSERT (Duplica in app/seller/products/new/page.tsx, import in blocco) e sul cambio di id; lo sblocco dello staff deve durare (un prodotto rimesso in vendita dallo staff non deve tornare bloccato dopo Disattiva/Attiva o dopo l'esaurimento), e un'attivazione in blocco non deve cadere intera per un solo prodotto tolto. Fascia libera: 886-889."
   },
   {
    "id": "R18-012",
@@ -231,11 +287,98 @@
   },
   {
    "id": "R18-015",
-   "chiave": "privacy-legale|l'obbligo di dichiarare allergeni e ingredienti vale solo finché la categoria principale si chiama esattamente «alimentari», e dal pannello quel nome si può cambiare"
+   "chiave": "privacy-legale|l'obbligo di dichiarare allergeni e ingredienti vale solo finché la categoria principale si chiama esattamente «alimentari», e dal pannello quel nome si può cambiare",
+   "esito": "parziale",
+   "commit": "d2bac7187f3c594bb5c8bfe8f1826fe11971bce4",
+   "file_toccati": [
+    "app/api/admin/categories/route.ts",
+    "app/admin/categories/page.tsx",
+    "app/seller/products/new/page.tsx",
+    "app/seller/products/[id]/edit/page.tsx",
+    "app/admin/products/new/page.tsx",
+    "app/admin/products/[id]/edit/page.tsx",
+    "app/api/ai/catalog-chat/route.ts",
+    "app/api/ai/catalog-apply/route.ts",
+    "app/api/ai/catalog-batch/start/route.ts",
+    "app/api/ai/copilot/route.ts",
+    "app/api/seller/products/import/route.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-obbligo-alimentare-della-categoria.test.ts"
+   ],
+   "cosa_ho_fatto": "getAttributesForCategory leggeva già la colonna (migrazione 363). La rotta admin categorie ora accetta e scrive richiede_dichiarazioni_alimentari (POST e PATCH, solo sulle principali; sulle sottocategorie 400), crea una principale senza il flag con un avviso nella risposta, e non traduce più ogni 23514 in «Foto non ammessa». Il pannello categorie ha la casella «Richiede allergeni e ingredienti (alimenti)» (disattivata se l'obbligo c'è già: il database non lo lascia togliere) e l'avviso alla creazione. Il select delle categorie porta la colonna nelle pagine prodotto venditore e admin e nelle rotte catalog-chat, catalog-apply, catalog-batch/start, copilot e seller/products/import. Nessuna migrazione.",
+   "cosa_resta": "File non miei che scartano la colonna o non la tipizzano: finché non si cambiano, catalog-apply-bulk, il batch AI, la bozza da foto e il calcolo «pronto per la vendita» ricadono sul nome della categoria (vedi serve_file_altrui).",
+   "serve_file_altrui": [
+    {
+     "file": "lib/products/aiPatch.ts",
+     "modifica": "righe 51-56: in CategoryRow aggiungere richiede_dichiarazioni_alimentari?: boolean | null; (le chiamate a getAttributesForCategory alla riga 519 passano già la lista intera)."
+    },
+    {
+     "file": "lib/ai/catalogBatch.ts",
+     "modifica": "riga 209: la mappa categories.map((c) => ({ id: c.id, slug: c.slug, parent_id: c.parent_id })) aggiunge richiede_dichiarazioni_alimentari: c.richiede_dichiarazioni_alimentari."
+    },
+    {
+     "file": "lib/products/prontoPerLaVendita.ts",
+     "modifica": "riga 155: la mappa albero aggiunge richiede_dichiarazioni_alimentari: c.richiede_dichiarazioni_alimentari."
+    },
+    {
+     "file": "lib/products/draftFromVision.ts",
+     "modifica": "riga 147: la mappa aggiunge richiede_dichiarazioni_alimentari: c.richiede_dichiarazioni_alimentari."
+    },
+    {
+     "file": "lib/products/righe-dal-file.ts",
+     "modifica": "riga 17: in CategoriaDelFile aggiungere richiede_dichiarazioni_alimentari?: boolean | null; (la riga 42 passa già la lista intera)."
+    },
+    {
+     "file": "app/api/ai/catalog-apply-bulk/route.ts",
+     "modifica": "riga 141: select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari')."
+    },
+    {
+     "file": "lib/products/salvataggio-tracciato.ts",
+     "modifica": "riga 394: select('id, name, slug, parent_id, richiede_dichiarazioni_alimentari')."
+    },
+    {
+     "file": "lib/queries/precarico.ts",
+     "modifica": "riga 97: il select delle categorie aggiunge richiede_dichiarazioni_alimentari (file di R20)."
+    },
+    {
+     "file": "app/seller/products/import/page.tsx",
+     "modifica": "riga 90: select('id, slug, parent_id, richiede_dichiarazioni_alimentari')."
+    }
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-obbligo-alimentare-della-categoria.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d2bac7187f3c594bb5c8bfe8f1826fe11971bce4^ --file app/api/admin/categories/route.ts,app/admin/categories/page.tsx,app/seller/products/new/page.tsx,app/seller/products/[id]/edit/page.tsx,app/admin/products/new/page.tsx,app/admin/products/[id]/edit/page.tsx,app/api/ai/catalog-chat/route.ts,app/api/ai/catalog-apply/route.ts,app/api/ai/catalog-batch/start/route.ts,app/api/ai/copilot/route.ts,app/api/seller/products/import/route.ts --prove tests/unit/riparazione-r18-obbligo-alimentare-della-categoria.test.ts --json"
+   },
+   "copre_tutta_la_voce": false
   },
   {
    "id": "R18-016",
-   "chiave": "privacy-legale|sugli alimenti confezionati il peso netto è facoltativo e il prezzo al chilo non compare mai"
+   "chiave": "privacy-legale|sugli alimenti confezionati il peso netto è facoltativo e il prezzo al chilo non compare mai",
+   "esito": "parziale",
+   "commit": "d3b281295d722314869a5a292d0b823af9e584e8",
+   "file_toccati": [
+    "lib/category-attributes.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r18-peso-netto-dice-a-cosa-serve.test.ts"
+   ],
+   "cosa_ho_fatto": "La parte «il prezzo al chilo non compare mai» era già chiusa sulla base (prezzoPerUnitaDiMisura e la riga prezzo-unitario in app/product/[id]/page.tsx:104-125). La parte senza scelte: il campo «Peso / Quantità» degli alimenti ha un testo di aiuto che chiede quantità e unità e dice che serve al prezzo al chilo o al litro. Resta facoltativo.",
+   "cosa_resta": "Rendere obbligatorio il peso netto, come numero più unità invece del testo libero, è una scelta di business (toccherebbe lib/products/schema.ts e il modulo).",
+   "domanda": "Il peso netto diventa obbligatorio per tutti gli alimenti o solo per i confezionati (escludendo per esempio pane e sfuso)? I prodotti già in vendita senza peso tornano bozza alla prima modifica o si chiede prima il dato ai negozi? Va bene un campo numero più unità (g, kg, ml, l) al posto del testo libero?",
+   "prova_comando": "npx vitest run tests/unit/riparazione-r18-peso-netto-dice-a-cosa-serve.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d3b281295d722314869a5a292d0b823af9e584e8^ --file lib/category-attributes.ts --prove tests/unit/riparazione-r18-peso-netto-dice-a-cosa-serve.test.ts --json"
+   },
+   "copre_tutta_la_voce": false
   }
  ],
  "nuovi_difetti_visti": [
@@ -264,10 +407,11 @@
  "domande_per_nicola": [
   "R18-001: la partita IVA è aperta? Nome legale, sede, P.IVA e PEC da mettere nelle NEXT_PUBLIC_TITOLARE_* su Vercel produzione?",
   "R18-004: col commercialista, quale documento fiscale si emette per la consegna (ricavo di MyCity), con quale regime e aliquota?",
-  "R18-014: le domande sotto i prodotti devono restare nascoste finché un admin o il negozio non le approva, e il negozio deve poter nascondere da solo quelle sui suoi prodotti?"
+  "R18-014: le domande sotto i prodotti devono restare nascoste finché un admin o il negozio non le approva, e il negozio deve poter nascondere da solo quelle sui suoi prodotti?",
+  "R18-016: il peso netto diventa obbligatorio per tutti gli alimenti o solo per i confezionati? Che fare dei prodotti già in vendita senza peso? Campo numero più unità al posto del testo libero?"
  ],
  "conto": {
-  "agenti": 2,
+  "agenti": 3,
   "nota": ""
  }
 }
