@@ -278,7 +278,11 @@ export default function PrivacyPage() {
               dell'account, e le finestre arrivano a 24 ore (lib/rate-limit.ts). */}
           <li><strong>Upstash Inc.</strong> (Stati Uniti — SCC) — protezione dagli abusi: memorizza, da un minuto fino a 24 ore, contatori legati all&apos;indirizzo IP, all&apos;email usata per accedere o all&apos;identificativo dell&apos;account, per fermare chi tenta troppe richieste di fila.</li>
           <li><strong>Verifica dei documenti d&apos;identità (KYC):</strong> l&apos;esame dei documenti di Venditori e Rider è svolto internamente da MyCity. Se in futuro verrà affidato a un fornitore esterno, il suo nome comparirà qui prima che il primo documento gli venga inviato.</li>
-          <li><strong>OpenStreetMap Foundation</strong> (Regno Unito) — geocoding indirizzi.</li>
+          {/* 26/11/2026 — Diceva solo «geocoding indirizzi». Ma le mappe del sito (components/DeliveryMap.tsx,
+              NearbyStoresMap.tsx, StoreLocationPicker.tsx) scaricano le tessere da tile.openstreetmap.org, e
+              «Naviga» del Rider (app/rider/orders/[id]/page.tsx) apre Google Maps con la destinazione. */}
+          <li><strong>OpenStreetMap Foundation</strong> (Regno Unito) — ricerca degli indirizzi (geocoding) e immagini delle mappe. Quando si apre una mappa del sito (la consegna del tuo ordine, i negozi vicini a te, la posizione del negozio), il browser scarica le tessere della mappa direttamente dai server di OpenStreetMap: ricevono l&apos;indirizzo IP del dispositivo e la zona mostrata, che può essere quella del tuo indirizzo di consegna o della tua posizione.</li>
+          <li><strong>Google Ireland Ltd. / Google LLC (Google Maps)</strong> — non è nostro responsabile: è titolare autonomo, e tratta i dati secondo le proprie regole. Quando il Rider tocca «Naviga», si apre Google Maps con la destinazione della consegna: le coordinate o l&apos;indirizzo dell&apos;Acquirente (o del negozio, per il ritiro). Allo stesso modo, il collegamento alla mappa nella vetrina di un negozio apre Google Maps con l&apos;indirizzo del negozio.</li>
           {/* 27/8/2026 (R055) — La frase diceva «vengono mascherati i campi di
               inserimento»: vero, e insufficiente. Il testo GIA' SCRITTO nella
               pagina finiva nel filmato così com'era, e sulla pagina degli
