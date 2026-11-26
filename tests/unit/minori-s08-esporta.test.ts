@@ -24,6 +24,8 @@ vi.mock('@/lib/supabase/server', () => ({
       q.limit = (n: number) => { voce.tetto = n; quante = n; return q; };
       q.range = (a: number, b: number) => { voce.tetto = b - a + 1; da = a; quante = b - a + 1; return q; };
       q.single = async () => ({ data: { id: 'u-1' }, error: null });
+      // 26/11/2026 — La scheda del locale si legge riga per riga (lib/agenzia/scheda-del-negozio.ts).
+      q.maybeSingle = async () => ({ data: null, error: null });
       q.then = (ok: (v: unknown) => unknown) =>
         Promise.resolve({
           data: (tabella === 'notifications' ? tante : []).slice(da, da + Math.min(quante, 1000)),

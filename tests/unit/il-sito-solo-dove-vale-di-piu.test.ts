@@ -126,8 +126,9 @@ describe('B · le opportunità dell analisi diventano proposte', () => {
     analisi: {
       business: {
         situazione: [{ testo: 'Ristorante aperto da vent’anni nel centro storico', fonte: 'https://www.esempio.it/chi-siamo' }],
+        // 26/11/2026 — Fonti che non sono pagine di TripAdvisor o Google Maps: quelle non si citano più (parere legale).
         opportunita: [
-          { testo: 'Molte ricerche di pranzo veloce in zona, e il menu del pranzo non è in rete', fonte: 'https://www.tripadvisor.it/x', servizio: 'social', proposta: 'Mettiamo il menu del pranzo su Google e su Instagram ogni settimana' },
+          { testo: 'Molte ricerche di pranzo veloce in zona, e il menu del pranzo non è in rete', fonte: 'https://www.ilpiacenza.it/pranzo', servizio: 'social', proposta: 'Mettiamo il menu del pranzo su Google e su Instagram ogni settimana' },
           { testo: 'Un concorrente vicino ha chiuso a settembre', fonte: 'https://www.ilpiacenza.it/y' },
           { testo: 'Nessuna foto dei piatti nelle recensioni più lette', fonte: 'https://www.tripadvisor.it/z', servizio: 'foto_video', proposta: 'Costa solo 100 € fotografare i piatti' },
         ],
@@ -145,7 +146,7 @@ describe('B · le opportunità dell analisi diventano proposte', () => {
       ['sito_web', 'Mettiamo il pulsante «Prenota» sul tuo sito'],
     ]);
     expect(dall[0].perche).toContain('menu del pranzo non è in rete');
-    expect(dall[0].fonte).toBe('tripadvisor.it');
+    expect(dall[0].fonte).toBe('ilpiacenza.it');
     expect(dall.every((x) => !x.generica)).toBe(true);
     // senza analisi, nessuna
     expect(offertaSuMisura(conSito(VELOCE, g({ livello: 'medio' }))).proposte.some((x) => x.id.startsWith('analisi-opp-'))).toBe(false);

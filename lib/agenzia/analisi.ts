@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { SERVIZI_AGENZIA, giornoDiPiacenza, type ServizioAgenzia } from './preventivo';
 import { senzaPrezzo, vociSenzaPrezzo, type SchedaCliente } from './scheda-cliente';
+import { pareDatoDiGoogle } from './rapporto';
 
 /**
  * L'ANALISI DEL BUSINESS — il quarto servizio (24/11/2026).
@@ -178,7 +179,15 @@ export const AnalisiCanaliInArrivo = z.object({
 export type AnalisiCanali = z.infer<typeof AnalisiCanaliInArrivo>;
 
 const senzaContatti = (v: string[]) => v.filter((x) => !TELEFONO_O_EMAIL.test(x));
+/** Google: via le frasi con una cifra. Ogni canale: via le frasi che ricopiano un voto o le recensioni di Google o TripAdvisor. */
+const senzaCifreSeGoogle = (canale: string, v: string[]) => v.filter((x) => !(canale === 'google' && /\d/.test(x)) && !pareDatoDiGoogle(x));
 
+/**
+ * 26/11/2026 — NESSUN NUMERO DI GOOGLE SI SALVA NÉ SI MOSTRA (parere legale, termini EEA di Google Maps dall'8/7/2025):
+ * della scheda Google letta da n8n il voto e il numero di recensioni si tolgono, qui, sia quando arriva (POST
+ * /api/agenzia/analisi-canali salva l'analisi già passata da qui) sia quando si legge una riga salvata prima. La
+ * scheda Google si mostra solo col riquadro ufficiale di Google (components/seller/SchedaGoogleUfficiale.tsx).
+ */
 /** Legge l'analisi dei canali salvata; se non è nel formato è come se non ci fosse. Le frasi con prezzi si tolgono. */
 export function leggiAnalisiCanali(grezza: unknown): AnalisiCanali | null {
   const esito = AnalisiCanaliInArrivo.safeParse(grezza);
@@ -187,7 +196,13 @@ export function leggiAnalisiCanali(grezza: unknown): AnalisiCanali | null {
     Object.entries(esito.data.canali).map(([nome, c]) => [
       nome,
       // 25/11/2026 sera — I canali vanno anche nel link pubblico: oltre ai prezzi si tolgono telefoni ed email (dal collaudo).
-      c && { ...c, osservazioni: senzaContatti(vociSenzaPrezzo(c.osservazioni, 6, 240)), consigli: senzaContatti(vociSenzaPrezzo(c.consigli, 6, 240)) },
+      c && {
+        ...c,
+        // Google: via i numeri, e via le frasi con una cifra dentro («4,5 stelle», «120 recensioni»): sono numeri di Google ricopiati.
+        ...(nome === 'google' ? { numeri: undefined } : {}),
+        osservazioni: senzaCifreSeGoogle(nome, senzaContatti(vociSenzaPrezzo(c.osservazioni, 6, 240))),
+        consigli: senzaCifreSeGoogle(nome, senzaContatti(vociSenzaPrezzo(c.consigli, 6, 240))),
+      },
     ]),
   );
   return { ...esito.data, canali };
@@ -438,7 +453,9 @@ export function analisiAziendale(scheda: SchedaCliente | null | undefined): Anal
           }
           return frase;
         })
-        .filter((v) => v.testo.length >= 10 && v.testo.length <= 300 && senzaPrezzo(v.testo.replace(VOTO, 'voto')) && !CONTATTO.test(v.testo) && !INDIRIZZO_WEB.test(v.testo) && fonteHttps.safeParse(v.fonte).success)
+        // 26/11/2026 — Parere legale: niente voti né conti di recensioni di Google o TripAdvisor, né frasi prese da
+        // una loro pagina (lib/agenzia/rapporto.ts, `pareDatoDiGoogle`).
+        .filter((v) => v.testo.length >= 10 && v.testo.length <= 300 && senzaPrezzo(v.testo.replace(VOTO, 'voto')) && !CONTATTO.test(v.testo) && !INDIRIZZO_WEB.test(v.testo) && fonteHttps.safeParse(v.fonte).success && !pareDatoDiGoogle(v.testo, v.fonte))
         .slice(0, 3);
       quante += pulite.length;
       return [s, pulite];

@@ -55,17 +55,24 @@ export function indirizzoWebPubblico(v: string | null | undefined): string | nul
  * g.page, goo.gl/maps) o dalla barra del browser (google.it/maps, maps.google.com…). Un link di un
  * altro sito non è una scheda Google: `null`.
  */
+/** I domini nazionali di Google ammessi dopo «google.» o «maps.google.». */
+const DOMINI_GOOGLE = new Set(['com', 'it', 'sm', 'ch', 'fr', 'de', 'at', 'es', 'pt', 'be', 'nl', 'lu', 'ie', 'co.uk', 'pl', 'ro', 'gr', 'hr', 'si', 'com.br', 'com.ar', 'ca', 'com.au', 'us']);
+
 export function linkGoogleMaps(v: string | null | undefined): string | null {
   const pulito = indirizzoWebPubblico(v);
   if (!pulito) return null;
   const u = new URL(pulito);
   const host = u.hostname.toLowerCase().replace(/^www\./, '');
   const percorso = u.pathname.toLowerCase();
-  const google = /^google\.[a-z]{2,3}(?:\.[a-z]{2})?$/.test(host);
-  const mapsGoogle = /^maps\.google\.[a-z]{2,3}(?:\.[a-z]{2})?$/.test(host);
+  // 26/11/2026 — Solo i domini veri di Google (revisione di sicurezza di mycity#336): prima passavano anche
+  // «google.qzx.me» e «maps.google.ab.cd». L'elenco è chiuso: i paesi dove MyCity lavora e i vicini.
+  const google = DOMINI_GOOGLE.has(host.replace(/^google\./, '')) && host.startsWith('google.');
+  const mapsGoogle = DOMINI_GOOGLE.has(host.replace(/^maps\.google\./, '')) && host.startsWith('maps.google.');
   const ok =
     host === 'maps.app.goo.gl' ||
     host === 'g.page' ||
+    // 26/11/2026 — Il link «Condividi» di Google Maps dal telefono, oggi (share.google/…).
+    host === 'share.google' ||
     (host === 'goo.gl' && percorso.startsWith('/maps')) ||
     (host === 'g.co' && percorso.startsWith('/kgs/')) ||
     mapsGoogle ||

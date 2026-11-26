@@ -43,6 +43,7 @@ const FUORI_DALL_EXPORT: Record<string, string> = {
   audit_logs: 'registro di controllo: va conservato e non si esporta a richiesta',
   catalog_ai_jobs: 'lavorazioni tecniche del catalogo, non dati della persona',
   invoice_sequences: 'contatore del numero di fattura, non un dato della persona',
+  inviti_agente: 'link d invito creati da Admin: il legame è l admin che li ha creati, non dati della persona invitata',
 };
 
 /** Ogni tabella creata nelle migrazioni che punta a una persona. */
