@@ -9,13 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import StoreHoursEditor from '@/components/seller/StoreHoursEditor';
-import { isStoreClosedForOrder, negozioPuoServire, romeNow, type StoreHours } from '@/lib/store-hours';
+import { isStoreClosedForOrder, negozioPuoServire, romeNow, type StoreHoursConSegni } from '@/lib/store-hours';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const GIORNO: [string, string][] = [['08:00', '20:00']];
-const APERTO_SEMPRE: StoreHours = { mon: GIORNO, tue: GIORNO, wed: GIORNO, thu: GIORNO, fri: GIORNO, sat: GIORNO, sun: GIORNO };
+const APERTO_SEMPRE: StoreHoursConSegni = { mon: GIORNO, tue: GIORNO, wed: GIORNO, thu: GIORNO, fri: GIORNO, sat: GIORNO, sun: GIORNO };
 const OGGI = 'Stasera · 18:00–20:00';
 const DOMANI = 'Domani · 9:00–11:00';
 
@@ -33,10 +33,10 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function apri(iniziale: StoreHours) {
-  let ultimo: StoreHours = iniziale;
+function apri(iniziale: StoreHoursConSegni) {
+  let ultimo: StoreHoursConSegni = iniziale;
   function Modulo() {
-    const [orari, setOrari] = useState<StoreHours>(iniziale);
+    const [orari, setOrari] = useState<StoreHoursConSegni>(iniziale);
     return <StoreHoursEditor value={orari} onChange={(n) => { ultimo = n; setOrari(n); }} />;
   }
   box = document.createElement('div');
