@@ -196,11 +196,17 @@ test.describe('l\'ordine che nasce davvero', () => {
    */
 
   /*
-   * 16/11/2026 (R29-001) — UN SOLO SALTO, QUESTO, E COPRE ANCHE LE TRE PROVE DELL'ACQUISTO VERO.
+   * 16/11/2026 (R29-001) — I SALTI STANNO QUI, NON DENTRO LE PROVE.
    * «Ambiente di prova pronto» vuol dire: l'interruttore E2E_DATI_DI_PROVA acceso, il database
-   * LOCALE di prova e Stripe in modalita' prova pronto. Se manca anche una cosa sola si saltano
-   * tutte, e il motivo dice quale: mai verdi a vuoto, e il lavoro della CI non diventa rosso
-   * perche' manca un segreto. Le prove, dentro, non si spengono piu' una per una.
+   * LOCALE di prova e, per la carta, Stripe in modalita' prova pronto. Se manca qualcosa la prova
+   * si salta prima di cominciare e il motivo dice cosa: mai verdi a vuoto, e il lavoro della CI non
+   * diventa rosso perche' manca un segreto. Le prove, dentro, non si spengono una per una.
+   *
+   * 26/11/2026 — I salti sono due, uno per quello che serve davvero. Prima era uno solo e guardava
+   * anche Stripe: senza le chiavi di prova si saltava anche il contrassegno, che Stripe non lo
+   * usa, Playwright usciva 0 con tre prove saltate e il lavoro della CI era verde senza aver visto
+   * niente. Adesso il contrassegno (e il modulo della cassa) chiede solo il database di prova; le
+   * due prove con la carta stanno nel gruppo «con la carta di prova», che chiede anche Stripe.
    *
    * Cosa serve:
    *  - il database: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY e SUPABASE_SERVICE_ROLE_KEY
@@ -255,17 +261,27 @@ test.describe('l\'ordine che nasce davvero', () => {
   }
 
   const ACCESO = Boolean(process.env.E2E_DATI_DI_PROVA);
+  const SPENTO =
+    'serve un database di prova con dentro un negozio approvato, un prodotto e un cliente, ' +
+    'piu\' le chiavi Stripe in modalita\' prova (variabile E2E_DATI_DI_PROVA). ' +
+    'Finche\' manca, in questo giro nessun ordine nasce davvero.';
+  // Il contrassegno e il modulo della cassa: basta il database locale di prova.
+  const COSA_MANCA_AI_CONTANTI = ACCESO ? cosaManca(['database']) : null;
+  const SENZA_DATABASE_DI_PROVA = !ACCESO || COSA_MANCA_AI_CONTANTI !== null;
+  const PERCHE_SENZA_DATABASE = !ACCESO
+    ? SPENTO
+    : `E2E_DATI_DI_PROVA e' accesa ma il database di prova non e' pronto: ${COSA_MANCA_AI_CONTANTI}. ` +
+      'Finche\' manca, in questo giro nessun ordine nasce davvero.';
+  // Le due prove con la carta: anche Stripe in modalita' prova (vedi il gruppo qui sotto).
   const COSA_MANCA = ACCESO ? cosaManca(['database', 'carta', 'bonifico']) : null;
   const SENZA_AMBIENTE_DI_PROVA = !ACCESO || COSA_MANCA !== null;
   const PERCHE = !ACCESO
-    ? 'serve un database di prova con dentro un negozio approvato, un prodotto e un cliente, ' +
-      'piu\' le chiavi Stripe in modalita\' prova (variabile E2E_DATI_DI_PROVA). ' +
-      'Finche\' manca, in questo giro nessun ordine nasce davvero.'
-    : `E2E_DATI_DI_PROVA e' accesa ma l'ambiente di prova non e' pronto: ${COSA_MANCA}. ` +
-      'Finche\' manca, in questo giro nessun ordine nasce davvero.';
+    ? SPENTO
+    : `E2E_DATI_DI_PROVA e' accesa ma l'ambiente di prova per la carta non e' pronto: ${COSA_MANCA}. ` +
+      'Finche\' manca, in questo giro nessun pagamento con la carta nasce davvero.';
 
   test.beforeEach(() => {
-    test.skip(SENZA_AMBIENTE_DI_PROVA, PERCHE);
+    test.skip(SENZA_DATABASE_DI_PROVA, PERCHE_SENZA_DATABASE);
   });
 
   test('la cassa disegna il modulo con la merce riletta dal database', async ({ page }) => {
@@ -291,8 +307,9 @@ test.describe('l\'ordine che nasce davvero', () => {
    *  ③ guarda l'ordine nel database di prova e, per la carta, l'oggetto su Stripe in modalita'
    *    prova (pagamento, rimborso, trasferimento).
    *
-   * Dentro non hanno salti propri: l'ambiente lo guarda il salto unico qui sopra, e se manca
-   * qualcosa si saltano tutte e tre prima di cominciare, dicendo cosa.
+   * Dentro non hanno salti propri: l'ambiente lo guardano i salti qui sopra (il database per
+   * tutte, Stripe di prova per le due del gruppo «con la carta di prova»), e se manca qualcosa la
+   * prova si salta prima di cominciare, dicendo cosa.
    */
 
   function databaseDiProva(): SupabaseClient {
@@ -525,65 +542,73 @@ test.describe('l\'ordine che nasce davvero', () => {
     expect(String(avviso!.body)).toContain(id.slice(0, 6).toUpperCase());
   });
 
-  test('rifiuto del negozio su un ordine pagato: il rimborso esiste', async ({ request }) => {
-    const stripe = stripeDiProva();
-    const b = await preparaLaBottega();
-    const { ordine, pagamento, totaleCents } = await ordinePagatoConLaCarta(request, b, stripe);
-
-    const rifiuto = await request.post(`/api/seller/orders/${ordine.id}/reject`, {
-      data: { reason: 'Prova automatica: merce finita' },
-      headers: conGettone(b.negozio),
+  test.describe('con la carta di prova', () => {
+    // Rimborso e bonifico passano da Stripe in modalita' prova: senza le sue chiavi si saltano
+    // qui, dicendo cosa manca, e il contrassegno qui sopra gira lo stesso.
+    test.beforeEach(() => {
+      test.skip(SENZA_AMBIENTE_DI_PROVA, PERCHE);
     });
-    expect(rifiuto.status(), `il negozio non riesce a rifiutare l'ordine pagato: ${await rifiuto.text()}`).toBe(200);
-    const refundId = ((await rifiuto.json()) as { refundId?: string | null }).refundId ?? '';
-    expect(refundId, 'rifiutato un ordine pagato senza nessun rimborso').toMatch(/^re_/);
 
-    // Il rimborso è registrato sull'ordine…
-    const dopo = await leggiOrdine(b.db, 'id', ordine.id);
-    expect(dopo.delivery_status).toBe('CANCELED');
-    expect(dopo.payment_status).toBe('REFUNDED');
-    expect(String(dopo.stripe_refund_id ?? '')).toContain(refundId);
-    expect(dopo.refunded_amount_cents).toBe(totaleCents);
+    test('rifiuto del negozio su un ordine pagato: il rimborso esiste', async ({ request }) => {
+      const stripe = stripeDiProva();
+      const b = await preparaLaBottega();
+      const { ordine, pagamento, totaleCents } = await ordinePagatoConLaCarta(request, b, stripe);
 
-    // …ed esiste su Stripe, sul pagamento giusto e per tutto l'importo.
-    const rimborso = await stripe.refunds.retrieve(refundId);
-    expect(rimborso.payment_intent).toBe(pagamento.id);
-    expect(rimborso.amount).toBe(totaleCents);
-    expect(['succeeded', 'pending']).toContain(rimborso.status);
+      const rifiuto = await request.post(`/api/seller/orders/${ordine.id}/reject`, {
+        data: { reason: 'Prova automatica: merce finita' },
+        headers: conGettone(b.negozio),
+      });
+      expect(rifiuto.status(), `il negozio non riesce a rifiutare l'ordine pagato: ${await rifiuto.text()}`).toBe(200);
+      const refundId = ((await rifiuto.json()) as { refundId?: string | null }).refundId ?? '';
+      expect(refundId, 'rifiutato un ordine pagato senza nessun rimborso').toMatch(/^re_/);
 
-    // E il cliente lo sa.
-    const { data: avvisi } = await b.db.from('notifications').select('title, body').eq('user_id', b.cliente.id);
-    expect((avvisi ?? []).some((n) => /rifiutato dal negozio/i.test(String(n.title)) && /rimborsato/i.test(String(n.body)))).toBe(true);
-  });
+      // Il rimborso è registrato sull'ordine…
+      const dopo = await leggiOrdine(b.db, 'id', ordine.id);
+      expect(dopo.delivery_status).toBe('CANCELED');
+      expect(dopo.payment_status).toBe('REFUNDED');
+      expect(String(dopo.stripe_refund_id ?? '')).toContain(refundId);
+      expect(dopo.refunded_amount_cents).toBe(totaleCents);
 
-  test('consegna completata: il bonifico al negozio parte', async ({ request }) => {
-    const stripe = stripeDiProva();
-    const b = await preparaLaBottega(AMBIENTE.contoNegozio);
-    const { ordine } = await ordinePagatoConLaCarta(request, b, stripe);
-    expect(ordine.payout_status, 'i soldi del negozio devono restare fermi fino alla consegna').toBe('HELD');
-    expect(ordine.seller_payout_cents ?? 0).toBeGreaterThan(0);
-    expect(ordine.stripe_charge_id, 'senza l addebito il bonifico parte dal saldo vuoto').toMatch(/^(ch|py)_/);
+      // …ed esiste su Stripe, sul pagamento giusto e per tutto l'importo.
+      const rimborso = await stripe.refunds.retrieve(refundId);
+      expect(rimborso.payment_intent).toBe(pagamento.id);
+      expect(rimborso.amount).toBe(totaleCents);
+      expect(['succeeded', 'pending']).toContain(rimborso.status);
 
-    // Consegnato due ore fa: oltre l'attesa del bonifico.
-    const dueOreFa = new Date(Date.now() - 2 * 3_600_000).toISOString();
-    const { error: errConsegna } = await b.db
-      .from('orders')
-      .update({ delivery_status: 'DELIVERED', accepted_at: dueOreFa, picked_up_at: dueOreFa, delivered_at: dueOreFa })
-      .eq('id', ordine.id);
-    expect(errConsegna, `la consegna di prova non si scrive: ${errConsegna?.message}`).toBeNull();
-
-    const giro = await request.post('/api/cron/release-payouts?a_mano=1', {
-      headers: { authorization: `Bearer ${AMBIENTE.cron}` },
+      // E il cliente lo sa.
+      const { data: avvisi } = await b.db.from('notifications').select('title, body').eq('user_id', b.cliente.id);
+      expect((avvisi ?? []).some((n) => /rifiutato dal negozio/i.test(String(n.title)) && /rimborsato/i.test(String(n.body)))).toBe(true);
     });
-    expect(giro.status(), `il giro dei bonifici non parte: ${await giro.text()}`).toBe(200);
 
-    const dopo = await leggiOrdine(b.db, 'id', ordine.id);
-    expect(dopo.payout_status, 'consegnato e pagato, ma il bonifico al negozio non è partito').toBe('TRANSFERRED');
-    expect(dopo.stripe_transfer_id).toMatch(/^tr_/);
+    test('consegna completata: il bonifico al negozio parte', async ({ request }) => {
+      const stripe = stripeDiProva();
+      const b = await preparaLaBottega(AMBIENTE.contoNegozio);
+      const { ordine } = await ordinePagatoConLaCarta(request, b, stripe);
+      expect(ordine.payout_status, 'i soldi del negozio devono restare fermi fino alla consegna').toBe('HELD');
+      expect(ordine.seller_payout_cents ?? 0).toBeGreaterThan(0);
+      expect(ordine.stripe_charge_id, 'senza l addebito il bonifico parte dal saldo vuoto').toMatch(/^(ch|py)_/);
 
-    const trasferimento = await stripe.transfers.retrieve(dopo.stripe_transfer_id!);
-    expect(trasferimento.destination).toBe(AMBIENTE.contoNegozio);
-    expect(trasferimento.amount).toBe(ordine.seller_payout_cents);
-    expect(trasferimento.source_transaction).toBe(ordine.stripe_charge_id);
+      // Consegnato due ore fa: oltre l'attesa del bonifico.
+      const dueOreFa = new Date(Date.now() - 2 * 3_600_000).toISOString();
+      const { error: errConsegna } = await b.db
+        .from('orders')
+        .update({ delivery_status: 'DELIVERED', accepted_at: dueOreFa, picked_up_at: dueOreFa, delivered_at: dueOreFa })
+        .eq('id', ordine.id);
+      expect(errConsegna, `la consegna di prova non si scrive: ${errConsegna?.message}`).toBeNull();
+
+      const giro = await request.post('/api/cron/release-payouts?a_mano=1', {
+        headers: { authorization: `Bearer ${AMBIENTE.cron}` },
+      });
+      expect(giro.status(), `il giro dei bonifici non parte: ${await giro.text()}`).toBe(200);
+
+      const dopo = await leggiOrdine(b.db, 'id', ordine.id);
+      expect(dopo.payout_status, 'consegnato e pagato, ma il bonifico al negozio non è partito').toBe('TRANSFERRED');
+      expect(dopo.stripe_transfer_id).toMatch(/^tr_/);
+
+      const trasferimento = await stripe.transfers.retrieve(dopo.stripe_transfer_id!);
+      expect(trasferimento.destination).toBe(AMBIENTE.contoNegozio);
+      expect(trasferimento.amount).toBe(ordine.seller_payout_cents);
+      expect(trasferimento.source_transaction).toBe(ordine.stripe_charge_id);
+    });
   });
 });
