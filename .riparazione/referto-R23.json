@@ -1,0 +1,334 @@
+{
+ "sessione": "R23",
+ "aggiornato": "2026-11-26 23:25",
+ "finita": true,
+ "testa": "c90ef7ffd3195d13f7709f46bfafc90deea35d95",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "c90ef7ffd3195d13f7709f46bfafc90deea35d95",
+  "nota": "typecheck pulito, lint 0 errori, vitest 2242 file e 13719 prove verdi; 1 file saltato perché il Postgres locale era spento dopo un riavvio della macchina (tests/unit/un-invito-scritto-a-mano-non-paga.test.ts, describe.skipIf senza Postgres): rilanciato da solo col Postgres acceso, 1/1 verde. Il verify di prima del giro corto era verde su 4df3ecb5bddb835ab7d8763152d7ce2d399de9dd."
+ },
+ "voci": [
+  {
+   "id": "R23-001",
+   "chiave": "sicurezza-auth|il gettone anti-robot si consuma due volte: accendendo il captcha su supabase, accesso e iscrizione con email si rompono",
+   "esito": "serve_file_altrui",
+   "nota": "La parte nel mio file è già nella base dall'onda 1: app/api/auth/signin/route.ts:61 legge CAPTCHA_SU_SUPABASE_ACCESO, :100 verifica il gettone solo col captcha di Supabase spento, :107-111 lo passa a Supabase e traduce captcha_failed (collaudo K01: la parte fatta regge). Resta la rotta di iscrizione (file di R28 in quest'onda) e .env.example (di nessuno). Il recupero password e il reinvio della conferma sono le voci R23-013 e R23-014.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/auth/signup/route.ts",
+     "modifica": "righe 39-43: eseguire verifyTurnstileToken solo se CAPTCHA_SU_SUPABASE_ACCESO non vale 1/true (stessa regola /^(1|true)$/i.test(trim) di app/api/auth/signin/route.ts:61); dentro if (error) dopo authServer.signUp: se error.code === 'captcha_failed' rispondere ApiErrors.invalidRequest('CAPTCHA non valido')"
+    },
+    {
+     "file": ".env.example",
+     "modifica": "dopo TURNSTILE_SECRET_KEY aggiungere CAPTCHA_SU_SUPABASE_ACCESO= col commento: 1 solo insieme al CAPTCHA Turnstile acceso su Supabase, mai prima"
+    }
+   ]
+  },
+  {
+   "id": "R23-002",
+   "chiave": "sicurezza-auth|chi chiede la nuova password dal computer e apre l'email dal telefono non riesce a cambiarla, e la pagina non dice perché",
+   "esito": "non_codice",
+   "nota": "Cosa deve fare Nicola su Supabase: 1) Authentication → URL Configuration: Site URL = l'indirizzo pubblico del sito. 2) Email Templates (SiteURL, TokenHash e RedirectTo sono le variabili del modello di Supabase, scritte fra doppie graffe) → «Reset password»: link = <SiteURL>/auth/confirm?token_hash=<TokenHash>&type=recovery. 3) «Confirm signup»: <SiteURL>/auth/confirm?token_hash=<TokenHash>&type=email&next=<RedirectTo>. 4) Subito dopo, prova a mano: reset chiesto dal computer, email aperta dal telefono, password cambiata; poi un'iscrizione confermata da un altro dispositivo. Se fallisce, rimettere i modelli di prima. Il codice è già pronto alla base aac2350b09db195d6d2286f15f75a7d02ae590a1: app/auth/confirm/route.ts:141 verifyOtp({token_hash,type}) funziona da qualunque dispositivo; app/reset-password/page.tsx:184-191 e 312-315 dicono il motivo (altro browser o link scaduto, lib/auth/link-email.ts:308-336); app/auth/callback/route.ts:62-68 rimanda a /sign-in col motivo «scambio-fallito», letto da app/sign-in/page.tsx:107 e 151. Prova: npx vitest run tests/unit/il-link-della-password-si-apre-da-qualunque-dispositivo.test.ts tests/unit/minori-s10-nuova-password.test.ts tests/unit/il-link-di-recupero-passato-dalla-conferma-porta-al-modulo.test.ts --reporter=dot → 38/38 verdi. I modelli email non stanno nel deposito (supabase/config.toml non ne ha). Finché i modelli restano quelli predefiniti, il link ?code= (PKCE) funziona solo nel browser che ha chiesto il reset. In alternativa dal codice si potrebbe chiedere il reset col flusso implicito, ma cambia come il link è protetto: è una scelta di Nicola, non fatta."
+  },
+  {
+   "id": "R23-003",
+   "chiave": "sicurezza-auth|il controllo all'ingresso chiude fuori chi aspetta l'approvazione: il negozio nuovo gira in tondo e il fattorino non arriva mai alla pagina dei documenti",
+   "esito": "scelta_di_nicola",
+   "domanda": "Il fattorino non approvato deve poter arrivare a /rider/onboarding per caricare i documenti (si rovescia la decisione 1 del 26/10, «reclutamento chiuso»), oppure la registrazione smette di offrire «Rider» (app/sign-up/page.tsx:33), che oggi lo lascia in un vicolo cieco?",
+   "nota": "Metà negozio già riparata prima di quest'onda: lib/auth/decisione-portiere.ts:298 e :302 lascia entrare il negozio non approvato su /seller/dashboard e sulle pagine della revisione; npx vitest run tests/unit/il-portiere-non-chiude-fuori-chi-aspetta-e-non-perde-il-rinnovo.test.ts --reporter=dot: 12/12 verdi alla base aac2350b09db195d6d2286f15f75a7d02ae590a1. Metà fattorino: lib/auth/decisione-portiere.ts:281-282 lo tiene fuori per la decisione 1 del 26/10, che però non risulta in registro-fatti.json né in DECISIONI.md (riverifica del 21/11). La regola sta in lib/auth/decisione-portiere.ts, che non è un mio file: se Nicola riapre, la modifica va lì (diff già pronto nel commit e33ef01 di R19, onda del 15/11), insieme al caso del respinto che ricarica i documenti (app/api/kyc/upload-document/route.ts:140-143). Nessun mio file da cambiare."
+  },
+  {
+   "id": "R23-004",
+   "chiave": "flussi-conversione|dopo l'accesso con google il ritorno non applica nessuna regola di ruolo",
+   "esito": "riparato",
+   "commit": "15ec90de01df5eaea5a6d28637db2c491c5a4951",
+   "file_toccati": [
+    "app/auth/callback/route.ts",
+    "tests/unit/riparazione-r23-ritorno-google-ruolo.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r23-ritorno-google-ruolo.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r23-ritorno-google-ruolo.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 15ec90de01df5eaea5a6d28637db2c491c5a4951^ --file app/auth/callback/route.ts --prove tests/unit/riparazione-r23-ritorno-google-ruolo.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La callback legge il ruolo e applica la stessa regola dell'accesso con email e password: se il ritorno è '/' o sta nell'area di un altro ruolo, amministratore, negozio e fattorino vanno sulla home del proprio. Vale anche per il next passato a /accetta-condizioni. Con la correzione l'amministratore non ha aree di un altro ruolo: tornaDaGoogle('admin','/seller/orders') porta a '/seller/orders'.",
+   "nota": "Due commit: 5dfdf8436b19223c637118e6e35f4056af403d9f (la regola di ruolo nella callback, prova tests/unit/riparazione-r23-ritorno-google-ruolo.test.ts, rimessa uscita 0) e la correzione 15ec90de01df5eaea5a6d28637db2c491c5a4951 chiesta dal collaudo (l'amministratore non ha aree di un altro ruolo: con Google torna su /seller e /rider come prima). Il ruolo si legge col client amministrativo con chiediConTetto e TETTO_VERBALE_MS, in parallelo al verbale: col database muto si entra lo stesso entro il tetto. Vale per ogni sessione aperta in /auth/callback, anche il link di conferma email. Le tabelle area/home sono ricopiate da app/sign-in/page.tsx (i file page/route non possono esportare, e un aiutante condiviso in un file nuovo dà 3 alla prova rimessa).",
+   "verificato_da": "collaudo interno K23 (modello grande) sul primo commit: rompe_altro per l'amministratore (rimandato su /admin da /seller e /rider); collaudo interno K23b (modello piccolo, sola lettura) sul giro di correzione: regge, app/auth/callback/route.ts:44 ruolo !== 'admin', '/' va ancora alla casa, altri ruoli invariati"
+  },
+  {
+   "id": "R23-005",
+   "chiave": "flussi-conversione|chi è amministratore, negozio o fattorino perde il ritorno dopo l'accesso, e col pulsante google il ritorno si perde per tutti",
+   "esito": "riparato",
+   "commit": "afd13b5ee39b37bfae749d23fecc21e9eefbd469",
+   "file_toccati": [
+    "app/sign-in/page.tsx",
+    "tests/unit/riparazione-r23-ritorno-amministratore.test.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r23-ritorno-amministratore.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r23-ritorno-amministratore.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base afd13b5ee39b37bfae749d23fecc21e9eefbd469^ --file app/sign-in/page.tsx --prove tests/unit/riparazione-r23-ritorno-amministratore.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Nella pagina di accesso la regola dell'area di un altro ruolo non vale più per l'amministratore, che il portiere fa entrare in /seller e /rider: il ritorno lì resta. Senza ritorno, o con '/', va ancora su /admin; per negozio e fattorino la regola non cambia.",
+   "nota": "Prima scritta gia_riparato_prima; il collaudo interno ha trovato il caso dell'amministratore ancora aperto, ed è riparato qui. La metà Google della voce (dall'iscrizione) è chiusa nel commit 9bd177a207a0d2819a390131e3163d70ac65ce16 di questo ramo, con la sua prova rossa alla base.",
+   "verificato_da": "primo giro: collaudo interno K23 (modello grande) trova il caso dell'amministratore ancora aperto; collaudo interno K23b (modello piccolo, sola lettura) sul giro di correzione: regge, app/sign-in/page.tsx:288 lascia /seller e /rider all'amministratore, '/', '/admin', '/seller/../admin' e le forme codificate restano giuste, negozio e fattorino invariati, nessun open redirect nuovo; 35 file di prova dei file toccati, 314 test verdi"
+  },
+  {
+   "id": "R23-006",
+   "chiave": "flussi-conversione|il ritorno dopo l'accesso guarda la stringa e non il percorso risolto per riconoscere l'area di un altro ruolo",
+   "esito": "riparato",
+   "commit": "50593e7513d94d0f0b7056f6dd4a9d82c63b7387",
+   "file_toccati": [
+    "app/sign-in/page.tsx",
+    "app/auth/callback/route.ts",
+    "tests/unit/riparazione-r23-ritorno-percorso-risolto.test.tsx",
+    "tests/unit/riparazione-r23-ritorno-google-percorso-risolto.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r23-ritorno-percorso-risolto.test.tsx",
+    "tests/unit/riparazione-r23-ritorno-google-percorso-risolto.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r23-ritorno-percorso-risolto.test.tsx tests/unit/riparazione-r23-ritorno-google-percorso-risolto.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 50593e7513d94d0f0b7056f6dd4a9d82c63b7387^ --file app/sign-in/page.tsx,app/auth/callback/route.ts --prove tests/unit/riparazione-r23-ritorno-percorso-risolto.test.tsx,tests/unit/riparazione-r23-ritorno-google-percorso-risolto.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La regola di ruolo decide sul percorso risolto (new URL(...).pathname poi decodeURIComponent), non sulla stringa: '/rider/..', '/admin/../', '/.', '/seller/%2e%2e' e '/%73eller/dashboard' vengono riconosciuti. Corretto nella pagina di accesso e nella callback.",
+   "nota": "Il portiere (middleware.ts) non è cambiato: nessuna rotta /sellerX, /riderX o /adminX esiste oggi.",
+   "verificato_da": "collaudo interno K23 (modello grande): regge; rimessa rilanciata uscita 0; riconosce anche '/%61dmin', '/seller%2Fdashboard', '/%2e%2e/seller', '/x/.%2e/seller', '/rider\\..'; nessun open redirect nuovo; 287/287 prove dei file toccati verdi, tsc ed eslint puliti"
+  },
+  {
+   "id": "R23-007",
+   "chiave": "qa-flussi|il salvataggio di prodotto e varianti non è una scrittura sola: resta una finestra di millisecondi",
+   "esito": "serve_file_altrui",
+   "nota": "La funzione del database c'è già: public.salva_prodotto_e_varianti (migrations/405, ridefinita in 709), una transazione sola, SECURITY INVOKER, search_path fissato, EXECUTE solo ad authenticated e service_role, provata da tests/sql/rls/riparazione-r16-salvataggio-unico.test.sql. Nessuna migrazione 921 serve. Manca che app/api/admin/products/route.ts (mio) la chiami quando ci sono varianti, ripiegando sul percorso di oggi con PGRST202 o 42883 che nomina la funzione, e traduca scorta_prodotto_cambiata e scorta_variante_cambiata negli stessi 409 di oggi. Provato e tolto: rompe 12 prove di altri in 4 file, perché i loro client admin finti non hanno rpc o lanciano per ogni nome diverso da salva_varianti. Fatte quelle modifiche, la rotta si cambia in un commit. Resta anche la stessa finestra nella pagina del negozio, app/seller/products/[id]/edit/page.tsx (non mia).",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/riparazione-r03-taglie-stessa-posizione.test.ts",
+     "modifica": "il client admin finto deve rispondere { data: null, error: { code: 'PGRST202' } } a una rpc che non conosce (oggi non ha rpc o lancia): 5 casi"
+    },
+    {
+     "file": "tests/unit/riparazione-r03-traccia-taglie-admin.test.ts",
+     "modifica": "come sopra: rpc sconosciuta → { data: null, error: { code: 'PGRST202' } } invece di lanciare (3 casi)"
+    },
+    {
+     "file": "tests/unit/riparazione-r16-salvataggio-tutto-o-niente.test.tsx",
+     "modifica": "come sopra: rpc sconosciuta → { data: null, error: { code: 'PGRST202' } } invece di lanciare (3 casi)"
+    },
+    {
+     "file": "tests/unit/la-porta-del-catalogo-non-scrive-una-scorta-che-nel-frattempo-e-cambiata.test.ts",
+     "modifica": "come sopra: rpc sconosciuta → { data: null, error: { code: 'PGRST202' } } invece di lanciare (1 caso)"
+    },
+    {
+     "file": "tests/unit/aiuti/salva-varianti-finta.ts",
+     "modifica": "l'aiuto finto risponde { data: null, error: { code: 'PGRST202' } } a ogni rpc diversa da salva_varianti, invece di lanciare"
+    }
+   ]
+  },
+  {
+   "id": "R23-008",
+   "chiave": "qa-flussi|la campanella del sito mostra le promozioni anche a chi le ha spente",
+   "esito": "gia_riparato_prima",
+   "prova": "app/notifications/page.tsx:100-111 e :251 tolgono le promozioni a chi non le ha accese; il resto della voce (il numerino) è chiuso nella base: components/hooks/useNotificationsCount.ts:18-29 (categorieDiNotificheSpente) e :60-62 tolgono dal conto le categorie spente (category not in promo, newsletter). Il file del contatore è di R25 in quest'onda."
+  },
+  {
+   "id": "R23-009",
+   "chiave": "qa-flussi|nell elenco docs dell iscrizione del fattorino patente e polizza hanno ancora required: true, ma nessuno lo legge: dato morto che inganna",
+   "esito": "riparato",
+   "commit": "c830d57da23f3d4010491103958293100eb88f47",
+   "file_toccati": [
+    "app/rider/onboarding/page.tsx",
+    "tests/unit/riparazione-r23-documenti-fattorino-senza-required.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r23-documenti-fattorino-senza-required.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r23-documenti-fattorino-senza-required.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c830d57da23f3d4010491103958293100eb88f47^ --file app/rider/onboarding/page.tsx --prove tests/unit/riparazione-r23-documenti-fattorino-senza-required.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Nessuno legge .required di DocDef (gli obblighi li dice solo obbligatorio()): tolto il campo dal tipo e dalle sei righe di DOCS, con un commento che rimanda alla regola vera. A video non cambia niente.",
+   "nota": "Prova leggera: legge il sorgente (niente required in DocDef né in DOCS) e controlla la regola per mezzo (in bici la patente non serve).",
+   "verificato_da": "collaudo interno K23b (modello piccolo, sola lettura) sul giro di correzione: regge, nessuno legge più required (obbligatorio() a :285-286 e :384), a video non sparisce nulla"
+  },
+  {
+   "id": "R23-010",
+   "chiave": "qa-flussi|un admin che pubblica una storia dall'area negozio lascia una foto orfana nel deposito: dopo la 404 l'inserimento gli è rifiutato",
+   "esito": "gia_riparato_prima",
+   "prova": "app/seller/layout.tsx:154-167 ferma l'amministratore su /seller/stories e sotto prima di qualunque caricamento («Le storie sono dei negozi»), così la foto non parte e non resta orfana; npx vitest run tests/unit/riparazione-r06-admin-senza-storie.test.tsx --reporter=dot → 2/2 verdi alla base aac2350b09db195d6d2286f15f75a7d02ae590a1.",
+   "nota": "Il collaudo K03 ha visto la stessa foto orfana per altre cause (rete che cade, negozio sospeso con la pagina aperta): app/seller/stories/page.tsx:160-184 carica la foto prima dell'inserimento e non la toglie se fallisce. Quel file è di R21 in quest'onda: non è la voce così com'è scritta (l'admin), resta per chi ha quel file."
+  },
+  {
+   "id": "R23-011",
+   "chiave": "qa-flussi|l accesso con google non porta il ritorno alla pagina di partenza",
+   "esito": "riparato",
+   "commit": "9bd177a207a0d2819a390131e3163d70ac65ce16",
+   "file_toccati": [
+    "components/ui/AuthShell.tsx",
+    "tests/unit/riparazione-r23-google-ritorno-iscrizione.test.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r23-google-ritorno-iscrizione.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r23-google-ritorno-iscrizione.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9bd177a207a0d2819a390131e3163d70ac65ce16^ --file components/ui/AuthShell.tsx --prove tests/unit/riparazione-r23-google-ritorno-iscrizione.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Quando la pagina non gli passa returnTo, il pulsante Google usa il returnTo dell'indirizzo, ripulito con safeInternalPath: da /sign-up?returnTo=/checkout si torna alla cassa; se la pagina lo passa (l'accesso), vale quello.",
+   "nota": "Il residuo era l'iscrizione: app/sign-up/page.tsx:367 monta il pulsante senza returnTo; la cura è nel mio file, sign-up non è toccato.",
+   "verificato_da": "collaudo interno K23 (modello grande): regge; da /sign-in nulla cambia, da /sign-up il ritorno arriva alla callback; '//host' scartato; prova rossa alla base (2 casi)"
+  },
+  {
+   "id": "R23-012",
+   "chiave": "qa-flussi|due regole diverse per il tetto del portiere sulla sessione",
+   "esito": "scelta_di_nicola",
+   "domanda": "Tetto unico per il portiere: 10 s con qualunque tessera (tettoPerGetUser diventa tettoPerChiedereChiSei), che allunga da 3 s a 10 s l'attesa di chi ha la tessera ancora buona per un'ora e rovescia l'asserzione della prova tests/unit/riparazione-r06-tetto-per-getuser.test.ts:22, la difesa dell'ondata 8?",
+   "nota": "La scheda chiede la firma di Nicola sulla prova r06. Le due prove esistenti vogliono risposte opposte per la stessa tessera (r06 vuole 3 s, il-rinnovo-oltre-i-tre-secondi-arriva-al-browser vuole 10 s): unificare toglie una difesa provata. Diff pronto nella scheda: lib/auth/cookie-di-sessione.ts:411-416 return tettoPerChiedereChiSei(cookie); prova r06 righe 21-23 attesa TETTO_RINNOVO_MS; prova nuova sul verdetto uguale delle due funzioni. Nessun commit."
+  },
+  {
+   "id": "R23-013",
+   "chiave": "sicurezza-auth|col captcha acceso su supabase il recupero password fallirebbe: resetpasswordforemail parte senza gettone",
+   "esito": "riparato",
+   "commit": "1957c39fe39ecd44586bcf4bd567b35e0937b6e2",
+   "file_toccati": [
+    "app/sign-in/page.tsx",
+    "app/reset-password/page.tsx",
+    "tests/unit/riparazione-r23-captcha-recupero-password.test.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r23-captcha-recupero-password.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r23-captcha-recupero-password.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1957c39fe39ecd44586bcf4bd567b35e0937b6e2^ --file app/sign-in/page.tsx,app/reset-password/page.tsx --prove tests/unit/riparazione-r23-captcha-recupero-password.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "«Password dimenticata?» nella pagina di accesso passa captchaToken a resetPasswordForEmail e poi rigenera il gettone; in /reset-password la vista «richiedi link» monta il riquadro Turnstile (se NEXT_PUBLIC_TURNSTILE_SITE_KEY è impostata), passa il gettone e lo rigenera.",
+   "nota": "Due commit: 66548ed053234018a451890f2fc336a4a5abda97 (il gettone passa a resetPasswordForEmail e si rigenera) e la correzione 1957c39fe39ecd44586bcf4bd567b35e0937b6e2 chiesta dal collaudo (il gettone si toglie dallo stato prima dell'attesa: un «Accedi» premuto nel frattempo non lo riusa). Senza gettone la richiesta parte lo stesso: voluto, per non bloccare col captcha di Supabase spento.",
+   "verificato_da": "collaudo interno K23 (modello grande) sul primo commit: regge, con il resto del gettone riusato; collaudo interno K23b (modello piccolo, sola lettura) sul giro di correzione: regge, lo stato si svuota prima dell'attesa (sign-in :316-318, reset-password :263-265), la rigenerazione nel finally gira anche se la richiesta fallisce, un «Accedi» nel frattempo si ferma a :193 senza riusare il gettone"
+  },
+  {
+   "id": "R23-014",
+   "chiave": "sicurezza-auth|col captcha acceso su supabase il reinvio della mail di conferma fallirebbe: resend parte senza gettone",
+   "esito": "parziale",
+   "commit": "6f3bb56efe47d1686c088f93a9c0d952475f2b8b",
+   "file_toccati": [
+    "lib/auth/conferma-email.ts",
+    "tests/unit/riparazione-r23-captcha-reinvio-conferma.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r23-captcha-reinvio-conferma.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r23-captcha-reinvio-conferma.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6f3bb56efe47d1686c088f93a9c0d952475f2b8b^ --file lib/auth/conferma-email.ts --prove tests/unit/riparazione-r23-captcha-reinvio-conferma.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "rimandaLinkDiConferma accetta dati.captchaToken e lo mette in options.captchaToken di resend; senza gettone la chiamata resta quella di prima.",
+   "cosa_resta": "L'unico chiamante, app/auth/verify-email/page.tsx:74, non ha il riquadro anti-robot e non passa il gettone: finché non lo fa, il reinvio resta senza gettone.",
+   "serve_file_altrui": [
+    {
+     "file": "app/auth/verify-email/page.tsx",
+     "modifica": "Importare Turnstile e il tipo ManopolaAntiBot da '@/components/Turnstile'; const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''; stato captchaToken e useRef<ManopolaAntiBot>(null). Dentro <form onSubmit={resend}> (riga 127), prima del pulsante «Reinvia», montare {TURNSTILE_SITE_KEY && <Turnstile ref={antiBot} siteKey={TURNSTILE_SITE_KEY} onVerify={(t) => setCaptchaToken(t)} onExpire={() => setCaptchaToken('')} />}. Alla riga 74 passare captchaToken: captchaToken || undefined a rimandaLinkDiConferma, e nel finally, se il gettone è stato mandato, setCaptchaToken('') e antiBot.current?.reset()."
+    }
+   ],
+   "verificato_da": "collaudo interno K23 (modello grande): regge, il parziale è giusto; unico chiamante app/auth/verify-email/page.tsx:74, non di R23"
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "Falla di sicurezza da chiudere (accessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+   "dimensione": "sicurezza-auth",
+   "severita": "minore",
+   "file": "(nel referto privato)",
+   "riservato": true
+  },
+  {
+   "titolo": "Senza il gettone anti-robot la pagina dice che il gettone «è stato rigenerato», anche quando il riquadro non si è caricato",
+   "dimensione": "sicurezza-auth",
+   "severita": "minore",
+   "file": "lib/errors.ts:97",
+   "descrizione": "Col CAPTCHA di Supabase acceso, se il riquadro Turnstile non dà il gettone (non caricato, o /reset-password senza onError) la richiesta del link parte senza e il messaggio d'errore parla di un gettone rigenerato che non c'è. lib/errors.ts non è di R23."
+  },
+  {
+   "titolo": "La funzione che salva prodotto e varianti in una scrittura sola esiste nel database ma non la chiama nessuno, e le prove la impediscono",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "migrations/709 · tests/unit/aiuti/salva-varianti-finta.ts",
+   "descrizione": "public.salva_prodotto_e_varianti (405, 709) è pronta e provata, ma né la rotta admin né la pagina del negozio la usano; i client finti delle prove lanciano a ogni rpc diversa da salva_varianti, così chi prova a usarla rompe prove di altri."
+  }
+ ],
+ "domande_per_nicola": [
+  "R23-003: il fattorino non approvato deve poter caricare i documenti da /rider/onboarding (riapri il reclutamento dal sito), oppure la registrazione smette di offrire «Rider»?",
+  "R23-012: tetto unico del portiere a 10 s con qualunque tessera, rovesciando l'attesa della prova r06 (da 3 s a 10 s per chi ha la tessera buona per un'ora)?",
+  "R23-002: cambi su Supabase i modelli delle email «Reset password» e «Confirm signup» verso /auth/confirm col token_hash (dettagli nella voce)?"
+ ],
+ "conto": {
+  "agenti": 6,
+  "subagenti": 6,
+  "nota": "riparatori dei lotti 2, 3 e 4 e del giro corto (modello grande), collaudo del lotto 3 (modello grande), collaudo del lotto 4 (modello piccolo); R23-001, 003, 008, 010, 012 classificate dal capo squadra con grep e prove esistenti · Il giro corto chiesto dalla sesta regia è costato circa 6,2 $ contro i 5 $ indicati (il primo giro della cura allargava la classificazione e l'ho fatto correggere prima di spingere).",
+  "costo_usd": 24.02
+ },
+ "costo_usd": 24.02,
+ "varie": [
+  {
+   "commit": "c90ef7ffd3195d13f7709f46bfafc90deea35d95",
+   "messaggio": "R23-varie il portiere legge il percorso risolto",
+   "chiesto_da": "sesta regia, giro corto del 26/11 sera (fuori dalla scheda)",
+   "file_toccati": [
+    "middleware.ts",
+    "tests/unit/riparazione-r23-portiere-percorso-risolto.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r23-portiere-percorso-risolto.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r23-portiere-percorso-risolto.test.ts --reporter=dot",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c90ef7ffd3195d13f7709f46bfafc90deea35d95^ --file middleware.ts --prove tests/unit/riparazione-r23-portiere-percorso-risolto.test.ts --json"
+   },
+   "cosa_ho_fatto": "Il portiere confronta il percorso decodificato con le aree riservate, con le aree che chiedono l'accesso, con la cassa e nella scorciatoia dell'acquirente, e lo passa a decidiAccessoArea. Un percorso che non si decodifica, o che risolto cambierebbe (segmenti «.» o «..», barre doppie o rovesciate), vale come l'area più stretta: la classificazione può solo stringere, mai allargare. Destinazioni dei rimandi, ritorni, cookie e CSP invariati.",
+   "verificato_da": "capo squadra R23 (non ha scritto la cura): diff letto (middleware.ts:108-131 e i cinque punti d'uso); prova rilanciata 41/41 verde; percorsi scomodi rifatti a mano sulla funzione ('/seller%2F..%2Fx', '/%2Fseller', '/seller%5C..', '/x/..%2Fseller', '/%E0%A4%A' valgono come l'area più stretta; '/%73eller/dashboard' è /seller/dashboard; '/', '/product/abc', '/seller/' invariati). Il primo giro della cura risolveva «..» e poteva allargare la classificazione: corretto con amend prima di spingere. Il riparatore ha lanciato 460 file di prova che nominano middleware (3016 casi verdi), tsc ed eslint puliti. Il collaudo esterno K08 la guarda per ultima."
+  }
+ ]
+}

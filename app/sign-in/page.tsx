@@ -63,6 +63,19 @@ function translateAuthError(msg: string): string {
 const AREA_DEL_RUOLO: Record<string, string> = { admin: '/admin', seller: '/seller', rider: '/rider' };
 const HOME_DEL_RUOLO: Record<string, string> = { admin: '/admin', seller: '/seller/dashboard', rider: '/rider' };
 
+/**
+ * R23-006 — Il percorso dove si arriva davvero, non la stringa: '/rider/..', '/admin/../' e '/.'
+ * portano su '/', '/%73eller/dashboard' su /seller/dashboard.
+ */
+function percorsoRisolto(ritorno: string): string {
+  const { pathname } = new URL(ritorno, 'http://percorso.interno');
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return pathname;
+  }
+}
+
 const SignInForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -269,8 +282,10 @@ const SignInForm = () => {
             .from('profiles').select('role').eq('id', data.user.id).single();
           const casa = prof?.role ? HOME_DEL_RUOLO[prof.role as string] : undefined;
           if (casa) {
-            const percorso = returnTo.split(/[?#]/)[0];
-            const inAreaAltrui = Object.entries(AREA_DEL_RUOLO).some(
+            const percorso = percorsoRisolto(returnTo);
+            // R23-005 — Il portiere fa entrare l'amministratore anche in /seller e /rider (ROLE_PROTECTED):
+            // per lui non sono aree di un altro ruolo, e il ritorno lì resta.
+            const inAreaAltrui = prof?.role !== 'admin' && Object.entries(AREA_DEL_RUOLO).some(
               ([ruolo, area]) => ruolo !== prof?.role && (percorso === area || percorso.startsWith(`${area}/`)),
             );
             if (percorso === '/' || inAreaAltrui) dest = casa;
@@ -296,16 +311,22 @@ const SignInForm = () => {
       return;
     }
     setSendingReset(true);
+    // R23-013 — Col CAPTCHA acceso su Supabase anche la richiesta del link vuole il gettone; vale una
+    // volta sola, quindi dopo averlo mandato se ne chiede uno nuovo per l'accesso.
+    const gettone = captchaToken || undefined;
+    // Si toglie subito dallo stato: un «Accedi» premuto mentre la richiesta è in corso non lo rimanda.
+    if (gettone) setCaptchaToken('');
     try {
       const redirectTo = typeof window !== 'undefined'
         ? `${window.location.origin}/reset-password`
         : undefined;
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo, captchaToken: gettone });
       if (error) throw error;
       toast.success('Ti abbiamo inviato un\'email per reimpostare la password');
     } catch (err) {
       toast.error(translateAuthError(err instanceof Error ? err.message : ''));
     } finally {
+      if (gettone) rigeneraGettone();
       setSendingReset(false);
     }
   };
