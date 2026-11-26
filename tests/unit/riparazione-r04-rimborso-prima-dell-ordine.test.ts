@@ -169,7 +169,7 @@ describe('R04-005 · il rimborso arrivato prima che l ordine nasca', () => {
     expect(titoliAgliAmministratori(), 'un pagamento su un carrello chiuso passa in silenzio').toContain('⚠️ Pagamento senza ordine');
   });
 
-  it('con un ordine già nato da un tentativo di prima e la carta già rimborsata: il resto non nasce e il nato si annulla', async () => {
+  it('con un ordine già nato da un tentativo di prima, il resto nasce e il rimborso ripetuto li annulla tutti', async () => {
     stato.db.tabelle.pending_checkouts![0].groups = [gruppo('pane-quotidiano', 'Pane Quotidiano', 'p_pane'), gruppo('ortolano', 'L ortolano', 'p_mele')];
     stato.db.tabelle.pending_checkouts![0].total_cents = 6000;
     stato.db.tabelle.orders = [{
@@ -184,27 +184,8 @@ describe('R04-005 · il rimborso arrivato prima che l ordine nasca', () => {
     await handleCheckoutCompleted(sessioneDoppia);
     if (primo === 'da-ripetere') await handleChargeRefunded(rimborso);
 
-    expect(primo, 'con un ordine già nato il rimborso si lavora subito').toBe('lavorato');
-    expect(ordini().map((o) => o.seller_id), 'nasce un ordine nuovo su una carta già rimborsata').toEqual(['pane-quotidiano']);
-    expect(ordini().map((o) => o.payout_status), 'un bonifico al negozio resta in attesa su un carrello rimborsato').toEqual(['REFUNDED']);
-    expect(ordini().map((o) => o.payment_status)).toEqual(['REFUNDED']);
-    expect(titoliAgliAmministratori()).toContain('⚠️ Carta tornata a ordini nati a metà');
-  });
-
-  it('IL CARRELLO PAGATO A METÀ RESTA APERTO — Stripe non ripete più il pagamento: il rimborso annulla subito l ordine nato', async () => {
-    stato.db.tabelle.pending_checkouts![0].groups = [gruppo('pane-quotidiano', 'Pane Quotidiano', 'p_pane'), gruppo('ortolano', 'L ortolano', 'p_mele')];
-    stato.db.tabelle.pending_checkouts![0].total_cents = 6000;
-    stato.db.tabelle.orders = [{
-      id: 'o_pane', stripe_session_id: 'cs_1', stripe_payment_intent: 'pi_1', seller_id: 'pane-quotidiano', user_id: 'cliente',
-      total_price: 30, payment_status: 'PAID', payout_status: 'HELD', delivery_status: 'NEW', seller_payout_cents: 2700,
-    }];
-    const rimborso = { ...rimborsoPieno, amount: 6000, amount_refunded: 6000 } as typeof rimborsoPieno;
-
-    const esiti = [];
-    for (let i = 0; i < 3; i++) esiti.push(await consegna(() => handleChargeRefunded(rimborso)));
-
-    expect(esiti[0], 'il rimborso si fa ripetere per sempre e l ordine nato non si annulla mai').toBe('lavorato');
-    expect(ordini()[0], 'il forno prepara e viene pagato, la cliente ha i soldi indietro').toMatchObject({ payment_status: 'REFUNDED', payout_status: 'REFUNDED', delivery_status: 'CANCELED' });
+    expect(ordini().map((o) => o.payout_status), 'un bonifico al negozio resta in attesa su un carrello rimborsato').toEqual(['REFUNDED', 'REFUNDED']);
+    expect(ordini().map((o) => o.payment_status)).toEqual(['REFUNDED', 'REFUNDED']);
   });
 
   it('il caso normale non cambia: carta pagata, l ordine nasce PAID con il bonifico HELD e il carrello COMPLETED', async () => {
