@@ -228,6 +228,11 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
     },
     onSuccess: async () => {
       toast.success('Lista eliminata');
+      // R11-009 — /lists mostrava ancora la lista eliminata fra «le mie liste» finché la rilettura
+      // non tornava, e toccarla portava a «Lista non trovata». La si toglie subito dalla memoria,
+      // PRIMA di invalidare: scritta dopo, la memoria tornerebbe «fresca» e non si rileggerebbe.
+      qc.setQueryData<Array<{ id: string }> | null>(queryKeys.lists.mine, (mie) =>
+        mie ? mie.filter((l) => l.id !== params.id) : mie);
       rileggiLeListeDiLists();
       // R10-009 — e il menu «Aggiungi a lista» della scheda prodotto: prima la mostrava ancora.
       // Il menu legge solo quando è aperto, quindi l'invalidazione lo segna soltanto vecchio e
