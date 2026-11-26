@@ -223,7 +223,19 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     return ApiErrors.internal();
   }
 
-  const scadute = (expired ?? []) as Array<{ user_id: string; deleted_at: string | null }>;
+  // R24-005 — Dal più vecchio. La RPC non ordina, e il tetto di tempo qui sotto lascia indietro chi
+  // viene per ultimo: chi era già oltre il mese poteva restare in fondo ogni notte, fuori dai tentativi
+  // e senza l'avviso del termine scaduto. Adesso passa per primo chi ha chiesto da più tempo; una data
+  // che manca o non si legge va in fondo (non può essere oltre il termine).
+  const chiestaDa = (r: { deleted_at: string | null }) => {
+    const t = r.deleted_at ? new Date(r.deleted_at).getTime() : NaN;
+    return Number.isFinite(t) ? t : Number.POSITIVE_INFINITY;
+  };
+  const scadute = [...((expired ?? []) as Array<{ user_id: string; deleted_at: string | null }>)].sort((a, b) => {
+    const da = chiestaDa(a);
+    const db = chiestaDa(b);
+    return da === db ? 0 : da < db ? -1 : 1;
+  });
   const userIds: string[] = scadute.map((r) => r.user_id);
   // R33-014 — Chi ha chiesto la cancellazione da più di 7 giorni ma non è nella lista: un
   // negozio con un ordine aperto o soldi da incassare (migrazione 572). Non si prende in
