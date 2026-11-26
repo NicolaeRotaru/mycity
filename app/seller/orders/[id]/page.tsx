@@ -106,6 +106,8 @@ type OrderRow = {
     // 27/8/2026 (R029) — la copia del nome e della foto del giorno dell'ordine.
     product_name: string | null;
     product_image: string | null;
+    // La variante scelta («Taglia M»): la scheda del reso la scrive in «Cosa torna».
+    variant_label?: string | null;
     products: { name: string; images: string[] | null } | null;
   }[];
 };
@@ -199,7 +201,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           rider_id,
           seller:profiles!orders_seller_id_fkey ( store_hours ),
           order_items (
-            id, quantity, unit_price, product_name, product_image,
+            id, quantity, unit_price, product_name, product_image, variant_label,
             products ( name, images )
           )
         `;
