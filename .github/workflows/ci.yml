@@ -243,11 +243,18 @@ jobs:
     # Perche' questo job esiste: i test di sicurezza sul database si
     # auto-skippavano quando mancavano i segreti di un progetto di prova. Un
     # verde che non provava niente — e proprio sui controlli che tengono chiusi
-    # i dati dei clienti. Qui si ricostruisce lo schema VERO dalle migrazioni su
+    # i dati dei clienti. Qui si ricostruisce lo schema dalle migrazioni su
     # un Postgres del runner: nessuna chiave, nessuna rete, e non si salta mai.
+    #
+    # 26/11/2026 — Ricostruito dai file NON vuol dire uguale alla produzione.
+    # Due cose lo tengono vicino: la stessa versione della produzione (la 17,
+    # come VERSIONE_ATTESA della copia notturna in backup-db.yml: prima qui
+    # c'era la 16) e il confronto notturno delle regole di accesso, oggetto per
+    # oggetto, fra questo database e quello vero
+    # (.github/workflows/deriva-migrazioni-produzione.yml).
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres

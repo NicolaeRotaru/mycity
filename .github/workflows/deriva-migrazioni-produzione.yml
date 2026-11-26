@@ -20,6 +20,23 @@ name: Deriva migrazioni (produzione)
 # Serve il segreto SUPABASE_DB_URL (la stessa stringa usata dal backup: la riga
 # del «Session pooler», IPv4). La lettura è sola lettura: una SELECT su una
 # tabella di sistema.
+#
+# 26/11/2026 — I NOMI NON BASTANO: SI CONFRONTANO LE REGOLE.
+#
+# Le prove dei permessi in SQL (tests/sql/rls/) girano su un database che la CI
+# ricostruisce dai file, con TUTTE le migrazioni. Il controllo qui sopra guarda
+# solo che i nomi delle migrazioni siano registrati in produzione: il 9 settembre
+# la produzione ha rieseguito le migrazioni dalla 003 alla 079, e 11 funzioni e
+# 27 regole di accesso sono tornate a com'erano, con tutti i nomi al loro posto
+# (vedi la 161). Le prove restavano verdi su un database che non era quello vero.
+#
+# Adesso, dopo i nomi, il lavoro ricostruisce il database dai file su un
+# Postgres della stessa versione della produzione (la 17) e confronta, oggetto
+# per oggetto, quello che decide i permessi: RLS accesa, ogni regola di accesso,
+# ogni funzione e ogni innesco di public (definizione intera), e cosa possono
+# fare anon e authenticated su tabelle, colonne e funzioni. Una differenza è
+# rossa e dice quale oggetto, com'è in produzione e com'è nei file. Anche questa
+# è sola lettura: SELECT sui cataloghi di sistema.
 
 on:
   schedule:
@@ -33,7 +50,23 @@ jobs:
   deriva:
     name: Migrazioni nel repo ma non in produzione
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    # Il database ricostruito dai file, per il confronto delle regole: stessa
+    # versione della produzione (PostgreSQL 17, come VERSIONE_ATTESA della copia
+    # notturna in backup-db.yml). Vive quanto il giro e non vede nessun dato.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -88,3 +121,100 @@ jobs:
             echo "::error::Il confronto NON e' partito: non mi sono collegata al database (il perche' e' nel log qui sopra). Non vuol dire che mancano migrazioni. Da GitHub Actions in SUPABASE_DB_URL serve la riga del «Session pooler» (IPv4, porta 5432), non la connessione diretta db.<progetto>.supabase.co."
           fi
           exit "$codice"
+
+      # 26/11/2026 — Da qui in giù: le regole di accesso, non solo i nomi.
+      # Si arriva qui solo se i nomi tornano: con migrazioni mancanti il passo
+      # sopra è già rosso, e le regole sarebbero diverse per forza.
+      - name: Installa il client psql
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      # Le variabili puntano SOLO al Postgres del giro: apply.sh cancella e
+      # ricrea il database che gli si nomina, e qui la stringa del database
+      # vero non c'è apposta.
+      - name: Ricostruisci il database dai file, come lo vedono le prove dei permessi
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: bash tests/sql/harness/apply.sh mycity_dai_file
+
+      - name: Le regole di accesso del database vero sono quelle dei file
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DB_DAI_FILE: postgresql://postgres:postgres@localhost:5432/mycity_dai_file
+          PGCONNECT_TIMEOUT: "20"
+        run: |
+          set -euo pipefail
+          cartella="${RUNNER_TEMP:-/tmp}/regole-del-database"
+          mkdir -p "$cartella"
+          # Una riga per oggetto, la stessa interrogazione sui due database.
+          # search_path = pg_catalog: i nomi escono tutti con lo schema, uguali
+          # dai due lati. Le funzioni delle estensioni non contano (in
+          # produzione stanno in un altro schema).
+          cat > "$cartella/impronta.sql" <<'FINE_SQL'
+          SET search_path = pg_catalog;
+          WITH funzioni AS (
+            SELECT p.oid, p.prosecdef
+            FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.prokind IN ('f', 'p')
+              AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                              WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')
+          ), tabelle AS (
+            SELECT c.oid, c.relkind, c.relrowsecurity, c.relforcerowsecurity
+            FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+          ), ruoli AS (
+            SELECT oid, rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated')
+          )
+          SELECT format('rls %s attiva=%s forzata=%s', t.oid::regclass, t.relrowsecurity, t.relforcerowsecurity)
+            FROM tabelle t WHERE t.relkind IN ('r', 'p')
+          UNION ALL
+          SELECT format('regola %s.%I %I %s ruoli=%s per=%s using=%s check=%s',
+                        schemaname, tablename, policyname, permissive, array_to_string(roles, ','), cmd,
+                        coalesce(replace(qual, E'\n', ' '), '-'), coalesce(replace(with_check, E'\n', ' '), '-'))
+            FROM pg_policies WHERE schemaname IN ('public', 'storage')
+          UNION ALL
+          SELECT format('funzione %s definer=%s impronta=%s', f.oid::regprocedure, f.prosecdef, md5(pg_get_functiondef(f.oid)))
+            FROM funzioni f
+          UNION ALL
+          SELECT format('esegue %s %s', r.rolname, f.oid::regprocedure)
+            FROM funzioni f CROSS JOIN ruoli r WHERE has_function_privilege(r.oid, f.oid, 'EXECUTE')
+          UNION ALL
+          SELECT format('permesso %s %s %s', r.rolname, t.oid::regclass, pr.priv)
+            FROM tabelle t CROSS JOIN ruoli r
+            CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS pr(priv)
+            WHERE has_table_privilege(r.oid, t.oid, pr.priv)
+          UNION ALL
+          SELECT format('colonna %s %s.%I %s', r.rolname, a.attrelid::regclass, a.attname, x.privilege_type)
+            FROM pg_attribute a JOIN tabelle t ON t.oid = a.attrelid
+            CROSS JOIN LATERAL aclexplode(a.attacl) x JOIN ruoli r ON r.oid = x.grantee
+            WHERE a.attnum > 0 AND NOT a.attisdropped
+          UNION ALL
+          SELECT format('innesco %s %I abilitato=%s impronta=%s', tg.tgrelid::regclass, tg.tgname, tg.tgenabled, md5(pg_get_triggerdef(tg.oid)))
+            FROM pg_trigger tg JOIN tabelle t ON t.oid = tg.tgrelid
+            WHERE NOT tg.tgisinternal;
+          FINE_SQL
+          psql "$SUPABASE_DB_URL" -X -q -At -v ON_ERROR_STOP=1 -f "$cartella/impronta.sql" | LC_ALL=C sort > "$cartella/vero.txt"
+          psql "$DB_DAI_FILE" -X -q -At -v ON_ERROR_STOP=1 -f "$cartella/impronta.sql" | LC_ALL=C sort > "$cartella/file.txt"
+          if [ ! -s "$cartella/vero.txt" ] || [ ! -s "$cartella/file.txt" ]; then
+            echo "::error::Il confronto delle regole NON vale: uno dei due database non ha restituito nessun oggetto."
+            exit 1
+          fi
+          solo_vero="$(LC_ALL=C comm -23 "$cartella/vero.txt" "$cartella/file.txt")"
+          solo_file="$(LC_ALL=C comm -13 "$cartella/vero.txt" "$cartella/file.txt")"
+          if [ -z "$solo_vero" ] && [ -z "$solo_file" ]; then
+            echo "✅ Le regole di accesso del database vero sono quelle dei file: $(wc -l < "$cartella/file.txt") oggetti confrontati, nessuna differenza."
+            exit 0
+          fi
+          if [ -n "$solo_vero" ]; then
+            echo "Com'è nel database vero (e non nei file):"
+            printf '%s\n' "$solo_vero" | sed 's/^/  - /'
+          fi
+          if [ -n "$solo_file" ]; then
+            echo "Com'è nei file, cioè dove le prove dei permessi danno il verde (e non nel database vero):"
+            printf '%s\n' "$solo_file" | sed 's/^/  - /'
+          fi
+          quante="$(printf '%s\n' "$solo_vero" "$solo_file" | grep -c . || true)"
+          echo "::error::Il database vero non è quello che le prove dei permessi certificano: $quante righe diverse fra produzione e file (elenco qui sopra). Un verde delle prove SQL non vale per la produzione finché non tornano uguali."
+          exit 1
