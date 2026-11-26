@@ -1,0 +1,188 @@
+{
+  "sessione": "R05",
+  "aggiornato": "2026-11-26 14:30",
+  "finita": true,
+  "testa": "ae3078760a6c4a1311f3ac4340fb440dd0caad2b",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "ae3078760a6c4a1311f3ac4340fb440dd0caad2b",
+    "nota": "typecheck verde, lint 0 errori (122 avvisi), 2147 file di prova e 13200 prove verdi"
+  },
+  "voci": [
+    {
+      "id": "R05-001",
+      "chiave": "pagamenti-stripe|i contanti vecchi ancora da versare spariscono dal pannello dei bonifici quando gli ordini consegnati superano mille",
+      "esito": "riparato",
+      "commit": "ce031c5db6763ead5e8357566dc80cb2a88b19c3",
+      "file_toccati": [
+        "app/admin/payouts/page.tsx",
+        "tests/unit/riparazione-r05-bonifici-aperti.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-bonifici-aperti.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-bonifici-aperti.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ed12ed8ec8190e1132b690f6e034c30f0a5d55ba --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r05-bonifici-aperti.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina legge a parte i bonifici aperti, col loro tetto di 1000+1 righe, e a parte i chiusi senza doppioni (questi servono solo per «Già pagato» e l'elenco); «almeno» e l'avviso «Elenco tagliato» valgono per ciascuna lettura. La prova usa un finto server con filtri, ordinamento e tetto di 1000 righe: un HELD più vecchio di 1.200 bonifici pagati entra in «Da versare lunedì» e nel tasto.",
+      "verificato_da": "qa opus: rilanciata la prova e le 8 prove che importano la pagina (72/72 verdi), rimessa rifatta in una copia (uscita 0), controllati i 13 valori di payout_status, URL PostgREST costruiti col vero postgrest-js, 4 scenari (aperti oltre 1000, lettura dei chiusi caduta, chiusi oltre 1000, tutti gli stati): regge."
+    },
+    {
+      "id": "R05-002",
+      "chiave": "pagamenti-stripe|il pannello dei bonifici non dice a nicola quanto versare a ogni negozio il lunedì",
+      "esito": "parziale",
+      "commit": "2d9c70020f3210936cf1d5a3e49c4d2e4c696fc4",
+      "file_toccati": [
+        "app/admin/payouts/page.tsx",
+        "tests/unit/riparazione-r05-commissione-ritiri-al-banco.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-commissione-ritiri-al-banco.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-commissione-ritiri-al-banco.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ce031c5db6763ead5e8357566dc80cb2a88b19c3 --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r05-commissione-ritiri-al-banco.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Regola ritiro.in-negozio: «Da versare lunedì», il riquadro «Contanti da versare» e il tasto «Bonifico fatto» tolgono application_fee_cents dei CASH_IN_STORE ritirati la settimana prima (ora di Roma). Se la commissione supera il bonifico la cifra è 0 e la pagina dice quanto va in fattura; con un PAID_MANUALLY già della settimana la commissione non si toglie due volte.",
+      "verificato_da": "qa opus: prova verde (3 casi), rimessa rifatta (uscita 0), 15 file di prove su page.tsx e negozio.ts verdi (127 casi), 10 varianti in una copia: 7 verdi (due negozi, solo ritiri al banco, storni dispari, cambio d'ora ottobre 2026 e marzo 2027, PAID_MANUALLY di un'altra settimana, ritiro rimborsato), 3 rosse (i punti 1-3 di cosa_resta): parziale.",
+      "cosa_resta": "Dal collaudo: (1) la commissione dei ritiri al banco si toglie due volte se l'ordine segnato PAID_MANUALLY viene poi rimborsato per intero e diventa REFUNDED (page.tsx:110 guarda solo PAID_MANUALLY: va guardato un ordine in contanti con payout_at della settimana e senza transfer, anche REFUNDED); (2) quando la commissione supera i contanti, il resto da mettere in fattura sparisce dopo «Bonifico fatto» e niente lo somma sul mese (page.tsx:110-111, 159-161, 430-434); (3) la commissione di una settimana senza bonifico segnato si perde, perché il conto guarda solo la settimana prima mentre gli arretrati HELD entrano tutti (page.tsx:109-118, 313-317); (4) con PAGAMENTI_CONTANTI_DA_STRIPE_DAL accesa gli HELD che il giro paga con Stripe restano «Da versare»: cura senza toccare negozio.ts con una rotta nuova solo admin (app/api/admin/contanti-da-stripe/route.ts, withAdminAuth, restituisce solo l'istante da inizioContantiDaStripe()) letta dalla pagina, che toglie quegli HELD dal lunedì e li mostra «In sospeso · lo paga Stripe». Fermata per il tetto di spesa della sessione.",
+      "nota": "Il tasto «Bonifico fatto» funziona solo con la migrazione 350 (segna_bonifico_manuale, stato PAID_MANUALLY) in produzione: sul deposito non c'è più dal 13/11 (b868e377) e il CHECK della 130 non ammette PAID_MANUALLY. Il rimborso dopo un bonifico a mano (refundOrder tratta PAID_MANUALLY come non pagato, lib/stripe/payout.ts:1186 e 2276-2278) è un difetto di lib/stripe/payout.ts, fuori da questa voce: va in nuovi_difetti_visti. Il commit c3dc96e7e2da03ca474fcb19a21aee97d3ef45c9 toglie dal pannello il «10%» scritto a mano (commenti e testo), che faceva rossa la prova su-ogni-pagina-il-negozio-legge-la-commissione-che-tratteniamo.",
+      "commit_extra": [
+        "c3dc96e7e2da03ca474fcb19a21aee97d3ef45c9"
+      ]
+    },
+    {
+      "id": "R05-003",
+      "chiave": "pagamenti-stripe|il bonifico di rimborso al cliente non si può segnare come fatto, e nessuno controlla la scadenza dei 14 giorni",
+      "esito": "parziale",
+      "commit": "3cfbf9bbd4c3be0325456804fd0960b04a25c3ad",
+      "commit_extra": [
+        "ae3078760a6c4a1311f3ac4340fb440dd0caad2b"
+      ],
+      "file_toccati": [
+        "lib/rimborsi/bonifici-da-fare.ts",
+        "app/admin/bonifici-rimborso/page.tsx",
+        "migrations/910_il_bonifico_di_rimborso_si_segna_fatto.sql",
+        "tests/unit/riparazione-r05-bonifici-rimborso-avviso.test.ts",
+        "tests/unit/riparazione-r05-bonifici-rimborso-pagina.test.tsx",
+        "tests/sql/rls/riparazione-r05-bonifici-rimborso.test.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-bonifici-rimborso-avviso.test.ts",
+        "tests/unit/riparazione-r05-bonifici-rimborso-pagina.test.tsx",
+        "tests/sql/rls/riparazione-r05-bonifici-rimborso.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-bonifici-rimborso-avviso.test.ts tests/unit/riparazione-r05-bonifici-rimborso-pagina.test.tsx --reporter=dot && bash tests/sql/harness/apply.sh r05_rimessa && psql -X -d r05_rimessa -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r05-bonifici-rimborso.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "testo: regge (uscita 0) · migrazione: rosso strutturale (uscita 3, la prova SQL nomina per forza la tabella e le RPC che crea solo la 910)",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2d9c70020f3210936cf1d5a3e49c4d2e4c696fc4 --file lib/rimborsi/bonifici-da-fare.ts --prove tests/unit/riparazione-r05-bonifici-rimborso-avviso.test.ts --json (uscita 0, dopo ae3078760a6c4a1311f3ac4340fb440dd0caad2b) ; PGHOST=/var/run/postgresql PGUSER=root timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2d9c70020f3210936cf1d5a3e49c4d2e4c696fc4 --file migrations/910_il_bonifico_di_rimborso_si_segna_fatto.sql --prove tests/sql/rls/riparazione-r05-bonifici-rimborso.test.sql --sql r05_rimessa --json (uscita 3)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Seguo il fatto registrato da Nicola il 29/10 (pagamenti.rimborso-contanti: «poi tocca fatto»), più recente della Semplifica del 17/10. Migrazione 910: esito per chiave FATTO/RESPINTO in private.bonifici_rimborso, admin_bonifici_rimborso() e admin_segna_bonifico_rimborso() (fatto una volta sola, il secondo admin legge chi e quando, respinto rimette da fare, chiave e centesimi controllati sul segno, riga in audit_logs). Pagina /admin/bonifici-rimborso ordinata per termine, in evidenza a 3 giorni o meno, a termine passato e a termine sconosciuto. L'avviso dice di premere «Fatto» e «Respinto dalla banca», e senza giorno di partenza dice che il termine non si sa invece di «Va pagato presto»; in bonifici-da-fare.ts ci sono i conti del termine e allarmiDeiBonifici(), pronti per il cron.",
+      "cosa_resta": "(1) L'allarme del termine nel cron, il link nel menu admin e la data di partenza dei reclami: serve_file_altrui. (2) Nell'avviso restano il link /admin/orders e la frase «prima di pagare cerca questa causale nei movimenti del conto. Se c'è, è già pagato», perché due prove comuni (che non importano il mio file per nome) li fissano: dopo la loro modifica (serve_file_altrui) in lib/rimborsi/bonifici-da-fare.ts, funzione avvisoDelBonificoDaFare, si toglie quella frase e il link diventa PAGINA_DEI_BONIFICI (com'era nel commit 3cfbf9bbd4c3be0325456804fd0960b04a25c3ad). (3) La migrazione 910 la applica Nicola: finché non c'è, la pagina dice «Non riesco a leggere i bonifici» e il pezzo del cron non va messo. (4) Il termine dei reclami: oggi «termine sconosciuto»; se si accetta l'apertura del reclamo come partenza, nella 910 (non ancora applicata) basta LEFT JOIN public.disputes d ON m[2] = 'dispute_' || d.id::text AND d.order_id = o.id e chiesto_il = coalesce(r.created_at, d.created_at). (5) Nessun revisore indipendente: fermata per il tetto di spesa.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/operational-alerts/route.ts",
+          "modifica": "Solo DOPO che la migrazione 910 è applicata. Dopo la riga 19 («} from '@/lib/privacy/cancellazioni-in-sospeso';») aggiungere: import { allarmiDeiBonifici, type RigaDelBonifico } from '@/lib/rimborsi/bonifici-da-fare'; — Subito prima del commento «5/11/2026 — UN CONTROLLO SALTATO NON BUTTA VIA GLI ALLARMI VERI» (riga 775, prima di const incompleto) un blocco try: const { data, error } = await admin.rpc('admin_bonifici_rimborso'); se error → controlliSaltati.push('bonifici di rimborso ai clienti'); altrimenti alerts.push(...allarmiDeiBonifici((data ?? []) as RigaDelBonifico[], new Date())); nel catch logger.error('[operational-alerts] bonifici di rimborso non letti', …) e controlliSaltati.push(...). Le prove del cron con un client finto senza rpc (riparazione-r33-reclamo-fermo, minori-s03-sorvegliante, riparazione-r29-allarme-ordine, la-campanella-degli-allarmi-suona-una-volta-anche-senza-posta e le altre che importano la rotta) vanno completate con rpc: async () => ({ data: [], error: null })."
+        },
+        {
+          "file": "app/api/admin/disputes/[id]/resolve/route.ts",
+          "modifica": "Riga 109: aggiungere created_at alla select del reclamo ('id, status, order_id, opener_id, against_id, refund_cents, created_at'). Nella chiamata refundOrder (righe 319-331), dopo «notifyBuyer: true,» aggiungere resoChiestoIl: (dispute as { created_at?: string | null }).created_at ?? null, così l'avviso del reclamo dice il termine."
+        },
+        {
+          "file": "components/admin/AdminSidebar.tsx",
+          "modifica": "Dopo la riga 50 «{ href: '/admin/payouts', icon: Wallet, label: 'Payout venditori' },» aggiungere «{ href: '/admin/bonifici-rimborso', icon: Banknote, label: 'Bonifici di rimborso' },» (Banknote è già importato alla riga 9)."
+        },
+        {
+          "file": "tests/unit/il-rimborso-dei-contanti-arriva-col-bonifico.test.ts",
+          "modifica": "Fissa il difetto. Riga 121: expect(avviso.link).toBe('/admin/orders') → toBe('/admin/bonifici-rimborso'). Riga 130: expect(testo).toContain(\"cerca questa causale nei movimenti del conto. Se c'è, è già pagato.\") → expect(testo).toContain('premi «Fatto» nella pagina «Bonifici di rimborso»'); expect(testo).not.toContain('movimenti del conto'). Insieme alla modifica di avvisoDelBonificoDaFare descritta in cosa_resta (2)."
+        },
+        {
+          "file": "tests/unit/un-reclamo-su-contanti-mai-incassati-non-regala-credito.test.ts",
+          "modifica": "Fissa il difetto. Riga 158: expect(avvisi[0].link).toBe('/admin/orders') → toBe('/admin/bonifici-rimborso'). Insieme alla modifica di avvisoDelBonificoDaFare descritta in cosa_resta (2)."
+        }
+      ],
+      "nota": "Migrazione 910_il_bonifico_di_rimborso_si_segna_fatto.sql: crea lo schema private (non esposto dall'API) con private.bonifici_rimborso (RLS accesa, nessun permesso ad anon e authenticated, niente IBAN), admin_bonifici_rimborso() (solo admin o service_role) e admin_segna_bonifico_rimborso(ordine, chiave, centesimi, FATTO|RESPINTO) (solo admin, riga in audit_logs). REVOKE da PUBLIC e anon, GRANT ad authenticated. Da applicare solo con l'ok di Nicola, prima del pezzo del cron. Prova SQL: 22 controlli verdi sul Postgres locale.",
+      "verificato_da": "nessun revisore indipendente (tetto di spesa della sessione raggiunto): solo le prove del riparatore e la rimessa del testo rifatta dal capo squadra"
+    },
+    {
+      "id": "R05-004",
+      "chiave": "dati-analytics|l'elenco prodotti dell'amministratore si ferma a mille senza dirlo, e la ricerca non trova i prodotti più vecchi",
+      "esito": "non_fatto",
+      "nota": "Non cominciata: la sessione ha passato l'80% del tetto di spesa (25 $) dopo i tre gravi; da riassegnare. Dal revisore di R05-001, da chiudere insieme in app/admin/payouts/page.tsx: con 1.200 TRANSFERRED l'elenco dei pagati si taglia a 1000 righe senza avviso (righe ~278 e ~371); l'avviso della lettura dei ritiri tagliata dice «col bonifico ancora aperto» (~276); REVERSAL_FAILED è letto fra gli aperti e occupa posto sotto il loro tetto (~228)."
+    },
+    {
+      "id": "R05-005",
+      "chiave": "pagamenti-stripe|il portale dell'abbonamento si apre anche a chi ha solo il cliente stripe, senza abbonamento",
+      "esito": "non_fatto",
+      "nota": "Non cominciata: la sessione ha passato l'80% del tetto di spesa (25 $) dopo i tre gravi; da riassegnare."
+    },
+    {
+      "id": "R05-006",
+      "chiave": "pagamenti-stripe|una contestazione che arriva senza ordini con il carrello ancora aperto viene lavorata in silenzio",
+      "esito": "non_fatto",
+      "nota": "Non cominciata: la sessione ha passato l'80% del tetto di spesa (25 $) dopo i tre gravi; da riassegnare."
+    },
+    {
+      "id": "R05-007",
+      "chiave": "stati-ui|creando una storia il negoziante non vede la foto scelta, solo il nome del file e il peso",
+      "esito": "non_fatto",
+      "nota": "Non cominciata: la sessione ha passato l'80% del tetto di spesa (25 $) dopo i tre gravi; da riassegnare."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Un rimborso dopo il bonifico a mano al negozio fa sparire i soldi da recuperare",
+      "dimensione": "pagamenti-stripe",
+      "severita": "grave",
+      "file": "lib/stripe/payout.ts:1186",
+      "descrizione": "refundOrder tratta PAID_MANUALLY come non pagato: un rimborso pieno lo riscrive in REFUNDED (payout.ts:2276-2278), «Già pagato» scende e la quota finisce in seller_payout_reversed_cents come se il bonifico non fosse partito; l'avviso «quota da recuperare a mano» parte solo per REVERSAL_FAILED (payout.ts:2515)."
+    },
+    {
+      "titolo": "Il negozio legge che la commissione dei ritiri al banco gliela chiediamo noi, non che la scaliamo dal bonifico del lunedì",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/seller/earnings/page.tsx:347",
+      "descrizione": "La frase dice «te la chiediamo noi» e la cifra è sul periodo filtrato, non sulla settimana del bonifico."
+    },
+    {
+      "titolo": "Il tasto «Bonifico fatto» del pannello dei bonifici risponde con un errore: la sua migrazione non è più nel deposito",
+      "dimensione": "pagamenti-stripe",
+      "severita": "grave",
+      "file": "migrations/130",
+      "descrizione": "La migrazione 350 (segna_bonifico_manuale, PAID_MANUALLY) è stata tolta il 13/11; il CHECK di payout_status della 130 non ammette PAID_MANUALLY. Se la 350 non è già in produzione, il tasto non segna niente."
+    },
+    {
+      "titolo": "La RPC del tasto «Bonifico fatto» dei negozi non è definita in nessuna migrazione del deposito",
+      "dimensione": "pagamenti-stripe",
+      "severita": "grave",
+      "file": "app/admin/payouts/page.tsx:165",
+      "descrizione": "segna_bonifico_manuale è chiamata dal tasto ma non c'è in migrations/ (i commenti citano 350 e 410, che non ci sono): un database ricostruito dalle migrazioni non ce l'ha. Stessa radice del difetto sul CHECK di payout_status."
+    }
+  ],
+  "domande_per_nicola": [
+    "R05-003: confermi che vale il tuo fatto del 29/10 (il bonifico di rimborso si segna «fatto» sul sito) e non la Semplifica del 17/10? Se sì, va applicata la migrazione 910; se no, la 910 e la pagina /admin/bonifici-rimborso si tolgono.",
+    "R05-003: per i reclami, il termine dei 14 giorni parte dall'apertura del reclamo?"
+  ],
+  "conto": {
+    "agenti": 4,
+    "nota": "Subagenti: riparatore L1 (R05-001, R05-002), revisore R05-001, revisore R05-002, riparatore L2 (R05-003); il quinto non c'è stato, il conto è 4. Spesa a 20,96 $ dopo L2: oltre l'80% del tetto di 25 $, quindi L3 (R05-004…007) e il revisore di R05-003 non sono partiti; la rimessa del testo di R05-003 e il ritocco delle prove li ha fatti il capo squadra.",
+    "subagenti": 4
+  },
+  "costo_usd": 22.44
+}
