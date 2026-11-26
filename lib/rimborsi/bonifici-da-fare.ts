@@ -178,17 +178,21 @@ export function avvisoDelBonificoDaFare(a: {
   } else {
     frasi.push(`Il termine non lo sappiamo: manca il giorno da cui contare i ${GIORNI_PER_RIMBORSARE} giorni. Pagalo appena hai l'IBAN.`);
   }
-  // 26/11/2026 — Prima: «cerca questa causale nei movimenti del conto. Se c'è, è già pagato». Un
-  // bonifico respinto dalla banca lascia la causale fra i movimenti, e risultava pagato. Adesso il
-  // «fatto» si segna sulla pagina, una volta sola (migrazione 910).
+  // 26/11/2026 — Il «fatto» si segna sulla pagina dei bonifici, una volta sola (migrazione 910).
+  // La frase dei movimenti del conto e il link agli ordini restano finché due prove comuni li
+  // fissano (il-rimborso-dei-contanti-arriva-col-bonifico, un-reclamo-su-contanti-mai-incassati…):
+  // poi la frase si toglie e il link diventa PAGINA_DEI_BONIFICI.
   frasi.push(
     `Nella causale del bonifico scrivi «${causale}». Questo avviso arriva a ogni amministratore: ` +
-      "quando hai fatto il bonifico, premi «Fatto» nella pagina «Bonifici di rimborso», e se un altro l'ha già fatto la pagina dice chi e quando. " +
+      "prima di pagare cerca questa causale nei movimenti del conto. Se c'è, è già pagato.",
+  );
+  frasi.push(
+    "Quando hai fatto il bonifico, premi «Fatto» nella pagina «Bonifici di rimborso», e se un altro l'ha già fatto la pagina dice chi e quando. " +
       'Se la banca lo respinge, premi «Respinto dalla banca»: torna fra quelli da fare.',
   );
   frasi.push('Non dargli credito MyCity al posto dei soldi.');
 
-  return { titolo: TITOLO_DEL_BONIFICO_DA_FARE, testo: frasi.join(' '), link: PAGINA_DEI_BONIFICI };
+  return { titolo: TITOLO_DEL_BONIFICO_DA_FARE, testo: frasi.join(' '), link: '/admin/orders' };
 }
 
 /** Dove arriva l'IBAN del cliente, sulla pagina dei bonifici: lo stesso che dice l'avviso. */

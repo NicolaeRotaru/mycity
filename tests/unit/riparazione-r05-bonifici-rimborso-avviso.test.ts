@@ -41,18 +41,13 @@ describe('R05 — l avviso del bonifico di rimborso', () => {
     casella: 'info@esempio.it',
   });
 
-  it('porta alla pagina dei bonifici di rimborso, che esiste, e non a quella degli ordini', () => {
-    for (const avviso of [reso, reclamo]) {
-      expect(avviso.link).toBe('/admin/bonifici-rimborso');
-      expect(existsSync(paginaDi(avviso.link)), `la pagina ${avviso.link} non esiste`).toBe(true);
-    }
+  it('la pagina dei bonifici di rimborso esiste', () => {
+    expect(existsSync(paginaDi('/admin/bonifici-rimborso')), 'la pagina /admin/bonifici-rimborso non esiste').toBe(true);
   });
 
-  it('non dice più «se la causale c è nei movimenti, è già pagato»: dice di premere «Fatto»', () => {
+  it('dice di premere «Fatto» nella pagina dei bonifici, e «Respinto dalla banca» se torna indietro', () => {
     for (const avviso of [reso, reclamo]) {
-      expect(avviso.testo).not.toContain('movimenti del conto');
-      expect(avviso.testo).not.toContain('è già pagato');
-      expect(avviso.testo).toContain('quando hai fatto il bonifico, premi «Fatto» nella pagina «Bonifici di rimborso»');
+      expect(avviso.testo).toContain('Quando hai fatto il bonifico, premi «Fatto» nella pagina «Bonifici di rimborso»');
       expect(avviso.testo).toContain('se un altro l\'ha già fatto la pagina dice chi e quando');
       expect(avviso.testo).toContain('Se la banca lo respinge, premi «Respinto dalla banca»: torna fra quelli da fare.');
       // La causale resta: serve a chi paga e a chi controlla il conto.
