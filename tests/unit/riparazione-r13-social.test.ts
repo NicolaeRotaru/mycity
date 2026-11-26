@@ -16,3 +16,24 @@ describe('R13-005 — le sottopagine vere di un profilo Facebook tengono il nome
     expect(fb('https://www.facebook.com/panequotidiano/qualcosa-di-strano')).toBe('https://www.facebook.com/panequotidiano/qualcosa-di-strano');
   });
 });
+
+describe('R13-006 — altri percorsi di servizio di Facebook non diventano il nome del profilo', () => {
+  const SERVIZIO = [
+    'groups', 'events', 'watch', 'marketplace', 'pages', 'people', 'share', 'hashtag', 'gaming', 'help', 'login', 'settings',
+    'notifications', 'messages', 'reel', 'reels', 'videos', 'live', 'fundraisers', 'business', 'ads', 'privacy', 'policies',
+    'profile', 'story', 'permalink', 'topic', 'topics', 'directory', 'security', 'cookies', 'support', 'inbox', 'oauth',
+    'adsmanager', 'instantgames', 'logout', 'recommendations', 'biz', 'creators', 'requests', 'invite', 'tournaments', 'birthdays',
+  ];
+  it.each([...SERVIZIO, 'profile.php', 'story.php', 'permalink.php', 'photo.php'])('facebook.com/%s resta com\'è ed è fermato', (p) => {
+    const url = `https://www.facebook.com/${p}`;
+    expect(fb(url)).toBe(url);
+    const r = storeCustomizationSchema.safeParse({ socials: { facebook: fb(url) } });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(campoDellErrore(r.error.issues[0].path)).toBe('Facebook');
+  });
+  it('i nomi veri restano nomi', () => {
+    for (const n of ['panequotidiano', 'pane.quotidiano', 'pane-quotidiano', 'forno2000']) {
+      expect(fb(`https://www.facebook.com/${n}`)).toBe(n);
+    }
+  });
+});
