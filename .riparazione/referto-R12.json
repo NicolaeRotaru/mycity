@@ -384,6 +384,8 @@
  ],
  "conto": {
   "agenti": 6,
-  "nota": "L1 riparatore, L1 smentitore, L1 correzione, L2 riparatore, L2 smentitore, L3 riparatore (sonnet). Il lotto 3 non ha avuto un subagente di smentita: spesa all'80% del limite. Spesa letta da get_session: 22,52 $ a fine lavoro."
- }
+  "nota": "L1 riparatore, L1 smentitore, L1 correzione, L2 riparatore, L2 smentitore, L3 riparatore (sonnet). Il lotto 3 non ha avuto un subagente di smentita: spesa all'80% del limite. Spesa letta da get_session: 22,52 $ a fine lavoro.",
+  "subagenti": 6
+ },
+ "costo_usd": 22.52
 }
