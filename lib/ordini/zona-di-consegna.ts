@@ -75,3 +75,22 @@ export function motivoFuoriZona(nomeNegozio?: string | null): string {
     ? `${troppoLontano} Puoi ritirare in negozio.`
     : `${troppoLontano} Prova con un negozio più vicino a te.`;
 }
+
+/**
+ * 26/11/2026 — DOVE PUÒ STARE UN NEGOZIO, E DOVE SI CERCANO GLI INDIRIZZI: PIACENZA E DINTORNI.
+ *
+ * Un riquadro solo, qui, perché lo leggono il browser (il selettore della posizione del negozio,
+ * il profilo) e il server (la ricerca degli indirizzi in lib/geocodifica.ts, l'iscrizione del
+ * negozio). Un negozio fuori da qui non riceve consegne dai clienti di Piacenza: il «Cerca» che
+ * trovava la Via Roma di un'altra città lo segnava confermato e il modulo lo salvava.
+ * (Coordinate: ovest/est in longitudine, sud/nord in latitudine.)
+ */
+export const AREA_SERVITA = { ovest: 9.55, sud: 44.93, est: 9.85, nord: 45.15 } as const;
+
+export function dentroLAreaServita(lat: number, lng: number): boolean {
+  const a = AREA_SERVITA;
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= a.sud && lat <= a.nord && lng >= a.ovest && lng <= a.est;
+}
+
+export const FRASE_NEGOZIO_FUORI_AREA =
+  'Questa posizione è fuori da Piacenza e dintorni, dove consegniamo: cerca di nuovo l’indirizzo con la città o tocca la mappa sul negozio.';

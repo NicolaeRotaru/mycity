@@ -20,6 +20,13 @@ import PushNotificationOptIn from '@/components/PushNotificationOptIn';
 import DatiPerIBonifici from '@/components/seller/DatiPerIBonifici';
 import DatiDelTitolare from '@/components/seller/DatiDelTitolare';
 import CanaliDelNegozio from '@/components/seller/CanaliDelNegozio';
+import { dentroLAreaServita, FRASE_NEGOZIO_FUORI_AREA } from '@/lib/ordini/zona-di-consegna';
+
+class PosizioneFuoriArea extends Error {
+  constructor() {
+    super(FRASE_NEGOZIO_FUORI_AREA);
+  }
+}
 
 /**
  * Profilo negozio = dati di CONTATTO + impostazioni operative/private.
@@ -60,6 +67,10 @@ export default function SellerProfilePage() {
   // Salva SOLO contatti + orari (il branding si salva dal site builder).
   const updateContact = useMutation({
     mutationFn: async (form: VendorFormData) => {
+      // 26/11/2026 — Il profilo scrive le coordinate direttamente nel database, senza una rotta che le
+      // guardi: una posizione fuori da Piacenza e dintorni (un «Cerca» finito in un'altra città, il GPS
+      // di chi aggiorna da casa) si salvava e il negozio smetteva di ricevere consegne. Qui si ferma.
+      if (!dentroLAreaServita(form.storeLat, form.storeLng)) throw new PosizioneFuoriArea();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
       const { error } = await supabase.from('profiles').update({
@@ -76,7 +87,7 @@ export default function SellerProfilePage() {
       invalidaProfiloDiChiEntrato(qc);
       toast.success('Contatti e orari aggiornati!');
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(err instanceof PosizioneFuoriArea ? err.message : friendlyError(err)),
   });
 
   const updateExpress = useMutation({

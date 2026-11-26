@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
-import { env } from '@/lib/env';
+import { cercaUnIndirizzo } from '@/lib/geocodifica';
 import { logger } from '@/lib/logger';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
@@ -36,31 +36,17 @@ export async function POST(req: Request) {
   }
   if (q.length < 3) return NextResponse.json({ lat: null, lng: null });
 
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=it`;
-    const appUrl = env.appUrl();
-    const res = await fetch(url, {
-      headers: {
-        // Nominatim Usage Policy: User-Agent identificativo obbligatorio.
-        'User-Agent': `MyCity/1.0 (${appUrl})`,
-        'Accept-Language': 'it',
-      },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!res.ok) {
-      logger.warn('[geocode] Nominatim ha risposto con un errore', { status: res.status });
-      return NextResponse.json(SERVIZIO_NON_DISPONIBILE, { status: 503 });
-    }
-    const json = (await res.json()) as Array<{ lat?: string; lon?: string }>;
-    const hit = Array.isArray(json) ? json[0] : undefined;
-    const lat = hit?.lat != null ? parseFloat(hit.lat) : null;
-    const lng = hit?.lon != null ? parseFloat(hit.lon) : null;
-    return NextResponse.json({
-      lat: Number.isFinite(lat as number) ? lat : null,
-      lng: Number.isFinite(lng as number) ? lng : null,
-    });
-  } catch {
-    logger.warn('[geocode] Nominatim non raggiungibile', { qlen: q.length });
+  // 26/11/2026 — La ricerca è quella della cassa (lib/geocodifica.ts), non più un testo libero col
+  // primo risultato d'Italia: «Via Roma 10, 29121 Piacenza» finiva a Podenzano e la zona diceva
+  // «troppo lontano» prima ancora di «Ordina».
+  const esito = await cercaUnIndirizzo(q);
+  if (esito.esito === 'servizio_giu') {
+    if (esito.status != null) logger.warn('[geocode] Nominatim ha risposto con un errore', { status: esito.status });
+    else logger.warn('[geocode] Nominatim non raggiungibile', { qlen: q.length });
     return NextResponse.json(SERVIZIO_NON_DISPONIBILE, { status: 503 });
   }
+  if (esito.esito === 'nessuno') return NextResponse.json({ lat: null, lng: null });
+  // 26/11/2026 — Anche il nome del posto trovato: il negozio che cerca «Via Roma 12» legge sotto il
+  // campo in quale città è finito, invece di vedere solo un segnaposto su una mappa.
+  return NextResponse.json({ lat: esito.lat, lng: esito.lng, ...(esito.nome ? { nome: esito.nome } : {}) });
 }

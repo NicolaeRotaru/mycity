@@ -1,0 +1,231 @@
+{
+  "sessione": "R27",
+  "aggiornato": "2026-11-26 23:00",
+  "finita": true,
+  "testa": "db46a9867f9d8b3eb117ff1a0e3b365e627f2451",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "db46a9867f9d8b3eb117ff1a0e3b365e627f2451",
+    "nota": "dopo aver tolto la correzione di R27-004: typecheck, lint e 2240 file di prove verdi, 1 file saltato come sulla base (13668 prove), uscita 0"
+  },
+  "voci": [
+    {
+      "id": "R27-001",
+      "chiave": "qa-flussi|la cassa dice «troppo lontano» a chi abita in via roma o in via cavour, in pieno centro, e l'ordine non parte",
+      "esito": "riparato",
+      "commit": "107d41c7140091eb3fe67923177d303165a1f885",
+      "file_toccati": [
+        "lib/geocodifica.ts",
+        "app/api/geocode/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-via-roma-in-centro.test.ts",
+        "tests/unit/riparazione-r27-via-roma-in-centro-rotta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-via-roma-in-centro.test.ts tests/unit/riparazione-r27-via-roma-in-centro-rotta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 107d41c7140091eb3fe67923177d303165a1f885^ --file lib/geocodifica.ts --prove tests/unit/riparazione-r27-via-roma-in-centro.test.ts --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 107d41c7140091eb3fe67923177d303165a1f885^ --file app/api/geocode/route.ts --prove tests/unit/riparazione-r27-via-roma-in-centro-rotta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Una ricerca sola in lib/geocodifica.ts (cercaUnIndirizzo), usata da coordinateDiUnIndirizzo (cassa in contanti e con carta) e da /api/geocode (controllo della zona prima di «Ordina», rubrica): strutturata (street, city, postalcode, countrycodes=it), prima dentro il riquadro di Piacenza e dintorni (viewbox + bounded=1), limit=5 scartando i risultati con comune o CAP diversi da quelli scritti, null se nessuno è affidabile (l'ordine passa senza coordinate, con la campanella agli amministratori che c'era già). Fuori dal riquadro si accetta solo un risultato del comune scritto, così Milano resta fuori zona. Il controllo dei 5 km non cambia; le rotte cod e checkout non servono modifiche (chiamano coordinateDiUnIndirizzo).",
+      "nota": "Rimessa in due lanci, uno per file (entrambi uscita 0): con un lancio solo sui due file usciva 3, perché con lib/geocodifica.ts alla base la rotta nuova non trova cercaUnIndirizzo (stato misto mai esistito). Nominatim vero non raggiungibile da qui: il comportamento è provato con un Nominatim finto che mette per prima la via omonima (come misurato in palestra). La frase q della cassa resta identica carattere per carattere (prova minori-s07-domanda-della-zona verde); /api/geocode la scompone in via/CAP/città. Senza città (selettore del negozio) la ricerca resta a testo ma chiusa nel riquadro. Da sapere: gli indirizzi già salvati in rubrica con le coordinate sbagliate di prima restano nel database (coordinateDaIndirizziSalvati li usa per primi); da guardare a mano prima del lancio se ce ne sono. Residuo fuori dalla voce (in nuovi_difetti_visti): gli indirizzi salvati in rubrica prima della correzione tengono le coordinate sbagliate e la cassa li usa per primi.",
+      "verificato_da": "smentitore grande (lotto 1): rilanciate le 2 prove; Nominatim finto con la via omonima di Podenzano per prima: città minuscola, «Piacenza (PC)», «PIACENZA PC», «Piacenza, PC», CAP 29122, Piazza Cavalli, Corso Vittorio Emanuele II, servizio che lancia, 200 non JSON, servizio appeso (null in 5 s, l’ordine non si blocca); 129 file di prove accanto verdi, tsc 0. Regge."
+    },
+    {
+      "id": "R27-002",
+      "chiave": "api-backend|la funzione che muore fra l'ordine e gli articoli lascia la merce riservata senza nessuno che la liberi",
+      "esito": "parziale",
+      "commit": "6a1ab8c7a04a0f6695591362b390facfc2697e04",
+      "file_toccati": [
+        "app/api/orders/cod/route.ts",
+        "app/api/cron/expire-stale-orders/route.ts",
+        "migrations/961_la_merce_riservata_resta_scritta_finche_l_ordine_non_la_prende.sql",
+        "tests/unit/riparazione-r27-riserva-scritta.test.ts",
+        "tests/sql/rls/riparazione-r27-riserva-scritta.test.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-riserva-scritta.test.ts",
+        "tests/sql/rls/riparazione-r27-riserva-scritta.test.sql"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r27-riserva-scritta.test.ts && PGHOST=/var/run/postgresql PGUSER=root bash tests/sql/harness/apply.sh r27_lavoro && psql -X -d r27_lavoro -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r27-riserva-scritta.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge (codice: rotta e giro) · migrazione: rosso_strutturale (uscita 3, la prova SQL nomina per forza la tabella e le funzioni che crea solo la 961)",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6a1ab8c7a04a0f6695591362b390facfc2697e04^ --file app/api/orders/cod/route.ts,app/api/cron/expire-stale-orders/route.ts --prove tests/unit/riparazione-r27-riserva-scritta.test.ts --json"
+      },
+      "rimessa_sql": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "PGHOST=/var/run/postgresql PGUSER=root timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6a1ab8c7a04a0f6695591362b390facfc2697e04^ --file migrations/961_la_merce_riservata_resta_scritta_finche_l_ordine_non_la_prende.sql --prove tests/sql/rls/riparazione-r27-riserva-scritta.test.sql --sql r27_rimessa --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La riserva della cassa in contanti ora nasce scritta nel database insieme alla merce scalata (reserve_stock con p_riserva, tabella private.riserve_merce_contanti della migrazione 961), la rotta la chiude quando gli articoli ci sono e la rimette insieme alla riga quando annulla; il giro degli ordini fermi (expire-stale-orders) chiama libera_riserve_orfane e rimette la merce delle righe rimaste oltre due ore, e il credito tolto se l'ordine non e' mai nato.",
+      "nota": "MIGRAZIONE NUOVA migrations/961_la_merce_riservata_resta_scritta_finche_l_ordine_non_la_prende.sql (fascia 961-965), non applicata a nessun database vero: la applica Nicola. Crea lo schema private se manca (come la 910), private.riserve_merce_contanti (RLS accesa, nessun permesso ad anon/authenticated) e quattro funzioni SECURITY DEFINER solo per service_role: reserve_stock(jsonb,jsonb) e restore_stock(jsonb,uuid) (versioni a due parametri: le vecchie a un parametro restano uguali per la carta e gli altri), chiudi_riserva_contanti(uuid), libera_riserve_orfane(int). Ritorno indietro in fondo al file. Finche' la 961 non c'e', la rotta prende PGRST202 e riserva come prima (senza la riga) e il giro scrive un warn: nessuna cassa si ferma. Soglia riusata dal codice, non inventata: 120 minuti = la vita della riserva della carta (pending_checkouts.expires_at, migrazione 042: due ore), molto sopra la durata di una funzione. La tabella sta nello schema private apposta: nello schema public il generatore dei tipi (lib/database.types.ts, non mio) avrebbe voluto la tabella nuova e due prove R11 sarebbero diventate rosse. Senza chiave di tentativo l'id dell'ordine ora nasce nella rotta (crypto.randomUUID) invece che nel database: serve alla riga della riserva per sapere quale ordine guardare. Prove: la prova unit (finto che fa quello che fanno le funzioni della 961) e' rossa sul comportamento con ognuno dei due file alla base (rimessa uscita 0); la prova SQL sul Postgres locale (11 controlli: tutto-o-niente, morta prima dell'ordine con credito, morta fra ordine e articoli, morta dopo gli articoli senza pezzi fantasma, riserva giovane intoccata, rimessa una volta sola, permessi) da' uscita 3 perche' nomina per forza gli oggetti che solo la 961 crea (stesso caso di R05-003). Verifiche: 2242 file di prove vitest verdi (suite intera), le 64 prove che importano la rotta dei contanti e le 24 del giro degli ordini fermi verdi senza toccarle, npx tsc --noEmit -p . verde, eslint sui file toccati verde, suite SQL locale (apply.sh + run.sh) verde, migrazione-su-database-pieno.sh verde. Nessuna prova esistente modificata. Resta fuori, per scelta di non allargare: (1) un invio gemello sulla stessa chiave che muore dopo aver riservato, mentre l'altro ha gia' fatto l'ordine con gli articoli: il giro chiude la sua riga senza rimettere (verso prudente, un pezzo in meno); (2) il codice sconto rivendicato prima del ciclo resta consumato se la funzione muore (non e' merce ne' credito); (3) gli allarmi della chiave abbandonata dicono ancora 'la merce puo' essere rimasta scalata'. Migrazione 961 (fascia R27): migrations/961_la_merce_riservata_resta_scritta_finche_l_ordine_non_la_prende.sql, non applicata: la applica Nicola. Senza la 961 (PGRST202) la cassa riserva come prima. Soglia 120 minuti presa dal codice (pending_checkouts.expires_at, migrazione 042).",
+      "cosa_resta": "La correzione è nel ramo (commit 6a1ab8c7a04a0f6695591362b390facfc2697e04, migrazione 961 non applicata) ma NON è stata smentita da un subagente indipendente sul modello grande: la sessione ha superato l’80% del limite di spesa (22,85 $ su 25 $) e ha consegnato. Da collaudare con priorità: la rimessa SQL della 961 esce 3 (la prova nomina oggetti creati solo dalla 961); residui dichiarati dal riparatore: due invii con la stessa chiave possono far chiudere la riga senza rimettere (verso prudente), il codice sconto rivendicato prima del ciclo resta consumato se la funzione muore, gli allarmi della chiave abbandonata dicono ancora «la merce può essere rimasta scalata».",
+      "verificato_da": "nessuno smentitore indipendente: limite di spesa raggiunto. Il riparatore ha lanciato la suite vitest intera (2242 file verdi), la suite SQL locale e migrazione-su-database-pieno.sh (verdi), tsc ed eslint verdi."
+    },
+    {
+      "id": "R27-006",
+      "chiave": "qa-flussi|la posizione del negozio può finire lontano da piacenza, o restare quella vecchia, e il modulo la salva lo stesso",
+      "esito": "parziale",
+      "commit": "698db3f8e6c01503602ce09af8117f79ca92aaaa",
+      "file_toccati": [
+        "components/StoreLocationPicker.tsx",
+        "app/api/geocode/route.ts",
+        "app/api/seller/apply/route.ts",
+        "app/seller/profile/page.tsx",
+        "lib/geocodifica.ts",
+        "lib/ordini/zona-di-consegna.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-posizione-del-negozio-selettore.test.tsx",
+        "tests/unit/riparazione-r27-posizione-del-negozio-server.test.ts",
+        "tests/unit/riparazione-r27-posizione-del-negozio-profilo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-posizione-del-negozio-selettore.test.tsx tests/unit/riparazione-r27-posizione-del-negozio-server.test.ts tests/unit/riparazione-r27-posizione-del-negozio-profilo.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 698db3f8e6c01503602ce09af8117f79ca92aaaa^ --file components/StoreLocationPicker.tsx,app/api/geocode/route.ts,app/api/seller/apply/route.ts,app/seller/profile/page.tsx,lib/geocodifica.ts --prove tests/unit/riparazione-r27-posizione-del-negozio-selettore.test.tsx,tests/unit/riparazione-r27-posizione-del-negozio-server.test.ts,tests/unit/riparazione-r27-posizione-del-negozio-profilo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Selettore: cambiato il testo, confermata torna false e compare «premi Cerca»; dopo Cerca si legge «Trovato: <nome>» (display_name che ora /api/geocode restituisce); una posizione fuori da Piacenza e dintorni (da Cerca, tocco/trascinamento o GPS) non si conferma, il segnaposto non si sposta e c'è l'avviso. La ricerca è già orientata su Piacenza (viewbox + bounded, dal commit della voce della cassa). Server: /api/seller/apply rifiuta (400) coordinate fuori area; il profilo (che scrive dal browser nel database) non scrive e mostra il perché. Il riquadro è uno solo, AREA_SERVITA in lib/ordini/zona-di-consegna.ts, e lib/geocodifica.ts ora lo importa.",
+      "nota": "Rimessa: lib/ordini/zona-di-consegna.ts è fuori da --file perché contiene solo il riquadro condiviso (AREA_SERVITA, dentroLAreaServita, la frase): rimesso da solo alla base, i cinque file che lo importano perdono il nome (rosso per struttura, uscita 3); il comportamento lo provano gli altri cinque file, ognuno rosso sul comportamento. «Area servita» = Piacenza e dintorni, lo stesso riquadro della ricerca indirizzi (lon 9.55-9.85, lat 44.93-45.15, circa 12 km dal centro): la voce non dava un numero; se Nicola vuole un confine più stretto (per esempio 5 km dal centro) si cambia solo AREA_SERVITA. Il profilo non ha una rotta server: il controllo sta nel suo salvataggio, l'unica strada nel codice; una guardia nel database contro una scrittura diretta fatta apposta dal negozio richiederebbe una migrazione, non la ritengo indispensabile (danneggerebbe solo il suo negozio). Negozi già salvati fuori area restano nel database finché non riaprono il profilo.",
+      "domanda_per_nicola": "L'area dove può stare un negozio è Piacenza e dintorni (circa 12 km dal centro, stesso riquadro della ricerca indirizzi): va bene o vuoi un confine più stretto?",
+      "cosa_resta": "1) Il selettore manda solo «via, Italia» (components/StoreLocationPicker.tsx:175-182): senza città la ricerca è a testo libero e non controlla il comune (lib/geocodifica.ts:154-156, :170), e AREA_SERVITA (lib/ordini/zona-di-consegna.ts:88) arriva a 17,7 km negli angoli: «Via Roma 12» trova la Via Roma di Podenzano (10,5 km, dentro il riquadro) e il selettore la conferma. Da fare: aggiungere «Piacenza» quando la città manca, oppure non confermare oltre il raggio di servizio dal centro. 2) Il profilo non ha rotta server: il controllo sta solo nel browser (app/seller/profile/page.tsx:73); serve una guardia lato server (rotta o vincolo nel database, migrazione nella fascia 961-965). Non fatto per il limite di spesa della sessione.",
+      "verificato_da": "smentitore grande (lotto 1): rilanciate le 3 prove, provato cercaUnIndirizzo(«Via Roma 12, Italia») col Nominatim finto e dentroLAreaServita con stringhe/NaN/null: trovati i due residui in cosa_resta. Parziale."
+    },
+    {
+      "id": "R27-003",
+      "chiave": "deploy-sre|sul sito vero manca la chiave della posta: il negozio non riceverà l'email del nuovo ordine e il cliente nessuna conferma",
+      "esito": "parziale",
+      "commit": "127dd1e63bbcfa91a03b0db6a2438ca3a6471783",
+      "file_toccati": [
+        "app/api/orders/cod/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-ordine-con-la-posta-spenta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-ordine-con-la-posta-spenta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 127dd1e63bbcfa91a03b0db6a2438ca3a6471783^ --file app/api/orders/cod/route.ts --prove tests/unit/riparazione-r27-ordine-con-la-posta-spenta.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Parte di codice: sul sito vero (VERCEL_ENV=production), quando l'email «Nuovo ordine» al negozio o la conferma al cliente di un ordine in contanti tornano «skipped» per RESEND_API_KEY o RESEND_FROM mancanti, la rotta suona la campanella agli amministratori (notifyAdmins, una volta per ordine con unaVoltaPer) dicendo di avvisare il negozio a voce. Prima l'ordine nasceva in silenzio (solo una riga nel registro: l'avviso della posta rifiutata salta apposta i «skipped»). /api/health elencava già RESEND_API_KEY, RESEND_FROM e SUPPORT_EMAIL fra le importanti (degradato): non toccato.",
+      "nota": "NON CODICE, per Nicola: su Vercel → progetto → Settings → Environment Variables → Production creare RESEND_API_KEY (Sensitive), RESEND_FROM con un mittente del dominio verificato su Resend e SUPPORT_EMAIL con una casella letta davvero; ripubblicare; fare un ordine di prova in contanti e controllare che arrivino l'email al negozio e la conferma al cliente (e che la campanella «posta spenta» non suoni). La campanella vale solo per i contanti: sulla strada della carta (webhook Stripe, file non miei) la posta spenta resta senza campanella, ma al lancio la carta è spenta (mancano anche le chiavi Stripe).",
+      "cosa_resta": "La cura vera non è codice: Nicola crea su Vercel (Production) RESEND_API_KEY, RESEND_FROM e SUPPORT_EMAIL, ripubblica e fa un ordine di prova. La parte di codice (campanella agli admin sulla strada dei contanti) regge; sulla strada della carta la posta spenta resta senza avviso perché lib/stripe/webhook/posta-non-partita.ts salta apposta questi casi (file non di R27).",
+      "serve_file_altrui": [
+        {
+          "file": "lib/stripe/webhook/posta-non-partita.ts",
+          "modifica": "quando l’email non parte perché la chiave o il mittente mancano (oggi saltato apposta), chiamare notifyAdmins una volta per ordine con la chiave posta-spenta:<id>, come fa ora app/api/orders/cod/route.ts"
+        }
+      ],
+      "verificato_da": "smentitore grande (lotto 1): rilanciata la prova; letto il diff: campanella dentro dopoLaRisposta con try/catch, unaVoltaPer posta-spenta:<id>, duplicati scartati (23505); notifyAdmins che fallisce non tocca l’ordine; fuori dal sito vero non suona. Codice regge, resta la parte non codice."
+    },
+    {
+      "id": "R27-004",
+      "chiave": "qa-flussi|le tre prove automatiche dell'acquisto vero sono vuote: passano in tre millesimi senza aprire niente",
+      "esito": "scelta_di_nicola",
+      "domanda": "Firmi la modifica alla prova comune tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts e il salto nuovo (test.skip per gruppo) nello spec 12, così la prova del contrassegno gira senza Stripe e il cancello non conta un verde a zero prove viste?",
+      "nota": "La correzione c’era (commit 5c38ad5711c31eebb9cf326b1b795331a98c3ec3, smentita dal grande: regge) ma guardia-ramo era rossa: cambia una prova comune e aggiunge un salto (test.skip) nello spec 12 e nella prova comune. Su richiesta della regista è tolta dal ramo con il commit db46a9867f9d8b3eb117ff1a0e3b365e627f2451. Con la firma di Nicola si rimette con git cherry-pick 5c38ad5711c31eebb9cf326b1b795331a98c3ec3 (tocca anche .github/workflows/ci.yml, la prova esistente tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts e la prova nuova tests/unit/riparazione-r27-la-cassa-vera-non-conta-a-vuoto.test.ts). Restano per Nicola anche: la variabile del repository E2E_DATI_DI_PROVA=1, il segreto STRIPE_TEST_SECRET_KEY (sk_test_) e la variabile E2E_STRIPE_CONTO_NEGOZIO (acct_ di prova). Diff esatta di spec 12 e prova comune nel campo diff.",
+      "diff": "diff --git a/tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts b/tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts\nindex db2d9e3..784d7f1 100644\n--- a/tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts\n+++ b/tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts\n@@ -196,11 +196,17 @@ test.describe('l\\'ordine che nasce davvero', () => {\n    */\n \n   /*\n-   * 16/11/2026 (R29-001) — UN SOLO SALTO, QUESTO, E COPRE ANCHE LE TRE PROVE DELL'ACQUISTO VERO.\n+   * 16/11/2026 (R29-001) — I SALTI STANNO QUI, NON DENTRO LE PROVE.\n    * «Ambiente di prova pronto» vuol dire: l'interruttore E2E_DATI_DI_PROVA acceso, il database\n-   * LOCALE di prova e Stripe in modalita' prova pronto. Se manca anche una cosa sola si saltano\n-   * tutte, e il motivo dice quale: mai verdi a vuoto, e il lavoro della CI non diventa rosso\n-   * perche' manca un segreto. Le prove, dentro, non si spengono piu' una per una.\n+   * LOCALE di prova e, per la carta, Stripe in modalita' prova pronto. Se manca qualcosa la prova\n+   * si salta prima di cominciare e il motivo dice cosa: mai verdi a vuoto, e il lavoro della CI non\n+   * diventa rosso perche' manca un segreto. Le prove, dentro, non si spengono una per una.\n+   *\n+   * 26/11/2026 — I salti sono due, uno per quello che serve davvero. Prima era uno solo e guardava\n+   * anche Stripe: senza le chiavi di prova si saltava anche il contrassegno, che Stripe non lo\n+   * usa, Playwright usciva 0 con tre prove saltate e il lavoro della CI era verde senza aver visto\n+   * niente. Adesso il contrassegno (e il modulo della cassa) chiede solo il database di prova; le\n+   * due prove con la carta stanno nel gruppo «con la carta di prova», che chiede anche Stripe.\n    *\n    * Cosa serve:\n    *  - il database: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY e SUPABASE_SERVICE_ROLE_KEY\n@@ -255,17 +261,27 @@ test.describe('l\\'ordine che nasce davvero', () => {\n   }\n \n   const ACCESO = Boolean(process.env.E2E_DATI_DI_PROVA);\n+  const SPENTO =\n+    'serve un database di prova con dentro un negozio approvato, un prodotto e un cliente, ' +\n+    'piu\\' le chiavi Stripe in modalita\\' prova (variabile E2E_DATI_DI_PROVA). ' +\n+    'Finche\\' manca, in questo giro nessun ordine nasce davvero.';\n+  // Il contrassegno e il modulo della cassa: basta il database locale di prova.\n+  const COSA_MANCA_AI_CONTANTI = ACCESO ? cosaManca(['database']) : null;\n+  const SENZA_DATABASE_DI_PROVA = !ACCESO || COSA_MANCA_AI_CONTANTI !== null;\n+  const PERCHE_SENZA_DATABASE = !ACCESO\n+    ? SPENTO\n+    : `E2E_DATI_DI_PROVA e' accesa ma il database di prova non e' pronto: ${COSA_MANCA_AI_CONTANTI}. ` +\n+      'Finche\\' manca, in questo giro nessun ordine nasce davvero.';\n+  // Le due prove con la carta: anche Stripe in modalita' prova (vedi il gruppo qui sotto).\n   const COSA_MANCA = ACCESO ? cosaManca(['database', 'carta', 'bonifico']) : null;\n   const SENZA_AMBIENTE_DI_PROVA = !ACCESO || COSA_MANCA !== null;\n   const PERCHE = !ACCESO\n-    ? 'serve un database di prova con dentro un negozio approvato, un prodotto e un cliente, ' +\n-      'piu\\' le chiavi Stripe in modalita\\' prova (variabile E2E_DATI_DI_PROVA). ' +\n-      'Finche\\' manca, in questo giro nessun ordine nasce davvero.'\n-    : `E2E_DATI_DI_PROVA e' accesa ma l'ambiente di prova non e' pronto: ${COSA_MANCA}. ` +\n-      'Finche\\' manca, in questo giro nessun ordine nasce davvero.';\n+    ? SPENTO\n+    : `E2E_DATI_DI_PROVA e' accesa ma l'ambiente di prova per la carta non e' pronto: ${COSA_MANCA}. ` +\n+      'Finche\\' manca, in questo giro nessun pagamento con la carta nasce davvero.';\n \n   test.beforeEach(() => {\n-    test.skip(SENZA_AMBIENTE_DI_PROVA, PERCHE);\n+    test.skip(SENZA_DATABASE_DI_PROVA, PERCHE_SENZA_DATABASE);\n   });\n \n   test('la cassa disegna il modulo con la merce riletta dal database', async ({ page }) => {\n@@ -291,8 +307,9 @@ test.describe('l\\'ordine che nasce davvero', () => {\n    *  ③ guarda l'ordine nel database di prova e, per la carta, l'oggetto su Stripe in modalita'\n    *    prova (pagamento, rimborso, trasferimento).\n    *\n-   * Dentro non hanno salti propri: l'ambiente lo guarda il salto unico qui sopra, e se manca\n-   * qualcosa si saltano tutte e tre prima di cominciare, dicendo cosa.\n+   * Dentro non hanno salti propri: l'ambiente lo guardano i salti qui sopra (il database per\n+   * tutte, Stripe di prova per le due del gruppo «con la carta di prova»), e se manca qualcosa la\n+   * prova si salta prima di cominciare, dicendo cosa.\n    */\n \n   function databaseDiProva(): SupabaseClient {\n@@ -525,65 +542,73 @@ test.describe('l\\'ordine che nasce davvero', () => {\n     expect(String(avviso!.body)).toContain(id.slice(0, 6).toUpperCase());\n   });\n \n-  test('rifiuto del negozio su un ordine pagato: il rimborso esiste', async ({ request }) => {\n-    const stripe = stripeDiProva();\n-    const b = await preparaLaBottega();\n-    const { ordine, pagamento, totaleCents } = await ordinePagatoConLaCarta(request, b, stripe);\n-\n-    const rifiuto = await request.post(`/api/seller/orders/${ordine.id}/reject`, {\n-      data: { reason: 'Prova automatica: merce finita' },\n-      headers: conGettone(b.negozio),\n+  test.describe('con la carta di prova', () => {\n+    // Rimborso e bonifico passano da Stripe in modalita' prova: senza le sue chiavi si saltano\n+    // qui, dicendo cosa manca, e il contrassegno qui sopra gira lo stesso.\n+    test.beforeEach(() => {\n+      test.skip(SENZA_AMBIENTE_DI_PROVA, PERCHE);\n     });\n-    expect(rifiuto.status(), `il negozio non riesce a rifiutare l'ordine pagato: ${await rifiuto.text()}`).toBe(200);\n-    const refundId = ((await rifiuto.json()) as { refundId?: string | null }).refundId ?? '';\n-    expect(refundId, 'rifiutato un ordine pagato senza nessun rimborso').toMatch(/^re_/);\n-\n-    // Il rimborso è registrato sull'ordine…\n-    const dopo = await leggiOrdine(b.db, 'id', ordine.id);\n-    expect(dopo.delivery_status).toBe('CANCELED');\n-    expect(dopo.payment_status).toBe('REFUNDED');\n-    expect(String(dopo.stripe_refund_id ?? '')).toContain(refundId);\n-    expect(dopo.refunded_amount_cents).toBe(totaleCents);\n-\n-    // …ed esiste su Stripe, sul pagamento giusto e per tutto l'importo.\n-    const rimborso = await stripe.refunds.retrieve(refundId);\n-    expect(rimborso.payment_intent).toBe(pagamento.id);\n-    expect(rimborso.amount).toBe(totaleCents);\n-    expect(['succeeded', 'pending']).toContain(rimborso.status);\n-\n-    // E il cliente lo sa.\n-    const { data: avvisi } = await b.db.from('notifications').select('title, body').eq('user_id', b.cliente.id);\n-    expect((avvisi ?? []).some((n) => /rifiutato dal negozio/i.test(String(n.title)) && /rimborsato/i.test(String(n.body)))).toBe(true);\n-  });\n \n-  test('consegna completata: il bonifico al negozio parte', async ({ request }) => {\n-    const stripe = stripeDiProva();\n-    const b = await preparaLaBottega(AMBIENTE.contoNegozio);\n-    const { ordine } = await ordinePagatoConLaCarta(request, b, stripe);\n-    expect(ordine.payout_status, 'i soldi del negozio devono restare fermi fino alla consegna').toBe('HELD');\n-    expect(ordine.seller_payout_cents ?? 0).toBeGreaterThan(0);\n-    expect(ordine.stripe_charge_id, 'senza l addebito il bonifico parte dal saldo vuoto').toMatch(/^(ch|py)_/);\n-\n-    // Consegnato due ore fa: oltre l'attesa del bonifico.\n-    const dueOreFa = new Date(Date.now() - 2 * 3_600_000).toISOString();\n-    const { error: errConsegna } = await b.db\n-      .from('orders')\n-      .update({ delivery_status: 'DELIVERED', accepted_at: dueOreFa, picked_up_at: dueOreFa, delivered_at: dueOreFa })\n-      .eq('id', ordine.id);\n-    expect(errConsegna, `la consegna di prova non si scrive: ${errConsegna?.message}`).toBeNull();\n-\n-    const giro = await request.post('/api/cron/release-payouts?a_mano=1', {\n-      headers: { authorization: `Bearer ${AMBIENTE.cron}` },\n+    test('rifiuto del negozio su un ordine pagato: il rimborso esiste', async ({ request }) => {\n+      const stripe = stripeDiProva();\n+      const b = await preparaLaBottega();\n+      const { ordine, pagamento, totaleCents } = await ordinePagatoConLaCarta(request, b, stripe);\n+\n+      const rifiuto = await request.post(`/api/seller/orders/${ordine.id}/reject`, {\n+        data: { reason: 'Prova automatica: merce finita' },\n+        headers: conGettone(b.negozio),\n+      });\n+      expect(rifiuto.status(), `il negozio non riesce a rifiutare l'ordine pagato: ${await rifiuto.text()}`).toBe(200);\n+      const refundId = ((await rifiuto.json()) as { refundId?: string | null }).refundId ?? '';\n+      expect(refundId, 'rifiutato un ordine pagato senza nessun rimborso').toMatch(/^re_/);\n+\n+      // Il rimborso è registrato sull'ordine…\n+      const dopo = await leggiOrdine(b.db, 'id', ordine.id);\n+      expect(dopo.delivery_status).toBe('CANCELED');\n+      expect(dopo.payment_status).toBe('REFUNDED');\n+      expect(String(dopo.stripe_refund_id ?? '')).toContain(refundId);\n+      expect(dopo.refunded_amount_cents).toBe(totaleCents);\n+\n+      // …ed esiste su Stripe, sul pagamento giusto e per tutto l'importo.\n+      const rimborso = await stripe.refunds.retrieve(refundId);\n+      expect(rimborso.payment_intent).toBe(pagamento.id);\n+      expect(rimborso.amount).toBe(totaleCents);\n+      expect(['succeeded', 'pending']).toContain(rimborso.status);\n+\n+      // E il cliente lo sa.\n+      const { data: avvisi } = await b.db.from('notifications').select('title, body').eq('user_id', b.cliente.id);\n+      expect((avvisi ?? []).some((n) => /rifiutato dal negozio/i.test(String(n.title)) && /rimborsato/i.test(String(n.body)))).toBe(true);\n     });\n-    expect(giro.status(), `il giro dei bonifici non parte: ${await giro.text()}`).toBe(200);\n \n-    const dopo = await leggiOrdine(b.db, 'id', ordine.id);\n-    expect(dopo.payout_status, 'consegnato e pagato, ma il bonifico al negozio non è partito').toBe('TRANSFERRED');\n-    expect(dopo.stripe_transfer_id).toMatch(/^tr_/);\n-\n-    const trasferimento = await stripe.transfers.retrieve(dopo.stripe_transfer_id!);\n-    expect(trasferimento.destination).toBe(AMBIENTE.contoNegozio);\n-    expect(trasferimento.amount).toBe(ordine.seller_payout_cents);\n-    expect(trasferimento.source_transaction).toBe(ordine.stripe_charge_id);\n+    test('consegna completata: il bonifico al negozio parte', async ({ request }) => {\n+      const stripe = stripeDiProva();\n+      const b = await preparaLaBottega(AMBIENTE.contoNegozio);\n+      const { ordine } = await ordinePagatoConLaCarta(request, b, stripe);\n+      expect(ordine.payout_status, 'i soldi del negozio devono restare fermi fino alla consegna').toBe('HELD');\n+      expect(ordine.seller_payout_cents ?? 0).toBeGreaterThan(0);\n+      expect(ordine.stripe_charge_id, 'senza l addebito il bonifico parte dal saldo vuoto').toMatch(/^(ch|py)_/);\n+\n+      // Consegnato due ore fa: oltre l'attesa del bonifico.\n+      const dueOreFa = new Date(Date.now() - 2 * 3_600_000).toISOString();\n+      const { error: errConsegna } = await b.db\n+        .from('orders')\n+        .update({ delivery_status: 'DELIVERED', accepted_at: dueOreFa, picked_up_at: dueOreFa, delivered_at: dueOreFa })\n+        .eq('id', ordine.id);\n+      expect(errConsegna, `la consegna di prova non si scrive: ${errConsegna?.message}`).toBeNull();\n+\n+      const giro = await request.post('/api/cron/release-payouts?a_mano=1', {\n+        headers: { authorization: `Bearer ${AMBIENTE.cron}` },\n+      });\n+      expect(giro.status(), `il giro dei bonifici non parte: ${await giro.text()}`).toBe(200);\n+\n+      const dopo = await leggiOrdine(b.db, 'id', ordine.id);\n+      expect(dopo.payout_status, 'consegnato e pagato, ma il bonifico al negozio non è partito').toBe('TRANSFERRED');\n+      expect(dopo.stripe_transfer_id).toMatch(/^tr_/);\n+\n+      const trasferimento = await stripe.transfers.retrieve(dopo.stripe_transfer_id!);\n+      expect(trasferimento.destination).toBe(AMBIENTE.contoNegozio);\n+      expect(trasferimento.amount).toBe(ordine.seller_payout_cents);\n+      expect(trasferimento.source_transaction).toBe(ordine.stripe_charge_id);\n+    });\n   });\n });\ndiff --git a/tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts b/tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts\nindex 36435ec..bd43449 100644\n--- a/tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts\n+++ b/tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts\n@@ -158,7 +158,7 @@ describe('R29-001 · ① le tre prove dell acquisto vero hanno un corpo che fa n\n     });\n   }\n \n-  it('lo spec ha un salto solo per la cassa col database, e il suo motivo dice cosa manca', () => {\n+  it('lo spec ha un salto per il database e uno per la carta, fuori dalle prove, e i motivi dicono cosa manca', () => {\n     const f = fonte();\n     const salti: string[] = [];\n     const visita = (n: ts.Node) => {\n@@ -167,15 +167,49 @@ describe('R29-001 · ① le tre prove dell acquisto vero hanno un corpo che fa n\n     };\n     visita(f);\n     // Le condizioni dei salti: la prima è delle pagine senza JavaScript, che c'era già; la seconda\n-    // è il salto unico. Un salto in più, dentro una delle tre prove o altrove, fa rosso qui.\n+    // è il database di prova (tutte); la terza è Stripe di prova (solo il gruppo della carta). Un\n+    // salto in più, dentro una delle tre prove o altrove, fa rosso qui.\n+    // 26/11/2026 — Prima il salto era uno solo e guardava anche Stripe: senza le chiavi di prova\n+    // si saltava anche il contrassegno, e il lavoro della CI era verde con tre prove saltate.\n     expect(salti, 'i salti dello spec sono cambiati: le tre prove non si spengono una per una').toEqual([\n       'diagnosi.senzaJavascript, diagnosi.motivo',\n+      'SENZA_DATABASE_DI_PROVA, PERCHE_SENZA_DATABASE',\n       'SENZA_AMBIENTE_DI_PROVA, PERCHE',\n     ]);\n-    // Il salto unico guarda tutto l'ambiente (database locale, carta, bonifico), non solo l'interruttore.\n-    expect(funzione('COSA_MANCA'), 'il salto unico non guarda l ambiente intero').toMatch(/cosaManca\\(\\s*\\[\\s*'database',\\s*'carta',\\s*'bonifico'\\s*\\]\\s*\\)/);\n+    // Il salto della carta guarda tutto l'ambiente (database locale, carta, bonifico), non solo l'interruttore.\n+    expect(funzione('COSA_MANCA'), 'il salto della carta non guarda l ambiente intero').toMatch(/cosaManca\\(\\s*\\[\\s*'database',\\s*'carta',\\s*'bonifico'\\s*\\]\\s*\\)/);\n     expect(funzione('SENZA_AMBIENTE_DI_PROVA')).toMatch(/COSA_MANCA\\s*!==\\s*null/);\n     expect(funzione('PERCHE'), 'il motivo del salto non dice cosa manca').toMatch(/\\$\\{COSA_MANCA\\}/);\n+    // Quello del database guarda il database locale, e l'interruttore.\n+    expect(funzione('COSA_MANCA_AI_CONTANTI'), 'il salto del database non guarda il database').toMatch(/cosaManca\\(\\s*\\[\\s*'database'\\s*\\]\\s*\\)/);\n+    expect(funzione('SENZA_DATABASE_DI_PROVA')).toMatch(/!ACCESO\\s*\\|\\|\\s*COSA_MANCA_AI_CONTANTI\\s*!==\\s*null/);\n+    expect(funzione('PERCHE_SENZA_DATABASE'), 'il motivo del salto non dice cosa manca').toMatch(/\\$\\{COSA_MANCA_AI_CONTANTI\\}/);\n+  });\n+\n+  it('il salto di Stripe tocca solo le due prove con la carta: il contrassegno non lo aspetta', () => {\n+    const f = fonte();\n+    // Il gruppo che contiene la chiamata `test.skip(SENZA_AMBIENTE_DI_PROVA, …)`.\n+    let gruppo: ts.CallExpression | undefined;\n+    const visita = (n: ts.Node) => {\n+      if (ts.isCallExpression(n) && modoDi(n) === 'skip' && n.arguments[0]?.getText(f) === 'SENZA_AMBIENTE_DI_PROVA') {\n+        let su: ts.Node | undefined = n.parent;\n+        while (su && !(ts.isCallExpression(su) && modoDi(su) === 'describe')) su = su.parent;\n+        gruppo = su as ts.CallExpression | undefined;\n+      }\n+      ts.forEachChild(n, visita);\n+    };\n+    visita(f);\n+    expect(gruppo, 'il salto di Stripe non sta in un gruppo suo').toBeTruthy();\n+    const titoli: string[] = [];\n+    const dentro = (n: ts.Node) => {\n+      if (ts.isCallExpression(n) && modoDi(n) === 'test' && n.arguments[0] && ts.isStringLiteral(n.arguments[0])) titoli.push(n.arguments[0].text);\n+      ts.forEachChild(n, dentro);\n+    };\n+    dentro(gruppo!);\n+    expect(titoli.sort()).toEqual([\n+      'consegna completata: il bonifico al negozio parte',\n+      'rifiuto del negozio su un ordine pagato: il rimborso esiste',\n+    ]);\n   });\n \n   it('l ordine si legge davvero dal database di prova, e il pagamento con la carta passa dall avviso firmato', () => {\n",
+      "commit_tolto": "5c38ad5711c31eebb9cf326b1b795331a98c3ec3",
+      "commit_revert": "db46a9867f9d8b3eb117ff1a0e3b365e627f2451",
+      "verificato_da": "smentitore grande (lotto 1): rilanciate le 3 prove; eseguito lo script vero del cancello preso da ci.yml con 11 varianti (job saltato/fallito/annullato, viste 0/vuota/null/abc/1 x/1, uscite vuote, cassa unico verde a zero viste): saltato non blocca, fallito/annullato rosso, zero o non numerico «non conta». Le due prove esistenti modificate leggono solo spec 12 e ci.yml e non sono indebolite. Regge."
+    },
+    {
+      "id": "R27-005",
+      "chiave": "qa-flussi|un ordine fermo su «accettato» o «ritirato dal fattorino» non fa suonare nessun allarme e non scade mai",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha superato l’80% del limite di spesa (22,85 $ su 25 $) dopo i lotti 1 e 2 e ha consegnato quello che aveva (regole del 26/11, punto 4). Da riassegnare in un’onda successiva."
+    },
+    {
+      "id": "R27-007",
+      "chiave": "qa-flussi|se il fattorino sparisce senza dichiarare i contanti, l'ordine resta in consegna per sempre e l'amministratore non può chiuderlo",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha superato l’80% del limite di spesa (22,85 $ su 25 $) dopo i lotti 1 e 2 e ha consegnato quello che aveva (regole del 26/11, punto 4). Da riassegnare in un’onda successiva."
+    },
+    {
+      "id": "R27-008",
+      "chiave": "api-backend|il cron degli ordini scaduti ricopia la logica di annullo invece di usare annullaerimborsa",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha superato l’80% del limite di spesa (22,85 $ su 25 $) dopo i lotti 1 e 2 e ha consegnato quello che aveva (regole del 26/11, punto 4). Da riassegnare in un’onda successiva."
+    },
+    {
+      "id": "R27-009",
+      "chiave": "api-backend|il giro che annulla legge al massimo 100 ordini fermi, senza un ordine: una veloce scaduta può restare fuori dal giro",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha superato l’80% del limite di spesa (22,85 $ su 25 $) dopo i lotti 1 e 2 e ha consegnato quello che aveva (regole del 26/11, punto 4). Da riassegnare in un’onda successiva."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Gli indirizzi salvati in rubrica prima della correzione tengono le coordinate sbagliate e la cassa li usa per primi",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/api/orders/cod/route.ts:1127 · app/profile/addresses/page.tsx:70-73",
+      "descrizione": "coordinateDaIndirizziSalvati usa per prime le coordinate della rubrica; la rubrica tiene le coordinate vecchie se il testo non cambia: chi aveva salvato «Via Roma 10» col geocodificatore vecchio resta fuori zona anche risalvando."
+    },
+    {
+      "titolo": "La pulizia di città e CAP nella ricerca indirizzi lascia passare null su scritture comuni",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "lib/geocodifica.ts:85 · :94-101 · :123-126",
+      "descrizione": "«piacenza pc» minuscolo e «Piacenza, PC» nel campo città danno null; un CAP 29122 per una via che le mappe danno 29121 dà null. Nessun blocco: l’ordine passa senza coordinate."
+    },
+    {
+      "titolo": "La prova «la cassa disegna il modulo» non gira in nessun lavoro della CI",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": ".github/workflows/ci.yml (filtro -g del job e2e-cassa-vera)",
+      "descrizione": "già nota, resta fuori dal filtro."
+    },
+    {
+      "titolo": "Se la cancellazione dell’ordine fallisce dopo quella degli articoli, l’ordine resta senza articoli e la sua merce non torna più",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/orders/cod/route.ts (rollbackCreatedCodOrders)",
+      "descrizione": "restore_stock_for_order rimette la merce solo dagli articoli: se gli articoli sono già cancellati e l’ordine no, la merce resta scalata."
+    },
+    {
+      "titolo": "Sulla strada della carta la posta spenta non avvisa nessuno",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "lib/stripe/webhook/posta-non-partita.ts",
+      "descrizione": "salta apposta i casi di chiave o mittente mancanti: nessuna campanella agli admin (al lancio la carta è spenta)."
+    },
+    {
+      "titolo": "Nessuna guardia nel database contro un negozio che scrive da solo la propria posizione fuori area",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/seller/profile/page.tsx:73",
+      "descrizione": "il controllo del profilo sta solo nel browser."
+    }
+  ],
+  "domande_per_nicola": [
+    "R27-006: l’area dove può stare un negozio è il riquadro di Piacenza e dintorni (circa 12 km dal centro, lo stesso della ricerca indirizzi): va bene o vuoi un confine più stretto? Si cambia in un punto solo (lib/ordini/zona-di-consegna.ts).",
+    "R27-003: creare su Vercel (Production) RESEND_API_KEY, RESEND_FROM e SUPPORT_EMAIL, ripubblicare e fare un ordine di prova.",
+    "R27-002: applicare la migrazione 961 quando il collaudo l’ha approvata.",
+    "R27-004: firmare la modifica alla prova comune riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto e il salto per gruppo nello spec 12 (diff nel referto; si rimette con cherry-pick di 5c38ad5711c31eebb9cf326b1b795331a98c3ec3); poi creare E2E_DATI_DI_PROVA=1, STRIPE_TEST_SECRET_KEY (sk_test_) ed E2E_STRIPE_CONTO_NEGOZIO."
+  ],
+  "conto": {
+    "agenti": 3,
+    "nota": "Ultracode non acceso (regole del 26/11, punto 1): lavorato senza. 3 subagenti sul modello grande: riparatore lotto 1 (4 voci), smentitore lotto 1, riparatore lotto 2 (R27-002). Fermata all’80% del limite: spesa letta da get_session 22,85 $ prima del verify, 23,29 $ alla consegna. Lotto 2 senza smentitore, lotti 3 e 4 non lanciati. Giro corto della sesta regia (senza subagenti): tolta la correzione di R27-004 per guardia-ramo rossa; spesa a fine giro 25,04 $.",
+    "subagenti": 3,
+    "costo_usd": 25.04
+  },
+  "costo_usd": 25.04
+}

@@ -33,6 +33,14 @@ function rimborsoSenzaRitorno(e: unknown): boolean {
 export const runtime = 'nodejs';
 
 /**
+ * 26/11/2026 — Dopo quanto una riserva della cassa in contanti senza articoli e'
+ * di una funzione morta. E' la vita della riserva della carta
+ * (`pending_checkouts.expires_at`, migrazione 042: due ore), molto piu' lunga di
+ * qualunque giro della cassa: una cassa ancora al lavoro non perde la sua merce.
+ */
+const RISERVA_ORFANA_DOPO_MINUTI = 120;
+
+/**
  * Cron: chiude gli ordini ORFANI fermi in NEW che il venditore non ha mai
  * accettato (es. ordine piazzato di notte). Senza questo restano in limbo a
  * tempo indefinito: nessuno stato di prodotto, stock bloccato, buyer all'oscuro.
@@ -118,6 +126,26 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   } catch (e) {
     return ApiErrors.unavailable(e instanceof Error ? e.message : 'config error');
   }
+
+  // 26/11/2026 — LA MERCE DI UNA CASSA MORTA IN MEZZO TORNA A SCAFFALE.
+  // La cassa in contanti scala la merce prima di scrivere l'ordine e gli articoli
+  // dopo; la riserva resta scritta (migrazione 961) finche' gli articoli non ci
+  // sono. Una riga rimasta oltre la soglia e' di una funzione morta: la merce
+  // torna, e il credito tolto se l'ordine non e' mai nato. Prima di tutto il
+  // resto, e senza fermare il giro se non riesce.
+  const { data: riserveLiberate, error: errRiserve } = await admin.rpc('libera_riserve_orfane', {
+    p_minuti: RISERVA_ORFANA_DOPO_MINUTI,
+  });
+  if (errRiserve) {
+    if (['PGRST202', '42883'].includes(String((errRiserve as { code?: string }).code))) {
+      logger.warn('[cron] expire-stale-orders: migrazione 961 non ancora applicata, niente riserve da liberare', { message: errRiserve.message });
+    } else {
+      logger.error('[cron] expire-stale-orders: riserve della cassa in contanti non liberate', { message: errRiserve.message });
+    }
+  } else if (typeof riserveLiberate === 'number' && riserveLiberate > 0) {
+    logger.spesa(`[cron] expire-stale-orders: ${riserveLiberate} riserve della cassa in contanti tornate a scaffale`);
+  }
+
   const cutoff = new Date().toISOString();
 
   const { data: candidates, error } = await admin
