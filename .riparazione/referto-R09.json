@@ -78,16 +78,15 @@
   {
    "id": "R09-004",
    "chiave": "architettura|il commento e la prova dicono che la bozza della cassa scade, ma la scadenza è stata tolta",
-   "esito": "riparato",
+   "esito": "parziale",
    "commit": "0dfa00b0097e4fed9c1fad936e2b097ffef32a3d",
    "file_toccati": [
-    "app/checkout/page.tsx",
-    "tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts"
+    "app/checkout/page.tsx"
    ],
    "prova_file": [
     "tests/unit/riparazione-r09-la-bozza-della-cassa-non-scade.test.ts"
    ],
-   "prova_comando": "npx vitest run tests/unit/riparazione-r09-la-bozza-della-cassa-non-scade.test.ts tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts --reporter=dot",
+   "prova_comando": "npx vitest run tests/unit/riparazione-r09-la-bozza-della-cassa-non-scade.test.ts --reporter=dot",
    "prova_tipo": "comando",
    "prova_eseguita": true,
    "rimessa": {
@@ -95,9 +94,16 @@
     "uscita": 0,
     "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0dfa00b0097e4fed9c1fad936e2b097ffef32a3d^ --file app/checkout/page.tsx --prove tests/unit/riparazione-r09-la-bozza-della-cassa-non-scade.test.ts --json"
    },
-   "copre_tutta_la_voce": true,
-   "cosa_ho_fatto": "Il commento di salvaLaBozzaPerAccesso dice che la bozza segna quando è stata scelta (sceltaIl) e non scade; la scadenza non è stata rimessa. Prova esistente modificata dichiarata: riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts legge per nome app/checkout/page.tsx e importa solo aiutanti di prova; tolto «(con la scadenza)» dal solo titolo, corpo invariato.",
-   "verificato_da": "revisore sonnet: rilanciate le due prove (7/7), cercati altri commenti o prove che promettano la scadenza (nessuno); nota: la prova nuova è leggera, guarda il testo del commento"
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Il commento di salvaLaBozzaPerAccesso in app/checkout/page.tsx dice che la bozza segna quando è stata scelta (sceltaIl) e non ha una scadenza; la scadenza non è stata rimessa. Il titolo della prova R19 era stato corretto, ma per il programma quella prova è comune: rimesso identico alla base col commit R09-varie 18e96d23fa0a66e66039f0c751107bed137300a6.",
+   "verificato_da": "revisore sonnet: rilanciate le due prove (7/7), cercati altri commenti o prove che promettano la scadenza (nessuno); nota: la prova nuova è leggera, guarda il testo del commento",
+   "cosa_resta": "La prova comune dice ancora «(con la scadenza)» nel titolo di un caso.",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts",
+     "modifica": "Riga 18: nel titolo del caso togliere « (con la scadenza)»: 'il salvataggio passa da bozzaDaSalvare ed è lo stesso di «Ordina»'. Asserzioni invariate."
+    }
+   ]
   },
   {
    "id": "R09-005",
@@ -333,13 +339,13 @@
   "nota": "L1 opus, L2 sonnet, L3 opus, revisore opus (5 voci), revisore sonnet (3 voci). Spesa a fine controlli 15,78 $ su 20: chiuso all'80%, nessun giro di correzione.",
   "subagenti": 5
  },
- "aggiornato": "2026-11-26 13:55",
- "testa": "40ee988e4e28d4685b9a48f1a01e04322d549d6f",
+ "aggiornato": "2026-11-26 14:10",
+ "testa": "18e96d23fa0a66e66039f0c751107bed137300a6",
  "verifica": {
   "comando": "npm run verify",
   "esito": "verde",
-  "testa": "40ee988e4e28d4685b9a48f1a01e04322d549d6f",
-  "nota": "typecheck pulito, lint 0 errori (121 avvisi già presenti), vitest 2148 file / 13197 prove passate, 1 saltato preesistente"
+  "testa": "18e96d23fa0a66e66039f0c751107bed137300a6",
+  "nota": "rilanciato sulla nuova testa dopo il commit che rimette la prova R19 identica alla base: typecheck pulito, lint 0 errori (121 avvisi già presenti), vitest 2148 file / 13197 prove passate, 1 saltato preesistente; guardia-ramo verde"
  },
  "costo_usd": 15.78
 }
