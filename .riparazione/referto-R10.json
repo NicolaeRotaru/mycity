@@ -1,0 +1,240 @@
+{
+  "sessione": "R10",
+  "aggiornato": "2026-11-26 13:48",
+  "finita": true,
+  "testa": "7da52c6631c3eb360408ef9cd47c48037eb9cba0",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "7da52c6631c3eb360408ef9cd47c48037eb9cba0",
+    "nota": "typecheck, lint e vitest: 2149 file di prova, 13221 prove passate; aspettato nello stesso turno"
+  },
+  "voci": [
+    {
+      "id": "R10-001",
+      "chiave": "flussi-conversione|chi è amministratore, negozio o fattorino perde il ritorno dopo l'accesso, e col pulsante google il ritorno si perde per tutti",
+      "esito": "riparato",
+      "commit": "db202f251ca5e2d3709fe75afeb0476df25d80f5",
+      "file_toccati": [
+        "app/sign-in/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-ritorno-dopo-l-accesso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-ritorno-dopo-l-accesso.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base db202f251ca5e2d3709fe75afeb0476df25d80f5^ --file app/sign-in/page.tsx --prove tests/unit/riparazione-r10-ritorno-dopo-l-accesso.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dopo l'accesso con email e password chi ha un returnTo sicuro ci torna anche se è amministratore, negozio o fattorino (per esempio verso /accetta-condizioni); la home del ruolo resta quando il returnTo manca, non è sicuro, è '/' o sta nell'area di un altro ruolo. La prova monta la pagina vera: ruoli, ritorni ostili, cambio di ruolo.",
+      "nota": "Parte (b), il pulsante Google, era già chiusa sulla base: components/ui/AuthShell.tsx:154 passa next a /auth/callback e app/auth/callback/route.ts:27-32 lo legge e lo ripulisce con safeInternalPath; la copre la prova esistente tests/unit/riparazione-r02-ritorno-con-google.test.tsx (verde). Le righe del registro (215-223) oggi sono page.tsx:254-267. Impostazione esterna da controllare (Nicola, console Supabase): la lista dei redirect permessi deve accettare /auth/callback con la query (?versione=…&next=…). Giro di correzione dopo il revisore: 7da52c6631c3eb360408ef9cd47c48037eb9cba0 amministratore, negozio e fattorino usano il returnTo solo se il percorso (senza query e frammento) non è '/' e non sta nell'area di un altro ruolo (/admin, /seller, /rider), altrimenti la home del proprio ruolo: resta lo scopo di prima («dopo un cambio account non resti sulla pagina del ruolo precedente»); il cliente non cambia; un amministratore con returnTo /seller o /rider va alla sua home, come sulla base. Rimessa: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7da52c6631c3eb360408ef9cd47c48037eb9cba0^ --file app/sign-in/page.tsx --prove tests/unit/riparazione-r10-ritorno-dopo-l-accesso.test.ts --json (uscita 0).",
+      "verificato_da": "revisore B (modello grande): 46 ritorni ostili passati da safeInternalPath, 14 varianti sulla pagina vera, giro /accetta-condizioni senza cicli, parte Google già chiusa sulla base; regge. Ha notato il ritorno verso l'area di un altro ruolo: corretto nel giro dopo. Secondo giro (revisore A) sul ritorno verso l'area di un altro ruolo: /accetta-condizioni, /cart e /profile restano ritorni validi per tutti, il cliente non cambia, '/?x' e le aree altrui portano alla home del ruolo, nessun ciclo. Verdetto del revisore «parziale» per casi di contorno della sola rifinitura (non del testo della voce): il controllo guarda la stringa e non il percorso risolto ('/rider/..', '/%73eller/…' con link costruiti apposta portano a '/'), nessuna uscita dal dominio."
+    },
+    {
+      "id": "R10-002",
+      "chiave": "flussi-conversione|il copilot del catalogo in blocco dice «rimandalo» per le voci rimaste fuori, ma la scheda non ha un modo per rimandare solo quelle",
+      "esito": "riparato",
+      "commit": "9f7bcffe39c11f296ffe08f362c29c058d179c16",
+      "file_toccati": [
+        "components/seller/CatalogCopilot.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-rimanda-le-rimaste.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-rimanda-le-rimaste.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9f7bcffe39c11f296ffe08f362c29c058d179c16^ --file components/seller/CatalogCopilot.tsx --prove tests/unit/riparazione-r10-rimanda-le-rimaste.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La scheda legge `rimaste` della rotta (id di prodotto) e mostra «Rimanda le N voci rimaste fuori», che rifà la chiamata in blocco con le stesse modifiche già proposte, filtrate su quelle voci; una voce data per scritta non riparte mai e il doppio clic manda una sola richiesta. La prova monta lo schermo vero (5 casi, 4 cadono senza la cura).",
+      "nota": "Non toccati lib/ai/esitoCopilot.ts né la rotta: l'avviso riceve gli esiti uniti {applied, results}. Le patch del copilot sono valori assoluti, quindi il rimando non ricalcola niente.",
+      "verificato_da": "revisore B (modello grande): formato di rimaste uguale alla rotta, patch assolute, 7 varianti d'errore (500/503/429/rete), doppio clic, voce scritta che ricompare fra le rimaste; regge."
+    },
+    {
+      "id": "R10-003",
+      "chiave": "flussi-conversione|il filtro «prezzo minimo» taglia sul prezzo pieno, non su quello che il cliente paga",
+      "esito": "riparato",
+      "commit": "e39bfa931334c169a107658ca1024d7463b15560",
+      "file_toccati": [
+        "lib/queries/griglia-prodotti.ts",
+        "migrations/960_il_prezzo_che_si_paga_lo_calcola_il_database.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-prezzo-minimo.test.ts",
+        "tests/sql/rls/riparazione-r10-prezzo-pagato.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-prezzo-minimo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e39bfa931334c169a107658ca1024d7463b15560^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r10-prezzo-minimo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il filtro «prezzo minimo» ora taglia su prezzo_pagato (prezzo meno la promozione attiva più alta, tetto 70%, al centesimo), calcolato dal database con la migrazione 960, e non su price. Vale anche per il conteggio sopra la griglia, che condivide il filtro.",
+      "nota": "MIGRAZIONE 960 dichiarata (fascia 960-969): migrations/960_il_prezzo_che_si_paga_lo_calcola_il_database.sql, commit 3a4e4c801ac586692851e3a27c11f310574088d0 (messaggio «R10-003 R10-004 R10-005 …»). Crea public.prezzo_pagato(products), colonna calcolata esposta da PostgREST con la stessa regola di active_promo_products; non SECURITY DEFINER, non tocca dati. Prova SQL tests/sql/rls/riparazione-r10-prezzo-pagato.test.sql; rimessa SQL: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3a4e4c801ac586692851e3a27c11f310574088d0^ --file migrations/960_il_prezzo_che_si_paga_lo_calcola_il_database.sql --prove tests/sql/rls/riparazione-r10-prezzo-pagato.test.sql --sql r10_rimessa --json (uscita 0, regge). Il codice di R10-003/004/005 la richiede applicata: senza, ordinare per prezzo o filtrare per prezzo minimo va in errore (colonna prezzo_pagato inesistente). Giro di correzione dopo il revisore: f00538d48a1cf3a39a75abc9ccab88bbc522c88b la migrazione 960 arrotonda come discountedUnitCents della cassa (float8, floor(x+0.5)), 0 differenze su 700.000 combinazioni (prezzi 0,01-100,00 × sconti 1-70), e GRANT EXECUTE esplicito ad anon/authenticated/service_role come vuole la 425; prova SQL coi casi 19,99/-50 → 9,99, 12,85/-30 → 8,99, 42,10/-5 → 39,99, categoria, futura, annullata; rimessa: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f00538d48a1cf3a39a75abc9ccab88bbc522c88b^ --file migrations/960_il_prezzo_che_si_paga_lo_calcola_il_database.sql --prove tests/sql/rls/riparazione-r10-prezzo-pagato.test.sql --sql r10_rimessa --json (uscita 0).",
+      "verificato_da": "revisore A (modello grande): lista e conteggio con lo stesso filtro, caso del registro coperto, prova SQL su 236 migrazioni verde, anonimo/cliente/negozio vedono lo stesso sconto; ha trovato l'arrotondamento diverso dalla cassa (corretto nel giro dopo). Secondo giro (revisore A): migrazione 960 corretta regge, 2.244.462 combinazioni confrontate col vero discountedUnitCents, 0 differenze; GRANT senza allargare niente."
+    },
+    {
+      "id": "R10-004",
+      "chiave": "flussi-conversione|l'ordine «prezzo crescente» ordina sul prezzo pieno, mentre la griglia mostra il prezzo scontato",
+      "esito": "riparato",
+      "commit": "9c56fe9375e24d7f9b6dee26a8ee1d48817a07fd",
+      "file_toccati": [
+        "lib/queries/griglia-prodotti.ts",
+        "migrations/960_il_prezzo_che_si_paga_lo_calcola_il_database.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-prezzo-ordine.test.ts",
+        "tests/sql/rls/riparazione-r10-prezzo-pagato.test.sql",
+        "tests/unit/riparazione-r10-riordino-a-blocchi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-prezzo-ordine.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9c56fe9375e24d7f9b6dee26a8ee1d48817a07fd^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r10-prezzo-ordine.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Ordinando per prezzo il database ordina su prezzo_pagato, poi su price nella stessa direzione (ripiego quando il pagato è pari o manca), poi sull'id come prima; il riordino in memoria dei blocchi fa lo stesso. L'ordine resta giusto anche fra le pagine.",
+      "insieme_a": [
+        "R10-005"
+      ],
+      "nota": "Stesso commit di R10-005, dichiarato. Il primo tentativo (09c4de9f291ad082d5e5c315ac7df9ebe0461c1d) toccava una prova comune: tolto col commit ec64e9c38aacdc19352782115e56cdff46ff487a (la prova comune torna uguale alla base) e rifatto qui senza toccarla. Richiede la migrazione 960 applicata (vedi R10-003). Giro di correzione dopo il revisore: f00538d48a1cf3a39a75abc9ccab88bbc522c88b la migrazione 960 arrotonda come discountedUnitCents della cassa (float8, floor(x+0.5)), 0 differenze su 700.000 combinazioni (prezzi 0,01-100,00 × sconti 1-70), e GRANT EXECUTE esplicito ad anon/authenticated/service_role come vuole la 425; prova SQL coi casi 19,99/-50 → 9,99, 12,85/-30 → 8,99, 42,10/-5 → 39,99, categoria, futura, annullata; rimessa: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f00538d48a1cf3a39a75abc9ccab88bbc522c88b^ --file migrations/960_il_prezzo_che_si_paga_lo_calcola_il_database.sql --prove tests/sql/rls/riparazione-r10-prezzo-pagato.test.sql --sql r10_rimessa --json (uscita 0). c7469c5e2c6da91f2977b752c259a8e98c7d479c aggiunge tests/unit/riparazione-r10-riordino-a-blocchi.test.ts, che passa dalla lettura a blocchi e cade togliendo la sola cura in memoria (5 su 6 rosse); rimessa: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9c56fe9375e24d7f9b6dee26a8ee1d48817a07fd^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r10-riordino-a-blocchi.test.ts --json (uscita 0).",
+      "verificato_da": "revisore A (modello grande): ordine in memoria uguale al database su 250 righe e >100 id col voto, tre finestre, crescente e decrescente; ha trovato l'arrotondamento e la prova del riordino a blocchi mancante (corretti nel giro dopo). Secondo giro (revisore A): 960 corretta regge (0 differenze su 2.244.462 combinazioni); la prova del riordino a blocchi cade togliendo la sola cura in memoria (5 su 6)."
+    },
+    {
+      "id": "R10-005",
+      "chiave": "frontend-ux|ordinando per prezzo, le griglie guardano il prezzo pieno e non quello che si paga",
+      "esito": "riparato",
+      "commit": "9c56fe9375e24d7f9b6dee26a8ee1d48817a07fd",
+      "file_toccati": [
+        "lib/queries/griglia-prodotti.ts",
+        "migrations/960_il_prezzo_che_si_paga_lo_calcola_il_database.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-prezzo-ordine.test.ts",
+        "tests/sql/rls/riparazione-r10-prezzo-pagato.test.sql",
+        "tests/unit/riparazione-r10-riordino-a-blocchi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-prezzo-ordine.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9c56fe9375e24d7f9b6dee26a8ee1d48817a07fd^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r10-prezzo-ordine.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stessa cura di R10-004: crescente e decrescente sul prezzo che si paga, col pieno come ripiego; vale per «Sotto i 10 €», ricerca e categorie, che passano tutte da leggiProdottiDellaGriglia.",
+      "insieme_a": [
+        "R10-004"
+      ],
+      "nota": "Stesso commit di R10-004, dichiarato. Il primo tentativo (09c4de9f291ad082d5e5c315ac7df9ebe0461c1d) toccava una prova comune: tolto col commit ec64e9c38aacdc19352782115e56cdff46ff487a (la prova comune torna uguale alla base) e rifatto qui senza toccarla. Richiede la migrazione 960 applicata (vedi R10-003). Giro di correzione dopo il revisore: f00538d48a1cf3a39a75abc9ccab88bbc522c88b la migrazione 960 arrotonda come discountedUnitCents della cassa (float8, floor(x+0.5)), 0 differenze su 700.000 combinazioni (prezzi 0,01-100,00 × sconti 1-70), e GRANT EXECUTE esplicito ad anon/authenticated/service_role come vuole la 425; prova SQL coi casi 19,99/-50 → 9,99, 12,85/-30 → 8,99, 42,10/-5 → 39,99, categoria, futura, annullata; rimessa: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f00538d48a1cf3a39a75abc9ccab88bbc522c88b^ --file migrations/960_il_prezzo_che_si_paga_lo_calcola_il_database.sql --prove tests/sql/rls/riparazione-r10-prezzo-pagato.test.sql --sql r10_rimessa --json (uscita 0). c7469c5e2c6da91f2977b752c259a8e98c7d479c aggiunge tests/unit/riparazione-r10-riordino-a-blocchi.test.ts, che passa dalla lettura a blocchi e cade togliendo la sola cura in memoria (5 su 6 rosse); rimessa: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9c56fe9375e24d7f9b6dee26a8ee1d48817a07fd^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r10-riordino-a-blocchi.test.ts --json (uscita 0).",
+      "verificato_da": "revisore A (modello grande): come R10-004; ricerca, categorie, vetrina, «Sotto i 10 €», novità, più venduti e Regali passano tutti da leggiProdottiDellaGriglia. Secondo giro (revisore A): come R10-004."
+    },
+    {
+      "id": "R10-006",
+      "chiave": "microcopy|la schermata di accesso dice ancora «100% commercianti locali verificati»",
+      "esito": "riparato",
+      "commit": "21efdc86da166beb8053773b5faa446d01f106e2",
+      "file_toccati": [
+        "components/ui/AuthShell.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-testo-accesso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-testo-accesso.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 21efdc86da166beb8053773b5faa446d01f106e2^ --file components/ui/AuthShell.tsx --prove tests/unit/riparazione-r10-testo-accesso.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La riga del testo ora dice «Commercianti locali», come la home; la prova legge il file e controlla che la frase assoluta non ci sia più e che ci sia la nuova.",
+      "nota": "Toccata solo la riga del testo.",
+      "verificato_da": "revisore A (modello grande): la frase non resta in AuthShell (sign-in, sign-up, reset-password) né nelle traduzioni; la prova cade sul testo vecchio. Regge."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il filtro «Sotto i 10 €» sui prodotti in promozione si ferma a 1000 righe e 100 id",
+      "dimensione": "flussi-conversione",
+      "severita": "minore",
+      "file": "lib/queries/griglia-prodotti.ts (idsCheInPromoScendonoSotto)",
+      "descrizione": "Il prezzo massimo usa ancora active_promo_products con tetto di 1000 righe e 100 id nell'indirizzo: oltre quei numeri il filtro è incompleto. Si chiuderebbe con prezzo_pagato anche sul massimo."
+    },
+    {
+      "titolo": "La griglia chiama il vecchio calcolo dei prodotti in promozione accanto a quello nuovo",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "components/ProductGrid.tsx:277",
+      "descrizione": "ProductGrid chiama idsCheInPromoScendonoSotto mentre leggiProdottiDellaGriglia ha già il prezzo pagato: due strade per lo stesso conto (file altrui, non toccato)."
+    },
+    {
+      "titolo": "Chi si iscrive con Google dalla registrazione perde il ritorno",
+      "dimensione": "flussi-conversione",
+      "severita": "minore",
+      "file": "app/sign-up/page.tsx:367",
+      "descrizione": "<AuthAlternatives condizioniDalModulo={acceptTos} /> non passa returnTo: chi si iscrive con Google perde il ritorno (es. verso /checkout). Modifica: returnTo={safeInternalPath(returnTo, '/')}, ripulito perché alla riga 78 returnTo è grezzo. File non di R10."
+    },
+    {
+      "titolo": "Lo slider del prezzo massimo taglia ancora sul prezzo pieno",
+      "dimensione": "flussi-conversione",
+      "severita": "minore",
+      "file": "lib/queries/griglia-prodotti.ts:186",
+      "descrizione": "Senza gli id scontati (app/search/page.tsx:590, pagina categoria, StoreProductExplorer.tsx:229) il massimo guarda price: con la forchetta 5-10 € un 12 € al -25% (9 €) resta fuori, mentre il minimo guarda già il prezzo pagato. Si chiude usando prezzo_pagato anche sul massimo."
+    },
+    {
+      "titolo": "La prova «Sotto i 10 €» non controlla il taglio sul massimo",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "tests/unit/aiuti/finto-postgrest.ts:126",
+      "descrizione": "Il finto PostgREST tratta ogni filtro or come quello sulla giacenza, quindi le prove che passano un or sul prezzo non lo controllano davvero (aiuto comune, non toccato)."
+    },
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (accessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "file": "(nel referto privato)",
+      "severita": "minore",
+      "dimensione": "sicurezza"
+    },
+    {
+      "titolo": "Il ritorno dopo l'accesso guarda la stringa e non il percorso risolto per riconoscere l'area di un altro ruolo",
+      "dimensione": "flussi-conversione",
+      "severita": "minore",
+      "file": "app/sign-in/page.tsx:272-276",
+      "descrizione": "'/rider/..', '/admin/../', '/.' o '/%73eller/dashboard' (link costruiti apposta) non vengono riconosciuti come '/' o come area altrui e portano a '/' invece che alla home del ruolo. Le aree in page.tsx ricopiano a mano quelle del portiere (middleware.ts:68-72, 105: startsWith('/seller') senza barra), che non è esportato."
+    },
+    {
+      "titolo": "Dopo l'accesso con Google il ritorno non applica nessuna regola di ruolo",
+      "dimensione": "flussi-conversione",
+      "severita": "minore",
+      "file": "app/auth/callback/route.ts:154",
+      "descrizione": "Un fattorino con ritorno /seller (sessione del negozio scaduta sullo stesso dispositivo) finisce su '/' invece che su /rider: la regola sulle aree degli altri ruoli vale solo per email e password (file non di R10)."
+    }
+  ],
+  "domande_per_nicola": [
+    "La migrazione 960 (prezzo_pagato) va applicata prima o insieme al codice di R10-003/004/005: senza, ordinare per prezzo e il filtro prezzo minimo danno errore. Vuoi anche un ripiego sul prezzo pieno finché non è applicata?"
+  ],
+  "conto": {
+    "agenti": 6,
+    "subagenti": 6,
+    "costo_usd": 18.44,
+    "nota": "lotto 1 (sonnet), lotto 2 (modello grande), correzione R10-004/005 (sonnet), revisore A (grande, ripreso per il secondo giro), revisore B (grande), correzione finale (sonnet). Spesa letta con get_session: 18,44 $ su tetto 20 $ (oltre l'80%: consegna)."
+  },
+  "costo_usd": 18.44
+}
