@@ -100,6 +100,57 @@ function redact(value: unknown, depth = 0): unknown {
   return value;
 }
 
+/**
+ * R15-011 — L'ERRORE VERO VA A SENTRY OSCURATO, NON INTERO.
+ *
+ * La frase e il contesto passavano già da `oscuraTesto`, ma un oggetto Error andava a Sentry così
+ * com'era (`captureException(err)`): un errore del database con l'email del cliente nel messaggio
+ * («Key (email)=(mario@…) already exists») usciva in chiaro, e il filtro di Sentry non tocca il
+ * testo delle eccezioni. Qui si fa una COPIA (l'Error di chi chiama non si tocca): stesso
+ * prototipo, stesso nome, messaggio oscurato, e della pila si oscura solo la testa (nome e
+ * messaggio) — le righe «at …» restano com'erano, perché a Sentry servono percorsi e numeri di
+ * riga. Le altre proprietà restano, coi testi oscurati; la causa (e gli `errors` di un
+ * AggregateError) si oscurano allo stesso modo, perché Sentry manda anche quelle.
+ */
+const PROFONDITA_DELLE_CAUSE = 5;
+
+function pilaOscurata(pila: string): string {
+  const righe = pila.search(/\n\s+at /);
+  return righe < 0 ? oscuraTesto(pila) : oscuraTesto(pila.slice(0, righe)) + pila.slice(righe);
+}
+
+function valoreOscurato(valore: unknown, profondita: number): unknown {
+  if (typeof valore === 'string') return oscuraTesto(valore);
+  if (valore instanceof Error) return erroreOscurato(valore, profondita + 1);
+  if (Array.isArray(valore)) return valore.map((v) => valoreOscurato(v, profondita + 1));
+  return valore;
+}
+
+function erroreOscurato(err: Error, profondita = 0): Error {
+  const copia = new Error(oscuraTesto(String(err.message ?? '')));
+  // Un DOMException (l'AbortError di fetch) ha nome e codice letti dall'oggetto vero: la copia resta
+  // un Error semplice, col nome di prima.
+  const host = typeof DOMException !== 'undefined' && err instanceof DOMException;
+  Object.setPrototypeOf(copia, host ? Error.prototype : Object.getPrototypeOf(err));
+  if (copia.name !== err.name) {
+    Object.defineProperty(copia, 'name', { value: err.name, writable: true, configurable: true, enumerable: false });
+  }
+  for (const chiave of Object.getOwnPropertyNames(err)) {
+    if (chiave === 'message' || chiave === 'stack') continue;
+    const d = Object.getOwnPropertyDescriptor(err, chiave);
+    if (!d || !('value' in d)) continue;
+    const valore = profondita < PROFONDITA_DELLE_CAUSE ? valoreOscurato(d.value, profondita) : d.value;
+    Object.defineProperty(copia, chiave, { ...d, value: valore });
+  }
+  Object.defineProperty(copia, 'stack', {
+    value: typeof err.stack === 'string' ? pilaOscurata(err.stack) : err.stack,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+  return copia;
+}
+
 function toCtx(ctx: unknown): Record<string, unknown> | undefined {
   if (ctx === undefined || ctx === null) return undefined;
   let obj: Record<string, unknown>;
@@ -362,6 +413,9 @@ export const logger = {
     }
     // R03-013 — Una frase passata come errore va a Sentry così com'è: si oscura prima.
     if (typeof errore === 'string') errore = oscuraTesto(errore);
+    // R15-011 — Anche un Error (una copia oscurata) e l'errore del database che arriva come oggetto semplice.
+    else if (errore instanceof Error) errore = erroreOscurato(errore);
+    else if (errore !== null && typeof errore === 'object') errore = redact(errore);
     if (eServer || process.env.NODE_ENV !== 'production') {
       console.error(line('error', errore instanceof Error ? errore.message : String(errore), contesto));
     }
