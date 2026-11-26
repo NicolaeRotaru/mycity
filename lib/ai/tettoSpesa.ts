@@ -51,10 +51,12 @@ export type { ContoCondivisoStato, DecisioneSpesa, AllarmeTetto } from '@/lib/ai
  * Dove vive il conto: la tabella `ai_spend_daily` (migrazione 131), toccata
  * con una sola istruzione atomica (`registra_spesa_ai`) dal client
  * amministrativo. Se quel giro non risponde — database irraggiungibile,
- * migrazione non ancora applicata — si continua a contare in memoria, perche'
- * un freno largo e' meglio di nessun freno, ma lo si DICE nei registri: un
- * ripiego silenzioso e' peggio del guasto, perche' nessuno sa che il tetto
- * vero non e' piu' quello scritto.
+ * migrazione non ancora applicata — sul computer di chi sviluppa si continua a
+ * contare in memoria, perche' li' la copia e' una sola, ma lo si DICE nei
+ * registri: un ripiego silenzioso e' peggio del guasto, perche' nessuno sa che
+ * il tetto vero non e' piu' quello scritto. In rete (Vercel, build di
+ * produzione) il conto in memoria NON vale come tetto: vedi
+ * `contoCondivisoObbligatorio` qui sotto.
  */
 
 /** La casella del giorno: data di calendario a Piacenza, `AAAA-MM-GG`. */
@@ -71,6 +73,38 @@ export function giornoDiSpesa(quando: Date = new Date()): string {
 /** Il ripiego: vale solo per questa copia, e si usa quando il conto vero tace. */
 const _ripiego = { giorno: '', cents: 0 };
 let _ripieghiSegnalati = 0;
+
+/**
+ * 26/11/2026 (R12-001) — IN RETE IL CONTO IN MEMORIA NON E' UN TETTO.
+ *
+ * In produzione il conto condiviso non c'e' (migrazione 131 mai applicata la'),
+ * e ogni copia ripiegava sul suo contatore in memoria. La quota divisa per
+ * `AI_COPIE_ATTESE` non bastava: le copie su Vercel sono quante ne servono e
+ * ogni risveglio nasce col contatore a zero, quindi la somma passava comunque
+ * il tetto scritto. Ogni copia contava per se'.
+ *
+ * Adesso, in rete (Vercel, anche le anteprime, o una build di produzione), se
+ * il conto condiviso non si legge, o la spesa di questa copia non ci si scrive,
+ * quanto si e' speso oggi e' «non lo so» (`NaN`). `decidiSpesaAi` tratta gia'
+ * «non lo so» come «basta» (motivo `spesa_sconosciuta`): l'AI a pagamento si
+ * ferma finche' il conto non risponde, invece di fingere un tetto per copia.
+ * Sul computer di chi sviluppa, e nelle prove, la copia e' una sola: li' il
+ * contatore in memoria E' il conto del sito, e il ripiego resta com'era.
+ */
+function contoCondivisoObbligatorio(): boolean {
+  return (
+    process.env.VERCEL === '1' ||
+    Boolean(process.env.VERCEL_ENV) ||
+    process.env.NODE_ENV === 'production'
+  );
+}
+
+/**
+ * In rete: la spesa che questa copia ha fatto ma non e' riuscita a scrivere nel
+ * conto condiviso. Le altre copie non la vedono, quindi prima di leggere il
+ * conto la si scrive; finche' non ci si riesce, la spesa di oggi e' «non lo so».
+ */
+const _daScrivere = { giorno: '', cents: 0 };
 
 /**
  * 3/9/2026 (R-lotto) — IL RIPIEGO ERA NATO PER UN'ASSENZA DI MINUTI E IN
@@ -161,6 +195,8 @@ export function __azzeraRipiegoSpesaAi(): void {
   _ripiego.giorno = '';
   _ripiego.cents = 0;
   _ripieghiSegnalati = 0;
+  _daScrivere.giorno = '';
+  _daScrivere.cents = 0;
   fallimentiDiFila = 0;
   riprovaDopo = 0;
   _stato.ripiegoDa = 0;
@@ -237,13 +273,17 @@ async function segnalaRipiego(motivo: string, giorno: string, adesso: number = D
   // generica di chi sta a valle. Rimpiazzarla rifarebbe il difetto di prima —
   // buttare via l'unica informazione utile — un piano piu' su.
   if (!_stato.motivo) _stato.motivo = motivo;
+  // R12-001 — In rete il ripiego non conta per copia: ferma l'AI a pagamento. Il registro dice quello.
+  const fermo = contoCondivisoObbligatorio();
 
   if (_stato.permanente) {
     if (adesso - _stato.dettoAlle < RIPETI_ALLARME_MS) return;
     _stato.dettoAlle = adesso;
     if (!(await nessunoHaParlatoNellOra(adesso))) return;
     logger.error(
-      '[ai] il conto della spesa condiviso NON ESISTE: il tetto giornaliero vale per copia, non per il sito. Applicare la migrazione 131.',
+      fermo
+        ? '[ai] il conto della spesa condiviso NON ESISTE: l AI a pagamento resta ferma finche non risponde. Applicare la migrazione 131.'
+        : '[ai] il conto della spesa condiviso NON ESISTE: il tetto giornaliero vale per copia, non per il sito. Applicare la migrazione 131.',
       {
         motivo,
         detto_dal_database: _stato.motivo,
@@ -265,13 +305,18 @@ async function segnalaRipiego(motivo: string, giorno: string, adesso: number = D
     _stato.dettoAlle = adesso;
     if (!(await nessunoHaParlatoNellOra(adesso))) return;
     logger.error(
-      '[ai] il conto della spesa condiviso non risponde da oltre un ora: il tetto giornaliero vale per copia, non per il sito (quota ridotta per copia).',
+      fermo
+        ? '[ai] il conto della spesa condiviso non risponde da oltre un ora: l AI a pagamento resta ferma finche non risponde.'
+        : '[ai] il conto della spesa condiviso non risponde da oltre un ora: il tetto giornaliero vale per copia, non per il sito (quota ridotta per copia).',
       { motivo, detto_dal_database: _stato.motivo, giorno, daMinuti, ripieghi: _ripieghiSegnalati },
     );
     return;
   }
   if (_ripieghiSegnalati === 1 || _ripieghiSegnalati % 100 === 0) {
-    logger.warn('[ai] il conto della spesa non risponde: conto in memoria, il tetto vero e piu alto', {
+    const testo = fermo
+      ? '[ai] il conto della spesa non risponde: l AI a pagamento si ferma finche non risponde'
+      : '[ai] il conto della spesa non risponde: conto in memoria, il tetto vero e piu alto';
+    logger.warn(testo, {
       motivo,
       giorno,
       ripieghi: _ripieghiSegnalati,
@@ -353,13 +398,30 @@ async function chiamaRpc(nome: string, args: Record<string, unknown>): Promise<n
   return eseguiRpc(nome, args);
 }
 
-/** Quanti centesimi sono usciti oggi, contando TUTTE le copie del sito. */
+/**
+ * Quanti centesimi sono usciti oggi, contando TUTTE le copie del sito.
+ * In rete, se il conto condiviso non risponde, `NaN`: «non lo so» (R12-001).
+ */
 export async function spesaDiOggiCents(quando?: Date): Promise<number> {
   const giorno = giornoDiSpesa(quando);
+  const inRete = contoCondivisoObbligatorio();
+  // R12-001 — In rete la spesa che questa copia non e' riuscita a scrivere va
+  // nel conto condiviso PRIMA di leggerlo: se no le altre copie non la vedono.
+  if (inRete && _daScrivere.cents > 0) {
+    const scritto = await chiamaRpc('registra_spesa_ai', { p_giorno: _daScrivere.giorno, p_cents: _daScrivere.cents });
+    if (scritto === null) {
+      await segnalaRipiego('registrazione della spesa non riuscita', giorno);
+      return Number.NaN;
+    }
+    _daScrivere.giorno = '';
+    _daScrivere.cents = 0;
+  }
   const condiviso = await chiamaRpc('spesa_ai_di_oggi', { p_giorno: giorno });
   if (condiviso === null) {
     await segnalaRipiego('lettura del conto condiviso non riuscita', giorno);
-    return ripiegoCents(giorno);
+    // R12-001 — In rete il contatore di una copia non e' il conto del sito:
+    // «non lo so», e chi decide si ferma (`decidiSpesaAi`, `spesa_sconosciuta`).
+    return inRete ? Number.NaN : ripiegoCents(giorno);
   }
   // Il ripiego non si butta: se il database torna a tacere piu' avanti, si
   // riparte dall'ultimo numero noto invece che da zero.
@@ -389,6 +451,13 @@ export async function aggiungiSpesaCents(cents: number, quando?: Date): Promise<
   if (totale === null) {
     await segnalaRipiego('registrazione della spesa non riuscita', giorno);
     _ripiego.cents = ripiegoCents(giorno) + arrotondati;
+    // R12-001 — In rete la spesa non scritta resta da scrivere: la prossima
+    // lettura la scrive prima di leggere, e finche' non ci riesce l'AI e' ferma.
+    // Un resto di un altro giorno passa su oggi: contato in piu', mai in meno.
+    if (contoCondivisoObbligatorio()) {
+      _daScrivere.giorno = giorno;
+      _daScrivere.cents += arrotondati;
+    }
     return;
   }
   _ripiego.cents = Math.max(ripiegoCents(giorno), totale);
