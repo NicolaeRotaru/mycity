@@ -9,12 +9,15 @@
 --   ④ answered_by mandato con un altro utente: resta chi ha scritto la risposta;
 --   ⑤ il negozio non cambia is_public, nemmeno con un UPDATE senza filtro;
 --   ⑥ l'amministratore nasconde ancora una domanda;
---   ⑦ il negozio risponde con una data a scelta: la data è quella di adesso;
---   ⑧ il negozio, senza cambiare la risposta, manda data e firma diverse:
---     restano quelle di prima;
+--   ⑦ il negozio risponde con una data a scelta, nel passato o nel futuro:
+--     la data è quella di adesso;
+--   ⑧ il negozio, senza cambiare la risposta, manda data (passata o futura) e
+--     firma diverse: restano quelle di prima, anche se la firma era di un altro;
 --   ⑨ il negozio toglie la risposta (vuota o solo spazi): firma e data tornano
---     vuote.
--- Senza la migrazione 993 ①, ④ e ⑤ sono ROSSI; senza la 995 ⑦, ⑧ e ⑨.
+--     vuote;
+--   ⑩ cancellato l'account di chi ha firmato una risposta, anche in una
+--     sessione di un altro utente: la firma diventa vuota, la risposta resta.
+-- Senza la migrazione 993 ①, ④ e ⑤ sono ROSSI; senza la 995 ⑦, ⑧, ⑨ e ⑩.
 -- =============================================================================
 
 BEGIN;
@@ -26,7 +29,8 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('e9930000-0000-0000-0000-00000000000a', 'negozio-s01-05@test.it', '{"role":"seller"}'),
   ('e9930000-0000-0000-0000-00000000000b', 'cliente1-s01-05@test.it', '{"role":"buyer"}'),
   ('e9930000-0000-0000-0000-00000000000c', 'cliente2-s01-05@test.it', '{"role":"buyer"}'),
-  ('e9930000-0000-0000-0000-00000000000d', 'staff-s01-05@test.it', '{"role":"buyer"}');
+  ('e9930000-0000-0000-0000-00000000000d', 'staff-s01-05@test.it', '{"role":"buyer"}'),
+  ('e9930000-0000-0000-0000-00000000000e', 'commesso-s01-05@test.it', '{"role":"buyer"}');
 UPDATE public.profiles SET role = 'admin' WHERE id = 'e9930000-0000-0000-0000-00000000000d';
 UPDATE public.profiles SET is_approved = true, approval_status = 'approved', store_name = 'Bottega S01-05'
  WHERE id = 'e9930000-0000-0000-0000-00000000000a';
@@ -43,7 +47,9 @@ INSERT INTO public.product_questions (id, product_id, author_id, question) VALUE
   ('e9930000-2222-0000-0000-000000000006', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000b', 'Ha il lievito madre?'),
   ('e9930000-2222-0000-0000-000000000007', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000c', 'A che ora esce dal forno?'),
   ('e9930000-2222-0000-0000-000000000008', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000b', 'Si può avere affettato?'),
-  ('e9930000-2222-0000-0000-000000000009', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000c', 'Va bene per i bambini?');
+  ('e9930000-2222-0000-0000-000000000009', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000c', 'Va bene per i bambini?'),
+  ('e9930000-2222-0000-0000-00000000000a', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000b', 'Quanto dura fresco?'),
+  ('e9930000-2222-0000-0000-00000000000b', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000c', 'Ha il sesamo?');
 RESET mycity.allow_profile_write;
 
 -- Il negozio risponde dal browser con l'answered_by indicato.
@@ -167,23 +173,49 @@ LANGUAGE sql AS $$
     FROM public.product_questions WHERE id = p_domanda;
 $$;
 
-INSERT INTO esiti SELECT '7 risposta con una data a scelta: la data è quella di adesso',
-  e = 'ok' AND pg_temp.stato('e9930000-2222-0000-0000-000000000006') = 'Ecco. | e9930000-0000-0000-0000-00000000000a | adesso',
-  e || ' · ' || pg_temp.stato('e9930000-2222-0000-0000-000000000006')
+INSERT INTO esiti SELECT '7 risposta con una data a scelta (passata o futura): la data è quella di adesso',
+  e = 'ok' AND f = 'ok'
+    AND pg_temp.stato('e9930000-2222-0000-0000-000000000006') = 'Ecco. | e9930000-0000-0000-0000-00000000000a | adesso'
+    AND pg_temp.stato('e9930000-2222-0000-0000-00000000000a') = 'Tre giorni. | e9930000-0000-0000-0000-00000000000a | adesso',
+  concat_ws(' · ', e, f, pg_temp.stato('e9930000-2222-0000-0000-000000000006'), pg_temp.stato('e9930000-2222-0000-0000-00000000000a'))
   FROM pg_temp.negozio('e9930000-2222-0000-0000-000000000006',
-         $s$answer = 'Ecco.', answered_at = '1990-01-01', answered_by = 'e9930000-0000-0000-0000-00000000000c'$s$) AS e;
+         $s$answer = 'Ecco.', answered_at = '1990-01-01', answered_by = 'e9930000-0000-0000-0000-00000000000c'$s$) AS e,
+       pg_temp.negozio('e9930000-2222-0000-0000-00000000000a',
+         $s$answer = 'Tre giorni.', answered_at = '2999-01-01', answered_by = 'e9930000-0000-0000-0000-00000000000c'$s$) AS f;
 
--- ⑧: risposta già scritta il 2 gennaio 2026 dal negozio (preparata dal server).
+-- ⑧: risposta già scritta il 2 gennaio 2026 dallo staff (preparata dal server);
+-- ⑩: risposta firmata dal commesso «e», che poi cancella l'account.
 SET LOCAL request.jwt.claims = '{"role":"service_role"}';
 UPDATE public.product_questions
-   SET answer = 'Alle sette.', answered_by = 'e9930000-0000-0000-0000-00000000000a', answered_at = '2026-01-02 10:00+00'
+   SET answer = 'Alle sette.', answered_by = 'e9930000-0000-0000-0000-00000000000d', answered_at = '2026-01-02 10:00+00'
  WHERE id = 'e9930000-2222-0000-0000-000000000007';
+UPDATE public.product_questions
+   SET answer = 'No.', answered_by = 'e9930000-0000-0000-0000-00000000000e', answered_at = '2026-01-03 10:00+00'
+ WHERE id = 'e9930000-2222-0000-0000-00000000000b';
 INSERT INTO esiti SELECT '8 senza cambiare la risposta, data e firma restano quelle di prima',
-  e = 'ok' AND pg_temp.stato('e9930000-2222-0000-0000-000000000007')
-               = 'Alle sette. | e9930000-0000-0000-0000-00000000000a | ' || '2026-01-02 10:00+00'::timestamptz::text,
-  e || ' · ' || pg_temp.stato('e9930000-2222-0000-0000-000000000007')
+  e = 'ok' AND f = 'ok'
+    AND pg_temp.stato('e9930000-2222-0000-0000-000000000007')
+        = 'Alle sette. | e9930000-0000-0000-0000-00000000000d | ' || '2026-01-02 10:00+00'::timestamptz::text,
+  concat_ws(' · ', e, f, pg_temp.stato('e9930000-2222-0000-0000-000000000007'))
   FROM pg_temp.negozio('e9930000-2222-0000-0000-000000000007',
-         $s$answered_at = '1990-01-01', answered_by = 'e9930000-0000-0000-0000-00000000000c'$s$) AS e;
+         $s$answered_at = '1990-01-01', answered_by = 'e9930000-0000-0000-0000-00000000000c'$s$) AS e,
+       pg_temp.negozio('e9930000-2222-0000-0000-000000000007',
+         $s$answer = answer, answered_at = '2999-01-01', answered_by = 'e9930000-0000-0000-0000-00000000000a'$s$) AS f;
+
+-- ⑩ L'account del commesso si cancella mentre la sessione è quella del negozio.
+CREATE FUNCTION pg_temp.cancella_account(p_utente uuid) RETURNS text
+LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claims', '{"sub":"e9930000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+  DELETE FROM auth.users WHERE id = p_utente;
+  RETURN 'ok';
+EXCEPTION WHEN OTHERS THEN RETURN SQLSTATE || ' ' || SQLERRM;
+END $$;
+INSERT INTO esiti SELECT '10 cancellato l''account di chi ha firmato: firma vuota, la risposta resta',
+  e = 'ok' AND pg_temp.stato('e9930000-2222-0000-0000-00000000000b')
+               = 'No. | ∅ | ' || '2026-01-03 10:00+00'::timestamptz::text,
+  e || ' · ' || pg_temp.stato('e9930000-2222-0000-0000-00000000000b')
+  FROM pg_temp.cancella_account('e9930000-0000-0000-0000-00000000000e') AS e;
 
 INSERT INTO esiti SELECT '9 risposta tolta (vuota o spazi): firma e data tornano vuote',
   a = 'ok' AND b = 'ok' AND c = 'ok' AND d = 'ok'
@@ -202,7 +234,7 @@ BEGIN
     RAISE INFO '%  %  — %', CASE WHEN r.ok THEN 'ok  ' ELSE 'ROTTO' END, r.nome, r.dettaglio;
   END LOOP;
   SELECT count(*) INTO rossi FROM esiti WHERE ok IS NOT TRUE;
-  IF rossi > 0 OR (SELECT count(*) FROM esiti) <> 9 THEN
+  IF rossi > 0 OR (SELECT count(*) FROM esiti) <> 10 THEN
     RAISE EXCEPTION '% controlli su % sono rossi (S01-05)', rossi, (SELECT count(*) FROM esiti);
   END IF;
   RAISE INFO 'S01-05: % controlli verdi', (SELECT count(*) FROM esiti);

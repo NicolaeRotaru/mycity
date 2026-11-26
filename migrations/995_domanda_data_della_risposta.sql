@@ -8,7 +8,9 @@
 --     (auth.uid()) e answered_at = now();
 --   · quando la risposta viene tolta (NULL o solo spazi): answered_by e
 --     answered_at tornano NULL;
---   · quando la risposta non cambia: answered_by e answered_at restano com'erano.
+--   · quando la risposta non cambia: answered_by e answered_at restano com'erano,
+--     tranne answered_by che diventa NULL quando il profilo di chi ha firmato
+--     non c'è più (ON DELETE SET NULL della chiave esterna).
 -- L'avviso a chi ha chiesto (risposta_avvisa_chi_ha_chiesto, 993) non cambia.
 --
 -- Si può rieseguire.
@@ -45,7 +47,10 @@ BEGIN
       NEW.answered_at := now();
     END IF;
   ELSE
-    NEW.answered_by := OLD.answered_by;
+    IF NOT (NEW.answered_by IS NULL AND OLD.answered_by IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = OLD.answered_by)) THEN
+      NEW.answered_by := OLD.answered_by;
+    END IF;
     NEW.answered_at := OLD.answered_at;
   END IF;
   RETURN NEW;
