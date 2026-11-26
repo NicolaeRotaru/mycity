@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { Plus, X } from 'lucide-react';
-import { orariImpostati, romeNow, type StoreHours, type HoursInterval } from '@/lib/store-hours';
+import { orariImpostati, romeNow, type StoreHours, type StoreHoursConSegni, type HoursInterval } from '@/lib/store-hours';
 import { DAYS, erroreDelleFasce, prossimaFascia } from './orari-validi';
 
 export { erroreDegliOrari, erroreDelleFasce, prossimaFascia } from './orari-validi';
@@ -16,15 +16,15 @@ function oggiAMezzanotte(): string {
 }
 
 interface Props {
-  value: StoreHours;
-  onChange: (next: StoreHours) => void;
+  value: StoreHoursConSegni;
+  onChange: (next: StoreHoursConSegni) => void;
 }
 
 /** Editor visuale degli orari di apertura (più fasce/giorno per la pausa pranzo). */
 export default function StoreHoursEditor({ value, onChange }: Props) {
   // 24/11/2026 — Il valore «senza orari» da cui questo editor ha riempito la settimana (vedi sotto):
   // serve a tornarci quando il negoziante annulla con la X tutte le fasce che ha aggiunto.
-  const senzaOrari = useRef<StoreHours | null>(null);
+  const senzaOrari = useRef<StoreHoursConSegni | null>(null);
   // 31/10/2026 — Si scrive sempre la settimana intera: un giorno mai toccato diventa «chiuso» (lista
   // vuota), come lo mostra già questo editor. Prima restava assente, e chi chiudeva tutti i giorni
   // per le ferie salvava una settimana a metà, che il sito leggeva «orari mai impostati» = sempre aperto.
