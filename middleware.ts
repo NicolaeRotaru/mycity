@@ -106,6 +106,31 @@ function findRoleRule(pathname: string) {
 }
 
 /**
+ * Il portiere classifica il percorso decodificato, lo stesso che sceglie la
+ * pagina: «/%73eller/dashboard» è /seller/dashboard. Un percorso che non si
+ * decodifica, o che risolto cambia (segmenti «.» o «..», barre doppie o
+ * rovesciate), vale come l'area più stretta.
+ */
+const AREA_PIU_STRETTA = '/admin';
+function percorsoPerIlPortiere(pathname: string): string {
+  let decodificato: string;
+  try {
+    decodificato = decodeURIComponent(pathname);
+  } catch {
+    return AREA_PIU_STRETTA;
+  }
+  const pezzi: string[] = [];
+  for (const pezzo of decodificato.split(/[\\/]+/)) {
+    if (pezzo === '' || pezzo === '.') continue;
+    if (pezzo === '..') pezzi.pop();
+    else pezzi.push(pezzo);
+  }
+  const risolto = `/${pezzi.join('/')}`;
+  const senzaBarreFinali = decodificato.length > 1 ? decodificato.replace(/\/+$/, '') : decodificato;
+  return risolto === senzaBarreFinali ? decodificato : AREA_PIU_STRETTA;
+}
+
+/**
  * 086 — C'È UNA SESSIONE, O È UN VISITATORE QUALUNQUE?
  *
  * La sessione Supabase vive nei cookie: si chiamano `sb-<progetto>-auth-token`
@@ -437,9 +462,11 @@ export async function middleware(req: NextRequest) {
     return exitRes;
   }
 
-  const roleRule = findRoleRule(pathname);
-  const needsAuth = !!roleRule || AUTH_REQUIRED.some((p) => pathname.startsWith(p));
-  const needsSellerGate = isMarketplaceBrowsePath(pathname);
+  // Il portiere classifica il percorso decodificato, lo stesso che sceglie la pagina.
+  const percorsoPortiere = percorsoPerIlPortiere(pathname);
+  const roleRule = findRoleRule(percorsoPortiere);
+  const needsAuth = !!roleRule || AUTH_REQUIRED.some((p) => percorsoPortiere.startsWith(p));
+  const needsSellerGate = isMarketplaceBrowsePath(percorsoPortiere);
 
   // Perf: la maggior parte del traffico pubblico esce subito (solo CSP).
   // Eccezione: venditori loggati sul catalogo → gate modalità acquisto.
@@ -477,7 +504,7 @@ export async function middleware(req: NextRequest) {
    */
   // 31/10/2026 (ondata 6) — Sul pagamento la scorciatoia non vale: lì si
   // guarda quali Termini ha accettato la persona (vedi sotto).
-  const sulPagamento = eIlPagamento(pathname);
+  const sulPagamento = eIlPagamento(percorsoPortiere);
   if (!needsAuth && needsSellerGate && !sulPagamento) {
     const messoDaParte = await leggiRuoloDalCookie(req);
     if (messoDaParte && messoDaParte.emailConfermata && messoDaParte.role !== 'seller') {
@@ -692,7 +719,7 @@ export async function middleware(req: NextRequest) {
       path: '/',
       sameSite: 'lax' as const,
     };
-    if (isMarketplaceBrowsePath(pathname)) {
+    if (isMarketplaceBrowsePath(percorsoPortiere)) {
       const url = req.nextUrl.clone();
       url.searchParams.delete(SHOPPING_MODE_QUERY);
       const enterRes = withCsp(NextResponse.redirect(url));
@@ -731,7 +758,7 @@ export async function middleware(req: NextRequest) {
         }),
       );
     }
-    const accesso = decidiAccessoArea({ role, approved, allowed: roleRule.allowed, pathname });
+    const accesso = decidiAccessoArea({ role, approved, allowed: roleRule.allowed, pathname: percorsoPortiere });
     if (accesso.azione === 'rimanda') {
       const url = req.nextUrl.clone();
       url.pathname = accesso.verso;
