@@ -38,6 +38,8 @@ type PayoutOrder = {
   seller_payout_reversed_cents: number | null;
   /** R22-002 — La commissione MyCity dell'ordine: sui ritiri pagati al banco si trattiene dal bonifico. */
   application_fee_cents?: number | null;
+  /** Il credito MyCity usato dal cliente: su un ritiro al banco il negozio ha incassato il lordo meno questo. */
+  wallet_applied_cents?: number | null;
   dispute_status?: string | null;
   internal_dispute_status?: string | null;
   payment_status?: string | null;
@@ -68,9 +70,19 @@ const TONO: Record<GruppoDelPannello, PayoutTone> = { da_versare: 'ready', in_so
  * con la rimessa confermata: quelli che Nicola versa a mano il lunedì.
  */
 function payoutTone(o: PayoutOrder): { tone: PayoutTone; label: string; cls: string } {
+  if (bonificoStripeAppeso(o)) return { tone: 'hold', label: 'Fermo: bonifico Stripe da controllare', cls: CLASSI.in_sospeso };
   const { gruppo, etichetta } = gruppoDelPannello(o);
   const label = o.payout_status === 'PAID_MANUALLY' && o.payout_at ? `${etichetta} ${fmtDate(o.payout_at)}` : etichetta;
   return { tone: TONO[gruppo], label, cls: CLASSI[gruppo] };
+}
+
+/**
+ * R22-002 — Un contante HELD con un bonifico Stripe già scritto (un PROCESSING appeso rimesso in HELD dal
+ * giro): la 916 non lo segna, perché il bonifico Stripe potrebbe essere partito. Non entra nella cifra
+ * del lunedì né nel tasto: resta in sospeso con la sua etichetta, da controllare su Stripe.
+ */
+function bonificoStripeAppeso(o: PayoutOrder): boolean {
+  return o.payment_method === 'cod' && o.payout_status === 'HELD' && !!o.stripe_transfer_id;
 }
 
 type SellerGroup = {
@@ -122,24 +134,31 @@ type ContoDelLunedi = {
   contanti: PayoutOrder[];
   ritiri: PayoutOrder[];
   contantiCents: number;
+  creditoCents: number;
   commissioneCents: number;
   trattenutaCents: number;
   importoCents: number;
   inFatturaCents: number;
 };
 
-/** Contanti meno commissione dei ritiri, in centesimi interi e mai sotto zero: il resto va in fattura. */
+/**
+ * Contanti più credito MyCity dei ritiri meno commissione dei ritiri, in centesimi interi e mai sotto
+ * zero: il resto va in fattura. Su un ritiro il negozio ha incassato in cassa il lordo meno il credito
+ * usato dal cliente, quindi MyCity gli deve «credito − commissione» (lo stesso conto della 916).
+ */
 function conto(contanti: PayoutOrder[], ritiri: PayoutOrder[]): ContoDelLunedi {
   const contantiCents = contanti.reduce((s, o) => s + netto(o), 0);
+  const creditoCents = ritiri.reduce((s, o) => s + Math.max(0, Math.round(Number(o.wallet_applied_cents) || 0)), 0);
   const commissioneCents = ritiri.reduce((s, o) => s + Math.max(0, Math.round(Number(o.application_fee_cents) || 0)), 0);
-  const trattenutaCents = Math.min(contantiCents, commissioneCents);
+  const trattenutaCents = Math.min(contantiCents + creditoCents, commissioneCents);
   return {
     contanti,
     ritiri,
     contantiCents,
+    creditoCents,
     commissioneCents,
     trattenutaCents,
-    importoCents: contantiCents - trattenutaCents,
+    importoCents: contantiCents + creditoCents - trattenutaCents,
     inFatturaCents: commissioneCents - trattenutaCents,
   };
 }
@@ -148,7 +167,7 @@ function conto(contanti: PayoutOrder[], ritiri: PayoutOrder[]): ContoDelLunedi {
 function contoDelLunedi(ordini: PayoutOrder[], adesso: Date): ContoDelLunedi {
   const { al } = settimanaPrima(adesso);
   const ritiri = ordini.filter((o) => ritiroDaRegolare(o) && !!o.delivered_at && giornoDiRoma(o.delivered_at) <= al);
-  return conto(ordiniDaVersareLunedi(ordini, adesso), ritiri);
+  return conto(ordiniDaVersareLunedi(ordini.filter((o) => !bonificoStripeAppeso(o)), adesso), ritiri);
 }
 
 /** Quello che resta per il lunedì dopo: contanti e ritiri di questa settimana, con la loro commissione. */
@@ -156,7 +175,7 @@ function contoDiQuestaSettimana(ordini: PayoutOrder[], adesso: Date): ContoDelLu
   const lunedi = contoDelLunedi(ordini, adesso);
   const nelLunedi = new Set([...lunedi.contanti, ...lunedi.ritiri].map((o) => o.id));
   return conto(
-    ordini.filter((o) => gruppoDelPannello(o).gruppo === 'da_versare' && !nelLunedi.has(o.id)),
+    ordini.filter((o) => gruppoDelPannello(o).gruppo === 'da_versare' && !bonificoStripeAppeso(o) && !nelLunedi.has(o.id)),
     ordini.filter((o) => ritiroDaRegolare(o) && !nelLunedi.has(o.id)),
   );
 }
@@ -217,7 +236,8 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
   const segna = async () => {
     let riferimento: string | null = null;
     if (totale > 0) {
-      const commissione = c.trattenutaCents > 0 ? ` (contanti ${formatPrice(c.contantiCents / 100)} meno ${formatPrice(c.trattenutaCents / 100)} di commissione dei ritiri al banco)` : '';
+      const credito = c.creditoCents > 0 ? ` più ${formatPrice(c.creditoCents / 100)} di credito MyCity dei ritiri al banco` : '';
+      const commissione = c.trattenutaCents > 0 || c.creditoCents > 0 ? ` (contanti ${formatPrice(c.contantiCents / 100)}${credito}${c.trattenutaCents > 0 ? ` meno ${formatPrice(c.trattenutaCents / 100)} di commissione dei ritiri al banco` : ''})` : '';
       const scritto = window.prompt(
         `Bonifico a ${storeName}: ${formatPrice(totale / 100)}${commissione} per ${daSegnare.length} ordini in contanti.\nScrivi il riferimento del bonifico (CRO/TRN o data):`,
       );
@@ -226,7 +246,7 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
     } else {
       // Commissione ≥ contanti: nessun bonifico da fare, quindi nessun riferimento da chiedere.
       const ok = window.confirm(
-        `Nessun bonifico da fare a ${storeName}: la commissione dei ritiri al banco (${formatPrice(c.commissioneCents / 100)}) copre i contanti (${formatPrice(c.contantiCents / 100)}).\nSegno la compensazione? ${formatPrice(c.inFatturaCents / 100)} di commissione vanno nella fattura del mese.`,
+        `Nessun bonifico da fare a ${storeName}: la commissione dei ritiri al banco (${formatPrice(c.commissioneCents / 100)}) copre i contanti${c.creditoCents > 0 ? ' e il credito MyCity dei ritiri' : ''} (${formatPrice((c.contantiCents + c.creditoCents) / 100)}).\nSegno la compensazione?${c.inFatturaCents > 0 ? ` ${formatPrice(c.inFatturaCents / 100)} di commissione vanno nella fattura del mese.` : ''}`,
       );
       if (!ok) return;
     }
@@ -261,7 +281,9 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
       n === daSegnare.length
         ? totale > 0
           ? `Segnati ${n} ordini come pagati.`
-          : `Compensazione segnata: ${formatPrice(c.inFatturaCents / 100)} di commissione vanno nella fattura del mese.`
+          : c.inFatturaCents > 0
+            ? `Compensazione segnata: ${formatPrice(c.inFatturaCents / 100)} di commissione vanno nella fattura del mese.`
+            : 'Compensazione segnata.'
         : `Attenzione: segnati ${n} ordini su ${daSegnare.length}. Gli altri nel frattempo hanno un reso, un reclamo o una contestazione e restano da versare: controlla il bonifico fatto.`,
     );
     setStato('pronto');
@@ -299,7 +321,7 @@ export default function AdminPayoutsPage() {
         supabase
           .from('orders')
           .select(
-            'id, seller_id, total_price, seller_payout_cents, seller_payout_reversed_cents, application_fee_cents, dispute_status, internal_dispute_status, payment_status, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
+            'id, seller_id, total_price, seller_payout_cents, seller_payout_reversed_cents, application_fee_cents, wallet_applied_cents, dispute_status, internal_dispute_status, payment_status, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
             // R11-011 — il server restituisce al massimo mille righe: la riga in più non arriva mai.
             { count: 'exact' },
           )
@@ -585,9 +607,11 @@ export default function AdminPayoutsPage() {
                 <div className="text-right">
                   <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-400">Da versare lunedì</p>
                   <p className="font-mono text-lg font-extrabold text-olive-700">{almeno}{formatPrice(g.lunediCents / 100)}</p>
-                  {g.lunedi.trattenutaCents > 0 && (
+                  {(g.lunedi.trattenutaCents > 0 || g.lunedi.creditoCents > 0) && (
                     <p className="text-xs text-ink-500">
-                      contanti {formatPrice(g.lunedi.contantiCents / 100)} − {formatPrice(g.lunedi.trattenutaCents / 100)} di commissione dei ritiri al banco
+                      contanti {formatPrice(g.lunedi.contantiCents / 100)}
+                      {g.lunedi.creditoCents > 0 && ` + ${formatPrice(g.lunedi.creditoCents / 100)} di credito MyCity dei ritiri al banco`}
+                      {g.lunedi.trattenutaCents > 0 && ` − ${formatPrice(g.lunedi.trattenutaCents / 100)} di commissione dei ritiri al banco`}
                     </p>
                   )}
                   {g.lunedi.inFatturaCents > 0 && (

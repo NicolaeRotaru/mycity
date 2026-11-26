@@ -24,8 +24,10 @@
 --       · i contanti → PAID_MANUALLY con payout_at e il bonifico (riferimento) collegato;
 --       · i ritiri al banco → payout_at = quando la commissione è stata regolata (lo stato resta
 --         CASH_IN_STORE: il negozio ha già incassato tutto) e il bonifico collegato;
---       · la riga del bonifico con trattenuta = min(contanti, commissione), importo = contanti −
---         trattenuta, in fattura = commissione − trattenuta.
+--       · la riga del bonifico con trattenuta = min(contanti + credito, commissione), importo =
+--         contanti + credito − trattenuta, in fattura = commissione − trattenuta. Il credito è il
+--         credito MyCity usato dai clienti sui ritiri: il negozio in cassa ha incassato il lordo meno
+--         il credito, e per ogni ritiro MyCity gli deve «credito − commissione».
 --     Un bonifico da 0 € (commissione ≥ contanti) non vuole il riferimento: è una compensazione, e il
 --     resto della commissione resta scritto «in fattura». Un secondo clic sullo stesso bonifico non
 --     scrive niente e risponde come il primo. Un passo in audit_logs per ogni bonifico.
@@ -84,11 +86,14 @@ CREATE TABLE IF NOT EXISTS private.bonifici_manuali (
   riferimento text,
   contanti_cents integer NOT NULL CHECK (contanti_cents >= 0),
   commissione_cents integer NOT NULL CHECK (commissione_cents >= 0),
+  -- Il credito MyCity usato dai clienti sui ritiri al banco: il negozio ha incassato in cassa il
+  -- lordo meno il credito, quindi quel credito MyCity glielo deve (si somma ai contanti).
+  credito_cents integer NOT NULL DEFAULT 0 CHECK (credito_cents >= 0),
   trattenuta_cents integer NOT NULL CHECK (trattenuta_cents >= 0),
   importo_cents integer NOT NULL CHECK (importo_cents >= 0),
   in_fattura_cents integer NOT NULL CHECK (in_fattura_cents >= 0),
-  CONSTRAINT bonifici_manuali_trattenuta CHECK (trattenuta_cents = LEAST(contanti_cents, commissione_cents)),
-  CONSTRAINT bonifici_manuali_importo CHECK (importo_cents = contanti_cents - trattenuta_cents),
+  CONSTRAINT bonifici_manuali_trattenuta CHECK (trattenuta_cents = LEAST(contanti_cents + credito_cents, commissione_cents)),
+  CONSTRAINT bonifici_manuali_importo CHECK (importo_cents = contanti_cents + credito_cents - trattenuta_cents),
   CONSTRAINT bonifici_manuali_in_fattura CHECK (in_fattura_cents = commissione_cents - trattenuta_cents),
   CONSTRAINT bonifici_manuali_riferimento CHECK (
     (importo_cents = 0 AND riferimento IS NULL)
@@ -139,6 +144,7 @@ DECLARE
   v_ok_ritiri int;
   v_contanti_cents bigint;
   v_commissione_cents bigint;
+  v_credito_cents bigint;
   v_trattenuta bigint;
   v_importo bigint;
   v_in_fattura bigint;
@@ -218,8 +224,10 @@ BEGIN
 
   -- I ritiri pagati al banco con la commissione ancora da regolare: gli stessi cancelli dei contanti
   -- (reso, reclamo, contestazione) e nessun rimborso, neanche parziale: la commissione aspetta.
-  SELECT count(*), coalesce(sum(GREATEST(0, coalesce(o.application_fee_cents, 0))), 0)
-    INTO v_ok_ritiri, v_commissione_cents
+  -- Per ogni ritiro MyCity deve al negozio il credito usato dal cliente meno la commissione.
+  SELECT count(*), coalesce(sum(GREATEST(0, coalesce(o.application_fee_cents, 0))), 0),
+         coalesce(sum(GREATEST(0, coalesce(o.wallet_applied_cents, 0))), 0)
+    INTO v_ok_ritiri, v_commissione_cents, v_credito_cents
     FROM public.orders o
    WHERE o.id = ANY (v_ritiri)
      AND o.seller_id = p_seller
@@ -240,12 +248,12 @@ BEGIN
       (cardinality(v_contanti) - v_ok_contanti) + (cardinality(v_ritiri) - v_ok_ritiri)
       USING ERRCODE = 'P0001';
   END IF;
-  IF v_contanti_cents > 2147483647 OR v_commissione_cents > 2147483647 THEN
+  IF v_contanti_cents + v_credito_cents > 2147483647 OR v_commissione_cents > 2147483647 THEN
     RAISE EXCEPTION 'bonifico fatto: cifra fuori misura' USING ERRCODE = '22003';
   END IF;
 
-  v_trattenuta := LEAST(v_contanti_cents, v_commissione_cents);
-  v_importo := v_contanti_cents - v_trattenuta;
+  v_trattenuta := LEAST(v_contanti_cents + v_credito_cents, v_commissione_cents);
+  v_importo := v_contanti_cents + v_credito_cents - v_trattenuta;
   v_in_fattura := v_commissione_cents - v_trattenuta;
 
   IF p_importo_cents IS NOT NULL AND p_importo_cents <> v_importo THEN
@@ -264,10 +272,10 @@ BEGIN
 
   INSERT INTO private.bonifici_manuali (
     seller_id, fatto_il, fatto_da, riferimento,
-    contanti_cents, commissione_cents, trattenuta_cents, importo_cents, in_fattura_cents
+    contanti_cents, commissione_cents, credito_cents, trattenuta_cents, importo_cents, in_fattura_cents
   ) VALUES (
     p_seller, v_adesso, v_chi, v_rif,
-    v_contanti_cents::int, v_commissione_cents::int, v_trattenuta::int, v_importo::int, v_in_fattura::int
+    v_contanti_cents::int, v_commissione_cents::int, v_credito_cents::int, v_trattenuta::int, v_importo::int, v_in_fattura::int
   ) RETURNING id INTO v_id;
 
   INSERT INTO private.bonifici_manuali_ordini (order_id, bonifico_id, tipo, cents)
@@ -291,6 +299,7 @@ BEGIN
     'seller_id', p_seller,
     'contanti', cardinality(v_contanti),
     'ritiri', cardinality(v_ritiri),
+    'credito_cents', v_credito_cents,
     'importo_cents', v_importo,
     'trattenuta_cents', v_trattenuta,
     'in_fattura_cents', v_in_fattura

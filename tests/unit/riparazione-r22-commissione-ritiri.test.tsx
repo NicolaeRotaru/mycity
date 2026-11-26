@@ -259,3 +259,45 @@ describe('R22-002 — il bonifico del lunedì toglie la commissione dei ritiri a
     expect(host.textContent).toMatch(/il bonifico lo fai tu il lunedì/);
   });
 });
+
+describe('R22-002 (giro di correzione) — credito MyCity sui ritiri, compensazione esatta, bonifico Stripe appeso', () => {
+  it('un ritiro pagato in parte col credito MyCity: il negozio ha in cassa 15 €, MyCity gli deve 5 € − 2 € di commissione', async () => {
+    stato.ordini = [
+      contante('c1', 1000, '2026-11-18'),
+      ritiro('r1', 200, '2026-11-19', { total_price: 15, wallet_applied_cents: 500 }),
+    ];
+    const host = await apri();
+    const blocco = bloccoDi(host, 'Pane Quotidiano');
+    expect(daVersareLunedi(blocco), 'il credito usato al banco non si restituisce al negozio').toMatch(/13,00/);
+    expect(blocco.textContent).toMatch(/contanti 10,00\s*€ \+ 5,00\s*€ di credito MyCity dei ritiri al banco − 2,00\s*€ di commissione/);
+    vi.stubGlobal('prompt', vi.fn(() => 'CRO-0099887766'));
+    await premi(tastoIn(blocco)!);
+    expect(stato.chiamate[0]).toMatchObject({ p_order_ids: ['c1'], p_ritiri: ['r1'], p_importo_cents: 1300 });
+  });
+
+  it('commissione uguale ai contanti: la conferma non parla di 0,00 € in fattura', async () => {
+    stato.ordini = [contante('c1', 200, '2026-11-18'), ritiro('r1', 200, '2026-11-19')];
+    const host = await apri();
+    const confirm = vi.fn((_testo?: string) => true);
+    vi.stubGlobal('confirm', confirm);
+    await premi(tastoIn(bloccoDi(host, 'Pane Quotidiano'))!);
+    const testo = String(confirm.mock.calls[0]?.[0] ?? '');
+    expect(testo).toMatch(/Segno la compensazione\?/);
+    expect(testo, 'dice che 0,00 € vanno in fattura').not.toMatch(/fattura/);
+    expect(host.textContent).not.toMatch(/0,00\s*€ di commissione vanno nella fattura/);
+  });
+
+  it('un contante HELD con un bonifico Stripe già scritto non entra nel lunedì né nel tasto: resta fermo con la sua etichetta', async () => {
+    stato.ordini = [
+      contante('c1', 1800, '2026-11-18'),
+      contante('c2', 900, '2026-11-17', { stripe_transfer_id: 'tr_appeso_0001' }),
+    ];
+    const host = await apri();
+    const blocco = bloccoDi(host, 'Pane Quotidiano');
+    expect(daVersareLunedi(blocco), 'la 916 lo rifiuta: il tasto resterebbe bloccato').toMatch(/18,00/);
+    expect(blocco.textContent).toMatch(/Fermo: bonifico Stripe da controllare/);
+    vi.stubGlobal('prompt', vi.fn(() => 'CRO-0099887766'));
+    await premi(tastoIn(blocco)!);
+    expect(stato.chiamate[0]).toMatchObject({ p_order_ids: ['c1'], p_importo_cents: 1800 });
+  });
+});
