@@ -23,7 +23,7 @@ import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
  * Legge la tabella `orders` (netto, storni, stato del bonifico) e raggruppa per negozio. La regola
  * degli stati sta in lib/guadagni/negozio.ts (`gruppoDelPannello`): contanti con la rimessa
  * confermata = «Da versare»; contanti ancora dal fattorino, carta in attesa del giro, IBAN da
- * verificare = «In sospeso»; ritiri al banco, storni e rimborsi = fuori dai totali. La commissione dei ritiri
+ * verificare = «In sospeso»; ritiri al banco, storni e rimborsi = fuori dai totali. Il 10% dei ritiri
  * pagati al banco si scala dal bonifico del lunedì (R05-002, `commissioneDaScalare`).
  */
 
@@ -77,7 +77,7 @@ type SellerGroup = {
   dueCents: number; // contanti da versare (rimessa confermata)
   lunediCents: number; // di questi, consegnati entro la domenica scorsa, meno la commissione dei ritiri al banco
   lordoLunediCents: number; // gli stessi, prima di togliere la commissione
-  commissioneCents: number; // R05-002 — la commissione dei ritiri al banco della settimana prima, da scalare
+  commissioneCents: number; // R05-002 — il 10% dei ritiri al banco della settimana prima, da scalare
   holdCents: number; // in sospeso (carta in attesa del giro, contanti dal fattorino, IBAN)
   paidCents: number; // già trasferiti o pagati a mano
 };
@@ -97,10 +97,10 @@ function maskIban(iban: string | null): string | null {
 }
 
 /**
- * R05-002 — LA COMMISSIONE DEI RITIRI PAGATI AL BANCO SI SCALA DAL BONIFICO DEL LUNEDÌ.
+ * R05-002 — IL 10% DEI RITIRI PAGATI AL BANCO SI SCALA DAL BONIFICO DEL LUNEDÌ.
  *
  * Nel ritiro pagato al banco (CASH_IN_STORE) il negozio ha già in cassa tutto, commissione compresa.
- * Il registro dei fatti (ritiro.in-negozio): «sui contanti al banco la commissione di MyCity si compensa sul
+ * Il registro dei fatti (ritiro.in-negozio): «sui contanti al banco il 10% di MyCity si compensa sul
  * bonifico del lunedì al negozio; se in una settimana non basta, il resto va nella fattura del mese».
  * Contano i ritiri della settimana prima, come i contanti del bonifico. Se il bonifico a mano di
  * questa settimana è già segnato, la commissione è già stata tolta lì: non si toglie una seconda volta
@@ -313,7 +313,7 @@ export default function AdminPayoutsPage() {
     const settimanaOra = settimanaPrima(adesso);
     for (const g of map.values()) {
       g.lordoLunediCents = daVersareLunedi(g.orders, adesso).cents;
-      // R05-002 — la commissione dei ritiri pagati al banco si scala dal bonifico; quello che non ci sta va in fattura.
+      // R05-002 — il 10% dei ritiri pagati al banco si scala dal bonifico; quello che non ci sta va in fattura.
       g.commissioneCents = commissioneDaScalare(g.orders, settimanaOra);
       g.lunediCents = Math.max(0, g.lordoLunediCents - g.commissioneCents);
     }
@@ -393,7 +393,7 @@ export default function AdminPayoutsPage() {
           Carta: i bonifici li fa il giro <span className="font-mono text-xs">release-payouts</span> verso il conto Stripe
           del negozio. Contanti: il lunedì versi tu, con un bonifico, quanto c&apos;è scritto in «Da versare lunedì»
           (consegne dal {fmtGiorno(settimana.dal)} al {fmtGiorno(settimana.al)} e arretrati), poi premi «Bonifico fatto».
-          Gli importi sono già al netto degli storni e della commissione dei ritiri pagati al banco nella stessa settimana: se il
+          Gli importi sono già al netto degli storni e del 10% dei ritiri pagati al banco nella stessa settimana: se il
           bonifico non basta, il resto va nella fattura del mese.
         </p>
       </div>
