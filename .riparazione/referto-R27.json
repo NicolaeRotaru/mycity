@@ -1,0 +1,129 @@
+{
+  "sessione": "R27",
+  "aggiornato": "2026-11-26 18:35",
+  "finita": false,
+  "testa": "5c38ad5711c31eebb9cf326b1b795331a98c3ec3",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "non_lanciato",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R27-001",
+      "chiave": "qa-flussi|la cassa dice «troppo lontano» a chi abita in via roma o in via cavour, in pieno centro, e l'ordine non parte",
+      "esito": "riparato",
+      "commit": "107d41c7140091eb3fe67923177d303165a1f885",
+      "file_toccati": [
+        "lib/geocodifica.ts",
+        "app/api/geocode/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-via-roma-in-centro.test.ts",
+        "tests/unit/riparazione-r27-via-roma-in-centro-rotta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-via-roma-in-centro.test.ts tests/unit/riparazione-r27-via-roma-in-centro-rotta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 107d41c7140091eb3fe67923177d303165a1f885^ --file lib/geocodifica.ts --prove tests/unit/riparazione-r27-via-roma-in-centro.test.ts --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 107d41c7140091eb3fe67923177d303165a1f885^ --file app/api/geocode/route.ts --prove tests/unit/riparazione-r27-via-roma-in-centro-rotta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Una ricerca sola in lib/geocodifica.ts (cercaUnIndirizzo), usata da coordinateDiUnIndirizzo (cassa in contanti e con carta) e da /api/geocode (controllo della zona prima di «Ordina», rubrica): strutturata (street, city, postalcode, countrycodes=it), prima dentro il riquadro di Piacenza e dintorni (viewbox + bounded=1), limit=5 scartando i risultati con comune o CAP diversi da quelli scritti, null se nessuno è affidabile (l'ordine passa senza coordinate, con la campanella agli amministratori che c'era già). Fuori dal riquadro si accetta solo un risultato del comune scritto, così Milano resta fuori zona. Il controllo dei 5 km non cambia; le rotte cod e checkout non servono modifiche (chiamano coordinateDiUnIndirizzo).",
+      "nota": "Rimessa in due lanci, uno per file (entrambi uscita 0): con un lancio solo sui due file usciva 3, perché con lib/geocodifica.ts alla base la rotta nuova non trova cercaUnIndirizzo (stato misto mai esistito). Nominatim vero non raggiungibile da qui: il comportamento è provato con un Nominatim finto che mette per prima la via omonima (come misurato in palestra). La frase q della cassa resta identica carattere per carattere (prova minori-s07-domanda-della-zona verde); /api/geocode la scompone in via/CAP/città. Senza città (selettore del negozio) la ricerca resta a testo ma chiusa nel riquadro. Da sapere: gli indirizzi già salvati in rubrica con le coordinate sbagliate di prima restano nel database (coordinateDaIndirizziSalvati li usa per primi); da guardare a mano prima del lancio se ce ne sono."
+    },
+    {
+      "id": "R27-006",
+      "chiave": "qa-flussi|la posizione del negozio può finire lontano da piacenza, o restare quella vecchia, e il modulo la salva lo stesso",
+      "esito": "riparato",
+      "commit": "698db3f8e6c01503602ce09af8117f79ca92aaaa",
+      "file_toccati": [
+        "components/StoreLocationPicker.tsx",
+        "app/api/geocode/route.ts",
+        "app/api/seller/apply/route.ts",
+        "app/seller/profile/page.tsx",
+        "lib/geocodifica.ts",
+        "lib/ordini/zona-di-consegna.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-posizione-del-negozio-selettore.test.tsx",
+        "tests/unit/riparazione-r27-posizione-del-negozio-server.test.ts",
+        "tests/unit/riparazione-r27-posizione-del-negozio-profilo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-posizione-del-negozio-selettore.test.tsx tests/unit/riparazione-r27-posizione-del-negozio-server.test.ts tests/unit/riparazione-r27-posizione-del-negozio-profilo.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 698db3f8e6c01503602ce09af8117f79ca92aaaa^ --file components/StoreLocationPicker.tsx,app/api/geocode/route.ts,app/api/seller/apply/route.ts,app/seller/profile/page.tsx,lib/geocodifica.ts --prove tests/unit/riparazione-r27-posizione-del-negozio-selettore.test.tsx,tests/unit/riparazione-r27-posizione-del-negozio-server.test.ts,tests/unit/riparazione-r27-posizione-del-negozio-profilo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Selettore: cambiato il testo, confermata torna false e compare «premi Cerca»; dopo Cerca si legge «Trovato: <nome>» (display_name che ora /api/geocode restituisce); una posizione fuori da Piacenza e dintorni (da Cerca, tocco/trascinamento o GPS) non si conferma, il segnaposto non si sposta e c'è l'avviso. La ricerca è già orientata su Piacenza (viewbox + bounded, dal commit della voce della cassa). Server: /api/seller/apply rifiuta (400) coordinate fuori area; il profilo (che scrive dal browser nel database) non scrive e mostra il perché. Il riquadro è uno solo, AREA_SERVITA in lib/ordini/zona-di-consegna.ts, e lib/geocodifica.ts ora lo importa.",
+      "nota": "Rimessa: lib/ordini/zona-di-consegna.ts è fuori da --file perché contiene solo il riquadro condiviso (AREA_SERVITA, dentroLAreaServita, la frase): rimesso da solo alla base, i cinque file che lo importano perdono il nome (rosso per struttura, uscita 3); il comportamento lo provano gli altri cinque file, ognuno rosso sul comportamento. «Area servita» = Piacenza e dintorni, lo stesso riquadro della ricerca indirizzi (lon 9.55-9.85, lat 44.93-45.15, circa 12 km dal centro): la voce non dava un numero; se Nicola vuole un confine più stretto (per esempio 5 km dal centro) si cambia solo AREA_SERVITA. Il profilo non ha una rotta server: il controllo sta nel suo salvataggio, l'unica strada nel codice; una guardia nel database contro una scrittura diretta fatta apposta dal negozio richiederebbe una migrazione, non la ritengo indispensabile (danneggerebbe solo il suo negozio). Negozi già salvati fuori area restano nel database finché non riaprono il profilo.",
+      "domanda_per_nicola": "L'area dove può stare un negozio è Piacenza e dintorni (circa 12 km dal centro, stesso riquadro della ricerca indirizzi): va bene o vuoi un confine più stretto?"
+    },
+    {
+      "id": "R27-003",
+      "chiave": "deploy-sre|sul sito vero manca la chiave della posta: il negozio non riceverà l'email del nuovo ordine e il cliente nessuna conferma",
+      "esito": "riparato",
+      "commit": "127dd1e63bbcfa91a03b0db6a2438ca3a6471783",
+      "file_toccati": [
+        "app/api/orders/cod/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-ordine-con-la-posta-spenta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-ordine-con-la-posta-spenta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 127dd1e63bbcfa91a03b0db6a2438ca3a6471783^ --file app/api/orders/cod/route.ts --prove tests/unit/riparazione-r27-ordine-con-la-posta-spenta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Parte di codice: sul sito vero (VERCEL_ENV=production), quando l'email «Nuovo ordine» al negozio o la conferma al cliente di un ordine in contanti tornano «skipped» per RESEND_API_KEY o RESEND_FROM mancanti, la rotta suona la campanella agli amministratori (notifyAdmins, una volta per ordine con unaVoltaPer) dicendo di avvisare il negozio a voce. Prima l'ordine nasceva in silenzio (solo una riga nel registro: l'avviso della posta rifiutata salta apposta i «skipped»). /api/health elencava già RESEND_API_KEY, RESEND_FROM e SUPPORT_EMAIL fra le importanti (degradato): non toccato.",
+      "nota": "NON CODICE, per Nicola: su Vercel → progetto → Settings → Environment Variables → Production creare RESEND_API_KEY (Sensitive), RESEND_FROM con un mittente del dominio verificato su Resend e SUPPORT_EMAIL con una casella letta davvero; ripubblicare; fare un ordine di prova in contanti e controllare che arrivino l'email al negozio e la conferma al cliente (e che la campanella «posta spenta» non suoni). La campanella vale solo per i contanti: sulla strada della carta (webhook Stripe, file non miei) la posta spenta resta senza campanella, ma al lancio la carta è spenta (mancano anche le chiavi Stripe)."
+    },
+    {
+      "id": "R27-004",
+      "chiave": "qa-flussi|le tre prove automatiche dell'acquisto vero sono vuote: passano in tre millesimi senza aprire niente",
+      "esito": "riparato",
+      "commit": "5c38ad5711c31eebb9cf326b1b795331a98c3ec3",
+      "file_toccati": [
+        ".github/workflows/ci.yml",
+        "tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts",
+        "tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts",
+        "tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-la-cassa-vera-non-conta-a-vuoto.test.ts",
+        "tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts",
+        "tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-la-cassa-vera-non-conta-a-vuoto.test.ts tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts --reporter=dot && npx playwright test tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts --list --project=chromium",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5c38ad5711c31eebb9cf326b1b795331a98c3ec3^ --file .github/workflows/ci.yml,tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts --prove tests/unit/riparazione-r27-la-cassa-vera-non-conta-a-vuoto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Chiuso il residuo del tentativo precedente. Spec 12: due salti fuori dalle prove, il database di prova (SENZA_DATABASE_DI_PROVA, cosaManca(['database'])) per tutte e Stripe di prova (il salto di prima, SENZA_AMBIENTE_DI_PROVA) solo nel gruppo «con la carta di prova» che contiene rimborso e bonifico: il contrassegno gira con la sola E2E_DATI_DI_PROVA=1 e il Supabase locale. ci.yml: il passo del riepilogo (id visto, if always()) scrive viste = stats.expected+unexpected+flaky di risultati-cassa-vera.json, il lavoro e2e-cassa-vera la espone in outputs.viste, e il cancello Main conta success con viste 0 o vuota come «⏭️ non conta» (né passato né rosso); i lavori senza `viste` non cambiano. La prova nuova ESEGUE lo script vero del cancello con ESITI come li scrive GitHub, il passo vero del riepilogo con JSON di Playwright finti, e Playwright sullo spec 12 senza chiavi Stripe (contrassegno caduto provando a raggiungere il database finto, carta saltata col motivo).",
+      "nota": "Prove esistenti modificate (dichiarato: leggono per nome lo spec 12 e/o ci.yml, file miei), come chiedeva il collaudo precedente perché scrivevano il residuo come comportamento voluto: tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts (senza Stripe di prova ora il contrassegno deve girare e cadere sulla rete, le due con la carta saltate col motivo: più stretta di prima) e tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts (i salti ora sono tre, con le condizioni controllate; nuovo controllo che il salto di Stripe stia in un gruppo con le sole due prove con la carta). La quarta prova «la cassa disegna il modulo» ora chiede solo il database di prova (non usa Stripe), ma resta fuori dal filtro -g del lavoro (difetto già segnalato a parte). NON CODICE, per Nicola: variabile del repository E2E_DATI_DI_PROVA=1 (Settings → Secrets and variables → Actions → Variables) per far girare il contrassegno; per le due prove con la carta anche il segreto STRIPE_TEST_SECRET_KEY (sk_test_…) e la variabile E2E_STRIPE_CONTO_NEGOZIO (acct_… di prova). Senza la variabile il lavoro resta «saltato» e il cancello lo dice."
+    }
+  ],
+  "nuovi_difetti_visti": [],
+  "domande_per_nicola": [
+    "R27-006: l’area dove può stare un negozio è il riquadro di Piacenza e dintorni (circa 12 km dal centro, lo stesso della ricerca indirizzi): va bene o vuoi un confine più stretto? Si cambia in un punto solo (lib/ordini/zona-di-consegna.ts)."
+  ],
+  "conto": {
+    "agenti": 1,
+    "nota": "Ultracode non acceso (regole del 26/11, punto 1): lavorato senza."
+  }
+}
