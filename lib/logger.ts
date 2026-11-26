@@ -95,11 +95,12 @@ function redact(value: unknown, depth = 0): unknown {
   // su ottantaquattro l'errore era il secondo argomento, quindi nei log
   // restava la frase («rimborso fallito») e spariva il motivo. Chi apriva il
   // log dopo un rimborso fallito leggeva: rimborso fallito, {}.
-  if (value instanceof Error) {
+  if (eUnErrore(value)) {
+    const pila = leggi(() => value.stack, undefined);
     return {
-      name: value.name,
-      message: oscuraTesto(value.message),
-      stack: typeof value.stack === 'string' ? oscuraTesto(value.stack) : value.stack,
+      name: leggi(() => value.name, NON_LEGGIBILE),
+      message: oscuraTesto(leggi(() => String(value.message ?? ''), NON_LEGGIBILE)),
+      stack: typeof pila === 'string' ? oscuraTesto(pila) : pila,
     };
   }
   if (typeof value === 'object') {
@@ -135,38 +136,85 @@ function redact(value: unknown, depth = 0): unknown {
  * riga. Le altre proprietà restano, coi testi oscurati; la causa (e gli `errors` di un
  * AggregateError) si oscurano allo stesso modo, perché Sentry manda anche quelle.
  */
-const PROFONDITA_DELLE_CAUSE = 5;
+/**
+ * 26/11/2026 (secondo giro) — Mai il valore originale, nessuna lettura che fa lanciare.
+ * ① Ogni Error già copiato si ritrova (una causa che torna su se stessa, un AggregateError che
+ *   contiene se stesso: la copia punta alla copia). Oltre `PROFONDITA_DELLE_CAUSE` livelli resta un
+ *   segnaposto, mai l'originale; il budget copre più di quello che Sentry legge (al massimo sei
+ *   eccezioni collegate), e una lista non consuma un livello in più dei suoi elementi.
+ * ② Le letture (messaggio, nome, pila, proprietà) sono protette: un getter che lancia, o un `name`
+ *   del prototipo che legge un campo privato, lasciano un Error semplice col nome di prima.
+ * ③ Un Error di un altro contesto JavaScript (modulo vm) si riconosce anche senza instanceof, e la
+ *   copia diventa un Error di questo contesto.
+ */
+const PROFONDITA_DELLE_CAUSE = 10;
+const ERRORE_TROPPO_PROFONDO = '[errore troppo profondo]';
+
+function leggi<T>(lettura: () => T, ripiego: T): T {
+  try {
+    return lettura();
+  } catch {
+    return ripiego;
+  }
+}
+
+function eUnErrore(valore: unknown): valore is Error {
+  if (valore instanceof Error) return true;
+  if (valore === null || typeof valore !== 'object') return false;
+  return leggi(() => {
+    const isError = (Error as unknown as { isError?: (v: unknown) => boolean }).isError;
+    return typeof isError === 'function' ? isError(valore) : Object.prototype.toString.call(valore) === '[object Error]';
+  }, false);
+}
 
 function pilaOscurata(pila: string): string {
   const righe = pila.search(/\n\s+at /);
   return righe < 0 ? oscuraTesto(pila) : oscuraTesto(pila.slice(0, righe)) + pila.slice(righe);
 }
 
-function valoreOscurato(valore: unknown, profondita: number): unknown {
+function valoreOscurato(valore: unknown, profondita: number, copie: WeakMap<object, unknown>): unknown {
   if (typeof valore === 'string') return oscuraTesto(valore);
-  if (valore instanceof Error) return erroreOscurato(valore, profondita + 1);
-  if (Array.isArray(valore)) return valore.map((v) => valoreOscurato(v, profondita + 1));
-  return valore;
+  if (valore === null || typeof valore !== 'object') return valore;
+  if (copie.has(valore)) return copie.get(valore);
+  if (profondita > PROFONDITA_DELLE_CAUSE) return eUnErrore(valore) ? new Error(ERRORE_TROPPO_PROFONDO) : ERRORE_TROPPO_PROFONDO;
+  if (eUnErrore(valore)) return erroreOscurato(valore, profondita, copie);
+  if (Array.isArray(valore)) {
+    const lista: unknown[] = [];
+    copie.set(valore, lista);
+    // Gli elementi stanno allo stesso livello della lista: la lista non consuma un livello.
+    for (const v of valore) lista.push(valoreOscurato(v, profondita, copie));
+    return lista;
+  }
+  return redact(valore);
 }
 
-function erroreOscurato(err: Error, profondita = 0): Error {
-  const copia = new Error(oscuraTesto(String(err.message ?? '')));
-  // Un DOMException (l'AbortError di fetch) ha nome e codice letti dall'oggetto vero: la copia resta
-  // un Error semplice, col nome di prima.
+function erroreOscurato(err: Error, profondita = 0, copie = new WeakMap<object, unknown>()): Error {
+  const copia = new Error(oscuraTesto(leggi(() => String(err.message ?? ''), '')));
+  copie.set(err, copia);
+  const nome = oscuraTesto(leggi(() => String(err.name ?? 'Error'), 'Error'));
+  // Il prototipo resta solo se è di questo contesto e si legge anche sulla copia. Un DOMException
+  // (l'AbortError di fetch), un errore di un altro contesto o un `name` che legge un campo privato
+  // farebbero lanciare chi la legge (Sentry compreso): lì la copia resta un Error semplice.
   const host = typeof DOMException !== 'undefined' && err instanceof DOMException;
-  Object.setPrototypeOf(copia, host ? Error.prototype : Object.getPrototypeOf(err));
-  if (copia.name !== err.name) {
-    Object.defineProperty(copia, 'name', { value: err.name, writable: true, configurable: true, enumerable: false });
+  const proto = leggi(() => Object.getPrototypeOf(err) as object | null, null);
+  if (!host && err instanceof Error && proto && proto !== Error.prototype) {
+    Object.setPrototypeOf(copia, proto);
+    const siLegge = leggi(() => typeof copia.name === 'string' && typeof copia.message === 'string' && typeof String(copia) === 'string', false);
+    if (!siLegge) Object.setPrototypeOf(copia, Error.prototype);
   }
-  for (const chiave of Object.getOwnPropertyNames(err)) {
+  if (leggi(() => copia.name, undefined) !== nome) {
+    Object.defineProperty(copia, 'name', { value: nome, writable: true, configurable: true, enumerable: false });
+  }
+  for (const chiave of leggi(() => Object.getOwnPropertyNames(err), [] as string[])) {
     if (chiave === 'message' || chiave === 'stack') continue;
-    const d = Object.getOwnPropertyDescriptor(err, chiave);
+    const d = leggi(() => Object.getOwnPropertyDescriptor(err, chiave), undefined);
     if (!d || !('value' in d)) continue;
-    const valore = profondita < PROFONDITA_DELLE_CAUSE ? valoreOscurato(d.value, profondita) : d.value;
-    Object.defineProperty(copia, chiave, { ...d, value: valore });
+    const valore = valoreOscurato(d.value, profondita + 1, copie);
+    leggi(() => Object.defineProperty(copia, chiave, { ...d, value: valore }), copia);
   }
+  const pila = leggi(() => err.stack, undefined);
   Object.defineProperty(copia, 'stack', {
-    value: typeof err.stack === 'string' ? pilaOscurata(err.stack) : err.stack,
+    value: typeof pila === 'string' ? pilaOscurata(pila) : undefined,
     writable: true,
     configurable: true,
     enumerable: false,
@@ -442,17 +490,24 @@ export const logger = {
     // contesto. Così l'errore vero smette di sparire.
     let errore = err;
     let contesto = ctx;
-    if (typeof err === 'string' && ctx instanceof Error) {
+    if (typeof err === 'string' && eUnErrore(ctx)) {
       errore = ctx;
       contesto = { messaggio: err };
     }
     // R03-013 — Una frase passata come errore va a Sentry così com'è: si oscura prima.
-    if (typeof errore === 'string') errore = oscuraTesto(errore);
-    // R15-011 — Anche un Error (una copia oscurata) e l'errore del database che arriva come oggetto semplice.
-    else if (errore instanceof Error) errore = erroreOscurato(errore);
-    else if (errore !== null && typeof errore === 'object') errore = redact(errore);
+    // R15-011 — Anche un Error (una copia oscurata, pure se viene da un altro contesto) e l'errore del
+    // database che arriva come oggetto semplice. Se non si riesce a leggerlo resta un segnaposto.
+    try {
+      if (typeof errore === 'string') errore = oscuraTesto(errore);
+      else if (eUnErrore(errore)) errore = erroreOscurato(errore);
+      else if (errore !== null && typeof errore === 'object') errore = redact(errore);
+    } catch {
+      errore = new Error('[errore non leggibile]');
+    }
     if (eServer || process.env.NODE_ENV !== 'production') {
-      console.error(line('error', errore instanceof Error ? errore.message : String(errore), contesto));
+      const messaggio = (errore as { message?: unknown } | null)?.message;
+      const testo = typeof messaggio === 'string' ? messaggio : leggi(() => String(errore), '[errore non leggibile]');
+      console.error(line('error', testo, contesto));
     }
     const c = ctxSicuro(contesto);
     if (typeof window === 'undefined') {
