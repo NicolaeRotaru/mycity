@@ -11,12 +11,11 @@ import caricatoreFotoRemote from '@/lib/image-loader';
 import { friendlyError } from '@/lib/errors';
 import { MAX_GALLERY_ITEMS, type SiteSection } from '@/lib/store-site';
 import {
-  avvisoPerGliScartati,
   decidiCosaFareDelDrop,
   mappaAccept,
   pesoMassimo,
 } from '@/lib/storage/casella-di-caricamento';
-import { uploadSiteImage } from './ImageUpload';
+import { avvisoPerGliScartatiDelSito, soloFotoMostrate, uploadSiteImage } from './ImageUpload';
 
 
 /**
@@ -44,7 +43,9 @@ type Item = Cfg['items'][number];
  * negoziante le trascinava e non succedeva niente. Calcolati una volta sola fuori dal componente
  * perche' l'oggetto non cambi identita' a ogni ridisegno.
  */
-const ACCETTA = mappaAccept();
+// R21-002 — Senza HEIC/HEIF: nessuno le converte e i clienti su Chrome e Android vedrebbero un
+// riquadro rotto (vedi `soloFotoMostrate` in ImageUpload.tsx).
+const ACCETTA = soloFotoMostrate(mappaAccept());
 const PESO_MASSIMO = pesoMassimo();
 
 /** Config del blocco "galleria": upload multiplo di immagini con testo alternativo. */
@@ -67,7 +68,7 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
     disabled: busy || items.length >= MAX_GALLERY_ITEMS,
     /** Il file che la casella butta fuori — formato, peso, quantità — adesso ha una voce. */
     onDropRejected: (scartati) => {
-      const avviso = avvisoPerGliScartati(scartati, { postiLiberi: MAX_GALLERY_ITEMS - items.length });
+      const avviso = avvisoPerGliScartatiDelSito(scartati, { postiLiberi: MAX_GALLERY_ITEMS - items.length });
       if (avviso) toast.error(avviso);
     },
     /**
