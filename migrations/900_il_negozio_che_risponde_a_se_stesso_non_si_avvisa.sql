@@ -34,7 +34,7 @@ BEGIN
   IF NEW.is_public IS NOT TRUE
      OR coalesce(btrim(NEW.answer), '') = ''
      OR coalesce(btrim(OLD.answer), '') <> ''
-     OR NEW.author_id IS NOT DISTINCT FROM NEW.answered_by THEN
+     OR NEW.author_id IS NOT DISTINCT FROM (SELECT auth.uid()) THEN
     RETURN NULL;
   END IF;
   BEGIN
