@@ -3,6 +3,7 @@ import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
 import { FRASE_PREZZO_NEGOZI, spiegazioneCommissione } from '@/app/seller/earnings/commissione';
 import { ABBONAMENTO_NEGOZI_ACCESO, AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { ORDER_STATUS_LABEL, etichettaPronto } from '@/lib/order-status';
+import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/ritiro-in-negozio';
 
 // 31/10/2026 (ondata 4) — Qui c'era «Bonifico mensile il giorno 5»: una terza
 // versione dei tempi, diversa dalla pagina Guadagni e da quello che facciamo
@@ -49,9 +50,13 @@ export const TOPICS: ArgomentoAiuto[] = [
       { q: 'Posso rifiutare un ordine?',
         // 12/11/2026 (R09-021, collaudo) — «riceve rimborso automatico» valeva solo per la carta: coi contanti
         // non ha pagato niente, e lo si dice.
-        a: 'Sì, se non puoi prepararlo. Fornisci sempre un motivo (es. prodotto esaurito). Il cliente viene avvisato: se paga alla consegna non ha pagato niente, se aveva pagato con carta gli torna tutto in automatico.' },
+        // 26/11/2026 — Il motivo è facoltativo, come dice il riquadro del rifiuto («Motivo del rifiuto (opzionale)»).
+        a: 'Sì, se non puoi prepararlo. Il motivo è facoltativo, ma aiuta il cliente (es. prodotto esaurito). Il cliente viene avvisato: se paga alla consegna non ha pagato niente, quindi non c\'è niente da restituire; se aveva pagato online gli torna il rimborso in automatico.' },
       { q: 'Come segnalo l\'ordine pronto?',
-        a: `Dalla pagina dell'ordine premi "${etichettaPronto(false)}" (oppure "${etichettaPronto(true)}" se il cliente passa in negozio). Il fattorino o il cliente vengono avvisati.` },
+        // 26/11/2026 — Il ritiro in negozio è spento al lancio: la seconda etichetta c'è solo quando si riaccende.
+        a: RITIRO_IN_NEGOZIO_ATTIVO
+          ? `Dalla pagina dell'ordine premi "${etichettaPronto(false)}" (oppure "${etichettaPronto(true)}" se il cliente passa in negozio). Il fattorino o il cliente vengono avvisati.`
+          : `Dalla pagina dell'ordine premi "${etichettaPronto(false)}". Il fattorino viene avvisato.` },
     ],
   },
   {
@@ -74,7 +79,9 @@ export const TOPICS: ArgomentoAiuto[] = [
     title: 'Guadagni e pagamenti',
     items: [
       { q: 'Quando ricevo i soldi delle vendite?',
-        a: `${RISPOSTA_TEMPI_BONIFICO} Da "Guadagni" vedi il prossimo importo previsto.` },
+        // 26/11/2026 — «il prossimo importo previsto» la pagina Guadagni non lo mostra: mostra il già versato,
+        // quello in attesa del bonifico e lo stato di ogni ordine (app/seller/earnings/page.tsx).
+        a: `${RISPOSTA_TEMPI_BONIFICO} Da "Guadagni" vedi quanto ti è già stato versato e quanto è in attesa del bonifico, ordine per ordine.` },
       { q: 'Quanto tratteniamo?',
         // 31/10/2026 (ondata 6) — Diceva «Nessun costo mensile»: il prezzo dei negozi è una frase sola.
         a: `${FRASE_PREZZO_NEGOZI} La percentuale si calcola sul venduto effettivamente concluso.` },

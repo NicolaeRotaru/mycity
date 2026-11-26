@@ -269,10 +269,41 @@ export function filmatoSenzaDatiPersonali(datiDelFilmato: unknown): unknown {
 function unPezzoDiFilmato(valore: unknown, profondita: number, conto: Conteggio): unknown {
   if (Array.isArray(valore)) return valore.map((v) => unPezzoDiFilmato(v, profondita + 1, conto));
   if (sembraUnEventoDelFilmato(valore)) {
-    // Il DOM del filmato passa intero: e' l'eccezione dichiarata qui sopra.
-    if (TIPI_RRWEB_CHE_PORTANO_IL_DOM.has(valore.type)) return valore;
-    return { ...valore, data: ripulisci(valore.data, profondita + 1, conto) };
+    // Il DOM del filmato passa intero: e' l'eccezione dichiarata qui sopra. Vale per `data`, non
+    // per le altre chiavi dell'evento.
+    const data = TIPI_RRWEB_CHE_PORTANO_IL_DOM.has(valore.type)
+      ? valore.data
+      : ripulisci(valore.data, profondita + 1, conto);
+    return conLeAltreChiaviPulite(valore, data, profondita, conto);
   }
   // Non ha la forma di un evento rrweb: nel dubbio si pulisce.
   return ripulisci(valore, profondita, conto);
+}
+
+/**
+ * 26/11/2026 — LE CHIAVI DELL'EVENTO DIVERSE DA `data` USCIVANO COSI' COM'ERANO.
+ * `{ ...valore, data: … }` copiava tutto il resto senza guardarlo. Oggi sono `timestamp`, `delay`
+ * e `cv` (che PostHog aggiunge ai fotogrammi compressi: toglierlo romperebbe la riproduzione),
+ * quindi si puliscono per contenuto come tutto il resto invece di scartarle: i numeri restano
+ * numeri, e un evento che non cambia torna lo stesso oggetto.
+ */
+function conLeAltreChiaviPulite(
+  evento: Record<string, unknown>,
+  data: unknown,
+  profondita: number,
+  conto: Conteggio,
+): Record<string, unknown> {
+  const pulito: Record<string, unknown> = {};
+  let uguale = data === evento.data;
+  for (const chiave of Object.keys(evento)) {
+    if (chiave === 'data') {
+      pulito.data = data;
+      continue;
+    }
+    pulito[chiave] = ripulisci(evento[chiave], profondita + 1, conto);
+    if (pulito[chiave] !== evento[chiave]) uguale = false;
+  }
+  if (uguale) return evento;
+  if (!('data' in pulito)) pulito.data = data;
+  return pulito;
 }

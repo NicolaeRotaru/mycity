@@ -35,17 +35,22 @@ type RigaContestata = {
   payout_tentativo?: number | null;
 };
 
-/** Scrive l'ordine; senza le colonne della 126/124 riprova senza di loro (come dispute.ts). */
+/**
+ * Scrive l'ordine; se manca proprio `payout_tentativo` (124) riprova senza.
+ *
+ * Il promemoria della quota non si toglie mai dalla scrittura: qui è lui il segno «già
+ * restituito», e va insieme al tentativo e allo stornato, come nella scrittura intera.
+ * Prima, con PostgREST che non conosceva ancora la colonna, il ripiego scriveva il
+ * tentativo nuovo e lasciava il promemoria: una ripetizione dell'evento rifaceva il
+ * bonifico con una chiave nuova. Adesso o si scrive tutto o niente: la scrittura
+ * obbligatoria lancia, Stripe ripete col tentativo di prima e la stessa chiave
+ * restituisce lo stesso bonifico.
+ */
 async function scriviConRipiego(valori: Record<string, unknown>, id: string) {
   const admin = getAdminSupabase();
-  let campi = valori;
-  let esito = await admin.from('orders').update(campi).eq('id', id);
-  for (const colonna of ['dispute_seller_reversed_cents', 'payout_tentativo']) {
-    if (!esito.error || !colonnaNonTrovata(esito.error as ErroreDatabase)) return esito;
-    campi = senzaCampi(campi, [colonna]);
-    esito = await admin.from('orders').update(campi).eq('id', id);
-  }
-  return esito;
+  const esito = await admin.from('orders').update(valori).eq('id', id);
+  if (!esito.error || !colonnaNonTrovata(esito.error as ErroreDatabase, ['payout_tentativo'])) return esito;
+  return admin.from('orders').update(senzaCampi(valori, ['payout_tentativo'])).eq('id', id);
 }
 
 export async function restituisciLeQuoteParziali(dispute: Stripe.Dispute, orders: RigaContestata[]): Promise<void> {
