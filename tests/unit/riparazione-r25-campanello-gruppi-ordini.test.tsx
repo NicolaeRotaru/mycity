@@ -1,9 +1,12 @@
 /**
  * @vitest-environment jsdom
  *
- * R25-009 — Il campanello del sito contava ancora i gruppi e gli aggiornamenti d'ordine di chi li
- * aveva spenti (`notif_groups`, `notif_order_updates`): la push non parte (`vuole_notifica`), il
- * pallino si accendeva lo stesso. Accesi di serie: spenti solo se la persona li ha spenti davvero.
+ * R25-009 — Il campanello del sito contava ancora i gruppi di chi li aveva spenti (`notif_groups`):
+ * la push non parte (`vuole_notifica`), il pallino si accendeva lo stesso. Accesi di serie: spenti
+ * solo se la persona li ha spenti davvero. Gli avvisi 'order' invece si contano anche con gli
+ * aggiornamenti d'ordine spenti (`notif_order_updates`): in quella categoria finiscono anche il
+ * pagamento dell'abbonamento non riuscito, la sponsorizzazione, il premio invito, l'SOS del
+ * fattorino, e il campanello non li deve nascondere.
  * Client Supabase finto: le righe e i filtri si applicano davvero.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -88,7 +91,7 @@ const righe = (category: string, quante: number, is_read = false): Notifica[] =>
   Array.from({ length: quante }, () => ({ user_id: UTENTE, is_read, category }));
 
 
-describe('R25-009 — il campanello del sito non conta gruppi e ordini spenti', () => {
+describe('R25-009 — il campanello del sito non conta i gruppi spenti, e conta sempre gli avvisi «order»', () => {
   beforeEach(() => {
     // 2 ordini, 4 gruppi, 1 di sistema, 3 promozioni non lette; un gruppo gia' letto non conta mai.
     notifiche = [
@@ -103,14 +106,14 @@ describe('R25-009 — il campanello del sito non conta gruppi e ordini spenti', 
     expect(await conto()).toBe(6);
   });
 
-  it('aggiornamenti d\'ordine spenti: gli ordini restano fuori dal conto', async () => {
+  it('aggiornamenti d\'ordine spenti: gli avvisi «order» restano nel conto (non sono solo aggiornamenti d\'ordine)', async () => {
     preferenze = { data: { ...accese, notif_groups: true, notif_order_updates: false }, error: null };
-    expect(await conto()).toBe(8);
+    expect(await conto()).toBe(10);
   });
 
-  it('tutto spento: restano solo gli avvisi di servizio', async () => {
+  it('tutto spento: restano gli avvisi di servizio e quelli «order»', async () => {
     preferenze = { data: { notif_promos: false, notif_newsletter: false, notif_groups: false, notif_order_updates: false }, error: null };
-    expect(await conto()).toBe(1);
+    expect(await conto()).toBe(3);
   });
 
   it('tutto acceso, o campi non scritti: si contano gruppi e ordini', async () => {
