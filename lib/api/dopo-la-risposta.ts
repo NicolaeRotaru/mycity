@@ -1,5 +1,5 @@
 import { after } from 'next/server';
-import { workAsyncStorage } from 'next/dist/server/app-render/work-async-storage.external';
+import { headers } from 'next/headers';
 import { logger } from '@/lib/logger';
 
 /**
@@ -38,8 +38,10 @@ import { logger } from '@/lib/logger';
  * R09-008 — UNA FILA PER RICHIESTA, NON UNA PER TUTTO IL SERVER. La fila era una variabile del modulo:
  * con più richieste servite dallo stesso processo (Fluid compute) le email di una raffica di ordini
  * si mettevano in coda dietro quelle delle altre, e la richiesta con gli ultimi lavori poteva arrivare
- * al suo tetto di durata prima del suo turno. Ora ogni richiesta ha la sua fila, legata allo stato
- * della richiesta di Next (`workAsyncStorage`); fuori da una richiesta (script, prove) resta una fila sola.
+ * al suo tetto di durata prima del suo turno. Ora ogni richiesta ha la sua fila, legata all'oggetto che
+ * l'API pubblica `headers()` di Next restituisce, lo stesso per tutta la richiesta (niente import da
+ * `next/dist`, che e' interno e cambia senza preavviso); fuori da una richiesta (script, prove) `headers()`
+ * lancia e resta una fila sola.
  */
 const TETTO_DEL_TURNO_MS = 10_000;
 const SENZA_RICHIESTA = {};
@@ -48,7 +50,7 @@ const file = new WeakMap<object, Promise<void>>();
 /** La chiave della fila: lo stato della richiesta in corso, o una chiave unica fuori da una richiesta. */
 function chiaveDellaRichiesta(): object {
   try {
-    return workAsyncStorage.getStore() ?? SENZA_RICHIESTA;
+    return (headers() as unknown as object) ?? SENZA_RICHIESTA;
   } catch {
     return SENZA_RICHIESTA;
   }
