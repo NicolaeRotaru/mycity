@@ -513,6 +513,10 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         <ReturnRequestCard
           ret={returnRow as unknown as ReturnRow}
           orderTotal={Number(order.total_price)}
+          // 26/11/2026 — Le righe dicono quale articolo torna e quanto vale: senza, la scheda
+          // proponeva il totale dell'ordine anche per un articolo solo.
+          righe={order.order_items}
+          scontoCents={Math.round(Number(order.discount_amount ?? 0) * 100)}
           onDecided={() => {
             qc.invalidateQueries({ queryKey: queryKeys.seller.returnForOrder(id) });
             qc.invalidateQueries({ queryKey: queryKeys.seller.order(id) });
