@@ -8,9 +8,9 @@
 -- approval_status = 'pending') e approval_requested_at = now() (la data che la
 -- lista «In attesa» mostra come «Inviata il»). Lo staff lo rivede con «approve»
 -- e le regole del mezzo (lib/admin/regole-approvazione.ts).
--- Da sospeso (approval_status = 'suspended') lo stesso cambio esce con 42501:
--- la riattivazione (motivoPerNonApprovare, 'reactivate') ritrova il mezzo e le
--- scadenze dell'ultima approvazione.
+-- Da sospeso (approval_status = 'suspended') questa versione rifiutava il
+-- cambio con 42501. La 994 la sostituisce: da sospeso lo stesso cambio rimette
+-- in coda, e da approvato tiene conto delle consegne già sue. Vale la 994.
 -- Iscrizione, bici, targa e gli altri campi non cambiano.
 --
 -- Non si applica a: is_admin(), ruolo JWT service_role,
