@@ -32,6 +32,47 @@ const SETTINGS_LINKS: { href: string; Icon: LucideIcon; label: string }[] = [
   { href: '/rider/help', Icon: HelpCircle, label: 'Aiuto' },
 ];
 
+/**
+ * R16-004 / R16-005 — Etichette dei documenti del fattorino.
+ *  - respinto o sospeso: la riga lo dice, non «in attesa di verifica» (nessuno sta esaminando niente);
+ *  - HACCP caricato: resta «in verifica» anche da approvato, perché nessuna colonna dice che l'hanno guardato.
+ */
+type StatoDocumento = 'ok' | 'review' | 'missing' | 'blocked';
+
+type EsitoDocumento = { sub: string; status: StatoDocumento };
+
+type StatoAccountFattorino = 'approvato' | 'in_attesa' | 'respinto' | 'sospeso';
+
+function statoAccountFattorino(
+  approvalStatus: string | null | undefined,
+  isApproved: boolean | null | undefined,
+): StatoAccountFattorino {
+  if (approvalStatus === 'rejected') return 'respinto';
+  if (approvalStatus === 'suspended') return 'sospeso';
+  if (isApproved === true) return 'approvato';
+  return 'in_attesa';
+}
+
+const FERMO: Record<'respinto' | 'sospeso', string> = {
+  respinto: 'Caricato · Richiesta respinta',
+  sospeso: 'Caricato · Account sospeso',
+};
+
+/** Documento d'identità: dopo l'approvazione dell'account è «Verificato». */
+function esitoDocumentoIdentita(caricato: boolean, account: StatoAccountFattorino): EsitoDocumento {
+  if (!caricato) return { sub: 'Da caricare', status: 'missing' };
+  if (account === 'respinto' || account === 'sospeso') return { sub: FERMO[account], status: 'blocked' };
+  if (account === 'approvato') return { sub: 'Verificato', status: 'ok' };
+  return { sub: 'Caricato · In attesa di verifica', status: 'review' };
+}
+
+/** Attestato HACCP senza scadenza scritta: caricato resta «in verifica», mai «ok» da solo. */
+function esitoAttestatoHaccp(caricato: boolean, account: StatoAccountFattorino): EsitoDocumento | null {
+  if (!caricato) return null;
+  if (account === 'respinto' || account === 'sospeso') return { sub: FERMO[account], status: 'blocked' };
+  return { sub: 'Caricato · In attesa di verifica', status: 'review' };
+}
+
 export default function RiderProfilePage() {
   const qc = useQueryClient();
   const router = useRouter();
@@ -46,7 +87,7 @@ export default function RiderProfilePage() {
       if (!user) throw new Error('Non autenticato');
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, phone, is_approved, rider_vehicle_type, rider_vehicle_plate, rider_zones, rider_haccp_expires_on, rider_license_expires_on, rider_insurance_expires_on, kyc_id_doc_front_url, rider_haccp_url')
+        .select('id, full_name, phone, is_approved, approval_status, rider_vehicle_type, rider_vehicle_plate, rider_zones, rider_haccp_expires_on, rider_license_expires_on, rider_insurance_expires_on, kyc_id_doc_front_url, rider_haccp_url')
         .eq('id', user.id)
         .single();
       if (error) throw error;
@@ -162,12 +203,14 @@ export default function RiderProfilePage() {
   const scaduto = (d: string | null) => !!d && d.slice(0, 10) < oggi;
   const soon = (d: string | null) => !!d && (new Date(d).getTime() - Date.now()) < 60 * 86400000; // <60gg
   // 'review': caricato, nessuno l'ha ancora esaminato (R19-005: prima diceva «In scadenza»).
-  type DocStatus = 'ok' | 'soon' | 'expired' | 'missing' | 'review';
+  type DocStatus = 'ok' | 'soon' | 'expired' | 'missing' | 'review' | 'blocked';
   const statoDellaScadenza = (d: string | null): DocStatus => (!d ? 'missing' : scaduto(d) ? 'expired' : soon(d) ? 'soon' : 'ok');
   // Solo patente e polizza fermano le consegne (migrazione 270); l'HACCP è facoltativo.
   const testoDellaScadenza = (d: string, ferma = true) =>
     scaduto(d) ? `Scaduta il ${fmtDate(d)}${ferma ? ' · non puoi prendere consegne' : ''}` : `Scade ${fmtDate(d)}`;
-  const approvato = (p?.is_approved as boolean | null) === true;
+  const account = statoAccountFattorino(p?.approval_status as string | null, p?.is_approved as boolean | null);
+  const esitoIdentita = esitoDocumentoIdentita(idUploaded, account);
+  const esitoHaccp = esitoAttestatoHaccp(haccpUploaded, account);
   // In bici patente e polizza non servono (lib/admin/regole-approvazione.ts): niente «Mancante» rosso.
   const inBici = vehicleType === 'BIKE' || vehicleType === 'EBIKE';
   const docs: { Icon: LucideIcon; label: string; sub: string; status: DocStatus }[] = [
@@ -183,15 +226,15 @@ export default function RiderProfilePage() {
     },
     {
       Icon: FileCheck, label: 'Documento identità',
-      sub: idUploaded ? (approvato ? 'Verificato' : 'Caricato · In attesa di verifica') : 'Da caricare',
-      status: idUploaded ? (approvato ? 'ok' : 'review') : 'missing',
+      sub: esitoIdentita.sub,
+      status: esitoIdentita.status,
     },
     {
       Icon: ShieldCheck, label: 'Attestato HACCP',
       sub: haccpExpires
         ? testoDellaScadenza(haccpExpires, false)
-        : haccpUploaded ? (approvato ? 'Caricato' : 'Caricato · In attesa di verifica') : 'Facoltativo (food)',
-      status: haccpExpires || !haccpUploaded ? statoDellaScadenza(haccpExpires) : approvato ? 'ok' : 'review',
+        : esitoHaccp ? esitoHaccp.sub : 'Facoltativo (food)',
+      status: haccpExpires || !esitoHaccp ? statoDellaScadenza(haccpExpires) : esitoHaccp.status,
     },
   ];
   const STATUS_META: Record<DocStatus, { bg: string; text: string; label: string; Icon: LucideIcon }> = {
@@ -200,6 +243,7 @@ export default function RiderProfilePage() {
     expired: { bg: 'bg-secondary-50', text: 'text-secondary-700', label: 'Scaduto',     Icon: CircleAlert },
     missing: { bg: 'bg-secondary-50', text: 'text-secondary-600', label: 'Mancante',    Icon: CircleAlert },
     review:  { bg: 'bg-accent-50',    text: 'text-accent-700',    label: 'In verifica', Icon: Clock },
+    blocked: { bg: 'bg-secondary-50', text: 'text-secondary-700', label: 'Non attivo',  Icon: CircleAlert },
   };
 
   return (

@@ -8,6 +8,7 @@ import { MessageSquare, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { useProfile } from './hooks/useProfile';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { fetchNomiPubblici } from '@/lib/queries/seller-public-profiles';
@@ -29,6 +30,9 @@ type Props = {
   sellerId: string;
 };
 
+/** R16-009 — Il database non ha toccato la domanda: non si dice «tolta». */
+const NON_TOLTA = 'La domanda non è stata tolta: riprova fra poco o scrivi all\'assistenza.';
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
 }
@@ -38,6 +42,7 @@ function formatDate(iso: string): string {
  *  - Tutti gli utenti loggati possono fare domande.
  *  - Solo il seller del prodotto può rispondere (RLS DB-side).
  *  - Le risposte sono pubbliche → contenuto SEO indicizzabile.
+ *  - Chi ha scritto la domanda la toglie (970), l'amministratore la nasconde (364).
  */
 export default function ProductQA({ productId, sellerId }: Props) {
   // 27/8/2026 (R115) — il campo della domanda e quello della risposta avevano
@@ -46,7 +51,7 @@ export default function ProductQA({ productId, sellerId }: Props) {
   const idDomanda = useId();
   const router = useRouter();
   const qc = useQueryClient();
-  const { isAuthenticated, profile } = useProfile();
+  const { isAuthenticated, profile, isAdmin } = useProfile();
   const [text, setText] = useState('');
   const [answerText, setAnswerText] = useState<Record<string, string>>({});
   // 5/11/2026 — Qui c'era un pulsante «Utile» con un conteggio che viveva solo nello stato
@@ -117,6 +122,32 @@ export default function ProductQA({ productId, sellerId }: Props) {
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
+
+  // R16-009 — Una domanda si toglie: l'amministratore la nasconde (is_public = false, migrazione 364),
+  // chi l'ha scritta la cancella (migrazione 970). Si chiede indietro la riga toccata: se il database
+  // non ha cambiato niente (una regola che non c'è ancora) si dice, invece di «tolta».
+  const removeMutation = useMutation({
+    mutationFn: async ({ questionId, come }: { questionId: string; come: 'nascondi' | 'cancella' }) => {
+      const domanda = supabase.from('product_questions');
+      const { data, error } = await (come === 'nascondi'
+        ? domanda.update({ is_public: false }).eq('id', questionId).select('id')
+        : domanda.delete().eq('id', questionId).select('id'));
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error(NON_TOLTA);
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: queryKeys.qa.product(productId) });
+      toast.success(vars.come === 'nascondi' ? 'Domanda nascosta.' : 'Domanda tolta.');
+    },
+    onError: (err: unknown) => toast.error(err instanceof Error && err.message === NON_TOLTA ? NON_TOLTA : friendlyError(err)),
+  });
+
+  const togli = async (q: Question, come: 'nascondi' | 'cancella') => {
+    const ok = await confirmDialog(come === 'nascondi'
+      ? { title: 'Nascondere questa domanda?', message: 'Non sarà più visibile sotto il prodotto.', confirmLabel: 'Nascondi', danger: true }
+      : { title: 'Togliere la tua domanda?', message: 'La domanda e l\'eventuale risposta del negozio spariscono per sempre.', confirmLabel: 'Togli', danger: true });
+    if (ok) removeMutation.mutate({ questionId: q.id, come });
+  };
 
   const isSellerOfThis = profile?.id === sellerId;
 
@@ -213,6 +244,17 @@ export default function ProductQA({ productId, sellerId }: Props) {
                   </span>
                 </div>
                 <p className="text-ink-800 ml-9">{q.question}</p>
+                {(isAdmin || (!!profile?.id && profile.id === q.author_id)) && (
+                  <button
+                    type="button"
+                    onClick={() => { void togli(q, isAdmin ? 'nascondi' : 'cancella'); }}
+                    disabled={removeMutation.isPending}
+                    aria-label={`${isAdmin ? 'Nascondi' : 'Togli'} la domanda: ${q.question}`}
+                    className="ml-9 mt-1 text-xs font-semibold text-ink-500 hover:text-ink-800 hover:underline disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 rounded"
+                  >
+                    {isAdmin ? 'Nascondi' : 'Togli la mia domanda'}
+                  </button>
+                )}
               </div>
 
               {/* Risposta */}

@@ -65,7 +65,9 @@ const ProductCard = ({
   const bigPrice = hasDiscount ? discountedPrice : price;
   const strikePrice = hasDiscount ? price : (compareValid ? (compareAtPrice as number) : 0);
   const badgePct = hasDiscount
-    ? (discountPercent as number)
+    // R16-006 — La percentuale che il prezzo applica davvero (tetto 70 di `discountedUnitCents`):
+    // su 100 € il prezzo scontato in centesimi dice lo sconto applicato, senza ripetere il 70 qui.
+    ? Math.round(100 - discountedUnitCents(100, discountPercent as number) / 100)
     : (compareValid ? Math.round((1 - price / (compareAtPrice as number)) * 100) : 0);
   const rawImg = images?.[0] ?? FOTO_MANCANTE;
   const img = sizedImage(rawImg, 'card');

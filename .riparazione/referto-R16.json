@@ -1,0 +1,352 @@
+{
+ "sessione": "R16",
+ "aggiornato": "2026-11-26 15:12",
+ "finita": true,
+ "testa": "efeecb68116a4732e8089778f1c02c83ee27e20f",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "efeecb68116a4732e8089778f1c02c83ee27e20f",
+  "nota": "2151 file di prova, 13216 casi verdi; typecheck e lint verdi"
+ },
+ "voci": [
+  {
+   "id": "R16-001",
+   "chiave": "coerenza-brand|ombre nere fredde accanto alle ombre calde del brand; il token creato apposta non è usato mai",
+   "esito": "parziale",
+   "commit": "cd293e13dd8284868589c868129b41c0e498de4c",
+   "file_toccati": [
+    "app/profile/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r16-ombre-calde.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r16-ombre-calde.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cd293e13dd8284868589c868129b41c0e498de4c^ --file app/profile/page.tsx --prove tests/unit/riparazione-r16-ombre-calde.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Sulla base app/orders/[id]/page.tsx:435 e components/ProductCard.tsx:168 non avevano più ombre nere; nei miei file restava solo hover:shadow-lg in app/profile/page.tsx:136, ora hover:shadow-warm-lg. La prova controlla che nessuno dei miei file usi più le ombre nere shadow/shadow-sm/md/lg/xl/2xl.",
+   "cosa_resta": "34 ombre nere (shadow/shadow-sm/md/lg/xl/2xl) in file non miei, da portare su shadow-warm-sm/shadow-warm/shadow-warm-lg: grep -rnE \"(^|[^-a-z])(hover:|focus:|group-hover:)?shadow(-sm|-md|-lg|-xl|-2xl)?[ \\\"'`}]\" app components --include=*.tsx | grep -v shadow-sm-neutral",
+   "verificato_da": "smentitore (sonnet): shadow-warm-lg esiste in tailwind.config.ts:184 e app/globals.css:109; rimettendo hover:shadow-lg la prova cade su quel file"
+  },
+  {
+   "id": "R16-014",
+   "chiave": "tipografia|la scala delle dimensioni del testo viene scavalcata circa trecentotrenta volte",
+   "esito": "parziale",
+   "prova_comando": "grep -nE \"text-\\[[0-9.]+(px|rem)\\]\" components/ProductCard.tsx",
+   "cosa_ho_fatto": "Nessuna modifica: sulla base components/ProductCard.tsx non ha più classi text-[Npx] e la scala di app/globals.css:22-32 non va cambiata.",
+   "cosa_resta": "Circa 195 text-[Npx] nel resto del sito (file non miei) e 24 nei miei file fuori da ProductCard (app/admin/page.tsx 6, app/orders/[id]/page.tsx 1, app/orders/page.tsx 2, app/profile/page.tsx 1, app/rider/profile/page.tsx 11, app/seller/orders/page.tsx 2): grep -rnE \"text-\\[[0-9.]+(px|rem)\\]\" app components --include=*.tsx. I valori 11, 13, 15, 17, 22 e 26px non hanno un gradino nella scala: serve una scelta di Nicola sul gradino più vicino."
+  },
+  {
+   "id": "R16-004",
+   "chiave": "frontend-ux|da approvato, l'attestato haccp appena caricato passa subito a «caricato · ok» senza che nessuno lo guardi",
+   "esito": "riparato",
+   "commit": "940731e258536cd91c7cb8770d5e0defbc7aa15b",
+   "file_toccati": [
+    "app/rider/profile/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r16-profilo-fattorino-documenti.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r16-profilo-fattorino-documenti.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 940731e258536cd91c7cb8770d5e0defbc7aa15b^ --file app/rider/profile/page.tsx --prove tests/unit/riparazione-r16-profilo-fattorino-documenti.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "L'attestato HACCP caricato resta «Caricato · In attesa di verifica» anche da approvato, perché nessuna colonna dice che qualcuno l'ha guardato.",
+   "insieme_a": [
+    "R16-005"
+   ],
+   "verificato_da": "smentitore (sonnet): prova e 23 file vicini verdi; stati rejected/suspended/approved/pending/null coperti; approval_status esiste (migrazioni 021/022) ed è nella query"
+  },
+  {
+   "id": "R16-005",
+   "chiave": "frontend-ux|il fattorino respinto o sospeso legge nel profilo «caricato · in attesa di verifica» sui documenti",
+   "esito": "riparato",
+   "commit": "940731e258536cd91c7cb8770d5e0defbc7aa15b",
+   "file_toccati": [
+    "app/rider/profile/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r16-profilo-fattorino-documenti.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r16-profilo-fattorino-documenti.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 940731e258536cd91c7cb8770d5e0defbc7aa15b^ --file app/rider/profile/page.tsx --prove tests/unit/riparazione-r16-profilo-fattorino-documenti.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La pagina legge anche approval_status: il fattorino respinto o sospeso legge «Caricato · Richiesta respinta» o «Caricato · Account sospeso» (etichetta «Non attivo»); chi è in attesa vera legge ancora «In attesa di verifica».",
+   "insieme_a": [
+    "R16-004"
+   ],
+   "verificato_da": "smentitore (sonnet): prova e 23 file vicini verdi; stati rejected/suspended/approved/pending/null coperti; approval_status esiste (migrazioni 021/022) ed è nella query"
+  },
+  {
+   "id": "R16-006",
+   "chiave": "frontend-ux|il bollino dello sconto della scheda prodotto mostra la percentuale grezza, oltre il 70% che il prezzo applica",
+   "esito": "riparato",
+   "commit": "1fd4f2563a6219802dc4ca3eaaa5f4d12ba573a6",
+   "file_toccati": [
+    "components/ProductCard.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r16-bollino-sconto.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r16-bollino-sconto.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1fd4f2563a6219802dc4ca3eaaa5f4d12ba573a6^ --file components/ProductCard.tsx --prove tests/unit/riparazione-r16-bollino-sconto.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il bollino ricava la percentuale da discountedUnitCents(100, pct), la stessa funzione che applica il tetto del 70% al prezzo: uno sconto grezzo del 90% mostra -70%. Complemento nello stesso tema: commit 71bb4d8a940f67a374f8102f72bb406861ae4f7e, anche il bollino «In promo» di components/ActivePromoBadge.tsx si ferma al 70% (prova tests/unit/riparazione-r16-bollino-promo-tetto.test.tsx, rimessa regge, uscita 0: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 71bb4d8a940f67a374f8102f72bb406861ae4f7e^ --file components/ActivePromoBadge.tsx --prove tests/unit/riparazione-r16-bollino-promo-tetto.test.tsx --json).",
+   "verificato_da": "smentitore (sonnet): sconti 0, 0.4, 1, 33, 70, 71, 100, 1000, negativo, NaN, null; da 1 a 70 identico, sopra 70 dice 70; rimettendo la percentuale grezza la prova cade; il complemento 71bb4d8a940f67a374f8102f72bb406861ae4f7e non è stato smentito da un secondo agente (limite di spesa all'80%): solo prova, rimessa e npm run verify"
+  },
+  {
+   "id": "R16-007",
+   "chiave": "microcopy|un tetto del nome negozio respinto dal database esce col messaggio generico «il valore inserito non è valido.»",
+   "esito": "riparato",
+   "commit": "3a3115e5d6cfa9ebb7964aeeba02295dae414c2c",
+   "file_toccati": [
+    "lib/errors.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r16-nome-negozio-troppo-lungo.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r16-nome-negozio-troppo-lungo.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3a3115e5d6cfa9ebb7964aeeba02295dae414c2c^ --file lib/errors.ts --prove tests/unit/riparazione-r16-nome-negozio-troppo-lungo.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il tetto è un trigger della migrazione 830 che alza 23514 con «Il nome del negozio puo' avere al massimo 80 caratteri»: friendlyError lo riconosce e dice «Il nome del negozio è troppo lungo: al massimo 80 caratteri. Accorcialo e riprova.»; gli altri 23514 restano generici.",
+   "verificato_da": "smentitore (sonnet): il testo del trigger della migrazione 830 combacia; gli altri 23514 restano generici (prove errors, r10, r28 verdi); con la regex rotta la prova cade"
+  },
+  {
+   "id": "R16-012",
+   "chiave": "qa-flussi|con una promozione del negozio la vetrina scrive un prezzo e la cassa ne fa pagare un altro, di un centesimo per pezzo",
+   "esito": "riparato",
+   "commit": "9e6c55123f87de15ce0a55c3ae0b322bd651caf4",
+   "file_toccati": [
+    "components/ActivePromoBadge.tsx",
+    "app/cart/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r16-prezzo-promo-al-centesimo.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r16-prezzo-promo-al-centesimo.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9e6c55123f87de15ce0a55c3ae0b322bd651caf4^ --file components/ActivePromoBadge.tsx,app/cart/page.tsx --prove tests/unit/riparazione-r16-prezzo-promo-al-centesimo.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La cassa fa pagare discountedUnitCents per pezzo (lib/ordini/valida-carrello.ts:185) e ProductCard la usava già sulla base. Ora la usa anche il bollino della promo (1,15 € al -10% scrive 1,03 €, non 1,04 €), e il carrello prende il prezzo di oggi anche quando la differenza è sotto il centesimo.",
+   "insieme_a": [
+    "R16-013"
+   ],
+   "verificato_da": "smentitore (modello grande): contanti e carta passano da validaRigaDelCarrello con discountedUnitCents × quantità; 1,15 € al 10%, 0,99 € al 33%, 2,49 € al 15% su 3 pezzi danno lo stesso numero in scheda, bollino, carrello, cassa e server; rimessa regge, 50 prove vicine verdi"
+  },
+  {
+   "id": "R16-013",
+   "chiave": "qa-flussi|con una promozione la vetrina scrive un prezzo e la cassa ne fa pagare un altro, di un centesimo per pezzo (voce già nel registro, non assegnata in onda 2)",
+   "esito": "riparato",
+   "commit": "9e6c55123f87de15ce0a55c3ae0b322bd651caf4",
+   "file_toccati": [
+    "components/ActivePromoBadge.tsx",
+    "app/cart/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r16-prezzo-promo-al-centesimo.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r16-prezzo-promo-al-centesimo.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9e6c55123f87de15ce0a55c3ae0b322bd651caf4^ --file components/ActivePromoBadge.tsx,app/cart/page.tsx --prove tests/unit/riparazione-r16-prezzo-promo-al-centesimo.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Stesso difetto della voce gemella: la riga indicata di ProductCard era già corretta sulla base (usa discountedUnitCents); restavano il bollino della promo e il carrello, che lo stesso commit allinea alla cassa.",
+   "insieme_a": [
+    "R16-012"
+   ],
+   "verificato_da": "smentitore (modello grande): contanti e carta passano da validaRigaDelCarrello con discountedUnitCents × quantità; 1,15 € al 10%, 0,99 € al 33%, 2,49 € al 15% su 3 pezzi danno lo stesso numero in scheda, bollino, carrello, cassa e server; rimessa regge, 50 prove vicine verdi"
+  },
+  {
+   "id": "R16-002",
+   "chiave": "dati-analytics|la percentuale dei pagamenti con carta oltre ventimila tentativi diventa un campione senza dirlo",
+   "esito": "riparato",
+   "commit": "72d99c5b216455f0d8a2fc7345ad6e583b593dc2",
+   "file_toccati": [
+    "app/admin/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r16-tasso-pagamenti-campione.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r16-tasso-pagamenti-campione.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 72d99c5b216455f0d8a2fc7345ad6e583b593dc2^ --file app/admin/page.tsx --prove tests/unit/riparazione-r16-tasso-pagamenti-campione.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Oltre il tetto di 20.000 righe la lettura dei tentativi segnala «troncato», ma la Panoramica non lo guardava. Ora l'etichetta diventa «campione dei 30 giorni» e la riga sotto dice «campione: solo gli ultimi 20.000 tentativi»; sotto il tetto la pagina resta com'era.",
+   "verificato_da": "smentitore (modello grande): leggiTutteLeRighe restituisce davvero troncato (lib/supabase/blocchi.ts:72-95), lettura dai più recenti; sotto il tetto la pagina è identica; rimessa regge, 8 prove vicine verdi"
+  },
+  {
+   "id": "R16-011",
+   "chiave": "qa-flussi|il carrello si riempie di nuovo con la spesa già pagata o già tolta, se si usano due dispositivi o non si torna da stripe",
+   "esito": "non_fatto",
+   "nota": "La correzione 739280542bf1e514a54454ccdb8cc24012b05a02 (vince il cloud intero se il locale non è cambiato dall'ultimo allineamento) è stata ritirata con efeecb68116a4732e8089778f1c02c83ee27e20f: lo smentitore ha mostrato due casi in cui poteva cancellare un prodotto appena aggiunto (syncUp prende «now» prima della risposta e riporta indietro cart_updated_at, CartCrossDeviceSync.tsx:123/135; e la data di allineamento presa dall'orologio dell'altro dispositivo, :103/:117). Torna il comportamento della base. Il caso «cloud vuoto più recente» era già chiuso sulla base (CartCrossDeviceSync.tsx:77-89). Restano: la riga tolta che torna dall'altro dispositivo (serve una cura che non riporti indietro la data locale durante l'invio e non usi l'orologio altrui) e il carrello pagato con la carta senza tornare da Stripe, che chiede il webhook qui sotto. Non ripresa per il limite di spesa.",
+   "serve_file_altrui": [
+    {
+     "file": "lib/stripe/webhook/ordini.ts",
+     "modifica": "in handleCheckoutCompleted, subito dopo l'update di pending_checkouts a status 'COMPLETED' (fine funzione), aggiungere: const { error: erroreCarrello } = await admin.from('user_carts').update({ items: [], updated_at: new Date().toISOString() }).eq('user_id', buyerId); if (erroreCarrello) logger.warn('[stripe] carrello salvato non svuotato dopo il pagamento', { pendingCheckoutId, message: erroreCarrello.message }); senza lanciare: l'ordine è già creato"
+    }
+   ]
+  },
+  {
+   "id": "R16-010",
+   "chiave": "qa-flussi|indirizzo, cap e città del profilo non si correggono più",
+   "esito": "scelta_di_nicola",
+   "domanda": "I vecchi indirizzo, CAP e città del profilo (profiles.address/city/zip) non li legge più nessuno ma restano salvati ed escono nell'esportazione dei dati: li rendiamo di nuovo correggibili nel Profilo, li mostriamo con un tasto «cancella», o li svuotiamo per tutti con una migrazione?",
+   "nota": "I campi sono stati tolti apposta dal Profilo il 5/11 (app/profile/page.tsx:19-25: la cassa non li leggeva). Il danno di /sell, che precompilava la residenza con quei valori, è già chiuso sulla base: app/sell/page.tsx:140-142 e 183-191 leggono solo legal_residence_* e i campi del modulo corto."
+  },
+  {
+   "id": "R16-008",
+   "chiave": "performance|quasi tutte le pagine del sito nascono vuote e le riempie il browser con chiamate al database, non solo la home e la scheda prodotto",
+   "esito": "scelta_di_nicola",
+   "domanda": "106 pagine su 126 nascono vuote e le riempie il browser: le portiamo sul server in un cantiere apposito (più giorni, tocca accesso e dati di ogni pagina) e, se sì, partendo da quali (ordini, cruscotto del negozio, ordini dell'amministrazione)?",
+   "nota": "Controllato sulla base: find app -name page.tsx = 126 pagine, 106 con 'use client'; delle 7 della scheda solo app/page.tsx e app/seller/page.tsx sono già sul server. Convertire le altre è una riscrittura di architettura (lettura dei dati e accesso lato server, pagina per pagina), non una riparazione minima: per questo non l'ho iniziata."
+  },
+  {
+   "id": "R16-009",
+   "chiave": "privacy-legale|le domande sotto i prodotti si pubblicano subito, non si possono segnalare una per una e nessuno può toglierle",
+   "esito": "parziale",
+   "commit": "ee2791dc0c11884e92f7b0472bbcb4ccbafe77b9",
+   "file_toccati": [
+    "components/ProductQA.tsx",
+    "migrations/970_chi_ha_fatto_la_domanda_la_toglie.sql"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r16-domanda-si-toglie.test.tsx",
+    "tests/sql/rls/riparazione-r16-domanda-tolta-dall-autore.test.sql"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r16-domanda-si-toglie.test.tsx --reporter=dot && bash tests/sql/harness/apply.sh r16_prova && psql -q -X -d r16_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r16-domanda-tolta-dall-autore.test.sql",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ee2791dc0c11884e92f7b0472bbcb4ccbafe77b9^ --file components/ProductQA.tsx --prove tests/unit/riparazione-r16-domanda-si-toglie.test.tsx --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Sotto ogni domanda l'amministratore ha «Nascondi» (is_public=false, regola già nella 364) e chi l'ha scritta ha «Togli la mia domanda». La migrazione nuova 970 dà all'autore, e solo a lui, il permesso di cancellare le sue domande; se il database non toglie niente, il sito lo dice invece di scrivere «tolta».",
+   "nota": "Migrazione nuova (non applicata, decide Nicola): migrations/970_chi_ha_fatto_la_domanda_la_toglie.sql, policy DELETE qa_autore_toglie (USING auth.uid() = author_id) e GRANT DELETE ad authenticated. Rimessa SQL sullo stesso commit: regge, uscita 0: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ee2791dc0c11884e92f7b0472bbcb4ccbafe77b9^ --file migrations/970_chi_ha_fatto_la_domanda_la_toglie.sql --prove tests/sql/rls/riparazione-r16-domanda-tolta-dall-autore.test.sql --sql r16_rimessa --json. Tutta tests/sql/rls verde con la 970.",
+   "verificato_da": "capo squadra R16: letta la migrazione 970 (cancella solo dove author_id = auth.uid()) e npm run verify verde; nessun secondo agente per il limite di spesa all'80%",
+   "cosa_resta": "(a) Segnalare una domanda alla volta: il database accetta già il tipo «domanda» (364), il modulo e la rotta no (vedi serve_file_altrui); poi in components/ProductQA.tsx va aggiunto <Segnala tipo=\"domanda\" oggettoId={q.id} /> sotto ogni domanda. (c) La moderazione prima della pubblicazione è una scelta di Nicola (domande_per_nicola), come il tasto del negozio per nascondere le domande sui suoi prodotti.",
+   "serve_file_altrui": [
+    {
+     "file": "components/Segnala.tsx",
+     "modifica": "riga 51: aggiungere 'domanda' all'unione di tipo; riga 55: per tipo==='domanda' usare MOTIVI_RECENSIONE (o un elenco con offensivo, illecito e altro)"
+    },
+    {
+     "file": "app/api/segnalazioni/route.ts",
+     "modifica": "riga 30: z.enum con 'domanda'; righe 74-79: TABELLE_DELL_OGGETTO con domanda: ['product_questions']; in contenutoAncoraOnline (righe 199-214) per il tipo 'domanda' leggere product_questions.is_public e, se è true, fermare con «La domanda è ancora visibile: nascondila prima di comunicare rimosso»"
+    },
+    {
+     "file": "lib/admin/segnalazioni-testi.ts",
+     "modifica": "in OGGETTI aggiungere domanda: 'una domanda sotto un prodotto'"
+    },
+    {
+     "file": "app/admin/segnalazioni/page.tsx",
+     "modifica": "dove(): per 'domanda' il link alla scheda del prodotto (product_id letto da product_questions); puoTogliere comprende 'domanda', e con «accolta» si fa update product_questions set is_public=false where id=oggetto_id"
+    }
+   ]
+  },
+  {
+   "id": "R16-003",
+   "chiave": "deploy-sre|chat e recensioni del negozio, senza la 181, scrivono un avviso a ogni apertura e non usano il ripiego dei nomi",
+   "esito": "serve_file_altrui",
+   "nota": "La metà «avviso a ogni apertura» era già chiusa prima della campagna (commit 5381741c7e426fb6a4ccf047807a74cf0d99ca9f, lib/queries/controparte-della-chat.ts:70-75). La cura dell'altra metà è pronta ma non è sul ramo: in lib/queries/controparte-della-chat.ts, nomiDeiClienti, quando la funzione della 181 manca, passare al ripiego già esistente fetchNomiDeiClienti di lib/queries/seller-public-profiles.ts (il nome di consegna sugli ordini), con una sola chiamata alla funzione per apertura. Con questa cura (rimessa uscita 0) due prove comuni diventano rosse, perché oggi fissano il difetto stesso: serve la firma di Nicola su quelle due modifiche, poi la cura si rimette.",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts",
+     "modifica": "prova comune: serve la firma di Nicola. Righe 214, 219 e 242: 'Cliente' diventa 'Maria Rossi' (il nome di consegna dell'ordine o1, che il negozio legge già)"
+    },
+    {
+     "file": "tests/unit/riparazione-r09-avviso-recensioni.test.tsx",
+     "modifica": "prova comune: serve la firma di Nicola. Nel finto supabase from('orders') deve rispondere a select().in().order().limit() con {data:[],error:null}; senza, il ripiego cade e l'avviso si conta 3 volte invece di 1"
+    }
+   ]
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "con uno sconto frazionario sotto lo 0,5% il bollino della scheda prodotto mostra «-0%»",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "components/ProductCard.tsx",
+   "descrizione": "hasDiscount è vero per uno sconto di 0,4 ma la percentuale arrotondata è 0: il bollino scrive -0%. Era così anche sulla base."
+  },
+  {
+   "titolo": "il bollino della promozione nella scheda prodotto scrive la percentuale grezza («In promo -80%») mentre il prezzo si ferma al 70%",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "components/ActivePromoBadge.tsx:58",
+   "descrizione": "Visto dal lotto 2: stesso tetto del 70% del bollino dello sconto, non applicato al testo della promo."
+  },
+  {
+   "titolo": "l'avviso «prezzo cambiato» di carrello e cassa perde molti cambi veri di un centesimo",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "app/cart/page.tsx:452",
+   "descrizione": "Il confronto è Math.abs(differenza in euro) >= 0.01 sui decimali: da 1,12 a 1,13 la differenza vale 0,0099… e l'avviso non esce. Stesso confronto in app/checkout/page.tsx:335. Era così anche sulla base."
+  },
+  {
+   "riservato": true,
+   "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+   "file": "(nel referto privato)",
+   "severita": "minore",
+   "dimensione": "sicurezza"
+  }
+ ],
+ "domande_per_nicola": [
+  "Le domande sotto i prodotti devono comparire solo dopo l'approvazione del negozio o dell'amministrazione, invece di essere pubblicate subito (is_public=true di default, migrazione 027)? E il negozio deve avere un tasto per nascondere le domande sui suoi prodotti?",
+  "Vecchi indirizzo, CAP e città del profilo (profiles.address/city/zip): li rendiamo di nuovo correggibili, li mostriamo con un tasto «cancella», o li svuotiamo per tutti con una migrazione?",
+  "Le 106 pagine su 126 che nascono vuote: le portiamo sul server in un cantiere apposito e, se sì, partendo da quali?",
+  "Scala del testo: per i valori 11, 13, 15, 17, 22 e 26px, che non hanno un gradino, a quale gradino li portiamo?",
+  "Due prove comuni fissano oggi il difetto dei nomi dei clienti senza la 181: firmi le modifiche scritte in R16-003 per poter rimettere la cura?"
+ ],
+ "conto": {
+  "agenti": 5,
+  "subagenti": 5,
+  "nota": "3 riparatori e 2 smentitori; il lotto 3 non ha avuto lo smentitore perché la spesa ha passato l'80% (16,39 $ su 20) a fine lotto 3; costo letto con get_session all'ultimo turno chiuso: il turno della consegna (verify, referto) va aggiunto",
+  "costo_usd": 16.39
+ },
+ "costo_usd": 16.39
+}
