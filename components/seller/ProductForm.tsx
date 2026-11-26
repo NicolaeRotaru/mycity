@@ -320,7 +320,10 @@ export default function ProductForm({
     setConsegnaSceltaDalNegoziante(true);
   };
   const [status, setStatus] = useState<string>(initialValues?.status ?? 'available');
-  const recedibileAllApertura = initialValues?.nonRecedibile === true;
+  // R13-014 — il valore dell'apertura si legge UNA volta: la spunta parte da qui e il salvataggio
+  // la confronta con questo. Ricalcolato a ogni disegno, se `initialValues` cambiava dopo (una
+  // rilettura del prodotto) il confronto si spostava e una spunta mai toccata riscriveva la banca dati.
+  const [recedibileAllApertura] = useState<boolean>(() => initialValues?.nonRecedibile === true);
   const [nonRecedibile, setNonRecedibile] = useState<boolean>(recedibileAllApertura);
   const [variants, setVariants] = useState<ProductVariant[]>(initialValues?.variants ?? []);
   // Assi di variante attivi (chiave campo → valori). Ricostruiti dalle varianti
