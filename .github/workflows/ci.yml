@@ -791,6 +791,139 @@ jobs:
           FINE_SCRIPT
           node /tmp/riassumi-prove-browser.mjs esito-prove-browser.json "$STATUS"
 
+  # 26/11/2026 — LE STESSE PROVE, SULLO SCHERMO DI UN TELEFONO.
+  #
+  # playwright.config.ts dichiara due progetti: «chromium» (un computer) e
+  # «mobile-safari» (un iPhone 14: schermo stretto, tocco, WebKit). Tutti i
+  # lanci della CI forzavano --project=chromium, quindi nessuna prova nel
+  # browser e' mai girata su uno schermo da telefono — dove compra la maggior
+  # parte dei clienti — e una era gia' rossa senza che nessuno lo vedesse.
+  #
+  # Questo lavoro fa girare tutte le prove nel browser col progetto del
+  # telefono, come il lavoro qui sopra: variabili finte, nessun segreto, nessun
+  # `if:`. Il riepilogo dice quante sono passate, quali sono rosse e quali
+  # saltate, col motivo.
+  #
+  # PER ORA NON FERMA LA RICHIESTA: il passo ha `continue-on-error: true`,
+  # perche' una prova e' gia' rossa sul telefono (tests/e2e/03-cart-and-search
+  # .spec.ts, «search page renders with input»: prende il primo campo di
+  # ricerca, che sul telefono e' quello nascosto del computer). Il rosso si
+  # vede, col nome della prova, ma non blocca il lavoro di tutti. L'ordine:
+  # prima si ripara quella prova, poi si toglie `continue-on-error` qui sotto
+  # e il telefono diventa un controllo che ferma come gli altri.
+  e2e-telefono:
+    name: Prove nel browser sullo schermo di un telefono
+    # Come gli altri lavori col browser: Ubuntu 24.04 fisso.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --legacy-peer-deps
+
+      # Il progetto del telefono usa WebKit (il motore di Safari su iPhone).
+      - name: Installa WebKit per Playwright
+        run: npx playwright install --with-deps webkit
+
+      - name: Build con variabili finte
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: "https://prove-nel-browser-senza-database.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "chiave-finta-per-le-prove-nel-browser"
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+        run: npm run build
+
+      - name: Percorri il sito sullo schermo di un telefono e dichiara cosa hai provato
+        # Vedi in cima al lavoro: da togliere quando la prova rossa sul
+        # telefono e' riparata.
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: "https://prove-nel-browser-senza-database.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "chiave-finta-per-le-prove-nel-browser"
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+          E2E_BASE_URL: "http://localhost:3000"
+          CRON_SECRET: "ci-e2e-cron-secret"
+          PLAYWRIGHT_JSON_OUTPUT_NAME: "esito-prove-telefono.json"
+        run: |
+          set -m
+          npm start &
+          APP_PID=$!
+          su=""
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000 >/dev/null 2>&1; then su="si"; break; fi
+            sleep 1
+          done
+          if [ -z "$su" ]; then
+            echo "::error::l'app non ha risposto entro 60 secondi: nessuna prova sul telefono ha potuto girare"
+            kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true
+            exit 1
+          fi
+          set +e
+          npm run test:e2e -- --project=mobile-safari --reporter=github,json
+          STATUS=$?
+          kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true
+          set -e
+
+          cat > /tmp/riassumi-prove-telefono.mjs <<'FINE_SCRIPT'
+          import { readFileSync, appendFileSync } from 'node:fs';
+
+          const [percorso, statoDetto] = process.argv.slice(2);
+          let esito = null;
+          try { esito = JSON.parse(readFileSync(percorso, 'utf8')); } catch {}
+
+          function tutteLeProve(gruppi = []) {
+            return gruppi.flatMap((g) => [
+              ...(g.specs ?? []).flatMap((s) =>
+                (s.tests ?? []).map((t) => ({
+                  nome: `${(s.file ?? g.file ?? '').replace('tests/e2e/', '')} › ${s.title}`,
+                  stato: t.status,
+                  motivo:
+                    (t.annotations ?? []).find((a) => a.type === 'skip')?.description ??
+                    (t.results ?? []).flatMap((r) => r.annotations ?? []).find((a) => a.type === 'skip')
+                      ?.description ??
+                    '',
+                })),
+              ),
+              ...tutteLeProve(g.suites ?? []),
+            ]);
+          }
+
+          const prove = esito ? tutteLeProve(esito.suites) : [];
+          const saltate = prove.filter((p) => p.stato === 'skipped');
+          const rosse = prove.filter((p) => p.stato === 'unexpected' || p.stato === 'timedOut');
+          const passate = prove.filter((p) => p.stato === 'expected' || p.stato === 'flaky');
+          const hannoGuardato = prove.length - saltate.length;
+
+          const righe = ['### Prove nel browser sullo schermo di un telefono (mobile-safari)', ''];
+          righe.push(`- **${passate.length} passate** su ${prove.length} scritte`);
+          righe.push(`- **${rosse.length} rosse**${rosse.length ? ':' : ''}`);
+          for (const p of rosse) righe.push(`  - \`${p.nome}\``);
+          righe.push(`- **${saltate.length} saltate**${saltate.length ? ', col perché:' : ''}`);
+          for (const p of saltate) righe.push(`  - \`${p.nome}\` — ${p.motivo || 'saltata senza motivo dichiarato'}`);
+          righe.push('');
+          righe.push(hannoGuardato > 0 ? `${hannoGuardato} prove hanno aperto il sito sullo schermo di un telefono.` : 'NESSUNA prova ha guardato niente sul telefono.');
+          righe.push('Per ora questo lavoro non ferma la richiesta: il rosso qui sopra si vede, ma non blocca.');
+          if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, righe.join('\n') + '\n');
+          console.log(righe.join('\n'));
+
+          if (hannoGuardato === 0) {
+            console.log('::error::sul telefono le prove nel browser si sono saltate tutte: nessuna pagina è stata aperta');
+            process.exit(1);
+          }
+          for (const p of rosse) console.log(`::error::sul telefono è rossa «${p.nome}»`);
+          const mute = saltate.filter((p) => !p.motivo);
+          for (const p of mute) console.log(`::error::sul telefono «${p.nome}» è saltata senza dire perché`);
+          process.exit(Number(statoDetto) === 0 && mute.length === 0 ? 0 : 1);
+          FINE_SCRIPT
+          node /tmp/riassumi-prove-telefono.mjs esito-prove-telefono.json "$STATUS"
+
   # 31/8/2026 (R102) — L'ACCESSIBILITA' HA UN LAVORO SUO, E NON PUO' SPEGNERSI.
   #
   # axe viveva dentro il lavoro qui sopra, dove ogni passo e' appeso a
@@ -924,6 +1057,7 @@ jobs:
       - e2e-tests
       - e2e-cassa-vera
       - e2e-senza-chiavi
+      - e2e-telefono
       - a11y
     if: always()
     runs-on: ubuntu-latest
