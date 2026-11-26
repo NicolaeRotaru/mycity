@@ -323,14 +323,21 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
         }
         customData = riprova.data;
         const chiavi = Object.keys(sociali);
-        const nomi = chiavi.map((k) => campoDellErrore(['socials', k]) ?? k).join(', ');
+        const nomeDi = (k: string) => campoDellErrore(['socials', k]) ?? k;
         // Un campo che prima era vuoto non «resta com'era»: semplicemente non si salva.
-        const cheFine = chiavi.every((k) => !salvati[k])
-          ? (chiavi.length > 1 ? 'non si sono salvati' : 'non si è salvato')
-          : (chiavi.length > 1 ? "sono rimasti com'erano" : "è rimasto com'era");
+        // Con due campi diversi (uno vuoto, uno già salvato) la frase si divide per gruppo.
+        const vuoti = chiavi.filter((k) => !salvati[k]);
+        const rimasti = chiavi.filter((k) => !!salvati[k]);
+        const fraseVuoti = vuoti.length > 0
+          ? `${vuoti.map(nomeDi).join(', ')} ${vuoti.length > 1 ? 'non si sono salvati' : 'non si è salvato'}`
+          : '';
+        const fraseRimasti = rimasti.length > 0
+          ? `${rimasti.map(nomeDi).join(', ')} ${rimasti.length > 1 ? "sono rimasti com'erano" : "è rimasto com'era"}`
+          : '';
+        const cheFine = [fraseVuoti, fraseRimasti].filter(Boolean).join(', ');
         socialNonSalvati = true;
         setCustomError(`${campo}: ${primo.message}`);
-        avvisoASalvataggioRiuscito.current = `${campo}: ${primo.message} Il resto è salvato; ${nomi} ${cheFine}.`;
+        avvisoASalvataggioRiuscito.current = `${campo}: ${primo.message} Il resto è salvato; ${cheFine}.`;
       } else {
         customData = parsed.data;
       }
