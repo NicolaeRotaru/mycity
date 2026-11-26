@@ -1,0 +1,355 @@
+{
+  "sessione": "R28",
+  "aggiornato": "2026-11-26 17:25",
+  "finita": false,
+  "testa": "ade4d1f8cd8341a37a94d23d33c4a71219387af8",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "ade4d1f8cd8341a37a94d23d33c4a71219387af8",
+    "nota": "2244 file di prova verdi (13683 prove), 1 saltato che c'era già; typecheck e lint verdi."
+  },
+  "voci": [
+    {
+      "id": "R28-013",
+      "chiave": "sicurezza-auth|la registrazione non passa ancora dal server: niente freno sulle iscrizioni e niente verifica anti-robot",
+      "esito": "parziale",
+      "commit": "edabc206417eaa82d55cce03c33fcf1581da54f2",
+      "file_toccati": [
+        "app/api/auth/signup/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-registrazione-dal-server.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-registrazione-dal-server.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base edabc206417eaa82d55cce03c33fcf1581da54f2^ --file app/api/auth/signup/route.ts --prove tests/unit/riparazione-r28-registrazione-dal-server.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La rotta di registrazione ora manda options.data (ruolo solo buyer/seller/rider, altrimenti buyer; nome ripulito, al massimo 200 caratteri; versione dei testi accettati). Il gettone anti-robot lo verifica uno solo, come nella rotta di accesso (CAPTCHA_SU_SUPABASE_ACCESO), e captcha_failed risponde «CAPTCHA non valido».",
+      "cosa_resta": "Collegare la pagina alla rotta. Non si può fare senza far diventare rosse 3 prove comuni. Prima va anche cambiato il client della rotta: authServer usa il client anonimo, che lavora col flusso implicito. Il link di conferma porterebbe la sessione nel frammento #, /auth/callback non troverebbe nessun code e chi si iscrive finirebbe su /sign-in?error=missing_code invece di entrare. Si perderebbe anche il segnale «registrazione» nelle statistiche. Oggi il browser usa il flusso PKCE, col cookie code_verifier.",
+      "serve_file_altrui": [
+        {
+          "file": "app/sign-up/page.tsx + app/api/auth/signup/route.ts (di R28, da fare nello stesso commit delle prove qui sotto)",
+          "modifica": "Pagina, handleSubmit righe 158-179: al posto di supabase.auth.signUp, fetch('/api/auth/signup',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,password,captchaToken:captchaToken||undefined,role,full_name:fullName.trim()||undefined,versione_testi_accettati:VERSIONE_TESTI_LEGALI,returnTo})}); se !ok, throw new Error(apiErrorMessage(corpo,'Registrazione non riuscita. Riprova.')); il resto (avviso, ricordaEmailDaConfermare, push alla verifica) resta uguale. Rotta: al posto di authServer.signUp, (await getServerSupabase()).auth.signUp({email,password,options:{captchaToken,emailRedirectTo,data}}) da lib/supabase/server.ts. È il client SSR coi cookie, col flusso PKCE: il cookie code_verifier arriva al browser come oggi e, con la conferma email spenta, anche la sessione. emailRedirectTo = ritornoDopoLaConferma(env.appUrl(), body.returnTo, 'email')."
+        },
+        {
+          "file": "tests/unit/api-auth.test.ts",
+          "modifica": "Righe 11-19 e 72-79: per la registrazione simulare '@/lib/supabase/server' (getServerSupabase → {auth:{signUp}}) al posto di authServer.signUp. L'attesa su emailRedirectTo diventa: comincia con 'http://localhost:3000/auth/callback?next='."
+        },
+        {
+          "file": "tests/unit/le-pagine-vere-dell-accesso-non-chiudono-fuori-nessuno.test.ts",
+          "modifica": "Righe 129-145: contare l'iscrizione su fetch('/api/auth/signup') finto (risposta 201 {user:{id:'maria',...},session:null}) invece che su __AUTH_FINTA__.signUp."
+        },
+        {
+          "file": "tests/unit/riparazione-r24-password-comune.test.ts",
+          "modifica": "Riga 120: '/api/auth/registrazione' diventa '/api/auth/signup', e la risposta finta è un 400 col messaggio già tradotto dalla rotta."
+        }
+      ],
+      "nota": "Tocca a Nicola, non è codice: accendere il CAPTCHA (Turnstile) in Supabase Auth e, insieme e mai prima, mettere CAPTCHA_SU_SUPABASE_ACCESO=1 su Vercel. La stessa variabile vale già per l'accesso. Detto onestamente: con la chiave anon pubblica si può chiamare Supabase direttamente, quindi il freno vero sulle iscrizioni sono il CAPTCHA e i limiti di Supabase; il freno per rete della rotta aiuta solo chi passa dalla pagina. Se Nicola preferisce la seconda strada della voce (cancellare la rotta), è una sua scelta."
+    },
+    {
+      "id": "R28-005",
+      "chiave": "microcopy|in registrazione e nel cambio password del profilo il rifiuto di una password debole o rubata non si traduce o si perde",
+      "esito": "riparato",
+      "commit": "22942d1f58977a5f7389cc6c5cca1d450ec5cb81",
+      "file_toccati": [
+        "app/api/account/cambia-password/route.ts",
+        "app/api/auth/signup/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-password-debole.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-password-debole.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 22942d1f58977a5f7389cc6c5cca1d450ec5cb81^ --file app/api/account/cambia-password/route.ts,app/api/auth/signup/route.ts --prove tests/unit/riparazione-r28-password-debole.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nelle due rotte un weak_password (riconosciuto da codice, nome o reasons) diventa un 400 con la frase di traduciErroreNuovaPassword. Se l'aiutante non dà una frase sulla password (testo sconosciuto, che lo farebbe ripiegare su «richiedi un nuovo link qui sotto»), si usa PASSWORD_SEMPLICE. Le altre risposte restano uguali: email già usata e limiti nella registrazione, guasto 500 nel cambio password.",
+      "nota": "La parte /sign-up era già riparata alla base, non toccata: la pagina usa friendlyError, che conosce già weak_password (lib/errors.ts:39-41 CODICI_AUTH, :112-127). Anche il testo sconosciuto col codice weak_password dà «La password è troppo semplice…» senza link; lo controlla l'ultimo blocco della prova, insieme a tests/unit/riparazione-r24-password-comune.test.ts. Rispetto al tentativo bocciato: nessun ripiego con link inesistente, né nelle rotte né nella pagina. La prova usa i veri AuthWeakPasswordError e AuthApiError (pwned, length, characters, testo sconosciuto, user_already_exists, over_email_send_rate_limit, 500)."
+    },
+    {
+      "id": "R28-012",
+      "chiave": "sicurezza-auth|col captcha acceso su supabase il cambio password fallirebbe sempre, con l'errore letto come «password non corretta»",
+      "esito": "parziale",
+      "commit": "36b16db4936c66f64c0889e84aee754f0348a7fb",
+      "file_toccati": [
+        "app/api/account/cambia-password/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-cambio-password-captcha.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-cambio-password-captcha.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 36b16db4936c66f64c0889e84aee754f0348a7fb^ --file app/api/account/cambia-password/route.ts --prove tests/unit/riparazione-r28-cambio-password-captcha.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "captcha_failed dalla prova della password attuale ora risponde 400 «Il controllo anti-robot non è andato a buon fine… la password non c'entra…», non più 401 «Password attuale non corretta». La rotta accetta un captchaToken facoltativo nel corpo e lo passa a signInWithPassword.",
+      "cosa_resta": "La pagina del profilo non manda nessun gettone. Col CAPTCHA acceso su Supabase il cambio password fallisce ancora sempre: adesso con un messaggio onesto.",
+      "serve_file_altrui": [
+        {
+          "file": "app/profile/settings/page.tsx",
+          "modifica": "Nel modulo del cambio password: disegnare <Turnstile> (components/Turnstile, NEXT_PUBLIC_TURNSTILE_SITE_KEY) come in /sign-up, mettere captchaToken nel corpo della fetch('/api/account/cambia-password') (righe 308-315) e rigenerarlo dopo ogni tentativo (ref.reset())."
+        }
+      ],
+      "nota": "Senza effetto finché il CAPTCHA su Supabase è spento: accenderlo spetta a Nicola."
+    },
+    {
+      "id": "R28-002",
+      "chiave": "flussi-conversione|chi si iscrive con google dalla registrazione perde il ritorno",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/minori-s10-accessi-alternativi.test.tsx",
+          "modifica": "La riga 29 inchioda il sorgente alla regex /<AuthAlternatives condizioniDalModulo=\\{acceptTos\\} \\/>/ e diventa rossa con la cura. Va cambiata in /<AuthAlternatives condizioniDalModulo=\\{acceptTos\\} returnTo=\\{safeInternalPath\\(returnTo, '\\/'\\)\\} \\/>/ nello stesso commit della pagina."
+        },
+        {
+          "file": "app/sign-up/page.tsx (di R28)",
+          "modifica": "Riga 367: <AuthAlternatives condizioniDalModulo={acceptTos} returnTo={safeInternalPath(returnTo, '/')} />, più import { safeInternalPath } from '@/lib/safe-redirect'. Con la riga della prova comune qui sopra nello stesso commit; prova nuova pronta (tests/unit/riparazione-r28-ritorno-con-google.test.ts: monta la pagina vera e legge i props arrivati ad AuthAlternatives; ?returnTo=/checkout dà '/checkout', https://…, //… e /\\… danno '/'; 3 casi rossi su 4 senza la cura)."
+        }
+      ],
+      "prova": "Difetto confermato alla base (app/sign-up/page.tsx:367, nessun returnTo). La cura fa diventare rossa la prova comune minori-s10-accessi-alternativi:29, che non si tocca: per questo nessun commit.",
+      "nota": "Patch pronta con pagina, prova nuova e la riga della prova comune (git apply --check ok), tenuta fuori dal deposito dalla sessione R28: la regista può chiederla."
+    },
+    {
+      "id": "R28-010",
+      "chiave": "qa-flussi|la contestazione parziale vinta, con la memoria di postgrest vecchia, scrive il tentativo nuovo ma lascia il promemoria della quota: una ripetizione di stripe rifà il bonifico con una chiave nuova",
+      "esito": "riparato",
+      "commit": "fd6c217f06e91d8d2a513d8e32c44f4eadde3ea2",
+      "file_toccati": [
+        "lib/stripe/webhook/contestazione-parziale-vinta.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-contestazione-parziale-ripiego.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-contestazione-parziale-ripiego.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fd6c217f06e91d8d2a513d8e32c44f4eadde3ea2^ --file lib/stripe/webhook/contestazione-parziale-vinta.ts --prove tests/unit/riparazione-r28-contestazione-parziale-ripiego.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il ripiego della scrittura dopo il bonifico non toglie più mai il promemoria della quota: toglie solo payout_tentativo, e solo se è lui la colonna che manca. Così promemoria, tentativo e stornato si scrivono insieme o per niente, come nella scrittura intera: con PostgREST che non conosce la colonna la scrittura obbligatoria lancia, Stripe ripete col tentativo di prima e la stessa chiave restituisce lo stesso bonifico.",
+      "nota": "Percorso normale letto: la scrittura intera di restituisciLeQuoteParziali (stornato meno la quota, promemoria a 0, tentativo+1 in un solo update) e il ripiego gemello di dispute.ts, dove il segno contro la ripetizione è payout_status e non il promemoria (per questo lì togliere la colonna della 126 va bene e qui no). Nessuna migrazione. Prova via rotta del webhook col database finto dei pagamenti: PGRST204 sul promemoria in scrittura (la lettura passa, come con lo schema in memoria vecchio) + timeout sul fattorino, poi ripetizioni dello stesso evento: un bonifico solo, chiave ..._t1, stornato non tolto due volte. Prove esistenti del webhook (32 file, 217 prove) verdi."
+    },
+    {
+      "id": "R28-009",
+      "chiave": "qa-flussi|il reso di un solo articolo: il cliente vede il prezzo pieno della riga, il negozio si vede proporre la riga meno la sua parte di sconto",
+      "esito": "parziale",
+      "commit": "ff3f564e4c36d616fc8c6dd42dd3c10e9baa8dad",
+      "file_toccati": [
+        "app/seller/orders/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-reso-di-una-riga.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-reso-di-una-riga.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ff3f564e4c36d616fc8c6dd42dd3c10e9baa8dad^ --file app/seller/orders/[id]/page.tsx --prove tests/unit/riparazione-r28-reso-di-una-riga.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La lettura dell'ordine lato negozio ora chiede variant_label delle righe: «Cosa torna» dice «Maglietta · Taglia M». La cifra del negozio era già quella giusta: le rotte dei resi (decide e avanza) considerano intero il rimborso della riga resa con rigaResaCents, cioè la riga meno la sua parte dello sconto (10 € e 20 €, sconto 6 €, reso della riga da 10 € = 8 €), ed è quella che la scheda propone.",
+      "serve_file_altrui": [
+        {
+          "file": "app/orders/[id]/return/page.tsx",
+          "modifica": "Riga 12: import { haUnaParteInContanti, rigaResaCents } from '@/lib/rimborsi/regole-del-rimborso'. Riga 83, nella select dell'ordine: aggiungere 'discount_amount, ' dopo 'wallet_applied_cents, ' (colonna della migrazione 014). Riga 392: al posto di formatPrice(Number(riga.unit_price ?? 0) * Number(riga.quantity ?? 1)) scrivere formatPrice((rigaResaCents(righe, riga.id, Math.round(Number(order?.discount_amount ?? 0) * 100)) ?? Math.round(Number(riga.unit_price ?? 0) * Number(riga.quantity ?? 1) * 100)) / 100), così il cliente vede accanto all'articolo quello che gli torna davvero (8 € nell'esempio). Prova: render della pagina con righe da 10 € e 20 € e discount_amount 6 → accanto alla riga da 10 € compare 8,00 €."
+        }
+      ],
+      "cosa_resta": "La pagina del cliente (app/orders/[id]/return/page.tsx:392, non di R28) mostra ancora il prezzo pieno della riga: la modifica esatta è in serve_file_altrui.",
+      "nota": "Oggi il caso nasce solo coi codici sconto, spenti al lancio (CODICI_SCONTO_IN_CASSA = false). Prove esistenti che leggono la pagina del negozio (20 file, 171 prove) verdi."
+    },
+    {
+      "id": "R28-008",
+      "chiave": "qa-flussi|col doppio clic su «rifiuta ordine» compare anche un avviso rosso di errore, e l'aiuto dice che il motivo è obbligatorio e promette un rimborso che coi contanti non esiste",
+      "esito": "riparato",
+      "commit": "2a58b633cbd18f4213598e72004477cb43670552",
+      "file_toccati": [
+        "app/seller/orders/[id]/page.tsx",
+        "app/api/seller/orders/[id]/reject/route.ts",
+        "app/seller/help/domande.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-rifiuto-del-negozio.test.ts",
+        "tests/unit/riparazione-r28-rifiuto-doppio-tocco.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-rifiuto-del-negozio.test.ts tests/unit/riparazione-r28-rifiuto-doppio-tocco.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2a58b633cbd18f4213598e72004477cb43670552^ --file app/seller/orders/[id]/page.tsx,app/api/seller/orders/[id]/reject/route.ts,app/seller/help/domande.ts --prove tests/unit/riparazione-r28-rifiuto-del-negozio.test.ts,tests/unit/riparazione-r28-rifiuto-doppio-tocco.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Ripreso il tentativo bocciato (a9adb1a6f13e282cd8b331d2e2e88392e36df35a) con la correzione chiesta: dopo GIA_ANNULLATO la rotta rilegge lo stato e risponde 409 «Ordine già annullato» solo se l'ordine è davvero CANCELED, altrimenti 409 «L'ordine è cambiato nel frattempo: ricarica la pagina.», che la pagina mostra come errore rosso. Nel riquadro un freno sincrono useRef oltre a isPending; il 409 «Ordine già annullato» (confronto esatto) non accende avvisi rossi né un secondo avviso dopo il rifiuto riuscito. Nell'aiuto: rifiuto col motivo facoltativo e niente da restituire coi contanti, «pronto» senza il ritiro in negozio finché RITIRO_IN_NEGOZIO_ATTIVO è spento, e «Quando ricevo i soldi» col già versato e l'in attesa del bonifico che la pagina Guadagni mostra davvero.",
+      "nota": "Ramo carta non toccato (GIA_ANNULLATO nasce solo dal ramo contanti/non pagato di annullaERimborsa). Il testo della cura («se non puoi evaderlo…») non si poteva usare alla lettera: la prova comune tests/unit/riparazione-r09-aiuto-dei-negozi.test.ts vieta «evader» e vuole «se paga alla consegna non ha pagato niente»; il testo nuovo dice lo stesso e le rispetta. Prove: rotta con una riga finta che applica davvero i filtri della scrittura (rifiuto vero 200; doppio 409 «già annullato» senza secondo avviso al cliente; stato cambiato in READY → 409 «cambiato nel frattempo», niente «annullato»), riquadro (doppio clic = una richiesta; 409 cambiato = errore rosso), testi. Prove esistenti dei tre file (32 + 6 file) verdi."
+    },
+    {
+      "id": "R28-001",
+      "chiave": "dati-analytics|il cancello del filmato copia senza pulirle le chiavi dell'evento diverse da data",
+      "esito": "riparato",
+      "commit": "6c2f9a9561d1e7cbf1bbff996ae7c27e9bee3ebe",
+      "file_toccati": [
+        "lib/analytics/filmato-senza-dati-personali.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-filmato-chiavi-dell-evento.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-filmato-chiavi-dell-evento.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6c2f9a9561d1e7cbf1bbff996ae7c27e9bee3ebe^ --file lib/analytics/filmato-senza-dati-personali.ts --prove tests/unit/riparazione-r28-filmato-chiavi-dell-evento.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Al posto di { ...valore, data: … } ogni chiave dell'evento diversa da data passa per la stessa pulizia per contenuto (ripulisci); vale anche sugli eventi del DOM, dove resta intero solo data. Un evento che non cambia torna lo stesso oggetto.",
+      "nota": "Pulite e non scartate: posthog-js aggiunge cv:'2024-10' ai fotogrammi compressi (visto in node_modules/posthog-js/dist), e scartarlo romperebbe la riproduzione; type, timestamp, delay sono numeri e restano tali. Prova: chiave in più con email/telefono su targa, evento personalizzato e DOM non esce; fotogramma compresso intatto (stesso oggetto). Prove esistenti del filmato (compresa riparazione-r12-filmato-in-eccezione, che vuole lo stesso oggetto per il DOM) verdi."
+    },
+    {
+      "id": "R28-004",
+      "chiave": "layout-responsive|in chi siamo i due pulsanti della fascia scura finale escono dalla fascia a 280 px col testo al 200%",
+      "esito": "riparato",
+      "commit": "bf54ece3a2847de66df39cd8cf269c56df08d974",
+      "file_toccati": [
+        "app/about/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-chi-siamo-fascia.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-chi-siamo-fascia.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bf54ece3a2847de66df39cd8cf269c56df08d974^ --file app/about/page.tsx --prove tests/unit/riparazione-r28-chi-siamo-fascia.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sotto sm i due pulsanti stanno in colonna a tutta larghezza, con l'icona che puo' andare sopra il testo (flex-wrap) e le parole che vanno a capo intere; il margine della fascia si stringe solo sotto i 320 px (max-sm:p-[min(2rem,10vw)]) e fino a 300 px il testo e' text-sm. Niente overflow-wrap:anywhere; p-8 e px-5 restano come prima sopra le soglie.",
+      "nota": "Misurato in Chromium (headless shell, html font-size 200%) su HTML della fascia ricavato dal sorgente con il CSS Tailwind del progetto: pagina senza scorrimento laterale a 280, 320, 360; pulsanti dentro la fascia (280: fascia 48-232, pulsanti 76-204, alti 154/220 px; 320: fascia 48-272, pulsanti 80-240, alti 170/196; 360: pulsanti 84-276), nessuna parola spezzata a lettere. Al 100%: 375, 320 e 280 px con padding fascia 32 px (28 a 280) e pulsanti dentro. Il test esistente riparazione-r02-chi-siamo-280.test.tsx importa anche Navbar (comune) e pretende p-8, px-5 e max-[300px]:px-3: non toccato e resta verde, per questo le correzioni sono con max-sm:/max-[300px]: in aggiunta. Prove in 17 file che importano la pagina: verdi. La misura e' su una copia dell'HTML, non sulla pagina servita."
+    },
+    {
+      "id": "R28-006",
+      "chiave": "privacy-legale|«chi siamo» e «lavora con noi» raccontano una flotta di rider, una crescita e quattro posti di lavoro che oggi non esistono",
+      "esito": "parziale",
+      "cosa_ho_fatto": "Meta' (a) gia' a posto sulla base; meta' (b) non chiusa.",
+      "prova": "app/about/page.tsx:208-211 dice gia' «Partiamo dal centro di Piacenza, con i primi negozi… Siamo all'inizio: cresceremo un quartiere alla volta»; grep di «flotta» e «quartiere dopo» in app/about/page.tsx: nessuna corrispondenza; metadata righe 13-29 senza claim di crescita (meta' (a) gia_riparato_prima).",
+      "cosa_resta": "Le quattro posizioni (JOBS, app/lavora-con-noi/page.tsx:~66-96, tra cui «Coordinatore flotta rider») restano: svuotarle rompe tre prove COMUNI che leggono anche file di altri e che non posso toccare: riparazione-r02-pagine-testo-grande.test.tsx:~64-80 (cerca `li div` flex-1 e `li a` «Candidati», nello stesso test dei file /faq,/returns), riparazione-r12-pagine-200.test.ts (~48-70,~99: legge anche stores, faq, returns, HowItWorks), riparazione-r03-ancore-senza-doppio-margine.test.ts:18 (legge anche product/[id]). Modifica per le prove: con JOBS vuoto e messaggio «Oggi non abbiamo posizioni aperte» (commit 6484d56ad071b7e29f3f8b67c8a71430725497f5) rendere facoltative le asserzioni su `li div`/`li a`/h3 {job.title}/pillola/margini della riga o spostarle su una lista di prova non vuota. Domanda a Nicola: stiamo davvero assumendo? Se no, via le 4 posizioni e resta la candidatura spontanea.",
+      "nota": "Col commit di R28-007 ho gia' tolto «alcune posizioni sono ibride» (ora «Piacenza.») e il rimando «Vedi le posizioni»; la lista delle 4 posizioni e il loro «Candidati» restano."
+    },
+    {
+      "id": "R28-007",
+      "chiave": "privacy-legale|«lavora con noi» promette ancora un lavoro da rider con compenso fisso e turni, e «entra nel team» rimanda a posizioni che non ci sono",
+      "esito": "parziale",
+      "commit": "dfe98f7dbcd89c89a45d69e581197adba1ed4554",
+      "file_toccati": [
+        "app/lavora-con-noi/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-lavora-con-noi-onesto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-lavora-con-noi-onesto.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dfe98f7dbcd89c89a45d69e581197adba1ed4554^ --file app/lavora-con-noi/page.tsx --prove tests/unit/riparazione-r28-lavora-con-noi-onesto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La carta «Diventa rider» e' ora «Consegnare a Piacenza»: «Se ti interessa consegnare a Piacenza, iscriviti e scrivici. Oggi non promettiamo ne' turni ne' un compenso fisso», bottone «Iscriviti come fattorino» (stessa strada /sign-up?role=rider della FAQ); «Entra nel team / Vedi le posizioni» e' «Dai una mano / Scrivici» con mailto di candidatura spontanea; via «rider» da intro e metadata, via «turni» dal perk «Flessibilita' vera» e «alcune posizioni sono ibride».",
+      "nota": "Resta la lista delle 4 posizioni (vedi R28-006, prove comuni). SCELTA DI NICOLA per questa voce: reclutare fattorini e' un'intenzione vera? Ora il testo e' condizionale e senza promesse; la strada /sign-up?role=rider resta perche' una prova comune (per-diventare-fattorino-la-faq-manda-dove-ci-si-iscrive) la pretende nel file. Tutte le prove che toccano la pagina (grep lavora-con-noi/LavoraConNoi, 17 file) verdi.",
+      "cosa_resta": "La lista delle 4 posizioni con i loro «Candidati» resta in pagina (vedi R28-006: svuotarla rompe tre prove comuni). Se reclutare fattorini sia un'intenzione vera lo decide Nicola: oggi il testo è condizionale e senza promesse."
+    },
+    {
+      "id": "R28-003",
+      "chiave": "frontend-ux|orari passati alla cassa e 409 della rotta contanti: le prove cercano parole nel sorgente, non fanno girare pagina e rotta",
+      "esito": "riparato",
+      "commit": "ade4d1f8cd8341a37a94d23d33c4a71219387af8",
+      "file_toccati": [
+        "tests/unit/riparazione-r28-cassa-orari.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-cassa-orari.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-cassa-orari.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bec53cf407c52b97f619b6a58e541c20e9e93829 --file app/checkout/page.tsx --prove tests/unit/riparazione-r28-cassa-orari.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuova prova che monta davvero app/checkout/page.tsx (jsdom, react-query, carrello e database finti, orologio finto) e controlla che store_hours venga letto e arrivi, con gli stessi valori, al DeliverySlotPicker e a consegnaScelta (il freno di «Ordina»). La meta' della rotta contanti c'era gia' sulla base: tests/unit/riparazione-r11-rotta-contanti-409-prima-dell-insert.test.ts (fa girare POST, 409 prima dell'insert).",
+      "nota": "Voce di sola prova: nessuna correzione da togliere. Rimessa con mutante locale mai spinto: ramo usa-e-getta da C con useMemo di orariNegozi che restituisce [] (commit bec53cf407c52b97f619b6a58e541c20e9e93829), dato come --base con --file app/checkout/page.tsx: esito 0 «regge» (rossa sul comportamento alla base, verde col file vero). Ramo usa-e-getta cancellato, tornato su ccr-a672a2b3-92w5w1-m28. Limite: i figli della cassa (OrderSummary, form, pagamento) sono sostituiti da finti; il freno e' osservato sull'argomento `orari` di consegnaScelta, non sul pulsante spento. Le due prove vecchie a parole (la-cassa-passa-gli-orari-dei-negozi-al-selettore-e-al-freno.test.ts e la-rotta-rifiuta-una-fascia-a-meno-di-un-ora-dalla-fine.test.ts:90-91) non vanno toccate: la nuova prova e la r11 le rendono superflue ma non le contraddicono; si possono togliere dopo la firma di Nicola."
+    },
+    {
+      "id": "R28-011",
+      "chiave": "qa-flussi|una prova dei contanti sostituisce tutti gli orari con «può sempre servire»",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/contanti-la-chiave-si-prende-prima.test.ts",
+          "modifica": "alle righe 77-80 sostituire il mock totale di '@/lib/store-hours' con un mock parziale che tiene gli orari veri: vi.mock('@/lib/store-hours', async (o) => ({ ...((await o()) as object), motivoNegozioChiuso: vi.fn((n: string) => `${n} è chiuso in questo momento.`) })) (negozioPuoServire reale: con store_hours null nelle righe dei venditori alle righe 109-110 serve sempre, come ora); in piu' un caso con store_hours chiuso (es. Forno solo mercoledi' 08-12 come in riparazione-r28-cassa-orari) che si aspetta 409 e nessun insert."
+        }
+      ],
+      "nota": "La prova importa @/app/api/orders/cod/route (riga 254), file di altri: non toccata."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "la registrazione fatta da un server manderebbe link di conferma che non fanno entrare",
+      "dimensione": "sicurezza-auth",
+      "severita": "minore",
+      "file": "lib/supabase/auth-server.ts:27-42",
+      "descrizione": "authServer.signUp usa creaClientAnonimo (supabase-js col flusso implicito): il link di conferma porta la sessione nel frammento #, che /auth/callback (solo ?code=) non vede, quindi missing_code. Oggi è latente perché nessuno la chiama; va tenuto presente quando si collega la rotta di registrazione."
+    },
+    {
+      "titolo": "la contestazione parziale vinta si fida della chiave anti-doppione di Stripe, che vale 24 ore, mentre Stripe ripete l'evento per 3 giorni",
+      "dimensione": "pagamenti",
+      "severita": "minore",
+      "file": "lib/stripe/webhook/contestazione-parziale-vinta.ts:87",
+      "descrizione": "Se la scrittura dopo il bonifico continua a fallire per più di 24 ore (per esempio PostgREST con la memoria vecchia dello schema mai ricaricata), una ripetizione di Stripe dopo la scadenza della chiave fa un bonifico nuovo con la stessa chiave. Prima di creare il bonifico manca un controllo «bonifico già fatto», come bonificoGiaFatto in lib/stripe/payout.ts (elenco dei bonifici del gruppo con metadata kind=dispute_won_restore, dispute_id e order_id). Non aggiunto: la prova comune riparazione-r11-contestazione-parziale-vinta.test.ts non simula transfers.list e diventerebbe rossa."
+    }
+  ],
+  "domande_per_nicola": [
+    "R28-013: accendere il CAPTCHA (Turnstile) in Supabase Auth e, insieme, CAPTCHA_SU_SUPABASE_ACCESO=1 su Vercel; e confermare la strada: registrazione dalla rotta del server (con firma sulle 3 prove comuni elencate) o cancellare la rotta morta.",
+    "R28-002: firma sulla riga 29 di tests/unit/minori-s10-accessi-alternativi.test.tsx per passare il ritorno ad AuthAlternatives in /sign-up.",
+    "R28-006 e R28-007: stiamo davvero assumendo? Se no, via le 4 posizioni di «Lavora con noi» (cura pronta nel commit 6484d56ad071b7e29f3f8b67c8a71430725497f5) con la firma sulle tre prove comuni elencate in R28-006; e reclutare fattorini è un'intenzione vera?"
+  ],
+  "conto": {
+    "agenti": 3,
+    "nota": "3 subagenti (lotti 1-2 sul modello grande, lotto 3 sul piccolo). Spesa 16,22 $ su 20 a fine lotto 3 (81%): per la regola del limite consegno senza il collaudo interno; le voci riparate non hanno ancora verificato_da.",
+    "subagenti": 3
+  },
+  "passaggio": {
+    "voci_fatte": 13,
+    "in_corso": [],
+    "giri_aperti": [
+      "collaudo interno (smentita sul modello grande) delle 6 riparate: R28-005, R28-010, R28-008, R28-001, R28-004, R28-003"
+    ],
+    "spesa": "16,22 $"
+  },
+  "costo_usd": 16.22
+}
