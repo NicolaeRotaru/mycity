@@ -98,6 +98,16 @@ function maskIban(iban: string | null): string | null {
 const TETTO_PAYOUT = 1000;
 
 /**
+ * R05-001 — I bonifici chiusi: pagati (carta o a mano), rimborsati, stornati, ritiri pagati al banco.
+ * Crescono sempre: letti insieme agli aperti, oltre le mille righe spingevano fuori dal tetto proprio
+ * i contanti più vecchi ancora da versare. Gli aperti si leggono da soli; i chiusi a parte, per
+ * «Già pagato» e per l'elenco.
+ */
+const STATI_CHIUSI = ['TRANSFERRED', 'PAID_MANUALLY', 'REFUNDED', 'REVERSED', 'CASH_IN_STORE'];
+
+type LettiPayout = PayoutOrder[] & { totale?: number; chiusi?: PayoutOrder[]; totaleChiusi?: number };
+
+/**
  * R11-004 — «Bonifico fatto»: segna come pagati a mano i contanti con la rimessa
  * confermata (HELD) di un negozio. Lo scrive `segna_bonifico_manuale` (migrazione
  * 350), riservata agli amministratori: da qui parte solo la richiesta.
@@ -164,24 +174,36 @@ export default function AdminPayoutsPage() {
   const query = useQuery({
     queryKey: ['admin', 'payouts'],
     refetchInterval: 60_000,
-    queryFn: async (): Promise<PayoutOrder[] & { totale?: number }> => {
+    queryFn: async (): Promise<LettiPayout> => {
       // Solo ordini consegnati con un netto venditore calcolato: sono gli unici
       // rilevanti per la riconciliazione payout. Esclude carrelli/annullati.
-      const { data, error, count } = await supabase
-        .from('orders')
-        .select(
-          'id, seller_id, total_price, seller_payout_cents, seller_payout_reversed_cents, dispute_status, internal_dispute_status, payment_status, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
-          // R11-011 — il server restituisce al massimo mille righe: la riga in più non arriva mai.
-          { count: 'exact' },
-        )
-        .eq('delivery_status', 'DELIVERED')
-        .not('seller_payout_cents', 'is', null)
-        .order('created_at', { ascending: false })
-        // Una riga in più: se arriva, l'elenco è tagliato davvero (con 1000 esatte no).
-        .limit(TETTO_PAYOUT + 1);
-      if (error) throw error;
+      const consegnati = () =>
+        supabase
+          .from('orders')
+          .select(
+            'id, seller_id, total_price, seller_payout_cents, seller_payout_reversed_cents, dispute_status, internal_dispute_status, payment_status, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
+            // R11-011 — il server restituisce al massimo mille righe: la riga in più non arriva mai.
+            { count: 'exact' },
+          )
+          .eq('delivery_status', 'DELIVERED')
+          .not('seller_payout_cents', 'is', null);
+      // R05-001 — il tetto vale per gli aperti da soli: i bonifici chiusi non li spingono più fuori.
+      const [daAperti, daChiusi] = await Promise.all([
+        consegnati()
+          .or(`payout_status.is.null,payout_status.not.in.(${STATI_CHIUSI.join(',')})`)
+          .order('created_at', { ascending: false })
+          // Una riga in più: se arriva, l'elenco è tagliato davvero (con 1000 esatte no).
+          .limit(TETTO_PAYOUT + 1),
+        consegnati().in('payout_status', STATI_CHIUSI).order('created_at', { ascending: false }).limit(TETTO_PAYOUT + 1),
+      ]);
+      if (daAperti.error) throw daAperti.error;
+      if (daChiusi.error) throw daChiusi.error;
+      const { data, count } = daAperti;
       // L'elenco resta un elenco; il totale contato dal database gli viaggia attaccato.
       const righe = (data ?? []) as unknown as PayoutOrder[];
+      const giaLetti = new Set(righe.map((o) => o.id));
+      const righeChiuse = ((daChiusi.data ?? []) as unknown as PayoutOrder[]).filter((o) => !giaLetti.has(o.id));
+      const totaleChiusi = Math.max(typeof daChiusi.count === 'number' ? daChiusi.count : 0, daChiusi.data?.length ?? 0);
       // Collaudo K04 — resi e reclami aperti si leggono dalle loro tabelle, come fanno il giro e la
       // funzione 350: senza, un contante con un reso aperto entrava nei «Da versare», la 350 lo saltava
       // in silenzio e il lunedì dopo ricompariva, pagato due volte. Una lettura caduta li ferma tutti.
@@ -200,15 +222,27 @@ export default function AdminPayoutsPage() {
       for (const o of righe) {
         if (letturaCaduta ? contantiHeld.includes(o.id) : aperti.has(o.id)) o.pratica_aperta = true;
       }
-      return Object.assign(righe, { totale: typeof count === 'number' ? count : righe.length });
+      return Object.assign(righe, {
+        totale: typeof count === 'number' ? count : righe.length,
+        chiusi: righeChiuse.slice(0, TETTO_PAYOUT),
+        totaleChiusi,
+      });
     },
   });
   const { data: letti = [], refetch } = query;
 
-  const tagliato = Math.max((letti as { totale?: number }).totale ?? 0, letti.length) > TETTO_PAYOUT;
-  const orders = useMemo(() => letti.slice(0, TETTO_PAYOUT), [letti]);
+  const meta = letti as LettiPayout;
+  const tagliato = Math.max(meta.totale ?? 0, letti.length) > TETTO_PAYOUT;
+  // R05-001 — i chiusi hanno il loro tetto: tagliati loro, è un minimo solo «già pagato».
+  const tagliatoChiusi = meta.chiusi ? (meta.totaleChiusi ?? 0) > TETTO_PAYOUT : tagliato;
+  const orders = useMemo(() => {
+    const tutti = [...letti.slice(0, TETTO_PAYOUT), ...((letti as LettiPayout).chiusi ?? [])];
+    // Lo stesso ordine di prima, aperti e chiusi mescolati: il più recente in cima.
+    return tutti.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+  }, [letti]);
   // Con l'elenco tagliato ogni somma è un minimo, non il totale.
   const almeno = tagliato ? 'almeno ' : '';
+  const almenoPagati = tagliatoChiusi ? 'almeno ' : '';
 
   const groups = useMemo(() => {
     const map = new Map<string, SellerGroup>();
@@ -286,7 +320,7 @@ export default function AdminPayoutsPage() {
         <div role="status" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
           <p>
-            <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PAYOUT} ordini consegnati. Mancano i più
+            <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PAYOUT} ordini consegnati col bonifico ancora aperto. Mancano i più
             vecchi, cioè proprio quelli da pagare da più tempo. I totali di questa pagina, anche quelli dei singoli
             negozi, possono essere più bassi del vero.
           </p>
@@ -297,7 +331,7 @@ export default function AdminPayoutsPage() {
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
         <AdminStatCard icon={Banknote} tone="olive" label="Contanti da versare" value={`${almeno}${formatPrice(totals.dueCents / 100)}`} />
         <AdminStatCard icon={Clock} tone="accent" label="In sospeso" value={`${almeno}${formatPrice(totals.holdCents / 100)}`} />
-        <AdminStatCard icon={CheckCircle2} tone="primary" label="Già pagato" value={`${almeno}${formatPrice(totals.paidCents / 100)}`} />
+        <AdminStatCard icon={CheckCircle2} tone="primary" label="Già pagato" value={`${almenoPagati}${formatPrice(totals.paidCents / 100)}`} />
       </div>
 
       {/* R11-001 — La nota diceva «niente azioni manuali»: al lancio i contanti li versi tu. */}
@@ -345,7 +379,7 @@ export default function AdminPayoutsPage() {
                   )}
                   {/* R11-012 (collaudo K04) — anche le cifre del singolo negozio sono un minimo, con l'elenco tagliato. */}
                   {g.paidCents > 0 && (
-                    <p className="text-xs text-ink-500">{almeno}{formatPrice(g.paidCents / 100)} già pagati</p>
+                    <p className="text-xs text-ink-500">{almenoPagati}{formatPrice(g.paidCents / 100)} già pagati</p>
                   )}
                   <BonificoFatto sellerId={g.sellerId} storeName={g.storeName} ordini={g.orders} quandoFatto={() => void refetch()} />
                 </div>
