@@ -60,8 +60,12 @@ const DATI_NEL_TESTO: Array<[forma: RegExp, sostituto: string]> = [
   // 9-10 cifre) o un fisso (0x.., 9-11 cifre), con spazi/punti/trattini fra gruppi tipici. Non
   // attaccato a lettere, cifre, `/`, `:`, `_`, `-`: così restano leggibili timestamp, id in URL,
   // date e versioni. Scelta: un numero nudo di 9-11 cifre che inizia con 3 o 0 è ambiguo, e si oscura.
+  // R17-010 — I gruppi si scrivono in tanti modi («333 12 34 567», «333 1234 567», «0523 12 34 56»):
+  // dopo il prefisso del cellulare (3xx) o del fisso (0…) le cifre restanti possono avere uno spazio,
+  // un punto o un trattino fra l'una e l'altra; il numero di cifre resta quello di un telefono. Una
+  // data «05.11.2026» (gg.mm.aaaa) non è un fisso, e resta leggibile.
   [
-    /(^|[^\w/:-])(?:(?:\+|00)39[ .-]?|\+)?(?:3\d{2}[ .-]?\d{3}[ .-]?\d{3,4}|0\d{1,3}[ .-]?\d{3,4}[ .-]?\d{3,4})(?![\w/:-])/g,
+    /(^|[^\w/:-])(?:(?:\+|00)39[ .-]?|\+)?(?:3\d{2}(?:[ .-]?\d){6,7}|(?!0\d[.-]\d{2}[.-]\d{4}(?![\w/:-]))0\d{1,3}(?:[ .-]?\d){6,8})(?![\w/:-])/g,
     '$1[redacted]',
   ],
 ];
