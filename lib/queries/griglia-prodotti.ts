@@ -49,14 +49,11 @@ export interface DomandaGriglia {
   sellerId?: string;
   search?: string;
   sort: OrdineGriglia;
-  maxPrice?: number;
   /**
-   * R01-008 — Prodotti col prezzo pieno sopra `maxPrice` che con la promozione attiva ci scendono
-   * sotto (li risolve `idsCheInPromoScendonoSotto`): passano lo stesso il filtro di prezzo.
-   * Assente o vuoto = il filtro di prezzo di sempre. R21-006 R21-004 — Con la migrazione 911 non
-   * servono più: il massimo guarda `prezzo_pagato`, e questi id contano solo nella lettura di prima.
+   * Il prezzo massimo, compreso: guarda il prezzo che si paga (R21-006). R21-010 — Senza la
+   * migrazione 911 gli id che solo in promozione ci scendono sotto li chiede la lettura da sé.
    */
-  idsScontatiSotto?: string[];
+  maxPrice?: number;
   minPrice?: number;
   onlyInStock?: boolean;
   /** Negozi aperti adesso (già risolti dal chiamante) — assente = filtro spento. */
@@ -180,6 +177,9 @@ export function inizioFinestraNovita(adesso: Date = new Date(), giorni: number =
 /**
  * R01-008 — I PRODOTTI CHE SOLO IN PROMOZIONE SCENDONO SOTTO LA SOGLIA.
  *
+ * R21-010 — Oggi è solo il ripiego della lettura qui sotto, finché la migrazione 911 non è applicata
+ * (con lei il massimo guarda `prezzo_pagato`): ProductGrid non lo chiama più per conto suo.
+ *
  * «Sotto i 10 €» tagliava sul prezzo pieno: un prodotto da 12 € al -25% (9 € alla cassa) restava
  * fuori. Qui si leggono i prodotti con una promozione attiva (`active_promo_products`, la stessa
  * regola di `product_active_discounts` che usa la cassa) e si tengono quelli col prezzo pieno alla
@@ -209,6 +209,15 @@ export async function idsCheInPromoScendonoSotto(
     .map((r) => r.id);
 }
 
+/**
+ * R21-010 — Il massimo senza `prezzo_pagato`: gli id che col prezzo pieno stanno sopra `maxPrice` e
+ * in promozione ci scendono, fino a `maxPrice` compreso. `idsCheInPromoScendonoSotto` vuole la soglia
+ * esclusa: è il centesimo dopo il massimo (9,995 → 10,00; 10 → 10,01).
+ */
+function idsScontatiFinoA(supabase: SupabaseClient, maxPrice: number, sellerId?: string): Promise<string[]> {
+  return idsCheInPromoScendonoSotto(supabase, (Math.floor(maxPrice * 100 + 1e-6) + 1) / 100, sellerId);
+}
+
 /** Quanti risultati chiedere alla ricerca del database: mai più della finestra a schermo. */
 const TETTO_PERTINENZA = 200;
 
@@ -231,10 +240,12 @@ async function idsPiuPertinenti(supabase: SupabaseClient, termine: string, tetto
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applicaFiltriComuni<Q extends { in: any; eq: any; lte: any; gte: any; or: any }>(
   q: Q,
-  d: Pick<DomandaGriglia, 'sellerId' | 'maxPrice' | 'idsScontatiSotto' | 'minPrice' | 'onlyInStock' | 'apertiOra' | 'creatiDal'>,
+  d: Pick<DomandaGriglia, 'sellerId' | 'maxPrice' | 'minPrice' | 'onlyInStock' | 'apertiOra' | 'creatiDal'>,
   categorie: string[] | null,
   /** La colonna `prezzo_pagato` c'è (migrazione 911): i filtri di prezzo guardano lei. */
   pagato: boolean,
+  /** Senza `prezzo_pagato`: chi supera il massimo solo a prezzo pieno (`idsScontatiFinoA`). */
+  scontatiSotto: readonly string[],
 ): Q {
   if (categorie) q = q.in('category_id', categorie);
   if (d.sellerId) q = q.eq('seller_id', d.sellerId);
@@ -242,11 +253,10 @@ function applicaFiltriComuni<Q extends { in: any; eq: any; lte: any; gte: any; o
     // R21-006 R21-004 — Il massimo (lo slider, «Sotto i 10 €») è il prezzo che si paga, come il minimo:
     // con la migrazione 911 lo dice `prezzo_pagato`, senza elenchi di id e senza i loro tetti.
     // R01-008 — Senza la migrazione, chi ci scende solo in promozione entra con i suoi id.
-    const scontati = d.idsScontatiSotto ?? [];
     q = pagato
       ? q.lte(COLONNA_PREZZO_PAGATO, d.maxPrice)
-      : scontati.length > 0
-        ? q.or(`price.lte.${d.maxPrice},id.in.(${scontati.join(',')})`)
+      : scontatiSotto.length > 0
+        ? q.or(`price.lte.${d.maxPrice},id.in.(${scontatiSotto.join(',')})`)
         : q.lte('price', d.maxPrice);
   }
   // R21-003 — «Prezzo minimo» è il prezzo che si paga: un 12 € al -25% (9 €) con minimo 10 € non entra.
@@ -397,6 +407,10 @@ async function leggiLaGriglia(
         ? await conLeSueSottocategorie(supabase, d.categoryId)
         : null;
 
+  // R21-010 — Senza la migrazione 911 il massimo vuole gli id che solo in promozione ci scendono
+  // sotto: li chiede la lettura, qui, una volta. Con la migrazione non servono.
+  const scontatiSotto = !pagato && d.maxPrice !== undefined ? await idsScontatiFinoA(supabase, d.maxPrice, d.sellerId) : [];
+
   const perPrezzo = d.sort === 'price_asc' || d.sort === 'price_desc';
   const base = (colonne: string = COLONNE) => {
     // R21-005 — Ordinando per prezzo le righe portano anche il prezzo pagato: serve a rimettere
@@ -422,7 +436,7 @@ async function leggiLaGriglia(
     // una riga saltata o una riga vista due volte fra una pagina e l'altra.
     q = q.order('id', { ascending: false });
 
-    q = applicaFiltriComuni(q, d, categorieDaLeggere, pagato);
+    q = applicaFiltriComuni(q, d, categorieDaLeggere, pagato, scontatiSotto);
     // Col ramo pertinenza il filtro sul testo l'ha già fatto il database, meglio di così.
     if (termine && !perPertinenza) q = q.ilike('name', `%${termine}%`);
     // Il taglio sugli id col voto NON sta qui: lo mette `leggiFraGliIdsColVoto`, a blocchi (R02-010).
@@ -547,6 +561,9 @@ export async function contaProdottiDellaGriglia(
   const termine = d.search ? d.search.replace(/[%_]/g, '\\$&').slice(0, 100) : undefined;
   // R21-003 — Gli stessi filtri di prezzo della lettura, con lo stesso ripiego se `prezzo_pagato` non c'è.
   let pagato = guardaIlPrezzo(d) && (await cePrezzoPagato(supabase));
+  // R21-010 — Come nella lettura: senza `prezzo_pagato` il massimo vuole i suoi id.
+  const scontatiSenzaPagato = async () => (d.maxPrice !== undefined ? idsScontatiFinoA(supabase, d.maxPrice, d.sellerId) : []);
+  let scontatiSotto = pagato ? [] : await scontatiSenzaPagato();
   // R11-010 R11-011 — Il numero conta solo i prodotti dei negozi approvati, come la griglia: il
   // negozio si aggancia con `!inner` alla vista pubblica, NOMINANDO il vincolo (fra products e la
   // vista ci sono due strade: senza nome PostgREST risponde 300). Se l'aggancio non va si conta com'era (`senzaAggancio`) invece di non dare nessun numero.
@@ -554,7 +571,7 @@ export async function contaProdottiDellaGriglia(
   const conta = (blocco?: string[]) => {
     const colonne = senzaAggancio ? 'id' : 'id, negozio:seller_public_profiles!products_seller_id_fkey!inner(id)';
     let q = supabase.from('products').select(colonne, { count: 'exact', head: true }).eq('status', 'available');
-    q = applicaFiltriComuni(q, d, categorie, pagato);
+    q = applicaFiltriComuni(q, d, categorie, pagato, scontatiSotto);
     if (termine) q = q.ilike('name', `%${termine}%`);
     if (blocco) q = q.in('id', blocco);
     return q;
@@ -575,6 +592,7 @@ export async function contaProdottiDellaGriglia(
     // il codice per saperlo). Si conta come prima, sul prezzo pieno.
     if (error && pagato) {
       pagato = false;
+      scontatiSotto = await scontatiSenzaPagato();
       ({ count, error } = await conta(blocco));
     }
     if (error || count == null) return null;
