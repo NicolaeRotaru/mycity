@@ -85,14 +85,16 @@ export function firmaDisiscrizione(email: string, ambito: AmbitoDisiscrizione): 
   return `${VERSIONE_CIFRATA}.${Buffer.concat([iv, cifrato, etichetta]).toString('base64url')}`;
 }
 
-function apriCifrato(corpo: string, chiave: Buffer): string | null {
+function apriCifrato(corpo: string, chiave: () => Buffer): string | null {
   try {
+    // La chiave si calcola qui dentro: senza segreto il link vale «non valido», non un errore.
+    const k = chiave();
     const tutto = Buffer.from(corpo, 'base64url');
     if (tutto.length < 12 + 16 + 3) return null;
     const iv = tutto.subarray(0, 12);
     const etichetta = tutto.subarray(tutto.length - 16);
     const cifrato = tutto.subarray(12, tutto.length - 16);
-    const apri = crypto.createDecipheriv('aes-256-gcm', chiave, iv);
+    const apri = crypto.createDecipheriv('aes-256-gcm', k, iv);
     apri.setAuthTag(etichetta);
     return Buffer.concat([apri.update(cifrato), apri.final()]).toString('utf8');
   } catch {
@@ -127,9 +129,9 @@ export function verificaDisiscrizione(
   token: string,
 ): { email: string; ambito: AmbitoDisiscrizione } | null {
   const dato = token.startsWith(`${VERSIONE_CIFRATA}.`)
-    ? apriCifrato(token.slice(VERSIONE_CIFRATA.length + 1), chiaveDiCifratura())
+    ? apriCifrato(token.slice(VERSIONE_CIFRATA.length + 1), chiaveDiCifratura)
     : token.startsWith(`${VERSIONE_CIFRATA_V2}.`)
-      ? apriCifrato(token.slice(VERSIONE_CIFRATA_V2.length + 1), chiaveDiCifraturaV2())
+      ? apriCifrato(token.slice(VERSIONE_CIFRATA_V2.length + 1), chiaveDiCifraturaV2)
       : apriFirmato(token);
   if (!dato) return null;
 
