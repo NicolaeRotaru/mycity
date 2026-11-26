@@ -51,12 +51,10 @@ export type { ContoCondivisoStato, DecisioneSpesa, AllarmeTetto } from '@/lib/ai
  * Dove vive il conto: la tabella `ai_spend_daily` (migrazione 131), toccata
  * con una sola istruzione atomica (`registra_spesa_ai`) dal client
  * amministrativo. Se quel giro non risponde — database irraggiungibile,
- * migrazione non ancora applicata — sul computer di chi sviluppa si continua a
- * contare in memoria, perche' li' la copia e' una sola, ma lo si DICE nei
- * registri: un ripiego silenzioso e' peggio del guasto, perche' nessuno sa che
- * il tetto vero non e' piu' quello scritto. In rete (Vercel) il conto in
- * memoria NON vale come tetto: decide `lib/ai/run.ts` (R20-002), che prenota
- * ogni chiamata qui dentro con `aggiungiSpesaCents` e si ferma se il conto tace.
+ * migrazione non ancora applicata — si continua a contare in memoria, perche'
+ * un freno largo e' meglio di nessun freno, ma lo si DICE nei registri: un
+ * ripiego silenzioso e' peggio del guasto, perche' nessuno sa che il tetto
+ * vero non e' piu' quello scritto.
  */
 
 /** La casella del giorno: data di calendario a Piacenza, `AAAA-MM-GG`. */
@@ -245,7 +243,7 @@ async function segnalaRipiego(motivo: string, giorno: string, adesso: number = D
     _stato.dettoAlle = adesso;
     if (!(await nessunoHaParlatoNellOra(adesso))) return;
     logger.error(
-      '[ai] il conto della spesa condiviso NON ESISTE: in rete l AI a pagamento resta ferma, in locale il tetto vale per copia. Applicare la migrazione 980, che basta da sola (la migrazione 131 o la 158 senza la 980 non restituiscono le prenotazioni).',
+      '[ai] il conto della spesa condiviso NON ESISTE: il tetto giornaliero vale per copia, non per il sito. Applicare la migrazione 131.',
       {
         motivo,
         detto_dal_database: _stato.motivo,
@@ -267,13 +265,13 @@ async function segnalaRipiego(motivo: string, giorno: string, adesso: number = D
     _stato.dettoAlle = adesso;
     if (!(await nessunoHaParlatoNellOra(adesso))) return;
     logger.error(
-      '[ai] il conto della spesa condiviso non risponde da oltre un ora: in rete l AI a pagamento resta ferma, in locale il tetto vale per copia (quota ridotta).',
+      '[ai] il conto della spesa condiviso non risponde da oltre un ora: il tetto giornaliero vale per copia, non per il sito (quota ridotta per copia).',
       { motivo, detto_dal_database: _stato.motivo, giorno, daMinuti, ripieghi: _ripieghiSegnalati },
     );
     return;
   }
   if (_ripieghiSegnalati === 1 || _ripieghiSegnalati % 100 === 0) {
-    logger.warn('[ai] il conto della spesa non risponde: in rete l AI a pagamento si ferma, in locale si conta in memoria', {
+    logger.warn('[ai] il conto della spesa non risponde: conto in memoria, il tetto vero e piu alto', {
       motivo,
       giorno,
       ripieghi: _ripieghiSegnalati,
@@ -382,35 +380,18 @@ export function ultimaSpesaNotaCents(quando?: Date): number {
   return ripiegoCents(giornoDiSpesa(quando));
 }
 
-/**
- * Aggiunge una spesa al conto del giorno. Non lancia mai.
- *
- * 26/11/2026 (R20-002) — Torna il totale del conto condiviso dopo l'aggiunta,
- * oppure `null` se nel conto condiviso non e' entrata (allora vale solo il
- * conto in memoria di questa copia, e in rete non vale niente). Chi decide in
- * rete (`lib/ai/run.ts`) prenota cosi' la stima di una chiamata: un'aggiunta
- * atomica, e la seconda di due copie vede la prima.
- *
- * Un numero NEGATIVO restituisce una prenotazione (migrazione 980: il conto
- * scende, mai sotto zero), nella casella del giorno di `quando`. Non passa dalla
- * pausa del circuito: il conto ha appena risposto alla prenotazione. Se non
- * riesce la prenotazione resta, e il conto conta di piu', mai di meno.
- */
-export async function aggiungiSpesaCents(cents: number, quando?: Date): Promise<number | null> {
-  if (!Number.isFinite(cents) || cents === 0) return null;
+/** Aggiunge una spesa al conto del giorno. Non lancia mai. */
+export async function aggiungiSpesaCents(cents: number, quando?: Date): Promise<void> {
+  if (!Number.isFinite(cents) || cents <= 0) return;
   const giorno = giornoDiSpesa(quando);
-  if (cents < 0) {
-    return eseguiRpc('registra_spesa_ai', { p_giorno: giorno, p_cents: -Math.ceil(-cents) });
-  }
   const arrotondati = Math.max(1, Math.round(cents));
   const totale = await chiamaRpc('registra_spesa_ai', { p_giorno: giorno, p_cents: arrotondati });
   if (totale === null) {
     await segnalaRipiego('registrazione della spesa non riuscita', giorno);
     _ripiego.cents = ripiegoCents(giorno) + arrotondati;
-    return null;
+    return;
   }
   _ripiego.cents = Math.max(ripiegoCents(giorno), totale);
-  return totale;
 }
 
 /**
