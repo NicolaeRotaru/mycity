@@ -26,6 +26,7 @@ import {
   type RapportoAvvisi,
 } from '@/lib/privacy/avvisi-a-chi-aspetta';
 import {
+  contaOrfaniDelleProve,
   contaOrfaniKyc,
   contaPotature,
   eseguiPotature,
@@ -128,8 +129,14 @@ async function contaSenzaCancellare(admin: Admin, dalCalendario: boolean): Promi
   // notte toglierebbe: sono file di un secchio senza backup, e chi accende le
   // cancellazioni deve vederli prima.
   // Sono FILE, non righe: stanno in una voce loro, accanto alle potature.
+  // 26/11/2026 (R02-006) — Anche le foto di consegna orfane (cod-proof) che la notte toglie
+  // (`potaturaDegliOrfaniDelleProve` in potatureNotturne): prima il conto mostrava solo i
+  // documenti d'identità, e la prima notte accesa ne spariva fino a un tetto senza preavviso.
   const potature = await contaPotature(admin as unknown as ClienteCheConta);
-  const fileDaTogliere = [await contaOrfaniKyc(admin as unknown as ClienteOrfani)];
+  const fileDaTogliere = [
+    await contaOrfaniKyc(admin as unknown as ClienteOrfani),
+    await contaOrfaniDelleProve(admin as unknown as ClienteOrfani),
+  ];
 
   const conto = NextResponse.json({
       ok: true,
@@ -147,7 +154,7 @@ async function contaSenzaCancellare(admin: Admin, dalCalendario: boolean): Promi
       fileDaTogliere,
       nonContati:
         "Per ogni account, i file nello storage, le prove di consegna e i dati su Stripe: si vedono solo cancellando. " +
-        "I documenti d'identità orfani invece sono contati: «fileDaTogliere» dice quanti file la notte toglierebbe.",
+        "I documenti d'identità orfani e le foto di consegna orfane invece sono contati: «fileDaTogliere» dice quanti file la notte toglierebbe.",
     });
 
   // 31/10/2026 — LA NOTTE CHE CONTA È LA NOTTE DI QUESTO LAVORO, E LASCIA IL BATTITO.
