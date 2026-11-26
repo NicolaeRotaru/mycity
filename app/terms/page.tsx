@@ -504,8 +504,11 @@ Data: ..................`}
             a chi ospita contenuti di terzi: un modo per segnalare, un punto di
             contatto dichiarato, e criteri di moderazione con un percorso di
             riesame per chi viene sospeso. Qui ci sono tutte e tre. */}
+        {/* 26/11/2026 (R18-003) — Il comando c'è anche sotto ogni recensione, della scheda prodotto e
+            della vetrina: la frase nominava solo prodotti e negozi, come se una recensione non si
+            potesse segnalare. */}
         <p>
-          Su ogni scheda prodotto e su ogni pagina negozio trovi il comando{' '}
+          Su ogni scheda prodotto, su ogni pagina negozio e sotto ogni recensione trovi il comando{' '}
           <strong>«Segnala questo contenuto»</strong>. Puoi usarlo anche senza avere un account.
           Ogni segnalazione viene esaminata da una persona: se lasci un recapito ti scriviamo{' '}
           <strong>com&apos;è andata e perché</strong>, anche quando decidiamo di non intervenire.

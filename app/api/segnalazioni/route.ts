@@ -7,8 +7,8 @@ import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
-import { comunicaEsito, MOTIVAZIONE_MINIMA } from './esito/comunica';
-import { motivoLeggibile, oggettoConArticolo } from '@/lib/admin/segnalazioni-testi';
+import { comunicaEsito, MOTIVAZIONE_MINIMA, type Canale } from './esito/comunica';
+import { COME_CONTESTARE, motivoLeggibile, oggettoConArticolo } from '@/lib/admin/segnalazioni-testi';
 import { sendEmail } from '@/lib/email/client';
 import { escapeHtml } from '@/lib/html-escape';
 
@@ -171,6 +171,15 @@ async function mandaRicevuta(
   }
 }
 
+/**
+ * Gli avvisi che partono da questa rotta sono di servizio: `system` è la categoria che nessuna
+ * preferenza spegne (vedi sotto, 3/9/2026). R18-003: lo stesso per l'avviso a chi ha scritto una
+ * recensione tolta, quindi la categoria si scrive in un posto solo.
+ */
+function avvisoDiServizio(riga: { user_id: string; title: string; body: string; link: string }) {
+  return { ...riga, category: 'system' };
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   {
     // Il canale deve restare aperto a chi non ha un account, quindi il freno
@@ -277,12 +286,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
      */
     try {
       const { data: capi } = await admin.from('profiles').select('id').eq('role', 'admin');
-      const righe = (capi ?? []).map((c) => ({
+      const righe = (capi ?? []).map((c) => avvisoDiServizio({
         user_id: c.id as string,
         title: '🚩 Nuova segnalazione',
         body: `Segnalato ${oggettoConArticolo(corpo.tipo)} per «${motivoLeggibile(corpo.motivo)}». Va esaminata e chiusa con un esito motivato.`,
         link: '/admin/segnalazioni',
-        category: 'system',
       }));
       if (righe.length > 0) {
         const { error: erroreAvviso } = await admin.from('notifications').insert(righe);
@@ -364,7 +372,121 @@ async function contenutoAncoraOnline(
       ? 'Il negozio è ancora attivo: sospendilo prima di comunicare «rimosso».'
       : null;
   }
+  if (s.tipo === 'recensione') {
+    // R18-003 — `togliRecensioneAccolta` l'ha già tolta: qui si guarda che sia fuori davvero.
+    for (const tabella of TABELLE_RECENSIONI) {
+      const { data: r, error: e } = await admin.from(tabella).select('id').eq('id', s.oggetto_id).maybeSingle();
+      if (e) return NON_VERIFICATO;
+      if (r) return 'La recensione è ancora online: toglila prima di comunicare «rimosso».';
+    }
+    return null;
+  }
   return 'Questo tipo di contenuto non si toglie da qui: l\'esito «rimosso» non può partire.';
+}
+
+/**
+ * 26/11/2026 (R18-003) — UNA RECENSIONE SEGNALATA E ACCOLTA SI TOGLIE DAVVERO, E CHI L'HA SCRITTA LO SA.
+ *
+ * I Termini (16-bis, «Cosa rimuoviamo») promettono di togliere le recensioni non genuine e sotto ogni
+ * recensione c'è «Segnala», ma nessuna strada del sito ne toglieva una: la regola del database non dà
+ * all'amministratore né DELETE né UPDATE su `reviews` e `store_reviews`, quindi il pannello (che scrive
+ * col client del browser) non può, e «Accolta» restava spenta. La recensione si toglie qui, col client
+ * di servizio, quando parte l'esito di una segnalazione accolta: prima la riga e le sue foto (il secchio
+ * `reviews` è pubblico: una foto rimasta lì si apre ancora da chi ha l'indirizzo), poi l'avviso a chi
+ * l'ha scritta con la motivazione e la via per contestare (regolamento sui servizi digitali, art. 17),
+ * e solo dopo l'esito «rimosso» a chi ha segnalato.
+ *
+ * Senza motivazione non si toglie niente (l'esito non partirebbe e la recensione sarebbe sparita senza
+ * una ragione scritta). Una recensione che non si trova più conta come tolta solo se il registro attività
+ * ne ha la cancellazione, che il database scrive da sé nella stessa operazione (migrazione 073): è il caso
+ * del secondo invio dopo un esito non partito. Senza quella traccia l'esito non parte.
+ */
+const TABELLE_RECENSIONI = ['reviews', 'store_reviews'] as const;
+const SECCHIO_FOTO_RECENSIONI = 'reviews';
+const FOTO_NEL_SECCHIO = /\/storage\/v1\/object\/public\/reviews\/([^?#]+)/;
+
+/** Il percorso nel secchio di una foto della recensione, dall'indirizzo pubblico salvato. */
+function percorsoFotoRecensione(url: unknown): string | null {
+  if (typeof url !== 'string') return null;
+  const m = url.match(FOTO_NEL_SECCHIO);
+  if (!m) return null;
+  try { return decodeURIComponent(m[1]); } catch { return null; }
+}
+
+type RecensioneTolta = { ferma: string; autore?: undefined } | { ferma: null; autore: Canale };
+
+async function togliRecensioneAccolta(
+  admin: ReturnType<typeof getAdminSupabase>,
+  id: string,
+): Promise<RecensioneTolta> {
+  const NON_VERIFICATO = 'Non riesco a verificare che la recensione sia stata tolta: riprova fra poco.';
+  const NON_TOLTA = 'La recensione non è stata tolta: l\'esito non parte. Riprova fra poco.';
+  const { data, error } = await admin
+    .from('segnalazioni').select('stato, tipo, oggetto_id, esito_motivato').eq('id', id).maybeSingle();
+  if (error) return { ferma: NON_VERIFICATO };
+  const s = data as { stato?: string; tipo?: string; oggetto_id?: string; esito_motivato?: string | null } | null;
+  if (!s || s.stato !== 'accolta' || s.tipo !== 'recensione' || !s.oggetto_id) return { ferma: null, autore: 'non_previsto' };
+  const motivazione = (s.esito_motivato ?? '').trim();
+  if (motivazione.length < MOTIVAZIONE_MINIMA) {
+    return { ferma: `Prima registra la decisione e una motivazione di almeno ${MOTIVAZIONE_MINIMA} caratteri` };
+  }
+
+  for (const tabella of TABELLE_RECENSIONI) {
+    const { data: trovata, error: erroreLettura } = await admin
+      .from(tabella).select('id, user_id, photo_urls').eq('id', s.oggetto_id).maybeSingle();
+    if (erroreLettura) return { ferma: NON_VERIFICATO };
+    if (!trovata) continue;
+    const r = trovata as { user_id?: string | null; photo_urls?: unknown };
+    const { data: tolte, error: erroreTolta } = await admin.from(tabella).delete().eq('id', s.oggetto_id).select('id');
+    if (erroreTolta || !tolte || tolte.length === 0) {
+      logger.error(new Error('[segnalazioni] recensione accolta non tolta'), { segnalazione: id, tabella, err: erroreTolta?.message });
+      return { ferma: NON_TOLTA };
+    }
+
+    const percorsi = (Array.isArray(r.photo_urls) ? r.photo_urls : [])
+      .map(percorsoFotoRecensione)
+      .filter((p): p is string => p !== null);
+    if (percorsi.length > 0) {
+      try {
+        const { error: erroreFoto } = await admin.storage.from(SECCHIO_FOTO_RECENSIONI).remove(percorsi);
+        if (erroreFoto) throw new Error(erroreFoto.message);
+      } catch (e) {
+        logger.error(new Error('[segnalazioni] foto della recensione tolta rimaste nel secchio'), {
+          segnalazione: id, foto: percorsi.length, err: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
+    let autore: Canale = 'nessun_recapito';
+    if (r.user_id) {
+      try {
+        const { error: erroreAvviso } = await admin.from('notifications').insert(avvisoDiServizio({
+          user_id: r.user_id,
+          title: 'Abbiamo tolto una tua recensione',
+          body: `Dopo una segnalazione abbiamo tolto una tua recensione. Motivazione: ${motivazione}\n\n${COME_CONTESTARE}`,
+          link: '/terms#segnalazioni',
+        }));
+        autore = erroreAvviso ? 'fallita' : 'inviata';
+      } catch {
+        autore = 'fallita';
+      }
+      if (autore === 'fallita') {
+        logger.error(new Error('[segnalazioni] avviso a chi ha scritto la recensione tolta non partito'), { segnalazione: id });
+      }
+    }
+    return { ferma: null, autore };
+  }
+
+  // Non c'è più in nessuna delle due tabelle: vale come tolta solo con la traccia della cancellazione.
+  try {
+    const { data: tracce, error: erroreTracce } = await admin
+      .from('activity_events').select('id').eq('target_id', s.oggetto_id).eq('action', 'delete');
+    if (erroreTracce) return { ferma: NON_VERIFICATO };
+    if (Array.isArray(tracce) && tracce.length > 0) return { ferma: null, autore: 'non_previsto' };
+  } catch {
+    return { ferma: NON_VERIFICATO };
+  }
+  return { ferma: 'La recensione segnalata non si trova e non risulta tolta: l\'esito «rimosso» non può partire.' };
 }
 
 export const PATCH = withAdminAuth(async ({ req }) => {
@@ -375,6 +497,8 @@ export const PATCH = withAdminAuth(async ({ req }) => {
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
   const admin = getAdminSupabase();
+  const recensione = await togliRecensioneAccolta(admin, corpo.id);
+  if (recensione.ferma) return ApiErrors.conflict(recensione.ferma);
   const ancoraOnline = await contenutoAncoraOnline(admin, corpo.id);
   if (ancoraOnline) return ApiErrors.conflict(ancoraOnline);
   const r = await comunicaEsito(admin, corpo.id);
@@ -386,10 +510,12 @@ export const PATCH = withAdminAuth(async ({ req }) => {
     return ApiErrors.internal('Segnalazione non letta: riprova');
   }
   const { segnalanteEmail, segnalanteNotifica, venditore } = r;
-  const fallito = [segnalanteEmail, segnalanteNotifica, venditore].includes('fallita');
-  if (fallito) logger.error('Esito della segnalazione non comunicato a tutti', { id: corpo.id, segnalanteEmail, segnalanteNotifica, venditore });
+  // R18-003 — L'avviso a chi ha scritto la recensione tolta conta come gli altri canali.
+  const autore = recensione.autore;
+  const fallito = [segnalanteEmail, segnalanteNotifica, venditore, autore].includes('fallita');
+  if (fallito) logger.error('Esito della segnalazione non comunicato a tutti', { id: corpo.id, segnalanteEmail, segnalanteNotifica, venditore, autore });
   return NextResponse.json(
-    { ok: !fallito, segnalanteEmail, segnalanteNotifica, venditore },
+    { ok: !fallito, segnalanteEmail, segnalanteNotifica, venditore, ...(autore !== 'non_previsto' ? { autore } : {}) },
     { status: fallito ? 502 : 200 },
   );
 });
