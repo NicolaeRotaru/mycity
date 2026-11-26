@@ -1,6 +1,6 @@
 {
   "sessione": "R19",
-  "aggiornato": "2026-11-26 18:45",
+  "aggiornato": "2026-11-26 18:50",
   "finita": true,
   "testa": "be3ee840e67661bedead7c511ee5506223b3e090",
   "verifica": {
@@ -124,6 +124,8 @@
   "domande_per_nicola": [],
   "conto": {
     "agenti": 3,
-    "nota": "3 lanci: riparatore lotto 1 (grande), riparatore lotto 2 (grande), smentitore A (grande) riusato con un messaggio per voce. Spesa della sessione: 13,90 $ a metà lotto 2; consegna al 70% del limite di 25 $ come da nota della regia."
-  }
+    "subagenti": 3,
+    "nota": "3 lanci: riparatore lotto 1 (grande), riparatore lotto 2 (grande), smentitore A (grande) riusato con un messaggio per voce. Consegna al 70% del limite di 25 $ come da nota della regia."
+  },
+  "costo_usd": 19.34
 }
