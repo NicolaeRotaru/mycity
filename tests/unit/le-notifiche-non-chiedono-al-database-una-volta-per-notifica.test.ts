@@ -63,7 +63,16 @@ function tabella(nome: string) {
     update: () => { inAggiornamento = true; return b; },
     limit: () => Promise.resolve({ data: inSospeso, error: null }),
     in: (_c: string, valori: string[]) => {
-      if (inAggiornamento) return Promise.resolve({ error: null });
+      // 26/11/2026 — Il giro prende le notifiche prima di mandarle (`update ... in ... is ... select`) e
+      // ridà quelle non mandate (`update ... in ... eq`): il database conferma le righe toccate.
+      if (inAggiornamento) {
+        const esito = { data: valori.map((id) => ({ id })), error: null };
+        const c: Record<string, unknown> = {
+          is: () => c, eq: () => c, select: () => c,
+          then: (risolvi: (v: unknown) => unknown) => Promise.resolve(esito).then(risolvi),
+        };
+        return c;
+      }
       filtroUtenti = valori;
       return b;
     },

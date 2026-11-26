@@ -18,8 +18,8 @@ const CATEGORIE_CHE_ASPETTANO = new Set(['promo', 'group', 'newsletter']);
 /**
  * Cron: invia le web push per le notifiche non ancora inviate (pushed_at NULL)
  * create nell'ultima ora. Ogni notifica viene processata una sola volta
- * (pushed_at marcato dopo il tentativo). Le subscription morte (404/410) vengono
- * rimosse dal sender.
+ * (pushed_at preso prima dell'invio, ridato vuoto se l'invio non va). Le
+ * subscription morte (404/410) vengono rimosse dal sender.
  *
  * Cadenza: ogni 5 minuti. Chi la fa partire sta in `vercel.json` → `crons`.
  * Oggi il nuovo ordine aspetta questo giro: la push al negozio la manda solo lui, quindi può
@@ -105,16 +105,41 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
    * sono di molte meno persone), gli invii vanno a gruppi di dieci in
    * parallelo, e le notifiche gestite si segnano con due sole scritture.
    */
-  const notifiche = pending as {
+  const lettePerIlGiro = pending as {
     id: string; user_id: string; title: string; body: string | null;
     link: string | null; category: string | null;
   }[];
+
+  /**
+   * 26/11/2026 — LE NOTIFICHE SI PRENDONO PRIMA DI MANDARLE.
+   *
+   * Il giro leggeva le righe con `pushed_at` vuoto e le segnava solo dopo l'invio: due giri che si
+   * sovrappongono (il ritentativo di Vercel, una chiamata a mano) leggevano le stesse righe e il
+   * telefono suonava due volte. Adesso, come l'invio subito del nuovo ordine (lib/push/subito.ts),
+   * le righe lette si prendono con una scrittura sola (`pushed_at` da vuoto all'ora della presa, solo
+   * dove è ancora vuoto) e si manda solo quello che si è davvero preso. Quelle non mandate tornano
+   * vuote alla fine, solo se hanno ancora la nostra presa.
+   */
+  const presa = new Date().toISOString();
+  const { data: prese, error: errorePresa } = await supa
+    .from('notifications')
+    .update({ pushed_at: presa })
+    .in('id', lettePerIlGiro.map((n) => n.id))
+    .is('pushed_at', null)
+    .select('id');
+  if (errorePresa) {
+    logger.error('[cron] notifiche push non prese: il giro dopo riprova', { message: errorePresa.message });
+    return ApiErrors.unavailable('notifiche non prese');
+  }
+  const preseIds = new Set(((prese ?? []) as { id: string }[]).map((r) => r.id));
+  const notifiche = lettePerIlGiro.filter((n) => preseIds.has(n.id));
 
   let sent = 0;
   let retried = 0;
   let saltate = 0;
   let rimandate = 0;
-  const nowIso = new Date().toISOString();
+  /** Prese ma non mandate: tornano al giro dopo con `pushed_at` vuoto. */
+  const daRidare: string[] = [];
 
   // ① Le preferenze, una volta per persona+categoria invece che per notifica.
   const chiavi = new Map<string, { user: string; categoria: string }>();
@@ -154,16 +179,15 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     );
   }
 
-  const daSegnare: string[] = [];
   const daMandare = notifiche.filter((n) => {
     const chiave = `${n.user_id}|${n.category ?? 'order'}`;
     if (nonLette.has(chiave)) {
+      daRidare.push(n.id);
       rimandate++;
       return false;
     }
     if (vuoleDavvero.get(chiave) === false) {
-      // Segnata come gestita: non e' un errore, e' una scelta di chi la riceve.
-      daSegnare.push(n.id);
+      // Resta presa, cioe' gestita: non e' un errore, e' una scelta di chi la riceve.
       saltate++;
       return false;
     }
@@ -186,6 +210,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   } catch (e) {
     logger.error('[cron] iscrizioni push non lette: il giro dopo riprova', { message: e instanceof Error ? e.message : String(e) });
     rimandate += daMandare.length;
+    daRidare.push(...daMandare.map((n) => n.id));
     daMandare.length = 0;
     iscrizioni = new Map();
   }
@@ -206,33 +231,38 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     );
     esiti.forEach((esito, k) => {
       if (esito.status !== 'fulfilled') {
+        daRidare.push(gruppo[k].id);
         retried++;
         return;
       }
       const r = esito.value;
       sent += r.delivered;
-      // 🟠-10: si segna SOLO se almeno una push e' arrivata, o se non c'era
-      // niente da consegnare. Se c'erano iscrizioni e zero consegne e' un
-      // guasto passeggero: si ritenta al giro dopo.
-      if (r.delivered > 0 || r.total === 0) daSegnare.push(gruppo[k].id);
-      else retried++;
+      // 🟠-10: resta segnata SOLO se almeno una push e' arrivata, o se non
+      // c'era niente da consegnare. Se c'erano iscrizioni e zero consegne e' un
+      // guasto passeggero: si ridà al giro dopo.
+      if (r.delivered === 0 && r.total > 0) {
+        daRidare.push(gruppo[k].id);
+        retried++;
+      }
     });
   }
 
-  // ④ Una scrittura sola per tutte quelle gestite.
-  if (daSegnare.length > 0) {
+  // ④ Una scrittura sola per quelle da ridare: `pushed_at` torna vuoto, solo dove c'e' ancora la
+  // nostra presa (un altro invio puo' averla mandata e segnata con la sua ora).
+  if (daRidare.length > 0) {
     const { error } = await supa
       .from('notifications')
-      .update({ pushed_at: nowIso })
-      .in('id', daSegnare);
+      .update({ pushed_at: null })
+      .in('id', daRidare)
+      .eq('pushed_at', presa);
     if (error) {
-      logger.error('[cron] push mandate ma non registrate: il prossimo giro le rimanda', {
-        quante: daSegnare.length, message: error.message,
+      logger.error('[cron] push non mandate e non ridate al giro: restano segnate', {
+        quante: daRidare.length, message: error.message,
       });
     }
   }
 
-  return NextResponse.json({ ok: true, sent, processed: pending.length, retried, saltate, rimandate });
+  return NextResponse.json({ ok: true, sent, processed: notifiche.length, retried, saltate, rimandate });
 });
 
 export const GET = handler;

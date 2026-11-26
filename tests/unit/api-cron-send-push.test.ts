@@ -32,6 +32,28 @@ const pending: Array<{ id: string; user_id: string; title: string; body: string 
 /** Risposta della funzione che dice se la persona vuole quella categoria. */
 let vuoleNotifica: boolean = true;
 
+/**
+ * 26/11/2026 — Il giro prende le notifiche prima di mandarle (`pushed_at` all'ora della presa, solo
+ * dove è vuoto) e alla fine ridà vuote quelle non mandate. `marked` quindi è lo stato finale: le righe
+ * che restano con `pushed_at` pieno. Il database finto conferma le righe toccate.
+ */
+function scritturaSuPushedAt(valore: string | null, ids: string[]) {
+  if (valore !== null) {
+    for (const id of ids) if (!marked.includes(id)) marked.push(id);
+  } else {
+    for (const id of ids) {
+      const k = marked.indexOf(id);
+      if (k >= 0) marked.splice(k, 1);
+    }
+  }
+  const esito = { data: ids.map((id) => ({ id })), error: null };
+  const c: Record<string, unknown> = {
+    is: () => c, eq: () => c, select: () => c,
+    then: (ok: (v: unknown) => unknown) => Promise.resolve(esito).then(ok),
+  };
+  return c;
+}
+
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     rpc: (_nome: string) => Promise.resolve({ data: vuoleNotifica, error: null }),
@@ -43,15 +65,12 @@ vi.mock('@supabase/supabase-js', () => ({
         gte: () => b,
         order: () => b,
         limit: () => Promise.resolve({ data: pending, error: null }),
-        update: () => ((b._update = true), b),
+        update: (v: { pushed_at?: string | null }) => ((b._update = true), (b._valore = v.pushed_at ?? null), b),
         // 22/8/2026 — il giro segna le notifiche gestite con UNA scrittura
         // sola invece di una per notifica: il finto deve saper rispondere
         // anche a quella.
         in: (_c: string, valori: string[]) => {
-          if (b._update) {
-            for (const v of valori) marked.push(v);
-            return Promise.resolve({ error: null });
-          }
+          if (b._update) return scritturaSuPushedAt(b._valore as string | null, valori);
           return b;
         },
         eq: (_c: string, v: string) => {
