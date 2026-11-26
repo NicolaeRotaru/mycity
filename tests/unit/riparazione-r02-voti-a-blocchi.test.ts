@@ -36,7 +36,8 @@ function catalogo(): Tabelle {
   return {
     seller_public_profiles: NEGOZI,
     products: prodotti.map((p) => ({
-      ...p, compare_at_price: null, images: [], stock: 3, has_variants: false, category_id: null, status: 'available',
+      // R10-004 — il database ordina sul prezzo che si paga (`prezzo_pagato`): senza promozioni è il prezzo pieno.
+      ...p, prezzo_pagato: p.price, compare_at_price: null, images: [], stock: 3, has_variants: false, category_id: null, status: 'available',
     })),
   };
 }
