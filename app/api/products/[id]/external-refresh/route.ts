@@ -92,12 +92,6 @@ async function doRefresh(
       .from('products')
       .update({ external_sync_status: 'error' })
       .eq('id', id);
-    // R03-006 — L'ora dell'errore nel database: il freno di sei ore vale per ogni copia del sito.
-    // A parte, e senza guardare l'esito: prima della migrazione 890 la colonna non c'e'.
-    await admin
-      .from('products')
-      .update({ external_sync_error_at: new Date().toISOString() })
-      .eq('id', id);
     return { data: null, errore: err };
   }
 }

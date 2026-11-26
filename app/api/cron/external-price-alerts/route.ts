@@ -167,9 +167,6 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
       // Marca come errore. R04-011 — external_synced_at NON si tocca (non e'
       // arrivato niente): il freno e' ritentoDopoErroreConsentito, qui sopra.
       await supa.from('products').update({ external_sync_status: 'error' }).eq('id', r.id);
-      // R03-006 — L'ora dell'errore nel database: il freno di sei ore vale per ogni copia del sito.
-      // A parte, e senza guardare l'esito: prima della migrazione 890 la colonna non c'e'.
-      await supa.from('products').update({ external_sync_error_at: new Date().toISOString() }).eq('id', r.id);
     }
   }
 
