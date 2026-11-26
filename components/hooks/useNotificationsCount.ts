@@ -7,6 +7,29 @@ import { queryKeys } from '@/lib/queries/keys';
 import { useUtente, CHIAVE_UTENTE } from '@/components/hooks/useUtente';
 
 /**
+ * 26/11/2026 — Le categorie che la persona ha spento nelle impostazioni (promozioni e
+ * newsletter, `notif_promos` e `notif_newsletter`): non le riceve in push
+ * (`vuole_notifica`), e il campanello non le deve contare. Prima le contava, e il
+ * pallino si accendeva per un avviso che la persona aveva chiesto di non avere.
+ * Se la preferenza non si legge si conta senza promozioni e newsletter, come il
+ * campanello del negozio (SellerShell): un guasto sulla preferenza non deve spegnere
+ * il pallino degli ordini.
+ */
+export async function categorieDiNotificheSpente(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('notif_promos, notif_newsletter')
+    .eq('id', userId)
+    .limit(1);
+  type Preferenze = { notif_promos?: boolean | null; notif_newsletter?: boolean | null };
+  const preferenze = error ? null : ((data ?? []) as Preferenze[])[0] ?? null;
+  const spente: string[] = [];
+  if (preferenze?.notif_promos !== true) spente.push('promo');
+  if (preferenze?.notif_newsletter !== true) spente.push('newsletter');
+  return spente;
+}
+
+/**
  * Conta le notifiche non lette dell'utente corrente.
  * Si re-fetcha ogni 60s e quando lo stato auth cambia.
  */
@@ -29,11 +52,15 @@ export const useNotificationsCount = () => {
     refetchInterval: 60_000,
     queryFn: async () => {
       if (!userId) return 0;
-      const { count, error } = await supabase
+      let conta = supabase
         .from('notifications')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .eq('is_read', false);
+      // Le categorie spente restano fuori dal conto: category NOT IN (…).
+      const spente = await categorieDiNotificheSpente(userId);
+      if (spente.length > 0) conta = conta.or(`category.not.in.(${spente.join(',')})`);
+      const { count, error } = await conta;
       // Non `return 0`: quello marcava la lettura come riuscita con un numero falso, e react-query
       // non riprova una query riuscita. Il pallino delle notifiche restava spento per sempre dopo
       // un guasto di un secondo. Chi legge il numero ha gia' il suo valore di riserva (`= 0` qui

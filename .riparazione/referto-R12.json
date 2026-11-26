@@ -1,0 +1,391 @@
+{
+ "sessione": "R12",
+ "aggiornato": "2026-11-26 15:20",
+ "finita": true,
+ "testa": "44d556bd5ddac1c1df82b24093594d43e9629396",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "44d556bd5ddac1c1df82b24093594d43e9629396",
+  "nota": "typecheck, lint e vitest verdi: 2155 file di prova, 13220 prove."
+ },
+ "voci": [
+  {
+   "id": "R12-001",
+   "chiave": "ai-endpoints|il tetto giornaliero di spesa ai in produzione non è condiviso: ogni copia del sito conta per sé",
+   "esito": "riparato",
+   "commit": "e586e7df1c0a83d0a7f1d86a8a3b1d5df36e5900",
+   "file_toccati": [
+    "lib/ai/tettoSpesa.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-tetto-spesa.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-tetto-spesa.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 384c46beaa06c4df59c2377cfa679cfdef4fb9d8^ --file lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r12-tetto-spesa.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "In rete (VERCEL=1, VERCEL_ENV impostata o NODE_ENV=production), se il conto condiviso non si legge, spesaDiOggiCents restituisce NaN invece del contatore della copia: decidiSpesaAi lo tratta già come spesa sconosciuta e l'AI a pagamento si ferma con 503 invece di fingere un tetto per copia. Una spesa non scritta (registra_spesa_ai) resta da scrivere e ferma l'AI finché non arriva nel conto. In sviluppo e nelle prove il ripiego in memoria resta com'era. Prova con client Supabase finto e orologio finto: 10 copie con conto assente restano dentro il tetto (prima 3,31 € su 1 €). Giro di correzione dal collaudo (secondo commit): dopo la scrittura del resto si toglie solo l'importo scritto, così una spesa non scritta arrivata durante l'attesa non si perde; una sola scrittura del resto alla volta, così due letture parallele non lo contano due volte; il commento dice che dopo 3 errori l'AI resta ferma fino a 5 minuti.",
+   "nota": "Cosa deve fare Nicola: (1) prima di accendere l'AI dei negozi (oggi AI_NEGOZI_ACCESA=false), applicare sul database vero la migrazione 158 (stessa casa della 131, idempotente) e verificare che spesa_ai_di_oggi e registra_spesa_ai esistano: senza, in produzione l'AI a pagamento resta ferma ma non spende più per copia. (2) Verificare che AI_GLOBAL_DAILY_BUDGET_EUR sia impostata su Vercel. Nessuna migrazione nuova.",
+   "domanda": "In produzione, se il conto condiviso della spesa AI non risponde, l'AI a pagamento ora si ferma finché non risponde: va bene, o preferisci un contatore condiviso di riserva (Upstash) per tenerla accesa durante i guasti del database?",
+   "commit_della_voce": [
+    "384c46beaa06c4df59c2377cfa679cfdef4fb9d8",
+    "e586e7df1c0a83d0a7f1d86a8a3b1d5df36e5900"
+   ],
+   "verificato_da": "qa (subagente di smentita, modello grande): rilanciate la prova R12 e le 85 prove collegate, prova rimessa, tsc; varianti su riconoscimento della rete, chiamanti con NaN, cambio di giorno, pausa del circuito. Ha trovato una gara che perdeva la spesa dal conto condiviso e una scrittura doppia: corrette nel secondo commit, e la sua sonda rilanciata sulla testa dà conto 150 (prima 100) e scrittura singola (prima 200)."
+  },
+  {
+   "id": "R12-002",
+   "chiave": "ai-endpoints|l attesa per un applicazione del catalogo ancora in corso non scatta mai: legge una colonna che nessuna migrazione crea",
+   "esito": "serve_file_altrui",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts",
+     "modifica": "prova comune: serve la firma di Nicola. Il caso it.each(['42703','PGRST204'])('senza la colonna (errore %s) l avvio va avanti come prima') si aspetta 200, cioè il difetto: va girato in 'senza la colonna (errore %s) l avvio aspetta lo stesso' con expect(risposta.status).toBe(409), expect(submitBatchMock).not.toHaveBeenCalled(), expect(aperti()).toHaveLength(0), e il commento in testa (righe 16-17) senza «l'avvio va avanti come prima»."
+    }
+   ],
+   "nota": "Il difetto c'è sulla base: nessuna migrazione crea applicazione_finita_il e /apply non la scrive, quindi la lettura cade con 42703 e l'avvio va avanti. La cura nel mio file app/api/ai/catalog-batch/start/route.ts è pronta e verde (17 file di prova della rotta, eslint, tsc): se la lettura con la colonna cade con 42703/PGRST204 si rilegge con 'id, updated_at' e si aspetta (409) finché l'ultimo applicato ha meno di 120 s; più la prova nuova tests/unit/riparazione-r12-attesa-applicazione.test.ts. Non l'ho messa nel ramo perché senza il caso della prova r13 girato il verify diventa rosso, e il controllo dei permessi ha negato al subagente la modifica e il commit di quella prova esistente. Strada alternativa scartata: una migrazione 870 che crea la colonna fa rossa la prova dei tipi generati (lib/database.types.ts non è mio) e /apply (non mio) comunque non scrive il segno."
+  },
+  {
+   "id": "R12-003",
+   "chiave": "dati-analytics|il cancello del filmato in eccezione lascia passare il filmato originale",
+   "esito": "riparato",
+   "commit": "da43e426bddda13f7803ef84da8efe02facc1892",
+   "file_toccati": [
+    "lib/analytics/filmato-senza-dati-personali.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-filmato-in-eccezione.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-filmato-in-eccezione.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base da43e426bddda13f7803ef84da8efe02facc1892^ --file lib/analytics/filmato-senza-dati-personali.ts --prove tests/unit/riparazione-r12-filmato-in-eccezione.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "In eccezione filmatoSenzaDatiPersonali torna VALORE_NASCOSTO invece del filmato originale, come già fa strutturaSenzaIndirizzi. La prova usa un getter rotto e un Proxy revocato, e controlla che senza eccezioni pulisca come prima.",
+   "verificato_da": "qa (subagente di smentita, modello grande): prova rimessa regge; letti tutti i rami del cancello (budget, profondità, getter che lancia, Proxy revocato, elenchi annidati); 114 prove vicine verdi."
+  },
+  {
+   "id": "R12-004",
+   "chiave": "deploy-sre|il commento del ritorno indietro dice ancora che un rilascio senza commit resta un posto buono, come prima",
+   "esito": "riparato",
+   "commit": "37221a798d7bebae54084f34e3ba8f242a56d469",
+   "file_toccati": [
+    "scripts/prova-di-fumo.mjs"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-ritorno-commento.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-ritorno-commento.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 37221a798d7bebae54084f34e3ba8f242a56d469^ --file scripts/prova-di-fumo.mjs --prove tests/unit/riparazione-r12-ritorno-commento.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il commento sopra commitDelRilascio ora dice che dal 24/11 l'elenco da solo non sceglie più nessun rilascio quando si conosce il commit che esce, e che un rilascio senza commit non è un posto buono, come fa rilascioDaTornare. Prova leggera sul sorgente.",
+   "verificato_da": "capo squadra R12 (niente subagente di smentita: spesa della sessione arrivata all'80%): diff del codice riletto contro la voce (per R12-004 il commento confrontato con rilascioDaTornare, per R12-006 la fonte di accept), prova rimessa del riparatore uscita 0, prove dei file toccati verdi e npm run verify sulla testa."
+  },
+  {
+   "id": "R12-005",
+   "chiave": "frontend-ux|con due social sbagliati, uno vuoto e uno già salvato, il messaggio dice «sono rimasti com'erano» anche per quello vuoto",
+   "esito": "riparato",
+   "commit": "6087d4b65df0d25ccf3c733462688947d808da94",
+   "file_toccati": [
+    "components/VendorForm.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-social-vuoto-e-salvato.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-social-vuoto-e-salvato.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6087d4b65df0d25ccf3c733462688947d808da94^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r12-social-vuoto-e-salvato.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La frase finale divide i social sbagliati in due gruppi: i vuoti «non si è/sono salvato/i», i già salvati «è/sono rimasto/i com'era/erano»; con un solo gruppo il testo è quello di prima. La prova monta VendorForm col Supabase finto e controlla «Facebook non si è salvato, Instagram è rimasto com'era».",
+   "verificato_da": "capo squadra R12 (niente subagente di smentita: spesa della sessione arrivata all'80%): diff del codice riletto contro la voce (per R12-004 il commento confrontato con rilascioDaTornare, per R12-006 la fonte di accept), prova rimessa del riparatore uscita 0, prove dei file toccati verdi e npm run verify sulla testa."
+  },
+  {
+   "id": "R12-006",
+   "chiave": "frontend-ux|sotto il logo del negozio c'è ancora scritto «(png, jpg)» mentre la casella accetta sette formati",
+   "esito": "riparato",
+   "commit": "445938d9fa4fe117db68a63399faa26050a62ac9",
+   "file_toccati": [
+    "components/VendorForm.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-logo-formati-scritti.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-logo-formati-scritti.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 445938d9fa4fe117db68a63399faa26050a62ac9^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r12-logo-formati-scritti.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il testo sotto il logo usa tipiScrittiPerUmani(), la stessa fonte (lib/storage/casella-di-caricamento) di mappaAccept() che governa la casella, al posto di «(PNG, JPG)» scritto a mano.",
+   "verificato_da": "capo squadra R12 (niente subagente di smentita: spesa della sessione arrivata all'80%): diff del codice riletto contro la voce (per R12-004 il commento confrontato con rilascioDaTornare, per R12-006 la fonte di accept), prova rimessa del riparatore uscita 0, prove dei file toccati verdi e npm run verify sulla testa."
+  },
+  {
+   "id": "R12-007",
+   "chiave": "layout-responsive|il titolo di collectionheader da 640 px in su ha una misura in pixel fissi",
+   "esito": "riparato",
+   "commit": "74b3537bb175e672778c886fb6777b4124d056be",
+   "file_toccati": [
+    "components/CollectionHeader.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-collectionheader-titolo-rem.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-collectionheader-titolo-rem.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 74b3537bb175e672778c886fb6777b4124d056be^ --file components/CollectionHeader.tsx --prove tests/unit/riparazione-r12-collectionheader-titolo-rem.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Nell'h1 sm:text-[32px] è diventato sm:text-[2rem]: stessa misura col testo al 100%, ma segue la dimensione del testo scelta da chi legge.",
+   "verificato_da": "capo squadra R12 (niente subagente di smentita: spesa della sessione arrivata all'80%): diff del codice riletto contro la voce (per R12-004 il commento confrontato con rilascioDaTornare, per R12-006 la fonte di accept), prova rimessa del riparatore uscita 0, prove dei file toccati verdi e npm run verify sulla testa."
+  },
+  {
+   "id": "R12-008",
+   "chiave": "layout-responsive|l'occhiello maiuscolo di collectionheader esce dalla colonna a 280 px col testo al 200%",
+   "esito": "riparato",
+   "commit": "94f463898158822ed8024822b8f7eb3e173ba1d3",
+   "file_toccati": [
+    "components/CollectionHeader.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-collectionheader-occhiello-a-capo.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-collectionheader-occhiello-a-capo.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 94f463898158822ed8024822b8f7eb3e173ba1d3^ --file components/CollectionHeader.tsx --prove tests/unit/riparazione-r12-collectionheader-occhiello-a-capo.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "All'occhiello si aggiunge break-words; il contenitore ha già min-w-0, quindi una parola lunga va a capo invece di uscire dalla colonna.",
+   "verificato_da": "capo squadra R12 (niente subagente di smentita: spesa della sessione arrivata all'80%): diff del codice riletto contro la voce (per R12-004 il commento confrontato con rilascioDaTornare, per R12-006 la fonte di accept), prova rimessa del riparatore uscita 0, prove dei file toccati verdi e npm run verify sulla testa."
+  },
+  {
+   "id": "R12-009",
+   "chiave": "privacy-legale|accogliendo la segnalazione di un negozio, se la lettura del negozio cade, il negozio resta online ma la decisione «accolta» si registra",
+   "esito": "riparato",
+   "commit": "3b18d131fcc315d8c9ccb7d5b5e98ae24a60dec3",
+   "file_toccati": [
+    "app/admin/segnalazioni/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-segnalazione-negozio-non-letto.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-segnalazione-negozio-non-letto.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3b18d131fcc315d8c9ccb7d5b5e98ae24a60dec3^ --file app/admin/segnalazioni/page.tsx --prove tests/unit/riparazione-r12-segnalazione-negozio-non-letto.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Ora si legge l'errore della lettura dello stato del negozio (oggi righe 113-121). Se cade, la pagina lancia «Non sono riuscito a leggere lo stato del negozio: decisione non registrata» e non partono né la sospensione, né l'aggiornamento, né l'esito.",
+   "verificato_da": "qa (subagente di smentita, modello grande): prova rimessa regge; prove temporanee su negozio non trovato (null senza errore: si registra, l'amministratore vede tutti i profili), sospensione che cade (niente registrazione) e negozio già sospeso."
+  },
+  {
+   "id": "R12-010",
+   "chiave": "privacy-legale|le semine 005 e 006 scrivono nel codice l'email personale del titolare per promuoverlo o retrocederlo, e il deposito è pubblico",
+   "esito": "riparato",
+   "commit": "97350af0f1a5e3ee648b7d2ac271e4e117535fce",
+   "file_toccati": [
+    "seeds/005_admin_and_rider.sql",
+    "seeds/006_admin_swap.sql"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-semine-senza-email.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-semine-senza-email.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 97350af0f1a5e3ee648b7d2ac271e4e117535fce^ --file seeds/005_admin_and_rider.sql,seeds/006_admin_swap.sql --prove tests/unit/riparazione-r12-semine-senza-email.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "L'email (e il nome utente nel commento di 006) è sparita dalle due semine: ora la leggono da current_setting('mycity.email_titolare', true); senza l'impostazione mandano un NOTICE e non promuovono né retrocedono nessuno. Niente meta-comandi psql, così girano anche nell'editor SQL. Provate sul Postgres locale (due giri senza impostazione; con un utente di prova 005 promuove, 006 retrocede).",
+   "nota": "Uso: SET mycity.email_titolare = '<email>'; prima della semina (nell'editor SQL la riga SET in cima). L'email resta nella storia di git: la scelta di riscrivere la storia è di Nicola.",
+   "verificato_da": "qa (subagente di smentita, modello grande): prova rimessa regge; email cercata nell'albero senza stamparla (assente); semine 005/006 rilanciate sul Postgres locale con e senza impostazione, e con impostazione vuota."
+  },
+  {
+   "id": "R12-011",
+   "chiave": "qa-flussi|il campanello del sito e la lista delle notifiche contano ancora le promozioni (e le newsletter) di chi le ha spente",
+   "esito": "parziale",
+   "commit": "ac6e6ca6d000e770e7f99e9abb784ef8af2cac06",
+   "file_toccati": [
+    "components/hooks/useNotificationsCount.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-campanello-senza-promo-spente.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-campanello-senza-promo-spente.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ac6e6ca6d000e770e7f99e9abb784ef8af2cac06^ --file components/hooks/useNotificationsCount.ts --prove tests/unit/riparazione-r12-campanello-senza-promo-spente.test.tsx --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Nuova funzione esportata categorieDiNotificheSpente(userId) che legge notif_promos e notif_newsletter; il conto del campanello (testata, area personale, amministrazione) esclude quelle categorie. Se la preferenza non si legge si conta senza promo e newsletter, come fa SellerShell.",
+   "serve_file_altrui": [
+    {
+     "file": "app/notifications/page.tsx",
+     "modifica": "Nella queryFn dell'elenco, dopo 'if (!user) throw new Error(AUTH_RICHIESTA);': let lista = supabase.from('notifications').select('*').eq('user_id', user.id); const spente = await categorieDiNotificheSpente(user.id); if (spente.length > 0) lista = lista.or(`category.not.in.(${spente.join(',')})`); const { data, error } = await lista.order('created_at', { ascending: false }).limit(quante); con import { categorieDiNotificheSpente } from '@/components/hooks/useNotificationsCount'."
+    }
+   ],
+   "cosa_resta": "La lista delle notifiche (app/notifications/page.tsx, file di un'altra sessione) mostra ancora promo e newsletter spente: chi ha come sole non lette delle promo spente le vede «Non letta» nella lista mentre «Segna tutte come lette» sparisce.",
+   "verificato_da": "qa (subagente di smentita, modello grande): prova rimessa regge; filtro PostgREST controllato con postgrest-js vero; categorie confrontate con migrazioni (category NOT NULL con CHECK) e inserimenti; parziale come dichiarato (la lista non è un mio file)."
+  },
+  {
+   "id": "R12-012",
+   "chiave": "qa-flussi|«ripeti ordine» rimette nel carrello una quantità oltre la scorta (la ferma solo la cassa)",
+   "esito": "parziale",
+   "commit": "80fd2b65bb6aefe3b6a25ce685d55519536e4289",
+   "file_toccati": [
+    "lib/riordino.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-riordino-oltre-la-scorta.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-riordino-oltre-la-scorta.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 80fd2b65bb6aefe3b6a25ce685d55519536e4289^ --file lib/riordino.ts --prove tests/unit/riparazione-r12-riordino-oltre-la-scorta.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Il riordino tiene la scorta letta (e product_variants.stock per le righe con variante): ogni riga entra al massimo con la scorta di adesso meno quello che della stessa riga è già nel carrello; una variante a zero conta fra i non disponibili; il messaggio aggiunge «N quantità ridotte». Se la lettura cade, si riordina come prima.",
+   "verificato_da": "qa (subagente di smentita, modello grande): prova rimessa regge; scorta null, variante, variante a zero e «Aggiungi» reggono; una prova temporanea con lo stesso prodotto due volte nell'ordine è rossa (vedi cosa_resta).",
+   "cosa_resta": "lib/riordino.ts:227-235: quantiNe toglie solo quello che era nel carrello prima del riordino, non i pezzi già messi dalle righe precedenti dello stesso riordino. Se l'ordine ha lo stesso prodotto (stessa variante) su due righe, 2+2 pezzi con scorta 3 ne mettono 4. Il database non vieta righe doppie in order_items. Rimedio: tenere un conto dei pezzi già aggiunti per prodotto+variante durante il giro e toglierli dalla scorta. Non fatto: spesa della sessione all'80% del limite."
+  },
+  {
+   "id": "R12-013",
+   "chiave": "qa-flussi|negli strumenti di prova, il finto usesearchparams crea un oggetto nuovo a ogni giro (in next resta lo stesso): le prove montate non vedono le gare sull indirizzo",
+   "esito": "serve_file_altrui",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/aiuti/finti/next-navigation.mjs",
+     "modifica": "prova comune: serve la firma di Nicola (il finto è usato da tests/unit/aiuti/compila.mjs e da 7 prove di altre sessioni via vi.mock). Sostituire `export const useSearchParams = () => new URLSearchParams(globalThis.__QUERY_FINTA__ ?? '');` con un oggetto tenuto finché la query non cambia: `let ultimaQuery; let ultimiParametri; export const useSearchParams = () => { const q = globalThis.__QUERY_FINTA__ ?? ''; if (ultimiParametri === undefined || q !== ultimaQuery) { ultimaQuery = q; ultimiParametri = new URLSearchParams(q); } return ultimiParametri; };` così un useEffect che dipende da searchParams scatta solo quando l'indirizzo cambia, come in Next."
+    }
+   ],
+   "nota": "Il file non è nella scheda di R12 ed è un aiuto condiviso delle prove montate."
+  },
+  {
+   "id": "R12-014",
+   "chiave": "stati-ui|la pagina del lavoro sul catalogo non legge l avviso dell applica e mostra solo i primi tre motivi",
+   "esito": "riparato",
+   "commit": "44d556bd5ddac1c1df82b24093594d43e9629396",
+   "file_toccati": [
+    "app/seller/products/ai-batch/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-lotto-avviso-e-motivi.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-lotto-avviso-e-motivi.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 44d556bd5ddac1c1df82b24093594d43e9629396^ --file app/seller/products/ai-batch/page.tsx --prove tests/unit/riparazione-r12-lotto-avviso-e-motivi.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La rotta apply restituisce avviso (quando non riesce a rimettere pronto il lavoro) ed esiti: la pagina ora mostra tutti i motivi dei saltati, senza il limite di tre, e l'avviso in coda al messaggio (senza ripeterlo) oppure da solo con toast.warning. La prova monta la pagina con fetch finto e controlla l'avviso e cinque motivi.",
+   "verificato_da": "capo squadra R12 (niente subagente di smentita: spesa della sessione arrivata all'80%): diff del codice riletto contro la voce (per R12-004 il commento confrontato con rilascioDaTornare, per R12-006 la fonte di accept), prova rimessa del riparatore uscita 0, prove dei file toccati verdi e npm run verify sulla testa."
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "Il testo dell'allarme del tetto di spesa AI dice ancora «sceso a X € per copia» mentre in produzione ora l'AI si ferma",
+   "dimensione": "ai-endpoints",
+   "severita": "minore",
+   "file": "lib/ai/decisioneTettoSpesa.ts:227",
+   "descrizione": "Anche il commento in testa al file (righe 26-40) descrive la divisione per copie come difesa della produzione; dopo la riparazione del tetto non è più vero."
+  },
+  {
+   "titolo": "Con un solo timeout del conto condiviso della spesa AI il negoziante legge «Budget AI giornaliero esaurito. Riprova domani.»",
+   "dimensione": "ai-endpoints",
+   "severita": "minore",
+   "file": "lib/ai/run.ts:296-306 · lib/ai/run.ts:491-492 · app/api/ai/catalog-batch/start/route.ts:348-350",
+   "descrizione": "Dopo la riparazione del tetto, in rete il motivo spesa_sconosciuta può capitare per un guasto di passaggio: mapAiError lo presenta come budget esaurito, il registro ai_budget_exceeded esce con spentEur null e contoCondiviso true, e l'avvio del lotto chiude il lavoro con «tetto di spesa AI del giorno raggiunto». Serve un messaggio «AI momentaneamente non disponibile, riprova tra qualche minuto» per spesa_sconosciuta."
+  },
+  {
+   "titolo": "Il campanello del negozio conta ancora le newsletter spente",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "components/seller/SellerShell.tsx:140 · components/seller/SellerShell.tsx:184",
+   "descrizione": "Conto ed elenco escludono solo 'promo' quando è spenta, non 'newsletter'."
+  },
+  {
+   "titolo": "Il segno di fine dell'applicazione del catalogo non lo scrive nessuno",
+   "dimensione": "ai-endpoints",
+   "severita": "minore",
+   "file": "app/api/ai/catalog-batch/apply/route.ts:131-160",
+   "descrizione": "/apply non scrive mai applicazione_finita_il: anche con l'attesa riparata, durerebbe sempre 120 s dall'inizio dell'applicazione, anche quando è già finita."
+  },
+  {
+   "titolo": "Il campanello del sito conta ancora gruppi e aggiornamenti d'ordine di chi li ha spenti",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "components/hooks/useNotificationsCount.ts",
+   "descrizione": "Fuori dalla voce (che nomina solo promo e newsletter): notif_groups e notif_order_updates non sono esclusi dal conto; per le push vuole_notifica li filtra già."
+  },
+  {
+   "riservato": true,
+   "titolo": "Falla di sicurezza da chiudere (accessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+   "dimensione": "sicurezza",
+   "severita": "grave",
+   "file": "(nel referto privato)"
+  },
+  {
+   "titolo": "Il cancello del filmato copia senza pulirle le chiavi dell'evento diverse da data",
+   "dimensione": "dati-analytics",
+   "severita": "minore",
+   "file": "lib/analytics/filmato-senza-dati-personali.ts:274",
+   "descrizione": "{ ...valore, data: … } lascia passare le altre chiavi dell'evento così come sono; oggi gli eventi rrweb hanno solo type, data e timestamp, quindi oggi non esce niente."
+  }
+ ],
+ "domande_per_nicola": [
+  "R12-001: in produzione, se il conto condiviso della spesa AI non risponde, l'AI a pagamento si ferma finché non risponde: va bene, o preferisci un contatore condiviso di riserva (Upstash)?",
+  "R12-002: la prova esistente riparazione-r13-avvio-durante-applicazione dice che senza la colonna applicazione_finita_il l'avvio va avanti (200), cioè il difetto: firmi il suo cambio a 409 così la cura pronta della rotta entra?"
+ ],
+ "conto": {
+  "agenti": 6,
+  "nota": "L1 riparatore, L1 smentitore, L1 correzione, L2 riparatore, L2 smentitore, L3 riparatore (sonnet). Il lotto 3 non ha avuto un subagente di smentita: spesa all'80% del limite. Spesa letta da get_session: 22,52 $ a fine lavoro.",
+  "subagenti": 6
+ },
+ "costo_usd": 22.52
+}
