@@ -68,8 +68,36 @@ const PERKS = [
   },
 ];
 
-// Posizioni davvero aperte: oggi nessuna. Quando Nicola ne aggiunge una vera, compare da sola nell'elenco.
-const JOBS: Array<{ title: string; location: string; type: string; tag: string; mailto: string }> = [];
+const JOBS = [
+  {
+    title: 'Account negozi (Merchant Success)',
+    location: 'Piacenza',
+    type: 'Full-time',
+    tag: 'Commerciale',
+    mailto: mailtoContatto('lavoro', 'Candidatura Account negozi'),
+  },
+  {
+    title: 'Coordinatore flotta rider',
+    location: 'Piacenza',
+    type: 'Full-time',
+    tag: 'Operazioni',
+    mailto: mailtoContatto('lavoro', 'Candidatura Coordinatore flotta'),
+  },
+  {
+    title: 'Product Designer',
+    location: 'Ibrido',
+    type: 'Full-time',
+    tag: 'Prodotto',
+    mailto: mailtoContatto('lavoro', 'Candidatura Product Designer'),
+  },
+  {
+    title: 'Operatore supporto clienti',
+    location: 'Piacenza',
+    type: 'Part-time',
+    tag: 'Supporto',
+    mailto: mailtoContatto('lavoro', 'Candidatura Supporto clienti'),
+  },
+];
 
 export default function LavoraConNoiPage() {
   return (
@@ -158,17 +186,6 @@ export default function LavoraConNoiPage() {
             Posizioni aperte
           </h2>
           <p className="text-base text-ink-500 mb-7">Piacenza · alcune posizioni sono ibride.</p>
-          {JOBS.length === 0 && (
-            <p className="text-base text-ink-700 mb-3">
-              Oggi non abbiamo posizioni aperte. Se vuoi lavorare con noi,{' '}
-              <a
-                href={mailtoContatto('lavoro', 'Candidatura spontanea')}
-                className="font-bold text-primary-700 underline [overflow-wrap:anywhere]"
-              >
-                mandaci una candidatura spontanea
-              </a>.
-            </p>
-          )}
           <ul className="flex flex-col gap-3">
             {JOBS.map((job) => (
               <li
