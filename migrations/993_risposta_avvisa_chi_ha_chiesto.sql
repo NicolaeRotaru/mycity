@@ -7,8 +7,10 @@
 --   è amministratore né servizio, is_public resta com'è e answered_by è chi
 --   scrive la risposta (auth.uid()).
 --
--- ORDINE: va applicata DOPO la 900 (che ridefinisce la stessa funzione) e dopo
--- la 822. Si può rieseguire. NON si applica a mano: lo decide Nicola.
+-- ORDINE: va applicata dopo tutte le migrazioni che definiscono queste due
+-- funzioni (la 215, la 822 e ogni altra con numero più basso che le
+-- ridefinisce); la 995 aggiorna poi il guardiano. Si può rieseguire. NON si
+-- applica a mano: lo decide Nicola.
 --
 -- Prova: tests/sql/rls/riparazione-s01-05.test.sql
 

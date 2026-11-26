@@ -8,8 +8,13 @@
 --   ③ il negozio risponde a una domanda sua: nessun avviso a se stesso;
 --   ④ answered_by mandato con un altro utente: resta chi ha scritto la risposta;
 --   ⑤ il negozio non cambia is_public, nemmeno con un UPDATE senza filtro;
---   ⑥ l'amministratore nasconde ancora una domanda.
--- Senza la migrazione 993 ①, ④ e ⑤ sono ROSSI.
+--   ⑥ l'amministratore nasconde ancora una domanda;
+--   ⑦ il negozio risponde con una data a scelta: la data è quella di adesso;
+--   ⑧ il negozio, senza cambiare la risposta, manda data e firma diverse:
+--     restano quelle di prima;
+--   ⑨ il negozio toglie la risposta (vuota o solo spazi): firma e data tornano
+--     vuote.
+-- Senza la migrazione 993 ①, ④ e ⑤ sono ROSSI; senza la 995 ⑦, ⑧ e ⑨.
 -- =============================================================================
 
 BEGIN;
@@ -34,7 +39,11 @@ INSERT INTO public.product_questions (id, product_id, author_id, question) VALUE
   ('e9930000-2222-0000-0000-000000000002', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000c', 'Quanto pesa?'),
   ('e9930000-2222-0000-0000-000000000003', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000a', 'Domanda del negozio'),
   ('e9930000-2222-0000-0000-000000000004', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000b', 'Si può congelare?'),
-  ('e9930000-2222-0000-0000-000000000005', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000c', 'Domanda da nascondere');
+  ('e9930000-2222-0000-0000-000000000005', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000c', 'Domanda da nascondere'),
+  ('e9930000-2222-0000-0000-000000000006', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000b', 'Ha il lievito madre?'),
+  ('e9930000-2222-0000-0000-000000000007', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000c', 'A che ora esce dal forno?'),
+  ('e9930000-2222-0000-0000-000000000008', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000b', 'Si può avere affettato?'),
+  ('e9930000-2222-0000-0000-000000000009', 'e9930000-1111-0000-0000-000000000001', 'e9930000-0000-0000-0000-00000000000c', 'Va bene per i bambini?');
 RESET mycity.allow_profile_write;
 
 -- Il negozio risponde dal browser con l'answered_by indicato.
@@ -130,6 +139,62 @@ INSERT INTO esiti SELECT '6 l''amministratore nasconde ancora una domanda',
   e = 'righe 1' AND pg_temp.pubblica('e9930000-2222-0000-0000-000000000005') IS FALSE,
   e FROM pg_temp.admin_nasconde('e9930000-2222-0000-0000-000000000005') AS e;
 
+-- Il negozio aggiorna la domanda dal browser con le assegnazioni date.
+CREATE FUNCTION pg_temp.negozio(p_domanda uuid, assegnazioni text) RETURNS text
+LANGUAGE plpgsql AS $$
+DECLARE n int;
+BEGIN
+  PERFORM set_config('request.jwt.claims', '{"sub":"e9930000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+  SET LOCAL ROLE authenticated;
+  EXECUTE format('UPDATE public.product_questions SET %s WHERE id = %L', assegnazioni, p_domanda);
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RESET ROLE;
+  RETURN CASE WHEN n = 1 THEN 'ok' ELSE 'righe ' || n END;
+EXCEPTION WHEN OTHERS THEN
+  RESET ROLE;
+  RETURN SQLSTATE || ' ' || SQLERRM;
+END $$;
+CREATE FUNCTION pg_temp.stato(p_domanda uuid) RETURNS text
+LANGUAGE sql AS $$
+  SELECT concat_ws(' | ', coalesce(answer, '∅'), coalesce(answered_by::text, '∅'),
+                   CASE WHEN answered_at IS NULL THEN '∅' WHEN answered_at = now() THEN 'adesso' ELSE answered_at::text END)
+    FROM public.product_questions WHERE id = p_domanda;
+$$;
+
+CREATE FUNCTION pg_temp.senza_firma(p_domanda uuid, p_risposta text) RETURNS boolean
+LANGUAGE sql AS $$
+  SELECT answer = p_risposta AND answered_by IS NULL AND answered_at IS NULL
+    FROM public.product_questions WHERE id = p_domanda;
+$$;
+
+INSERT INTO esiti SELECT '7 risposta con una data a scelta: la data è quella di adesso',
+  e = 'ok' AND pg_temp.stato('e9930000-2222-0000-0000-000000000006') = 'Ecco. | e9930000-0000-0000-0000-00000000000a | adesso',
+  e || ' · ' || pg_temp.stato('e9930000-2222-0000-0000-000000000006')
+  FROM pg_temp.negozio('e9930000-2222-0000-0000-000000000006',
+         $s$answer = 'Ecco.', answered_at = '1990-01-01', answered_by = 'e9930000-0000-0000-0000-00000000000c'$s$) AS e;
+
+-- ⑧: risposta già scritta il 2 gennaio 2026 dal negozio (preparata dal server).
+SET LOCAL request.jwt.claims = '{"role":"service_role"}';
+UPDATE public.product_questions
+   SET answer = 'Alle sette.', answered_by = 'e9930000-0000-0000-0000-00000000000a', answered_at = '2026-01-02 10:00+00'
+ WHERE id = 'e9930000-2222-0000-0000-000000000007';
+INSERT INTO esiti SELECT '8 senza cambiare la risposta, data e firma restano quelle di prima',
+  e = 'ok' AND pg_temp.stato('e9930000-2222-0000-0000-000000000007')
+               = 'Alle sette. | e9930000-0000-0000-0000-00000000000a | ' || '2026-01-02 10:00+00'::timestamptz::text,
+  e || ' · ' || pg_temp.stato('e9930000-2222-0000-0000-000000000007')
+  FROM pg_temp.negozio('e9930000-2222-0000-0000-000000000007',
+         $s$answered_at = '1990-01-01', answered_by = 'e9930000-0000-0000-0000-00000000000c'$s$) AS e;
+
+INSERT INTO esiti SELECT '9 risposta tolta (vuota o spazi): firma e data tornano vuote',
+  a = 'ok' AND b = 'ok' AND c = 'ok' AND d = 'ok'
+    AND pg_temp.stato('e9930000-2222-0000-0000-000000000008') = '∅ | ∅ | ∅'
+    AND pg_temp.senza_firma('e9930000-2222-0000-0000-000000000009', '   '),
+  concat_ws(' / ', a, b, c, d, pg_temp.stato('e9930000-2222-0000-0000-000000000008'), pg_temp.stato('e9930000-2222-0000-0000-000000000009'))
+  FROM pg_temp.rispondi('e9930000-2222-0000-0000-000000000008', 'e9930000-0000-0000-0000-00000000000a') AS a,
+       pg_temp.rispondi('e9930000-2222-0000-0000-000000000009', 'e9930000-0000-0000-0000-00000000000a') AS b,
+       pg_temp.negozio('e9930000-2222-0000-0000-000000000008', $s$answer = NULL$s$) AS c,
+       pg_temp.negozio('e9930000-2222-0000-0000-000000000009', $s$answer = '   '$s$) AS d;
+
 DO $$
 DECLARE r record; rossi int;
 BEGIN
@@ -137,7 +202,7 @@ BEGIN
     RAISE INFO '%  %  — %', CASE WHEN r.ok THEN 'ok  ' ELSE 'ROTTO' END, r.nome, r.dettaglio;
   END LOOP;
   SELECT count(*) INTO rossi FROM esiti WHERE ok IS NOT TRUE;
-  IF rossi > 0 OR (SELECT count(*) FROM esiti) <> 6 THEN
+  IF rossi > 0 OR (SELECT count(*) FROM esiti) <> 9 THEN
     RAISE EXCEPTION '% controlli su % sono rossi (S01-05)', rossi, (SELECT count(*) FROM esiti);
   END IF;
   RAISE INFO 'S01-05: % controlli verdi', (SELECT count(*) FROM esiti);
