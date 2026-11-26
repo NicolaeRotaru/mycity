@@ -141,8 +141,12 @@ function redact(value: unknown, depth = 0): unknown {
     return elementi ? elementi.map((v) => redact(v, depth + 1)) : NON_LEGGIBILE;
   }
   if (typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const k of Object.keys(value)) {
+    // R17-011 — senza prototipo (una chiave «__proto__» resta una chiave) e con la lettura delle
+    // chiavi protetta: un valore che non si legge diventa solo lui «[non leggibile]».
+    const out: Record<string, unknown> = Object.create(null);
+    const chiavi = leggi(() => Object.keys(value), null);
+    if (!chiavi) return NON_LEGGIBILE;
+    for (const k of chiavi) {
       if (PII_KEYS.test(k)) {
         out[k] = '[redacted]';
         continue;

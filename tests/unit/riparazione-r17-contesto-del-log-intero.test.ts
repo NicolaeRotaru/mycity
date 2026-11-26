@@ -86,4 +86,20 @@ describe('R17-011 · un valore che non si scrive non si porta via il contesto', 
     expect((riga.m as Record<string, unknown>).ordine).toBe('ord_5');
     expect(righe[0]).toContain('[troppo profondo]');
   });
+
+  it('un valore annidato con chiavi che lanciano diventa solo lui [non leggibile]', async () => {
+    const rotto = new Proxy({}, { ownKeys() { throw new Error('x'); } });
+    const riga = await rigaDi({ orderId: 'ord_9', motivo: 'carta rifiutata', rotto });
+    expect(riga.contesto).toBeUndefined();
+    expect(riga.orderId).toBe('ord_9');
+    expect(riga.motivo).toBe('carta rifiutata');
+    expect(riga.rotto).toBe('[non leggibile]');
+  });
+
+  it('una chiave __proto__ resta una chiave e non cambia il prototipo', async () => {
+    const riga = await rigaDi(JSON.parse('{"orderId":"ord_8","__proto__":{"admin":true}}'));
+    expect(riga.orderId).toBe('ord_8');
+    expect(Object.keys(riga)).toContain('__proto__');
+    expect((riga as { admin?: unknown }).admin).toBeUndefined();
+  });
 });
