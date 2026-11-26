@@ -29,7 +29,7 @@ function chiama(body: string | undefined, cookie?: string) {
       'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
     },
     body,
-  }));
+  })).catch(() => ({ status: 500 } as { status: number })); // un'eccezione = errore del server
 }
 
 beforeEach(() => {
@@ -54,8 +54,9 @@ describe('corpo vuoto o rotto', () => {
 describe('cookie dei consensi storto', () => {
   it('parseConsentCookie: percentuale rotta = consenso assente, non eccezione', () => {
     const nessuno = { functional: false, analytics: false, marketing: false };
-    expect(parseConsentCookie('%E0%A4%A')).toEqual(nessuno);
-    expect(parseConsentCookie('%E0')).toEqual(nessuno);
+    const leggi = (v: string) => { try { return parseConsentCookie(v); } catch { return 'eccezione'; } };
+    expect(leggi('%E0%A4%A')).toEqual(nessuno);
+    expect(leggi('%E0')).toEqual(nessuno);
   });
 
   it('la rotta risponde 204 e, senza consenso, non registra la visita', async () => {
