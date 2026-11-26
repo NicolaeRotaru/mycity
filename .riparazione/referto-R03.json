@@ -1,0 +1,234 @@
+{
+  "sessione": "R03",
+  "aggiornato": "2026-11-26 13:35",
+  "finita": true,
+  "testa": "1a3f66cd6f3433223ee8f342749ae35fe1cb083c",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "1a3f66cd6f3433223ee8f342749ae35fe1cb083c",
+    "nota": "typecheck verde, lint 0 errori (122 avvisi, come prima), 2149 file di prova e 13197 prove verdi. Un verify precedente su da38e34ab9eb225e8b2570425424f99ffe593342 era rosso (4 guardie sui tipi del database per la migrazione 890): R03-006 tolta dal ramo con 480b1369d21c2247fc5dc436fa6fe4c5123cb4e9."
+  },
+  "voci": [
+    {
+      "id": "R03-001",
+      "chiave": "ai-endpoints|nella chat assistenza il negoziante approva una descrizione nuova senza poterla leggere, e al primo messaggio l'assistente riscrive tag e descrizione senza aver visto quelli che ci sono",
+      "esito": "parziale",
+      "commit": "084e9fe8378811d9cfaf2fb84b33d53062172c5e",
+      "file_toccati": [
+        "app/api/ai/catalog-chat/route.ts",
+        "tests/unit/riparazione-r03-catalog-chat.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-catalog-chat.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-catalog-chat.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 084e9fe8378811d9cfaf2fb84b33d53062172c5e^ --file app/api/ai/catalog-chat/route.ts --prove tests/unit/riparazione-r03-catalog-chat.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Alla base i punti ② e ③ erano già chiusi: in identificazione la rotta toglie descrizione, tag e caratteristiche dalla proposta, e il prompt ha già la regola NON INVENTARE. Restava ①, chiuso nella rotta: a scheda aperta la risposta mostrata sopra la scheda con Applica porta il testo nuovo della descrizione, così come lo scriverebbe il server, e i tag attuali che l'applicazione toglie, confrontati con la stessa normalizzazione del server.",
+      "cosa_resta": "La scheda della proposta con Applica dice ancora «Descrizione aggiornata» e «Tag →» con la sola lista nuova: deve mostrare lei il testo nuovo della descrizione (accorciato, con «leggi tutto») e i tag che spariscono, con una prova su righeDellaProposta. Il testo messo dalla rotta nella risposta della chat sta nella stessa bolla del modello, che a parole può contraddirlo; la scheda, calcolata dalla proposta, non è falsificabile dal modello.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/products/prontoPerLaVendita.ts",
+          "modifica": "in righeDellaProposta (riga ~705 alla base) al posto di 'Descrizione aggiornata' scrivere «Descrizione nuova: «<testo accorciato a ~160 caratteri>»»; alla riga ~724 aggiungere al parametro prodotto il campo tags?: string[] (lo snapshot di lib/products/aiSnapshot.ts lo ha già) e accodare «(tolti: x, y)» con i tag attuali la cui forma normalizzata da tagDelPatch non compare in tagDelPatch(patch.tags); mostrare anche la lista nuova normalizzata, non grezza. Prova sulla scheda."
+        },
+        {
+          "file": "components/SupportProductAssistant.tsx",
+          "modifica": "«leggi tutto» sulla riga della descrizione nella scheda della proposta (righe ~400-413), e whitespace-pre-wrap sulla bolla della risposta perché a capo ed elenchi della descrizione non si appiattiscano."
+        }
+      ],
+      "verificato_da": "smentitore R03-001 (modello grande) nel worktree staccato a 084e9fe8378811d9cfaf2fb84b33d53062172c5e: prova 4/4 e vicine 58/58 verdi, prova rimessa regge, tsc pulito; ② e ③ già chiusi alla base (route.ts:81, :172-177, :456); testo e tag tolti arrivano nella risposta in tutti i percorsi e sono calcolati come il server, ma la scheda (prontoPerLaVendita.ts:705, :724) è invariata e il testo nella bolla il modello lo può contraddire: parziale."
+    },
+    {
+      "id": "R03-002",
+      "chiave": "ai-endpoints|con il modello ai mancante il giro dei prezzi esterni segna in errore tutti i prodotti del giro e continua a chiamare",
+      "esito": "riparato",
+      "commit": "50ac47b3162c4bd5b9e297f2917c9bf4b0a0b081",
+      "file_toccati": [
+        "app/api/cron/external-price-alerts/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-giro-prezzi-modello-mancante.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-giro-prezzi-modello-mancante.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 50ac47b3162c4bd5b9e297f2917c9bf4b0a0b081^ --file app/api/cron/external-price-alerts/route.ts --prove tests/unit/riparazione-r03-giro-prezzi-modello-mancante.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Al primo errore 404 del modello il giro esce dal ciclo senza segnare 'error' nessun prodotto, nemmeno quello che ha preso il 404, che non ha colpa; la risposta aggiunge «rimasti». Gli altri guasti continuano come prima.",
+      "nota": "Il prodotto che prende il 404 non è segnato 'error': il guasto è del modello, non suo. La prova esistente sul 404 dei prezzi esterni resta verde.",
+      "verificato_da": "smentitore lotto 2 (sonnet) nel worktree a da38e34ab9eb225e8b2570425424f99ffe593342: prova e rimessa verdi; il giro si ferma solo sull'errore 404 dell'API del modello (il 404 di una pagina sta dentro la ricerca web e non si confonde); 500 e rete proseguono e segnano 'error'; il prodotto del 404 resta in testa alla fila e torna al giro dopo."
+    },
+    {
+      "id": "R03-003",
+      "chiave": "ai-endpoints|il sorvegliante dei prezzi esterni può superare i suoi 300 s con 10 chiamate al modello in fila",
+      "esito": "riparato",
+      "commit": "1a3f66cd6f3433223ee8f342749ae35fe1cb083c",
+      "file_toccati": [
+        "app/api/cron/external-price-alerts/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-giro-prezzi-durata.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-giro-prezzi-durata.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a3f42c8e7c4f3a26a5aebc9fd57d86ccb13b6aa4^ --file app/api/cron/external-price-alerts/route.ts --prove tests/unit/riparazione-r03-giro-prezzi-durata.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tetto di tempo nel giro: una chiamata nuova parte solo se, usando tutti i 60 s del tentativo, finisce prima di 270 s (300 meno 30 di margine), contati dall'inizio dell'handler, selezione dei candidati compresa. I prodotti rimasti non si toccano e restano al giro dopo; la risposta dice quanti.",
+      "nota": "Due commit della voce: a3f42c8e7c4f3a26a5aebc9fd57d86ccb13b6aa4 (il tetto) e 1a3f66cd6f3433223ee8f342749ae35fe1cb083c (giro di correzione chiesto dallo smentitore: inizio del conto spostato all'inizio dell'handler e prova stretta). Con orologio finto e chiamate da 60 s partono esattamente 4 chiamate (0, 60, 120, 180 s); con 90 s di selezione ne partono 3. La prova cade con ciascuna mutazione: tetto tolto, margine a 0, termine dei 60 s tolto, inizio del conto rimesso dopo la selezione.",
+      "verificato_da": "smentitore lotto 2 (sonnet): codice giusto, prova debole (cadeva solo togliendo tutto il tetto); dopo il giro di correzione le tre mutazioni e la controprova sull'inizio del conto fanno cadere la prova, rimessa regge, 6 prove della rotta verdi (90 casi), tsc ed eslint verdi."
+    },
+    {
+      "id": "R03-004",
+      "chiave": "ai-endpoints|«aggiorna ora» dei prezzi esterni: col budget ai finito l'admin legge ancora «riprova»",
+      "esito": "riparato",
+      "commit": "1703ffaad2aeaa411386bf0bf26befda27dba368",
+      "file_toccati": [
+        "app/api/products/[id]/external-refresh/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-aggiorna-ora-budget-ai.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-aggiorna-ora-budget-ai.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1703ffaad2aeaa411386bf0bf26befda27dba368^ --file app/api/products/[id]/external-refresh/route.ts --prove tests/unit/riparazione-r03-aggiorna-ora-budget-ai.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel POST gli AiCallError col motivo tetto di spesa o status 401/429/503 passano a mapAiError; il 404 resta com'era e gli altri guasti restano «Aggiornamento non riuscito. Riprova.».",
+      "nota": "Non ogni AiCallError passa a mapAiError: un 500 darebbe lo stesso 502 con un testo diverso, e una prova esistente fissa il testo attuale. Tutti i casi che mapAiError distingue sono coperti.",
+      "verificato_da": "smentitore lotto 2 (sonnet): prova e rimessa verdi; l'unico chiamante (components/admin/ExternalDataPanel.tsx:53-61) mostra body.error.message, quindi l'admin legge «Budget AI giornaliero esaurito»; un 503 del fornitore senza motivo dice «servizio non disponibile», non budget."
+    },
+    {
+      "id": "R03-005",
+      "chiave": "ai-endpoints|la lettura di più prodotti da foto chiede 6000 token in un tentativo da 60 secondi",
+      "esito": "scelta_di_nicola",
+      "domanda": "Lettura di più prodotti da foto: tenere max_tokens 6000 (etichette lunghe intere ma una risposta lunga può superare i 60 s), scendere a circa 3500-4000 (sta nei 60 s ma riapre la troncatura delle etichette lunghe chiusa il 5/11), o dare a questa rotta un tentativo più lungo (tocca lib/ai/client.ts e lib/ai/run.ts, con poco margine sui 120 s della rotta)?",
+      "nota": "Difetto ancora presente: app/api/vision/extract-products/route.ts:230 (max_tokens 6000), lib/ai/client.ts TEMPO_TENTATIVO_AI_MS=60000 e RITENTATIVI_AI=0. Il numero giusto dipende dalla velocità reale del modello, non misurabile qui, e da quanta troncatura accettare: soglia di prodotto. Nessun file toccato."
+    },
+    {
+      "id": "R03-006",
+      "chiave": "ai-endpoints|il freno di sei ore sui prodotti importati in errore regge solo con upstash: senza, ogni copia del sito ripaga le chiamate ai",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "lib/database.types.ts",
+          "modifica": "rigenerare con npm run db:types dopo la migrazione 890: in products aggiunge external_sync_error_at: string | null (Row), external_sync_error_at?: string | null (Insert e Update). Va fatto insieme al cherry-pick del commit 9136d2120cadb9e1b64beb22ef2303d951b2ca0c, che porta la migrazione 890 e il codice che la usa."
+        }
+      ],
+      "nota": "La cura è pronta nel commit 9136d2120cadb9e1b64beb22ef2303d951b2ca0c: migrazione 890 (colonna products.external_sync_error_at, additiva e idempotente) scritta nei due punti che segnano 'error' e letta da ritentoDopoErroreConsentito, con prove unit e SQL; la prova rimessa reggeva (uscita 0, anche con --sql). Senza i tipi rigenerati quattro prove di guardia del sito sono rosse (colonne che non esistono, tipi generati diversi dal generatore), e lib/database.types.ts non è di nessuna sessione in quest'onda: il commit è tolto dal ramo con 480b1369 (revert). Il rinvio di Nicola del 19/11 (AI per i negozi spenta al lancio) resta vero: la migrazione non è applicata. Strada senza codice: UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN in produzione. Residuo minore del commit pronto, accettabile: il giro a orario scrive l'ora dell'errore solo dopo la chiamata (fino a 60 s) e non prenota il prodotto, quindi al massimo 2 chiamate per prodotto ogni 6 ore invece di 1 (app/api/cron/external-price-alerts/route.ts:103,169-172 al commit 9136d212).",
+      "verificato_da": "smentitore R03-006 (modello grande) nel worktree a da38e34ab9eb225e8b2570425424f99ffe593342: prove unit 6/6, SQL 3/3 e RLS verdi, rimessa regge, 890 rilanciata due volte senza errori, varianti su due copie, colonna assente e 6 ore che mordono; ma quattro guardie della suite rosse senza lib/database.types.ts rigenerato (verdi al genitore e dopo npm run db:types): conferma serve_file_altrui."
+    },
+    {
+      "id": "R03-007",
+      "chiave": "stati-ui|la modifica prodotto dell'amministratore, se non legge le varianti, dice «ricarica la pagina» ma non ha il bottone riprova",
+      "esito": "riparato",
+      "commit": "1d3f5b5f1c9fe3c80d7cf62e6faa0d7966590b3f",
+      "file_toccati": [
+        "app/admin/products/[id]/edit/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-admin-prodotto-varianti-riprova.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-admin-prodotto-varianti-riprova.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1d3f5b5f1c9fe3c80d7cf62e6faa0d7966590b3f^ --file app/admin/products/[id]/edit/page.tsx --prove tests/unit/riparazione-r03-admin-prodotto-varianti-riprova.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il bottone Riprova compare anche con l'errore delle varianti e le rilegge (e rilegge il prodotto se è caduto anche lui). La prova ci clicca e verifica che il modulo si apra con le 2 taglie.",
+      "verificato_da": "smentitore lotto 2 (sonnet): prova e rimessa verdi; con l'errore delle varianti il Riprova compare e le rilegge, e il modulo si apre con le taglie."
+    },
+    {
+      "id": "R03-008",
+      "chiave": "stati-ui|nella pagina di amministrazione del prodotto, quando torna la rete, il caricamento prende il posto del modulo e le modifiche si perdono; senza rete il modulo si apre con 0 taglie",
+      "esito": "riparato",
+      "commit": "da38e34ab9eb225e8b2570425424f99ffe593342",
+      "file_toccati": [
+        "app/admin/products/[id]/edit/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-admin-prodotto-rete-che-torna.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-admin-prodotto-rete-che-torna.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base da38e34ab9eb225e8b2570425424f99ffe593342^ --file app/admin/products/[id]/edit/page.tsx --prove tests/unit/riparazione-r03-admin-prodotto-rete-che-torna.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Come nella pagina del negozio: controllo fetchStatus 'paused' per prodotto e taglie; caricamento ed errori valgono solo prima che il modulo si apra (dopo non si smonta più); il modulo non si apre se le taglie non sono lette. Dopo un conflitto di scorta il modulo si rimonta con riga e taglie rilette.",
+      "verificato_da": "smentitore lotto 2 (sonnet): prova e rimessa verdi, più quattro scenari con una prova temporanea: dopo un 409 il modulo si rimonta con riga e taglie nuove; un errore delle taglie a modulo aperto non lo smonta; senza rete e senza prodotto in memoria compare Riprova e, tornata la rete, il modulo si apre da solo."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Nella chat Assistenza la bolla della risposta appiattisce a capo ed elenchi: una descrizione lunga diventa un muro di testo senza «leggi tutto»",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "components/SupportProductAssistant.tsx:400-413",
+      "descrizione": "La bolla non ha whitespace-pre-wrap: a capo ed elenchi si perdono e il markdown resta grezzo; fino a 4000 caratteri senza «leggi tutto»."
+    },
+    {
+      "titolo": "Col budget AI finito il prodotto importato viene segnato in errore e resta frenato sei ore anche quando il budget torna",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/products/[id]/external-refresh/route.ts (doRefresh) e app/api/cron/external-price-alerts/route.ts",
+      "descrizione": "Il blocco del tetto di spesa segna 'error' e l'ora dell'errore come un guasto del prodotto: il prodotto sano resta dietro il freno di sei ore. È lo stesso schema che nel giro è già stato chiuso per il modello mancante."
+    },
+    {
+      "titolo": "I prodotti ripresi dalla via dei falliti consumano il permesso di riprovare già in selezione: se il giro li lascia fuori restano fermi altre sei ore",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/cron/external-price-alerts/route.ts:103",
+      "descrizione": "ritentoDopoErroreConsentito si chiama mentre si scelgono i candidati; se poi il tetto di tempo o lo stop del modello mancante li esclude, il permesso è già speso."
+    },
+    {
+      "titolo": "La modifica prodotto dell'amministratore senza rete si apre con le categorie vuote se non erano in memoria",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/admin/products/[id]/edit/page.tsx",
+      "descrizione": "Manca la guardia sulle categorie in pausa che la pagina del negozio ha (app/seller/products/[id]/edit/page.tsx:325), e manca «Riapri con i dati aggiornati»: dopo un 409 con rilettura delle taglie fallita il modulo si rimonta con le taglie vecchie."
+    },
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "sicurezza",
+      "severita": "minore",
+      "file": "(nel referto privato)"
+    }
+  ],
+  "domande_per_nicola": [
+    "R03-005: per la lettura di più prodotti da foto, tenere max_tokens 6000 (etichette intere, ma una risposta lunga può superare i 60 s), scendere a circa 3500-4000 (sta nei 60 s ma riapre la troncatura delle etichette lunghe), o dare a questa rotta un tentativo più lungo?",
+    "R03-006: quando l'AI per i negozi si riaccende, riprendere il commit 9136d2120cadb9e1b64beb22ef2303d951b2ca0c con la migrazione 890 e lib/database.types.ts rigenerato, oppure impostare UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN in produzione?"
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "6 subagenti su 8: lotto 1 (grande), lotto 2 (sonnet), smentitore R03-001 (grande), smentitore R03-006 (grande), smentitore delle altre cinque (sonnet), correzione R03-003 (sonnet). Spesa letta da get_session (senza id) prima della consegna: 11,58 $ su un limite di 25 $; il numero si aggiorna a turno chiuso.",
+    "subagenti": 6
+  },
+  "costo_usd": 11.58
+}

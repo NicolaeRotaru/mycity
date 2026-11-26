@@ -15,8 +15,11 @@ import { runMessage, AiCallError, mapAiError, conCacheDelContesto } from '@/lib/
 import { getAttributesForCategory } from '@/lib/category-attributes';
 import {
   eCampoDichiarativo,
+  MAX_DESCRIZIONE_PRODOTTO,
   REGOLA_CAMPI_DICHIARATIVI,
   propostaPerLaChat,
+  tagDelPatch,
+  testoDelPatch,
   type AiProductPatch,
   type CategoryRow,
 } from '@/lib/products/aiPatch';
@@ -175,6 +178,30 @@ function senzaCampiNonVisti<T extends object>(proposta: T): T {
   const copia = { ...proposta } as Record<string, unknown>;
   for (const k of CAMPI_NON_VISTI_IN_IDENTIFICAZIONE) delete copia[k];
   return copia as T;
+}
+
+/**
+ * 26/11/2026 — IL NEGOZIANTE APPLICAVA UNA DESCRIZIONE CHE NON AVEVA LETTO.
+ *
+ * La scheda della proposta dice solo «Descrizione aggiornata» e, dei tag, la
+ * lista nuova: il testo scritto dal modello non si vedeva prima di Applica, e i
+ * tag che sparivano nessuno li nominava. Qui la risposta che la chat mostra
+ * sopra la scheda porta il testo nuovo, come lo scriverebbe il server, e i tag
+ * attuali che la proposta toglie.
+ */
+function daLeggerePrimaDiApplicare(patch: AiProductPatch, prodotto: ProductRow): string {
+  const righe: string[] = [];
+  const descrizione = testoDelPatch(patch.description, MAX_DESCRIZIONE_PRODOTTO);
+  if (descrizione) righe.push(`Descrizione nuova, leggila prima di applicare: «${descrizione}»`);
+  if (Array.isArray(patch.tags)) {
+    const restano = tagDelPatch(patch.tags);
+    const tolti = (Array.isArray(prodotto.tags) ? prodotto.tags : []).filter((t) => {
+      const chiave = tagDelPatch([t])[0];
+      return chiave !== undefined && !restano.includes(chiave);
+    });
+    if (tolti.length) righe.push(`Applicando, questi tag spariscono: ${tolti.join(', ')}.`);
+  }
+  return righe.map((r) => ` ${r}`).join('');
 }
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
@@ -462,9 +489,10 @@ Identifica di quale prodotto parla il venditore e imposta "product_id". Se non s
     const avvisoTolti = tolti.length
       ? ` Attenzione: descrizione, tag e caratteristiche non li ho ancora letti, quindi NON li cambio da qui. Apri il prodotto (si apre da solo con la prossima risposta) e ripeti la richiesta: li vedrai prima di applicare.`
       : '';
+    const daLeggere = matched ? daLeggerePrimaDiApplicare(patch, matched) : '';
 
     return NextResponse.json({
-      reply: `${reply}${avvisoTolti}`,
+      reply: `${reply}${avvisoTolti}${daLeggere}`,
       productId: matched?.id ?? null,
       patch,
       product: matched ? snapshot(matched, categories) : null,
