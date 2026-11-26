@@ -7,6 +7,7 @@ import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-d
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { AiCallError } from '@/lib/ai/run';
+import { TEMPO_TENTATIVO_AI_MS } from '@/lib/ai/client';
 import { fetchExternalSnapshot, ritentoDopoErroreConsentito } from '@/lib/products/externalSync';
 import { isStale, type ExternalData, type Marketplace } from '@/lib/products/externalSyncShared';
 import { detectExternalChange, changeMessage } from '@/lib/products/externalAlert';
@@ -28,6 +29,15 @@ import { detectExternalChange, changeMessage } from '@/lib/products/externalAler
 export const runtime = 'nodejs';
 
 const BATCH = 10; // prodotti per giro (la verifica AI costa)
+
+/**
+ * 26/11/2026 (R03-003) — IL GIRO RESTA DENTRO LA SUA DURATA. Fino a 10 chiamate in fila da
+ * 60 s l'una (TEMPO_TENTATIVO_AI_MS) superavano i 300 s di `vercel.json`: la funzione veniva
+ * spenta a meta' giro. Una chiamata nuova parte solo se, anche impiegando tutto il suo tempo,
+ * finisce prima di (durata - margine); i prodotti rimasti non si toccano e vanno al giro dopo.
+ */
+const DURATA_GIRO_MS = 300_000;
+const MARGINE_GIRO_MS = 30_000;
 
 type Row = {
   id: string;
@@ -98,9 +108,15 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   let modelloNonTrovato = false;
   let rimasti = 0;
   const now = new Date().toISOString();
+  const inizioGiro = Date.now();
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
+    // R03-003 — niente chiamata nuova se non c'e' il tempo di finirla.
+    if (Date.now() - inizioGiro + TEMPO_TENTATIVO_AI_MS > DURATA_GIRO_MS - MARGINE_GIRO_MS) {
+      rimasti = rows.length - i;
+      break;
+    }
     const prev = r.external_data;
     const query = prev?.source_title || r.name || '';
     if (!query) continue;
