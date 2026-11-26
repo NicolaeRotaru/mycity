@@ -73,11 +73,11 @@ export default function ComeFunzionaPage() {
         <div className="grid gap-4 sm:grid-cols-3">
           {REASSURANCE.map((r) => (
             <div key={r.title} className="rounded-2xl border border-cream-300 bg-white p-5 shadow-warm-sm">
-              <div className="mb-2 flex items-center gap-2.5">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-olive-50 text-olive-700">
+              <div className="mb-2 flex min-w-0 items-center gap-2.5">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-olive-50 text-olive-700">
                   <r.Icon size={20} strokeWidth={2.2} aria-hidden />
                 </span>
-                <h2 className="font-serif font-bold text-ink-900">{r.title}</h2>
+                <h2 className="min-w-0 break-words font-serif font-bold text-ink-900">{r.title}</h2>
               </div>
               <p className="text-sm leading-relaxed text-ink-600">{r.desc}</p>
             </div>
