@@ -221,7 +221,7 @@ export default async function AboutPage() {
 
         {/* CTA band scura */}
         <section className="pb-16">
-          <div className="bg-ink-900 text-white rounded-2xl p-8 max-sm:p-5 max-[300px]:p-4 md:p-11 flex flex-col md:flex-row md:items-center md:justify-between gap-7">
+          <div className="bg-ink-900 text-white rounded-2xl p-8 md:p-11 flex flex-col md:flex-row md:items-center md:justify-between gap-7">
             <div className="min-w-0">
               <h2 className="font-serif text-2xl md:text-3xl font-extrabold text-white mb-2 break-words hyphens-auto">
                 Vuoi farne parte?
@@ -231,16 +231,16 @@ export default async function AboutPage() {
                 città — c’è posto per te.
               </p>
             </div>
-            <div className="flex flex-wrap gap-3 min-w-0 max-w-full">
+            <div className="flex flex-wrap gap-3">
               <Link
                 href="/lavora-con-noi"
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 max-[300px]:px-3 max-[300px]:max-w-full min-w-0 max-w-full [overflow-wrap:anywhere] font-bold text-base bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors"
+                className="inline-flex items-center gap-2 rounded-full px-5 py-3 max-[300px]:px-3 max-[300px]:max-w-full font-bold text-base bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors"
               >
                 <Briefcase size={18} strokeWidth={2.2} aria-hidden /> Lavora con noi
               </Link>
               <Link
                 href="/sell"
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 max-[300px]:px-3 max-[300px]:max-w-full min-w-0 max-w-full [overflow-wrap:anywhere] font-bold text-base bg-white/10 text-white border border-white/25 hover:bg-white/20 transition-colors"
+                className="inline-flex items-center gap-2 rounded-full px-5 py-3 max-[300px]:px-3 max-[300px]:max-w-full font-bold text-base bg-white/10 text-white border border-white/25 hover:bg-white/20 transition-colors"
               >
                 <Store size={18} strokeWidth={2.2} aria-hidden /> Apri un negozio
                 <ArrowRight size={16} strokeWidth={2.2} aria-hidden />
