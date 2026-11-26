@@ -258,10 +258,35 @@ export function normalizeCustomization(raw: unknown): StoreCustomization {
   if (!raw || typeof raw !== 'object') return {};
   const parsed = storeCustomizationSchema.safeParse(raw);
   // R01-010 — Un campo fuori regola non butta più via gli altri: si tiene quello che passa.
-  const data = parsed.success ? parsed.data : salvaQuelloCheVale(raw as Record<string, unknown>);
+  const letti = parsed.success ? parsed.data : salvaQuelloCheVale(raw as Record<string, unknown>);
+  const data = conIlSitoGiaSalvato(letti, raw as Record<string, unknown>);
   // Un badge spento già salvato non arriva alla pagina, né all'editor: il prossimo salvataggio lo toglie.
   const { badges } = data;
   return badges ? { ...data, badges: badges.filter(badgeAttivo) } : data;
+}
+
+/**
+ * Un sito GIÀ salvato che le regole di oggi rifiuterebbero (uno spazio nel percorso, «ftp://», scritto male)
+ * si tiene in lettura: altrimenti sparisce dalla vetrina e il primo salvataggio che rilegge la
+ * personalizzazione (ThemePicker, StoreDetailsEditor) lo cancella dal database. Si rifiuta solo un valore
+ * NUOVO, allo schema di salvataggio. Gli schemi che eseguono codice (javascript:, data:…) no: quelli si scartano.
+ * Come link in vetrina si mostra comunque solo http/https (socialLinks).
+ */
+const SCHEMI_PERICOLOSI = /^(?:javascript|vbscript|data|file|blob):/;
+function sitoGiaSalvatoDaTenere(v: unknown): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const w = v.trim();
+  if (!w || w.length > 500) return undefined;
+  // Il browser ignora spazi e caratteri di controllo dentro lo schema («java\tscript:»).
+  if (SCHEMI_PERICOLOSI.test(w.replace(/[\s\u0000-\u001f\u007f-\u009f]/g, '').toLowerCase())) return undefined;
+  return w;
+}
+function conIlSitoGiaSalvato(data: StoreCustomization, raw: Record<string, unknown>): StoreCustomization {
+  if (data.socials?.website !== undefined) return data;
+  const socials = raw.socials;
+  if (!socials || typeof socials !== 'object' || Array.isArray(socials)) return data;
+  const website = sitoGiaSalvatoDaTenere((socials as Record<string, unknown>).website);
+  return website === undefined ? data : { ...data, socials: { ...data.socials, website } };
 }
 
 /**
