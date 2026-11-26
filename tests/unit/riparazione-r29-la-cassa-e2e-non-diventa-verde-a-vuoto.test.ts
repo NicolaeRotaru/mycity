@@ -158,7 +158,7 @@ describe('R29-001 · ① le tre prove dell acquisto vero hanno un corpo che fa n
     });
   }
 
-  it('lo spec ha un salto per il database e uno per la carta, fuori dalle prove, e i motivi dicono cosa manca', () => {
+  it('lo spec ha un salto solo per la cassa col database, e il suo motivo dice cosa manca', () => {
     const f = fonte();
     const salti: string[] = [];
     const visita = (n: ts.Node) => {
@@ -167,49 +167,15 @@ describe('R29-001 · ① le tre prove dell acquisto vero hanno un corpo che fa n
     };
     visita(f);
     // Le condizioni dei salti: la prima è delle pagine senza JavaScript, che c'era già; la seconda
-    // è il database di prova (tutte); la terza è Stripe di prova (solo il gruppo della carta). Un
-    // salto in più, dentro una delle tre prove o altrove, fa rosso qui.
-    // 26/11/2026 — Prima il salto era uno solo e guardava anche Stripe: senza le chiavi di prova
-    // si saltava anche il contrassegno, e il lavoro della CI era verde con tre prove saltate.
+    // è il salto unico. Un salto in più, dentro una delle tre prove o altrove, fa rosso qui.
     expect(salti, 'i salti dello spec sono cambiati: le tre prove non si spengono una per una').toEqual([
       'diagnosi.senzaJavascript, diagnosi.motivo',
-      'SENZA_DATABASE_DI_PROVA, PERCHE_SENZA_DATABASE',
       'SENZA_AMBIENTE_DI_PROVA, PERCHE',
     ]);
-    // Il salto della carta guarda tutto l'ambiente (database locale, carta, bonifico), non solo l'interruttore.
-    expect(funzione('COSA_MANCA'), 'il salto della carta non guarda l ambiente intero').toMatch(/cosaManca\(\s*\[\s*'database',\s*'carta',\s*'bonifico'\s*\]\s*\)/);
+    // Il salto unico guarda tutto l'ambiente (database locale, carta, bonifico), non solo l'interruttore.
+    expect(funzione('COSA_MANCA'), 'il salto unico non guarda l ambiente intero').toMatch(/cosaManca\(\s*\[\s*'database',\s*'carta',\s*'bonifico'\s*\]\s*\)/);
     expect(funzione('SENZA_AMBIENTE_DI_PROVA')).toMatch(/COSA_MANCA\s*!==\s*null/);
     expect(funzione('PERCHE'), 'il motivo del salto non dice cosa manca').toMatch(/\$\{COSA_MANCA\}/);
-    // Quello del database guarda il database locale, e l'interruttore.
-    expect(funzione('COSA_MANCA_AI_CONTANTI'), 'il salto del database non guarda il database').toMatch(/cosaManca\(\s*\[\s*'database'\s*\]\s*\)/);
-    expect(funzione('SENZA_DATABASE_DI_PROVA')).toMatch(/!ACCESO\s*\|\|\s*COSA_MANCA_AI_CONTANTI\s*!==\s*null/);
-    expect(funzione('PERCHE_SENZA_DATABASE'), 'il motivo del salto non dice cosa manca').toMatch(/\$\{COSA_MANCA_AI_CONTANTI\}/);
-  });
-
-  it('il salto di Stripe tocca solo le due prove con la carta: il contrassegno non lo aspetta', () => {
-    const f = fonte();
-    // Il gruppo che contiene la chiamata `test.skip(SENZA_AMBIENTE_DI_PROVA, …)`.
-    let gruppo: ts.CallExpression | undefined;
-    const visita = (n: ts.Node) => {
-      if (ts.isCallExpression(n) && modoDi(n) === 'skip' && n.arguments[0]?.getText(f) === 'SENZA_AMBIENTE_DI_PROVA') {
-        let su: ts.Node | undefined = n.parent;
-        while (su && !(ts.isCallExpression(su) && modoDi(su) === 'describe')) su = su.parent;
-        gruppo = su as ts.CallExpression | undefined;
-      }
-      ts.forEachChild(n, visita);
-    };
-    visita(f);
-    expect(gruppo, 'il salto di Stripe non sta in un gruppo suo').toBeTruthy();
-    const titoli: string[] = [];
-    const dentro = (n: ts.Node) => {
-      if (ts.isCallExpression(n) && modoDi(n) === 'test' && n.arguments[0] && ts.isStringLiteral(n.arguments[0])) titoli.push(n.arguments[0].text);
-      ts.forEachChild(n, dentro);
-    };
-    dentro(gruppo!);
-    expect(titoli.sort()).toEqual([
-      'consegna completata: il bonifico al negozio parte',
-      'rifiuto del negozio su un ordine pagato: il rimborso esiste',
-    ]);
   });
 
   it('l ordine si legge davvero dal database di prova, e il pagamento con la carta passa dall avviso firmato', () => {

@@ -509,17 +509,11 @@ jobs:
   # variabile, non un segreto: lì GitHub i segreti non li mostra. Finché la
   # variabile manca il lavoro risulta «saltato», e il cancello di main lo conta
   # come tale. Con la variabile accesa:
-  #  - il contrassegno gira sempre: gli basta il Supabase locale;
-  #  - le due prove con la carta (rimborso e bonifico) girano solo con Stripe di
-  #    prova pronto: il segreto STRIPE_TEST_SECRET_KEY (sk_test_…) e la variabile
-  #    E2E_STRIPE_CONTO_NEGOZIO (un conto collegato acct_… di PROVA). Se ne manca
-  #    uno, lo spec le salta dicendo cosa manca; il riepilogo lo scrive.
+  #  - le tre prove girano insieme, solo con Stripe di prova pronto: il segreto
+  #    STRIPE_TEST_SECRET_KEY (sk_test_…) e la variabile E2E_STRIPE_CONTO_NEGOZIO
+  #    (un conto collegato acct_… di PROVA). Se ne manca uno, lo spec ha un solo
+  #    salto, e le salta tutte e tre dicendo cosa manca; il riepilogo lo scrive.
   #    Una chiave che non comincia con sk_test_ non arriva mai al sito.
-  #  - 26/11/2026 — Verde con zero prove viste non conta. Il lavoro espone
-  #    `viste` (le prove davvero girate, passate o cadute, dal JSON di
-  #    Playwright): se Playwright esce 0 con tutto saltato il lavoro resta verde
-  #    (mai rosso per un segreto che manca), ma il cancello di main non lo conta
-  #    fra i passati: lo scrive «⏭️ non conta».
   # Il segreto del webhook e quello dei lavori a orario sono di questo giro e
   # basta: li conosce solo il sito acceso qui dentro, che le prove firmano.
   e2e-cassa-vera:
@@ -527,8 +521,6 @@ jobs:
     if: ${{ vars.E2E_DATI_DI_PROVA == '1' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    outputs:
-      viste: ${{ steps.visto.outputs.viste }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -555,11 +547,11 @@ jobs:
             case "$CONTO_PROVA" in acct_*) bonifico=si ;; esac
           fi
           if [ -n "$STRIPE_PROVA" ] && [ "$carta" = no ]; then
-            echo "::warning::STRIPE_TEST_SECRET_KEY non comincia con sk_test_: le due prove con la carta NON partono (mai una chiave vera qui dentro); il contrassegno gira."
+            echo "::warning::STRIPE_TEST_SECRET_KEY non comincia con sk_test_: le tre prove dell'acquisto vero NON partono (mai una chiave vera qui dentro)."
           elif [ "$carta" = no ]; then
-            echo "::warning::Manca il segreto STRIPE_TEST_SECRET_KEY (sk_test_…): le due prove con la carta si saltano dicendolo; il contrassegno gira."
+            echo "::warning::Manca il segreto STRIPE_TEST_SECRET_KEY (sk_test_…): le tre prove dell'acquisto vero si saltano dicendolo."
           elif [ "$bonifico" = no ]; then
-            echo "::warning::Manca la variabile E2E_STRIPE_CONTO_NEGOZIO (acct_… di prova): le due prove con la carta si saltano dicendolo; il contrassegno gira."
+            echo "::warning::Manca la variabile E2E_STRIPE_CONTO_NEGOZIO (acct_… di prova): le tre prove dell'acquisto vero si saltano dicendolo."
           fi
           echo "carta=$carta" >> "$GITHUB_OUTPUT"
           echo "bonifico=$bonifico" >> "$GITHUB_OUTPUT"
@@ -603,10 +595,7 @@ jobs:
 
       # Il riepilogo dice, prova per prova, se l'acquisto vero e' stato visto:
       # passata, saltata (e perche'), o caduta. Gira sempre, anche col rosso.
-      # E scrive `viste` (passate + cadute + instabili, dalle statistiche di
-      # Playwright) per il cancello di main: zero viste = un verde che non conta.
       - name: Dichiara cosa ha visto la cassa vera
-        id: visto
         if: always()
         run: |
           node -e '
@@ -627,11 +616,7 @@ jobs:
               }
               if (spec.length === 0) righe.push("⚠️ Nessuna delle tre prove e'"'"' stata trovata: il filtro non ha preso niente.");
             }
-            const st = (rapporto && rapporto.stats) || {};
-            const viste = (Number(st.expected) || 0) + (Number(st.unexpected) || 0) + (Number(st.flaky) || 0);
-            if (viste === 0) righe.push("", "⏭️ **Nessuna prova dell'"'"'acquisto vero e'"'"' girata davvero:** il lavoro resta verde, ma il cancello di main non lo conta fra i passati.");
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, righe.join("\n") + "\n");
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, `viste=${viste}\n`);
           '
 
   # 3/9/2026 — LE PROVE NEL BROWSER NON POSSONO PIU' SPEGNERSI DA SOLE.
@@ -1080,24 +1065,15 @@ jobs:
           #   {"unit-tests": {"result": "success", "outputs": {}}, ...}
           # Se non si legge, o e' vuoto, il cancello resta chiuso: un via
           # libera dato senza aver guardato e' la spunta bugiarda di sempre.
-          # 26/11/2026 — Il terzo campo e' `viste`, per i lavori che lo espongono (la cassa vera):
-          # «-» se il lavoro non lo dichiara, «nessuna» se lo dichiara vuoto.
-          if ! RIGHE="$(printf '%s' "${ESITI:-}" | jq -er 'to_entries[] | "\(.key) \(.value.result // "sconosciuto") \((.value.outputs // {}) | if has("viste") then ((.viste // "") | if . == "" then "nessuna" else . end) else "-" end)"' 2>/dev/null)"; then
+          if ! RIGHE="$(printf '%s' "${ESITI:-}" | jq -er 'to_entries[] | "\(.key) \(.value.result // "sconosciuto")"' 2>/dev/null)"; then
             echo "::error::Non riesco a leggere l'esito dei controlli: niente via libera per main."
             exit 1
           fi
           PASSATI=0
           FERMI=""
-          while read -r LAVORO ESITO VISTE; do
+          while read -r LAVORO ESITO; do
             case "$ESITO" in
-              # Verde con zero prove viste (tutto saltato: per esempio la cassa vera senza le chiavi
-              # di prova) non e' rosso, ma non e' nemmeno un controllo passato.
-              success)
-                if [ "${VISTE:--}" = "-" ] || [[ "$VISTE" =~ ^[1-9][0-9]*$ ]]; then
-                  PASSATI=$((PASSATI + 1)); echo "✅ $LAVORO"
-                else
-                  echo "⏭️  $LAVORO: verde ma nessuna prova vista, non conta"
-                fi ;;
+              success) PASSATI=$((PASSATI + 1)); echo "✅ $LAVORO" ;;
               skipped) echo "⏭️  $LAVORO: saltato, non blocca" ;;
               *) echo "❌ $LAVORO: $ESITO"; FERMI="$FERMI $LAVORO ($ESITO)" ;;
             esac

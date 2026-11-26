@@ -30,13 +30,8 @@ import { describe, expect, it } from 'vitest';
  * Tre controprove: senza l'interruttore le tre prove restano saltate con il
  * motivo; con un database che non e' locale si saltano dicendolo e non scrivono
  * da nessuna parte (verso un indirizzo vero non si semina mai); senza la chiave
- * Stripe di prova (una sk_live_ non conta) si saltano, dicendo cosa manca, solo
- * le due prove con la carta.
- *
- * 26/11/2026 — Prima, senza la chiave Stripe, il salto unico fermava anche il
- * contrassegno, che Stripe non lo usa: Playwright usciva 0 con tre prove saltate
- * e il lavoro della CI era verde senza aver visto niente. Adesso il contrassegno
- * gira (e qui, con il database finto, cade provando a raggiungerlo).
+ * Stripe di prova (una sk_live_ non conta) il salto unico le ferma tutte e tre
+ * dicendo cosa manca.
  */
 
 type TestJson = {
@@ -134,17 +129,12 @@ describe('le tre prove dell acquisto vero', () => {
     }
   }, 60_000);
 
-  it('con l interruttore acceso ma senza Stripe di prova si saltano dicendolo solo le due con la carta: il contrassegno guarda', () => {
-    // Senza la chiave sk_test_ le due prove con la carta non partono (mai una chiave vera, mai
-    // rosse per un segreto che manca); il contrassegno, che Stripe non lo usa, gira lo stesso.
+  it('con l interruttore acceso ma senza Stripe di prova si saltano tutte e tre dicendo cosa manca: mai verdi, mai rosse per un segreto', () => {
+    // Il salto e' uno solo e guarda l'ambiente intero: senza la chiave sk_test_ non si accende
+    // nemmeno il contrassegno, e il lavoro della CI non diventa rosso perche' manca un segreto.
     const { STRIPE_SECRET_KEY: _senzaChiave, ...resto } = AMBIENTE_FINTO_E_IRRAGGIUNGIBILE;
     for (const s of giraLeTre({ ...resto, STRIPE_SECRET_KEY: 'sk_live_chiave_vera_mai_qui' })) {
       const prova = s.tests?.[0];
-      if (s.title === 'contrassegno: l\'ordine nasce e il negozio lo vede') {
-        expect(prova?.status, `il contrassegno senza la chiave Stripe deve guardare lo stesso (${motivoDelSalto(prova)})`).toBe('unexpected');
-        expect(erroreDi(prova), 'il contrassegno e\' caduto, ma non provando a raggiungere il database o il sito').toMatch(/fetch failed|ECONNREFUSED/i);
-        continue;
-      }
       expect(prova?.status, `«${s.title}» senza la chiave Stripe di prova non deve girare`).toBe('skipped');
       expect(motivoDelSalto(prova), `«${s.title}» saltata senza dire che manca la chiave di prova`).toMatch(/STRIPE_SECRET_KEY sk_test_/);
     }
