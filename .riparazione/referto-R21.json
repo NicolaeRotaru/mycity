@@ -1,6 +1,6 @@
 {
   "sessione": "R21",
-  "aggiornato": "2026-11-26 20:05",
+  "aggiornato": "2026-11-26 23:30",
   "finita": true,
   "testa": "10b630596839d63f761b09b992bc6b6a1e4742ae",
   "verifica": {
@@ -53,7 +53,7 @@
     {
       "id": "R21-002",
       "chiave": "frontend-ux|le foto dell'iphone (heic) adesso entrano davvero, ma nessuno le converte: sul telefono android e su chrome restano un riquadro rotto",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "9ac969cff4796d08e0dffac53b275b72f6faeb74",
       "file_toccati": [
         "components/PhotoReviewUpload.tsx",
@@ -73,15 +73,34 @@
         "uscita": 0,
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d1baf1e715603c3ab22f1add2e65ee94fa8ab49d^ --file components/PhotoReviewUpload.tsx,app/seller/stories/page.tsx,components/seller/site/GalleryFields.tsx,components/seller/site/ImageUpload.tsx --prove tests/unit/riparazione-r21-foto-heic.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Come le foto prodotto: nei quattro punti l'accept non elenca più HEIC/HEIF, così l'iPhone le converte da solo in JPEG; un .heic che arriva lo stesso (image/heic, o tipo vuoto da PC riconosciuto dall'estensione) non parte e mostra una frase chiara.",
       "nota": "Due commit col prefisso R21-002: d1baf1e715603c3ab22f1add2e65ee94fa8ab49d la riparazione, 9ac969cff4796d08e0dffac53b275b72f6faeb74 la correzione (ogni casella tiene la sua regola, niente import fra i due file). Prova rossa senza correzione (18/21 fallite), verde con (21/21). 57 file di prove esistenti (394) verdi; nessuna prova esistente modificata.",
-      "verificato_da": "smentitore grande (worktree staccato a 9ac969cf): regge. Prova 21/21, rimessa uscita 0, 44 file di prove vicine (317 casi) verdi, tsc ed eslint puliti; varianti .HEIC/.Heif, octet-stream, heic-sequence, tipo vuoto, scelto e trascinato, 11 MB, più file insieme: l'HEIC non parte e gli altri sì; JPG/PNG/WEBP/GIF/AVIF partono ancora, accept sempre esplicito (mai image/*). Lievi: un file image/heic chiamato .jpg entra nelle due caselle della vetrina (GalleryFields.tsx:62, ImageUpload.tsx:35); .heics/.heifs non riconosciute come HEIC ma fermate comunque; la frase nomina l'iPhone anche per chi ha HEIF da Android."
+      "verificato_da": "smentitore grande (worktree staccato a 9ac969cf): regge. Prova 21/21, rimessa uscita 0, 44 file di prove vicine (317 casi) verdi, tsc ed eslint puliti; varianti .HEIC/.Heif, octet-stream, heic-sequence, tipo vuoto, scelto e trascinato, 11 MB, più file insieme: l'HEIC non parte e gli altri sì; JPG/PNG/WEBP/GIF/AVIF partono ancora, accept sempre esplicito (mai image/*). Lievi: un file image/heic chiamato .jpg entra nelle due caselle della vetrina (GalleryFields.tsx:62, ImageUpload.tsx:35); .heics/.heifs non riconosciute come HEIC ma fermate comunque; la frase nomina l'iPhone anche per chi ha HEIF da Android. Collaudo K07: parziale (tre punti fuori dalla voce accettano ancora HEIC).",
+      "cosa_resta": "Collaudo K07: i quattro campi della voce reggono, ma tre punti di caricamento accettano ancora HEIC tramite mappaAccept() (che contiene image/heic): components/VendorForm.tsx:220 (logo del negozio), components/StoreMediaManager.tsx:55 (foto del negozio), components/ImageUrlField.tsx:63 (banner dell'amministrazione). VendorForm è mio, ma la prova comune tests/unit/riparazione-r16-foto-sette-tipi.test.tsx (monta VendorForm E ImageUrlField, :93-132) pretende che tutti e due accettino HEIC: senza toccare quella prova comune non si chiude.",
+      "serve_file_altrui": [
+        {
+          "file": "components/StoreMediaManager.tsx",
+          "modifica": "A :55 sostituire `accept: mappaAccept(),` con un accept senza HEIC/HEIF: `accept: Object.fromEntries(Object.entries(mappaAccept()).filter(([t]) => t !== 'image/heic' && t !== 'image/heif')),`; in onDrop e onDropRejected, un file con type image/heic|image/heif (anche -sequence) o con estensione .heic/.heif (maiuscole comprese, anche con type vuoto o application/octet-stream) non parte e mostra «Le foto HEIC non si vedono su Android e su Chrome: dal telefono scegli la foto dalla galleria (l'iPhone la converte da solo in JPG) o caricala in JPG/PNG.» Stesso schema già sul ramo in components/seller/site/GalleryFields.tsx (commit 9ac969cff4796d08e0dffac53b275b72f6faeb74)."
+        },
+        {
+          "file": "components/ImageUrlField.tsx",
+          "modifica": "A :63 stessa modifica: `accept: Object.fromEntries(Object.entries(mappaAccept(bucket)).filter(([t]) => t !== 'image/heic' && t !== 'image/heif')),` e lo stesso rifiuto con frase chiara per l'HEIC che arriva lo stesso."
+        },
+        {
+          "file": "components/VendorForm.tsx",
+          "modifica": "A :220 stessa modifica sul logo (file di R21, ma va fatta insieme alla prova comune qui sotto)."
+        },
+        {
+          "file": "tests/unit/riparazione-r16-foto-sette-tipi.test.tsx",
+          "modifica": "Prova comune (importa VendorForm e ImageUrlField): i tre casi di :107-131 vanno rovesciati per le due caselle: l'accept deve essere TIPI_IMMAGINE meno image/heic e image/heif; il messaggio dei formati scartati non deve nominare HEIC fra gli ammessi; un 'IMG_0001.HEIC' col tipo vuoto NON deve partire e deve comparire la frase sull'HEIC. Serve la firma di chi tiene le prove comuni."
+        }
+      ]
     },
     {
       "id": "R21-003",
       "chiave": "flussi-conversione|il filtro «prezzo minimo» taglia sul prezzo pieno, non su quello che il cliente paga",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "4468a8abc3fb949d397c995f60ff06b7a58261e3",
       "file_toccati": [
         "lib/queries/griglia-prodotti.ts",
@@ -101,10 +120,11 @@
         "uscita": 0,
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4468a8abc3fb949d397c995f60ff06b7a58261e3^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r21-prezzo-minimo.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Il minimo (lettura e conteggio) filtra su prezzo_pagato. Ripiego: una sonda per client ricorda se la colonna c'è (se manca riprova dopo 5 minuti); se una lettura cade con 42703/42883 o con un PGRST che nomina prezzo_pagato, la griglia rilegge alla vecchia maniera e il conteggio riprova sul prezzo pieno.",
       "nota": "MIGRAZIONE 911_il_prezzo_che_si_paga_lo_calcola_il_database.sql (fascia 911-915, non applicata): contenuto finale della vecchia 960 più la regola della 709 (negozio_in_vetrina(seller) OR seller = auth.uid()), SECURITY INVOKER, GRANT EXECUTE come la 425. Le migrazioni dopo la 709 (880 compresa) non toccano promozioni né negozio_in_vetrina; 900/910/940/970 non ridefiniscono prezzo_pagato. Prova SQL 14 controlli; rimessa della migrazione: regge, uscita 0 (PGHOST=/var/run/postgresql PGUSER=root timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4468a8abc3fb949d397c995f60ff06b7a58261e3^ --file migrations/911_il_prezzo_che_si_paga_lo_calcola_il_database.sql --prove tests/sql/rls/riparazione-r21-prezzo-pagato.test.sql --sql r21_rimessa --json). Tutte le prove SQL di tests/sql/rls verdi con la 911. Il comportamento nuovo vale quando Nicola applica la 911; prima il minimo resta sul prezzo pieno, senza errori. database.types.ts non cambia (Functions: never).",
-      "verificato_da": "smentitore (sonnet, worktree a 748e1aaf): regge. 4 prove del lotto 23/23, rimessa a campione uscita 0, 54 file di prove accanto (298) verdi, tsc pulito; ripiego letto: 42703/42883/PGRST su prezzo_pagato riconosciuti, la sonda caduta per rete non si ricorda e non manda in errore, il conteggio ripiega su ogni errore; migrazione 911 INVOKER, STABLE, search_path fisso, regola identica alla 709 e a discountedUnitCents (tetto 70%, arrotondamento; 19,99 € al -50% = 9,99 € in SQL e JS)."
+      "verificato_da": "smentitore (sonnet, worktree a 748e1aaf): regge. 4 prove del lotto 23/23, rimessa a campione uscita 0, 54 file di prove accanto (298) verdi, tsc pulito; ripiego letto: 42703/42883/PGRST su prezzo_pagato riconosciuti, la sonda caduta per rete non si ricorda e non manda in errore, il conteggio ripiega su ogni errore; migrazione 911 INVOKER, STABLE, search_path fisso, regola identica alla 709 e a discountedUnitCents (tetto 70%, arrotondamento; 19,99 € al -50% = 9,99 € in SQL e JS). Collaudo K07: rompe_altro (scala della 911, 57014, conteggio).",
+      "cosa_resta": "Collaudo K07 (rompe altro): prezzo_pagato è una funzione con SET search_path, non si srotola nella query e non si indicizza: misurato da anon 449 ms su 2.000 prodotti e 4.991 ms su 20.000 (oltre 6-7 mila prodotti si supera il limite di 3 s di anon). Il ripiego non riconosce l'errore 57014, e griglia-prodotti.ts:593 (if (error && pagato)) riconta sul prezzo pieno per qualunque errore, timeout compreso: il numero sopra la griglia non torna con la lista. Correzione chiesta dalla regia (911 veloce provata con 20.000 prodotti, 57014 nel ripiego, conteggio sulla stessa strada della lista) NON fatta: il freno sugli agenti ha fermato il lancio numero 9. Fino ad allora la 911 NON va applicata in produzione senza contare il catalogo (sotto mille prodotti circa 0,25 s a richiesta)."
     },
     {
       "id": "R21-005",
@@ -314,7 +334,7 @@
     {
       "id": "R21-016",
       "chiave": "frontend-ux|il campo sito del negozio accetta uno spazio nel percorso (https://negozio.it/a b) e lo salva con lo spazio",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "7f8588fa6cbf354216b164f92f4c07bce25a837d",
       "file_toccati": [
         "lib/store-customization.ts",
@@ -331,9 +351,13 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7f8588fa6cbf354216b164f92f4c07bce25a837d^ --file lib/store-customization.ts --prove tests/unit/riparazione-r21-sito-percorso-con-spazio.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "websiteSchema rifiuta qualsiasi spazio nell'indirizzo; normalizzaSocials non mette più https:// davanti a «//negozio.it», che resta com'è e viene rifiutato dallo schema.",
-      "verificato_da": "smentitore (sonnet, worktree a 10b63059): 6 file di prove nuove 49/49, prove accanto ai file toccati 144 file/1094 verdi. Regge: rifiutati spazio nel percorso, tab, nbsp, a capo, spazio nel dominio e nel frammento, //negozio.it; accettati %20, ?a=b, spazio solo in fondo. Rimessa uscita 0."
+      "verificato_da": "smentitore (sonnet, worktree a 10b63059): 6 file di prove nuove 49/49, prove accanto ai file toccati 144 file/1094 verdi. Regge: rifiutati spazio nel percorso, tab, nbsp, a capo, spazio nel dominio e nel frammento, //negozio.it; accettati %20, ?a=b, spazio solo in fondo. Rimessa uscita 0. Collaudo K07: rompe_altro (valori già salvati scartati in silenzio).",
+      "cosa_resta": "Collaudo K07 (rompe altro): un sito già salvato con la regola vecchia (es. 'https://negozio.it/a b') ora viene scartato da normalizeCustomization (lib/store-customization.ts:257): sparisce dalla vetrina (components/store-sections/useStorePageData.ts:113) e si cancella al primo cambio di colore (components/seller/site/ThemePicker.tsx:65) o di dettagli. Va chiusa insieme a R21-012: normalizeCustomization deve tenere i valori già salvati (tranne gli schemi pericolosi come javascript:) e rifiutare solo quelli nuovi. Correzione NON fatta: il freno sugli agenti ha fermato il lancio numero 9.",
+      "insieme_a": [
+        "R21-012"
+      ]
     },
     {
       "id": "R21-012",
@@ -357,9 +381,12 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Un sito già salvato (es. ftp://sito.it) e non toccato non blocca più il salvataggio: per il controllo si lascia vuoto e poi si rimette com'era, con l'avviso «Il resto è salvato; Sito web è rimasto com'era». Un sito nuovo sbagliato resta rifiutato.",
-      "cosa_resta": "Solo per il campo sito. Per Instagram/Facebook/TikTok un valore già salvato che le regole rifiutano blocca ancora: la prova comune tests/unit/riparazione-r02-social-link-incollati.test.tsx usa defaultValues come valore salvato e pretende il blocco; estendere ai social la contraddice (non toccata). Serve decidere se quella prova va riscritta digitando il valore invece di salvarlo.",
+      "cosa_resta": "Collaudo K07 (non regge): sul sito vero StoreDetailsEditor.tsx:98 passa a VendorForm i dati già passati da normalizeCustomization (lib/store-customization.ts:257), che scarta 'ftp://sito.it' prima che arrivi al modulo: la logica di VendorForm.tsx:314-333 non scatta mai e il sito sparisce dal database al primo salvataggio (sonda: normalizeCustomization({socials:{website:'ftp://sito.it',instagram:'x'}}) restituisce solo instagram). Si chiude con R21-016 correggendo normalizeCustomization; NON fatto: il freno sugli agenti ha fermato il lancio numero 9. Resta anche il caso dei social con nome (prova comune riparazione-r02-social-link-incollati).",
       "nota": "Prove esistenti che importano VendorForm: 22 file/156 prove verdi, nessuna toccata.",
-      "verificato_da": "smentitore (sonnet, worktree a 10b63059): 6 file di prove nuove 49/49, prove accanto ai file toccati 144 file/1094 verdi. Regge come parziale (VendorForm.tsx:314-332): svuotato e corretto ragionati sul codice, non provati; con sito salvato ftp E un sito nuovo sbagliato il salvataggio resta bloccato (come prima)."
+      "verificato_da": "smentitore (sonnet, worktree a 10b63059): 6 file di prove nuove 49/49, prove accanto ai file toccati 144 file/1094 verdi. Regge come parziale (VendorForm.tsx:314-332): svuotato e corretto ragionati sul codice, non provati; con sito salvato ftp E un sito nuovo sbagliato il salvataggio resta bloccato (come prima). Collaudo K07: non_regge (la correzione gira solo nella prova).",
+      "insieme_a": [
+        "R21-016"
+      ]
     },
     {
       "id": "R21-013",
@@ -468,9 +495,9 @@
   ],
   "conto": {
     "agenti": 8,
-    "nota": "8 subagenti: 4 riparatori (lotti 1-3 modello grande, lotto 4 sonnet) e 4 smentitori (lotti 1-2 grande, 3-4 sonnet), in una copia separata (worktree) per non sporcare l'albero.",
+    "nota": "8 subagenti: 4 riparatori (lotti 1-3 modello grande, lotto 4 sonnet) e 4 smentitori (lotti 1-2 grande, 3-4 sonnet), in una copia separata (worktree) per non sporcare l'albero. Giro di correzione K07 (26/11 sera): il lancio del subagente numero 9 è stato fermato dal freno sugli agenti (tetto 8 del riparatore-gravi); referto allineato al collaudo, nessun codice cambiato.",
     "subagenti": 8,
-    "costo_usd": 23.73
+    "costo_usd": 24.18
   },
-  "costo_usd": 23.73
+  "costo_usd": 24.18
 }
