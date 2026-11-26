@@ -21,7 +21,8 @@ vi.mock('@/lib/rate-limit', () => ({
   getClientIp: () => '1.2.3.4',
 }));
 vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: async () => 'scritto' }));
-vi.mock('@/lib/agenzia/nuovo-cliente-n8n', () => ({
+vi.mock('@/lib/agenzia/nuovo-cliente-n8n', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
   cittaDallIndirizzo: () => null,
   inviaNuovaAttivitaAlFlusso: async () => undefined,
 }));
