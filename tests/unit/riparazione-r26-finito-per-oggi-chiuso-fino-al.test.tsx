@@ -9,10 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import StoreHoursEditor from '@/components/seller/StoreHoursEditor';
-import { isStoreClosedForOrder, negozioPuoServire, romeNow } from '@/lib/store-hours';
+import { isStoreClosedForOrder, negozioPuoServire, romeNow, type StoreHoursConSegni } from '@/lib/store-hours';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
-
-type StoreHoursConSegni = Parameters<typeof StoreHoursEditor>[0]['value'];
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
