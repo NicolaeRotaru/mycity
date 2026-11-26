@@ -251,11 +251,13 @@ const SignInForm = () => {
       // diceva: il canale restava «sconosciuto» e i due ingressi non si
       // potevano confrontare.
       if (data?.user?.id) trackSignedIn(data.user.id, 'email');
-      // Atterra sulla home del ruolo (seller/rider/admin) così, dopo un cambio
-      // account, non resti sulla pagina del ruolo precedente. I buyer rispettano
-      // l'eventuale returnTo (es. checkout).
+      // Senza un ritorno atterra sulla home del ruolo (seller/rider/admin) così,
+      // dopo un cambio account, non resti sulla pagina del ruolo precedente.
+      // R10-001 — Un ritorno (già pulito da `safeInternalPath`: un indirizzo
+      // esterno diventa '/') vale per tutti i ruoli: prima amministratore,
+      // negozio e fattorino lo perdevano, per esempio verso /accetta-condizioni.
       let dest = returnTo;
-      if (data?.user?.id) {
+      if (data?.user?.id && returnTo === '/') {
         try {
           const { data: prof } = await supabase
             .from('profiles').select('role').eq('id', data.user.id).single();
