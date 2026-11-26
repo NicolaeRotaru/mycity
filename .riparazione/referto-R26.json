@@ -1,6 +1,6 @@
 {
   "sessione": "R26",
-  "aggiornato": "2026-11-26 17:45",
+  "aggiornato": "2026-11-26 17:50",
   "finita": true,
   "testa": "51f5a265a10c7094878da9c97cb1087b1904a569",
   "verifica": {
@@ -417,6 +417,8 @@
   ],
   "conto": {
     "agenti": 4,
-    "nota": "3 lotti (il primo sul modello grande, gli altri due sul piccolo) e 1 revisore sul piccolo. Il ramo ha un'unione (d3975f44257cb1111661470bc5e0a09eeb8de59a, -s ours) perché un subagente ha ricucito un commit già spinto: segnalata alla regista."
-  }
+    "nota": "3 lotti (il primo sul modello grande, gli altri due sul piccolo) e 1 revisore sul piccolo. Il ramo ha un'unione (d3975f44257cb1111661470bc5e0a09eeb8de59a, -s ours) perché un subagente ha ricucito un commit già spinto: segnalata alla regista.",
+    "subagenti": 4
+  },
+  "costo_usd": 16.89
 }
