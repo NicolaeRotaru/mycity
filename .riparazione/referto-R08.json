@@ -392,6 +392,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "2 riparatori (lotto 1 modello grande, lotto 2 sonnet) e 4 collaudatori sul modello grande; i due giri di correzione chiesti dal collaudo (R08-001, R08-005) li ho fatti io perché il tetto dei subagenti era raggiunto. Spesa letta da get_session: 19,12 $ su un tetto di 20 $; consegnato all'80% come da regole."
-  }
+    "nota": "2 riparatori (lotto 1 modello grande, lotto 2 sonnet) e 4 collaudatori sul modello grande; i due giri di correzione chiesti dal collaudo (R08-001, R08-005) li ho fatti io perché il tetto dei subagenti era raggiunto. Spesa letta da get_session: 19,12 $ su un tetto di 20 $; consegnato all'80% come da regole.",
+    "subagenti": 6
+  },
+  "costo_usd": 19.12
 }
