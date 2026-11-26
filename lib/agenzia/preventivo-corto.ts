@@ -16,18 +16,18 @@ export const SERVIZI_IN_BREVE: Record<Abbonamento, Record<ServizioAgenzia, strin
     foto_video: 'Foto all’avvio: copertina e prodotti principali',
     sito_web: 'Un sito di una pagina col tuo nome',
     social: '8 post al mese e la scheda Google sistemata',
-    analisi: 'Un’analisi completa all’avvio',
+    analisi: 'Il rapporto all’avvio, coi concorrenti vicini',
   },
   business: {
     foto_video: 'Foto all’avvio e ogni tre mesi, un video al mese',
     sito_web: 'Un sito completo di più pagine',
     social: '12 post e 2 video al mese, scheda Google e recensioni',
-    analisi: 'Un’analisi nuova ogni mese',
+    analisi: 'Il rapporto ogni mese, coi concorrenti sui social',
   },
   premium: {
     foto_video: 'Foto e video nuovi ogni mese',
     sito_web: 'Un sito completo, aggiornato ogni mese',
     social: '20 post e 4 video al mese, scheda Google curata ogni mese',
-    analisi: 'L’analisi ogni settimana e un incontro al mese',
+    analisi: 'Il rapporto ogni settimana e un incontro al mese',
   },
 };

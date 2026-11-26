@@ -5,7 +5,8 @@ import { CorpoTroppoGrande, jsonRichiesta } from '@/lib/api/corpo';
 import { segretiCombaciano } from '@/lib/api/segreti';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { SchedaInArrivo } from '@/lib/agenzia/scheda-cliente';
+import { SchedaInArrivo, leggiSchedaSalvata, type SchedaCliente } from '@/lib/agenzia/scheda-cliente';
+import { analisiDaSalvare, campiDaSalvare, unisciSchedaParziale } from '@/lib/agenzia/rapporto';
 import { analizzaSitoDopoLaRisposta } from '@/lib/agenzia/sito-pagespeed';
 import { indirizzoWebPubblico } from '@/lib/indirizzi-pubblici';
 
@@ -66,7 +67,9 @@ export async function POST(req: Request): Promise<NextResponse> {
     const primo = esito.error.issues[0];
     return ApiErrors.invalidRequest(`Scheda non valida: ${primo?.path.join('.') || 'corpo'} — ${primo?.message ?? ''}`.trim());
   }
-  const scheda = esito.data;
+  // 26/11/2026 — Parere legale: i dati di Google non si salvano. Della scheda Google resta solo il place_id, e i
+  // campi letti da una pagina di Google Maps o TripAdvisor non entrano (lib/agenzia/rapporto.ts).
+  const scheda = { ...esito.data, campi: campiDaSalvare(esito.data.campi), analisi: analisiDaSalvare(esito.data.analisi) };
   const id = scheda.id_attivita.toLowerCase();
   if (id.startsWith(PREFISSO_DI_SISTEMA)) return ApiErrors.invalidRequest('I negozi di sistema non hanno una scheda cliente.');
 
@@ -80,9 +83,20 @@ export async function POST(req: Request): Promise<NextResponse> {
     return ApiErrors.notFound('Nessuna attività con questo id.');
   }
 
+  // 26/11/2026 — Contratto v1.3, regola 8: una scheda parziale si unisce a quella che c'è, non la sostituisce.
+  let daSalvare: SchedaCliente = scheda;
+  if (scheda.parziale) {
+    const prima = await admin.from('schede_clienti').select('scheda').eq('id_attivita', id).maybeSingle();
+    if (prima.error) {
+      logger.error('[scheda-cliente] scheda di prima non letta: la parziale non si salva', { id, message: prima.error.message });
+      return ApiErrors.unavailable('Riprova fra poco.');
+    }
+    daSalvare = unisciSchedaParziale(leggiSchedaSalvata((prima.data as { scheda?: unknown } | null)?.scheda), scheda);
+  }
+
   const adesso = new Date().toISOString();
   const { error } = await admin.from('schede_clienti').upsert(
-    { id_attivita: id, scheda: { ...scheda, id_attivita: id }, origine: (scheda.origine ?? 'n8n-16').slice(0, 40), aggiornata_il: adesso },
+    { id_attivita: id, scheda: { ...daSalvare, id_attivita: id }, origine: (scheda.origine ?? 'n8n-16').slice(0, 40), aggiornata_il: adesso },
     { onConflict: 'id_attivita' },
   );
   if (error && String((error as { code?: string }).code) === '23514') {

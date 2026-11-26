@@ -43,8 +43,12 @@ SET LOCAL ROLE authenticated;
 DO $$
 DECLARE n int; esito text;
 BEGIN
-  SELECT count(*) INTO n FROM public.schede_clienti;
-  INSERT INTO esiti VALUES ('il negozio legge la sua scheda', n = 1, n || ' righe');
+  -- 864 (26/11/2026): la scheda si legge solo dal server, che sa cosa il negozio ha pagato.
+  BEGIN
+    SELECT count(*) INTO n FROM public.schede_clienti; esito := n || ' righe lette';
+  EXCEPTION WHEN insufficient_privilege THEN esito := 'negato';
+  END;
+  INSERT INTO esiti VALUES ('il negozio non legge la scheda dal browser (864)', esito = 'negato', esito);
   BEGIN
     SELECT count(*) INTO n FROM public.preventivi_con_codice; esito := n || ' righe lette';
   EXCEPTION WHEN insufficient_privilege THEN esito := 'negato';
@@ -63,10 +67,13 @@ RESET request.jwt.claims;
 SET LOCAL request.jwt.claims = '{"sub":"a7081111-1111-1111-1111-111111111111","role":"authenticated"}';
 SET LOCAL ROLE authenticated;
 DO $$
-DECLARE n int;
+DECLARE n int; esito text;
 BEGIN
-  SELECT count(*) INTO n FROM public.schede_clienti;
-  INSERT INTO esiti VALUES ('un altro negozio non vede la scheda', n = 0, n || ' righe');
+  BEGIN
+    SELECT count(*) INTO n FROM public.schede_clienti; esito := n || ' righe lette';
+  EXCEPTION WHEN insufficient_privilege THEN esito := 'negato';
+  END;
+  INSERT INTO esiti VALUES ('un altro negozio non vede la scheda', esito = 'negato', esito);
 END $$;
 RESET ROLE;
 RESET request.jwt.claims;

@@ -188,6 +188,33 @@ export interface Database {
         };
         Relationships: [];
       };
+      agenti: {
+        Row: {
+          user_id: string;
+          email: string;
+          invito_id: string | null;
+          attivo: boolean;
+          creato_il: string;
+          sospeso_il: string | null;
+        };
+        Insert: {
+          user_id: string;
+          email: string;
+          invito_id?: string | null;
+          attivo?: boolean;
+          creato_il?: string;
+          sospeso_il?: string | null;
+        };
+        Update: {
+          user_id?: string;
+          email?: string;
+          invito_id?: string | null;
+          attivo?: boolean;
+          creato_il?: string;
+          sospeso_il?: string | null;
+        };
+        Relationships: [];
+      };
       ai_spend_daily: {
         Row: {
           giorno: string;
@@ -1097,6 +1124,42 @@ export interface Database {
           user_id?: string;
           quantity?: number;
           joined_at?: string | null;
+        };
+        Relationships: [];
+      };
+      inviti_agente: {
+        Row: {
+          id: string;
+          codice_hash: string;
+          nota: string | null;
+          creato_da: string | null;
+          creato_il: string;
+          scade_il: string;
+          usi_max: number;
+          usi: number;
+          ritirato_il: string | null;
+        };
+        Insert: {
+          id?: string;
+          codice_hash: string;
+          nota?: string | null;
+          creato_da?: string | null;
+          creato_il?: string;
+          scade_il: string;
+          usi_max?: number;
+          usi?: number;
+          ritirato_il?: string | null;
+        };
+        Update: {
+          id?: string;
+          codice_hash?: string;
+          nota?: string | null;
+          creato_da?: string | null;
+          creato_il?: string;
+          scade_il?: string;
+          usi_max?: number;
+          usi?: number;
+          ritirato_il?: string | null;
         };
         Relationships: [];
       };

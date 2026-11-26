@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/Button';
 import CanaliDelNegozio from '@/components/seller/CanaliDelNegozio';
 import CanaliAnalizzati from '@/components/seller/CanaliAnalizzati';
 import AnalisiAziendale from '@/components/seller/AnalisiAziendale';
+import RapportoImprenditore from '@/components/seller/RapportoImprenditore';
 import type { SchedaCliente } from '@/lib/agenzia/scheda-cliente';
+import type { Abbonamento } from '@/lib/agenzia/preventivo';
 import {
   CANALI_ANALIZZATI,
   analisiAziendale,
@@ -73,7 +75,7 @@ function Elenco({ titolo, voci }: { titolo: string; voci: string[] }) {
   );
 }
 
-export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente | null }) {
+export default function AnalisiDelBusiness({ scheda, fascia, haPagato = null, letturaFallita = false }: { scheda?: SchedaCliente | null; fascia?: Abbonamento | null; haPagato?: boolean | null; letturaFallita?: boolean }) {
   const qc = useQueryClient();
   const { data: analisi } = useQuery({ queryKey: CHIAVE_ANALISI, queryFn: leggiAnalisiDelNegozio });
   const { data: canali } = useQuery({ queryKey: CHIAVE_CANALI, queryFn: leggiCanali });
@@ -103,6 +105,8 @@ export default function AnalisiDelBusiness({ scheda }: { scheda?: SchedaCliente 
       <p className="mt-0.5 text-xs text-ink-500">
         Già pronta con quello che sappiamo oggi. Usiamo solo fonti pubbliche e gratuite; dove un’analisi non c’è ancora, te lo diciamo.
       </p>
+
+      <RapportoImprenditore scheda={scheda} canali={analisi?.canali} sito={sito} haPagato={haPagato} letturaFallita={letturaFallita} fascia={fascia} haSito={haSito || !!sito} canaliScritti={canali ?? null} />
 
       {pagella && (
         <Blocco icona={ClipboardCheck} titolo="La tua pagella su MyCity">

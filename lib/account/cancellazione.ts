@@ -305,6 +305,18 @@ export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
     sopravvive: true,
     perche: 'nome, cellulare, indirizzo di casa, coordinate della porta e note per il fattorino',
   },
+  {
+    // 26/11/2026 — Gli agenti entrati dal link d'invito (migrations/865). La chiave è
+    // agenti.user_id -> auth.users ON DELETE CASCADE: la riga se ne va con la persona.
+    // Si ripulisce lo stesso prima, come le altre: l'email non resta neanche un istante.
+    // Solo l'email: `attivo` non si tocca, così se la cancellazione si ferma a metà l'agente non perde
+    // l'accesso (terzo collaudo del 26/11). La pagina dell'agente legge l'email dall'account, non da qui.
+    tabella: 'agenti',
+    colonna: 'user_id',
+    azzera: { email: '[eliminato]' },
+    sopravvive: false,
+    perche: 'l\'email con cui la persona si è iscritta come agente',
+  },
 ];
 
 /**

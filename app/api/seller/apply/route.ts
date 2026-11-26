@@ -12,7 +12,7 @@ import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ibanValido, normalizzaIban } from '@/app/sell/iban';
 import { MAX_DETTAGLIO_ATTIVITA, TIPI_ATTIVITA, descriviAttivita } from '@/lib/agenzia/tipi-attivita';
-import { cittaDallIndirizzo, inviaNuovaAttivitaAlFlusso } from '@/lib/agenzia/nuovo-cliente-n8n';
+import { cittaDallIndirizzo, indiziDelTitolare, inviaNuovaAttivitaAlFlusso } from '@/lib/agenzia/nuovo-cliente-n8n';
 import { dentroLAreaServita, FRASE_NEGOZIO_FUORI_AREA } from '@/lib/ordini/zona-di-consegna';
 
 export const runtime = 'nodejs';
@@ -103,6 +103,9 @@ const CampiRichiesta = z.object({
   storeAddress: z.string().trim().min(3, "Inserisci l'indirizzo del negozio"),
   storeLat: z.number().finite(),
   storeLng: z.number().finite(),
+  // 26/11/2026 — Facoltativi: due indizi del titolare per l'analisi (Instagram, scheda Google Maps). Vanno solo a n8n.
+  instagram: z.string().max(400).optional().nullable(),
+  googleMaps: z.string().max(400).optional().nullable(),
   // Spazi e minuscole si tolgono prima del controllo; poi la cifra mod 97.
   billingIban: z
     .string()
@@ -371,6 +374,8 @@ export const POST = withAuthRateLimit(
         // 25/11/2026 — Il modulo corto non chiede la sede legale: la città si ricava dall'indirizzo del negozio.
         citta: f.businessCity ?? cittaDallIndirizzo(f.storeAddress),
         descrizione: f.storeDescription ?? null,
+        // 26/11/2026 — Gli indizi del titolare, ricontrollati qui: uno storto si lascia fuori, non ferma l'iscrizione.
+        indizi: indiziDelTitolare(f.instagram, f.googleMaps),
       });
     }
 
