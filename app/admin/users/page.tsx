@@ -61,6 +61,8 @@ type Profile = {
   auth_phone: string | null;
   last_sign_in_at: string | null;
   email_confirmed_at: string | null;
+  /** R08-006 — la RPC delle email non ha risposto: l'email vuota di questa riga non vuol dire «senza email». */
+  email_non_letta?: boolean;
 };
 
 /** Miglior etichetta identificativa per un utente. */
@@ -151,11 +153,19 @@ async function leggiProfili(chiedi: (colonne: string) => PromiseLike<RispostaPro
 /**
  * Email e ultimo accesso vivono in auth.users: arrivano dalla RPC admin-only
  * (migrazione 074). Se la RPC non c'e', la pagina resta usabile senza email.
+ * `null` = la lettura non è riuscita (R08-006: l'elenco lo deve dire).
  */
-async function leggiContattiAuth(): Promise<RigaAuth[]> {
+async function leggiContattiAuthOppureNull(): Promise<RigaAuth[] | null> {
   const { data, error } = await supabase.rpc('admin_list_user_emails');
-  if (error || !Array.isArray(data)) return [];
+  if (error || !Array.isArray(data)) {
+    logger.warn('admin/users: email degli utenti non lette', { code: (error as { code?: string } | null)?.code });
+    return null;
+  }
   return data as RigaAuth[];
+}
+
+async function leggiContattiAuth(): Promise<RigaAuth[]> {
+  return (await leggiContattiAuthOppureNull()) ?? [];
 }
 
 /**
@@ -213,7 +223,10 @@ function AdminUsersPageInner() {
           .order('created_at', { ascending: false })
           .limit(TETTO_UTENTI) as unknown as PromiseLike<RispostaProfili>,
       );
-      return conContattiAuth(base, await leggiContattiAuth());
+      // 26/11/2026 (R08-006) — Se le email non arrivano le righe restano senza email, come prima,
+      // ma ognuna lo sa: sotto i filtri compare una riga che lo dice (`emailNonLette`).
+      const contatti = await leggiContattiAuthOppureNull();
+      return contatti === null ? base.map((p) => ({ ...p, email_non_letta: true })) : conContattiAuth(base, contatti);
     },
   });
 
@@ -482,6 +495,8 @@ function AdminUsersPageInner() {
   });
 
   const detail = detailId ? inMano.find((p) => p.id === detailId) : null;
+  /** R08-006 — le righe a schermo sono senza email perché la RPC non ha risposto, non perché non ce l'hanno. */
+  const emailNonLette = inMano.some((p) => p.email_non_letta === true);
 
   /**
    * #81 — Codice fiscale e partita IVA si chiedono per UN utente, quando si apre
@@ -685,6 +700,18 @@ function AdminUsersPageInner() {
         >
           <AlertTriangle size={16} strokeWidth={2.2} className="text-accent-600 shrink-0 mt-0.5" aria-hidden />
           <span>{etichette.avviso}</span>
+        </p>
+      )}
+      {emailNonLette && (
+        <p
+          role="status"
+          className="flex items-start gap-2 bg-accent-50 border border-accent-200 text-accent-900 rounded-xl px-4 py-3 text-sm"
+        >
+          <AlertTriangle size={16} strokeWidth={2.2} className="text-accent-600 shrink-0 mt-0.5" aria-hidden />
+          <span>
+            Le email degli utenti non sono arrivate: in questo elenco mancano anche a chi ce l&apos;ha, quindi una
+            riga senza email non vuol dire che quell&apos;utente non ne abbia una. Ricarica la pagina fra poco.
+          </span>
         </p>
       )}
 
