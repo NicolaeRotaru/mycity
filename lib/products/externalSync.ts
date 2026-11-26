@@ -290,6 +290,25 @@ export async function resolveCategoryFromSlug(
 export const RIPROVA_DOPO_ERRORE_MS = 6 * 60 * 60_000;
 
 export async function ritentoDopoErroreConsentito(productId: string): Promise<boolean> {
+  // 26/11/2026 (R03-006) — IL FRENO STA NEL DATABASE, UGUALE PER TUTTE LE COPIE DEL SITO.
+  // Senza Upstash il contatore di rate-limit e' uno per copia accesa: ognuna ripagava le chiamate
+  // AI. L'ora dell'ultimo errore (products.external_sync_error_at, migrazione 890, scritta dove si
+  // segna 'error') la vedono tutte. Se la colonna non c'e' ancora o la lettura fallisce si resta
+  // al contatore di prima: mai un freno in meno.
+  try {
+    const { data, error } = await getAdminSupabase()
+      .from('products')
+      .select('external_sync_error_at')
+      .eq('id', productId)
+      .maybeSingle();
+    if (!error) {
+      const quando = (data as { external_sync_error_at?: string | null } | null)?.external_sync_error_at;
+      const ms = quando ? Date.parse(quando) : NaN;
+      if (Number.isFinite(ms) && Date.now() - ms < RIPROVA_DOPO_ERRORE_MS) return false;
+    }
+  } catch {
+    // ripiego sul contatore
+  }
   const esito = await rateLimitAsync({ key: `ext-sync-errore:${productId}`, max: 1, windowMs: RIPROVA_DOPO_ERRORE_MS });
   return esito.allowed;
 }
