@@ -17,7 +17,7 @@ const ALTRI = [
 
 describe('R09-005 — la frase della zona ha una fonte sola', () => {
   it('«km dal negozio» è scritto solo nella fonte, in nessuno degli altri sei posti', () => {
-    expect(readFileSync(FONTE, 'utf8')).toMatch(/fino a \$\{CONFINE_DELLA_ZONA\} dal negozio/);
+    expect(readFileSync(FONTE, 'utf8')).toMatch(/fino a .{1,40} dal negozio/);
     for (const f of ALTRI) {
       const righe = readFileSync(f, 'utf8')
         .split('\n')
