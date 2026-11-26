@@ -90,7 +90,9 @@ const EMAIL_A_PAROLE = /\b(gmail|libero|hotmail|yahoo|outlook|icloud|alice|tisca
  * Un voto o un conto di recensioni ricopiato da Google o TripAdvisor («4,6 su Google», «120 recensioni»,
  * «quattro e mezzo su cinque»): non è un nostro dato e non si mostra (parere legale del 26/11).
  */
-const NUMERO_DI_GOOGLE = /(google|maps|tripadvisor)[^.]*(\d|stell|voto|recension)|\d[^.]*(google|maps|tripadvisor|recension|stell)|su cinque\b|stelle\b/i;
+// Dal terzo collaudo: la regola di prima scartava anche «il sito del 2015 senza mappa di Google» o «3 post con le
+// stelle di Natale». Ora ci vuole un voto (4,6), un conto di recensioni o di stelle, o «voto» vicino al nome.
+const NUMERO_DI_GOOGLE = /(google|maps|tripadvisor)[^.]*(\d[.,]\d|\d\s*stell|\bvoto|\d+\s*recension)|(\d[.,]\d|\d+\s*recension|\d\s*stell)[^.]*(google|maps|tripadvisor)|\d+\s*(recensioni|stelle)\b|su cinque\b/i;
 /** Un prezzo detto senza moneta («25 a persona», «coperto 3»): `senzaPrezzo` guarda la moneta e i decimali. */
 /** Nel rapporto nessun voto in stelle, di nessuno («4,6 su 5», «4.6/5»): i voti sono di Google o TripAdvisor. */
 const UN_VOTO = /\d\s*([.,]\s*\d)?\s*(su\s*(5|cinque)\b|\/\s*5\b)/i;
@@ -483,7 +485,7 @@ export function leggiRapporto(scheda: SchedaCliente | null | undefined, adesso: 
   aggiungi('piano_30_giorni', sezioneAd(business, 'piano_30_giorni', (o) => {
     const s = intero(o.settimana, 4);
     // Contratto v1.3: `proposta` = cosa facciamo noi (10-160 caratteri), accanto all'azione.
-    const proposta = typeof o.proposta === 'string' ? fraseMostrabile(o.proposta, 10, 160) : null;
+    const proposta = typeof o.proposta === 'string' ? prosa(o.proposta, 10, 160) : null;
     const azione = typeof o.azione === 'string' ? fraseMostrabile(o.azione, 3, 200) : null;
     // Una settimana senza azione non si mostra: «Settimana 2» da sola non dice niente (revisione di mycity#336).
     if (!s || s < 1 || !azione || NOME_E_COGNOME.test(azione)) return null;
@@ -708,13 +710,26 @@ function senzaChiaviVietate(v: unknown, tieni: readonly string[] = [], ancheRece
  * o il testo dice un loro voto o un conto di recensioni. La usa anche l'analisi del business di prima (analisi.ts).
  */
 export function pareDatoDiGoogle(testo: string, fonte?: string | null): boolean {
-  return (typeof fonte === 'string' && FONTE_GOOGLE.test(fonte)) || NUMERO_DI_GOOGLE.test(testo);
+  return (typeof fonte === 'string' && fonteDiGoogle(fonte)) || NUMERO_DI_GOOGLE.test(testo);
 }
+
+/**
+ * Vero se l'indirizzo è di Google (Maps, Search, le sue immagini e API, i link brevi) o di TripAdvisor. Si guarda il
+ * nome del sito letto dall'indirizzo, non il testo: «https://x@www.google.com/…» è Google (dal terzo collaudo).
+ */
+export function fonteDiGoogle(indirizzo: string): boolean {
+  try {
+    const host = new URL(indirizzo).hostname.toLowerCase();
+    return HOST_GOOGLE.test(host);
+  } catch {
+    return /google|tripadvisor|goo\.gl/i.test(indirizzo);
+  }
+}
+const HOST_GOOGLE = /(^|\.)(google\.[a-z.]{2,6}|googleapis\.com|googleusercontent\.com|gstatic\.com|ggpht\.com|goo\.gl|g\.page|g\.co|share\.google|tripadvisor\.[a-z.]{2,6})$/;
 
 const PLACE_ID = /^[A-Za-z0-9_-]{10,300}$/;
 const LOCATION_ID = /^\d{1,20}$/;
 /** Una fonte che è una pagina di Google Maps o TripAdvisor: un campo letto lì non si salva (parere legale del 26/11). */
-const FONTE_GOOGLE = /^https?:\/\/([\w-]+\.)*(google\.[a-z.]{2,6}|goo\.gl|g\.page|g\.co|share\.google|tripadvisor\.[a-z.]{2,6})([/?#:]|$)/i;
 
 /**
  * I campi della scheda come si salvano: un campo la cui fonte è Google Maps o TripAdvisor (orari, indirizzo,
@@ -722,7 +737,13 @@ const FONTE_GOOGLE = /^https?:\/\/([\w-]+\.)*(google\.[a-z.]{2,6}|goo\.gl|g\.pag
  */
 export function campiDaSalvare<T extends Record<string, { fonte?: string | null } | undefined>>(campi: T): T {
   return Object.fromEntries(
-    Object.entries(campi).filter(([nome, c]) => !CHIAVE_VIETATA.test(nome) && !(typeof c?.fonte === 'string' && FONTE_GOOGLE.test(c.fonte))),
+    Object.entries(campi).filter(([nome, c]) => {
+      if (CHIAVE_VIETATA.test(nome) || CHIAVE_DI_VOTO.test(nome)) return false;
+      if (typeof c?.fonte === 'string' && fonteDiGoogle(c.fonte)) return false;
+      // Un valore che ricopia un voto o le recensioni («4,6 su 5 su Google») non si salva, qualunque sia il nome.
+      const valore = (c as { valore?: unknown } | undefined)?.valore;
+      return !(typeof valore === 'string' && (pareDatoDiGoogle(valore) || UN_VOTO.test(valore)));
+    }),
   ) as T;
 }
 
@@ -828,7 +849,23 @@ export function analisiDaSalvare<T extends Record<string, unknown> | undefined>(
       });
     }
     for (const [sezione, chiavi] of Object.entries(VOCI_DELLE_SEZIONI)) {
-      if (sezione in bz) b2[sezione] = elenco(bz[sezione]).flatMap((x) => (comeOggetto(x) ? [senzaVoti(soloChiavi(comeOggetto(x)!, chiavi))] : []));
+      if (sezione in bz) b2[sezione] = elenco(bz[sezione]).flatMap((x) => {
+        const o = comeOggetto(x);
+        if (!o) return [];
+        const v = senzaVoti(soloChiavi(o, chiavi)) as Record<string, unknown>;
+        // Dal terzo collaudo: fonti solo https e non di Google o TripAdvisor; testi senza voti, recensioni o nomi
+        // di persona (un testo storto si toglie; la voce resta se ha ancora la sua fonte).
+        const fonte = https(v.fonte);
+        if (!fonte || fonteDiGoogle(fonte)) return [];
+        v.fonte = fonte;
+        if ('fonte_canali' in v) v.fonte_canali = https(v.fonte_canali) && !fonteDiGoogle(String(v.fonte_canali)) ? v.fonte_canali : null;
+        for (const [k, val] of Object.entries(v)) {
+          if (k === 'fonte' || k === 'fonte_canali' || typeof val !== 'string') continue;
+          const nome = k === 'nome' || k === 'bando' || k === 'ente' || k === 'cosa';
+          if (pareDatoDiGoogle(val) || UN_VOTO.test(val) || (!nome && NOME_E_COGNOME.test(val))) v[k] = null;
+        }
+        return [v];
+      });
     }
     if ('reputazione_temi' in bz) {
       b2.reputazione_temi = elenco(bz.reputazione_temi).flatMap((x) => {

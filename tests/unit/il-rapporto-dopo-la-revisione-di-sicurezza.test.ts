@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { analisiDaSalvare, analisiPerChiNonHaPagato, analisiPerLaFascia } from '@/lib/agenzia/rapporto';
+import { analisiDaSalvare, analisiPerChiNonHaPagato, analisiPerLaFascia, campiDaSalvare, leggiRapporto } from '@/lib/agenzia/rapporto';
+import { leggiSchedaSalvata, type SchedaCliente } from '@/lib/agenzia/scheda-cliente';
+import { leggiGiudizioSito } from '@/lib/agenzia/offerta-su-misura';
 import { linkGoogleMaps } from '@/lib/indirizzi-pubblici';
 import { schedaComeLaVedeIlNegozio } from '@/lib/agenzia/scheda-del-negozio';
 
@@ -94,6 +96,51 @@ describe('5 · il link di Google Maps solo sui domini veri di Google', () => {
     expect(linkGoogleMaps('https://www.google.it/maps/place/Bar')).not.toBeNull();
     expect(linkGoogleMaps('https://maps.google.it/?cid=123')).not.toBeNull();
     expect(linkGoogleMaps('https://maps.app.goo.gl/AbC123')).not.toBeNull();
+  });
+});
+
+describe('dal terzo collaudo', () => {
+  it('1 · le sezioni nuove dell’AD: fonti solo https e non Google, testi senza voti né nomi, prima di salvare', () => {
+    const salvata = analisiDaSalvare({ business: {
+      confronto_concorrenti: [
+        { nome: 'Bar A', differenza: 'Ha 4,8 su Google con 900 recensioni', meglio: 'Mario Rossi risponde a ogni recensione', fonte: 'https://www.openstreetmap.org/node/1', fonte_canali: 'javascript:alert(1)' },
+        { nome: 'Bar B', differenza: 'apre prima', fonte: 'https://www.google.com/maps/place/Bar+B' },
+      ],
+      piano_30_giorni: [{ settimana: 1, azione: 'Foto della vetrina', fonte: 'http://tripadvisor.it/x' }],
+    } }) as { business: Record<string, Array<Record<string, unknown>>> };
+    expect(salvata.business.confronto_concorrenti).toEqual([{ nome: 'Bar A', differenza: null, meglio: null, fonte: 'https://www.openstreetmap.org/node/1', fonte_canali: null }]);
+    expect(salvata.business.piano_30_giorni).toEqual([]);
+  });
+
+  it('2 · un campo con un voto di Google nel valore, o con una fonte Google mascherata, non si salva', () => {
+    const campi = campiDaSalvare({
+      valutazione: { valore: '4,6 su 5 su Google, 230 recensioni', stato: 'da_confermare', fonte: 'https://www.paginegialle.it/x' },
+      foto: { valore: 'x', stato: 'foto', fonte: 'https://lh5.googleusercontent.com/abc' },
+      api: { valore: 'x', stato: 'da_confermare', fonte: 'https://maps.googleapis.com/maps/api/place/x' },
+      orari: { valore: 'Lun-Sab 7-19', stato: 'da_confermare', fonte: 'https://x@www.google.com/maps/place/y' },
+      indirizzo: { valore: 'Via Roma 1', stato: 'confermato', fonte: 'https://www.bar.it' },
+    });
+    expect(Object.keys(campi)).toEqual(['indirizzo']);
+  });
+
+  it('3 e 4 · note, migliorie e liste legittime restano anche se dicono un anno e Google', () => {
+    const s = leggiSchedaSalvata({ tipo: 'scheda-cliente', id_attivita: ID, campi: {}, analisi: {
+      giudizio_sito: { livello: 'pregio', migliorie: 'Rifare la home del 2016 e aggiungere la mappa di Google', nota: 'Sito del 2015, senza mappa di Google Maps' },
+      punti_di_forza: ['Aperto dal 1985, risponde a tutte le recensioni'],
+      cosa_chiedere_al_titolare: ['Hai 2 sedi? Chi risponde alle recensioni?'],
+      idee_contenuti: ['3 post al mese con le stelle di Natale in vetrina'],
+    } }) as SchedaCliente;
+    const g = leggiGiudizioSito((s.analisi as Record<string, unknown>).giudizio_sito);
+    expect(g?.nota).toBe('Sito del 2015, senza mappa di Google Maps');
+    expect(g?.migliorie).toBeTruthy();
+    expect(s.analisi?.punti_di_forza).toHaveLength(1);
+    expect(s.analisi?.cosa_chiedere_al_titolare).toHaveLength(1);
+    expect(s.analisi?.idee_contenuti).toHaveLength(1);
+  });
+
+  it('5 · un nome di persona nella proposta del piano non si mostra', () => {
+    const s = { tipo: 'scheda-cliente', id_attivita: ID, campi: {}, analisi: { business_fatta_il: LETTO, business: { piano_30_giorni: [{ settimana: 1, azione: 'Fotografare le brioche al mattino', proposta: 'servizio foto con Giulia Bianchi in negozio', fonte: 'https://x.it' }] } } } as unknown as SchedaCliente;
+    expect(JSON.stringify(leggiRapporto(s, new Date('2026-11-26T14:00:00Z')))).not.toContain('Giulia');
   });
 });
 

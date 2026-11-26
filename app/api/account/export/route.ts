@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { schedaComeLaVedeIlNegozio } from '@/lib/agenzia/scheda-del-negozio';
+import { leggiAnalisiCanali } from '@/lib/agenzia/analisi';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { sullaPortaDeiDiritti } from '@/lib/privacy/porta-dei-diritti';
@@ -286,6 +287,15 @@ const scarica = withAuthRateLimit(
     altre.scheda_del_locale = altre.scheda_del_locale.map((riga) => {
       const r = riga as Record<string, unknown>;
       return { ...r, scheda: schedaComeLaVedeIlNegozio(r.scheda, { visibileSenzaAbbonamento: visibile, abbonamenti }) };
+    });
+  }
+
+  // 26/11/2026 — L'analisi dei canali esce ripulita come nella pagina: della scheda Google letta da n8n niente voto né
+  // recensioni (parere legale; anche dalle righe salvate prima).
+  if (Array.isArray(altre.analisi_del_negozio)) {
+    altre.analisi_del_negozio = altre.analisi_del_negozio.map((riga) => {
+      const r = riga as Record<string, unknown>;
+      return 'canali' in r ? { ...r, canali: leggiAnalisiCanali(r.canali) } : r;
     });
   }
 

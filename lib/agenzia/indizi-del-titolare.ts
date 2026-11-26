@@ -12,7 +12,7 @@ import { controllaCanali } from './canali';
 export type IndiziDelTitolare = { instagram?: string; google_maps?: string };
 
 /** I link a un luogo, sui soli domini veri di Google (l'elenco chiuso lo fa `linkGoogleMaps`, dentro `controllaCanali`). */
-const LINK_DI_UN_LUOGO = /^https:\/\/(maps\.app\.goo\.gl\/[\w-]+\/?$|goo\.gl\/maps\/[\w-]+\/?$|share\.google\/[\w-]+\/?$|g\.page\/|g\.co\/kgs\/|(www\.)?google\.[a-z.]+\/maps\/place\/|maps\.google\.[a-z.]+\/(maps)?\?(.*&)?cid=\d+)/i;
+const LINK_DI_UN_LUOGO = /^https:\/\/(maps\.app\.goo\.gl\/[\w-]+\/?$|goo\.gl\/maps\/[\w-]+\/?$|share\.google\/(?!search\b)[\w-]{6,}\/?$|g\.page\/|g\.co\/kgs\/|(www\.)?google\.[a-z.]+\/maps\/place\/|maps\.google\.[a-z.]+\/(maps)?\?(.*&)?cid=\d+)/i;
 /** Pezzi che dicono una persona: il profilo di chi recensisce, una recensione, un percorso, un account, un'email. */
 const PEZZI_DI_PERSONE = /\/contrib\/|\/dir\/|\/review|authuser|@[^/]*@|[\w.+-]+@[\w-]+\.|%40/i;
 
