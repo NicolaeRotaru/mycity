@@ -78,10 +78,7 @@ export default function AdminDisputesPage() {
         `)
         .order('created_at', { ascending: false })
         .limit(LIMITE_RECLAMI);
-      // «Aperto» è il filtro d'apertura e vale per i reclami ancora da chiudere: anche quelli già «in
-      // valutazione», dove porta il link della scheda ordine (prima li lasciava fuori).
-      if (filter === 'open') q = q.in('status', ['open', 'under_review']);
-      else if (filter !== 'all') q = q.eq('status', filter);
+      if (filter !== 'all') q = q.eq('status', filter);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as unknown as Dispute[];
