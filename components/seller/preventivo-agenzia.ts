@@ -92,6 +92,19 @@ export async function leggiSchedaDelNegozio(): Promise<SchedaCliente | null> {
   return leggiSchedaSalvata(corpo.data.scheda);
 }
 
+/**
+ * 26/11/2026 — Se il negozio ha già pagato un abbonamento (la scheda è «aperta»): il rapporto dell'imprenditore
+ * intero si mostra solo allora, prima c'è l'assaggio (lib/agenzia/rapporto.ts). Lo decide il server; se la
+ * lettura non riesce vale «no».
+ */
+export const CHIAVE_SCHEDA_APERTA = ['seller', 'scheda-cliente', 'aperta'] as const;
+export async function leggiSeHaPagato(): Promise<boolean> {
+  const r = await fetch('/api/seller/scheda-cliente', { cache: 'no-store' }).catch(() => null);
+  if (!r || !r.ok) return false;
+  const corpo = (await r.json().catch(() => null)) as { ok?: boolean; data?: { aperta?: unknown } } | null;
+  return corpo?.ok === true && corpo.data?.aperta === true;
+}
+
 /* ───────────── 24/11/2026 — L'analisi del business e la bozza del sito dell'AD ───────────── */
 
 

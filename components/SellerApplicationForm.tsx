@@ -15,6 +15,7 @@ import { FRASE_PREZZO_NEGOZI, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earni
 import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
 import { Store, Send } from 'lucide-react';
 import { MAX_DETTAGLIO_ATTIVITA, SCHEDE_ATTIVITA, TIPI_ATTIVITA, tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
+import { controllaCanali } from '@/lib/agenzia/canali';
 
 /**
  * Il modulo per chiedere di vendere su MyCity.
@@ -58,6 +59,10 @@ const SellerSchema = z.object({
 
   contactPhone: z.string().regex(/^[0-9 +]{8,16}$/, 'Numero di telefono non valido'),
 
+  // 26/11/2026 — Facoltativi (Nicola): due indizi per l'analisi, che vanno a n8n. Lo stesso controllo dei canali.
+  instagram: z.string().max(400).optional().or(z.literal('')),
+  googleMaps: z.string().max(400).optional().or(z.literal('')),
+
   // Consensi legali
   // boolean + refine (non literal(true)): permette default false nel form
   // ma valida che sia true al submit. Evita il cast `false as unknown as true`.
@@ -70,6 +75,11 @@ const SellerSchema = z.object({
 }).superRefine((d, ctx) => {
   if (d.businessType === 'altro' && (d.businessTypeDetail ?? '').trim().length < 2) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['businessTypeDetail'], message: 'Scrivi in poche parole che attività hai' });
+  }
+  const esito = controllaCanali({ instagram: d.instagram ?? '', google_maps: d.googleMaps ?? '' });
+  if (!esito.ok) {
+    if (esito.errori.instagram) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['instagram'], message: esito.errori.instagram });
+    if (esito.errori.google_maps) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['googleMaps'], message: esito.errori.google_maps });
   }
 });
 
@@ -117,6 +127,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       storeName:         defaultValues?.storeName         ?? '',
       businessVatNumber: defaultValues?.businessVatNumber ?? '',
       contactPhone:      defaultValues?.contactPhone      ?? '',
+      instagram:         '',
+      googleMaps:        '',
       acceptTos:         false,
       acceptPrivacy:     false,
       acceptAccuracy:    false,
@@ -147,8 +159,12 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       setLocationError(`Metti ${scheda.il} sulla mappa: premi «Cerca» accanto all'indirizzo, oppure tocca la mappa nel punto giusto. Senza la posizione, i clienti vicini non possono ordinarti la consegna.`);
       return;
     }
+    // 26/11/2026 — Gli indizi facoltativi partono solo se scritti: un campo vuoto non manda niente.
+    const { instagram, googleMaps, ...resto } = data;
     onSubmit({
-      ...data,
+      ...resto,
+      ...(instagram?.trim() ? { instagram: instagram.trim() } : {}),
+      ...(googleMaps?.trim() ? { googleMaps: googleMaps.trim() } : {}),
       storeAddress: location.address,
       storeLat: location.lat,
       storeLng: location.lng,
@@ -259,6 +275,27 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
             {...register('contactPhone')}
             error={errors.contactPhone?.message}
             hint={emailAccesso ? `Gli avvisi arrivano anche a ${emailAccesso}` : undefined}
+          />
+        </div>
+
+        {/* 26/11/2026 — Due indizi facoltativi per l'analisi (Nicola): nessuno dei due è obbligatorio. */}
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Input
+            label="Instagram (facoltativo)"
+            placeholder="@iltuonegozio"
+            maxLength={400}
+            {...register('instagram')}
+            error={errors.instagram?.message}
+            hint="Il nome del profilo dell’attività: ci aiuta a preparare la tua analisi"
+          />
+          <Input
+            label="Scheda Google Maps (facoltativo)"
+            placeholder="https://maps.app.goo.gl/…"
+            maxLength={400}
+            inputMode="url"
+            {...register('googleMaps')}
+            error={errors.googleMaps?.message}
+            hint="Il link della scheda del locale su Google Maps"
           />
         </div>
       </Section>

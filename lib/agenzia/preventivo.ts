@@ -122,6 +122,13 @@ type Fascia = {
  * proposta dell'AD dello stesso giorno, da confermare con Nicola: si cambia qui, in un posto solo.
  * Prima di questa data ogni servizio aveva il suo prezzo (sito 500 €, social 300 € al mese, foto e
  * video da 50 a 300 € al mese): non si vendono più uno per uno.
+ *
+ * 26/11/2026 — L'analisi diventa il rapporto dell'imprenditore (Nicola, ~14:45, prezzi invariati) e si personalizza
+ * per abbonamento (14:54); i concorrenti sui social e sul web si nominano (14:35). Cambia il testo di
+ * `servizi.analisi`: Base all'avvio, senza ricerche né concorrenti sui social; Business ogni mese, coi 3 concorrenti
+ * principali; Premium ogni settimana, fino a 5 concorrenti e un incontro al mese. Le parti incluse ed escluse di
+ * ogni fascia stanno in `ANALISI_PER_FASCIA`
+ * (lib/agenzia/rapporto.ts). I prodotti di SDG ripetono questo testo: li riscrive la migrazione 863.
  */
 export const FASCE: Record<Abbonamento, Fascia> = {
   base: {
@@ -132,7 +139,7 @@ export const FASCE: Record<Abbonamento, Fascia> = {
       foto_video: 'Una sessione di foto all’avvio: copertina e prodotti principali.',
       sito_web: 'Un sito di una pagina col tuo nome, collegato alla vetrina.',
       social: '8 post al mese, preparati e pubblicati da noi. Scheda Google Maps creata o sistemata all’avvio.',
-      analisi: 'Un’analisi completa all’avvio: la tua attività, i social, la scheda Google e il sito, con cosa migliorare.',
+      analisi: 'Il rapporto completo all’avvio: reputazione, concorrenti vicini, zona, sito, i tuoi social, calendario della città, bandi e il piano dei primi 30 giorni.',
     },
     vetrina: 'Vetrina su MyCity con ordini, consegna e ritiro in negozio.',
     assistenza: 'Su WhatsApp, risposta entro 24 ore lavorative.',
@@ -145,7 +152,7 @@ export const FASCE: Record<Abbonamento, Fascia> = {
       foto_video: 'Foto all’avvio e una nuova sessione ogni tre mesi, più un video al mese.',
       sito_web: 'Un sito completo di più pagine, col tuo nome.',
       social: '12 post al mese, 3 a settimana, con 2 video brevi. Scheda Google Maps sistemata, più le risposte alle recensioni scritte da noi.',
-      analisi: 'L’analisi completa all’avvio e una nuova ogni mese: cosa è cambiato e cosa fare il mese dopo.',
+      analisi: 'Il rapporto completo all’avvio e aggiornato ogni mese, con le ricerche su Google e i tuoi 3 concorrenti principali sui social e sul web: cosa è cambiato e cosa fare il mese dopo.',
     },
     vetrina: 'Vetrina su MyCity con ordini, consegna e ritiro in negozio, in evidenza nella tua categoria una settimana al mese.',
     assistenza: 'Su WhatsApp, risposta entro 4 ore lavorative.',
@@ -158,7 +165,7 @@ export const FASCE: Record<Abbonamento, Fascia> = {
       foto_video: 'Una sessione di foto e video ogni mese.',
       sito_web: 'Un sito completo, aggiornato da noi ogni mese.',
       social: '20 post al mese, 4 video brevi e le storie. Scheda Google Maps curata ogni mese: foto nuove, post e risposte alle recensioni.',
-      analisi: 'L’analisi ogni settimana, e un incontro al mese per leggerla insieme.',
+      analisi: 'Il rapporto aggiornato ogni settimana, con fino a 5 concorrenti sui social e sul web e le idee che ne nascono, e un incontro al mese per leggerlo insieme.',
     },
     vetrina: 'Vetrina su MyCity con ordini, consegna e ritiro in negozio, in home page due settimane al mese.',
     assistenza: 'Un referente tutto tuo e una visita nel locale ogni mese.',

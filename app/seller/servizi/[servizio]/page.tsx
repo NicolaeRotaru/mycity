@@ -12,6 +12,7 @@ import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import AnalisiDelBusiness from '@/components/seller/AnalisiDelBusiness';
 import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
+import CosaCeNellAnalisi from '@/components/seller/CosaCeNellAnalisi';
 import {
   CHIAVE_BOZZA_AD,
   CHIAVE_PREVENTIVO,
@@ -99,7 +100,7 @@ export default function PaginaDelServizio() {
 
       {/* Cosa ricevi, già pronto: si vede anche prima di sceglierlo (Nicola, 23/11). L'analisi del
           business (24/11) è la sua analisi vera, coi canali da scrivere. */}
-      {p && id === 'analisi' && <AnalisiDelBusiness scheda={scheda} />}
+      {p && id === 'analisi' && <AnalisiDelBusiness scheda={scheda} fascia={p.attivo?.fascia ?? null} />}
       {p && !giaAPosto && id !== 'analisi' && (
         <AnteprimaServizio id={id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} scheda={scheda} bozzaAd={bozzaAd} />
       )}
@@ -115,6 +116,8 @@ export default function PaginaDelServizio() {
                   {f === p.consigliato && <span className="ml-2 rounded-full bg-olive-700 px-2 py-0.5 text-[11px] font-bold text-white">Consigliato</span>}
                 </p>
                 <p className="mt-0.5 text-sm text-ink-700">{FASCE[f].servizi[id]}</p>
+                {/* 26/11/2026 — L'analisi per abbonamento: parti incluse ed escluse, dalla stessa tabella (Nicola). */}
+                {id === 'analisi' && <div className="mt-2"><CosaCeNellAnalisi fascia={f} /></div>}
               </li>
             ))}
           </ul>

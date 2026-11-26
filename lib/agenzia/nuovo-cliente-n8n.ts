@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger';
+import { controllaCanali } from './canali';
 
 const ATTESA_MASSIMA_MS = 5_000;
 
@@ -49,7 +50,28 @@ export type NuovaAttivitaPerIlFlusso = {
    */
   sito?: string | null;
   dalModulo12?: boolean;
+  /**
+   * 26/11/2026 — Facoltativi: gli indizi che il titolare scrive all'iscrizione (/sell), il nome Instagram
+   * dell'attività e il link della scheda Google Maps. A n8n arrivano come `indizi_del_titolare`: aiutano a trovare
+   * il profilo e il place_id giusti. Sono dati dell'attività, non del titolare.
+   */
+  indizi?: IndiziDelTitolare | null;
 };
+
+export type IndiziDelTitolare = { instagram?: string; google_maps?: string };
+
+/** Gli indizi ripuliti col controllo dei canali; uno storto o vuoto si lascia fuori. `null` se non ne resta nessuno. */
+export function indiziDelTitolare(instagram: string | null | undefined, googleMaps: string | null | undefined): IndiziDelTitolare | null {
+  const fuori: IndiziDelTitolare = {};
+  for (const [chiave, valore] of [['instagram', instagram], ['google_maps', googleMaps]] as const) {
+    const v = (valore ?? '').trim();
+    if (!v) continue;
+    const esito = controllaCanali({ [chiave]: v });
+    const pulito = esito.ok ? esito.canali[chiave] : undefined;
+    if (pulito) fuori[chiave] = pulito;
+  }
+  return Object.keys(fuori).length ? fuori : null;
+}
 
 /**
  * 25/11/2026 — LA CITTÀ DALL'INDIRIZZO DEL NEGOZIO.
@@ -117,6 +139,7 @@ export async function inviaNuovaAttivitaAlFlusso(
           ...(a.sito && /^https:\/\//i.test(a.sito) ? { sito: corto(a.sito, 300) } : {}),
         },
         ...(a.dalModulo12 ? { provenienza: 'modulo-12' } : {}),
+        ...(a.indizi && Object.keys(a.indizi).length ? { indizi_del_titolare: a.indizi } : {}),
       }),
       signal: AbortSignal.timeout(ATTESA_MASSIMA_MS),
     });

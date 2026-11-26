@@ -230,7 +230,9 @@ describe('le pagine dei servizi della demo', () => {
     const r = disegna(await ServizioDemo({ params: Promise.resolve({ codice: CODICE, servizio: 'analisi' }) }));
     const blocco = r.querySelector('[data-testid="analisi-aziendale"]');
     expect(blocco?.textContent).toContain('Bar e pasticceria in centro');
-    expect(blocco?.textContent).toContain('scheda Google');
+    // 26/11/2026 — Il testo dell'analisi nelle fasce non nomina più la scheda Google (rapporto dell'imprenditore):
+    // la fonte della frase resta, come collegamento accanto alla frase.
+    expect(blocco?.querySelector('a[rel~="nofollow"]')?.textContent).toBe('fonte');
     expect(r.textContent?.toLowerCase()).not.toContain('pagella');
   });
 

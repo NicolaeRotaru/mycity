@@ -7,6 +7,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AlertTriangle, Check, CheckCircle2, CreditCard, Send, TrendingUp } from 'lucide-react';
 import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
+import CosaCeNellAnalisi from '@/components/seller/CosaCeNellAnalisi';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
@@ -286,6 +287,11 @@ export default function PaginaAbbonamento() {
               );
             })}
           </fieldset>
+          {/* 26/11/2026 — Cosa c'è nella tua analisi nella fascia guardata: parti incluse ed escluse (Nicola, 14:54). */}
+          <section className="mt-4" aria-labelledby="analisi-della-fascia">
+            <h3 id="analisi-della-fascia" className="text-lg font-bold text-ink-900">Cosa c’è nella tua analisi col {FASCE[fascia].nome}</h3>
+            <div className="mt-2"><CosaCeNellAnalisi fascia={fascia} /></div>
+          </section>
           <ul className="mt-4 space-y-1.5 text-sm text-ink-800">
             <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-olive-700" aria-hidden /> {p.primoMeseScontato ? FRASE_CONDIZIONI : FRASE_CONDIZIONI.replace(' Il primo mese costa la metà.', '')}</li>
             <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-olive-700" aria-hidden /> {RESOCONTO_MENSILE}</li>
