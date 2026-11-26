@@ -161,7 +161,18 @@ const handleSchema = z
 
 // R10-003 — Un nome di Facebook non ha il trattino basso (lo stesso nome dentro un link è già rifiutato):
 // scritto a mano «pane_quotidiano» passava, incollato in un link no.
-const facebookSchema = handleSchema.refine((v) => !v || !v.includes('_'), 'Il nome di una pagina Facebook non ha il trattino basso: controlla che sia il nome della pagina');
+// R13-009 — Il messaggio del trattino basso viene PRIMA di quello generico: in un link
+// «facebook.com/nome_x» il motivo vero del rifiuto è il trattino, non i caratteri del link.
+const facebookSchema = z
+  .string()
+  .trim()
+  .superRefine((v, ctx) => {
+    if (v.length > 64) ctx.addIssue({ code: 'custom', message: 'Troppo lungo' });
+    if (v.includes('_')) ctx.addIssue({ code: 'custom', message: 'Il nome di una pagina Facebook non ha il trattino basso: controlla che sia il nome della pagina' });
+    if (v && !/^@?[A-Za-z0-9._-]+$/.test(v)) ctx.addIssue({ code: 'custom', message: 'Scrivi solo il nome del profilo, per esempio iltuonegozio' });
+  })
+  .optional()
+  .or(z.literal(''));
 
 const whatsappSchema = z
   .string()

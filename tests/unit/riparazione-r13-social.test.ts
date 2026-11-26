@@ -80,3 +80,23 @@ describe('R13-008 — il sito del negozio accetta solo http e https', () => {
     expect(esito('').r.success).toBe(true);
   });
 });
+
+describe('R13-009 — un link facebook.com/nome_col_trattino dà prima il messaggio del trattino basso', () => {
+  const messaggi = (v: string) => {
+    const r = storeCustomizationSchema.safeParse({ socials: { facebook: v } });
+    return r.success ? null : r.error.issues.map((i) => i.message);
+  };
+  it('il primo messaggio è quello del trattino basso, anche col link intero', () => {
+    for (const v of ['https://www.facebook.com/pane_quotidiano', 'facebook.com/pane_quotidiano', 'pane_quotidiano']) {
+      const m = messaggi(fb(v) ?? v);
+      expect(m, v).not.toBeNull();
+      expect(m![0], v).toMatch(/trattino basso/);
+    }
+  });
+  it('senza trattino basso il messaggio generico resta, e i nomi buoni passano', () => {
+    expect(messaggi('https://www.facebook.com/groups/x')![0]).toMatch(/Scrivi solo il nome del profilo/);
+    expect(messaggi('x'.repeat(65))![0]).toBe('Troppo lungo');
+    expect(messaggi('pane.quotidiano')).toBeNull();
+    expect(messaggi('')).toBeNull();
+  });
+});
