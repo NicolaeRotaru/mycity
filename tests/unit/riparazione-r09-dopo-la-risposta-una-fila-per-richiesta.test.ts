@@ -11,7 +11,9 @@ const stato = vi.hoisted(() => ({
 }));
 
 vi.mock('next/server', () => ({ after: (fn: () => unknown) => void stato.registrati.push(fn) }));
-vi.mock('next/headers', () => ({ headers: () => stato.richiesta }));
+vi.mock('next/dist/server/app-render/work-async-storage.external', () => ({
+  workAsyncStorage: { getStore: () => stato.richiesta },
+}));
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
