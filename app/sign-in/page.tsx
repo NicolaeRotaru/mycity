@@ -63,6 +63,19 @@ function translateAuthError(msg: string): string {
 const AREA_DEL_RUOLO: Record<string, string> = { admin: '/admin', seller: '/seller', rider: '/rider' };
 const HOME_DEL_RUOLO: Record<string, string> = { admin: '/admin', seller: '/seller/dashboard', rider: '/rider' };
 
+/**
+ * R23-006 — Il percorso dove si arriva davvero, non la stringa: '/rider/..', '/admin/../' e '/.'
+ * portano su '/', '/%73eller/dashboard' su /seller/dashboard.
+ */
+function percorsoRisolto(ritorno: string): string {
+  const { pathname } = new URL(ritorno, 'http://percorso.interno');
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return pathname;
+  }
+}
+
 const SignInForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -269,7 +282,7 @@ const SignInForm = () => {
             .from('profiles').select('role').eq('id', data.user.id).single();
           const casa = prof?.role ? HOME_DEL_RUOLO[prof.role as string] : undefined;
           if (casa) {
-            const percorso = returnTo.split(/[?#]/)[0];
+            const percorso = percorsoRisolto(returnTo);
             const inAreaAltrui = Object.entries(AREA_DEL_RUOLO).some(
               ([ruolo, area]) => ruolo !== prof?.role && (percorso === area || percorso.startsWith(`${area}/`)),
             );

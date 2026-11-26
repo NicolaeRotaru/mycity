@@ -22,10 +22,23 @@ export const runtime = 'nodejs';
 const AREA_DEL_RUOLO: Record<string, string> = { admin: '/admin', seller: '/seller', rider: '/rider' };
 const HOME_DEL_RUOLO: Record<string, string> = { admin: '/admin', seller: '/seller/dashboard', rider: '/rider' };
 
+/**
+ * R23-006 — Il percorso dove si arriva davvero, non la stringa: '/rider/..', '/admin/../' e '/.'
+ * portano su '/', '/%73eller/dashboard' su /seller/dashboard.
+ */
+function percorsoRisolto(ritorno: string): string {
+  const { pathname } = new URL(ritorno, 'http://percorso.interno');
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return pathname;
+  }
+}
+
 function ritornoPerIlRuolo(ritorno: string, ruolo: unknown): string {
   const casa = typeof ruolo === 'string' ? HOME_DEL_RUOLO[ruolo] : undefined;
   if (!casa) return ritorno;
-  const percorso = ritorno.split(/[?#]/)[0];
+  const percorso = percorsoRisolto(ritorno);
   const inAreaAltrui = Object.entries(AREA_DEL_RUOLO).some(
     ([altro, area]) => altro !== ruolo && (percorso === area || percorso.startsWith(`${area}/`)),
   );
