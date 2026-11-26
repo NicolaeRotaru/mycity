@@ -114,6 +114,15 @@ function mancaPrezzoPagato(error: unknown): boolean {
   return codice.startsWith('PGRST') && `${e.message ?? ''} ${e.details ?? ''} ${e.hint ?? ''}`.includes(COLONNA_PREZZO_PAGATO);
 }
 
+/**
+ * Con la colonna la lettura non va: manca (sopra) oppure il database ha superato il suo tempo
+ * (57014, `statement_timeout` di anon) ordinando o tagliando su `prezzo_pagato` in un catalogo grande.
+ * In tutti e due i casi lista e conteggio ripiegano sul prezzo pieno, e per cinque minuti non la riprovano.
+ */
+function prezzoPagatoNonVa(error: unknown): boolean {
+  return mancaPrezzoPagato(error) || String((error as { code?: unknown } | null)?.code ?? '') === '57014';
+}
+
 function segnaSenzaPrezzoPagato(supabase: SupabaseClient): void {
   notiPrezzoPagato.set(supabase, { c: false, finoA: Date.now() + RICHIEDI_SENZA_PREZZO_PAGATO_MS });
 }
@@ -355,8 +364,9 @@ export async function leggiProdottiDellaGriglia(
   try {
     return await leggiLaGriglia(supabase, d, pagato);
   } catch (errore) {
-    // R21-003 — Il ripiego: la colonna non c'è (migrazione 911 non applicata) → la lettura di prima.
-    if (!pagato || !mancaPrezzoPagato(errore)) throw errore;
+    // R21-003 — Il ripiego: la colonna non c'è (migrazione 911 non applicata) o il database ha superato
+    // il tempo (57014) → la lettura di prima.
+    if (!pagato || !prezzoPagatoNonVa(errore)) throw errore;
     segnaSenzaPrezzoPagato(supabase);
     return leggiLaGriglia(supabase, d, false);
   }
@@ -570,7 +580,12 @@ export async function contaProdottiDellaGriglia(
   let senzaAggancio = false;
   const conta = (blocco?: string[]) => {
     const colonne = senzaAggancio ? 'id' : 'id, negozio:seller_public_profiles!products_seller_id_fkey!inner(id)';
-    let q = supabase.from('products').select(colonne, { count: 'exact', head: true }).eq('status', 'available');
+    // R21-003 — Guardando `prezzo_pagato` si conta con una GET senza righe (limit 0) invece che con una HEAD:
+    // così l'errore porta il suo codice e il conteggio ripiega solo dove ripiega la lista.
+    let q = (pagato
+      ? supabase.from('products').select(colonne, { count: 'exact' }).limit(0)
+      : supabase.from('products').select(colonne, { count: 'exact', head: true })
+    ).eq('status', 'available');
     q = applicaFiltriComuni(q, d, categorie, pagato, scontatiSotto);
     if (termine) q = q.ilike('name', `%${termine}%`);
     if (blocco) q = q.in('id', blocco);
@@ -582,17 +597,20 @@ export async function contaProdottiDellaGriglia(
   let totale = 0;
   for (const blocco of blocchi) {
     let { count, error } = await conta(blocco);
-    // Su una HEAD postgrest-js non dà il codice dell'errore (solo `message: ""`): il ripiego scatta
-    // su QUALSIASI errore della lettura agganciata, mai sul codice.
-    if (error && !senzaAggancio) {
-      senzaAggancio = true;
-      ({ count, error } = await conta(blocco));
-    }
-    // R21-003 — Ancora in errore guardando `prezzo_pagato`: la colonna può non esserci (la HEAD non dà
-    // il codice per saperlo). Si conta come prima, sul prezzo pieno.
-    if (error && pagato) {
-      pagato = false;
-      scontatiSotto = await scontatiSenzaPagato();
+    for (;;) {
+      if (!error) break;
+      // R21-003 — La stessa strada della lista: si conta sul prezzo pieno solo se `prezzo_pagato` manca o
+      // ha superato il tempo (57014), e da lì anche la lista legge sul prezzo pieno. Un altro errore non
+      // cambia il prezzo su cui si conta: il numero sopra la griglia deve tornare con la lista.
+      if (pagato && prezzoPagatoNonVa(error)) {
+        pagato = false;
+        segnaSenzaPrezzoPagato(supabase);
+        scontatiSotto = await scontatiSenzaPagato();
+      } else if (!senzaAggancio) {
+        // Su una HEAD postgrest-js non dà il codice dell'errore (solo `message: ""`): il ripiego
+        // dell'aggancio scatta su QUALSIASI altro errore della lettura agganciata, mai sul codice.
+        senzaAggancio = true;
+      } else break;
       ({ count, error } = await conta(blocco));
     }
     if (error || count == null) return null;
