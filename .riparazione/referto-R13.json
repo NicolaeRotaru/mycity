@@ -1,13 +1,13 @@
 {
  "sessione": "R13",
- "aggiornato": "2026-11-26 15:20",
+ "aggiornato": "2026-11-26 16:05",
  "finita": true,
- "testa": "897182db181e03c33bafb02f0c7161a6a49b7a14",
+ "testa": "a1682ada73b4b8f742a3b48d7b95ab6aa2ea7c31",
  "verifica": {
   "comando": "npm run verify",
   "esito": "verde",
-  "testa": "897182db181e03c33bafb02f0c7161a6a49b7a14",
-  "nota": "typecheck, lint (0 errori) e vitest: 2149 file, 13281 prove verdi"
+  "testa": "a1682ada73b4b8f742a3b48d7b95ab6aa2ea7c31",
+  "nota": "typecheck, lint (0 errori) e vitest: 2149 file, 13281 prove verdi; prove SQL locali (apply.sh 236 migrazioni, run.sh 99 file) verdi"
  },
  "voci": [
   {
@@ -262,8 +262,9 @@
    },
    "copre_tutta_la_voce": true,
    "cosa_ho_fatto": "Migrazione nuova 900 che ridefinisce public.risposta_avvisa_chi_ha_chiesto() (nessuna migrazione dopo la 822 la cambia): l'avviso non parte quando chi ha chiesto è il negozio del prodotto, letto dal database e non da answered_by. Le domande dei clienti, e quelle di un negozio a un altro negozio, avvisano come prima anche senza answered_by.",
-   "nota": "Migrazione nuova 900 (fascia 900-909), non applicata a nessun database vero: lo decide Nicola. Suite SQL locale (apply.sh e run.sh) verde con la 900.",
-   "verificato_da": "qa (modello grande, smentitore lotto 3): database locale ricostruito con e senza la 900; 10 casi propri (negozio con 3 prodotti, answered_by admin o altro negozio, risposta dal server, UPDATE ripetuti, prodotto senza negozio): 5 rossi senza la 900, tutti verdi con; SECURITY DEFINER, search_path e REVOKE come nella 822; nessuna migrazione 823-899 ridefinisce la funzione; suite SQL e 28 prove che leggono le migrazioni verdi"
+   "nota": "Migrazione nuova 900 (fascia 900-909), non applicata a nessun database vero: lo decide Nicola. Suite SQL locale (apply.sh e run.sh) verde con la 900. Giro di correzione chiesto dalla regia: riservato.",
+   "verificato_da": "qa (modello grande, smentitore lotto 3): database locale ricostruito con e senza la 900; 10 casi propri (negozio con 3 prodotti, answered_by admin o altro negozio, risposta dal server, UPDATE ripetuti, prodotto senza negozio): 5 rossi senza la 900, tutti verdi con; SECURITY DEFINER, search_path e REVOKE come nella 822; nessuna migrazione 823-899 ridefinisce la funzione; suite SQL e 28 prove che leggono le migrazioni verdi",
+   "commit_correzione": "a1682ada73b4b8f742a3b48d7b95ab6aa2ea7c31"
   },
   {
    "id": "R13-013",
@@ -326,8 +327,8 @@
  ],
  "conto": {
   "agenti": 6,
-  "nota": "3 subagenti riparatori (lotto 1 e 2 sonnet, lotto 3 modello grande) e 3 smentitori (lotto 1 e 2 sonnet, lotto 3 modello grande). Le due correzioni chieste dagli smentitori (R13-005, R13-010) le ho fatte io, al tetto dei subagenti. Costo letto con get_session (senza id) prima della consegna: 11,95 $ (a turno chiuso precedente).",
+  "nota": "3 subagenti riparatori (lotto 1 e 2 sonnet, lotto 3 modello grande) e 3 smentitori (lotto 1 e 2 sonnet, lotto 3 modello grande). Le due correzioni chieste dagli smentitori (R13-005, R13-010) le ho fatte io, al tetto dei subagenti. Costo letto con get_session (senza id) prima della consegna: 12,33 $ (get_session durante il giro di correzione).",
   "subagenti": 6
  },
- "costo_usd": 11.95
+ "costo_usd": 12.33
 }
