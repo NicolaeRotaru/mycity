@@ -236,6 +236,20 @@ export function motivoFasciaRifiutata(
 }
 
 /**
+ * 26/11/2026 — AL MASSIMO CINQUE GIRI PER FASCIA.
+ *
+ * Regola di Nicola (fatto `consegna.capienza`, 1/11): in una fascia si accettano al massimo 5
+ * ordini, e il numero si cambia dal pannello. Questo è il valore di partenza, finché il pannello
+ * non lo scrive. I giri li conta chi crea l'ordine: quelli non annullati, nello stesso giorno e
+ * nella stessa fascia; un carrello con più negozi (gli ordini dello stesso cliente) vale un giro.
+ * Al sesto la rotta risponde 409 con `MOTIVO_FASCIA_PIENA`.
+ */
+export const ORDINI_PER_FASCIA = 5;
+
+export const MOTIVO_FASCIA_PIENA =
+  'Questa fascia è piena: in quell’orario abbiamo già tutte le consegne che riusciamo a fare. Scegline un’altra.';
+
+/**
  * Le fasce di oggi che si possono ancora scegliere. Vuota dopo l'ultima.
  *
  * Con l'ora intera (le vecchie chiamate) vale solo la regola dei 60 minuti alle :00. Con
