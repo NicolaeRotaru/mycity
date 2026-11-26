@@ -85,6 +85,8 @@ type SellerGroup = {
   holdCents: number; // in sospeso (carta in attesa del giro, contanti dal fattorino, IBAN)
   paidCents: number; // già partito davvero: bonifici della carta e bonifici a mano
   inFattura: { mese: string; cents: number }[]; // commissione dei ritiri al banco rimasta da fatturare
+  recuperoCents: number; // contanti versati a mano e poi rimborsati: da riprendere dal negozio
+  recuperoOrdini: number;
 };
 
 const fmtDate = (iso: string | null) =>
@@ -105,7 +107,15 @@ const nomeDelMese = (mese: string) => new Date(`${mese}-15T12:00:00Z`).toLocaleD
  * guarda gli stessi cancelli.
  */
 function ritiroDaRegolare(o: PayoutOrder): boolean {
-  return o.payment_method === 'cod' && o.payout_status === 'CASH_IN_STORE' && !o.payout_at && o.payment_status !== 'REFUNDED';
+  return (
+    o.payment_method === 'cod' && o.payout_status === 'CASH_IN_STORE' && !o.payout_at &&
+    // Gli stessi cancelli dei contanti (916): con un reso, un reclamo, una contestazione o un rimborso,
+    // anche parziale, la commissione aspetta.
+    o.pratica_aperta !== true &&
+    (!o.dispute_status || o.dispute_status === 'WON') &&
+    (!o.internal_dispute_status || o.internal_dispute_status === 'RESOLVED') &&
+    o.payment_status !== 'REFUNDED' && o.payment_status !== 'PARTIALLY_REFUNDED'
+  );
 }
 
 type ContoDelLunedi = {
@@ -150,6 +160,9 @@ function contoDiQuestaSettimana(ordini: PayoutOrder[], adesso: Date): ContoDelLu
     ordini.filter((o) => ritiroDaRegolare(o) && !nelLunedi.has(o.id)),
   );
 }
+
+/** Una riga di contanti_da_recuperare (916): un contante versato a mano e poi rimborsato al cliente. */
+type DaRecuperare = { order_id: string; seller_id: string; store_name: string | null; da_recuperare_cents: number };
 
 /** Una riga di bonifici_manuali_per_mese (916): versato e in fattura, per negozio e mese. */
 type BonificiDelMese = { seller_id: string; mese: string; importo_cents: number; in_fattura_cents: number };
@@ -227,7 +240,16 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
     } as never);
     if (error) {
       // Tutto o niente (916): se nel frattempo è cambiato qualcosa non resta scritto niente.
-      const cambiato = /BONIFICO_CAMBIATO/.test(String((error as { message?: unknown }).message ?? ''));
+      const messaggio = String((error as { message?: unknown }).message ?? '');
+      // Lo stesso bonifico è già scritto con un altro riferimento o un'altra cifra (916): lo si dice.
+      const giaSegnato = /BONIFICO_GIA_SEGNATO:\s*(.*)$/.exec(messaggio);
+      if (giaSegnato) {
+        setEsito(`Non l’ho riscritto: ${giaSegnato[1]}. Se il bonifico è un altro, ricarica e controlla.`);
+        setStato('pronto');
+        quandoFatto();
+        return;
+      }
+      const cambiato = /BONIFICO_CAMBIATO/.test(messaggio);
       setEsito(cambiato ? 'Non l’ho segnato: nel frattempo la cifra è cambiata (un reso, un reclamo o un ordine già segnato). Ricarica e controlla prima di segnare.' : null);
       setStato(cambiato ? 'pronto' : 'errore');
       if (cambiato) quandoFatto();
@@ -305,7 +327,10 @@ export default function AdminPayoutsPage() {
       // Collaudo K04 — resi e reclami aperti si leggono dalle loro tabelle, come fanno il giro e la
       // funzione 916: senza, un contante con un reso aperto entrava nei «Da versare», la funzione lo saltava
       // in silenzio e il lunedì dopo ricompariva, pagato due volte. Una lettura caduta li ferma tutti.
-      const contantiHeld = righe.filter((o) => o.payment_method === 'cod' && o.payout_status === 'HELD').map((o) => o.id);
+      // Anche i ritiri al banco da regolare: con un reso o un reclamo aperto la commissione aspetta (916).
+      const contantiHeld = righe
+        .filter((o) => o.payment_method === 'cod' && (o.payout_status === 'HELD' || (o.payout_status === 'CASH_IN_STORE' && !o.payout_at)))
+        .map((o) => o.id);
       const aperti = new Set<string>();
       let letturaCaduta = false;
       for (let i = 0; i < contantiHeld.length; i += 150) {
@@ -350,9 +375,27 @@ export default function AdminPayoutsPage() {
       })),
     [manuali.data],
   );
+  // R22-003 — Contanti già versati a mano e poi rimborsati al cliente: il bonifico è partito, la quota
+  // del negozio non si toglie più da un bonifico futuro. Va ripresa dal negozio: la pagina la mostra.
+  const recuperi = useQuery({
+    queryKey: ['admin', 'payouts', 'da-recuperare'],
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<DaRecuperare[]> => {
+      const { data, error } = await supabase.rpc('contanti_da_recuperare');
+      if (error) throw error;
+      return (Array.isArray(data) ? (data as Partial<DaRecuperare>[]) : []).map((r) => ({
+        order_id: String(r.order_id ?? ''),
+        seller_id: String(r.seller_id ?? ''),
+        store_name: r.store_name ?? null,
+        da_recuperare_cents: centesimi(r.da_recuperare_cents),
+      }));
+    },
+  });
+  const righeRecuperi = useMemo(() => recuperi.data ?? [], [recuperi.data]);
   const rileggi = () => {
     void refetch();
     void manuali.refetch();
+    void recuperi.refetch();
   };
 
   const meta = letti as LettiPayout;
@@ -370,12 +413,11 @@ export default function AdminPayoutsPage() {
 
   const groups = useMemo(() => {
     const map = new Map<string, SellerGroup>();
-    for (const o of orders) {
-      if (!o.seller_id) continue;
-      const g = map.get(o.seller_id) ?? {
-        sellerId: o.seller_id,
-        storeName: o.seller?.store_name ?? `Venditore ${o.seller_id.slice(0, 6)}`,
-        iban: o.seller?.billing_iban ?? null,
+    const gruppo = (sellerId: string, storeName: string | null | undefined, iban: string | null): SellerGroup => {
+      const g = map.get(sellerId) ?? {
+        sellerId,
+        storeName: storeName ?? `Venditore ${sellerId.slice(0, 6)}`,
+        iban,
         orders: [],
         dueCents: 0,
         lunediCents: 0,
@@ -384,14 +426,28 @@ export default function AdminPayoutsPage() {
         holdCents: 0,
         paidCents: 0,
         inFattura: [],
+        recuperoCents: 0,
+        recuperoOrdini: 0,
       };
+      map.set(sellerId, g);
+      return g;
+    };
+    for (const o of orders) {
+      if (!o.seller_id) continue;
+      const g = gruppo(o.seller_id, o.seller?.store_name, o.seller?.billing_iban ?? null);
       g.orders.push(o);
       const cents = netto(o);
       const t = payoutTone(o);
       // R22-002 — i bonifici a mano si contano da quello che è partito (righeManuali), non dal netto pieno.
       if (t.tone === 'paid' && o.payout_status === 'TRANSFERRED') g.paidCents += cents;
       else if (t.tone === 'hold') g.holdCents += cents;
-      map.set(o.seller_id, g);
+    }
+    // Un negozio con solo una quota da recuperare compare lo stesso: i suoi ordini possono essere fuori elenco.
+    for (const r of righeRecuperi) {
+      if (!r.seller_id || r.da_recuperare_cents <= 0) continue;
+      const g = gruppo(r.seller_id, r.store_name, null);
+      g.recuperoCents += r.da_recuperare_cents;
+      g.recuperoOrdini += 1;
     }
     const adesso = new Date();
     const mese = meseDiRoma(adesso);
@@ -409,7 +465,7 @@ export default function AdminPayoutsPage() {
     }
     // Ordina: prima chi ha più da liquidare.
     return Array.from(map.values()).sort((a, b) => b.lunediCents - a.lunediCents || b.dueCents - a.dueCents);
-  }, [orders, righeManuali]);
+  }, [orders, righeManuali, righeRecuperi]);
 
   const totals = useMemo(() => {
     let hold = 0;
@@ -470,6 +526,12 @@ export default function AdminPayoutsPage() {
             del vero.
           </p>
         </div>
+      )}
+
+      {recuperi.isError && (
+        <p role="alert" className="text-sm text-secondary-700">
+          Non riesco a leggere i contanti da recuperare dai negozi (rimborsi arrivati dopo un bonifico a mano). Riprova tra poco.
+        </p>
       )}
 
       {/* KPI: pronto · in sospeso · già pagato */}
@@ -542,6 +604,14 @@ export default function AdminPayoutsPage() {
                   {/* R11-012 (collaudo K04) — anche le cifre del singolo negozio sono un minimo, con l'elenco tagliato. */}
                   {g.paidCents > 0 && (
                     <p className="text-xs text-ink-500">{almenoPagati}{formatPrice(g.paidCents / 100)} già pagati</p>
+                  )}
+                  {/* R22-003 — Non si toglie dal bonifico del lunedì: si riprende dal negozio, a mano. */}
+                  {g.recuperoCents > 0 && (
+                    <p className="text-xs font-semibold text-secondary-700">
+                      Da recuperare dal negozio: {formatPrice(g.recuperoCents / 100)} ({g.recuperoOrdini}{' '}
+                      {g.recuperoOrdini === 1 ? 'ordine rimborsato' : 'ordini rimborsati'} dopo il bonifico a mano). Non è tolto
+                      dal bonifico del lunedì: chiedilo al negozio.
+                    </p>
                   )}
                   {g.inFattura.map((f) => (
                     <p key={f.mese} className="text-xs text-secondary-700">

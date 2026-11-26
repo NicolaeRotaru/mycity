@@ -31,11 +31,17 @@
 --     scrive niente e risponde come il primo. Un passo in audit_logs per ogni bonifico.
 --  4. public.bonifici_manuali_per_mese() — i bonifici sommati per negozio e mese (ora di Roma):
 --     versato, trattenuto, in fattura. L'amministratore li legge tutti, un negozio solo i suoi.
+--  5. public.contanti_da_recuperare() — solo un amministratore: i contanti già versati a mano e poi
+--     rimborsati al cliente, con quanto va ripreso dal negozio (il bonifico è partito, non si toglie più).
+--  Un ritiro al banco con un reso, un reclamo, una contestazione o un rimborso (anche parziale) non
+--  entra nel bonifico, come i contanti. Il secondo clic con un riferimento o una cifra diversi dal primo
+--  non passa in silenzio: risponde BONIFICO_GIA_SEGNATO col riferimento già scritto.
 --
 -- Prove: tests/sql/rls/riparazione-r22-bonifico-fatto.test.sql (la funzione) e
 -- tests/sql/rls/riparazione-r22-pagato-a-mano.test.sql (il vincolo).
 -- Si può rieseguire. NON si applica a mano: lo decide Nicola.
 -- REVERSIBILE:
+--   DROP FUNCTION IF EXISTS public.contanti_da_recuperare();
 --   DROP FUNCTION IF EXISTS public.bonifici_manuali_per_mese();
 --   DROP FUNCTION IF EXISTS public.segna_bonifico_manuale(uuid, uuid[], text, uuid[], integer);
 --   DROP TABLE IF EXISTS private.bonifici_manuali_ordini;
@@ -177,6 +183,14 @@ BEGIN
        AND cardinality(v_gia_bonifici) = 1
        AND EXISTS (SELECT 1 FROM private.bonifici_manuali b WHERE b.id = v_gia_bonifici[1] AND b.seller_id = p_seller)
        AND (SELECT count(*) FROM private.bonifici_manuali_ordini l WHERE l.bonifico_id = v_gia_bonifici[1]) = cardinality(v_tutti) THEN
+      -- Idempotente solo se coincide tutto: un CRO o una cifra diversi non si accettano in silenzio.
+      SELECT b.riferimento, b.importo_cents INTO v_rif, v_importo
+        FROM private.bonifici_manuali b WHERE b.id = v_gia_bonifici[1];
+      IF (v_importo > 0 AND v_rif IS DISTINCT FROM nullif(btrim(coalesce(p_riferimento, '')), ''))
+         OR (p_importo_cents IS NOT NULL AND p_importo_cents <> v_importo) THEN
+        RAISE EXCEPTION 'BONIFICO_GIA_SEGNATO: questo bonifico è già scritto col riferimento % e % centesimi',
+          coalesce(v_rif, '(nessuno: compensazione)'), v_importo USING ERRCODE = 'P0001';
+      END IF;
       RETURN cardinality(v_contanti);
     END IF;
     RAISE EXCEPTION 'BONIFICO_CAMBIATO: % ordini sono già in un altro bonifico', v_gia USING ERRCODE = 'P0001';
@@ -202,7 +216,8 @@ BEGIN
      AND NOT EXISTS (SELECT 1 FROM public.disputes d
                       WHERE d.order_id = o.id AND d.status IN ('open', 'under_review'));
 
-  -- I ritiri pagati al banco con la commissione ancora da regolare.
+  -- I ritiri pagati al banco con la commissione ancora da regolare: gli stessi cancelli dei contanti
+  -- (reso, reclamo, contestazione) e nessun rimborso, neanche parziale: la commissione aspetta.
   SELECT count(*), coalesce(sum(GREATEST(0, coalesce(o.application_fee_cents, 0))), 0)
     INTO v_ok_ritiri, v_commissione_cents
     FROM public.orders o
@@ -212,7 +227,13 @@ BEGIN
      AND o.delivery_status = 'DELIVERED'
      AND o.payout_status = 'CASH_IN_STORE'
      AND o.payout_at IS NULL
-     AND coalesce(o.payment_status, '') <> 'REFUNDED';
+     AND (o.dispute_status IS NULL OR o.dispute_status = 'WON')
+     AND (o.internal_dispute_status IS NULL OR o.internal_dispute_status = 'RESOLVED')
+     AND coalesce(o.payment_status, '') NOT IN ('REFUNDED', 'PARTIALLY_REFUNDED')
+     AND NOT EXISTS (SELECT 1 FROM public.returns r
+                      WHERE r.order_id = o.id AND r.status IN ('REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED'))
+     AND NOT EXISTS (SELECT 1 FROM public.disputes d
+                      WHERE d.order_id = o.id AND d.status IN ('open', 'under_review'));
 
   IF v_ok_contanti <> cardinality(v_contanti) OR v_ok_ritiri <> cardinality(v_ritiri) THEN
     RAISE EXCEPTION 'BONIFICO_CAMBIATO: % ordini non sono più da segnare',
@@ -332,6 +353,58 @@ GRANT EXECUTE ON FUNCTION public.bonifici_manuali_per_mese() TO authenticated;
 
 COMMENT ON FUNCTION public.bonifici_manuali_per_mese() IS
   'I bonifici fatti a mano sommati per negozio e mese (ora di Roma): versato, trattenuto dai ritiri al banco, in fattura. L amministratore li legge tutti, un negozio solo i suoi (migrazione 916).';
+
+-- 5) Le quote da recuperare dal negozio ----------------------------------------------------------
+-- Un contante già versato a mano e poi rimborsato al cliente: il bonifico è partito, quindi la quota
+-- del negozio non si toglie più da un bonifico futuro. Va ripresa dal negozio, e la pagina dei
+-- bonifici la mostra. Da recuperare = quanto è partito col bonifico − quanto gli spetta adesso
+-- (netto meno storni; zero se l'ordine è rimborsato per intero).
+CREATE OR REPLACE FUNCTION public.contanti_da_recuperare()
+RETURNS TABLE (
+  order_id uuid,
+  seller_id uuid,
+  store_name text,
+  fatto_il timestamptz,
+  riferimento text,
+  versato_cents integer,
+  da_recuperare_cents integer
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+BEGIN
+  IF (SELECT auth.uid()) IS NULL OR NOT public.is_admin() THEN
+    RAISE EXCEPTION 'quote da recuperare: riservate agli amministratori' USING ERRCODE = '42501';
+  END IF;
+
+  RETURN QUERY
+    SELECT q.oid, q.sid, q.negozio, q.il, q.rif, q.versato, q.da_recuperare
+      FROM (
+        SELECT l.order_id AS oid, b.seller_id AS sid, p.store_name AS negozio, b.fatto_il AS il,
+               b.riferimento AS rif, l.cents AS versato,
+               GREATEST(0, l.cents - CASE
+                 WHEN o.payout_status IN ('REFUNDED', 'REVERSED') OR o.payment_status = 'REFUNDED' THEN 0
+                 ELSE GREATEST(0, coalesce(o.seller_payout_cents, 0) - coalesce(o.seller_payout_reversed_cents, 0))
+               END)::int AS da_recuperare
+          FROM private.bonifici_manuali_ordini l
+          JOIN private.bonifici_manuali b ON b.id = l.bonifico_id
+          JOIN public.orders o ON o.id = l.order_id
+          LEFT JOIN public.profiles p ON p.id = b.seller_id
+         WHERE l.tipo = 'contanti'
+      ) q
+     WHERE q.da_recuperare > 0
+     ORDER BY q.il DESC, q.oid;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.contanti_da_recuperare() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.contanti_da_recuperare() FROM anon;
+GRANT EXECUTE ON FUNCTION public.contanti_da_recuperare() TO authenticated;
+
+COMMENT ON FUNCTION public.contanti_da_recuperare() IS
+  'Contanti versati a mano e poi rimborsati al cliente: quanto va ripreso dal negozio, ordine per ordine. Solo amministratori (migrazione 916).';
 
 NOTIFY pgrst, 'reload schema';
 

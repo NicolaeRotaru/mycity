@@ -97,6 +97,7 @@ vi.mock('@/lib/supabase/client', () => ({
     from: (t: string) => tabella(t),
     rpc: vi.fn(async (n: string, args: Record<string, unknown>) => {
       if (n === 'bonifici_manuali_per_mese') return { data: stato.manuali, error: null };
+      if (n === 'contanti_da_recuperare') return { data: [], error: null };
       stato.chiamate.push({ n, ...args });
       return { data: (args.p_order_ids as string[]).length, error: null };
     }),
