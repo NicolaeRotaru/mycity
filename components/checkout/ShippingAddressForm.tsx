@@ -67,12 +67,15 @@ export function useCoordinateDellaZona(
   useEffect(() => {
     if (!domanda) return;
     let vale = true;
+    // La ricerca vecchia si annulla davvero (non solo si ignora) quando si scrive ancora o si smonta.
+    const annulla = new AbortController();
     const timer = setTimeout(async () => {
       try {
         const res = await fetch('/api/geocode', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ q: domanda }),
+          signal: annulla.signal,
         });
         if (!res.ok) return;
         const j = (await res.json()) as { lat?: unknown; lng?: unknown };
@@ -86,6 +89,7 @@ export function useCoordinateDellaZona(
     return () => {
       vale = false;
       clearTimeout(timer);
+      annulla.abort();
     };
   }, [domanda]);
 
