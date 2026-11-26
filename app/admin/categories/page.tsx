@@ -26,6 +26,18 @@ type Cat = {
   image_url?: string | null;
 };
 
+/**
+ * R13-004 — Niente `maxLength` sui campi brevi: il browser tagliava in silenzio quello che si
+ * incollava oltre il tetto (nome e slug 60, icona 8, foto 500: gli stessi dell'API). Il testo
+ * resta intero e, oltre il tetto, l'errore sotto il campo lo dice (come nei moduli della home).
+ */
+function sopraIlTetto(valore: string, max: number): string | undefined {
+  const n = valore.trim().length;
+  return n > max
+    ? `Troppo lungo: ${n.toLocaleString('it-IT')} caratteri su ${max.toLocaleString('it-IT')}. Accorcialo, così si salva.`
+    : undefined;
+}
+
 async function authedFetch(method: string, body: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
   const res = await fetch('/api/admin/categories', {
@@ -69,9 +81,9 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli
   return (
     <div className={`rounded-xl border p-3 ${cat.parent_id ? 'ml-6 border-cream-200 bg-cream-50/40' : 'border-cream-300 bg-white'}`}>
       <div className="flex flex-wrap items-end gap-2">
-        <Input label="Nome" containerClassName="flex-1 min-w-[140px]" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
-        <Input label="Slug" containerClassName="w-40" value={slug} maxLength={60} onChange={(e) => setSlug(e.target.value)} />
-        <Input label="Icona" containerClassName="w-20" value={icon} maxLength={8} placeholder="Emoji" onChange={(e) => setIcon(e.target.value)} />
+        <Input label="Nome" containerClassName="flex-1 min-w-[140px]" value={name} error={sopraIlTetto(name, 60)} onChange={(e) => setName(e.target.value)} />
+        <Input label="Slug" containerClassName="w-40" value={slug} error={sopraIlTetto(slug, 60)} onChange={(e) => setSlug(e.target.value)} />
+        <Input label="Icona" containerClassName="w-20" value={icon} error={sopraIlTetto(icon, 8)} placeholder="Emoji" onChange={(e) => setIcon(e.target.value)} />
         <Select label="Genitore" containerClassName="w-44" value={parentId} onChange={(e) => setParentId(e.target.value)}>
           <option value="">— Principale —</option>
           {/* Una principale con sottocategorie non può diventare figlia: le sue
@@ -80,7 +92,7 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli
         </Select>
         <Input label="Ordine" containerClassName="w-20" type="number" min={0} value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value) || 0)} />
         <Checkbox containerClassName="mb-2.5" label="In evidenza" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
-        <Input label="Foto della tessera (https://… o /…)" containerClassName="flex-1 min-w-[220px]" value={imageUrl} maxLength={500} placeholder="Vuota = gradiente del marchio" onChange={(e) => setImageUrl(e.target.value)} />
+        <Input label="Foto della tessera (https://… o /…)" containerClassName="flex-1 min-w-[220px]" value={imageUrl} error={sopraIlTetto(imageUrl, 500)} placeholder="Vuota = gradiente del marchio" onChange={(e) => setImageUrl(e.target.value)} />
         <Button className="mb-0.5" size="sm" type="button" loading={save.isPending} onClick={() => save.mutate()}>Salva</Button>
         <button type="button" onClick={() => {
             if (figli > 0) {
@@ -147,9 +159,9 @@ export default function AdminCategoriesPage() {
 
       {/* Crea nuova */}
       <form onSubmit={(e) => { e.preventDefault(); create.mutate(); }} className="bg-white border border-cream-300 rounded-xl p-4 flex flex-wrap items-end gap-2">
-        <Input label="Nuova categoria" containerClassName="flex-1 min-w-[160px]" value={newName} maxLength={60} placeholder="Es: Animali" onChange={(e) => setNewName(e.target.value)} />
-        <Input label="Icona" containerClassName="w-20" value={newIcon} maxLength={8} placeholder="Emoji" onChange={(e) => setNewIcon(e.target.value)} />
-        <Input label="Foto (facoltativa)" containerClassName="flex-1 min-w-[200px]" value={newImage} maxLength={500} placeholder="https://… o /…" onChange={(e) => setNewImage(e.target.value)} />
+        <Input label="Nuova categoria" containerClassName="flex-1 min-w-[160px]" value={newName} error={sopraIlTetto(newName, 60)} placeholder="Es: Animali" onChange={(e) => setNewName(e.target.value)} />
+        <Input label="Icona" containerClassName="w-20" value={newIcon} error={sopraIlTetto(newIcon, 8)} placeholder="Emoji" onChange={(e) => setNewIcon(e.target.value)} />
+        <Input label="Foto (facoltativa)" containerClassName="flex-1 min-w-[200px]" value={newImage} error={sopraIlTetto(newImage, 500)} placeholder="https://… o /…" onChange={(e) => setNewImage(e.target.value)} />
         <Select label="Genitore" containerClassName="w-44" value={newParent} onChange={(e) => setNewParent(e.target.value)}>
           <option value="">— Principale —</option>
           {tops.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
