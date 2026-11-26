@@ -5,7 +5,7 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Plus, X } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Field';
-import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { FRASE_DELLA_ZONA } from '@/lib/ordini/zona-di-consegna';
 
 /**
  * Form indirizzo di consegna per checkout.
@@ -307,7 +307,7 @@ export function ShippingAddressForm({
                28/10/2026 — Via «e dintorni»: col confine a 5 km Podenzano,
                Rottofreno e Gossolengo restano fuori, e la frase li prometteva.
                Il limite vero è la distanza dal negozio, e la frase dice quella. */
-            hint={`Consegniamo a Piacenza, fino a ${RAGGIO_CONSEGNA_KM} km dal negozio`}
+            hint={FRASE_DELLA_ZONA}
           />
         </div>
         <Input

@@ -2,6 +2,15 @@ import { RAGGIO_CONSEGNA_KM, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { haversineKm } from '@/lib/geo';
 
 /**
+ * R09-005 — LA FRASE DELLA ZONA SI SCRIVE QUI, UNA VOLTA SOLA.
+ * La cassa, la pagina Spedizioni, il rifiuto, la pillola della posizione, le FAQ e «Vicino a te» la
+ * importano da qui: il confine vero (`RAGGIO_CONSEGNA_KM`) e le parole che lo dicono non si separano.
+ */
+export const CONFINE_DELLA_ZONA = `${RAGGIO_CONSEGNA_KM} km`;
+export const FINO_AL_CONFINE = `fino a ${CONFINE_DELLA_ZONA} dal negozio`;
+export const FRASE_DELLA_ZONA = `Consegniamo a Piacenza, ${FINO_AL_CONFINE}`;
+
+/**
  * FIN DOVE CONSEGNIAMO — la domanda in un posto solo.
  *
  * Vive qui, e non dentro lib/shipping.ts, per un motivo pratico: la chiedono le
@@ -61,7 +70,7 @@ export function fuoriZonaDiConsegna(opts: DoveVaLaConsegna & { pickupInStore?: b
 export function motivoFuoriZona(nomeNegozio?: string | null): string {
   const negozio = nomeNegozio?.trim();
   const dove = negozio ? `da ${negozio}` : 'da questo negozio';
-  const troppoLontano = `Per ora consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio: il tuo indirizzo è troppo lontano ${dove}.`;
+  const troppoLontano = `Per ora consegniamo ${FINO_AL_CONFINE}: il tuo indirizzo è troppo lontano ${dove}.`;
   return RITIRO_IN_NEGOZIO_ATTIVO
     ? `${troppoLontano} Puoi ritirare in negozio.`
     : `${troppoLontano} Prova con un negozio più vicino a te.`;
