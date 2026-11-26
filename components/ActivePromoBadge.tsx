@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
+import { discountedUnitCents } from '@/lib/promotions';
 import { queryKeys } from '@/lib/queries/keys';
 
 /**
@@ -43,8 +44,12 @@ export default function ActivePromoBadge({ productId, basePrice }: Props) {
 
   if (!discount || discount <= 0) return null;
 
-  const discounted = basePrice * (1 - discount / 100);
-  const savings = basePrice - discounted;
+  // R16-012 — Lo scontato si calcola con la funzione della cassa (`discountedUnitCents`: al centesimo,
+  // sconto fra 0 e 70), come il prezzo grande della scheda. La formula a mano non arrotondava:
+  // 1,15 € al -10% il bollino scriveva 1,04 € e la cassa faceva pagare 1,03 €.
+  const discountedCents = discountedUnitCents(basePrice, discount);
+  const discounted = discountedCents / 100;
+  const savings = (Math.round(basePrice * 100) - discountedCents) / 100;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
