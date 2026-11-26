@@ -12,8 +12,9 @@
 --   ⑧ in banca dati lo snapshot del prodotto è quello scritto dal server;
 --   ⑨ un nuovo prodotto del negozio parte da 'idle' con la data non oltre adesso;
 --   ⑩ il nuovo prodotto importato dal modulo tiene snapshot e data;
---   ⑪ l'upsert sul proprio prodotto non cambia lo snapshot.
--- Senza la migrazione 990 ①, ⑧, ⑨ e ⑪ sono ROSSI.
+--   ⑪ l'upsert sul proprio prodotto non cambia lo snapshot;
+--   ⑫ un prodotto nuovo senza sincronizzazione resta con la data vuota.
+-- Senza la migrazione 990 ①, ⑧, ⑨ e ⑪ sono ROSSI; con la 990 senza la 996 ⑫.
 -- =============================================================================
 
 BEGIN;
@@ -97,6 +98,19 @@ EXCEPTION WHEN OTHERS THEN RETURN SQLSTATE || ' ' || SQLERRM;
 END $$;
 GRANT EXECUTE ON FUNCTION pg_temp.inserisci(uuid, timestamptz, text) TO authenticated;
 
+-- Un prodotto del negozio A nato qui, senza sincronizzazione: torna la data salvata.
+CREATE FUNCTION pg_temp.nativo(prodotto uuid) RETURNS text
+LANGUAGE plpgsql AS $$
+DECLARE r record;
+BEGIN
+  INSERT INTO public.products (id, name, price, seller_id, status, stock)
+  VALUES (prodotto, 'Nato qui', 5, 'e9900000-0000-0000-0000-000000000001', 'available', 1)
+  RETURNING external_synced_at, external_sync_status INTO r;
+  RETURN format('stato=%s data=%s', r.external_sync_status, coalesce(r.external_synced_at::text, 'vuota'));
+EXCEPTION WHEN OTHERS THEN RETURN SQLSTATE || ' ' || SQLERRM;
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.nativo(uuid) TO authenticated;
+
 CREATE FUNCTION pg_temp.upsert(prodotto uuid) RETURNS int
 LANGUAGE plpgsql AS $$
 DECLARE n int;
@@ -143,6 +157,9 @@ INSERT INTO esiti SELECT '10 il nuovo prodotto importato dal modulo tiene snapsh
   FROM pg_temp.inserisci('e9900000-0000-0000-0000-0000000000a3', now() - interval '1 minute', NULL) AS e;
 INSERT INTO esiti SELECT '11 l''upsert sul proprio prodotto non cambia lo snapshot', n = -1, 'righe: ' || n
   FROM pg_temp.upsert('e9900000-0000-0000-0000-0000000000a1') AS n;
+INSERT INTO esiti SELECT '12 un prodotto nuovo senza sincronizzazione resta con la data vuota',
+  e = 'stato=idle data=vuota', e
+  FROM pg_temp.nativo('e9900000-0000-0000-0000-0000000000a4') AS e;
 
 -- L'amministratore, dal browser.
 SET LOCAL request.jwt.claims = '{"sub":"e9900000-0000-0000-0000-000000000003","role":"authenticated"}';
@@ -180,7 +197,7 @@ BEGIN
     RAISE INFO '%  %  — %', CASE WHEN r.ok THEN 'ok  ' ELSE 'ROTTO' END, r.nome, r.dettaglio;
   END LOOP;
   SELECT count(*) INTO rossi FROM esiti WHERE ok IS NOT TRUE;
-  IF rossi > 0 OR (SELECT count(*) FROM esiti) <> 11 THEN
+  IF rossi > 0 OR (SELECT count(*) FROM esiti) <> 12 THEN
     RAISE EXCEPTION '% controlli su % sono rossi (S01-01)', rossi, (SELECT count(*) FROM esiti);
   END IF;
   RAISE INFO 'S01-01: % controlli verdi', (SELECT count(*) FROM esiti);

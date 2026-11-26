@@ -11,8 +11,9 @@
 --   UPDATE — se cambia una di queste colonne esce con 42501; lo stesso valore
 --            rimandato passa;
 --   INSERT — lo snapshot iniziale del modulo resta; external_sync_status parte
---            da 'idle' e external_synced_at non va oltre now(), così il
---            rinnovo a scadenza (EXTERNAL_TTL_MS) vale anche per lui.
+--            da 'idle' e external_synced_at non va oltre now(). Il rinnovo a
+--            scadenza (EXTERNAL_TTL_MS) c'è solo con gli strumenti AI dei
+--            negozi accesi. La 996 aggiorna questa funzione: vale la 996.
 --
 -- Prova: tests/sql/rls/riparazione-s01-01.test.sql
 
