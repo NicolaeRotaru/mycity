@@ -113,6 +113,7 @@ beforeEach(() => {
   vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '');
   vi.stubEnv('VERCEL', '');
   vi.stubEnv('VERCEL_ENV', '');
+  vi.stubEnv('NODE_ENV', 'test');
   createMock.mockResolvedValue(rispostaFinta());
 });
 afterEach(() => {
@@ -187,6 +188,97 @@ describe('in produzione il tetto non diventa per copia quando il conto condiviso
     const totale = spese.reduce((a, b) => a + b, 0);
     expect(spese[0], 'col conto condiviso vivo l AI deve poter spendere').toBeGreaterThan(0.5);
     expect(totale).toBeLessThanOrEqual(1.1);
+  });
+});
+
+/**
+ * Il conto condiviso finto per le gare: una casella per giorno, e una scrittura
+ * che si puo' tenere ferma a meta' per far entrare un'altra chiamata intanto.
+ */
+function contoConCaselle() {
+  const caselle: Record<string, number> = {};
+  const stato = {
+    modo: 'rotto' as 'rotto' | 'trattieni' | 'vivo',
+    sblocca: () => {},
+    trattenuta: Promise.resolve(),
+  };
+  let entrata = () => {};
+  stato.trattenuta = new Promise<void>((r) => {
+    entrata = r;
+  });
+  rpcMock.mockImplementation(async (nome: string, args: { p_giorno: string; p_cents?: number }) => {
+    if (nome === 'spesa_ai_di_oggi') return { data: caselle[args.p_giorno] ?? 0, error: null };
+    if (nome !== 'registra_spesa_ai' || stato.modo === 'rotto') return TIMEOUT;
+    if (stato.modo === 'trattieni') {
+      // Questa scrittura riuscira', ma piu' tardi; quelle che arrivano intanto falliscono.
+      stato.modo = 'rotto';
+      const via = new Promise<void>((r) => {
+        stato.sblocca = r;
+      });
+      entrata();
+      await via;
+    } else {
+      await new Promise((r) => setTimeout(r, 2));
+    }
+    caselle[args.p_giorno] = (caselle[args.p_giorno] ?? 0) + (args.p_cents ?? 0);
+    return { data: caselle[args.p_giorno], error: null };
+  });
+  return { caselle, stato };
+}
+
+describe('il resto da scrivere non perde e non raddoppia la spesa', () => {
+  beforeEach(() => {
+    vi.stubEnv('VERCEL_ENV', 'production');
+  });
+
+  it('una spesa non scritta mentre si scrive il resto resta da scrivere e arriva nel conto', async () => {
+    const { caselle, stato } = contoConCaselle();
+    const { tetto } = await unaCopiaNuova();
+    await tetto.aggiungiSpesaCents(100); // non scritta: resto 100
+
+    stato.modo = 'trattieni';
+    const lettura = tetto.spesaDiOggiCents(); // scrive il resto, lentamente
+    await stato.trattenuta;
+    await tetto.aggiungiSpesaCents(50); // intanto: altri 50 che non si scrivono
+    stato.modo = 'vivo';
+    stato.sblocca();
+
+    expect(await lettura).toBe(150);
+    await tetto.spesaDiOggiCents();
+    expect(
+      caselle['2026-11-26'],
+      'i 50 spesi durante la scrittura del resto sono spariti dal conto condiviso',
+    ).toBe(150);
+  });
+
+  it('se intanto cambia il giorno, il resto vecchio va su ieri e la spesa nuova su oggi', async () => {
+    const { caselle, stato } = contoConCaselle();
+    const { tetto } = await unaCopiaNuova();
+    vi.setSystemTime(new Date('2026-11-26T23:59:00+01:00'));
+    await tetto.aggiungiSpesaCents(100); // resto del 26
+
+    vi.setSystemTime(new Date('2026-11-27T00:10:00+01:00'));
+    stato.modo = 'trattieni';
+    const lettura = tetto.spesaDiOggiCents();
+    await stato.trattenuta;
+    await tetto.aggiungiSpesaCents(50); // spesa del 27, non scritta
+    stato.modo = 'vivo';
+    stato.sblocca();
+
+    expect(await lettura).toBe(50);
+    expect(caselle['2026-11-26']).toBe(100);
+    expect(caselle['2026-11-27'], 'la spesa del 27 arrivata durante la scrittura e sparita').toBe(50);
+  });
+
+  it('due letture in parallelo della stessa copia scrivono il resto una volta sola', async () => {
+    const { caselle, stato } = contoConCaselle();
+    const { tetto } = await unaCopiaNuova();
+    await tetto.aggiungiSpesaCents(100);
+
+    stato.modo = 'vivo';
+    const lette = await Promise.all([tetto.spesaDiOggiCents(), tetto.spesaDiOggiCents()]);
+    expect(caselle['2026-11-26'], 'il resto e stato scritto due volte: il conto del sito sale del doppio').toBe(100);
+    expect(lette).toEqual([100, 100]);
   });
 });
 
