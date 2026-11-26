@@ -5,6 +5,7 @@ import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-d
 import { logger } from '@/lib/logger';
 import { aggiornaQuadratura } from '@/lib/cassa/quadratura';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
+import { inizioGiornoPiacenza, ultimiGiorniPiacenza } from '@/lib/tempo-piacenza';
 
 export const runtime = 'nodejs';
 
@@ -29,19 +30,21 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   const admin = getAdminSupabase();
 
-  const oggi = giornoLocale(new Date());
-  const ieri = giornoLocale(new Date(Date.now() - 24 * 60 * 60_000));
+  // 26/11/2026 — «Ieri» è il giorno di calendario prima di oggi a Piacenza, non
+  // adesso meno 24 ore: nelle domeniche del cambio d'ora le giornate durano 23 o
+  // 25 ore, e un giro lanciato poco dopo mezzanotte saltava la domenica.
+  const [ieri, oggi] = ultimiGiorniPiacenza(2, new Date());
 
   // I fattorini che hanno consegnato in contanti negli ultimi due giorni.
   // Due giorni e non uno: la giornata di ieri si chiude dopo mezzanotte, e a
-  // mezzanotte il giro di ieri ha già girato.
-  const dueGiorniFa = new Date(Date.now() - 48 * 60 * 60_000).toISOString();
+  // mezzanotte il giro di ieri ha già girato. Si legge dalla mezzanotte di ieri.
+  const mezzanotteDiIeri = inizioGiornoPiacenza(ieri).toISOString();
   const { data: righe, error } = await admin
     .from('orders')
     .select('rider_id, delivered_at')
     .eq('payment_method', 'cod')
     .eq('delivery_status', 'DELIVERED')
-    .gte('delivered_at', dueGiorniFa)
+    .gte('delivered_at', mezzanotteDiIeri)
     .not('rider_id', 'is', null);
 
   if (error) {
