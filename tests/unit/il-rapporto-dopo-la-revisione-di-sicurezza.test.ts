@@ -192,4 +192,47 @@ describe('dal ricontrollo di sicurezza su 88a2d67', () => {
   });
 });
 
+describe('dal collaudo finale', () => {
+  const blocco = (dati: Record<string, unknown>, altro: Record<string, unknown> = {}) => ({ stato: 'letto', fonte: 'https://www.comune.piacenza.it/', fonte_nome: 'Comune di Piacenza', letto_il: LETTO, dati, ...altro });
+
+  it('1 · un campo senza fonte resta se non viene dal web (foto, proposta); resta fuori se dice di essere confermato', () => {
+    const campi = campiDaSalvare({
+      menu_testo: { valore: 'Tortelli', stato: 'foto', fonte: null },
+      sito_ufficiale: { valore: null, stato: 'proposta', fonte: null },
+      orari: { valore: 'Lun-Sab 7-19', stato: 'da_confermare', fonte: null },
+    });
+    expect(Object.keys(campi)).toEqual(['menu_testo', 'sito_ufficiale']);
+  });
+
+  it('2 · date e parole legittime dentro i fatti restano', () => {
+    const salvata = analisiDaSalvare({ fatti: {
+      bandi: blocco({ elenco: [{ titolo: 'Contributi per il commercio, domande entro il 31/5' }] }),
+      eventi: blocco({ elenco: [{ titolo: 'Hotel 4 stelle aperti a Natale' }, { titolo: 'Festa dei lavoratori 1/5 in Piazza Cavalli' }] }),
+      ricerche: blocco({ parole: [{ parola: 'hotel 4 stelle piacenza', ricerche_al_mese: 900 }] }, { fonte: 'https://dataforseo.com/', fonte_nome: 'DataForSEO' }),
+    } });
+    const t = JSON.stringify(salvata);
+    for (const x of ['31/5', 'Hotel 4 stelle aperti a Natale', '1/5 in Piazza Cavalli', 'hotel 4 stelle piacenza']) expect(t).toContain(x);
+  });
+
+  it('3 · nomi di attività e luoghi con un nome proprio restano; i nomi di persona no', () => {
+    const azioni = ['Proponi una colazione con la Pasticceria Maria Luisa', 'Prepara un menu per la partita allo stadio Leonardo Garilli', 'Una serata dopo il Teatro Giuseppe Verdi', 'La pizza Margherita DOP in vetrina', 'Festa di Sant’Antonio Abate in piazza'];
+    const salvata = analisiDaSalvare({ business: { piano_30_giorni: azioni.map((azione, i) => ({ settimana: (i % 4) + 1, azione, fonte: 'https://x.it' })) } }) as { business: { piano_30_giorni: Array<{ azione: unknown }> } };
+    expect(salvata.business.piano_30_giorni.map((p) => p.azione)).toEqual(azioni);
+    expect(analisiDaSalvare({ pubblico: 'Lo consiglia Alessia Rossi' })).toEqual({});
+  });
+
+  it('4 · chiavi di persona anche dentro nomi composti', () => {
+    const t = JSON.stringify(analisiDaSalvare({ fatti: { instagram: blocco({ follower: 5, ultimo_commento: { testo: 'bello' }, autore_nome: 'Giulia Bianchi', display_name: 'x' }, { fonte_nome: 'Instagram' }) } }));
+    expect(t).not.toMatch(/ultimo_commento|autore_nome|display_name|Giulia/);
+    expect(t).toContain('"follower":5');
+  });
+
+  it('5 · nel rapporto pagato, Instagram «vuoto» non dice «Follower: 0»', () => {
+    const s = { tipo: 'scheda-cliente', id_attivita: ID, campi: {}, analisi: { fatti: { instagram: blocco({ follower: 0, post_ultimi_30_giorni: 0 }, { stato: 'vuoto', fonte_nome: 'Instagram' }) } } } as unknown as SchedaCliente;
+    const t = JSON.stringify(leggiRapporto(s, new Date('2026-11-26T14:00:00Z'))?.social);
+    expect(t).not.toContain('Follower: 0');
+    expect(t).toContain('Non abbiamo trovato un profilo Instagram');
+  });
+});
+
 void ID;

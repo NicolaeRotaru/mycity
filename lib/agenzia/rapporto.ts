@@ -97,10 +97,11 @@ const EMAIL_A_PAROLE = /\b(gmail|libero|hotmail|yahoo|outlook|icloud|alice|tisca
  */
 // Dal terzo collaudo: la regola di prima scartava anche «il sito del 2015 senza mappa di Google» o «3 post con le
 // stelle di Natale». Ora ci vuole un voto (4,6), un conto di recensioni o di stelle, o «voto» vicino al nome.
-const NUMERO_DI_GOOGLE = /(google|maps|tripadvisor)[^.]*(\d[.,]\d|\d\s*stell|\bvoto|\d+\s*recension)|(\d[.,]\d|\d+\s*recension|\d\s*stell)[^.]*(google|maps|tripadvisor)|\d+\s*(recensioni|stelle)\b|su cinque\b/i;
+const NUMERO_DI_GOOGLE = /(google|maps|tripadvisor)[^.]*(\d[.,]\d|\d\s*stell|\bvoto|\d+\s*recension)|(\d[.,]\d|\d+\s*recension|\d\s*stell)[^.]*(google|maps|tripadvisor)|\d+\s*recensioni\b|su cinque\b/i;
 /** Un prezzo detto senza moneta («25 a persona», «coperto 3»): `senzaPrezzo` guarda la moneta e i decimali. */
 /** Nel rapporto nessun voto in stelle, di nessuno («4,6 su 5», «4.6/5»): i voti sono di Google o TripAdvisor. */
-const UN_VOTO = /\d\s*([.,]\s*\d)?\s*(su\s*(5|cinque)\b|\/\s*5\b)/i;
+// Una data come «31/5» non è un voto (collaudo finale): «/5» conta solo dopo un decimale («4,6/5»).
+const UN_VOTO = /\d\s*([.,]\s*\d)?\s*su\s*(5|cinque)\b|\d[.,]\d\s*\/\s*5\b/i;
 const PREZZO_SENZA_MONETA = /\d+\s*(a persona|a testa|cad\.?|al pezzo|al chilo|al kg)\b|\bcoperto\s*\d/i;
 
 /**
@@ -476,7 +477,7 @@ export function leggiRapporto(scheda: SchedaCliente | null | undefined, adesso: 
   }));
 
   // 7 · I social: Instagram (Business Discovery).
-  metti('social', b('instagram'), (x) => pezzo(x.etichetta, {
+  metti('social', b('instagram'), (x) => x.vuoto ? pezzo(x.etichetta, { frasi: ['Non abbiamo trovato un profilo Instagram dell’attività.'] }) : pezzo(x.etichetta, {
     voci: soloVoci([
       conNumero('Follower', x.dati.follower), conNumero('Post negli ultimi 30 giorni', x.dati.post_ultimi_30_giorni),
       conNumero('Video negli ultimi 30 giorni', x.dati.video_ultimi_30_giorni), conNumero('Interazioni medie per post', x.dati.interazioni_medie),
@@ -761,7 +762,12 @@ export function campiDaSalvare<T extends Record<string, { fonte?: string | null 
     Object.entries(campi).filter(([nome, c]) => {
       if (CHIAVE_VIETATA.test(nome) || CHIAVE_DI_VOTO.test(nome)) return false;
       // Un campo senza fonte, o letto da Google, TripAdvisor o DataForSEO, non si salva (ricontrollo del 26/11).
-      if (typeof c?.fonte !== 'string' || !c.fonte.trim() || fonteDiGoogle(c.fonte) || fonteDataForSeo(c.fonte)) return false;
+      // Fanno eccezione gli stati che non vengono dal web (foto, frammento, proposta, nessuna): per natura non hanno
+      // un indirizzo (collaudo finale: prima si perdevano il menu letto da una foto e le proposte).
+      const stato = (c as { stato?: unknown } | undefined)?.stato;
+      const senzaWeb = stato === 'foto' || stato === 'frammento' || stato === 'proposta' || stato === 'nessuna';
+      const fonte = typeof c?.fonte === 'string' ? c.fonte.trim() : '';
+      if (fonte ? fonteDiGoogle(fonte) || fonteDataForSeo(fonte) : !senzaWeb) return false;
       // Un valore che ricopia un voto o le recensioni («4,6 su 5 su Google») non si salva, qualunque sia il nome.
       const valore = (c as { valore?: unknown } | undefined)?.valore;
       return !(typeof valore === 'string' && (pareDatoDiGoogle(valore) || UN_VOTO.test(valore)));
@@ -784,7 +790,8 @@ const VOCI_DELLE_SEZIONI: Record<string, readonly string[]> = {
 /** Una chiave che dice un voto o recensioni («stelle», «rating», «numero_recensioni»): nei fatti non si salva. */
 const CHIAVE_DI_VOTO = /voto|stell|rating|recension|review/i;
 /** Una chiave che dice una persona (chi scrive, chi commenta): non si salva mai, da nessuna parte (revisione del 26/11). */
-const CHIAVE_DI_PERSONA = /^(autore|autori|author|authors|utente|utenti|user|users|username|name|nome_autore|commenti|comments|commentatori)$/i;
+// Anche dentro nomi composti («autore_nome», «ultimo_commento», «display_name»): il collaudo finale ne ha trovati.
+const CHIAVE_DI_PERSONA = /(^|_)(autore|autori|author|authors|utente|utenti|user|users|username|name|full|display|profile|commento|commenti|comment|comments|commentatori)(_|$)/i;
 /** Le sezioni di prima dell'AD (analisi.ts, `SEZIONI_BUSINESS`) e le chiavi di ogni loro frase. */
 const SEZIONI_DI_PRIMA = ['situazione', 'mercato', 'clienti', 'opportunita', 'rischi', 'prime_mosse'] as const;
 const VOCE_DI_PRIMA = ['testo', 'fonte', 'servizio', 'proposta'] as const;
@@ -810,7 +817,7 @@ export function fonteDataForSeo(indirizzo: unknown): boolean {
 const BLOCCHI_DA_DATAFORSEO = new Set(['ricerche', 'recensioni']);
 /** Le chiavi di testo libero dentro i fatti: lì niente nomi di persona. I nomi di attività, eventi e bandi stanno in altre chiavi. */
 const CHIAVE_DESCRITTIVA = /^(motivo|nota|note|descrizione|commento|osservazion[ie]|testo|perche|didascalia|caption)$/i;
-const CHIAVE_INDIRIZZO = /^(fonte|link|indirizzo|url|profilo)$/i;
+const CHIAVE_INDIRIZZO = /^(fonte|link|indirizzo|url|profilo|parola|tipo_osm|orari_osm|data|letto_il)$/i;
 
 /**
  * Le frasi dentro i fatti, non solo le chiavi: una stringa che ricopia un voto o le recensioni di Google si toglie;

@@ -9,15 +9,15 @@
  * la regola del minuscolo (rapporto.ts, `temaMostrabile`).
  */
 const NOMI = `
-Alessandro Alessandra Alberto Alberta Aldo Alda Alessio Alfredo Alice Alma Amedeo Andrea Angela Angelo Anna Annalisa
+Alessandro Alessandra Alberto Alberta Aldo Alda Alessia Alessio Alfredo Alice Amedeo Andrea Angela Angelo Anna Annalisa
 Antonella Antonio Antonia Arianna Armando Arturo Aurora Barbara Beatrice Benedetta Bianca Bruno Carla Carlo Carlotta
 Carmela Carmen Carolina Caterina Cecilia Cesare Chiara Christian Claudia Claudio Concetta Cristian Cristina Cristiano
 Dalila Damiano Daniela Daniele Dario Davide Debora Denis Diego Domenico Donatella Edoardo Elena Eleonora Elia Elisa
 Elisabetta Emanuela Emanuele Emma Enrico Enrica Enzo Erica Ernesto Ettore Eugenio Fabio Fabiola Fabrizio Fausto
 Federica Federico Fernando Filippo Fiorella Flavia Flavio Francesca Francesco Franco Gabriele Gabriella Gaetano Gianluca
-Gianni Giacomo Gino Giorgia Giorgio Giovanna Giovanni Giulia Giuliana Giuliano Giulio Giuseppe Giuseppina Grazia
+Gianni Giacomo Giada Gino Giorgia Giorgio Giovanna Giovanni Giulia Giuliana Giuliano Giulio Giuseppe Giuseppina Grazia
 Graziella Guido Ilaria Irene Isabella Ivan Ivana Jacopo Laura Lauro Lea Leonardo Letizia Lia Lidia Liliana Linda Lisa
-Livia Lorena Lorenzo Loredana Luana Luca Lucia Luciana Luciano Ludovica Luigi Luisa Manuela Marcello Marco Margherita
+Livia Lorena Lorenzo Loredana Luana Luca Lucia Luciana Luciano Ludovica Luigi Luisa Manuela Marcello Marco
 Maria Marianna Marina Mario Marisa Marta Martina Massimo Matilde Matteo Mattia Maurizio Mauro Michela Michele Mirco
 Mirko Monica Nadia Natalia Nicola Nicoletta Nicolò Noemi Ornella Orlando Paola Paolo Pasquale Patrizia Pietro Piero
 Raffaele Raffaella Renato Renata Riccardo Rita Roberta Roberto Rocco Rosa Rosalba Rosanna Rosaria Rossella Ruggero
@@ -26,14 +26,19 @@ Teresa Tiziana Tiziano Tommaso Umberto Valentina Valentino Valeria Valerio Vanes
 Vittorio Walter Ylenia Yuri Zeno
 `.trim().split(/\s+/);
 
-const PRIMA_DI_UNA_STRADA = /(?:^|\s)(via|viale|piazza|piazzale|corso|largo|vicolo|san|santa|santo|sant')\s*$/i;
-const NOME_E_COGNOME = new RegExp(`(^|[^\\p{L}])(${NOMI.join('|')})\\s+[A-ZÀ-Ý][\\p{L}']+`, 'gu');
+/**
+ * Prima del nome: una strada, un santo, o un luogo e un'attività che portano un nome («Pasticceria Maria Luisa»,
+ * «Teatro Giuseppe Verdi», «stadio Leonardo Garilli», «Gelateria Bianca Neve»): allora non è una persona.
+ */
+const PRIMA_DI_UN_LUOGO = /(?:^|\s)(via|viale|piazza|piazzale|corso|largo|vicolo|strada|san|santa|santo|sant['’]|pasticceria|gelateria|panetteria|forneria|macelleria|salumeria|bar|caffè|caffe|ristorante|pizzeria|trattoria|osteria|enoteca|hotel|albergo|locanda|teatro|stadio|cinema|scuola|istituto|liceo|chiesa|basilica|duomo|palazzo|museo|parco|fondazione|associazione|ospedale|pizza|torta)\s*$/i;
+// Il cognome è una parola con la maiuscola e poi minuscole: «DOP», «IGP» non sono cognomi.
+const NOME_E_COGNOME = new RegExp(`(^|[^\\p{L}])(${NOMI.join('|')})\\s+[A-ZÀ-Ý][a-zà-ÿ'’][\\p{L}'’]*`, 'gu');
 
 /** Vero se il testo contiene un nome e cognome di persona (non il nome di una strada o di un santo). */
 export function haUnNomeDiPersona(testo: string): boolean {
   for (const m of testo.matchAll(NOME_E_COGNOME)) {
     const prima = testo.slice(0, (m.index ?? 0) + m[1].length);
-    if (!PRIMA_DI_UNA_STRADA.test(prima)) return true;
+    if (!PRIMA_DI_UN_LUOGO.test(prima)) return true;
   }
   return false;
 }
