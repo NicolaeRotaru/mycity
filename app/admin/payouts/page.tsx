@@ -11,6 +11,7 @@ import { AdminPageTitle, AdminStatCard } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import { STATI_VERSATI, daVersareLunedi, ordiniDaVersareLunedi, gruppoDelPannello, nettoDopoStorni, settimanaPrima, type GruppoDelPannello, type OrdineNegozio } from '@/lib/guadagni/negozio';
+import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
 
 /**
  * Payout venditori (admin · Trust & Safety).
@@ -22,7 +23,8 @@ import { STATI_VERSATI, daVersareLunedi, ordiniDaVersareLunedi, gruppoDelPannell
  * Legge la tabella `orders` (netto, storni, stato del bonifico) e raggruppa per negozio. La regola
  * degli stati sta in lib/guadagni/negozio.ts (`gruppoDelPannello`): contanti con la rimessa
  * confermata = «Da versare»; contanti ancora dal fattorino, carta in attesa del giro, IBAN da
- * verificare = «In sospeso»; ritiri al banco, storni e rimborsi = fuori dai totali.
+ * verificare = «In sospeso»; ritiri al banco, storni e rimborsi = fuori dai totali. Il 10% dei ritiri
+ * pagati al banco si scala dal bonifico del lunedì (R05-002, `commissioneDaScalare`).
  */
 
 type PayoutOrder = {
@@ -31,6 +33,7 @@ type PayoutOrder = {
   total_price: number | string | null;
   seller_payout_cents: number | null;
   seller_payout_reversed_cents: number | null;
+  application_fee_cents?: number | null;
   dispute_status?: string | null;
   internal_dispute_status?: string | null;
   payment_status?: string | null;
@@ -72,7 +75,9 @@ type SellerGroup = {
   iban: string | null;
   orders: PayoutOrder[];
   dueCents: number; // contanti da versare (rimessa confermata)
-  lunediCents: number; // di questi, consegnati entro la domenica scorsa
+  lunediCents: number; // di questi, consegnati entro la domenica scorsa, meno la commissione dei ritiri al banco
+  lordoLunediCents: number; // gli stessi, prima di togliere la commissione
+  commissioneCents: number; // R05-002 — il 10% dei ritiri al banco della settimana prima, da scalare
   holdCents: number; // in sospeso (carta in attesa del giro, contanti dal fattorino, IBAN)
   paidCents: number; // già trasferiti o pagati a mano
 };
@@ -92,6 +97,28 @@ function maskIban(iban: string | null): string | null {
 }
 
 /**
+ * R05-002 — IL 10% DEI RITIRI PAGATI AL BANCO SI SCALA DAL BONIFICO DEL LUNEDÌ.
+ *
+ * Nel ritiro pagato al banco (CASH_IN_STORE) il negozio ha già in cassa tutto, commissione compresa.
+ * Il registro dei fatti (ritiro.in-negozio): «sui contanti al banco il 10% di MyCity si compensa sul
+ * bonifico del lunedì al negozio; se in una settimana non basta, il resto va nella fattura del mese».
+ * Contano i ritiri della settimana prima, come i contanti del bonifico. Se il bonifico a mano di
+ * questa settimana è già segnato, la commissione è già stata tolta lì: non si toglie una seconda volta
+ * da un contante arrivato dopo.
+ */
+function commissioneDaScalare(ordini: PayoutOrder[], settimana: { dal: string; al: string }): number {
+  const giaVersato = ordini.some((o) => o.payout_status === 'PAID_MANUALLY' && !!o.payout_at && giornoPiacenza(o.payout_at) > settimana.al);
+  if (giaVersato) return 0;
+  return ordini
+    .filter((o) => {
+      if (o.payout_status !== 'CASH_IN_STORE' || !o.delivered_at) return false;
+      const giorno = giornoPiacenza(o.delivered_at);
+      return giorno >= settimana.dal && giorno <= settimana.al;
+    })
+    .reduce((s, o) => s + (o.application_fee_cents ?? 0), 0);
+}
+
+/**
  * Quanti ordini consegnati legge al massimo questa pagina. Arrivati al tetto i riquadri sommano
  * solo quello che e' stato letto: la pagina lo dice, invece di spacciare un totale parziale.
  */
@@ -105,17 +132,19 @@ const TETTO_PAYOUT = 1000;
  */
 const STATI_CHIUSI = ['TRANSFERRED', 'PAID_MANUALLY', 'REFUNDED', 'REVERSED', 'CASH_IN_STORE'];
 
-type LettiPayout = PayoutOrder[] & { totale?: number; chiusi?: PayoutOrder[]; totaleChiusi?: number };
+type LettiPayout = PayoutOrder[] & { totale?: number; chiusi?: PayoutOrder[]; totaleChiusi?: number; finestraTagliata?: boolean };
 
 /**
  * R11-004 — «Bonifico fatto»: segna come pagati a mano i contanti con la rimessa
  * confermata (HELD) di un negozio. Lo scrive `segna_bonifico_manuale` (migrazione
  * 350), riservata agli amministratori: da qui parte solo la richiesta.
  */
-function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
+function BonificoFatto({ sellerId, storeName, ordini, commissioneCents, quandoFatto }: {
   sellerId: string;
   storeName: string;
   ordini: PayoutOrder[];
+  /** R05-002 — la commissione dei ritiri al banco da togliere dal bonifico. */
+  commissioneCents: number;
   quandoFatto: () => void;
 }) {
   const [stato, setStato] = useState<'pronto' | 'invio' | 'errore'>('pronto');
@@ -123,10 +152,13 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
   // R11-001 — si segnano gli stessi ordini di «Da versare lunedì»: quelli di questa settimana aspettano il prossimo.
   const daSegnare = ordiniDaVersareLunedi(ordini, new Date());
   if (daSegnare.length === 0) return esito ? <p role="status" className="mt-1.5 text-xs text-ink-600">{esito}</p> : null;
-  const totale = daSegnare.reduce((s, o) => s + netto(o), 0);
+  const lordo = daSegnare.reduce((s, o) => s + netto(o), 0);
+  const scalata = Math.min(commissioneCents, lordo);
+  const totale = lordo - scalata;
   const segna = async () => {
+    const tolta = scalata > 0 ? ` (tolti ${formatPrice(scalata / 100)} di commissione sui ritiri pagati al banco)` : '';
     const riferimento = window.prompt(
-      `Bonifico a ${storeName}: ${formatPrice(totale / 100)} per ${daSegnare.length} ordini in contanti.\nScrivi il riferimento del bonifico (CRO/TRN o data):`,
+      `Bonifico a ${storeName}: ${formatPrice(totale / 100)} per ${daSegnare.length} ordini in contanti${tolta}.\nScrivi il riferimento del bonifico (CRO/TRN o data):`,
     );
     if (!riferimento || riferimento.trim().length < 3) return;
     setStato('invio');
@@ -181,23 +213,28 @@ export default function AdminPayoutsPage() {
         supabase
           .from('orders')
           .select(
-            'id, seller_id, total_price, seller_payout_cents, seller_payout_reversed_cents, dispute_status, internal_dispute_status, payment_status, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
+            'id, seller_id, total_price, seller_payout_cents, seller_payout_reversed_cents, application_fee_cents, dispute_status, internal_dispute_status, payment_status, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
             // R11-011 — il server restituisce al massimo mille righe: la riga in più non arriva mai.
             { count: 'exact' },
           )
           .eq('delivery_status', 'DELIVERED')
           .not('seller_payout_cents', 'is', null);
+      // R05-002 — i ritiri pagati al banco e i bonifici a mano dalla settimana prima, letti a parte:
+      // la commissione da scalare il lunedì non dipende dal tetto dei chiusi.
+      const dal = inizioGiornoPiacenza(settimanaPrima(new Date()).dal).toISOString();
       // R05-001 — il tetto vale per gli aperti da soli: i bonifici chiusi non li spingono più fuori.
-      const [daAperti, daChiusi] = await Promise.all([
+      const [daAperti, daChiusi, daFinestra] = await Promise.all([
         consegnati()
           .or(`payout_status.is.null,payout_status.not.in.(${STATI_CHIUSI.join(',')})`)
           .order('created_at', { ascending: false })
           // Una riga in più: se arriva, l'elenco è tagliato davvero (con 1000 esatte no).
           .limit(TETTO_PAYOUT + 1),
         consegnati().in('payout_status', STATI_CHIUSI).order('created_at', { ascending: false }).limit(TETTO_PAYOUT + 1),
+        consegnati().in('payout_status', ['CASH_IN_STORE', 'PAID_MANUALLY']).or(`delivered_at.gte.${dal},payout_at.gte.${dal}`).limit(TETTO_PAYOUT + 1),
       ]);
       if (daAperti.error) throw daAperti.error;
       if (daChiusi.error) throw daChiusi.error;
+      if (daFinestra.error) throw daFinestra.error;
       const { data, count } = daAperti;
       // L'elenco resta un elenco; il totale contato dal database gli viaggia attaccato.
       const righe = (data ?? []) as unknown as PayoutOrder[];
@@ -222,17 +259,21 @@ export default function AdminPayoutsPage() {
       for (const o of righe) {
         if (letturaCaduta ? contantiHeld.includes(o.id) : aperti.has(o.id)) o.pratica_aperta = true;
       }
+      const chiuse = righeChiuse.slice(0, TETTO_PAYOUT);
+      for (const o of chiuse) giaLetti.add(o.id);
+      const dallaFinestra = ((daFinestra.data ?? []) as unknown as PayoutOrder[]).filter((o) => !giaLetti.has(o.id));
       return Object.assign(righe, {
         totale: typeof count === 'number' ? count : righe.length,
-        chiusi: righeChiuse.slice(0, TETTO_PAYOUT),
+        chiusi: [...chiuse, ...dallaFinestra],
         totaleChiusi,
+        finestraTagliata: Math.max(typeof daFinestra.count === 'number' ? daFinestra.count : 0, daFinestra.data?.length ?? 0) > TETTO_PAYOUT,
       });
     },
   });
   const { data: letti = [], refetch } = query;
 
   const meta = letti as LettiPayout;
-  const tagliato = Math.max(meta.totale ?? 0, letti.length) > TETTO_PAYOUT;
+  const tagliato = Math.max(meta.totale ?? 0, letti.length) > TETTO_PAYOUT || meta.finestraTagliata === true;
   // R05-001 — i chiusi hanno il loro tetto: tagliati loro, è un minimo solo «già pagato».
   const tagliatoChiusi = meta.chiusi ? (meta.totaleChiusi ?? 0) > TETTO_PAYOUT : tagliato;
   const orders = useMemo(() => {
@@ -255,6 +296,8 @@ export default function AdminPayoutsPage() {
         orders: [],
         dueCents: 0,
         lunediCents: 0,
+        lordoLunediCents: 0,
+        commissioneCents: 0,
         holdCents: 0,
         paidCents: 0,
       };
@@ -267,10 +310,19 @@ export default function AdminPayoutsPage() {
       map.set(o.seller_id, g);
     }
     const adesso = new Date();
-    for (const g of map.values()) g.lunediCents = daVersareLunedi(g.orders, adesso).cents;
+    const settimanaOra = settimanaPrima(adesso);
+    for (const g of map.values()) {
+      g.lordoLunediCents = daVersareLunedi(g.orders, adesso).cents;
+      // R05-002 — il 10% dei ritiri pagati al banco si scala dal bonifico; quello che non ci sta va in fattura.
+      g.commissioneCents = commissioneDaScalare(g.orders, settimanaOra);
+      g.lunediCents = Math.max(0, g.lordoLunediCents - g.commissioneCents);
+    }
     // Ordina: prima chi ha più da liquidare.
     return Array.from(map.values()).sort((a, b) => b.lunediCents - a.lunediCents || b.dueCents - a.dueCents);
   }, [orders]);
+
+  // R05-002 — anche il riquadro dei contanti da versare è al netto della commissione tolta dai bonifici.
+  const scalateCents = groups.reduce((s, g) => s + (g.lordoLunediCents - g.lunediCents), 0);
 
   const totals = useMemo(() => {
     let due = 0;
@@ -329,7 +381,7 @@ export default function AdminPayoutsPage() {
 
       {/* KPI: pronto · in sospeso · già pagato */}
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        <AdminStatCard icon={Banknote} tone="olive" label="Contanti da versare" value={`${almeno}${formatPrice(totals.dueCents / 100)}`} />
+        <AdminStatCard icon={Banknote} tone="olive" label="Contanti da versare" value={`${almeno}${formatPrice((totals.dueCents - scalateCents) / 100)}`} />
         <AdminStatCard icon={Clock} tone="accent" label="In sospeso" value={`${almeno}${formatPrice(totals.holdCents / 100)}`} />
         <AdminStatCard icon={CheckCircle2} tone="primary" label="Già pagato" value={`${almenoPagati}${formatPrice(totals.paidCents / 100)}`} />
       </div>
@@ -341,7 +393,8 @@ export default function AdminPayoutsPage() {
           Carta: i bonifici li fa il giro <span className="font-mono text-xs">release-payouts</span> verso il conto Stripe
           del negozio. Contanti: il lunedì versi tu, con un bonifico, quanto c&apos;è scritto in «Da versare lunedì»
           (consegne dal {fmtGiorno(settimana.dal)} al {fmtGiorno(settimana.al)} e arretrati), poi premi «Bonifico fatto».
-          Gli importi sono già al netto degli storni.
+          Gli importi sono già al netto degli storni e del 10% dei ritiri pagati al banco nella stessa settimana: se il
+          bonifico non basta, il resto va nella fattura del mese.
         </p>
       </div>
 
@@ -371,8 +424,16 @@ export default function AdminPayoutsPage() {
                 <div className="text-right">
                   <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-400">Da versare lunedì</p>
                   <p className="font-mono text-lg font-extrabold text-olive-700">{almeno}{formatPrice(g.lunediCents / 100)}</p>
-                  {g.dueCents > g.lunediCents && (
-                    <p className="text-xs text-ink-500">+ {almeno}{formatPrice((g.dueCents - g.lunediCents) / 100)} di questa settimana</p>
+                  {g.lordoLunediCents > g.lunediCents && (
+                    <p className="text-xs text-ink-500">già tolti {formatPrice((g.lordoLunediCents - g.lunediCents) / 100)} di commissione sui ritiri pagati al banco</p>
+                  )}
+                  {g.commissioneCents > g.lordoLunediCents - g.lunediCents && (
+                    <p className="text-xs text-ink-500">
+                      {formatPrice((g.commissioneCents - (g.lordoLunediCents - g.lunediCents)) / 100)} di commissione sui ritiri pagati al banco non ci stanno nel bonifico: vanno nella fattura del mese
+                    </p>
+                  )}
+                  {g.dueCents > g.lordoLunediCents && (
+                    <p className="text-xs text-ink-500">+ {almeno}{formatPrice((g.dueCents - g.lordoLunediCents) / 100)} di questa settimana</p>
                   )}
                   {g.holdCents > 0 && (
                     <p className="text-xs text-ink-500">{almeno}{formatPrice(g.holdCents / 100)} in sospeso</p>
@@ -381,7 +442,7 @@ export default function AdminPayoutsPage() {
                   {g.paidCents > 0 && (
                     <p className="text-xs text-ink-500">{almenoPagati}{formatPrice(g.paidCents / 100)} già pagati</p>
                   )}
-                  <BonificoFatto sellerId={g.sellerId} storeName={g.storeName} ordini={g.orders} quandoFatto={() => void refetch()} />
+                  <BonificoFatto sellerId={g.sellerId} storeName={g.storeName} ordini={g.orders} commissioneCents={g.commissioneCents} quandoFatto={() => void refetch()} />
                 </div>
               </div>
 
