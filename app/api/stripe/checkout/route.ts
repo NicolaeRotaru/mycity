@@ -17,7 +17,7 @@ import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { romeNow } from '@/lib/store-hours';
-import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
+import { FASCE_AMMESSE, MOTIVO_FASCIA_PIENA, ORDINI_PER_FASCIA, finestraDellaFascia, motivoFasciaRifiutata } from '@/lib/quando-arriva';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
@@ -42,6 +42,64 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 // chiuso»: il messaggio giusto c'era, e si perdeva nella forma sbagliata.
 
 export const runtime = 'nodejs';
+
+/**
+ * 26/11/2026 — QUANTI GIRI HA GIÀ LA FASCIA SCELTA (il tetto è `ORDINI_PER_FASCIA`).
+ *
+ * Il giorno e la finestra di una fascia si contano dal giorno in cui è stata scelta, come fanno
+ * tutti i lettori di `orders.delivery_slot`: «Domani · 16:30–18:00» di un ordine nato ieri è la
+ * stessa fascia di «Oggi · 16:30–18:00» scelta adesso. Si contano gli ordini non annullati, a
+ * domicilio, per cliente: un carrello con più negozi sono più righe ma un giro solo, e un secondo
+ * carrello dello stesso cliente nella stessa fascia va alla stessa porta (`mio`), come per la
+ * veloce (migrazione 840). `null` = lettura non riuscita (cosa farne lo dice chi chiama).
+ */
+type GiornoEFinestra = { giorno: string; da: number; a: number };
+
+function giornoEFinestra(fascia: string, sceltaIl: string | number | Date): GiornoEFinestra | null {
+  const f = finestraDellaFascia(fascia);
+  const giornoDellaScelta = giornoDiPiacenza(sceltaIl);
+  if (!f || !giornoDellaScelta) return null;
+  const giorno = new Date(Date.parse(giornoDellaScelta) + (f.giorno === 'domani' ? 86_400_000 : 0)).toISOString().slice(0, 10);
+  return { giorno, da: f.daMinuti, a: f.aMinuti };
+}
+
+async function giriNellaFascia(
+  admin: ReturnType<typeof getAdminSupabase>,
+  fascia: string,
+  clienteId: string,
+  adesso: Date,
+): Promise<{ altri: number; mio: boolean } | null> {
+  const cercata = giornoEFinestra(fascia, adesso);
+  if (!cercata) return { altri: 0, mio: false };
+  const stessaFinestra = FASCE_AMMESSE.filter((e) => {
+    const f = finestraDellaFascia(e);
+    return f !== null && f.daMinuti === cercata.da && f.aMinuti === cercata.a;
+  });
+  try {
+    const { data, error, count } = await admin
+      .from('orders')
+      .select('id, user_id, delivery_slot, created_at, pickup_in_store, delivery_status', { count: 'exact' })
+      .in('delivery_slot', stessaFinestra)
+      // Una fascia di oggi o di domani: gli ordini che la possono avere sono nati da ieri in poi.
+      .gte('created_at', new Date(adesso.getTime() - 48 * 3_600_000).toISOString());
+    if (error || !Array.isArray(data) || (typeof count === 'number' && count > data.length)) return null;
+    const giri = new Set<string>();
+    let mio = false;
+    for (const o of data as Array<{
+      id?: string; user_id?: string | null; delivery_slot?: string | null; created_at?: string | null;
+      pickup_in_store?: boolean | null; delivery_status?: string | null;
+    }>) {
+      if (o.delivery_status === 'CANCELED' || o.pickup_in_store || !o.delivery_slot || !o.created_at) continue;
+      const g = giornoEFinestra(o.delivery_slot, o.created_at);
+      if (!g || g.giorno !== cercata.giorno || g.da !== cercata.da || g.a !== cercata.a) continue;
+      if (o.user_id === clienteId) mio = true;
+      else giri.add(o.user_id ? `cliente:${o.user_id}` : `riga:${o.id}`);
+    }
+    return { altri: giri.size, mio };
+  } catch {
+    return null;
+  }
+}
 
 const ItemSchema = z.object({
   productId: z.string().uuid(),
@@ -532,6 +590,17 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       (sellers ?? []).map((s) => ({ nome: s.store_name, orari: (s as { store_hours?: unknown }).store_hours })),
     );
     if (rifiutata) return ApiErrors.conflict(rifiutata);
+  }
+
+  // 26/11/2026 — Al massimo `ORDINI_PER_FASCIA` giri per fascia (fatto `consegna.capienza`): al sesto
+  // 409. La veloce non è una fascia, e il ritiro non chiede un giro. Sta prima della pulizia, come
+  // gli altri rifiuti: un tentativo respinto non chiude le altre casse. Un conteggio non riuscito
+  // non ferma il pagamento: il tetto è morbido (il negozio accetta ogni ordine e può rifiutare
+  // quelli in più), e una lettura caduta non deve spegnere la carta; resta scritto.
+  if (!body.pickupInStore && !consegnaVeloce && body.deliverySlot) {
+    const giri = await giriNellaFascia(admin, body.deliverySlot, user.id, new Date());
+    if (giri === null) logger.warn('[stripe] giri della fascia non contati: il tetto non è stato controllato', { userId: user.id });
+    else if (!giri.mio && giri.altri + 1 > ORDINI_PER_FASCIA) return ApiErrors.conflict(MOTIVO_FASCIA_PIENA);
   }
 
   // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso, un
