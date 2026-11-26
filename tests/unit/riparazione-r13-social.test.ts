@@ -37,3 +37,20 @@ describe('R13-006 — altri percorsi di servizio di Facebook non diventano il no
     }
   });
 });
+
+describe('R13-007 — tiktok.com/@live è un profilo, tiktok.com/live no', () => {
+  const tk = (url: string) => normalizzaSocials({ tiktok: url })?.tiktok;
+  it.each(['live', 'foryou', 'following', 'search', 'discover', 'music', 'video', 'tag'])('tiktok.com/@%s con la @ si salva come «%s»', (n) => {
+    expect(tk(`https://www.tiktok.com/@${n}`)).toBe(n);
+    expect(tk(`https://www.tiktok.com/@${n}/video/123?lang=it`)).toBe(n);
+    expect(storeCustomizationSchema.safeParse({ socials: { tiktok: tk(`https://tiktok.com/@${n}`) } }).success).toBe(true);
+  });
+  it.each(['live', 'foryou', 'tag', 'discover'])('tiktok.com/%s senza la @ resta un percorso riservato', (n) => {
+    expect(tk(`https://www.tiktok.com/${n}`)).toBe(`https://www.tiktok.com/${n}`);
+  });
+  it('un profilo normale e gli altri social non cambiano', () => {
+    expect(tk('https://www.tiktok.com/@forno')).toBe('forno');
+    expect(normalizzaSocials({ instagram: 'https://www.instagram.com/explore/' })?.instagram).toBe('https://www.instagram.com/explore/');
+    expect(normalizzaSocials({ instagram: 'https://www.instagram.com/@p/' })?.instagram).toBe('https://www.instagram.com/@p/');
+  });
+});

@@ -362,6 +362,8 @@ function percorsoDiUnProfiloFacebook(nome: string, resto: string): boolean {
 type RegolaDelSocial = {
   dominio: RegExp;
   riservati: RegExp;
+  /** R13-007 — Su TikTok un profilo si scrive sempre con la @: con la @ il nome non è mai un percorso riservato. */
+  arobaFaProfilo?: boolean;
   percorsoDiUnProfilo?: (nome: string, resto: string) => boolean;
 };
 
@@ -373,16 +375,17 @@ function handleDaLink(v: string | undefined, regola: RegolaDelSocial): string | 
   if (v === undefined) return v;
   const t = v.trim();
   const m = t.match(
-    new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${regola.dominio.source}\\/@?([A-Za-z0-9._-]+)(?=$|[\\/?#])([^?#]*)`, 'i'),
+    new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${regola.dominio.source}\\/(@?)([A-Za-z0-9._-]+)(?=$|[\\/?#])([^?#]*)`, 'i'),
   );
   // «profile.php?id=…», «/p/…», «/reel/…», «/share/…» non sono il nome del profilo: si lascia
   // il valore com'è, e il controllo lo ferma invece di salvare un link sbagliato.
   // R10-010 — Il link copiato dall'app porta dietro «?igsh=…» o «?hl=it»: dopo il nome del profilo
   // la coda non conta, si tiene il nome (prima ogni «?» fermava anche un profilo vero).
-  if (m && (regola.riservati.test(m[1]) || (regola.percorsoDiUnProfilo && !regola.percorsoDiUnProfilo(m[1], m[2])))) {
+  const riservato = m && !(regola.arobaFaProfilo && m[1] === '@') && regola.riservati.test(m[2]);
+  if (m && (riservato || (regola.percorsoDiUnProfilo && !regola.percorsoDiUnProfilo(m[2], m[3])))) {
     return t;
   }
-  return (m ? m[1] : t).replace(/^@+/, '');
+  return (m ? m[2] : t).replace(/^@+/, '');
 }
 
 /**
@@ -411,7 +414,7 @@ export function normalizzaSocials(s: StoreCustomization['socials']): StoreCustom
     riservati: RISERVATI_FACEBOOK,
     percorsoDiUnProfilo: percorsoDiUnProfiloFacebook,
   });
-  out.tiktok = handleDaLink(s.tiktok, { dominio: /tiktok\.com/, riservati: RISERVATI_TIKTOK });
+  out.tiktok = handleDaLink(s.tiktok, { dominio: /tiktok\.com/, riservati: RISERVATI_TIKTOK, arobaFaProfilo: true });
   if (s.website !== undefined) {
     const w = s.website.trim();
     out.website = w && !/^https?:\/\//i.test(w) && /\./.test(w) ? `https://${w}` : w;
