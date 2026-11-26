@@ -39,7 +39,9 @@ function ritornoPerIlRuolo(ritorno: string, ruolo: unknown): string {
   const casa = typeof ruolo === 'string' ? HOME_DEL_RUOLO[ruolo] : undefined;
   if (!casa) return ritorno;
   const percorso = percorsoRisolto(ritorno);
-  const inAreaAltrui = Object.entries(AREA_DEL_RUOLO).some(
+  // Il portiere fa entrare l'amministratore anche in /seller e /rider (ROLE_PROTECTED): per lui non
+  // sono aree di un altro ruolo, e il ritorno lì resta, come prima di questa regola.
+  const inAreaAltrui = ruolo !== 'admin' && Object.entries(AREA_DEL_RUOLO).some(
     ([altro, area]) => altro !== ruolo && (percorso === area || percorso.startsWith(`${area}/`)),
   );
   return percorso === '/' || inAreaAltrui ? casa : ritorno;

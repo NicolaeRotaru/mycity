@@ -101,6 +101,11 @@ describe('R23-004 — il ritorno da Google applica la regola di ruolo', () => {
     expect(await tornaDaGoogle('seller', '/seller/products')).toBe('/seller/products');
   });
 
+  it('l\'amministratore torna anche nelle aree di negozio e fattorino: il portiere lo fa entrare', async () => {
+    expect(await tornaDaGoogle('admin', '/seller/orders')).toBe('/seller/orders');
+    expect(await tornaDaGoogle('admin', '/rider')).toBe('/rider');
+  });
+
   it('il cliente non cambia: va dove dice il ritorno, anche verso /seller o «/»', async () => {
     expect(await tornaDaGoogle('buyer', '/seller')).toBe('/seller');
     expect(await tornaDaGoogle('buyer')).toBe('/');
