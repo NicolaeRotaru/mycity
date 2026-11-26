@@ -1,0 +1,248 @@
+{
+ "sessione": "R11",
+ "aggiornato": "2026-11-26 13:35",
+ "finita": true,
+ "testa": "d09057e7a15dbc3440cbea409478de05cddfccd8",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "d09057e7a15dbc3440cbea409478de05cddfccd8",
+  "nota": "typecheck, lint e 2147 file di prova (13197 prove) verdi; un verify precedente su a3ffd712dfe671a1df900aca4c12f04110f5f2e2 era verde anch'esso."
+ },
+ "voci": [
+  {
+   "id": "R11-001",
+   "chiave": "frontend-ux|nella pagina di una lista il prezzo dei prodotti non tiene conto della promozione",
+   "esito": "riparato",
+   "commit": "e43006ff9af07ccbebed97db7dc61fa27ab87b4f",
+   "file_toccati": [
+    "app/lists/[id]/page.tsx",
+    "tests/unit/riparazione-r11-lista-prezzo-scontato.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r11-lista-prezzo-scontato.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r11-lista-prezzo-scontato.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e43006ff9af07ccbebed97db7dc61fa27ab87b4f^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r11-lista-prezzo-scontato.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La lettura dei prodotti della lista ora legge lo sconto attivo con fetchActiveDiscounts, come la griglia, e la riga mostra il prezzo che si paga (discountedUnitCents, al centesimo come la cassa) con il prezzo pieno barrato accanto. Se la lettura dello sconto non riesce resta il prezzo pieno. La prova monta la pagina su un QueryClient vero.",
+   "verificato_da": "subagente opus che smentisce: prova e rimessa rilanciate (uscita 0); sconto 0/assente/illeggibile, lista vuota, riga senza prodotto, arrotondamento uguale alla cassa (stesso discountedUnitCents di lib/ordini/valida-carrello.ts)."
+  },
+  {
+   "id": "R11-009",
+   "chiave": "qa-flussi|eliminata una lista, la pagina «le mie liste» la mostra ancora finché la rilettura non torna",
+   "esito": "riparato",
+   "commit": "d09057e7a15dbc3440cbea409478de05cddfccd8",
+   "file_toccati": [
+    "app/lists/[id]/page.tsx",
+    "tests/unit/riparazione-r11-lista-eliminata-sparisce-da-le-mie.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r11-lista-eliminata-sparisce-da-le-mie.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r11-lista-eliminata-sparisce-da-le-mie.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base b9704fea60602d02c410203a4463270839f2c102^ --file \"app/lists/[id]/page.tsx\" --prove tests/unit/riparazione-r11-lista-eliminata-sparisce-da-le-mie.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "In deleteList.onSuccess un setQueryData toglie subito l'id eliminato dalle cache lists.mine, lists.public e lists.inVetrina, prima dell'invalidazione (scritto dopo, la memoria tornerebbe fresca e non si rileggerebbe). La prova elimina una lista privata e una pubblica in vetrina e torna su /lists col database lento: spariscono subito da «Le mie liste», dalla community e dalla vetrina, l'altra lista pubblica resta e la rilettura avviene lo stesso.",
+   "commit_della_voce": [
+    "b9704fea60602d02c410203a4463270839f2c102",
+    "d09057e7a15dbc3440cbea409478de05cddfccd8"
+   ],
+   "nota": "Due commit per la voce: il secondo è il giro di correzione dopo il primo collaudo (la lista pubblica restava in «Liste della community»). La prova rimessa toglie tutta la voce (base = genitore del primo commit).",
+   "verificato_da": "primo subagente opus che smentisce: parziale (la lista pubblica restava in «Liste della community»), da qui il giro di correzione; poi subagente sonnet che smentisce sulla testa d09057e7a15dbc3440cbea409478de05cddfccd8: regge, rimessa uscita 0, chiavi uguali a app/lists/page.tsx:54/78/96, cache null/undefined gestita, scrittura solo in onSuccess, rilettura sempre fatta; 16 prove accanto verdi."
+  },
+  {
+   "id": "R11-007",
+   "chiave": "frontend-ux|le collezioni scelte a mano non passano il prezzo barrato del negozio",
+   "esito": "riparato",
+   "commit": "205790afc59ad8e1addf0a0b88a5c8fbbde84068",
+   "file_toccati": [
+    "components/store-sections/CollectionSection.tsx",
+    "tests/unit/riparazione-r11-collezione-prezzo-barrato.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r11-collezione-prezzo-barrato.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r11-collezione-prezzo-barrato.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 205790afc59ad8e1addf0a0b88a5c8fbbde84068^ --file components/store-sections/CollectionSection.tsx --prove tests/unit/riparazione-r11-collezione-prezzo-barrato.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La query della collezione manuale (nel mio file) non chiedeva il prezzo barrato: ora seleziona compare_at_price e lo passa a ProductCard come compareAtPrice, come fa ProductGrid. La prova ha un database finto che risponde solo con le colonne chieste, quindi controlla query e passaggio del dato, in griglia e in carosello.",
+   "verificato_da": "subagente opus che smentisce: prova e rimessa rilanciate (uscita 0); barrato uguale/minore/0/NaN ignorato da ProductCard, con promo attiva vince lo sconto come in ProductGrid."
+  },
+  {
+   "id": "R11-002",
+   "chiave": "frontend-ux|l immagine di anteprima social del prodotto e i dati per i motori di ricerca mostrano il prezzo pieno durante una promozione",
+   "esito": "riparato",
+   "commit": "f18d2819c23d9d90d6098d5a3e07d61d92476e87",
+   "file_toccati": [
+    "app/product/[id]/opengraph-image.tsx",
+    "app/product/[id]/layout.tsx",
+    "tests/unit/riparazione-r11-anteprima-e-google-col-prezzo-scontato.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r11-anteprima-e-google-col-prezzo-scontato.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r11-anteprima-e-google-col-prezzo-scontato.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f18d2819c23d9d90d6098d5a3e07d61d92476e87^ --file app/product/[id]/layout.tsx,app/product/[id]/opengraph-image.tsx --prove tests/unit/riparazione-r11-anteprima-e-google-col-prezzo-scontato.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La card social e il JSON-LD dell'offerta leggono lo sconto attivo con fetchActiveDiscounts (client anonimo; la funzione è concessa ad anon) e pubblicano il prezzo scontato con discountedUnitCents. Il JSON-LD segue la regola Google del prezzo pagato: price è quello che il cliente paga ora; niente priceValidUntil perché la data di fine non arriva. Se la lettura dello sconto non riesce resta il prezzo pieno.",
+   "nota": "Il registro diceva che il prezzo da dichiarare a Google andava deciso: si è seguita la regola di Google (Offer.price = prezzo che si paga).",
+   "verificato_da": "subagente opus che smentisce: prova e rimessa rilanciate (uscita 0, i due file cadono ognuno da solo); runtime edge ok, funzione sconti aperta ad anon, JSON-LD price stringa toFixed(2) e EUR come prima."
+  },
+  {
+   "id": "R11-006",
+   "chiave": "frontend-ux|con una promozione attiva la barra d'acquisto e i caroselli mostrano il prezzo pieno, mentre sopra c'è quello scontato",
+   "esito": "serve_file_altrui",
+   "nota": "La parte della scheda prodotto era già riparata sulla base: app/product/[id]/page.tsx:541-543 calcola price con discountedUnitCents e lo passa a prezzo grande (:1018), riquadro a lato (:1276), barra (:1705-1709, con prezzoPieno), addToCart (:708, :754) e al tetto dei contanti (:614/:619). StickyAddToCart.tsx non ha un difetto suo (non ricalcola, barra il pieno solo se è più alto), nessun commit. Restano i 4 caroselli, file di altri.",
+   "serve_file_altrui": [
+    {
+     "file": "components/SimilarProducts.tsx",
+     "modifica": "Aggiungere `import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';`. :18 diventa `type Item = ProdottoSimile & { sconto?: number };`. :39 diventa `queryFn: async (): Promise<Item[]> => { const righe = await leggiSimili(supabase, { productId, categoryId, sellerId }); const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>()); return righe.map((p) => ({ ...p, sconto: sconti.get(p.id) ?? 0 })); },`. :94 diventa `{formatPrice(p.sconto ? discountedUnitCents(p.price, p.sconto) / 100 : p.price)}`."
+    },
+    {
+     "file": "components/RecentlyViewed.tsx",
+     "modifica": "Stesso import. :17 diventa `type Item = VistoDiRecente & { sconto?: number };`. :71 diventa `queryFn: async (): Promise<Item[]> => { const visti = await leggiVistiDiRecente(supabase, { userId: userId! }); const sconti = await fetchActiveDiscounts(supabase, visti.map((it) => it.product.id)).catch(() => new Map<string, number>()); return visti.map((it) => ({ ...it, sconto: sconti.get(it.product.id) ?? 0 })); },`. :110 diventa `{formatPrice(it.sconto ? discountedUnitCents(p.price, it.sconto) / 100 : p.price)}`."
+    },
+    {
+     "file": "components/SponsoredCarousel.tsx",
+     "modifica": "Stesso import. :21 diventa `type SponsoredItem = Sponsorizzato & { sconto?: number };`. :49-50 diventa `queryFn: async (): Promise<SponsoredItem[]> => { const annunci = await leggiSponsorizzati(supabase, { placement, categorySlug, oggi: giornoPiacenza() }); const sconti = await fetchActiveDiscounts(supabase, annunci.flatMap((a) => (a.product ? [a.product.id] : []))).catch(() => new Map<string, number>()); return annunci.map((a) => ({ ...a, sconto: a.product ? (sconti.get(a.product.id) ?? 0) : 0 })); },`. :136 diventa `{formatPrice(it.sconto ? discountedUnitCents(p.price, it.sconto) / 100 : p.price)}`."
+    },
+    {
+     "file": "components/SearchBar.tsx",
+     "modifica": "Stesso import. :18 diventa `type Suggestion = Suggerimento & { sconto?: number };`. :57 diventa `queryFn: async (): Promise<Suggestion[]> => { const trovati = await leggiSuggerimentiRicerca(supabase, debounced); const sconti = await fetchActiveDiscounts(supabase, trovati.flatMap((s) => (s.kind === 'product' ? [s.id] : []))).catch(() => new Map<string, number>()); return trovati.map((s) => (s.kind === 'product' ? { ...s, sconto: sconti.get(s.id) ?? 0 } : s)); },`. :249 diventa `{formatPrice(s.sconto ? discountedUnitCents(s.price, s.sconto) / 100 : s.price)}`."
+    }
+   ],
+   "verificato_da": "subagente opus che smentisce: vero sulla base (page.tsx:541-543 → prezzo grande :1018, riquadro :1276, addToCart :708/:754, barra :1705-1709); i 4 caroselli stampano formatPrice(p.price) senza sconto; nessun difetto proprio in StickyAddToCart.tsx."
+  },
+  {
+   "id": "R11-003",
+   "chiave": "frontend-ux|un tasso di conversione fra il 50% e il 99% resta verde anche se gonfiato dal consenso ai cookie",
+   "esito": "scelta_di_nicola",
+   "domanda": "Sopra quale tasso di conversione la tessera smette di essere verde e mostra un avviso «dato forse gonfiato: conta solo chi accetta i cookie»? Oggi ogni tasso da 2% in su è verde, anche 80% (app/seller/analytics/page.tsx:365-368).",
+   "cosa_ho_fatto": "Solo verifica: il difetto c'è ancora sulla base, nessun codice toccato.",
+   "verificato_da": "subagente sonnet che smentisce: file identico alla base, page.tsx:365-368 verde da 2% in su senza tetto."
+  },
+  {
+   "id": "R11-004",
+   "chiave": "frontend-ux|la pagina clienti del negozio mostra solo i nomi, senza contatti né esportazione, e consiglia offerte che non si possono mandare",
+   "esito": "scelta_di_nicola",
+   "domanda": "Quali contatti dei clienti dare al negozio nella pagina Clienti (per esempio telefono ed email di chi ha accettato in cassa di essere ricontattato da quel negozio) e con quale consenso, da decidere col legale, prima di aggiungere i contatti e il pulsante Esporta in CSV?",
+   "nota": "La parte «subito» della voce era già fatta sulla base: app/seller/customers/page.tsx:222-230 non ha più il «4×» né il consiglio dell'offerta (tolti dal commit 7e4b287b9064a8119cc970ff5afc834154cafaf6, già nella base), provato da tests/unit/minori-s06-pagina-clienti.test.ts:50-52. Resta la query a righe 36-46 che legge solo il nome e i totali: contatti ed esportazione aspettano la scelta.",
+   "verificato_da": "subagente sonnet che smentisce: 7e4b287b antenato della base, minori-s06-pagina-clienti.test.ts:50-52 prova l'assenza del «4×», la query 36-46 non legge contatti, nessuna esportazione."
+  },
+  {
+   "id": "R11-005",
+   "chiave": "frontend-ux|mancano «finito per oggi» e «chiuso fino al…», promessi ai negozi della prima ondata",
+   "esito": "serve_file_altrui",
+   "cosa_ho_fatto": "Verificato: l'editor ha solo gli orari della settimana (StoreHoursEditor.tsx:25) e nel codice non c'è nessun «finito per oggi» o «chiuso fino al» del negozio. La decisione sull'ordine passa da lib/quando-arriva.ts:222-236 (motivoFasciaRifiutata chiama negozioPuoServire e motivoNegozioChiuso di lib/store-hours.ts), usata da app/api/orders/cod/route.ts:17 e app/api/stripe/checkout/route.ts:20; isStoreClosedForOrder e orariImpostati sono chiamate anche da lib/promessa-consegna.ts, lib/ordini/scadenza-accettazione.ts e components/store-sections/orari-schema.ts. Cambiando le funzioni in lib/store-hours.ts la regola arriva a tutti questi punti. Nessun file toccato: un interruttore nell'editor senza la lettura in lib farebbe accettare ordini a un negozio che si crede chiuso.",
+   "nota": "Proposta senza migrazione: i due segni dentro il JSON store_hours, già salvato da app/seller/profile/page.tsx:64-71 e già fra i campi scrivibili. Se Nicola preferisce colonne vere, la migrazione andrebbe nella fascia 970-979 (ALTER TABLE public.profiles ADD COLUMN store_closed_until date, ADD COLUMN store_done_for_day_on date, più trigger dei campi consentiti e vista seller_public_profiles).",
+   "serve_file_altrui": [
+    {
+     "file": "lib/store-hours.ts",
+     "modifica": "(1) Nel tipo StoreHours (riga 11) due chiavi opzionali: `chiusoFinoAl?: string` (AAAA-MM-GG, ultimo giorno di chiusura incluso) e `finitoOggiIl?: string` (AAAA-MM-GG di Roma del giorno in cui il negoziante ha premuto «finito per oggi»). (2) Nuova `export function sospesoIl(storeHours: unknown, giorno: string): boolean` che torna true se `typeof chiusoFinoAl === 'string' && giorno <= chiusoFinoAl` oppure `typeof finitoOggiIl === 'string' && finitoOggiIl === giorno`, con `giorno` = AAAA-MM-GG di Roma del giorno della fascia (oggi o domani), così «chiuso fino al» rifiuta anche le fasce dei giorni dopo e «finito per oggi» lascia servibile la fascia di domani (scade da solo a mezzanotte). (3) orariImpostati (riga 267): far valere i segni anche per un negozio senza orari impostati. (4) isStoreClosedForOrder (riga 112), prima del controllo orari: `if (sospesoIl(storeHours, <giorno di now a Roma>)) return true;`. (5) negozioPuoServire (riga 307), come prima riga: `if (sospesoIl(storeHours, <giorno della fascia>)) return false;` (da lì passano rotta contanti, rotta carta e cassa). (6) motivoNegozioChiuso (riga 392): dire il motivo vero, «chiuso fino al <data>» o «ha finito per oggi». Le rotte contanti e carta arrivano a negozioPuoServire attraverso motivoFasciaRifiutata (lib/quando-arriva.ts:222-236): controllare lì che il giorno della fascia passato a negozioPuoServire sia quello giusto per «chiuso fino al»."
+    },
+    {
+     "file": "components/store-sections/orari-schema.ts",
+     "modifica": "Riga 47 usa orariImpostati per le fasce e la scheda pubblica del negozio: fargli leggere anche sospesoIl, così la vetrina non mostra «aperto» a un negozio che ha premuto «finito per oggi» o è chiuso fino a una data."
+    },
+    {
+     "file": "components/seller/StoreHoursEditor.tsx",
+     "modifica": "(file mio, da fare SOLO dopo lib/store-hours.ts) un pulsante «Finito per oggi» che chiama onChange({...value, finitoOggiIl: <oggi AAAA-MM-GG di Roma>}) e un campo data «Chiuso fino al» che scrive chiusoFinoAl (vuoto = toglie la chiave). La rotta di salvataggio (app/seller/profile/page.tsx:64-71, update diretto di store_hours) passa già il valore intero. La prova deve montare l'editor e il rifiuto dell'ordine insieme."
+    }
+   ],
+   "verificato_da": "subagente sonnet che smentisce: righe di lib/store-hours.ts giuste (112, 267, 307, 392) e salvataggio diretto giusto; ha corretto il percorso delle chiamate (passa da lib/quando-arriva.ts:222-236), già riportato qui."
+  },
+  {
+   "id": "R11-008",
+   "chiave": "frontend-ux|orari passati alla cassa e 409 della rotta contanti: le prove cercano parole nel sorgente, non fanno girare pagina e rotta",
+   "esito": "parziale",
+   "commit": "a3ffd712dfe671a1df900aca4c12f04110f5f2e2",
+   "file_toccati": [
+    "tests/unit/riparazione-r11-rotta-contanti-409-prima-dell-insert.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r11-rotta-contanti-409-prima-dell-insert.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r11-rotta-contanti-409-prima-dell-insert.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Prova nuova che fa girare l'handler POST di app/api/orders/cod/route.ts con supabase finto e orologio finto (martedì 26/5/2026, 17:30 Roma): la fascia «In giornata · 15:00–18:00» dà 409 e nessun insert su orders; controprova «Domani · 9:00–12:00» dà 200 e un insert. Le due prove vecchie non sono toccate.",
+   "cosa_resta": "1) Le due prove vecchie (tests/unit/la-cassa-passa-gli-orari-dei-negozi-al-selettore-e-al-freno.test.ts, tests/unit/la-rotta-rifiuta-una-fascia-a-meno-di-un-ora-dalla-fine.test.ts:90-91) restano basate sul sorgente: non sono mie. 2) Manca la prova che monta la pagina della cassa (app/checkout/page.tsx, circa 266-273) e controlla che gli orari arrivino al selettore e al freno: troppe dipendenze da simulare, è una prova a sé. 3) Una voce di sole prove non ha prova rimessa di programma: c'è il mutante a mano in nota.",
+   "nota": "Mutante a mano, senza commit: tolta la riga `if (rifiutata) return esciERilascia(ApiErrors.conflict(rifiutata));` (route.ts:1017) e rimesso lo stesso controllo subito dopo l'insert di order_items. `npx vitest run tests/unit/riparazione-r11-rotta-contanti-409-prima-dell-insert.test.ts --reporter=dot` col mutante: 1 failed | 1 passed («l'ordine è stato inserito prima del rifiuto»); dopo `git checkout -- app/api/orders/cod/route.ts`: 2 passed, albero pulito.",
+   "verificato_da": "subagente sonnet che smentisce: prova verde anche con TZ=UTC e TZ=Pacific/Auckland; tre mutanti a mano tutti rossi (controllo dopo l'insert su orders, dopo l'insert su order_items, controllo tolto → 200 invece di 409)."
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "il precarico non riempie lo sconto attivo del prodotto, che il browser rilegge",
+   "dimensione": "prestazioni",
+   "severita": "minore",
+   "file": "lib/queries/precarico.ts:124-128",
+   "descrizione": "queryKeys.products.activeDiscount(id) non è precaricata: il guscio legge lo sconto sul server e il browser rifà la stessa chiamata RPC a ogni visita."
+  },
+  {
+   "titolo": "un negozio che chiude solo uno o due giorni resta «sempre aperto» negli altri",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "lib/store-hours.ts:267-277",
+   "descrizione": "orariImpostati torna null per un negozio con meno di 4 giorni scritti e tutti vuoti, e il negozio viene trattato come senza orari."
+  },
+  {
+   "titolo": "una prova dei contanti sostituisce tutti gli orari con «può sempre servire»",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "tests/unit/contanti-la-chiave-si-prende-prima.test.ts:79-83",
+   "descrizione": "mocka tutto @/lib/store-hours con negozioPuoServire: () => true: le prove che passano da lì non vedono mai gli orari veri."
+  },
+  {
+   "titolo": "col ritiro in negozio riacceso, la rotta contanti non controlla gli orari della fascia",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "app/api/orders/cod/route.ts:1013-1017",
+   "descrizione": "il controllo della fascia gira solo se !body.pickupInStore; oggi il ritiro è spento in lancio, ma se si riaccende il ramo ritiro non ha controllo orari in quel punto."
+  },
+  {
+   "titolo": "il riquadro della promozione può scrivere un centesimo diverso dalla cassa",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "components/ActivePromoBadge.tsx:47",
+   "descrizione": "calcola basePrice * (1 - d/100) senza discountedUnitCents: su circa 2.700 coppie prezzo/sconto su 1,4 milioni scrive un centesimo diverso dalla cassa (es. 0,29 € al -50%: riquadro 0,15 €, cassa 0,14 €)."
+  }
+ ],
+ "domande_per_nicola": [
+  "R11-003: sopra quale tasso di conversione la tessera dell'analisi smette di essere verde e avvisa che il dato può essere gonfiato dal consenso ai cookie?",
+  "R11-004: quali contatti dei clienti dare al negozio (e con quale consenso, col legale) prima di contatti ed esportazione CSV nella pagina Clienti?",
+  "R11-005: «finito per oggi» e «chiuso fino al» dentro il JSON degli orari (nessuna migrazione, consigliato) o in colonne nuove?"
+ ],
+ "conto": {
+  "agenti": 6,
+  "nota": "2 subagenti che riparano (lotto 1 opus, lotto 2 sonnet), 1 giro di correzione (sonnet), 3 che smentiscono (lotto 1 opus, lotto 2 sonnet, correzione R11-009 sonnet). Costo letto con get_session (senza id) prima della consegna: 12,51 $ all'ultimo turno chiuso.",
+  "subagenti": 6
+ },
+ "costo_usd": 12.51
+}
