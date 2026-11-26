@@ -1,0 +1,390 @@
+{
+  "sessione": "R02",
+  "aggiornato": "2026-11-26 15:05",
+  "finita": true,
+  "testa": "31418c31e2e9852f7bdc25e0c26e6352d8bd3c3d",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "31418c31e2e9852f7bdc25e0c26e6352d8bd3c3d",
+    "nota": "typecheck, lint e test: 2153 file, 13212 prove verdi"
+  },
+  "voci": [
+    {
+      "id": "R02-002",
+      "chiave": "privacy-legale|lo sconto scritto su un evento appare ai clienti come «-20%», ma la cassa non lo applica mai",
+      "esito": "parziale",
+      "commit": "fab609697038ddebc3318657684d5693cc791cc6",
+      "file_toccati": [
+        "migrations/880_un_evento_non_promette_uno_sconto_che_la_cassa_non_applica.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r02-niente-sconto-sugli-eventi.test.sql"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh mycity_test && psql -X -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r02-niente-sconto-sugli-eventi.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ed12ed8ec8190e1132b690f6e034c30f0a5d55ba --file migrations/880_un_evento_non_promette_uno_sconto_che_la_cassa_non_applica.sql --prove tests/sql/rls/riparazione-r02-niente-sconto-sugli-eventi.test.sql --sql r02_rimessa --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base il modulo admin non salvava già più lo sconto, ma il database accettava ancora discount_percent e la pagina eventi mostra «-n%» per ogni evento che ne ha uno. La migrazione nuova 880 azzera gli sconti già salvati sugli eventi e aggiunge un vincolo CHECK (discount_percent IS NULL): un evento con lo sconto non si crea né si modifica, quindi il badge non può più comparire.",
+      "nota": "Migrazione nuova 880 (fascia 880-889), provata con --sql r02_rimessa. Vale in produzione solo quando Nicola la applica; gli sconti azzerati non tornano (nell'intestazione la SELECT per vederli prima). Pulizia facoltativa per chi ha app/events/page.tsx:270-274: il badge diventa codice morto.",
+      "verificato_da": "qa grande (primo giro): prova SQL verde con la 880 e 3/5 rossa senza; 880 rieseguibile su db con 4 eventi scontati; run.sh e migrazione-su-database-pieno verdi; 87 file vitest verdi; nessun calcolo del prezzo legge marketplace_events, nessuna API/seed/email mostra lo sconto. Trovato: la 880 azzerava senza archiviare (si perde la prova di chi ha visto «-20%»), la pulizia non era coperta da prova, il badge resta in app/events/page.tsx — non corretto per il tetto di spesa: esito portato a parziale.",
+      "cosa_resta": "Dal collaudo, non fatto per il tetto di spesa: (1) la 880 azzera discount_percent su tutti gli eventi senza archiviarlo prima (il registro attività lo scrive come «***»): va prima copiato (evento, sconto, data) in una tabella d'archivio, perché è l'unica prova di chi ha visto «-20%» e ha pagato pieno; (2) la pulizia dei dati già salvati non è coperta dalla prova SQL (riga 81 conta solo gli eventi creati dalla prova); (3) il badge «-n%» resta in app/events/page.tsx:270-274 (non di R02): finché la 880 non è applicata si vede ancora — togliere quelle righe lo chiude col rilascio, senza perdere dati.",
+      "serve_file_altrui": [
+        {
+          "file": "app/events/page.tsx",
+          "modifica": "Togliere il blocco 270-274 ({ev.discount_percent ? (<Badge variant=\"discount\" …>-{ev.discount_percent}%</Badge>) : null}), come già fatto in components/home/HomeEvents.tsx."
+        }
+      ]
+    },
+    {
+      "id": "R02-004",
+      "chiave": "privacy-legale|la pulizia notturna dei documenti d'identità lasciati a metà iscrizione fallisce ogni notte nel database vero",
+      "esito": "non_codice",
+      "nota": "Il codice è già pronto (lib/privacy/potature-ritenzione.ts:549-583, riparazione del 12/11): senza la 171 il passo si salta con un avviso e la notte non risponde più 500; con la 171 il passo lavora (provato sullo schema di tutte le migrazioni sul Postgres locale, ruolo service_role e grilletti veri). Nicola: applicare migrations/171_i_documenti_d_identita_scadono.sql nel database vero; poi, se kyc_file_da_togliere_rimetti manca, rilanciare il blocco 32 della migrazione 215; e tenere su Vercel la chiave di servizio, senza la quale il lavoro notturno è fermo.",
+      "commit": "ed53a08c4fb99eff7ce8bedad9d718229a0f802f",
+      "file_toccati": [
+        "tests/sql/rls/riparazione-r02-documenti-a-meta-di-notte.test.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r02-documenti-a-meta-di-notte.test.sql",
+        "tests/unit/riparazione-r02-potatura-kyc.test.ts"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test ; npx vitest run tests/unit/riparazione-r02-potatura-kyc.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "cosa_ho_fatto": "Ricostruito il perché dal codice e dalle migrazioni senza il database vero: la notte fallita veniva dalla 171 non applicata, e dalla base il passo la salta. Aggiunta una prova SQL di guardia che fa la notte come PostgREST e mostra che con la 171 il passo regge.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-001",
+      "chiave": "privacy-legale|il sito non dice chi c'è dietro: niente nome, sede, partita iva né pec, il titolare risulta solo «mycity»",
+      "esito": "parziale",
+      "commit": "f3517e446c755fce99e4daa8a59427fe427b624b",
+      "file_toccati": [
+        "app/privacy/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-titolare-pec-informativa.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-titolare-pec-informativa.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ed53a08c4fb99eff7ce8bedad9d718229a0f802f --file app/privacy/page.tsx --prove tests/unit/riparazione-r02-titolare-pec-informativa.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Quando NEXT_PUBLIC_TITOLARE_PEC c'è, l'informativa ora stampa la PEC fra i Contatti del Titolare (Termini e piede la stampavano già, la privacy no). Nessun dato inventato; il nome della persona era già stampato (lib/legal/titolare.ts:129-134).",
+      "cosa_resta": "Codice (dal collaudo, non fatto per il tetto di spesa): lib/legal/titolare.ts:133-134 non scarta NEXT_PUBLIC_TITOLARE_NOME uguale al marchio o a un segnaposto: con NOME=«MyCity» l'informativa torna a «Il titolare del trattamento è MyCity» (e con «MyCity S.r.l.» stamperebbe una società che non esiste); va fatto passare da eSegnaposto/confronto col marchio. Nicola: mettere su Vercel produzione NEXT_PUBLIC_TITOLARE_NOME, _INDIRIZZO, _PIVA e _PEC e poi ripubblicare il sito (sono variabili NEXT_PUBLIC_ lette anche dal piede nel browser: senza una nuova pubblicazione non cambia niente). L'indirizzo (sede) è dovuto già oggi a prescindere dalla P.IVA (art. 7.1 d.lgs. 70/2003, art. 49.1.c Codice del Consumo) e il codice lo stampa anche da solo; la P.IVA serve solo con attività soggetta a IVA: la soglia dei 5000€ (lib/legal/titolare.ts:195-196) è una scelta di Nicola da verificare col legale.",
+      "verificato_da": "qa grande: rilanciata la prova (verde, e rossa con app/privacy/page.tsx del genitore); disegnati privacy, termini (anche il modulo di recesso) e piede con le variabili tutte valorizzate, tutte vuote e con NOME=«MyCity»; ripassate 26 prove vicine, verdi. Trovato: con NOME=«MyCity» l'informativa torna a «Il titolare del trattamento è MyCity» (lib/legal/titolare.ts:133-134) — non corretto per il tetto di spesa, scritto in cosa_resta."
+    },
+    {
+      "id": "R02-003",
+      "chiave": "privacy-legale|la consegna è un incasso di mycity, ma per quei soldi non nasce nessun documento fiscale e i termini mandano il cliente a chiedere la fattura al negozio",
+      "esito": "parziale",
+      "commit": "39cf874a2642d78fd7bada3ca1601e4010aa55ef",
+      "file_toccati": [
+        "app/terms/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-termini-chi-documenta-la-consegna.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-termini-chi-documenta-la-consegna.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f3517e446c755fce99e4daa8a59427fe427b624b --file app/terms/page.tsx --prove tests/unit/riparazione-r02-termini-chi-documenta-la-consegna.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nel §5 «Documenti fiscali» la fattura da chiedere al Venditore riguarda solo i prodotti; le spese di consegna le incassa MyCity, il Venditore non le documenta, e per quelle il cliente si rivolge a MyCity. Nessun documento promesso per la consegna (la prova controlla anche questo).",
+      "cosa_resta": "emettere il documento fiscale per la consegna: scelta di Nicola (quale documento, fornitore, regime)",
+      "verificato_da": "qa grande: rilanciata la prova sul commit (3/3 verdi), con app/terms/page.tsx del genitore 2 su 3 rosse (la terza è una guardia); seguita la quota consegna nel codice (computeOrderSplit lib/stripe/client.ts:475-510, rotta COD app/api/orders/cod/route.ts:1517-1556, webhook carta lib/stripe/webhook/ordini.ts:311): resta alla piattaforma e non entra nel netto del venditore; grep di fattura/scontrino/documento fiscale/ricevuta su Termini, informativa, FAQ, spedizioni, resi, email e cassa: nessuna contraddizione; 10 prove vicine verdi. Nota: «rivolgiti a MyCity» lascia intendere un documento su richiesta che oggi nessun flusso emette — coperto dal cosa_resta."
+    },
+    {
+      "id": "R02-008",
+      "chiave": "privacy-legale|la conferma della newsletter scatta appena il link viene aperto, anche da un antivirus, e funziona anche con la newsletter spenta",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/le-porte-pubbliche-che-scrivono-hanno-un-freno.test.ts",
+          "modifica": "Prova comune (importa lib/rate-limit, di un'altra sessione). Tre cambi: `import { GET as CONFERMA } from '@/app/api/newsletter/confirm/route'` diventa `import { POST as CONFERMA } …`; dopo il vi.mock del logger si aggiunge `vi.mock('@/lib/funzioni-al-lancio', async (o) => ({ ...((await o()) as Record<string, unknown>), NEWSLETTER_ACCESA: true }));`; nel caso «IL CASO CHE ROMPEVA» `toBe(307)` diventa `toBe(303)`."
+        },
+        {
+          "file": "tests/unit/riparazione-r32-newsletter-riscritto-dopo-disiscrizione.test.ts",
+          "modifica": "Prova comune (importa lib/rate-limit, di un'altra sessione). Due cambi: `import { GET as conferma }` diventa `import { POST as conferma }`, e la Request della conferma riceve `method: 'POST',`."
+        }
+      ],
+      "nota": "La correzione nei file di R02 è pronta e provata ma non è nel ramo, perché da sola fa diventare rosse le due prove comuni qui sopra. Va applicata tutta insieme in un commit: app/api/newsletter/confirm/route.ts (la GET risponde con una pagina e un pulsante, solo la POST conferma con 303 sullo stesso indirizzo, e tutte e due rifiutano se NEWSLETTER_ACCESA è false); lib/funzioni-al-lancio.ts (commento: resta viva solo la disiscrizione); prova nuova tests/unit/riparazione-r02-newsletter-conferma-col-pulsante.test.ts; le due prove comuni come sopra. La patch unica l'ha la regista nel messaggio finale di R02 (git apply --check ok sulla testa cee124c2f03d26a1627b4b2d74975034efb88d9c).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-012",
+      "chiave": "privacy-legale|l'informativa non dice quanto teniamo i messaggi dei contatti e della chat, e per l'email con l'iban scrive «finché non la cancelliamo»",
+      "esito": "scelta_di_nicola",
+      "domanda": "Per quanti mesi resta nella casella email dell'assistenza l'email con l'IBAN del rimborso (e l'avviso a chi paga), e chi pulisce la casella? Oggi nessun codice la cancella, quindi «finché non la cancelliamo» è vero.",
+      "nota": "Contatti e chat avevano già la loro riga sulla base: app/privacy/page.tsx:215 dice Contatti 24 mesi (MESI_DEI_MESSAGGI_DEI_CONTATTI, applicato in lib/privacy/potature-ritenzione.ts:376-380); app/privacy/page.tsx:222 dice che un messaggio della chat resta finché chi l'ha scritto non cancella l'account. Per l'IBAN non c'è durata nel codice: lib/privacy/iban-per-email.ts:9-11 dice già che il numero lo sceglie Nicola col legale.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-013",
+      "chiave": "privacy-legale|la pagina «sono assicurato?» del fattorino parla solo di rc e non nomina l'inail, che è la condizione decisa",
+      "esito": "gia_riparato_prima",
+      "prova": "app/rider/help/page.tsx:81-83 sulla base ed12ed8ec8190e1132b690f6e034c30f0a5d55ba: «Prima della prima consegna serve anche la copertura INAIL contro gli infortuni: senza, non si consegna». npx vitest run tests/unit/minori-s02-aiuto-fattorini.test.tsx è verde (caso «Sono assicurato? nomina l INAIL»).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-015",
+      "chiave": "privacy-legale|le mappe mandano a openstreetmap e a google la zona di casa del cliente, ma l'informativa nomina openstreetmap solo per cercare gli indirizzi",
+      "esito": "riparato",
+      "commit": "cee124c2f03d26a1627b4b2d74975034efb88d9c",
+      "file_toccati": [
+        "app/privacy/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-informativa-mappe.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-informativa-mappe.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 39cf874a2642d78fd7bada3ca1601e4010aa55ef --file app/privacy/page.tsx --prove tests/unit/riparazione-r02-informativa-mappe.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Solo l'informativa, le mappe restano come sono: la voce OpenStreetMap ora dice che il browser scarica le tessere della mappa con l'IP e la zona mostrata; voce nuova per Google Maps (titolare autonomo): «Naviga» del fattorino apre Google Maps con la destinazione della consegna, la mappa della vetrina apre l'indirizzo del negozio. La prova controlla anche che i file delle mappe usino davvero tile.openstreetmap.org e google.com/maps/dir.",
+      "verificato_da": "non verificato da un revisore indipendente: tetto di spesa (80% di 25 $) raggiunto a fine lotto 4; solo prove del riparatore, prova rimessa e npm run verify"
+    },
+    {
+      "id": "R02-005",
+      "chiave": "privacy-legale|i nomi di sedici account cancellati restano nel registro delle azioni",
+      "esito": "non_codice",
+      "prova": "app/api/admin/users/[id]/moderate/route.ts:347-355: writeAudit scrive solo {role, reason}, senza nome; nessun'altra writeAudit su profiles scrive un nome (grep su app e lib).",
+      "nota": "Il codice è già a posto: le righe nuove non hanno il nome. Restano le righe vecchie (16 persone) nel database vero; una migrazione di soli dati non si prova con --sql (le righe della prova nascono dopo la migrazione). Nicola, sul database vero: prima SELECT count(*) con la stessa condizione, poi UPDATE public.audit_logs SET metadata = metadata - 'name' WHERE target_table='profiles' AND metadata ? 'name' AND NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id::text = audit_logs.target_id); e lo stesso su public.activity_events (category='moderation', target_table='profiles'). In alternativa si aspetta la potatura notturna (12 mesi audit_logs, 14 activity_events), che gira solo con CANCELLAZIONI_A_ORARIO accese.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-006",
+      "chiave": "privacy-legale|il conto fatto prima di accendere le cancellazioni non mostra le foto di consegna che la notte toglierà",
+      "esito": "riparato",
+      "insieme_a": [
+        "R02-007"
+      ],
+      "commit": "1ae51e708012e0ddb29b1da9a2d391e99faad261",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-conto-prove-orfane.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-conto-prove-orfane.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cee124c2f03d26a1627b4b2d74975034efb88d9c --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r02-conto-prove-orfane.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il conto senza cancellare mette contaOrfaniDelleProve in fileDaTogliere accanto a contaOrfaniKyc, e il testo nonContati nomina le foto orfane. La prova gira la rotta vera con un magazzino finto: conta 2 foto e non ne toglie nessuna.",
+      "verificato_da": "non verificato da un revisore indipendente: tetto di spesa (80% di 25 $) raggiunto a fine lotto 4; solo prove del riparatore, prova rimessa e npm run verify"
+    },
+    {
+      "id": "R02-007",
+      "chiave": "privacy-legale|il giro a mano delle cancellazioni non conta le foto di consegna orfane che la notte toglierà",
+      "esito": "riparato",
+      "insieme_a": [
+        "R02-006"
+      ],
+      "commit": "31418c31e2e9852f7bdc25e0c26e6352d8bd3c3d",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts",
+        "tests/unit/riparazione-r02-giro-a-mano-e-a-orario-prove-orfane.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-giro-a-mano-e-a-orario-prove-orfane.test.ts",
+        "tests/unit/riparazione-r02-conto-prove-orfane.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-giro-a-mano-e-a-orario-prove-orfane.test.ts tests/unit/riparazione-r02-conto-prove-orfane.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cee124c2f03d26a1627b4b2d74975034efb88d9c --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r02-giro-a-mano-e-a-orario-prove-orfane.test.ts,tests/unit/riparazione-r02-conto-prove-orfane.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La correzione sta nella stessa funzione dell'altra voce del conto (contaSenzaCancellare, commit 1ae51e708012e0ddb29b1da9a2d391e99faad261): contaOrfaniDelleProve è chiamata anche dal giro a mano (?a_mano=1). Il commit di questa voce aggiunge la sua prova: giro a mano e conto della notte a cancellazioni spente contano 2 foto orfane e non ne tolgono nessuna; rossa con route.ts della base, verde con la correzione (prova rimessa con base il genitore della correzione).",
+      "verificato_da": "non verificato da un revisore indipendente: tetto di spesa (80% di 25 $) raggiunto a fine lotto 4; solo prove del riparatore, prova rimessa e npm run verify"
+    },
+    {
+      "id": "R02-009",
+      "chiave": "privacy-legale|chi fa una segnalazione lascia la sua email lì per sempre",
+      "esito": "scelta_di_nicola",
+      "domanda": "Per quanto teniamo email, nome e testo di una segnalazione mai decisa (stato ricevuta o in esame)? Per quelle decise sono già 12 mesi dalla decisione; proposta: 12 mesi dalla ricezione.",
+      "nota": "La durata decisa (12 mesi dalla decisione) è già applicata in lib/privacy/potature-ritenzione.ts:383-394 e dichiarata in app/privacy/page.tsx:235; restano scoperte le righe con deciso_at vuoto (riga 392). Cancellarle prima della decisione impedirebbe di mandare l'esito (DSA art. 16.5). Fuori dai file di R02: la cancellazione dell'account non ripulisce le segnalazioni per segnalante_id (lib/account/cancellazione.ts).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-010",
+      "chiave": "privacy-legale|chi segnala un contenuto illecito lasciando l'email non riceve nessuna conferma che la segnalazione è arrivata",
+      "esito": "riparato",
+      "commit": "ac62569ce25abe430d12ba74ca55c52caa9fac09",
+      "file_toccati": [
+        "app/api/segnalazioni/route.ts",
+        "components/Segnala.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-segnalazione-ricevuta.test.ts",
+        "tests/unit/riparazione-r02-segnalazione-ricevuta-modulo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-segnalazione-ricevuta.test.ts tests/unit/riparazione-r02-segnalazione-ricevuta-modulo.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1ae51e708012e0ddb29b1da9a2d391e99faad261 --file app/api/segnalazioni/route.ts,components/Segnala.tsx --prove tests/unit/riparazione-r02-segnalazione-ricevuta.test.ts,tests/unit/riparazione-r02-segnalazione-ricevuta-modulo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dopo l'inserimento la rotta manda una ricevuta con sendEmail (transazionale, idempotencyKey) con numero, oggetto, motivo e data, mai il testo libero. Tetto di 3 ricevute al giorno per indirizzo (impronta sha256 dell'indirizzo normalizzato). L'esito torna in `conferma`, un invio fallito va nei log; il modulo mostra il numero e dice se la conferma è partita. Nelle prove sendEmail è finto.",
+      "nota": "Il tetto di 3 al giorno per indirizzo (RICEVUTE_PER_INDIRIZZO) è un numero tecnico contro l'abuso del modulo aperto: Nicola può cambiarlo.",
+      "verificato_da": "non verificato da un revisore indipendente: tetto di spesa (80% di 25 $) raggiunto a fine lotto 4; solo prove del riparatore, prova rimessa e npm run verify"
+    },
+    {
+      "id": "R02-011",
+      "chiave": "privacy-legale|una recensione segnalata come falsa non si può accogliere né togliere",
+      "esito": "parziale",
+      "commit": "daecd9af793aa71b0655aec190ce77305186bb08",
+      "file_toccati": [
+        "app/api/segnalazioni/route.ts",
+        "tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-recensione-accolta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-recensione-accolta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b9e4b39841c668e9568b28b9802b01d7d1d11ad9 --file app/api/segnalazioni/route.ts --prove tests/unit/riparazione-r02-recensione-accolta.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "contenutoAncoraOnline non risponde più 409 a ogni recensione: controlla reviews e store_reviews, «rimosso» parte solo se la recensione non c'è più; se la lettura cade si ferma e i messaggi restano fermi. Modificata la prova esistente riparazione-r02-segnalazione-esito-solo-se-tolto (importa la rotta di R02): il 409 lo pretende ora solo per una recensione ancora pubblicata.",
+      "cosa_resta": "Il pulsante «Accolta» e la rimozione della recensione stanno in file di altre sessioni (vedi serve_file_altrui).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/admin/segnalazioni/accogli/route.ts",
+          "modifica": "Al posto di `if (s.tipo !== 'prodotto') return conflict(...)`, un ramo per s.tipo === 'recensione': `admin.from('reviews').delete().eq('id', s.oggetto_id).select('id')`; se non tocca righe, lo stesso su 'store_reviews'. Errore → 500. Poi writeAudit({action:'review.remove', targetTable:<tabella>, targetId:s.oggetto_id, metadata:{origine:'segnalazione-accolta', segnalazione:s.id}}), senza il testo della recensione. Risposta {ok:true, tolto}. Gli altri tipi restano a 409."
+        },
+        {
+          "file": "lib/audit-azioni.ts",
+          "modifica": "Aggiungere 'review.remove' all'elenco delle azioni con l'etichetta 'Recensione tolta'."
+        },
+        {
+          "file": "app/admin/segnalazioni/page.tsx",
+          "modifica": "Riga 74: puoTogliere = prodotto || negozio || recensione. Nel mutationFn (circa riga 101) la condizione diventa `decisione === 'accolta' && (s.tipo === 'prodotto' || s.tipo === 'recensione')` e chiama /api/admin/segnalazioni/accogli; per la recensione prima un window.confirm, perché la cancellazione non si torna indietro. Messaggio d'errore: 'Il contenuto non è stato tolto: decisione non registrata. Riprova.'"
+        }
+      ],
+      "verificato_da": "non verificato da un revisore indipendente: tetto di spesa (80% di 25 $) raggiunto a fine lotto 4; solo prove del riparatore, prova rimessa e npm run verify"
+    },
+    {
+      "id": "R02-014",
+      "chiave": "privacy-legale|il venditore può rimettere in vendita da solo un prodotto tolto dopo una segnalazione accolta",
+      "esito": "riparato",
+      "commit": "dc4dad457b2647d42012a549d4c9ffe8856a7e13",
+      "file_toccati": [
+        "migrations/881_un_prodotto_tolto_per_segnalazione_non_torna_in_vendita_da_solo.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r02-prodotto-tolto-resta-fuori.test.sql"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh mycity_test && psql -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r02-prodotto-tolto-resta-fuori.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base daecd9af793aa71b0655aec190ce77305186bb08 --file migrations/881_un_prodotto_tolto_per_segnalazione_non_torna_in_vendita_da_solo.sql --prove tests/sql/rls/riparazione-r02-prodotto-tolto-resta-fuori.test.sql --sql r02_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Migrazione 881: trigger BEFORE UPDATE (SECURITY DEFINER, search_path fissato) che non lascia passare un prodotto ad 'available' se ha una segnalazione accolta e a scrivere non è is_admin() o service_role. Il venditore riceve 23514 con un motivo leggibile; un rifornimento riesce ma lascia lo stato di prima; prezzo e resto restano liberi. 7 controlli SQL, senza la 881 due sono rossi.",
+      "nota": "Migrazione 881 (fascia 880-889), provata con --sql r02_rimessa; da applicare: lo decide Nicola. Il passaggio del messaggio 23514 dalla rotta del venditore è visto leggendo il codice, non con una prova. Fuori dai file di R02: «lo stato precedente si perde» sta in app/api/admin/segnalazioni/accogli/route.ts.",
+      "verificato_da": "non verificato da un revisore indipendente: tetto di spesa (80% di 25 $) raggiunto a fine lotto 4; solo prove del riparatore, prova rimessa e npm run verify"
+    },
+    {
+      "id": "R02-016",
+      "chiave": "privacy-legale|il modulo di segnalazione non permette di dare il nome di chi segnala né di dichiarare la buona fede",
+      "esito": "riparato",
+      "commit": "b9e4b39841c668e9568b28b9802b01d7d1d11ad9",
+      "file_toccati": [
+        "app/api/segnalazioni/route.ts",
+        "components/Segnala.tsx",
+        "app/privacy/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-segnalazione-nome-buona-fede.test.ts",
+        "tests/unit/riparazione-r02-segnalazione-nome-buona-fede-modulo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-segnalazione-nome-buona-fede.test.ts tests/unit/riparazione-r02-segnalazione-nome-buona-fede-modulo.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ac62569ce25abe430d12ba74ca55c52caa9fac09 --file app/api/segnalazioni/route.ts,components/Segnala.tsx,app/privacy/page.tsx --prove tests/unit/riparazione-r02-segnalazione-nome-buona-fede.test.ts,tests/unit/riparazione-r02-segnalazione-nome-buona-fede-modulo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Modulo e schema hanno due campi facoltativi, nomeSegnalante (max 100, una riga) e buonaFede (casella); il server li mette in testa a `dettaglio`, nessuno schema nuovo. Senza i due campi il testo resta identico; con uno dei due il testo ha 1700 caratteri, il modulo lo dice prima di inviare e la rotta risponde 400 «accorcialo di N» invece di cadere sul CHECK 2000. L'informativa nomina il nome fra i dati.",
+      "nota": "Niente colonne nuove: una colonna non ancora applicata farebbe cadere ogni insert, e servirebbero lib/database.types.ts e la pagina admin, non di R02. Nome e dichiarazione seguono la potatura di dettaglio (12 mesi dalla decisione).",
+      "verificato_da": "non verificato da un revisore indipendente: tetto di spesa (80% di 25 $) raggiunto a fine lotto 4; solo prove del riparatore, prova rimessa e npm run verify"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "L'informativa propone il modulo dei contatti come contatto del titolare anche quando il modulo non arriva a nessuno",
+      "dimensione": "privacy-legale",
+      "severita": "minore",
+      "file": "app/privacy/page.tsx:73",
+      "descrizione": "La sezione 5 (righe 336-361) usa già stradaDeiDiritti per non promettere il modulo quando non arriva a nessuno; la riga 73 no."
+    },
+    {
+      "titolo": "I Termini dicono che il fattorino consegna i contanti a MyCity, ma il fattorino si tiene prima il suo compenso",
+      "dimensione": "privacy-legale",
+      "severita": "minore",
+      "file": "app/terms/page.tsx:183",
+      "descrizione": "Già sulla base: compensoDalContante in lib/shipping.ts:168 trattiene il compenso del fattorino dal contante prima del versamento."
+    },
+    {
+      "titolo": "La cancellazione dell'account non ripulisce le segnalazioni fatte da quell'account",
+      "dimensione": "privacy-legale",
+      "severita": "minore",
+      "file": "lib/account/cancellazione.ts",
+      "descrizione": "Le righe di segnalazioni con segnalante_id dell'account cancellato restano (il vincolo mette solo NULL sull'id), con email e testo."
+    }
+  ],
+  "domande_per_nicola": [
+    "Far salire la versione dei Termini e dell'informativa (lib/legal/versione.ts, non è un file di R02) per i cambi di testo del ramo R02? Vuol dire far riaccettare i Termini a tutti.",
+    "Per quanti mesi resta nella casella dell'assistenza l'email con l'IBAN del rimborso?",
+    "Per le spese di consegna, che incassa MyCity, quale documento fiscale emettere, con quale fornitore e regime?",
+    "Per quanto teniamo email, nome e testo di una segnalazione mai decisa? Proposta: 12 mesi dalla ricezione.",
+    "Va bene il tetto di 3 ricevute di segnalazione al giorno per indirizzo email?",
+    "Accogliere una recensione segnalata come falsa vuol dire cancellarla? Oggi non c'è modo di nasconderla."
+  ],
+  "conto": {
+    "agenti": 7,
+    "nota": "7 subagenti (4 riparatori, 3 revisori grandi). Spesa da get_session: 22,53 $ a fine lotto 4 (oltre l'80% del tetto di 25 $), 24,31 $ alla consegna: niente giri di correzione su R02-001/R02-002 e niente revisore per i minori riparati.",
+    "subagenti": 7
+  },
+  "costo_usd": 24.31
+}
