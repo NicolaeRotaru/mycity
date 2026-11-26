@@ -3,7 +3,17 @@
  * e la rotta delle email a orario non porta più un permesso di saltare il controllo che non salta niente.
  */
 import { describe, it, expect } from 'vitest';
-import { ESLint } from 'eslint';
+import { createRequire } from 'node:module';
+
+// eslint non porta i tipi: si carica con require e si descrive solo quello che serve.
+type Messaggio = { message: string };
+type Eslint = {
+  calculateConfigForFile(f: string): Promise<{ rules?: Record<string, unknown> }>;
+  lintFiles(f: string[]): Promise<Array<{ messages: Messaggio[] }>>;
+};
+const { ESLint } = createRequire(import.meta.url)('eslint') as {
+  ESLint: new (o?: { reportUnusedDisableDirectives?: string }) => Eslint;
+};
 
 const livello = (v: unknown) => {
   const x = Array.isArray(v) ? v[0] : v;
@@ -22,7 +32,7 @@ describe('R09-001 — no-explicit-any acceso, direttive morte fuori', () => {
   it('app/api/cron/send-emails/route.ts non ha direttive eslint-disable che non spengono niente', async () => {
     const eslint = new ESLint({ reportUnusedDisableDirectives: 'warn' });
     const [r] = await eslint.lintFiles(['app/api/cron/send-emails/route.ts']);
-    const morte = r.messages.filter((m) => /Unused eslint-disable/.test(m.message));
+    const morte = r.messages.filter((m: Messaggio) => /Unused eslint-disable/.test(m.message));
     expect(morte).toEqual([]);
   }, 60_000);
 });
