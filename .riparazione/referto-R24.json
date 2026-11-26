@@ -1,13 +1,13 @@
 {
   "sessione": "R24",
-  "aggiornato": "2026-11-26 17:30",
+  "aggiornato": "2026-11-26 22:03",
   "finita": true,
-  "testa": "619c2a5d6cb95809654cf48f79a34f0070a5b653",
+  "testa": "f9555d636983a1f80895acc94d5633f20ad30962",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "619c2a5d6cb95809654cf48f79a34f0070a5b653",
-    "nota": "typecheck, lint e 2245 file di prova (13676 prove) verdi, aspettato nello stesso turno"
+    "testa": "f9555d636983a1f80895acc94d5633f20ad30962",
+    "nota": "typecheck, lint e prove verdi (2244 file passati, 1 saltato da un salto condizionale già nella base, nessun .skip aggiunto dal ramo), aspettato nello stesso turno; guardia-ramo verde"
   },
   "voci": [
     {
@@ -326,9 +326,7 @@
       "esito": "riparato",
       "commit": "285b17e5e2d6d4e40a3fa11cf0a8e8d0d2a316c6",
       "file_toccati": [
-        "lib/account/cancellazione.ts",
-        "tests/unit/api-cron-deletions.test.ts",
-        "tests/unit/minori-s03-cancellazioni.test.ts"
+        "lib/account/cancellazione.ts"
       ],
       "prova_file": [
         "tests/unit/riparazione-r24-newsletter-email-non-letta.test.ts"
@@ -342,11 +340,12 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 285b17e5e2d6d4e40a3fa11cf0a8e8d0d2a316c6^ --file lib/account/cancellazione.ts --prove tests/unit/riparazione-r24-newsletter-email-non-letta.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "togliDallaNewsletter legge anche l'errore di getUserById e lo scrive nel registro; ogni pulizia non riuscita torna come riga che sopravvive (newsletter_subscribers). cancellaAccount la mette fra le pulizie fallite e si ferma prima di deleteUser: logger.error, notte rossa, si riprova. Un utente senza email va avanti come prima.",
-      "nota": "Due prove esistenti modificate, dichiarate: tests/unit/api-cron-deletions.test.ts e tests/unit/minori-s03-cancellazioni.test.ts importano la rotta process-deletions (mio file). Il loro finto admin non aveva getUserById: prima l'eccezione veniva ingoiata, ora fermerebbe la cancellazione. Aggiunto getUserById con utente senza email; asserzioni invariate. Seguito 3b00b37edff93c13b9c2060da90d2c013a31671f (stesso id): un 404 user_not_found nella lettura dell'email vale «utente già tolto, niente da togliere», come il «già chiuso» del passo ③; caso aggiunto alla prova. Prova rimessa regge sia con base 285b17e5e2d6d4e40a3fa11cf0a8e8d0d2a316c6^ sia con base 3b00b37edff93c13b9c2060da90d2c013a31671f^.",
+      "cosa_ho_fatto": "togliDallaNewsletter legge anche l’errore di getUserById e lo scrive nel registro; ogni pulizia non riuscita (errore o eccezione nella lettura, delete rifiutato) torna come riga che sopravvive (newsletter_subscribers) e cancellaAccount si ferma prima di deleteUser: logger.error, notte rossa, si riprova. Un utente senza email, un utente di accesso già tolto (404 user_not_found) e un client senza getUserById vanno avanti come prima.",
+      "nota": "Seguiti della stessa voce: 3b00b37edff93c13b9c2060da90d2c013a31671f (il 404 user_not_found vale «utente già tolto», trovato dal revisore A) e f9555d636983a1f80895acc94d5633f20ad30962 (chiesto dalla sesta regia: tests/unit/api-cron-deletions.test.ts e tests/unit/minori-s03-cancellazioni.test.ts sono prove comuni e tornano identiche alla base aac2350b09db195d6d2286f15f75a7d02ae590a1; un client senza getUserById, solo ridotto o finto, va avanti come prima con logger.warn). La lettura che cade davvero continua a fermare la cancellazione. Prova rimessa con base 285b17e5e2d6d4e40a3fa11cf0a8e8d0d2a316c6^ rilanciata sulla testa nuova: regge. guardia-ramo verde.",
       "verificato_da": "revisore A (sonnet): NON reggeva sul 404 user_not_found (cancellazione bloccata per sempre se ③ era già riuscito); seguito fatto da R24 in 3b00b37edff93c13b9c2060da90d2c013a31671f con il caso nella prova; non riguardato da un altro subagente (tetto di 6 raggiunto)",
       "commit_extra": [
-        "3b00b37edff93c13b9c2060da90d2c013a31671f"
+        "3b00b37edff93c13b9c2060da90d2c013a31671f",
+        "f9555d636983a1f80895acc94d5633f20ad30962"
       ]
     },
     {
@@ -385,9 +384,9 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "3 riparatori (lotti 1-2 modello grande, lotto 3 sonnet) + 3 revisori sonnet. Revisori sul modello piccolo e uno per lotto invece che grande e uno per voce, per stare nel limite di 20 $ e nel tetto di 6; il seguito di R24-015 l'ha scritto R24 stesso perché il tetto era raggiunto.",
+    "nota": "3 riparatori (lotti 1-2 modello grande, lotto 3 sonnet) + 3 revisori sonnet. Revisori sul modello piccolo e uno per lotto invece che grande e uno per voce, per stare nel limite di 20 $ e nel tetto di 6; il seguito di R24-015 l'ha scritto R24 stesso perché il tetto era raggiunto. Giro corto della sesta regia (prove comuni rimesse come alla base) fatto da R24 senza subagenti.",
     "subagenti": 6,
-    "costo_usd": 16.22
+    "costo_usd": 18.43
   },
-  "costo_usd": 16.22
+  "costo_usd": 18.43
 }
