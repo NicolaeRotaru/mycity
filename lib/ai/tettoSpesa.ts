@@ -107,38 +107,6 @@ function contoCondivisoObbligatorio(): boolean {
 const _daScrivere = { giorno: '', cents: 0 };
 
 /**
- * La scrittura del resto in corso, se c'e'. Una sola alla volta: le letture
- * parallele della stessa copia aspettano quella, invece di scrivere due volte lo
- * stesso resto (il conto condiviso salirebbe del doppio).
- */
-let _scritturaInVolo: Promise<boolean> | null = null;
-
-/**
- * Scrive il resto nel conto condiviso; vero se ci e' riuscita. Si toglie dal
- * resto SOLO quanto si e' scritto: una spesa non scritta arrivata durante
- * l'attesa (`aggiungiSpesaCents` fallito di questa copia) resta da scrivere,
- * con la sua data. Azzerare tutto la faceva sparire dal conto del sito.
- */
-function scriviResto(): Promise<boolean> {
-  if (_scritturaInVolo) return _scritturaInVolo;
-  const scritti = _daScrivere.cents;
-  _scritturaInVolo = chiamaRpc('registra_spesa_ai', { p_giorno: _daScrivere.giorno, p_cents: scritti })
-    .then((totale) => {
-      if (totale === null) return false;
-      _daScrivere.cents -= scritti;
-      if (_daScrivere.cents <= 0) {
-        _daScrivere.giorno = '';
-        _daScrivere.cents = 0;
-      }
-      return true;
-    })
-    .finally(() => {
-      _scritturaInVolo = null;
-    });
-  return _scritturaInVolo;
-}
-
-/**
  * 3/9/2026 (R-lotto) — IL RIPIEGO ERA NATO PER UN'ASSENZA DI MINUTI E IN
  * PRODUZIONE DURAVA DA SEMPRE.
  *
@@ -229,7 +197,6 @@ export function __azzeraRipiegoSpesaAi(): void {
   _ripieghiSegnalati = 0;
   _daScrivere.giorno = '';
   _daScrivere.cents = 0;
-  _scritturaInVolo = null;
   fallimentiDiFila = 0;
   riprovaDopo = 0;
   _stato.ripiegoDa = 0;
@@ -366,8 +333,6 @@ type RispostaRpc = { data: unknown; error: { code?: string; message?: string } |
  * un momento in cui il database sta gia' soffrendo. Dopo qualche tentativo
  * andato a vuoto si sospende per cinque minuti e si conta in memoria; poi si
  * riprova, perche' il guasto puo' essere passato.
- * In rete (R12-001) durante la pausa la spesa di oggi e' «non lo so»: l'AI a
- * pagamento resta ferma fino a cinque minuti anche se il conto e' gia' tornato.
  */
 const FALLIMENTI_PRIMA_DI_SOSPENDERE = 3;
 const PAUSA_MS = 5 * 60_000;
@@ -442,13 +407,14 @@ export async function spesaDiOggiCents(quando?: Date): Promise<number> {
   const inRete = contoCondivisoObbligatorio();
   // R12-001 — In rete la spesa che questa copia non e' riuscita a scrivere va
   // nel conto condiviso PRIMA di leggerlo: se no le altre copie non la vedono.
-  // Si gira finche' il resto non e' zero: quello arrivato durante la scrittura
-  // (o durante una scrittura di un'altra lettura, aspettata) si scrive anch'esso.
-  while (inRete && _daScrivere.cents > 0) {
-    if (!(await scriviResto())) {
+  if (inRete && _daScrivere.cents > 0) {
+    const scritto = await chiamaRpc('registra_spesa_ai', { p_giorno: _daScrivere.giorno, p_cents: _daScrivere.cents });
+    if (scritto === null) {
       await segnalaRipiego('registrazione della spesa non riuscita', giorno);
       return Number.NaN;
     }
+    _daScrivere.giorno = '';
+    _daScrivere.cents = 0;
   }
   const condiviso = await chiamaRpc('spesa_ai_di_oggi', { p_giorno: giorno });
   if (condiviso === null) {
