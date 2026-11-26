@@ -588,7 +588,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // Prezzo pieno barrato + unità + condizione (campi di primo livello).
   const compareAt = (product as { compare_at_price?: number | string | null }).compare_at_price;
   const compareAtNum = compareAt != null ? Number(compareAt) : null;
-  const compareValid = compareAtNum != null && compareAtNum > prezzoPieno;
+  // R18-006 — Con la promozione attiva il prezzo di listino non si mostra: ci sarebbero due prezzi barrati
+  // e un «Risparmi» calcolato sul pieno (come fa già la scheda delle griglie).
+  const compareValid = compareAtNum != null && compareAtNum > prezzoPieno && !(scontoPromo > 0);
   const comparePct = compareValid ? Math.round((1 - prezzoPieno / compareAtNum) * 100) : 0;
   const unitRaw = (product as { unit?: string | null }).unit ?? null;
   const unitSuffix = unitRaw && unitRaw !== 'pezzo' ? (UNIT_SUFFIX[unitRaw as ProductUnit] ?? '') : '';
