@@ -10,6 +10,7 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { friendlyError } from '@/lib/errors';
@@ -54,6 +55,8 @@ type Item = {
     images: string[] | null;
     status: string;
   } | null;
+  /** Sconto promo attivo (%), dalla stessa fonte della griglia e della cassa. */
+  sconto?: number;
 };
 
 export default function ListDetailPage(props: { params: Promise<{ id: string }> }) {
@@ -103,7 +106,13 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
         .eq('list_id', params.id)
         .order('sort_order', { ascending: true });
       if (error) throw error;
-      return (data ?? []) as unknown as Item[];
+      const righe = (data ?? []) as unknown as Item[];
+      // R11-001 — La lista mostrava il prezzo pieno anche a un prodotto in promozione, mentre griglia,
+      // scheda e cassa applicano lo sconto. Lo si legge come la griglia (fetchActiveDiscounts); se la
+      // lettura cade si resta sul prezzo pieno, come prima.
+      const ids = righe.flatMap((it) => (it.product ? [it.product.id] : []));
+      const sconti = await fetchActiveDiscounts(supabase, ids).catch(() => new Map<string, number>());
+      return righe.map((it) => ({ ...it, sconto: it.product ? (sconti.get(it.product.id) ?? 0) : 0 }));
     },
   });
 
@@ -395,6 +404,10 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
               );
             }
             const img = p.images?.[0];
+            // R11-001 — Il prezzo che si paga: con la promo attiva, scontato al centesimo come in cassa.
+            const prezzoPieno = Number(p.price);
+            const sconto = it.sconto ?? 0;
+            const prezzo = sconto > 0 ? discountedUnitCents(prezzoPieno, sconto) / 100 : prezzoPieno;
             return (
               <li key={p.id} className="bg-white border border-cream-300 rounded-xl p-4 flex gap-3 items-start">
                 <Link href={`/product/${p.id}`} className="flex-shrink-0">
@@ -407,7 +420,14 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
                 <div className="flex-1 min-w-0">
                   <Link href={`/product/${p.id}`} className="block">
                     <p className="font-semibold text-ink-900 truncate hover:text-primary-700">{p.name}</p>
-                    <p className="text-sm font-bold text-primary-700">{formatPrice(Number(p.price))}</p>
+                    <p className="text-sm font-bold text-primary-700">
+                      {formatPrice(prezzo)}
+                      {prezzo < prezzoPieno && (
+                        <span className="ml-1 text-xs font-normal text-ink-400 line-through">
+                          <span className="sr-only">Prezzo pieno </span>{formatPrice(prezzoPieno)}
+                        </span>
+                      )}
+                    </p>
                   </Link>
                   {isOwner ? (
                     <input
