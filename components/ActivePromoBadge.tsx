@@ -50,12 +50,15 @@ export default function ActivePromoBadge({ productId, basePrice }: Props) {
   const discountedCents = discountedUnitCents(basePrice, discount);
   const discounted = discountedCents / 100;
   const savings = (Math.round(basePrice * 100) - discountedCents) / 100;
+  // R16-006 — La percentuale che il prezzo applica davvero (tetto 70 di `discountedUnitCents`), come
+  // il bollino di ProductCard: su 100 € lo scontato in centesimi dice lo sconto applicato.
+  const appliedPct = Math.round(100 - discountedUnitCents(100, discount) / 100);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="inline-flex items-center gap-2 bg-secondary-50 border border-secondary-200 rounded-lg px-3 py-1.5">
         <Tag size={14} className="text-secondary-700" strokeWidth={2.4} />
-        <span className="text-sm font-bold text-secondary-700">In promo -{discount}%</span>
+        <span className="text-sm font-bold text-secondary-700">In promo -{appliedPct}%</span>
         <span className="text-sm text-ink-500 line-through">{formatPrice(basePrice)}</span>
         <span className="text-sm font-bold text-secondary-700">{formatPrice(discounted)}</span>
       </div>
