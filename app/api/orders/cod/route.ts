@@ -19,7 +19,7 @@ import { fasciaAlGiornoDellOrdine, giornoDiPiacenza } from '@/lib/ordini/fascia-
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
-import { sendEmail } from '@/lib/email/client';
+import { sendEmail, type SendEmailResult } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { clientIdGaDalCookie } from '@/lib/analytics/ga-client-id';
@@ -181,6 +181,33 @@ async function allarmeAgliAmministratori(titolo: string, corpo: string, link = '
     await notifyAdmins(titolo, corpo, link);
   } catch (e) {
     logger.error('[cod] allarme agli amministratori non partito', { titolo, message: e instanceof Error ? e.message : String(e) });
+  }
+}
+
+/**
+ * 26/11/2026 — LA POSTA SPENTA NON FA PIÙ NASCERE GLI ORDINI IN SILENZIO.
+ *
+ * Senza RESEND_API_KEY (o RESEND_FROM) sul sito vero `sendEmail` risponde «skipped» e lascia solo
+ * una riga nel registro: l'ordine nasceva, il negozio non riceveva «Nuovo ordine», il cliente
+ * nessuna conferma, e nessuno lo sapeva (l'avviso della posta rifiutata salta apposta i «skipped»,
+ * e il semaforo /api/health lo vede solo chi lo apre). Adesso, sul sito vero, parte la campanella
+ * agli amministratori, una volta per ordine, per avvisare il negozio a voce. Le variabili mancanti
+ * restano da mettere su Vercel: questo è il segnale, non la cura. Non lancia mai.
+ */
+async function avvisaSeLaPostaESpenta(orderId: string, esito: SendEmailResult): Promise<void> {
+  if (process.env.VERCEL_ENV !== 'production') return;
+  if (esito.ok || !('skipped' in esito) || !/RESEND_(API_KEY|FROM)/.test(esito.reason)) return;
+  try {
+    await notifyAdmins(
+      '📭 Ordine senza email: la posta del sito è spenta',
+      `L'ordine in contanti #${orderId.slice(0, 8)} è nato, ma la posta non è partita (${esito.reason}): ` +
+        'il negozio non ha ricevuto «Nuovo ordine» e il cliente nessuna conferma. Avvisa tu il negozio; ' +
+        'la posta si riaccende mettendo la variabile su Vercel (Production).',
+      `/admin/orders/${orderId}`,
+      { unaVoltaPer: `posta-spenta:${orderId}` },
+    );
+  } catch (e) {
+    logger.error('[cod] campanella della posta spenta non partita', { orderId, message: e instanceof Error ? e.message : String(e) });
   }
 }
 
@@ -1880,6 +1907,7 @@ export const POST = withAuthRateLimit(
             // R03-003 — un rifiuto di Resend non lancia: si legge l'esito (lib/stripe/webhook/posta-non-partita.ts).
             const esito = await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
             await avvisaSeLaPostaNonParte('email «Nuovo ordine» al negozio', { orderId: c.orderId, sellerId: c.sellerId }, esito);
+            await avvisaSeLaPostaESpenta(c.orderId, esito);
           } catch (e) {
             logger.warn('[cod] email nuovo ordine al venditore fallita', { orderId: c.orderId, e });
           }
@@ -1902,6 +1930,7 @@ export const POST = withAuthRateLimit(
             // R24 — avviso di servizio: senza il tasto «annulla l'iscrizione».
             const esito = await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
             await avvisaSeLaPostaNonParte('conferma dell ordine al cliente', { orderId: c.orderId }, esito);
+            await avvisaSeLaPostaESpenta(c.orderId, esito);
           } catch (e) {
             logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: c.orderId, e });
           }
