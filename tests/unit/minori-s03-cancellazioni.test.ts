@@ -78,9 +78,7 @@ vi.mock('@/lib/supabase/server', () => ({
       })),
       delete: vi.fn(() => ({ ...catena(false), ilike: vi.fn(() => Promise.resolve({ error: null })) })),
     })),
-    // R24-015 — La cancellazione legge l'email per togliere la newsletter: se la lettura cade si ferma.
-    // Qui l'utente non ha email (lettura riuscita, niente da togliere), come prima.
-    auth: { admin: { deleteUser: deleteUserMock, getUserById: vi.fn(async () => ({ data: { user: null }, error: null })) } },
+    auth: { admin: { deleteUser: deleteUserMock } },
     storage: {
       from: vi.fn(() => ({
         remove: vi.fn(() => Promise.resolve({ error: null })),

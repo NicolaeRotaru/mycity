@@ -574,6 +574,12 @@ export async function togliDallaNewsletter(admin: Admin, userId: string): Promis
     tabella: 'newsletter_subscribers', colonna: 'email', sopravvive: true, errore,
   });
   try {
+    // Il client vero ha sempre getUserById: uno senza (ridotto, finto) non può leggere l'email e si va
+    // avanti come prima, ma lo si scrive. La lettura che cade davvero (errore o eccezione) ferma sotto.
+    if (typeof admin.auth?.admin?.getUserById !== 'function') {
+      logger.warn('[cancellazione] lettura email per la newsletter non disponibile su questo client', { userId });
+      return null;
+    }
     const { data: utenteAuth, error: erroreLettura } = await admin.auth.admin.getUserById(userId);
     // L'utente di accesso già cancellato (giro precedente o cancellazione parallela):
     // la newsletter è stata ripulita prima di cancellarlo, non c'è niente da togliere.
