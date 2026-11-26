@@ -264,8 +264,8 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     }
   }
   // R04-005 — Carta già rimborsata o contestata, o carrello chiuso apposta (CANCELED, MISMATCH): nessun
-  // ordine PAID col netto pieno al negozio. Con ordini già nati da un tentativo di prima si fa nascere il
-  // resto: il rimborso, che aspetta il carrello non più aperto (rimborsi.ts), li annulla tutti insieme.
+  // ordine PAID col netto pieno al negozio. Carta tornata con ordini già nati da un tentativo di prima: il
+  // resto non nasce, e il rimborso (o la contestazione) lavora quelli nati. Carrello chiuso: nasce il resto.
   if (cartaTornata || pending.status === 'CANCELED' || pending.status === 'MISMATCH') {
     const { data: giaNati, error: errNati } = await admin.from('orders').select('id').eq('stripe_session_id', session.id);
     if (errNati) throw new Error(`[stripe] carta tornata o carrello chiuso: ordini non letti (${errNati.message})`);
@@ -274,6 +274,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       await notifyAdmins('⚠️ Pagamento senza ordine', `Sul carrello ${pendingCheckoutId} (${pending.status}) la carta risulta già rimborsata o contestata, o il carrello era chiuso: nessun ordine creato. Guarda su Stripe se il cliente ha riavuto tutto.`, '/admin/orders', { unaVoltaPer: `pagato-senza-ordine:${pendingCheckoutId}` });
       return;
     }
+    if (cartaTornata) { await notifyAdmins('⚠️ Carta tornata a ordini nati a metà', `Sul carrello ${pendingCheckoutId} la carta risulta già rimborsata o contestata e una parte degli ordini era già nata: il resto non nasce. Guarda su Stripe che i nati siano annullati e libera la merce del resto.`, '/admin/orders', { unaVoltaPer: `pagato-a-meta:${pendingCheckoutId}` }); return; }
   }
 
   // 31/10/2026 — LA FASCIA SI GUARDA QUANDO SI PAGA, E SI SCRIVE DAL GIORNO DELL'ORDINE.
