@@ -602,7 +602,6 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const attributiProdotto = (product.attributes ?? {}) as Record<string, unknown>;
   const eAlimento = product.categories?.slug === 'alimentari'
     || 'allergeni' in attributiProdotto || 'ingredienti' in attributiProdotto;
-  const prezzoUnitario = eAlimento ? prezzoPerUnitaDiMisura(price, unitRaw, attributiProdotto.peso) : null;
   const conditionRaw = (product as { condition?: string | null }).condition ?? null;
   const conditionLabel = conditionRaw ? (CONDITION_LABELS[conditionRaw as ProductCondition] ?? conditionRaw) : null;
   // Varianti: i selettori derivano dalle varianti; la disponibilità mostrata è
@@ -617,6 +616,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     daScegliere: needsVariantChoice,
   } = statoSceltaVarianti(variants, selectedOptions, hasVariants);
   const COMBINAZIONE_CHE_NON_CE = 'Questa combinazione non c\'è: prova un\'altra opzione.';
+  // R18-010 — Se il peso è un asse delle varianti, il prezzo al chilo usa il peso del formato scelto (e nessuna
+  // riga finché non se ne sceglie uno), non quello del prodotto base.
+  const pesoVariabile = variants.some((v) => typeof v.options?.peso === 'string');
+  const pesoPerPrezzoUnitario = pesoVariabile ? selectedVariant?.options?.peso : attributiProdotto.peso;
+  const prezzoUnitario = eAlimento ? prezzoPerUnitaDiMisura(price, unitRaw, pesoPerPrezzoUnitario) : null;
 
   const stock: number | undefined = hasVariants
     ? (selectedVariant ? selectedVariant.stock : undefined)
