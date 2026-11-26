@@ -40,6 +40,19 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   const pi = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
   if (!pi) return;
 
+  // R04-005 — Il carrello di questo pagamento è ancora aperto e nessun ordine è nato: l'avviso del pagamento
+  // non è passato e gli ordini possono ancora nascere, pagati e col netto pieno al negozio. Si fa ripetere a
+  // Stripe. Il carrello si legge PRIMA degli ordini: COMPLETED si scrive solo quando sono nati tutti
+  // (ordini.ts). Con ordini già nati si lavora subito: un carrello pagato a metà può restare aperto per
+  // sempre (expire-checkouts lo lascia a mano), e ripetere vorrebbe dire non annullarli mai.
+  let carrelloAperto: string | null = null;
+  const carrello = charge.metadata?.pending_checkout_id ?? (charge.transfer_group?.startsWith('mc_') ? charge.transfer_group.slice(3) : null);
+  if (carrello) {
+    const { data: delCarrello, error: errCarrello } = await admin.from('pending_checkouts').select('status').eq('id', carrello).maybeSingle();
+    if (errCarrello) throw new Error(`[stripe] carrello del rimborso non letto: ${errCarrello.message}`);
+    if ((delCarrello as { status?: string } | null)?.status === 'PENDING') carrelloAperto = carrello;
+  }
+
   // Multi-seller: una charge può avere N ordini (uno per seller).
   const { data: orders, error: errOrdini } = await admin
     .from('orders')
@@ -57,6 +70,9 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   // R81 — Una lettura caduta non è «nessun ordine»: prima il gestore usciva
   // bene, la rotta rispondeva 200, e un rimborso pieno non veniva mai scritto.
   if (errOrdini) throw new Error(`[stripe] ordini del rimborso non letti: ${errOrdini.message}`);
+  if (carrelloAperto && (!orders || orders.length === 0)) {
+    throw new Error(`[stripe] rimborso su un carrello ancora aperto (${carrelloAperto}): gli ordini possono ancora nascere, si riprova`);
+  }
   if (!orders || orders.length === 0) {
     // 31/10/2026 (178) — Un pagamento senza ordini puo' essere quello di un
     // buono regalo: rimborsato per intero, il buono si spegne con lui. Su un

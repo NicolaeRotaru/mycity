@@ -1,0 +1,178 @@
+{
+  "sessione": "R04",
+  "aggiornato": "2026-11-26 14:15",
+  "finita": true,
+  "testa": "2a477dd2a1670f70ca1b2fb85cb9109d9145cc2c",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "2a477dd2a1670f70ca1b2fb85cb9109d9145cc2c",
+    "nota": "2144 file di prova verdi (1 saltato già sulla base), typecheck e lint verdi; rifatto dopo il revert chiesto dalla regista"
+  },
+  "voci": [
+    {
+      "id": "R04-001",
+      "chiave": "api-backend|se l'email «nuovo ordine» al negozio non parte, nessuno se ne accorge e nessuno la rimanda",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: il limite di spesa della sessione (25 $) era al 71% (17,69 $) dopo il lotto 1 con le sue due smentite e la correzione. Un altro lotto avrebbe passato l'80%. Da riassegnare."
+    },
+    {
+      "id": "R04-002",
+      "chiave": "pagamenti-stripe|dopo un guasto, chiudere il reso con i passi normali registra due volte lo stesso rimborso, e al negozio la sua parte viene tolta due volte",
+      "esito": "non_fatto",
+      "nota": "Riparazione tentata (092af11e8a06a235ad41f3b23e23eefa805e1a56: in refundOrder il segno wallet:<chiave> scritto prima del credito, insieme alla quota del negozio) e TOLTA con 9c41ee20bc3936c7fef036f451f841a405083a7b: lo smentitore opus ha trovato tre strade peggiori della base in lib/stripe/payout.ts. (1) Ripresa fra segno e credito di un rimborso oltre metà ordine (30 su 40): payout.ts:2151 taglia la cifra al residuo che conta già la prenotazione del tentativo morto, accredita 10 € e chiude. (2) Rimborso pieno, stessa ripresa: RimborsoNonRitentabile «importo rimborso non valido» (payout.ts:2152), cliente senza credito, quota già tolta. (3) Seconda chiamata con la stessa chiave dopo il segno salta la prenotazione e la guardia 'in_corso' della 412 (2206-2208, 2255). Rifarla bene chiede più giri di quelli rimasti nel limite di spesa della sessione: va a una sessione dopo, con queste tre varianti come prove."
+    },
+    {
+      "id": "R04-003",
+      "chiave": "pagamenti-stripe|la pagina guadagni, con i soli contanti, dice al negozio commissione zero e soldi mai versati",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: il limite di spesa della sessione (25 $) era al 71% (17,69 $) dopo il lotto 1 con le sue due smentite e la correzione. Un altro lotto avrebbe passato l'80%. Da riassegnare."
+    },
+    {
+      "id": "R04-004",
+      "chiave": "pagamenti-stripe|il bonifico del lunedì al negozio non si può segnare: i soldi dei contanti restano «in attesa» per sempre, sia per il negozio sia per nicola",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: il limite di spesa della sessione (25 $) era al 71% (17,69 $) dopo il lotto 1 con le sue due smentite e la correzione. Un altro lotto avrebbe passato l'80%. Da riassegnare. Dal testo della voce la cura chiede un'azione admin «bonifico del lunedì fatto», una funzione del database con is_admin() e uno stato payout nuovo (migrazione): probabile serve_file_altrui per le pagine admin."
+    },
+    {
+      "id": "R04-005",
+      "chiave": "pagamenti-stripe|se il cliente viene rimborsato prima che il suo ordine nasca, l'ordine nasce lo stesso come pagato e il negozio viene pagato",
+      "esito": "parziale",
+      "commit": "4972bd8bb2e08592d208eee82249b227394be3e8",
+      "file_toccati": [
+        "lib/stripe/webhook/ordini.ts",
+        "lib/stripe/webhook/rimborsi.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-rimborso-prima-dell-ordine.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-rimborso-prima-dell-ordine.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ed12ed8ec8190e1132b690f6e034c30f0a5d55ba --file lib/stripe/webhook/ordini.ts,lib/stripe/webhook/rimborsi.ts --prove tests/unit/riparazione-r04-rimborso-prima-dell-ordine.test.ts --json",
+        "nota": "Voce intera (base senza i due commit 936ff7ef0c7ac78c8245f488dc4852afebef47ba e 4972bd8bb2e08592d208eee82249b227394be3e8): uscita 0. Anche sulla sola correzione (--base 4972bd8bb2e08592d208eee82249b227394be3e8^): uscita 0."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "handleCheckoutCompleted rilegge la carta (refunded, amount_refunded, disputed): se è già rimborsata o contestata, o il carrello è CANCELED/MISMATCH, e nessun ordine è nato, non crea ordini, chiude il carrello e avvisa gli amministratori una volta; se la carta è tornata e una parte degli ordini era già nata, il resto non nasce più. handleChargeRefunded si fa ripetere da Stripe solo se il carrello è ancora PENDING e nessun ordine è nato; con ordini nati lavora subito come prima.",
+      "nota": "Due commit: 936ff7ef0c7ac78c8245f488dc4852afebef47ba (riparazione) e 4972bd8bb2e08592d208eee82249b227394be3e8 (correzione dopo la smentita: un carrello pagato a metà resta PENDING per sempre e il rimborso si faceva ripetere senza annullare mai l'ordine nato). ordini.ts sta a 598 righe sotto il tetto di 600 di webhook-diviso-per-mestiere: accorciati due commenti di testa. Resta una finestra stretta: carrello pagato a metà, il resto che nasce proprio mentre il rimborso lavora i nati. Il caso EXPIRED con la carta già rimborsata (ordini.ts, ramo EXPIRED prima del controllo nuovo) chiede a Stripe un rimborso già fatto e l'avviso si ripete per 3 giorni: nessun ordine nasce e nessun soldo si perde, c'era già prima.",
+      "cosa_resta": "Una finestra di pochi secondi su un carrello già pagato a metà da un tentativo di prima: se il gestore del pagamento ha già riletto la carta pulita e il rimborso pieno arriva proprio allora, il rimborso annulla i nati e risponde bene, poi nasce il resto PAID/HELD e nessuno lo annulla (lib/stripe/webhook/rimborsi.ts:73). La prima versione chiudeva la finestra facendo ripetere il rimborso finché il carrello era PENDING, ma un carrello pagato a metà resta PENDING per sempre e l'ordine nato non si annullava mai: tolta. Chiuderla tutta vuol dire, per esempio, lavorare i nati E farsi ripetere finché il carrello è PENDING, controllando che riconsegnare il rimborso sugli ordini già REFUNDED non cambi niente. Inoltre con la carta tornata a ordini nati a metà il carrello resta PENDING: la merce del resto resta tenuta e il codice sconto consumato finché un amministratore non interviene (l'avviso lo chiede).",
+      "verificato_da": "smentitore opus, due giri: primo giro parziale (carrello pagato a metà bloccato per sempre, corretto in 4972bd8bb2e08592d208eee82249b227394be3e8); secondo giro parziale (finestra stretta riaperta, vedi cosa_resta). Prove 9/9 e 41 file vicini 301/301 verdi."
+    },
+    {
+      "id": "R04-006",
+      "chiave": "api-backend|la rotta di annullo dell'amministrazione risponde 500 in silenzio quando l'annullo stesso fallisce",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: il limite di spesa della sessione (25 $) era al 71% (17,69 $) dopo il lotto 1 con le sue due smentite e la correzione. Un altro lotto avrebbe passato l'80%. Da riassegnare."
+    },
+    {
+      "id": "R04-007",
+      "chiave": "api-backend|cancellazione utente e annullo ordine dell'amministrazione rispondono 500 senza scrivere nel registro",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: il limite di spesa della sessione (25 $) era al 71% (17,69 $) dopo il lotto 1 con le sue due smentite e la correzione. Un altro lotto avrebbe passato l'80%. Da riassegnare."
+    },
+    {
+      "id": "R04-008",
+      "chiave": "api-backend|il cron degli ordini scaduti ricopia la logica di annullo invece di usare annullaerimborsa",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: il limite di spesa della sessione (25 $) era al 71% (17,69 $) dopo il lotto 1 con le sue due smentite e la correzione. Un altro lotto avrebbe passato l'80%. Da riassegnare."
+    },
+    {
+      "id": "R04-009",
+      "chiave": "api-backend|quando è il servizio delle mappe a rispondere «troppe richieste», la rotta della ricerca indirizzi risponde 200 senza coordinate e la pagina salva l'indirizzo come «posizione non trovata»",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: il limite di spesa della sessione (25 $) era al 71% (17,69 $) dopo il lotto 1 con le sue due smentite e la correzione. Un altro lotto avrebbe passato l'80%. Da riassegnare."
+    },
+    {
+      "id": "R04-010",
+      "chiave": "api-backend|l'annullo dal sito, il rifiuto del negozio e il cliente assente rispondono 500 senza riga nel registro quando l'annullo fallisce",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: il limite di spesa della sessione (25 $) era al 71% (17,69 $) dopo il lotto 1 con le sue due smentite e la correzione. Un altro lotto avrebbe passato l'80%. Da riassegnare."
+    },
+    {
+      "id": "R04-011",
+      "chiave": "api-backend|il negozio riceve «il cliente ha ritirato il reso» anche quando il rimborso approvato nello stesso momento è poi partito",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/returns/[id]/avanza/route.ts",
+          "modifica": "Nel ramo del ritiro del cliente (dopo il controllo «La merce è già in viaggio o in negozio», circa riga 210), aggiungere: if (ret.status === 'APPROVED' && Number(ret.refund_amount_cents ?? 0) > 0) { return ApiErrors.conflict('Il negozio ha già approvato il reso con il rimborso: la richiesta non si può più ritirare. Se il rimborso non arriva, scrivi al negozio.'); } — solo decide scrive refund_amount_cents e lo toglie se il rimborso non parte, quindi APPROVED con la cifra vuol dire rimborso in corso o già uscito. Prova nuova: tests/unit/riparazione-r04-ritiro-durante-il-rimborso.test.ts, contenuto intero nel commit 51fd671bf67af8b3309b0bb674ff933a96426a5d (rimessa uscita 0 su quel commit)."
+        },
+        {
+          "file": "tests/unit/riparazione-r04-reso-nota-del-negozio.test.ts",
+          "modifica": "Nei due casi del ritiro (describe «la nota del negozio la scrive solo il negozio», «il cliente ritira la richiesta…» e «il cliente ritira con una nota sua…»), subito dopo stato.chiamante = ANNA aggiungere stato.reso.refund_amount_cents = null; (reso approvato senza rimborso immediato), asserzioni invariate. Prova comune: serve la firma di Nicola."
+        }
+      ],
+      "nota": "prova comune: serve la firma di Nicola. La correzione (51fd671bf67af8b3309b0bb674ff933a96426a5d) è stata tolta con 2a477dd2a1670f70ca1b2fb85cb9109d9145cc2c: per stare verde cambiava lo scenario di tests/unit/riparazione-r04-reso-nota-del-negozio.test.ts, che fa vi.mock anche di file di altre sessioni dell'onda. Rotta e prova sono tornate uguali alla base."
+    },
+    {
+      "id": "R04-012",
+      "chiave": "api-backend|il reso già rimborsato si chiude con la cifra uscita su stripe, non con quella chiesta, e il negozio non lo sa",
+      "esito": "riparato",
+      "commit": "5676d452a3940164fac30d4f3a474a581fa6bfcb",
+      "file_toccati": [
+        "app/api/returns/[id]/avanza/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-reso-chiuso-con-la-cifra-di-stripe.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-reso-chiuso-con-la-cifra-di-stripe.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ed12ed8ec8190e1132b690f6e034c30f0a5d55ba --file app/api/returns/[id]/avanza/route.ts --prove tests/unit/riparazione-r04-reso-chiuso-con-la-cifra-di-stripe.test.ts --json",
+        "nota": "Rifatta dopo il revert di 51fd671bf67af8b3309b0bb674ff933a96426a5d: sulla testa avanza/route.ts = base + solo la correzione di R04-012. Anche la prima, --base 5676d452a3940164fac30d4f3a474a581fa6bfcb^, aveva uscita 0."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La cifra registrata resta quella già uscita sulla carta (la vera); se il negozio ne aveva chiesta un'altra riceve una campanella con le due cifre.",
+      "verificato_da": "R04 capo (agente diverso dal riparatore): diff letto riga per riga, prove rilanciate verdi dopo il revert (23 file che importano avanza, 184 casi), rimessa dalla base uscita 0"
+    },
+    {
+      "id": "R04-013",
+      "chiave": "api-backend|reso ritirato mentre il negozio lo approva: per pochi secondi il negozio riceve «il cliente ha ritirato la richiesta» mentre il reso risulta rimborsato",
+      "esito": "non_fatto",
+      "nota": "tolta insieme a R04-011, da rifare da sola (la correzione stava nello stesso commit 51fd671bf67af8b3309b0bb674ff933a96426a5d, tolto con 2a477dd2a1670f70ca1b2fb85cb9109d9145cc2c)."
+    },
+    {
+      "id": "R04-014",
+      "chiave": "api-backend|la pagina d'errore dice «abbiamo registrato il problema», ma un errore nel telefono del cliente non lo registra nessuno",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: il limite di spesa della sessione (25 $) era al 71% (17,69 $) dopo il lotto 1 con le sue due smentite e la correzione. Un altro lotto avrebbe passato l'80%. Da riassegnare."
+    },
+    {
+      "id": "R04-015",
+      "chiave": "api-backend|la guardia della cancellazione dice un importo gonfiato su una giornata di cassa riaperta",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: il limite di spesa della sessione (25 $) era al 71% (17,69 $) dopo il lotto 1 con le sue due smentite e la correzione. Un altro lotto avrebbe passato l'80%. Da riassegnare."
+    },
+    {
+      "id": "R04-016",
+      "chiave": "api-backend|se la lettura dell'email cade, la cancellazione dell'account lascia l'indirizzo nella newsletter e nessuno lo sa",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: il limite di spesa della sessione (25 $) era al 71% (17,69 $) dopo il lotto 1 con le sue due smentite e la correzione. Un altro lotto avrebbe passato l'80%. Da riassegnare."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "una contestazione che arriva prima che l'ordine nasca (carrello ancora in attesa) esce in silenzio",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/webhook/dispute.ts:90-114",
+      "descrizione": "In handleDisputeCreated, ramo orders.length===0 prima del buono: se il PaymentIntent ha metadata.pending_checkout_id di un carrello PENDING andrebbe lanciato un errore perché Stripe ripeta. File fuori da R04."
+    }
+  ],
+  "domande_per_nicola": [
+    "Un carrello CANCELED dalla rotta del checkout dopo che la sessione Stripe è nata (app/api/stripe/checkout/route.ts:1142-1152) può restare pagabile: ora l'ordine non nasce e gli amministratori sono avvisati, ma non parte un rimborso automatico come per il carrello EXPIRED. Va rimborsato in automatico?"
+  ],
+  "conto": {
+    "agenti": 3,
+    "subagenti": 3,
+    "costo_usd": 17.69,
+    "nota": "1 riparatore opus (lotto 1) + 2 smentitori opus (uno per grave del lotto 1; quello di R04-005 ripreso con SendMessage per la seconda smentita). Correzione di R04-005 e ricontrollo dei minori fatti dal capo. Costo letto da get_session prima della consegna, prima della chiusura del referto."
+  },
+  "costo_usd": 17.69
+}
