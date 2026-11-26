@@ -283,7 +283,9 @@ const SignInForm = () => {
           const casa = prof?.role ? HOME_DEL_RUOLO[prof.role as string] : undefined;
           if (casa) {
             const percorso = percorsoRisolto(returnTo);
-            const inAreaAltrui = Object.entries(AREA_DEL_RUOLO).some(
+            // R23-005 — Il portiere fa entrare l'amministratore anche in /seller e /rider (ROLE_PROTECTED):
+            // per lui non sono aree di un altro ruolo, e il ritorno lì resta.
+            const inAreaAltrui = prof?.role !== 'admin' && Object.entries(AREA_DEL_RUOLO).some(
               ([ruolo, area]) => ruolo !== prof?.role && (percorso === area || percorso.startsWith(`${area}/`)),
             );
             if (percorso === '/' || inAreaAltrui) dest = casa;
