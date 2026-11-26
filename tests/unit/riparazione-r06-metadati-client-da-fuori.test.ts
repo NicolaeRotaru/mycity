@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * R06-004 (26/11/2026) — Un client passato da fuori non usa né riempie la memoria a due secondi.
+ * R06-004 (26/11/2026) — Un client passato da fuori ha la sua memoria a due secondi: non usa né riempie
+ * quella condivisa, né quella di un altro client.
  */
 const letturaAnonima = vi.fn(async () => ({ data: { id: 'pubblica' }, error: null }));
 vi.mock('@/lib/supabase/anonimo', () => ({
@@ -44,5 +45,21 @@ describe('R06-004 · memoria dei metadati e client da fuori', () => {
     await leggiPerMetadati('products', 'id', { id: '3' });
     await leggiPerMetadati('products', 'id', { id: '3' });
     expect(letturaAnonima).toHaveBeenCalledTimes(1);
+  });
+
+  it('due client da fuori diversi non si passano la riga', async () => {
+    const primo = clienteConSessione({ id: 'del-primo' });
+    const secondo = clienteConSessione({ id: 'del-secondo' });
+    await leggiPerMetadati('products', 'id', { id: '4' }, primo.client);
+    const r = await leggiPerMetadati<{ id: string }>('products', 'id', { id: '4' }, secondo.client);
+    expect(r).toEqual({ id: 'del-secondo' });
+    expect(secondo.single).toHaveBeenCalledTimes(1);
+  });
+
+  it('lo stesso client da fuori che chiede due volte legge una volta sola', async () => {
+    const { client, single } = clienteConSessione({ id: 'sua' });
+    await leggiPerMetadati('products', 'id', { id: '5' }, client);
+    await leggiPerMetadati('products', 'id', { id: '5' }, client);
+    expect(single).toHaveBeenCalledTimes(1);
   });
 });
