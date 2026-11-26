@@ -1276,6 +1276,54 @@ async function aggiungiAllElencoDeiRimborsi(
 }
 
 /**
+ * 26/11/2026 (R04-002) — IL SEGNO DEL RIMBORSO IN CREDITO E LA QUOTA DEL NEGOZIO, IN UNA SCRITTURA SOLA.
+ *
+ * `metti`: aggiunge `segno` all'elenco dei rimborsi e `quotaCents` a quanto è già tolto al negozio,
+ * insieme, solo se elenco e quota sono ancora quelli letti (se no rilegge e riprova). `togli` fa il
+ * contrario, solo se il segno c'è: è il ritorno indietro di un credito che non è uscito. Così il segno
+ * c'è se e solo se c'è anche la quota: una ripresa che lo trova non la toglie una seconda volta.
+ */
+async function segnoEQuotaDelCredito(
+  admin: ReturnType<typeof getAdminSupabase>,
+  orderId: string,
+  segno: string,
+  quotaCents: number,
+  verso: 'metti' | 'togli',
+): Promise<{ message: string } | null> {
+  for (let tentativo = 0; tentativo < TENTATIVI_SU_UN_ORDINE_CHE_CAMBIA; tentativo++) {
+    const { data: ora, error: errLettura } = await admin
+      .from('orders')
+      .select('stripe_refund_id, seller_payout_reversed_cents, seller_payout_cents')
+      .eq('id', orderId)
+      .single();
+    if (errLettura || !ora) return errLettura ?? { message: 'ordine non riletto' };
+    const riga = ora as { stripe_refund_id?: string | null; seller_payout_reversed_cents?: number | null; seller_payout_cents?: number | null };
+    const letto = riga.stripe_refund_id ?? null;
+    const quotaLetta = riga.seller_payout_reversed_cents ?? null;
+    const elenco = rimborsiGiaScritti({ stripe_refund_id: letto });
+    // Già messo (un altro tentativo della stessa chiave), o niente da togliere: non si tocca niente.
+    if (elenco.has(segno) === (verso === 'metti')) return null;
+    const restano = [...elenco].filter((id) => id !== segno);
+    const nuovoElenco = verso === 'metti' ? elencoDaScrivere(elenco, [segno]) : restano.length > 0 ? restano.join(',') : null;
+    const nuovaQuota = verso === 'metti'
+      ? Math.min((quotaLetta ?? 0) + quotaCents, Number(riga.seller_payout_cents ?? 0))
+      : Math.max(0, (quotaLetta ?? 0) - quotaCents);
+    let scrittura = admin
+      .from('orders')
+      .update({ stripe_refund_id: nuovoElenco, ...(quotaCents > 0 ? { seller_payout_reversed_cents: nuovaQuota } : {}) })
+      .eq('id', orderId);
+    scrittura = letto === null ? scrittura.is('stripe_refund_id', null) : scrittura.eq('stripe_refund_id', letto);
+    if (quotaCents > 0) {
+      scrittura = quotaLetta === null ? scrittura.is('seller_payout_reversed_cents', null) : scrittura.eq('seller_payout_reversed_cents', quotaLetta);
+    }
+    const { data: scritti, error } = await scrittura.select('id');
+    if (error) return error;
+    if (scritti && scritti.length > 0) return null;
+  }
+  return { message: 'l ordine cambia a ogni tentativo' };
+}
+
+/**
  * LA GEMELLA: rimette l'ordine com'era prima del bonifico (17/10/2026).
  *
  * Se dopo il segno del bonifico un passo cade (l'avviso, il credito), il rimborso
@@ -2140,18 +2188,24 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // (decide risponde 500, il reso resta APPROVED). Coi passi normali avanza ripropone 20 € con
   // la stessa chiave: si prenotava di nuovo, il portafoglio trovava il doppione e taceva, e il
   // rimborso si registrava due volte (40 € sull'ordine, 36 € tolti al negozio invece di 18).
-  // Il rimborso di prima e' finito quando sull'ordine c'e' il suo segno `wallet:<chiave>`, che si
-  // scrive a rimborso concluso (quota del negozio compresa, piu' sotto): si restituisce quello,
-  // senza toccare niente. Collaudo del 12/11 — prima si guardava il totale rimborsato
-  // dell'ordine, che puo' contenere ALTRI rimborsi: un reso stornato dopo un guasto doppio,
-  // su un ordine con un rimborso precedente, risultava «gia' contato» e non si registrava mai.
-  // Senza il segno (tentativo stornato, o morto prima della fine) si va avanti come sempre.
-  if (
-    tipo === 'contanti' && opts.idempotencyKey && !bonificoDiPrima &&
-    ripartoVero.bonificoCents === 0 && ripartoVero.creditoCents > 0 &&
-    rimborsiGiaScritti({ stripe_refund_id: (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null })
-      .has(`wallet:${opts.idempotencyKey}`)
-  ) {
+  // Collaudo del 12/11 — prima si guardava il totale rimborsato dell'ordine, che puo' contenere
+  // ALTRI rimborsi: un reso stornato dopo un guasto doppio, su un ordine con un rimborso
+  // precedente, risultava «gia' contato» e non si registrava mai.
+  // 26/11/2026 (R04-002) — IL SEGNO SI SCRIVE PRIMA DEL CREDITO, NELLA STESSA SCRITTURA DELLA QUOTA.
+  // Si scriveva a rimborso concluso, dopo la quota del negozio: se la funzione moriva fra le due, o
+  // la scrittura del segno cadeva (solo un log), la ripresa non lo trovava, prenotava di nuovo e
+  // toglieva di nuovo la quota (40 € rimborsati su 20 usciti, 36 € al negozio invece di 18). Adesso
+  // `wallet:<chiave>` vuol dire «prenotazione contata e quota tolta» (`segnoEQuotaDelCredito`), e il
+  // `catch` lo toglie insieme a quota e prenotazione se il credito non esce. Segno e credito a diario:
+  // finito, si restituisce quello. Segno senza credito: il tentativo di prima e' morto prima del
+  // credito, e si finisce solo il credito (`creditoDaFinire`).
+  const segnoDelCredito =
+    tipo === 'contanti' && opts.idempotencyKey && !bonificoDiPrima && ripartoVero.bonificoCents === 0 && ripartoVero.creditoCents > 0
+      ? `wallet:${opts.idempotencyKey}`
+      : null;
+  const creditoDaFinire = !!segnoDelCredito &&
+    rimborsiGiaScritti({ stripe_refund_id: (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null }).has(segnoDelCredito);
+  if (creditoDaFinire && opts.idempotencyKey) {
     const giaADiario = await accreditoADiario(admin, opts.idempotencyKey);
     if (giaADiario != null) {
       controllaLaCifraGiaAccreditata(giaADiario, ripartoVero.creditoCents);
@@ -2197,7 +2251,8 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // R17-018 — La prenotazione l'ha presa il libro con la chiave (il database ha la 412).
   let prenotataConLaChiave = false;
   let newRefundedTotal = Number(order.refunded_amount_cents ?? 0);
-  if (!bonificoDiPrima) {
+  // R04-002 — Il credito da finire ha gia' la prenotazione del tentativo di prima (e' nel totale).
+  if (!bonificoDiPrima && !creditoDaFinire) {
     const { data: claimRimborso, error: errClaim } = await prenotaIlRimborso(admin, order.id, safeAmountCents, chiaveDellaPrenotazione);
     if (errClaim) {
       logger.error('[refundOrder] accumulo rimborso fallito', { orderId: order.id, message: errClaim.message });
@@ -2294,6 +2349,29 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
         })
       : null;
 
+  const sellerNet = order.seller_payout_cents ?? 0;
+  const quotaDichiarata = opts.quotaNegozioCents;
+  // 13/11/2026 (R17-013) — IL RIMBORSO CHE CHIUDE L'ORDINE PRENDE QUELLO CHE RESTA AL NEGOZIO.
+  // La proporzione si fa sul lordo intero e sul netto intero del negozio. Ma un rimborso di prima può
+  // avergli tolto meno della sua proporzione: l'euro della veloce (quota 0, è di MyCity). Ordine da
+  // 19 €, al forno 13,50 €, bonifico partito: l'euro torna senza toccare il forno, poi il reso pieno di
+  // 18 € gli toglieva 18 × 13,50 / 19 = 12,79 €, e 71 centesimi restavano al forno su un ordine
+  // rimborsato tutto. Adesso il rimborso che porta l'ordine al lordo pieno prende quello che al negozio
+  // resta (13,50 €). Con un recupero caduto (REVERSAL_FAILED) quello che resta non si sa (lo recupera
+  // una persona): lì resta la proporzione.
+  const restaAlNegozio = Math.max(0, sellerNet - Number(order.seller_payout_reversed_cents ?? 0));
+  const sellerShare =
+    typeof quotaDichiarata === 'number' && Number.isFinite(quotaDichiarata)
+      ? Math.max(0, Math.min(Math.round(quotaDichiarata), safeAmountCents, sellerNet))
+      : isFull && order.payout_status !== 'REVERSAL_FAILED'
+        ? restaAlNegozio
+        : grossCents > 0
+          ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet)
+          : 0;
+  // R04-002 — La quota del rimborso in credito si toglie col suo segno, prima del credito: sul bonifico
+  // al negozio non ancora partito. Se e' partito (TRANSFERRED) si storna dopo, su Stripe, come prima.
+  const quotaColSegno =
+    segnoDelCredito && order.payout_status !== 'TRANSFERRED' && order.payout_status !== 'REVERSAL_FAILED' ? sellerShare : 0;
   let refundId: string;
   let stripeRefundId: string | null = null;
   // Il credito e' uscito ma il diario non ha detto quanto: si registra, e lo
@@ -2369,6 +2447,12 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
         refundId = segno;
       } else {
         refundId = `wallet:${chiave}`;
+        // R04-002 — Il segno (con la quota) prima del credito: il `catch` lo toglie se il credito non esce.
+        if (segnoDelCredito && !creditoDaFinire) {
+          segnoDaTogliere = segnoDelCredito;
+          const errSegno = await segnoEQuotaDelCredito(admin, order.id, segnoDelCredito, quotaColSegno, 'metti');
+          if (errSegno) throw new Error(`refundOrder COD: segno del credito non scritto sull ordine: ${errSegno.message}`);
+        }
       }
       // Idempotente sulla chiave: unique index su wallet_ledger(reason, ref),
       // migrazioni 098 e 143.
@@ -2411,14 +2495,18 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     // cadere e' stata solo la risposta, il secondo tentativo ritrova quello
     // (Stripe con la chiave, il portafoglio con l'indice unico), non ne crea un altro.
     if (avvisoDaTogliere) await togliLAvvisoAgliAmministratori(chiaveDellAvviso);
-    if (segnoDaTogliere) {
+    if (segnoDaTogliere && segnoDaTogliere === segnoDelCredito) {
+      const errTolto = await segnoEQuotaDelCredito(admin, order.id, segnoDaTogliere, quotaColSegno, 'togli');
+      if (errTolto) logger.error('[refundOrder] segno e quota del credito non tolti dopo il credito non uscito', { orderId: order.id, message: errTolto.message });
+    } else if (segnoDaTogliere) {
       await rimettiLOrdineComEra(admin, order.id, segnoDaTogliere, safeAmountCents, {
         payment_status: order.payment_status ?? null,
         payout_status: order.payout_status ?? null,
       });
     }
     // Il bonifico rimasto a meta' non ha prenotato niente: la prenotazione resta del tentativo di prima.
-    const { error: errStorno } = bonificoDiPrima
+    // R04-002 — Lo stesso per il credito da finire: segno, quota e prenotazione restano del tentativo di prima.
+    const { error: errStorno } = bonificoDiPrima || creditoDaFinire
       ? { error: null }
       : await stornaLaPrenotazione(admin, order.id, safeAmountCents, chiaveDellaPrenotazione);
     if (errStorno) {
@@ -2474,25 +2562,6 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // rimborso va a termine, e i soldi rimasti al negozio diventano un lavoro
   // dichiarato — sull'ordine e sulla scrivania degli amministratori. R82 —
   // vale anche per i contanti, dove lo storno stava senza nessuna protezione.
-  const sellerNet = order.seller_payout_cents ?? 0;
-  const quotaDichiarata = opts.quotaNegozioCents;
-  // 13/11/2026 (R17-013) — IL RIMBORSO CHE CHIUDE L'ORDINE PRENDE QUELLO CHE RESTA AL NEGOZIO.
-  // La proporzione si fa sul lordo intero e sul netto intero del negozio. Ma un rimborso di prima può
-  // avergli tolto meno della sua proporzione: l'euro della veloce (quota 0, è di MyCity). Ordine da
-  // 19 €, al forno 13,50 €, bonifico partito: l'euro torna senza toccare il forno, poi il reso pieno di
-  // 18 € gli toglieva 18 × 13,50 / 19 = 12,79 €, e 71 centesimi restavano al forno su un ordine
-  // rimborsato tutto. Adesso il rimborso che porta l'ordine al lordo pieno prende quello che al negozio
-  // resta (13,50 €). Con un recupero caduto (REVERSAL_FAILED) quello che resta non si sa (lo recupera
-  // una persona): lì resta la proporzione.
-  const restaAlNegozio = Math.max(0, sellerNet - Number(order.seller_payout_reversed_cents ?? 0));
-  const sellerShare =
-    typeof quotaDichiarata === 'number' && Number.isFinite(quotaDichiarata)
-      ? Math.max(0, Math.min(Math.round(quotaDichiarata), safeAmountCents, sellerNet))
-      : isFull && order.payout_status !== 'REVERSAL_FAILED'
-        ? restaAlNegozio
-        : grossCents > 0
-          ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet)
-          : 0;
 
   let stornatoAlNegozio = 0;
   let recuperoNonRiuscito: string | null = null;
@@ -2507,7 +2576,10 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // 21/8/2026 — Se il bonifico al negozio non e' ancora partito, la sua quota
   // si scala da quello che gli verra' versato (vedi la funzione): una sola
   // copia per tutti i modi di pagare.
-  const reversedCents = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, stornatoAlNegozio);
+  // R04-002 — Sul rimborso in credito la quota e' gia' tolta col segno (da questo tentativo o da quello di prima).
+  const reversedCents = quotaColSegno > 0
+    ? (creditoDaFinire ? 0 : quotaColSegno)
+    : await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, stornatoAlNegozio);
   // 13/11/2026 (R17-024) — IL BONIFICO E' USCITO E UNO STORNO DI PRIMA NON E' RIUSCITO: SI DICE, A MANO.
   // Lo storno qui sopra parte solo su TRANSFERRED e la quota non scende dal bonifico (già partito): senza
   // questo avviso i soldi restavano al negozio e nessuno lo sapeva. Col rimborso pieno la cifra è tutto
@@ -2533,19 +2605,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   if (tipo === 'contanti' && order.payout_status === 'HELD' && sellerShare > 0) {
     await avvisaDellaQuotaDaTrattenere(admin, order.id, sellerShare, chiave);
   }
-  // R03-005 — il segno del rimborso in credito finito (vedi sopra, `wallet:<chiave>`): si scrive
-  // dopo la quota del negozio, cosi' una ripresa che lo trova sa che non manca niente.
-  if (tipo === 'contanti' && opts.idempotencyKey && ripartoVero.bonificoCents === 0 && ripartoVero.creditoCents > 0) {
-    const errSegno = await aggiungiAllElencoDeiRimborsi(
-      admin,
-      order.id,
-      (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null,
-      `wallet:${opts.idempotencyKey}`,
-    );
-    if (errSegno) {
-      logger.error('[refundOrder] segno del rimborso in credito non scritto sull ordine', { orderId: order.id, message: errSegno.message });
-    }
-  }
+  // R03-005 · R04-002 — il segno del rimborso in credito (`wallet:<chiave>`) e' gia' scritto, con la quota, prima del credito.
 
   // Rimborso totale: si recupera anche il compenso del fattorino, altrimenti la
   // piattaforma restituisce tutto al cliente e paga la consegna di tasca sua.
