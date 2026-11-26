@@ -53,7 +53,8 @@ export interface DomandaGriglia {
   /**
    * R01-008 — Prodotti col prezzo pieno sopra `maxPrice` che con la promozione attiva ci scendono
    * sotto (li risolve `idsCheInPromoScendonoSotto`): passano lo stesso il filtro di prezzo.
-   * Assente o vuoto = il filtro di prezzo di sempre.
+   * Assente o vuoto = il filtro di prezzo di sempre. R21-006 R21-004 — Con la migrazione 911 non
+   * servono più: il massimo guarda `prezzo_pagato`, e questi id contano solo nella lettura di prima.
    */
   idsScontatiSotto?: string[];
   minPrice?: number;
@@ -147,8 +148,8 @@ async function cePrezzoPagato(supabase: SupabaseClient): Promise<boolean> {
 }
 
 /** La domanda guarda il prezzo (filtro o ordine)? Solo allora serve sapere se `prezzo_pagato` c'è. */
-function guardaIlPrezzo(d: Pick<DomandaGriglia, 'minPrice'> & { sort?: OrdineGriglia }): boolean {
-  return d.minPrice !== undefined || d.sort === 'price_asc' || d.sort === 'price_desc';
+function guardaIlPrezzo(d: Pick<DomandaGriglia, 'minPrice' | 'maxPrice'> & { sort?: OrdineGriglia }): boolean {
+  return d.minPrice !== undefined || d.maxPrice !== undefined || d.sort === 'price_asc' || d.sort === 'price_desc';
 }
 
 /**
@@ -238,11 +239,15 @@ function applicaFiltriComuni<Q extends { in: any; eq: any; lte: any; gte: any; o
   if (categorie) q = q.in('category_id', categorie);
   if (d.sellerId) q = q.eq('seller_id', d.sellerId);
   if (d.maxPrice !== undefined) {
-    // R01-008 — «Sotto i 10 €» è il prezzo che si paga: chi ci scende solo in promozione entra lo stesso.
+    // R21-006 R21-004 — Il massimo (lo slider, «Sotto i 10 €») è il prezzo che si paga, come il minimo:
+    // con la migrazione 911 lo dice `prezzo_pagato`, senza elenchi di id e senza i loro tetti.
+    // R01-008 — Senza la migrazione, chi ci scende solo in promozione entra con i suoi id.
     const scontati = d.idsScontatiSotto ?? [];
-    q = scontati.length > 0
-      ? q.or(`price.lte.${d.maxPrice},id.in.(${scontati.join(',')})`)
-      : q.lte('price', d.maxPrice);
+    q = pagato
+      ? q.lte(COLONNA_PREZZO_PAGATO, d.maxPrice)
+      : scontati.length > 0
+        ? q.or(`price.lte.${d.maxPrice},id.in.(${scontati.join(',')})`)
+        : q.lte('price', d.maxPrice);
   }
   // R21-003 — «Prezzo minimo» è il prezzo che si paga: un 12 € al -25% (9 €) con minimo 10 € non entra.
   // Senza la migrazione 911 resta il prezzo pieno, come prima.
