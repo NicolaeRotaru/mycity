@@ -1312,7 +1312,7 @@ export default function CheckoutPage() {
   };
 
   // R19-004 — Un solo modo di salvare la bozza prima di andare all'accesso: lo usano «Ordina» da ospite
-  // e il link «Ho già un account». Passa da `bozzaDaSalvare`, quindi porta anche la scadenza.
+  // e il link «Ho già un account». Passa da `bozzaDaSalvare`, che segna quando e' stata scelta (`sceltaIl`): la bozza non ha una scadenza.
   const salvaLaBozzaPerAccesso = () => {
     try {
       localStorage.setItem('mc_checkout_draft', JSON.stringify(bozzaDaSalvare({
