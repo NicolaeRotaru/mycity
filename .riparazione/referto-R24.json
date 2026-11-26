@@ -1,0 +1,392 @@
+{
+  "sessione": "R24",
+  "aggiornato": "2026-11-26 22:03",
+  "finita": true,
+  "testa": "f9555d636983a1f80895acc94d5633f20ad30962",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "f9555d636983a1f80895acc94d5633f20ad30962",
+    "nota": "typecheck, lint e prove verdi (2244 file passati, 1 saltato da un salto condizionale già nella base, nessun .skip aggiunto dal ramo), aspettato nello stesso turno; guardia-ramo verde"
+  },
+  "voci": [
+    {
+      "id": "R24-001",
+      "chiave": "api-backend|oltre mille iscritti la pagina utenti perde in silenzio email e ultimo accesso degli altri",
+      "esito": "riparato",
+      "commit": "b9d736a0a070352196f2fd0f95a418dbacff6a0f",
+      "file_toccati": [
+        "app/admin/users/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-email-utenti-oltre-mille.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-email-utenti-oltre-mille.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b9d736a0a070352196f2fd0f95a418dbacff6a0f^ --file app/admin/users/page.tsx --prove tests/unit/riparazione-r24-email-utenti-oltre-mille.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "leggiContattiAuthOppureNull legge la RPC admin_list_user_emails a pagine di 1000 (order created_at,id + range) finché una pagina torna corta, con un freno a 100 pagine. Una pagina caduta (o il freno raggiunto) vale come lettura non riuscita: compare l'avviso già esistente «Le email degli utenti non sono arrivate» invece di un elenco con le email a metà.",
+      "nota": "Non toccati lib/admin/* né la ricerca (cercaContattiAuth resta com'è). Effetto collaterale voluto: anche l'esportazione e il ripiego PGRST202 della ricerca, che usano lo stesso lettore nella pagina, ricevono tutti i contatti; il resto della voce grave dell'altra sessione (ricerca che dice «nessuno» se la lettura cade, lib/admin/esporta-utenti.ts) resta suo. Prova jsdom con PostgREST finto (max_rows 1000, 1500 iscritti): senza correzione i profili dopo i primi mille hanno email null e nessun avviso. 8 prove esistenti che leggono la pagina verdi.",
+      "verificato_da": "revisore B (sonnet): ordine applicato da PostgREST fuori dalla funzione, overload 940 senza default quindi chiamata univoca, pagine senza sovrapposizioni; 61 prove verdi; non provato su PostgREST vero: regge"
+    },
+    {
+      "id": "R24-002",
+      "chiave": "api-backend|la rotta di annullo dell'amministrazione risponde 500 in silenzio quando l'annullo stesso fallisce",
+      "esito": "riparato",
+      "commit": "40607c896ce88c296b68a1b7ac30ee4d8f560fc1",
+      "file_toccati": [
+        "app/api/admin/orders/[id]/cancel/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-annullo-admin-nel-registro.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-annullo-admin-nel-registro.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 40607c896ce88c296b68a1b7ac30ee4d8f560fc1^ --file app/api/admin/orders/[id]/cancel/route.ts --prove tests/unit/riparazione-r24-annullo-admin-nel-registro.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La rotta di annullo dell'amministrazione scrive logger.error (id ordine, motivo, dettaglio, id admin) prima del 500 'Annullamento fallito', e anche quando la lettura dell'ordine fallisce; risposta al client invariata.",
+      "verificato_da": "revisore A (sonnet): logger.error senza dati del cliente, risposta invariata: regge"
+    },
+    {
+      "id": "R24-003",
+      "chiave": "api-backend|cancellazione utente e annullo ordine dell'amministrazione rispondono 500 senza scrivere nel registro",
+      "esito": "gia_riparato_prima",
+      "prova": "app/api/admin/users/[id]/delete/route.ts:48 e :74 scrivono logger.error prima di ogni ApiErrors.internal (lettura utente e cancellazione fallita); la parte annullo ordine admin e' chiusa da R24-002.",
+      "verificato_da": "revisore A (sonnet): ragione vera, logger.error già prima di ogni 500"
+    },
+    {
+      "id": "R24-004",
+      "chiave": "api-backend|la scadenza dei carrelli dal giro notturno ridà il codice sconto ma non chiude la rivendicazione",
+      "esito": "riparato",
+      "commit": "e8ed882a692043c4a1a26202a5939cecbb410f50",
+      "file_toccati": [
+        "app/api/cron/expire-checkouts/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-carrello-scaduto-chiude-la-rivendicazione.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-carrello-scaduto-chiude-la-rivendicazione.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e8ed882a692043c4a1a26202a5939cecbb410f50^ --file app/api/cron/expire-checkouts/route.ts --prove tests/unit/riparazione-r24-carrello-scaduto-chiude-la-rivendicazione.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il giro legge anche delivery dei carrelli; dopo un release_coupon riuscito chiude la riga di coupon_redemptions scritta in delivery.rivendicazione (released_at, solo se ancora aperta), come il webhook carrello-scaduto. Se il codice non torna nel contatore la rivendicazione resta aperta. Aiutante condiviso non esiste (ogni strada lo scrive in linea), quindi stessa forma in linea.",
+      "nota": "Prova con Supabase finto e orologio finto: rivendicazione propria chiusa, quella di un'altra scheda no; con release_coupon rifiutato resta aperta; senza rivendicazione scritta non si chiude niente. 9 prove esistenti del giro verdi (127 test).",
+      "verificato_da": "revisore A (sonnet): chiusura identica a lib/stripe/webhook/carrello-scaduto.ts:87-95, non chiude rivendicazioni altrui, idempotente: regge"
+    },
+    {
+      "id": "R24-005",
+      "chiave": "api-backend|il tetto della notte lascia indietro gli account nell'ordine della rpc, non dal più vecchio: chi è già oltre il mese può essere rimandato ogni notte, senza avviso del termine",
+      "esito": "riparato",
+      "commit": "e1a1cffd094fc9aeb5edce1dd40fba55efa0f22a",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-cancellazioni-dal-piu-vecchio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-cancellazioni-dal-piu-vecchio.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e1a1cffd094fc9aeb5edce1dd40fba55efa0f22a^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r24-cancellazioni-dal-piu-vecchio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nella rotta le scadute lette dalla RPC si ordinano per deleted_at, dalla più vecchia; una data che manca o non si legge va in fondo. Così chi è oltre il mese entra per primo nei tentativi e riceve l'avviso del termine. Prova con orologio finto e Supabase finto: 5 account, posto per 3, presi dal più vecchio.",
+      "verificato_da": "revisore A (sonnet): diff, prova e 84 prove esistenti rilanciate; date mancanti in fondo, sort stabile: regge"
+    },
+    {
+      "id": "R24-006",
+      "chiave": "api-backend|il tetto di tempo della notte non è rigido: l'ultimo account preso può sforare, e la cancellazione di un account non ha un limite di tempo suo",
+      "esito": "riparato",
+      "insieme_a": [
+        "R24-007"
+      ],
+      "commit": "2d24495e85c0e0c35c490b40f4d83e8f39027367",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts",
+        "lib/account/cancellazione.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-cancellazione-col-suo-tempo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-cancellazione-col-suo-tempo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2d24495e85c0e0c35c490b40f4d83e8f39027367^ --file app/api/cron/process-deletions/route.ts,lib/account/cancellazione.ts --prove tests/unit/riparazione-r24-cancellazione-col-suo-tempo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Ogni account preso ha come scadenza il tetto del ciclo già esistente (adesso + TETTO_CANCELLAZIONI_MS), nessun numero nuovo. La rotta aspetta rilettura e cancellaAccount al massimo fino a lì; finito il tempo l'account conta come rimandato. cancellaAccount ha un'opzione { scadenza }: passata quella non comincia altri passi e non arriva a deleteUser. L'amministratore non la passa.",
+      "nota": "Prova con timer finti: un account piantato 400 s e uno preso a 149 s e lento; senza correzione la risposta arriva a 400 s e 549 s, con la correzione entro 150 s. Limite noto: se il tempo scade mentre deleteUser è già in corso, la cancellazione può finire dopo e il giro l'ha già contata fra le rimandate (conto dell'avviso sbagliato, nessun danno alla persona).",
+      "verificato_da": "revisore A (sonnet): seguiti i punti di stop di cancellaAccount; l'amministratore senza scadenza è invariato; passi ripetibili: regge"
+    },
+    {
+      "id": "R24-007",
+      "chiave": "api-backend|un account preso poco prima del tetto del ciclo non ha un tempo suo",
+      "esito": "riparato",
+      "insieme_a": [
+        "R24-006"
+      ],
+      "commit": "619c2a5d6cb95809654cf48f79a34f0070a5b653",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-preso-poco-prima-del-tetto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-preso-poco-prima-del-tetto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2d24495e85c0e0c35c490b40f4d83e8f39027367^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r24-preso-poco-prima-del-tetto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La correzione sta nel commit comune 2d24495e85c0e0c35c490b40f4d83e8f39027367 con la voce sul tetto rigido (insieme_a): la rotta non aspetta un account oltre il tetto del ciclo. Il commit 619c2a5d6cb95809654cf48f79a34f0070a5b653 aggiunge la prova dedicata (preso a 140 s, lento 100 s: risposta entro 150 s).",
+      "verificato_da": "revisore A (sonnet): stessa verifica del commit comune: regge",
+      "commit_extra": [
+        "2d24495e85c0e0c35c490b40f4d83e8f39027367"
+      ],
+      "nota": "Il messaggio del commit comune cita solo l’altra voce (errore del mandato di R24, non riscrivibile senza --force): per questo la voce ha un commit suo di sola prova che porta il suo id. La rimessa toglie solo route.ts: la parte di lib/account/cancellazione.ts (opzione scadenza) è della voce sul tetto rigido e questa prova la finge."
+    },
+    {
+      "id": "R24-008",
+      "chiave": "api-backend|il giro delle notifiche push può mandare due volte se due giri si sovrappongono (ritentativo di vercel o chiamata a mano)",
+      "esito": "non_fatto",
+      "nota": "Riparazione fatta (034f80e6fdf32fff355fc2505a8e030e13649e1f, presa con pushed_at prima dell'invio) e poi TOLTA con 397b227dd5997e3f2c1ec1eb9ba40867c8d6cc2d: il revisore B ha mostrato che se il giro lancia dopo la presa (rpc vuole_notifica caduta), muore per il tempo o perde la scrittura di restituzione, le righe restano con pushed_at pieno e nessun giro le riprende: una push persa invece di una doppia, peggio della base. Il ramo è tornato uguale alla base su route.ts e sulle 5 prove esistenti toccate.",
+      "cosa_resta": "Serve una presa con una colonna sua (es. push_claimed_at, migrazione nella fascia 927-929) separata da pushed_at, con try/finally che restituisce le non mandate e un recupero delle prese più vecchie di qualche minuto; oppure un invio idempotente lato push. Da rifare in un'onda con budget.",
+      "verificato_da": "revisore B (sonnet): non reggeva (presa senza restituzione su eccezione, nessun recupero delle prese vecchie)"
+    },
+    {
+      "id": "R24-009",
+      "chiave": "api-backend|l'annullo dal sito, il rifiuto del negozio e il cliente assente rispondono 500 senza riga nel registro quando l'annullo fallisce",
+      "esito": "parziale",
+      "commit": "3dc32949f596ae03661928691257c5e85c95b02a",
+      "file_toccati": [
+        "app/api/orders/[id]/cancel/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-annullo-cliente-nel-registro.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-annullo-cliente-nel-registro.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3dc32949f596ae03661928691257c5e85c95b02a^ --file app/api/orders/[id]/cancel/route.ts --prove tests/unit/riparazione-r24-annullo-cliente-nel-registro.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La rotta di annullo dal sito scrive logger.error (id ordine, motivo, dettaglio) prima del 500; risposta invariata.",
+      "cosa_resta": "Il rifiuto del negozio (app/api/seller/orders/[id]/reject/route.ts, ApiErrors.internal('Rifiuto fallito')) e il cliente assente (app/api/rider/orders/[id]/cliente-assente/route.ts, ApiErrors.internal('Annullamento fallito')) restano senza riga nel registro: file non miei.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/seller/orders/[id]/reject/route.ts",
+          "modifica": "importare logger da '@/lib/logger' e, prima di `return ApiErrors.internal('Rifiuto fallito')`, aggiungere logger.error('[reject] rifiuto ordine fallito', { orderId: order.id, motivo: esito.motivo, dettaglio: esito.dettaglio })"
+        },
+        {
+          "file": "app/api/rider/orders/[id]/cliente-assente/route.ts",
+          "modifica": "importare logger (se manca) e, prima di `return ApiErrors.internal('Annullamento fallito')`, aggiungere logger.error('[cliente-assente] annullo ordine fallito', { orderId: order.id, motivo: esito.motivo, dettaglio: esito.dettaglio })"
+        }
+      ],
+      "verificato_da": "revisore C (sonnet): riga nel registro prima del 500; le due modifiche serve_file_altrui corrispondono al codice: regge (parziale onesto)"
+    },
+    {
+      "id": "R24-010",
+      "chiave": "api-backend|due segnali di accesso per lo stesso ingresso: la deduplica legge-e-poi-scrive senza vincolo sul database — e la migrazione che la reggerebbe non c'e' in questo lotto",
+      "esito": "riparato",
+      "commit": "489eb8c2850352615bb09808e01d3aa94a80c8fb",
+      "file_toccati": [
+        "migrations/926_un_accesso_una_riga_anche_coi_due_segnali_insieme.sql",
+        "lib/activity.ts"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r24-un-accesso-una-riga.test.sql"
+      ],
+      "prova_comando": "bash tests/sql/harness/apply.sh r24_prova_accessi && psql -q -X -d r24_prova_accessi -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r24-un-accesso-una-riga.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 489eb8c2850352615bb09808e01d3aa94a80c8fb^ --file migrations/926_un_accesso_una_riga_anche_coi_due_segnali_insieme.sql --prove tests/sql/rls/riparazione-r24-un-accesso-una-riga.test.sql --sql r24_rimessa_accessi --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Migrazione 926: trigger BEFORE INSERT su activity_events (solo login con user_id) che prende pg_advisory_xact_lock per persona e applica la stessa regola della rotta (stessa sessione <30 min, sessione mancante <60 s, sessione diversa sempre scritta, ultimi 5 accessi); la seconda copia si scarta in silenzio (RETURN NULL). Nessun indice unico, quindi si applica anche con le righe doppie già presenti.",
+      "nota": "Migrazione nuova 926 (da applicare da Nicola; finché non c'è resta il controllo dell'app). Niente indice unico apposta: non può esprimere la regola a finestre (fermerebbe il nuovo accesso nella stessa scheda dopo un'ora o l'accesso da un altro telefono nello stesso minuto) né la coppia «con sessione / senza sessione». lib/activity.ts: solo il commento che aspettava la migrazione (per questo non è in --file della rimessa); app/api/track/route.ts non toccata. Prova SQL: 7 controlli (stessa sessione, sessione mista nei due ordini, altro telefono, dopo 31 minuti, senza sessione a 2 minuti, page_view non toccate, lucchetto tenuto fino a fine transazione); senza 926 tre rossi. Verificato a mano su Postgres locale con due transazioni vere sovrapposte: una riga sola. Applicata anche su dati doppi e due volte di fila: ok. Tutta la suite SQL locale verde e 50 prove unit che leggono le migrazioni o lib/activity verdi.",
+      "verificato_da": "revisore B (sonnet): tutte le 241 migrazioni applicate su Postgres locale, prova SQL verde, varianti (page_view, login senza user_id, 31 minuti, altra sessione) passano: regge"
+    },
+    {
+      "id": "R24-011",
+      "chiave": "api-backend|la rotta che registra le visite va in errore del server se riceve un corpo vuoto o rotto, o un cookie dei consensi storto",
+      "esito": "riparato",
+      "commit": "3d97dcd7b52fb71edb67035a745a55d59628bce5",
+      "file_toccati": [
+        "app/api/track/route.ts",
+        "lib/consent.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-registro-visite-corpo-e-cookie-storti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-registro-visite-corpo-e-cookie-storti.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3d97dcd7b52fb71edb67035a745a55d59628bce5^ --file app/api/track/route.ts,lib/consent.ts --prove tests/unit/riparazione-r24-registro-visite-corpo-e-cookie-storti.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Corpo vuoto, rotto o non-oggetto: 204 'ignorato' come gli altri input non validi; parseConsentCookie con percentuale rotta restituisce consenso assente invece di lanciare. lib/api/corpo.ts non toccato (l'altro chiamante, remove-bg, non cambia).",
+      "nota": "Il secondo commit (stesso id) cambia solo la prova perche' cada sull'asserzione e non sull'eccezione; la rimessa e' lanciata con base = primo commit^ e regge con la prova finale. Secondo commit della stessa voce, solo la prova: 041c1d94a66d4032e3a4f10bce90b77bfaa77124.",
+      "commit_extra": [
+        "041c1d94a66d4032e3a4f10bce90b77bfaa77124"
+      ],
+      "verificato_da": "revisore C (sonnet): 204 su corpo vuoto/rotto, cookie storto = consenso assente; l'altro chiamante middleware.ts:375 cambia in meglio: regge"
+    },
+    {
+      "id": "R24-012",
+      "chiave": "api-backend|la pagina d'errore dice «abbiamo registrato il problema», ma un errore nel telefono del cliente non lo registra nessuno",
+      "esito": "riparato",
+      "commit": "fdcf6262da3d2fddc74093d58df3242cdad50474",
+      "file_toccati": [
+        "app/error.tsx",
+        "app/admin/error.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-pagine-errore-dicono-il-vero.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-pagine-errore-dicono-il-vero.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fdcf6262da3d2fddc74093d58df3242cdad50474^ --file app/error.tsx,app/admin/error.tsx --prove tests/unit/riparazione-r24-pagine-errore-dicono-il-vero.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le tre pagine mandavano gia' l'errore a captureError (useEffect); ora app/error.tsx e app/admin/error.tsx dicono 'Abbiamo registrato il problema' solo se NEXT_PUBLIC_SENTRY_DSN e' acceso (stessa regola di seller/rider), altrimenti solo 'Riprova fra un momento'. global-error.tsx non promette la registrazione: nessuna modifica.",
+      "nota": "Il consenso non entra: opzioniSentry registra gli errori per interesse legittimo e lega al consenso solo replay e misure.",
+      "verificato_da": "revisore C (sonnet): dubbio sulla sostanza, regge sul testo: con il DSN Sentry lato cliente è inizializzato (instrumentation-client.ts) e captureError manda; senza DSN ora il testo non promette più"
+    },
+    {
+      "id": "R24-013",
+      "chiave": "api-backend|il modulo dell'indirizzo alla cassa non annulla le ricerche vecchie mentre si scrive",
+      "esito": "riparato",
+      "commit": "ad4270baee4e67acb82f9337809d142c37b4ddf1",
+      "file_toccati": [
+        "components/checkout/ShippingAddressForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-ricerca-zona-vecchia-si-annulla.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-ricerca-zona-vecchia-si-annulla.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ad4270baee4e67acb82f9337809d142c37b4ddf1^ --file components/checkout/ShippingAddressForm.tsx --prove tests/unit/riparazione-r24-ricerca-zona-vecchia-si-annulla.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La ricerca della zona usa un AbortController annullato a ogni cambio di indirizzo e allo smontaggio (prima una guardia `vale` ignorava solo la risposta, la richiesta partiva comunque).",
+      "nota": "La risposta vecchia non sovrascriveva gia' prima (guardia `vale` + confronto sulla domanda): la prova lo conferma; la parte mancante era l'annullo vero.",
+      "verificato_da": "revisore C (sonnet): AbortError dentro il try con catch vuoto, non arriva all'utente: regge"
+    },
+    {
+      "id": "R24-014",
+      "chiave": "api-backend|la guardia della cancellazione dice un importo gonfiato su una giornata di cassa riaperta",
+      "esito": "non_fatto",
+      "nota": "Alla base il difetto non si produce: nessuna strada riapre una giornata di cassa (remitted_at non torna mai a NULL). lib/cassa/quadratura.ts:97-106 fa l'upsert senza remitted_at; migrations/501_la_rimessa_conferma_solo_gli_ordini_visti.sql:66-69 lo mette solo a now(); nessun 'remitted_at = null' in migrations, app, lib. Le giornate con remitted_at NULL non sono mai state versate, quindi la somma di collected_cents è giusta. Correggerla ora vorrebbe dire prendere l'importo da un'altra fonte di soldi senza un caso che lo giustifichi, e la frase è fissata da tests/unit/chi-aspetta-la-cancellazione-sa-perche-aspetta.test.ts. Va riparata insieme alla riapertura delle giornate (migrazione 381), quando entra.",
+      "verificato_da": "revisore A (sonnet): ragione vera, nessuna strada riporta remitted_at a NULL; la migrazione 381 non esiste"
+    },
+    {
+      "id": "R24-015",
+      "chiave": "api-backend|se la lettura dell'email cade, la cancellazione dell'account lascia l'indirizzo nella newsletter e nessuno lo sa",
+      "esito": "riparato",
+      "commit": "285b17e5e2d6d4e40a3fa11cf0a8e8d0d2a316c6",
+      "file_toccati": [
+        "lib/account/cancellazione.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-newsletter-email-non-letta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-newsletter-email-non-letta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 285b17e5e2d6d4e40a3fa11cf0a8e8d0d2a316c6^ --file lib/account/cancellazione.ts --prove tests/unit/riparazione-r24-newsletter-email-non-letta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "togliDallaNewsletter legge anche l’errore di getUserById e lo scrive nel registro; ogni pulizia non riuscita (errore o eccezione nella lettura, delete rifiutato) torna come riga che sopravvive (newsletter_subscribers) e cancellaAccount si ferma prima di deleteUser: logger.error, notte rossa, si riprova. Un utente senza email, un utente di accesso già tolto (404 user_not_found) e un client senza getUserById vanno avanti come prima.",
+      "nota": "Seguiti della stessa voce: 3b00b37edff93c13b9c2060da90d2c013a31671f (il 404 user_not_found vale «utente già tolto», trovato dal revisore A) e f9555d636983a1f80895acc94d5633f20ad30962 (chiesto dalla sesta regia: tests/unit/api-cron-deletions.test.ts e tests/unit/minori-s03-cancellazioni.test.ts sono prove comuni e tornano identiche alla base aac2350b09db195d6d2286f15f75a7d02ae590a1; un client senza getUserById, solo ridotto o finto, va avanti come prima con logger.warn). La lettura che cade davvero continua a fermare la cancellazione. Prova rimessa con base 285b17e5e2d6d4e40a3fa11cf0a8e8d0d2a316c6^ rilanciata sulla testa nuova: regge. guardia-ramo verde.",
+      "verificato_da": "revisore A (sonnet): NON reggeva sul 404 user_not_found (cancellazione bloccata per sempre se ③ era già riuscito); seguito fatto da R24 in 3b00b37edff93c13b9c2060da90d2c013a31671f con il caso nella prova; non riguardato da un altro subagente (tetto di 6 raggiunto)",
+      "commit_extra": [
+        "3b00b37edff93c13b9c2060da90d2c013a31671f",
+        "f9555d636983a1f80895acc94d5633f20ad30962"
+      ]
+    },
+    {
+      "id": "R24-016",
+      "chiave": "api-backend|una giornata di cassa riaperta dichiara come «non ancora versati» anche i contanti già versati quel giorno",
+      "esito": "non_fatto",
+      "nota": "Stessa riga e stessa ragione della voce sull'importo gonfiato: alla base una giornata di cassa non si riapre mai (lib/cassa/quadratura.ts:97-106, migrations/501_la_rimessa_conferma_solo_gli_ordini_visti.sql:66-69, nessun remitted_at rimesso a NULL), quindi l'esempio dei 41,00 € al posto di 20,50 € non si produce. Si ripara con la riapertura (381).",
+      "verificato_da": "revisore A (sonnet): ragione vera, nessuna strada riporta remitted_at a NULL; la migrazione 381 non esiste"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "La cancellazione di un account può disiscrivere dalla newsletter un'altra persona con un'email simile",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "lib/account/cancellazione.ts:584",
+      "descrizione": "togliDallaNewsletter usa .ilike('email', emailUtente) senza neutralizzare i jolly _ e %: chi cancella mario_rossi@x.it disiscrive anche mario.rossi@x.it. Serve un confronto esatto senza maiuscole (jolly tolti, oppure lower(email) = lower(valore))."
+    },
+    {
+      "titolo": "Un fattorino che incassa contanti dopo aver versato nello stesso giorno può avere contanti nuovi invisibili alla guardia della cancellazione",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "lib/cassa/quadratura.ts:97-106",
+      "descrizione": "L'upsert aggiorna collected_cents ma lascia remitted_at valorizzato; la guardia (lib/account/cancellazione.ts, remitted_at == null) non vede i contanti incassati dopo il versamento. Dubbio del revisore, non riprodotto con dati."
+    },
+    {
+      "titolo": "Il trigger degli accessi scarta un login retrodatato se la stessa persona ha un accesso più recente senza sessione",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "migrations/926_un_accesso_una_riga_anche_coi_due_segnali_insieme.sql",
+      "descrizione": "Il confronto v_quando - created_at < intervallo è con segno: una riga con created_at vecchio di giorni e sessione null si scarta. Non tocca la rotta (usa now()), solo importazioni o ricostruzioni retrodatate."
+    }
+  ],
+  "domande_per_nicola": [
+    "NEXT_PUBLIC_SENTRY_DSN è impostato su Vercel in produzione? Se manca, nessun errore dei telefoni dei clienti viene registrato (ora le pagine d'errore non lo promettono più, ma il buco resta)."
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "3 riparatori (lotti 1-2 modello grande, lotto 3 sonnet) + 3 revisori sonnet. Revisori sul modello piccolo e uno per lotto invece che grande e uno per voce, per stare nel limite di 20 $ e nel tetto di 6; il seguito di R24-015 l'ha scritto R24 stesso perché il tetto era raggiunto. Giro corto della sesta regia (prove comuni rimesse come alla base) fatto da R24 senza subagenti.",
+    "subagenti": 6,
+    "costo_usd": 18.43
+  },
+  "costo_usd": 18.43
+}
