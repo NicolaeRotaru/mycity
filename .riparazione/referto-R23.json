@@ -1,13 +1,13 @@
 {
  "sessione": "R23",
- "aggiornato": "2026-11-26 18:30",
+ "aggiornato": "2026-11-26 23:25",
  "finita": true,
- "testa": "c830d57da23f3d4010491103958293100eb88f47",
+ "testa": "c90ef7ffd3195d13f7709f46bfafc90deea35d95",
  "verifica": {
   "comando": "npm run verify",
   "esito": "verde",
-  "testa": "4df3ecb5bddb835ab7d8763152d7ce2d399de9dd",
-  "nota": "typecheck pulito, lint 0 errori (121 avvisi), vitest 2242 file e 13679 prove verdi; 4df3ecb5 viene dopo la testa e tocca solo il referto"
+  "testa": "c90ef7ffd3195d13f7709f46bfafc90deea35d95",
+  "nota": "typecheck pulito, lint 0 errori, vitest 2242 file e 13719 prove verdi; 1 file saltato perché il Postgres locale era spento dopo un riavvio della macchina (tests/unit/un-invito-scritto-a-mano-non-paga.test.ts, describe.skipIf senza Postgres): rilanciato da solo col Postgres acceso, 1/1 verde. Il verify di prima del giro corto era verde su 4df3ecb5bddb835ab7d8763152d7ce2d399de9dd."
  },
  "voci": [
   {
@@ -302,10 +302,33 @@
   "R23-002: cambi su Supabase i modelli delle email «Reset password» e «Confirm signup» verso /auth/confirm col token_hash (dettagli nella voce)?"
  ],
  "conto": {
-  "agenti": 5,
-  "subagenti": 5,
-  "nota": "riparatori dei lotti 2, 3 e 4 (modello grande), collaudo del lotto 3 (modello grande), collaudo del lotto 4 (modello piccolo); R23-001, 003, 008, 010, 012 classificate dal capo squadra con grep e prove esistenti",
-  "costo_usd": 17.83
+  "agenti": 6,
+  "subagenti": 6,
+  "nota": "riparatori dei lotti 2, 3 e 4 e del giro corto (modello grande), collaudo del lotto 3 (modello grande), collaudo del lotto 4 (modello piccolo); R23-001, 003, 008, 010, 012 classificate dal capo squadra con grep e prove esistenti · Il giro corto chiesto dalla sesta regia è costato circa 6,2 $ contro i 5 $ indicati (il primo giro della cura allargava la classificazione e l'ho fatto correggere prima di spingere).",
+  "costo_usd": 24.02
  },
- "costo_usd": 17.83
+ "costo_usd": 24.02,
+ "varie": [
+  {
+   "commit": "c90ef7ffd3195d13f7709f46bfafc90deea35d95",
+   "messaggio": "R23-varie il portiere legge il percorso risolto",
+   "chiesto_da": "sesta regia, giro corto del 26/11 sera (fuori dalla scheda)",
+   "file_toccati": [
+    "middleware.ts",
+    "tests/unit/riparazione-r23-portiere-percorso-risolto.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r23-portiere-percorso-risolto.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r23-portiere-percorso-risolto.test.ts --reporter=dot",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c90ef7ffd3195d13f7709f46bfafc90deea35d95^ --file middleware.ts --prove tests/unit/riparazione-r23-portiere-percorso-risolto.test.ts --json"
+   },
+   "cosa_ho_fatto": "Il portiere confronta il percorso decodificato con le aree riservate, con le aree che chiedono l'accesso, con la cassa e nella scorciatoia dell'acquirente, e lo passa a decidiAccessoArea. Un percorso che non si decodifica, o che risolto cambierebbe (segmenti «.» o «..», barre doppie o rovesciate), vale come l'area più stretta: la classificazione può solo stringere, mai allargare. Destinazioni dei rimandi, ritorni, cookie e CSP invariati.",
+   "verificato_da": "capo squadra R23 (non ha scritto la cura): diff letto (middleware.ts:108-131 e i cinque punti d'uso); prova rilanciata 41/41 verde; percorsi scomodi rifatti a mano sulla funzione ('/seller%2F..%2Fx', '/%2Fseller', '/seller%5C..', '/x/..%2Fseller', '/%E0%A4%A' valgono come l'area più stretta; '/%73eller/dashboard' è /seller/dashboard; '/', '/product/abc', '/seller/' invariati). Il primo giro della cura risolveva «..» e poteva allargare la classificazione: corretto con amend prima di spingere. Il riparatore ha lanciato 460 file di prova che nominano middleware (3016 casi verdi), tsc ed eslint puliti. Il collaudo esterno K08 la guarda per ultima."
+  }
+ ]
 }
