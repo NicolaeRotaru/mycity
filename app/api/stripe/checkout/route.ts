@@ -23,7 +23,7 @@ import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import type { RiserveLiberate } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
 import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
-import { riusoDellaCassaAperta, type SessioneRiletta } from '@/lib/ordini/riuso-della-cassa-aperta';
+import { riusoDellaCassaAperta, type EsitoRiuso, type SessioneRiletta } from '@/lib/ordini/riuso-della-cassa-aperta';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
 import { giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
 import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
@@ -353,7 +353,15 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       logger.warn('[stripe] sessione precedente non rileggibile, ne apro una nuova', { e });
     }
 
-    const riuso = riusoDellaCassaAperta(await pulisci(), sessioneRiletta);
+    // 26/11/2026 — La pulizia chiude su Stripe le casse degli altri carrelli: qui gira solo se
+    // c'è davvero una pagina da restituire. Se la pagina di prima non è più pagabile (scaduta,
+    // Stripe muto) si va avanti senza pulire: la pulizia la fa `pulisci()` più sotto, dopo i
+    // rifiuti, e il cancello del pagamento vecchio lo guarda la rivendicazione del codice sconto.
+    // Prima un tentativo poi respinto (fascia finita, negozio chiuso) chiudeva una cassa buona.
+    const riuso: EsitoRiuso =
+      riusoDellaCassaAperta(null, sessioneRiletta).esito === 'riusa'
+        ? riusoDellaCassaAperta(await pulisci(), sessioneRiletta)
+        : { esito: 'apri_nuova' };
     if (riuso.esito === 'ferma_tutto') {
       logger.error('[stripe] cassa gia aperta NON restituita: un pagamento vecchio e ancora pagabile', {
         userId: user.id,
