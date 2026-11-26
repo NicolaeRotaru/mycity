@@ -155,13 +155,38 @@ async function leggiProfili(chiedi: (colonne: string) => PromiseLike<RispostaPro
  * (migrazione 074). Se la RPC non c'e', la pagina resta usabile senza email.
  * `null` = la lettura non è riuscita (R08-006: l'elenco lo deve dire).
  */
+/**
+ * 26/11/2026 — OLTRE MILLE ISCRITTI LE EMAIL SI LEGGONO A PAGINE.
+ *
+ * PostgREST restituisce al massimo `max_rows` righe per richiesta (1000, supabase/config.toml), anche
+ * da una RPC: la lettura in un colpo solo si fermava alle prime mille righe di auth.users, e agli
+ * altri utenti mancavano email e ultimo accesso senza nessun avviso. Si legge a pagine di mille,
+ * in ordine di iscrizione (chi si iscrive mentre si legge finisce in fondo, non sposta le pagine),
+ * finché una pagina non torna più corta. Una pagina che cade vale come lettura non riuscita: meglio
+ * l'avviso «email non arrivate» che un elenco con le email a metà.
+ */
+const PAGINA_CONTATTI = 1000;
+/** Freno: centomila iscritti. Oltre, la lettura non si dichiara completa. */
+const PAGINE_CONTATTI_MASSIME = 100;
+
 async function leggiContattiAuthOppureNull(): Promise<RigaAuth[] | null> {
-  const { data, error } = await supabase.rpc('admin_list_user_emails');
-  if (error || !Array.isArray(data)) {
-    logger.warn('admin/users: email degli utenti non lette', { code: (error as { code?: string } | null)?.code });
-    return null;
+  const tutte: RigaAuth[] = [];
+  for (let pagina = 0; pagina < PAGINE_CONTATTI_MASSIME; pagina++) {
+    const da = pagina * PAGINA_CONTATTI;
+    const { data, error } = await supabase
+      .rpc('admin_list_user_emails')
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(da, da + PAGINA_CONTATTI - 1);
+    if (error || !Array.isArray(data)) {
+      logger.warn('admin/users: email degli utenti non lette', { code: (error as { code?: string } | null)?.code, pagina });
+      return null;
+    }
+    tutte.push(...(data as RigaAuth[]));
+    if (data.length < PAGINA_CONTATTI) return tutte;
   }
-  return data as RigaAuth[];
+  logger.warn('admin/users: email degli utenti oltre il freno delle pagine', { righe: tutte.length });
+  return null;
 }
 
 async function leggiContattiAuth(): Promise<RigaAuth[]> {
