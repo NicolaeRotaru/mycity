@@ -34,7 +34,8 @@ const NOME_MASSIMO = 100;
 const DETTAGLIO_MASSIMO = 2000;
 const RISERVA_DATI = 300;
 const Corpo = z.object({
-  tipo: z.enum(['prodotto', 'negozio', 'recensione', 'messaggio']),
+  // R18-014 — anche una domanda sotto un prodotto (il database la accetta dalla migrazione 364).
+  tipo: z.enum(['prodotto', 'negozio', 'recensione', 'messaggio', 'domanda']),
   oggettoId: z.string().uuid(),
   motivo: z.enum([
     'contraffatto', 'illecito', 'pericoloso', 'ingannevole',
@@ -229,6 +230,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       negozio: ['seller_public_profiles'],
       recensione: ['reviews', 'store_reviews'],
       messaggio: ['messages'],
+      domanda: ['product_questions'],
     };
     let oggettoEsiste = false;
     for (const tabellaOggetto of TABELLE_DELL_OGGETTO[corpo.tipo]) {
@@ -370,6 +372,15 @@ async function contenutoAncoraOnline(
     if (e) return NON_VERIFICATO;
     return (n as { approval_status?: string } | null)?.approval_status === 'approved'
       ? 'Il negozio è ancora attivo: sospendilo prima di comunicare «rimosso».'
+      : null;
+  }
+  if (s.tipo === 'domanda') {
+    // R18-014 — Una domanda si toglie nascondendola (is_public = false: la regola della migrazione 364
+    // lo permette all'amministratore). Finché è visibile sotto il prodotto, «rimosso» non parte.
+    const { data: d, error: e } = await admin.from('product_questions').select('is_public').eq('id', s.oggetto_id).maybeSingle();
+    if (e) return NON_VERIFICATO;
+    return (d as { is_public?: boolean } | null)?.is_public === true
+      ? 'La domanda è ancora visibile: nascondila prima di comunicare «rimosso».'
       : null;
   }
   if (s.tipo === 'recensione') {
