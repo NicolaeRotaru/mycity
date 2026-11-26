@@ -226,6 +226,16 @@ describe('la pagina Abbonamento serve solo a scegliere e pagare', () => {
     expect(r.textContent).not.toContain('Paga e attiva');
   });
 
+  it('col pagamento online spento non dice «Pagamento ricevuto» né «riprovare», anche con ?pagato= (collaudo del 26/11)', async () => {
+    for (const v of ['1', '0']) {
+      window.history.replaceState({}, '', `/seller/abbonamento?pagato=${v}`);
+      const r = await monta(PaginaAbbonamento);
+      expect(r.textContent, v).not.toContain('Pagamento ricevuto');
+      expect(r.textContent, v).not.toContain('Pagamento annullato');
+    }
+    window.history.replaceState({}, '', '/');
+  });
+
   it('porta alle pagine dei tre servizi, per rileggere cosa si riceve (collaudo del 24/11)', async () => {
     const r = await monta(PaginaAbbonamento);
     for (const href of ['/seller/servizi/foto-video', '/seller/servizi/sito-web', '/seller/servizi/social', '/seller/servizi/analisi']) {

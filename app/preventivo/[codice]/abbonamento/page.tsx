@@ -111,7 +111,7 @@ export default async function PreventivoDalLink({
         <p className="mt-1 text-sm text-ink-600">{descriviAttivita(p.tipoAttivita)} · {FRASE_PARTNER}</p>
       </header>
 
-      {pagato === '0' && (
+      {PAGAMENTO_ONLINE_SERVIZI && pagato === '0' && (
         <p role="status" className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-ink-800">
           Il pagamento non è stato completato. Puoi riprovare qui sotto.
         </p>

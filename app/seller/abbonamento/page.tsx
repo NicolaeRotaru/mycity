@@ -175,12 +175,12 @@ export default function PaginaAbbonamento() {
               : 'Scrivici dall’Aiuto: sistemiamo insieme il pagamento.'}
           </p>
         </div>
-      ) : ritorno === 'pagato' ? (
+      ) : PAGAMENTO_ONLINE_SERVIZI && ritorno === 'pagato' ? (
         <div role="status" className="mb-4 rounded-2xl border-2 border-olive-300 bg-olive-50 p-4">
           <p className="font-semibold text-ink-900">Pagamento ricevuto, grazie!</p>
           <p className="text-sm text-ink-700 mt-1">L’abbonamento si attiva in pochi secondi: ricarica la pagina fra un momento.</p>
         </div>
-      ) : ritorno === 'annullato' ? (
+      ) : PAGAMENTO_ONLINE_SERVIZI && ritorno === 'annullato' ? (
         <div role="status" className="mb-4 rounded-2xl border-2 border-cream-300 bg-cream-50 p-4">
           <p className="font-semibold text-ink-900">Pagamento annullato</p>
           <p className="text-sm text-ink-700 mt-1">Non ti abbiamo addebitato niente. Puoi riprovare quando vuoi.</p>
