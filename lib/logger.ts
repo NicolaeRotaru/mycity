@@ -87,10 +87,32 @@ function oscuraTesto(testo: string): string {
 const TROPPO_PROFONDO = '[troppo profondo]';
 const NON_LEGGIBILE = '[non leggibile]';
 
+/**
+ * R17-011 — UN VALORE SOLO NON SI PORTA VIA TUTTO IL CONTESTO.
+ *
+ * Un BigInt (JSON.stringify lancia: «Do not know how to serialize a BigInt») o un `toJSON` che lancia
+ * facevano cadere la scrittura della riga intera, e il contesto usciva come «[non scrivibile]»: un id
+ * a 64 bit nel contesto di un rimborso fallito cancellava anche l'ordine e il motivo. Adesso il BigInt
+ * esce come testo e una funzione (anche un `toJSON` di chi chiama) non è un dato: non si copia, così
+ * nessuno la chiama scrivendo. Date, Map e Set non hanno chiavi proprie e uscivano come `{}`: la data
+ * esce come ISO, la Map come oggetto (con la regola delle chiavi), il Set come elenco.
+ */
+function eUnaData(valore: object): valore is Date {
+  return valore instanceof Date || leggi(() => Object.prototype.toString.call(valore) === '[object Date]', false);
+}
+
+function dataScritta(valore: Date): string {
+  const ms = leggi(() => Date.prototype.getTime.call(valore), Number.NaN);
+  return Number.isNaN(ms) ? 'Invalid Date' : new Date(ms).toISOString();
+}
+
 function redact(value: unknown, depth = 0): unknown {
   if (value == null) return value;
   if (typeof value === 'string') return oscuraTesto(value);
+  if (typeof value === 'bigint') return value.toString();
+  if (typeof value === 'function') return undefined;
   if (typeof value !== 'object') return value;
+  if (eUnaData(value)) return dataScritta(value);
   if (depth > 4) return TROPPO_PROFONDO;
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
   // #232 — Un Error va trattato per quello che è, PRIMA del ramo «oggetto».
@@ -106,6 +128,17 @@ function redact(value: unknown, depth = 0): unknown {
       message: oscuraTesto(leggi(() => String(value.message ?? ''), NON_LEGGIBILE)),
       stack: typeof pila === 'string' ? oscuraTesto(pila) : pila,
     };
+  }
+  if (value instanceof Map) {
+    const voci = leggi(() => Array.from(value.entries()), null);
+    if (!voci) return NON_LEGGIBILE;
+    const comeOggetto: Record<string, unknown> = Object.create(null);
+    for (const [chiave, v] of voci) comeOggetto[leggi(() => String(chiave), NON_LEGGIBILE)] = v;
+    return redact(comeOggetto, depth);
+  }
+  if (value instanceof Set) {
+    const elementi = leggi(() => Array.from(value.values()), null);
+    return elementi ? elementi.map((v) => redact(v, depth + 1)) : NON_LEGGIBILE;
   }
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {};
