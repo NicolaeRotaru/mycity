@@ -5,7 +5,6 @@ import { verifyTurnstileToken } from '@/lib/captcha';
 import { env } from '@/lib/env';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
-import { traduciErroreNuovaPassword } from '@/lib/auth/errori-nuova-password';
 
 export const runtime = 'nodejs';
 
@@ -50,12 +49,6 @@ export async function POST(request: Request) {
       emailRedirectTo,
     });
     if (error) {
-      // 26/11/2026 (R06-003) — «Password debole o rubata» non è «controlla i dati»: la persona
-      // deve sapere che è la password, e quale consiglio seguire.
-      const e = error as { code?: unknown; name?: unknown; reasons?: unknown };
-      if (e.code === 'weak_password' || e.name === 'AuthWeakPasswordError' || Array.isArray(e.reasons)) {
-        return ApiErrors.invalidRequest(traduciErroreNuovaPassword(error));
-      }
       return ApiErrors.invalidRequest('Registrazione non riuscita. Controlla i dati e riprova.');
     }
     return NextResponse.json(data, { status: 201 });

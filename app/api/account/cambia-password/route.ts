@@ -8,7 +8,6 @@ import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
 import { LUNGHEZZA_MINIMA, PASSWORD_UGUALE } from '@/lib/account/cambio-password';
 import { esitoErroreDiAccesso } from '@/lib/auth/errore-di-accesso';
-import { traduciErroreNuovaPassword } from '@/lib/auth/errori-nuova-password';
 
 export const runtime = 'nodejs';
 
@@ -112,13 +111,6 @@ export const POST = withAuthRateLimit(
       password: corpo.nuovaPassword,
     });
     if (erroreCambio) {
-      // 26/11/2026 (R06-003) — Una password debole o negli elenchi rubati è un rifiuto della
-      // richiesta (la persona ne sceglie un'altra), non un guasto nostro: 400 col testo
-      // tradotto, come /reset-password. Tutto il resto resta il 500 di prima.
-      const e = erroreCambio as { code?: unknown; name?: unknown; reasons?: unknown };
-      if (e.code === 'weak_password' || e.name === 'AuthWeakPasswordError' || Array.isArray(e.reasons)) {
-        return ApiErrors.invalidRequest(traduciErroreNuovaPassword(erroreCambio));
-      }
       logger.error('[cambia-password] scrittura fallita', { userId: user.id, message: erroreCambio.message });
       return ApiErrors.internal('Non è stato possibile aggiornare la password');
     }
