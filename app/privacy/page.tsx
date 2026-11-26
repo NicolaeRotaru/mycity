@@ -71,6 +71,15 @@ export default function PrivacyPage() {
         <p>
           <strong>Contatti del Titolare:</strong>{' '}
           <a href={dovePerIDiritti.href} className="text-primary-700 underline">{dovePerIDiritti.testo}</a>
+          {/* 26/11/2026 — La PEC, quando c'e', e' un recapito del titolare (art. 13.1.a GDPR):
+              i Termini e il piede la stampavano gia', l'informativa no. */}
+          {ownerData.pec ? (
+            <>
+              <br />
+              <strong>PEC:</strong>{' '}
+              <a href={`mailto:${ownerData.pec}`} className="text-primary-700 underline">{ownerData.pec}</a>
+            </>
+          ) : null}
           {ownerData.emailDpo ? (
             <>
               <br />
