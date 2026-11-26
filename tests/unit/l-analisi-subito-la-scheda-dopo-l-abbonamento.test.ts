@@ -166,7 +166,8 @@ describe('l analisi del business, come l AD analizza MyCity come azienda', () =>
       situazione: [{ testo: 'Trattoria a conduzione familiare in via Roma.', fonte: 'https://laragazzetta.it' }, { testo: 'Frase con fonte non sicura.', fonte: 'http://x.it' }],
       mercato: [{ testo: 'Un piatto costa 12,50 euro come dai vicini.', fonte: 'https://x.it' }],
       clienti: [{ testo: 'Chiamate il 333 123 4567 per prenotare.', fonte: 'https://x.it' }],
-      opportunita: [1, 2, 3, 4].map((i) => ({ testo: `Opportunità numero ${'abcd'[i - 1]} vista nelle recensioni.`, fonte: 'https://g.co/x' })),
+      // 26/11/2026 — Non più g.co: è un link di Google, e una frase presa da Google non si mostra (parere legale).
+      opportunita: [1, 2, 3, 4].map((i) => ({ testo: `Opportunità numero ${'abcd'[i - 1]} vista nelle recensioni.`, fonte: 'https://x.it/o' })),
       rischi: 'non è un elenco',
     }))!;
     expect(a.situazione).toEqual([{ testo: 'Trattoria a conduzione familiare in via Roma.', fonte: 'https://laragazzetta.it' }]);

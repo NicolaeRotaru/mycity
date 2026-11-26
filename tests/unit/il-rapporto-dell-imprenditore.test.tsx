@@ -9,6 +9,8 @@ import {
   analisiPerChiNonHaPagato,
   analisiPerLaFascia,
   campiDaSalvare,
+  fraseMostrabile,
+  temaMostrabile,
   assaggio,
   leggiBlocco,
   leggiRapporto,
@@ -196,7 +198,7 @@ describe('prova 4 (parte del sito) — fonte spenta e dati scaduti', () => {
 
 describe('prova 5 — una recensione con «Mario Rossi»', () => {
   it('nella reputazione nessun nome di persona: un tema col nome si scarta, i testi non si leggono', () => {
-    const s = scheda({ business: { reputazione_temi: [
+    const s = scheda({ business_fatta_il: LETTO, business: { reputazione_temi: [
       { tema: 'Mario Rossi gentile', tono: 'positivo', quante: 5, fonte: DFS },
       { tema: 'il caffè', tono: 'positivo', quante: 5, fonte: DFS, testo: 'Mario Rossi dice che il caffè è ottimo' },
     ] } });
@@ -208,7 +210,7 @@ describe('prova 5 — una recensione con «Mario Rossi»', () => {
   });
 
   it('nelle voci niente prezzi, telefoni, link, menzioni o numeri di Google', () => {
-    const occasioni = (cose: Array<Record<string, unknown>>) => scheda({ business: { occasioni: [{ cosa: 'Mercato in piazza Cavalli', fonte: DFS }, ...cose] } });
+    const occasioni = (cose: Array<Record<string, unknown>>) => scheda({ business_fatta_il: LETTO, business: { occasioni: [{ cosa: 'Mercato in piazza Cavalli', fonte: DFS }, ...cose] } });
     const cattive = [
       { cosa: 'Il caffè costa 1,20 € in zona', fonte: DFS }, { cosa: 'Chiama il 333 123 4567', fonte: DFS },
       { cosa: 'Leggi su www.esempio.it', fonte: DFS }, { cosa: 'Scrivi a (@mario.rossi) per info', fonte: DFS },
@@ -231,7 +233,7 @@ describe('prova 6 — il preventivo Base', () => {
     expect(promesse).not.toMatch(/mese su mese|ogni mese|ogni settimana|confronto/i);
     expect(escluse.map((r) => r.parte)).toEqual(expect.arrayContaining(['ricerche', 'concorrenti_web']));
     const { container } = render(<CosaCeNellAnalisi fascia="base" />);
-    expect(container.querySelector('[data-esclusa="concorrenti_web"]')?.textContent).toContain('Non compreso: i concorrenti sui social e sul web');
+    expect(container.querySelector('[data-esclusa="concorrenti_web"]')?.textContent).toContain('Non compreso nel rapporto: i concorrenti sui social e sul web');
     expect(container.querySelector('[data-inclusa="concorrenti_web"]')).toBeNull();
   });
 
@@ -249,7 +251,7 @@ describe('prova 6 — il preventivo Base', () => {
 
 describe('prova 7 — i temi delle recensioni', () => {
   it('un tema citato da 2 recensioni non si mostra; da 3 sì, col numero', () => {
-    const s = scheda({ business: { reputazione_temi: [{ tema: 'il parcheggio', tono: 'negativo', quante: 2, fonte: DFS }, { tema: 'le brioche', tono: 'positivo', quante: 3, fonte: DFS }] } });
+    const s = scheda({ business_fatta_il: LETTO, business: { reputazione_temi: [{ tema: 'il parcheggio', tono: 'negativo', quante: 2, fonte: DFS }, { tema: 'le brioche', tono: 'positivo', quante: 3, fonte: DFS }] } });
     expect((leggiRapporto(s, ADESSO)!.reputazione as PezzoParte[])[0].temi).toEqual([{ tema: 'le brioche', tono: 'positivo', quante: 3 }]);
     const { container } = render(<RapportoImprenditore scheda={s} canali={null} sito={null} haPagato adesso={ADESSO} />);
     expect(container.textContent).toContain('le brioche: piace (3 recensioni)');
@@ -276,7 +278,7 @@ describe('prova 8 — il preventivo di ogni fascia elenca incluse ed escluse, da
   });
 
   it('dopo il pagamento il rapporto mostra le parti della fascia e dice quelle non comprese', () => {
-    const s = scheda({ business: { idee_dal_confronto: [{ idea: 'I concorrenti pubblicano video ogni giorno', perche: 'piacciono', fonte: DFS }] } });
+    const s = scheda({ business_fatta_il: LETTO, business: { idee_dal_confronto: [{ idea: 'I concorrenti pubblicano video ogni giorno', perche: 'piacciono', fonte: DFS }] } });
     const { container } = render(<RapportoImprenditore scheda={s} canali={null} sito={null} haPagato fascia="base" adesso={ADESSO} />);
     expect(container.querySelector('[data-parte="concorrenti_web"]')?.textContent).toContain('Non compresa nel Base');
     expect(container.textContent).not.toContain('I concorrenti pubblicano video');
@@ -291,6 +293,7 @@ describe('l’assaggio prima di pagare, il rapporto intero dopo', () => {
       google: blocco({ place_id: 'ChIJ_xyz_1234567' }, { fonte_nome: 'Google Places' }),
       bandi: blocco({ elenco: [{ titolo: 'Contributo per le vetrine del centro', fonte: 'https://www.comune.piacenza.it/' }] }, { fonte_nome: 'Comune di Piacenza', licenza: null }),
     },
+    business_fatta_il: LETTO,
     business: { situazione: [{ testo: 'Bar in centro da dieci anni', fonte: 'https://example.org' }], piano_30_giorni: [{ settimana: 1, azione: 'Fotografare le brioche del mattino', servizio: 'foto_video', fonte: DFS }] },
   });
 
@@ -422,8 +425,104 @@ describe('dal collaudo del 26/11', () => {
   });
 });
 
+describe('dal secondo collaudo e dal contratto v1.3', () => {
+  it('nessun voto in stelle nelle frasi, nemmeno senza dire Google', () => {
+    for (const t of ['Il locale ha una media di 4,6 su 5', 'Valutazione media 4.6/5 secondo i clienti', 'ha 4,7 su 5 di media, voi meno']) {
+      expect(fraseMostrabile(t), t).toBeNull();
+    }
+  });
+
+  it('contatti, link e menzioni scritti in modi diversi non passano', () => {
+    for (const t of ['scrivi a mario @ gmail punto com', 'Visita pizzeria.shop per il menu', 'Segui linktr.ee/pizzeria', 'Profilo ＠mario.rossi qui', 'Ne parla @àlex in un post']) {
+      expect(fraseMostrabile(t, 2), t).toBeNull();
+    }
+  });
+
+  it('un tema con una maiuscola qualunque si scarta (nome in testa, fra parentesi, dopo barra o virgola)', () => {
+    for (const t of ['Giulia', 'Giulia è gentile', 'personale (Giulia)', 'cameriere/Marco', 'il titolare,Rossi']) expect(temaMostrabile(t), t).toBe(false);
+    expect(temaMostrabile('il servizio al banco')).toBe(true);
+  });
+
+  it('prima di salvare restano solo i campi del contratto: niente stelle, rating, voti in elenco, chiavi sconosciute, temi col nome', () => {
+    const salvata = analisiDaSalvare({
+      ratings: { media: 4.6, totale: 412 },
+      fatti: { vicini: blocco({ raggio_m: 400, concorrenti: { numero: 2, elenco: [{ nome: 'Bar X', distanza_m: 80, voto_medio: 4.2, orari_osm: 'Mo-Sa 07:00-20:00' }] } }) },
+      business: {
+        confronto_concorrenti: [{ nome: 'Bar X', differenza: 'apre prima', stelle: 4.7, numero_recensioni: 300, rating: 4.7, fonte: DFS }],
+        reputazione_temi: [{ tema: 'Mario Rossi ha scritto: «il peggior servizio», mai più', tono: 'negativo', quante: 3, fonte: DFS }],
+      },
+    }) as Record<string, unknown>;
+    const testo = JSON.stringify(salvata);
+    expect(testo).not.toMatch(/ratings|4\.6|4\.2|4\.7|stelle|numero_recensioni|rating|Mario/);
+    expect(testo).toContain('Mo-Sa 07:00-20:00');
+    expect((salvata.business as Record<string, unknown[]>).reputazione_temi).toEqual([]);
+  });
+
+  it('un campo letto da Google Search o da un link breve di Google non si salva', () => {
+    for (const fonte of ['https://www.google.it/search?q=bar+roma', 'https://share.google/abc', 'https://search.google.com/local/x', 'https://business.google.com/x']) {
+      expect(Object.keys(campiDaSalvare({ indirizzo: { valore: 'Via Roma 1', stato: 'da_confermare', fonte } })), fonte).toEqual([]);
+    }
+  });
+
+  it('una voce dell’AD presa da una pagina di Google Maps non si mostra; le voci dell’AD hanno la data', () => {
+    const s = scheda({ business_fatta_il: LETTO, business: { occasioni: [{ cosa: 'Aperto fino alle due di notte', fonte: 'https://www.google.com/maps/place/x' }, { cosa: 'Mercato in piazza Cavalli', fonte: DFS }] } });
+    const parte = leggiRapporto(s, ADESSO)!.calendario as PezzoParte[];
+    expect(parte.flatMap((p) => p.voci.map((v) => v.titolo))).toEqual(['Mercato in piazza Cavalli']);
+    expect(parte[0].fonte).toContain('del 26/11');
+    // Senza nessuna data, le voci dell'AD non si mostrano.
+    expect(leggiRapporto(scheda({ business: { occasioni: [{ cosa: 'Mercato in piazza Cavalli', fonte: DFS }] } }), ADESSO)).toBeNull();
+  });
+
+  it('il Business riceve 3 concorrenti sui social e sul web, il Premium 5', () => {
+    const elencoCinque = Array.from({ length: 5 }, (_, i) => ({ nome: `Bar ${i + 1}` }));
+    const a = { fatti: { concorrenti_canali: blocco({ elenco: elencoCinque }) } };
+    const quanti = (f: 'business' | 'premium') => ((analisiPerLaFascia(a, f) as unknown as { fatti: { concorrenti_canali: { dati: { elenco: unknown[] } } } }).fatti.concorrenti_canali.dati.elenco).length;
+    expect(quanti('business')).toBe(3);
+    expect(quanti('premium')).toBe(5);
+  });
+
+  it('degli indizi di /sell non partono link con un profilo, una recensione o un account, e la parte dopo «?» si toglie', () => {
+    expect(indiziDelTitolare('', 'https://www.google.com/maps/place/Bar+Roma/contrib/1234567890/reviews')).toBeNull();
+    expect(indiziDelTitolare('', 'https://www.google.com/maps/place/Bar+Roma/@45,9,17z?authuser=mario.rossi@gmail.com')).toBeNull();
+    expect(indiziDelTitolare('', 'https://g.page/r/abc/review?mario')).toBeNull();
+    expect(indiziDelTitolare('', 'https://www.google.com/maps/place/Bar+Roma/@45,9,17z?entry=ttu')).toEqual({ google_maps: 'https://www.google.com/maps/place/Bar+Roma/@45,9,17z' });
+  });
+
+  it('stato «vuoto» senza numero: lo zero è contato, non «non ancora letto»', () => {
+    const s = scheda({ fatti: { vicini: { ...blocco({}), stato: 'vuoto' } } });
+    expect(assaggio({ scheda: s }, ADESSO).find((n) => n.id === 'concorrenti')!.valore).toBe('nessuna attività simile');
+  });
+
+  it('il piano dei 30 giorni dice anche cosa facciamo noi (contratto v1.3, `proposta`)', () => {
+    const s = scheda({ business_fatta_il: LETTO, business: { piano_30_giorni: [{ settimana: 2, azione: 'Mostrare le brioche del mattino', servizio: 'social', proposta: 'Pubblichiamo tre storie a settimana', fonte: DFS }] } });
+    const v = (leggiRapporto(s, ADESSO)!.piano_30_giorni as PezzoParte[])[0].voci[0];
+    expect(v).toEqual({ titolo: 'Settimana 2', dettaglio: 'Mostrare le brioche del mattino · lo facciamo noi: Pubblichiamo tre storie a settimana' });
+  });
+
+  it('una scheda parziale aggiunge e non scrive mai un vuoto sopra un pieno (contratto v1.3, regola 8)', async () => {
+    db.esistente = {
+      tipo: 'scheda-cliente', id_attivita: ID, campi: { indirizzo: { valore: 'Via Roma 1', stato: 'confermato', fonte: 'https://www.bar.it' } },
+      analisi: { tipo_di_locale: 'bar', fatti: { vicini: vicini(4), instagram: instagram(100) }, business: { situazione: [{ testo: 'Bar in centro da dieci anni', fonte: 'https://x.it' }] } },
+    };
+    const r = await manda({
+      tipo: 'scheda-cliente', id_attivita: ID, parziale: true, campi: {},
+      analisi: { tipo_di_locale: '', fatti: { vicini: blocco(null, { stato: 'errore', motivo: 'Overpass non risponde' }), meteo: blocco({ giorni: [] }, { fonte_nome: 'MET Norway', licenza: 'CC BY 4.0' }) }, business: { situazione: [], occasioni: [{ cosa: 'Mercato', fonte: DFS }] } },
+    });
+    expect(r.status).toBe(200);
+    const salvata = db.salvate[0].scheda as { campi: Record<string, unknown>; analisi: { tipo_di_locale: string; fatti: Record<string, { stato: string }>; business: Record<string, unknown[]> } };
+    expect(Object.keys(salvata.campi)).toEqual(['indirizzo']);
+    expect(salvata.analisi.tipo_di_locale).toBe('bar');
+    expect(salvata.analisi.fatti.vicini.stato).toBe('letto');
+    expect(salvata.analisi.fatti.instagram.stato).toBe('letto');
+    expect(salvata.analisi.fatti.meteo.stato).toBe('letto');
+    expect(salvata.analisi.business.situazione).toHaveLength(1);
+    expect(salvata.analisi.business.occasioni).toHaveLength(1);
+    db.esistente = null;
+  });
+});
+
 // ─── La porta per n8n, per la prova 3 ────────────────────────────────────────────────────
-const db = vi.hoisted(() => ({ salvate: [] as Array<Record<string, unknown>> }));
+const db = vi.hoisted(() => ({ salvate: [] as Array<Record<string, unknown>>, esistente: null as null | Record<string, unknown> }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@/lib/rate-limit', () => ({
   rateLimitAsync: vi.fn(async () => ({ allowed: true, remaining: 10, retryAfterSec: 0, limit: 60 })),
@@ -433,7 +532,10 @@ vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     from: (tabella: string) => {
       if (tabella === 'profiles') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: ID, role: 'seller' }, error: null }) }) }) };
-      if (tabella === 'schede_clienti') return { upsert: async (riga: Record<string, unknown>) => { db.salvate.push(riga); return { error: null }; } };
+      if (tabella === 'schede_clienti') return {
+        upsert: async (riga: Record<string, unknown>) => { db.salvate.push(riga); return { error: null }; },
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: db.esistente ? { scheda: db.esistente } : null, error: null }) }) }),
+      };
       throw new Error(`tabella inattesa ${tabella}`);
     },
   }),

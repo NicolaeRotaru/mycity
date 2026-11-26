@@ -77,27 +77,40 @@ export const TITOLI_PARTI: Record<ParteRapporto, string> = {
 
 const CONTATTO = /[\w.+-]+@[\w-]+\.[\w.]+|\+?\(?\d[\d\s./()-]{7,}\d/;
 /** Come in analisi.ts (mycity#335): gli indirizzi web stanno solo nella fonte, mai nella frase. */
-const INDIRIZZO_WEB = /https?:\/\/|www\.|\b[\w-]+\.(?:it|com|net|org|eu|info|biz|io|app|xyz|ly|to|me)(?:\/|\b)/i;
+const INDIRIZZO_WEB = /https?:\/\/|www\.|\b[\w-]+\.(?:it|com|net|org|eu|info|biz|io|app|xyz|ly|to|me|shop|store|online|site|ee|de|fr|es|ch|at|uk|co|gl|page|link|bio)(?:\/|\b)|\b[\w-]+\.[a-z]{2,10}\/\S/i;
 /** Un voto («4,6 su 5», «4.5 stelle») non è un prezzo. */
 const VOTO = /\d[.,]\d\s*(su\s*5|\/\s*5|stell[ae])/gi;
 /** Due parole di fila con la maiuscola («Mario Rossi»): quasi sempre un nome di persona. */
 const NOME_E_COGNOME = /\b[A-ZÀ-Ý][a-zà-ÿ']+\s+[A-ZÀ-Ý][a-zà-ÿ']+/;
 /** «@nome», anche fra parentesi: nel rapporto non si citano persone né profili altrui (chi recensisce, chi commenta). */
-const MENZIONE = /@[\w.]{2,}/;
+const MENZIONE = /[@＠]\s*[\p{L}\d_.]{2,}/u;
+/** Un indirizzo email detto a parole («mario @ gmail punto com»). */
+const EMAIL_A_PAROLE = /\b(gmail|libero|hotmail|yahoo|outlook|icloud|alice|tiscali|virgilio)\b|\bpunto\s+(com|it|net)\b/i;
 /**
  * Un voto o un conto di recensioni ricopiato da Google o TripAdvisor («4,6 su Google», «120 recensioni»,
  * «quattro e mezzo su cinque»): non è un nostro dato e non si mostra (parere legale del 26/11).
  */
 const NUMERO_DI_GOOGLE = /(google|maps|tripadvisor)[^.]*(\d|stell|voto|recension)|\d[^.]*(google|maps|tripadvisor|recension|stell)|su cinque\b|stelle\b/i;
 /** Un prezzo detto senza moneta («25 a persona», «coperto 3»): `senzaPrezzo` guarda la moneta e i decimali. */
+/** Nel rapporto nessun voto in stelle, di nessuno («4,6 su 5», «4.6/5»): i voti sono di Google o TripAdvisor. */
+const UN_VOTO = /\d\s*([.,]\s*\d)?\s*(su\s*(5|cinque)\b|\/\s*5\b)/i;
 const PREZZO_SENZA_MONETA = /\d+\s*(a persona|a testa|cad\.?|al pezzo|al chilo|al kg)\b|\bcoperto\s*\d/i;
+
+/**
+ * Un tema è una cosa scritta in minuscolo («i dolci», «il servizio»), mai una persona: qualunque maiuscola
+ * («Giulia», «personale (Giulia)», «il titolare,Rossi») lo scarta. Un nome scritto tutto minuscolo non si
+ * riconosce: lo esclude il contratto (regola 3); qui restano il tetto di 80 caratteri e il minimo di 3 recensioni.
+ */
+export function temaMostrabile(tema: unknown): tema is string {
+  return typeof tema === 'string' && !!fraseMostrabile(tema, 2, 80) && tema === tema.toLowerCase() && !NOME_E_COGNOME.test(tema);
+}
 
 /** Una frase che si può mostrare, ripulita; `null` se ha un prezzo, un contatto, un link, una menzione o un numero di Google. */
 export function fraseMostrabile(v: unknown, min = 10, max = 300): string | null {
   const t = typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '';
   if (t.length < min || t.length > max) return null;
   if (!senzaPrezzo(t.replace(VOTO, 'voto'))) return null;
-  if (CONTATTO.test(t) || INDIRIZZO_WEB.test(t) || MENZIONE.test(t) || NUMERO_DI_GOOGLE.test(t) || PREZZO_SENZA_MONETA.test(t)) return null;
+  if (CONTATTO.test(t) || INDIRIZZO_WEB.test(t) || MENZIONE.test(t) || EMAIL_A_PAROLE.test(t) || NUMERO_DI_GOOGLE.test(t) || UN_VOTO.test(t) || PREZZO_SENZA_MONETA.test(t)) return null;
   return t;
 }
 
@@ -211,7 +224,8 @@ export function assaggio(
 
   const v = leggiBlocco(fatti, 'vicini', adesso);
   const conc = letto(v) ? comeOggetto(v.dati.concorrenti) : null;
-  const n = intero(conc?.numero, 10_000);
+  // Stato `vuoto` = ha risposto e non c'è niente: il conto è zero anche se il numero non è scritto (contratto, sez. 1).
+  const n = intero(conc?.numero, 10_000) ?? (letto(v) && v.vuoto ? 0 : null);
   const raggio = intero(comeOggetto(letto(v) ? v.dati : null)?.raggio_m, 5_000);
   const concorrenti: Valore =
     letto(v) && n !== null
@@ -278,18 +292,24 @@ const pezzo = (fonte: string | null, p: Partial<PezzoParte>): PezzoParte | null 
 const voce = (titolo: unknown, dettaglio?: unknown): VoceRapporto | null => {
   const t = fraseMostrabile(titolo, 2, 120);
   if (!t) return null;
-  const d = dettaglio === undefined || dettaglio === null || dettaglio === '' ? null : fraseMostrabile(dettaglio, 2, 200);
+  const d = dettaglio === undefined || dettaglio === null || dettaglio === '' ? null : fraseMostrabile(dettaglio, 2, 400);
   return { titolo: t, dettaglio: d };
 };
 const soloVoci = (v: Array<VoceRapporto | null>) => v.filter((x): x is VoceRapporto => !!x);
 
 /** Una sezione dell'AD (contratto, sez. 2): ogni voce con la sua fonte https; senza, non esce. */
-function sezioneAd(business: Record<string, unknown> | null, chiave: string, comeVoce: (o: Record<string, unknown>) => VoceRapporto | null, max: number): PezzoParte | null {
+/**
+ * Una sezione dell'AD (contratto, sez. 2): ogni voce con la sua fonte https, che non sia una pagina di Google o
+ * TripAdvisor; senza, non esce. La data è quella della lettura dell'AD (`etichettaAd`): senza data non si mostra.
+ */
+function sezioneAd(business: Record<string, unknown> | null, chiave: string, comeVoce: (o: Record<string, unknown>) => VoceRapporto | null, max: number, etichetta: string | null): PezzoParte | null {
+  if (!etichetta) return null;
   const voci = soloVoci(elenco(business?.[chiave]).slice(0, max).map((x) => {
     const o = comeOggetto(x);
-    return o && https(o.fonte) ? comeVoce(o) : null;
+    const f = o ? https(o.fonte) : null;
+    return o && f && !pareDatoDiGoogle('', f) ? comeVoce(o) : null;
   }));
-  return pezzo('Una lettura dell’AD di MyCity, ogni voce dalla sua fonte pubblica', { voci });
+  return pezzo(etichetta, { voci });
 }
 
 const n = (v: unknown) => intero(v);
@@ -300,6 +320,9 @@ export function leggiRapporto(scheda: SchedaCliente | null | undefined, adesso: 
   const fatti = fattiDi(scheda);
   const business = businessDi(scheda);
   const b = (k: string) => leggiBlocco(fatti, k, adesso);
+  // La data della lettura dell'AD: `business_fatta_il` (N8N#16), o in mancanza quando la scheda è partita.
+  const quandoAd = [(scheda?.analisi as Record<string, unknown> | undefined)?.business_fatta_il, scheda?.inviato_il].find((d) => dataDiLetturaValida(d, adesso)) as string | undefined;
+  const ad = quandoAd ? `Una lettura dell’AD di MyCity del ${giornoEMese(quandoAd)}, ogni voce dalla sua fonte pubblica` : null;
 
   const parti: Partial<Record<ParteRapporto, Array<PezzoParte | null> | 'da_rileggere' | 'in_arrivo'>> = {};
   const metti = (p: ParteRapporto, e: EsitoBlocco, comePezzo: (x: BloccoLetto) => PezzoParte | null) => {
@@ -335,13 +358,12 @@ export function leggiRapporto(scheda: SchedaCliente | null | undefined, adesso: 
     const tono = o?.tono === 'positivo' || o?.tono === 'negativo' || o?.tono === 'misto' ? o.tono : null;
     const q = intero(o?.quante);
     if (!o || !https(o.fonte) || !tema || !tono || q === null || q < RECENSIONI_MINIME_PER_TEMA) return [];
-    // Un tema è una cosa («i dolci»), mai una persona: un nome e cognome, o una parola con la maiuscola dopo la
-    // prima («la cameriera Giulia»), lo scarta. Un nome scritto tutto minuscolo non si riconosce: lo esclude il
-    // contratto (regola 3), qui resta il tetto di 80 caratteri e il minimo di 3 recensioni.
-    if (NOME_E_COGNOME.test(tema) || /\s[A-ZÀ-Ý]/.test(tema)) return [];
+    if (!temaMostrabile(tema)) return [];
     return [{ tema, tono, quante: q }];
   });
-  aggiungi('reputazione', pezzo('Fonte: DataForSEO, temi delle recensioni pubbliche', { temi }));
+  const rec = comeOggetto(comeOggetto(fatti)?.recensioni);
+  const quandoTemi = [rec?.letto_il, quandoAd].find((d) => dataDiLetturaValida(d, adesso)) as string | undefined;
+  if (quandoTemi) aggiungi('reputazione', pezzo(etichettaFonte('DataForSEO, temi delle recensioni pubbliche', quandoTemi), { temi }));
 
   // 3 · I concorrenti vicini: quanti e quali, da OpenStreetMap. Mai voti né classifiche.
   metti('concorrenti', b('vicini'), (x) => {
@@ -356,7 +378,7 @@ export function leggiRapporto(scheda: SchedaCliente | null | undefined, adesso: 
     const frasi = num === null ? [] : [num === 0 ? `Nessuna attività come la tua${raggio ? ` entro ${it(raggio)} metri` : ''}.` : `${it(num)} ${num === 1 ? 'attività come la tua' : 'attività come la tua'}${raggio ? ` entro ${it(raggio)} metri` : ''}.`];
     return pezzo(x.etichetta, { frasi, voci });
   });
-  aggiungi('concorrenti', sezioneAd(business, 'confronto_concorrenti', (o) => voce(o.nome, o.differenza), 5));
+  aggiungi('concorrenti', sezioneAd(business, 'confronto_concorrenti', (o) => voce(o.nome, o.differenza), 5, ad));
 
   // 4 · La zona: i servizi vicini, da OpenStreetMap.
   metti('zona', b('vicini'), (x) => {
@@ -407,19 +429,21 @@ export function leggiRapporto(scheda: SchedaCliente | null | undefined, adesso: 
       return data && tempo ? voce(`${data}: ${tempo}`, max) : null;
     })),
   }));
-  aggiungi('calendario', sezioneAd(business, 'occasioni', (o) => voce(o.cosa, o.perche_conta), 5));
+  aggiungi('calendario', sezioneAd(business, 'occasioni', (o) => voce(o.cosa, o.perche_conta), 5, ad));
 
   // 9 · Soldi pubblici: i bandi trovati, e quelli che l'AD ha scelto per te.
   metti('bandi', b('bandi'), (x) => pezzo(x.etichetta, { voci: soloVoci(elenco(x.dati.elenco).slice(0, 6).map((e) => voce(comeOggetto(e)?.titolo))) }));
-  aggiungi('bandi', sezioneAd(business, 'soldi_pubblici', (o) => voce(o.bando, [o.per_chi, typeof o.scadenza === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.scadenza) ? `scade il ${giornoEMese(`${o.scadenza}T12:00:00Z`)}` : null].filter(Boolean).join(' · ') || null), 4));
+  aggiungi('bandi', sezioneAd(business, 'soldi_pubblici', (o) => voce(o.bando, [o.per_chi, typeof o.scadenza === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.scadenza) ? `scade il ${giornoEMese(`${o.scadenza}T12:00:00Z`)}` : null].filter(Boolean).join(' · ') || null), 4, ad));
 
   // 10 · Su MyCity: i numeri del negozio sono nella pagella, nella stessa pagina (flusso 18): qui non si ripetono.
 
   // 11 · Il piano dei 30 giorni, settimana per settimana.
   aggiungi('piano_30_giorni', sezioneAd(business, 'piano_30_giorni', (o) => {
     const s = intero(o.settimana, 4);
-    return s && s >= 1 ? voce(`Settimana ${s}`, o.azione) : null;
-  }, 8));
+    // Contratto v1.3: `proposta` = cosa facciamo noi (10-160 caratteri), accanto all'azione.
+    const proposta = typeof o.proposta === 'string' ? fraseMostrabile(o.proposta, 10, 160) : null;
+    return s && s >= 1 ? voce(`Settimana ${s}`, [typeof o.azione === 'string' ? o.azione : null, proposta ? `lo facciamo noi: ${proposta}` : null].filter(Boolean).join(' · ') || null) : null;
+  }, 8, ad));
 
   // 12 · I concorrenti sui social e sul web: cosa fanno, e le idee che ne nascono.
   metti('concorrenti_web', b('concorrenti_canali'), (x) => pezzo(x.etichetta, {
@@ -435,8 +459,8 @@ export function leggiRapporto(scheda: SchedaCliente | null | undefined, adesso: 
       return voce(o?.nome, dettaglio || null);
     })),
   }));
-  aggiungi('concorrenti_web', sezioneAd(business, 'confronto_concorrenti', (o) => (o.meglio || o.peggio ? voce(o.nome, [o.meglio ? `fa meglio: ${o.meglio}` : null, o.peggio ? `fa peggio: ${o.peggio}` : null].filter(Boolean).join(' · ')) : null), 5));
-  aggiungi('concorrenti_web', sezioneAd(business, 'idee_dal_confronto', (o) => voce(o.idea, o.perche), 3));
+  aggiungi('concorrenti_web', sezioneAd(business, 'confronto_concorrenti', (o) => (o.meglio || o.peggio ? voce(o.nome, [o.meglio ? `fa meglio: ${o.meglio}` : null, o.peggio ? `fa peggio: ${o.peggio}` : null].filter(Boolean).join(' · ')) : null), 5, ad));
+  aggiungi('concorrenti_web', sezioneAd(business, 'idee_dal_confronto', (o) => voce(o.idea, o.perche), 3, ad));
 
   const fuori = Object.fromEntries(PARTI_RAPPORTO.map((p) => {
     const v = parti[p];
@@ -457,13 +481,15 @@ const BLOCCHI_DELL_ASSAGGIO = ['vicini', 'ricerche', 'instagram', 'google'] as c
 export const SEZIONI_NUOVE_AD = ['reputazione_temi', 'confronto_concorrenti', 'occasioni', 'soldi_pubblici', 'piano_30_giorni', 'idee_dal_confronto', 'parti'] as const;
 export function analisiPerChiNonHaPagato<T extends Record<string, unknown> | undefined>(analisi: T): T {
   if (!analisi) return analisi;
-  const { fatti, business, rapporto: _vecchio, ...resto } = analisi as Record<string, unknown>;
+  // Solo le chiavi che il sito conosce: una riga salvata prima, o fuori contratto, non porta altro al browser.
+  const { fatti, business, ...resto } = soloChiavi(analisi as Record<string, unknown>, CHIAVI_ANALISI);
   const f = comeOggetto(fatti);
   const out: Record<string, unknown> = { ...resto };
   if (f) {
     const tenuti = Object.fromEntries(BLOCCHI_DELL_ASSAGGIO.filter((k) => k in f).map((k) => {
-      const b = comeOggetto(f[k]);
-      if (!b) return [k, null];
+      const grezzo = comeOggetto(f[k]);
+      if (!grezzo) return [k, null];
+      const b = soloChiavi(grezzo, BUSTA_DEL_BLOCCO);
       // Del blocco vicini all'assaggio serve solo il numero: l'elenco dei nomi è del rapporto intero.
       if (k === 'vicini') {
         const d = comeOggetto(b.dati);
@@ -478,7 +504,9 @@ export function analisiPerChiNonHaPagato<T extends Record<string, unknown> | und
         const d = comeOggetto(b.dati);
         return [k, { ...b, dati: d ? { parole: elenco(d.parole).slice(0, 1) } : null }];
       }
-      return [k, b];
+      // google: della busta solo il place_id, controllato.
+      const d = comeOggetto(b.dati);
+      return [k, { ...b, dati: typeof d?.place_id === 'string' && PLACE_ID.test(d.place_id) ? { place_id: d.place_id } : null }];
     }));
     out.fatti = tenuti;
   }
@@ -531,7 +559,7 @@ export const ANALISI_PER_FASCIA: Record<Abbonamento, AnalisiDellaFascia> = {
       concorrenti_web: null,
     },
     inPiu: [AVVISO_BANDI],
-    nonComprende: ['Gli aggiornamenti periodici e il confronto mese su mese: ci sono nel Business e nel Premium.'],
+    nonComprende: ['Gli aggiornamenti del rapporto e il confronto mese su mese: ci sono nel Business e nel Premium.'],
   },
   business: {
     ritmo: 'Il rapporto completo all’avvio, poi aggiornato ogni mese.',
@@ -543,7 +571,7 @@ export const ANALISI_PER_FASCIA: Record<Abbonamento, AnalisiDellaFascia> = {
       ricerche: '',
       sito: '',
       social: '',
-      calendario: 'gli eventi del mese',
+      calendario: 'eventi e meteo, ogni mese',
       bandi: '',
       mycity: 'le tue vendite, ogni mese',
       piano_30_giorni: 'rifatto ogni mese',
@@ -637,7 +665,7 @@ export function pareDatoDiGoogle(testo: string, fonte?: string | null): boolean 
 const PLACE_ID = /^[A-Za-z0-9_-]{10,300}$/;
 const LOCATION_ID = /^\d{1,20}$/;
 /** Una fonte che è una pagina di Google Maps o TripAdvisor: un campo letto lì non si salva (parere legale del 26/11). */
-const FONTE_GOOGLE = /^https?:\/\/([\w-]+\.)*(google\.[a-z.]+\/maps|maps\.google\.|goo\.gl\/maps|maps\.app\.goo\.gl|g\.page|tripadvisor\.)/i;
+const FONTE_GOOGLE = /^https?:\/\/([\w-]+\.)*(google\.[a-z.]{2,6}|goo\.gl|g\.page|g\.co|share\.google|tripadvisor\.[a-z.]{2,6})([/?#:]|$)/i;
 
 /**
  * I campi della scheda come si salvano: un campo la cui fonte è Google Maps o TripAdvisor (orari, indirizzo,
@@ -649,30 +677,62 @@ export function campiDaSalvare<T extends Record<string, { fonte?: string | null 
   ) as T;
 }
 
+/** Le chiavi di `analisi` che il sito conosce e usa (scheda-cliente.ts, analisi.ts, offerta-su-misura.ts, qui). */
+const CHIAVI_ANALISI = ['tipo_di_locale', 'pubblico', 'punti_di_forza', 'idee_contenuti', 'cosa_chiedere_al_titolare', 'dubbi', 'business', 'business_fatta_il', 'giudizio_sito', 'fatti'] as const;
+const BLOCCHI_DEI_FATTI = ['posizione', 'vicini', 'meteo', 'eventi', 'bandi', 'sito', 'google', 'tripadvisor', 'recensioni', 'ricerche', 'instagram', 'concorrenti_canali'] as const;
+const BUSTA_DEL_BLOCCO = ['stato', 'motivo', 'fonte', 'fonte_nome', 'licenza', 'letto_il', 'conserva_fino_al', 'dati', 'parte'] as const;
+/** Le chiavi delle sezioni nuove dell'AD, dal contratto (sez. 2): tutto il resto non si salva. */
+const VOCI_DELLE_SEZIONI: Record<string, readonly string[]> = {
+  confronto_concorrenti: ['nome', 'distanza_m', 'differenza', 'fonte', 'meglio', 'peggio', 'fonte_canali'],
+  idee_dal_confronto: ['idea', 'perche', 'servizio', 'fonte'],
+  occasioni: ['quando', 'cosa', 'perche_conta', 'fonte'],
+  soldi_pubblici: ['bando', 'ente', 'scadenza', 'per_chi', 'fonte'],
+  piano_30_giorni: ['settimana', 'azione', 'servizio', 'proposta', 'fonte'],
+};
+/** Una chiave che dice un voto o recensioni («stelle», «rating», «numero_recensioni»): nei fatti non si salva. */
+const CHIAVE_DI_VOTO = /voto|stell|rating|recension|review/i;
+
+const soloChiavi = (o: Record<string, unknown>, chiavi: readonly string[]) => Object.fromEntries(chiavi.filter((k) => k in o).map((k) => [k, o[k]]));
+
+/** Toglie a ogni profondità le chiavi di voti e recensioni (i dati dentro i blocchi dei fatti). */
+function senzaVoti(v: unknown, profondita = 0): unknown {
+  if (profondita > 8) return null;
+  if (Array.isArray(v)) return v.map((x) => senzaVoti(x, profondita + 1));
+  const o = comeOggetto(v);
+  if (!o) return v;
+  return Object.fromEntries(Object.entries(o).filter(([k]) => !CHIAVE_DI_VOTO.test(k)).map(([k, x]) => [k, senzaVoti(x, profondita + 1)]));
+}
+
+/**
+ * L'analisi come si salva, quando n8n manda la scheda (POST /api/agenzia/scheda-cliente). Parere legale del 26/11:
+ * i dati di Google non si salvano, nemmeno per poco. Dal collaudo: non basta guardare il nome «google» delle
+ * chiavi, si tiene SOLO quello che il contratto prevede. Quindi, prima di scrivere nel database:
+ *  · di `analisi` solo le chiavi che il sito conosce; della vecchia bozza (`analisi.google`, `analisi.rapporto`) niente;
+ *  · dei fatti solo i blocchi del contratto, con la loro busta; `google.dati` col solo `place_id` controllato,
+ *    `tripadvisor.dati` col solo `location_id`, `recensioni.dati` coi soli conti (lette, con_risposta, ultima_il);
+ *    dentro gli altri blocchi niente chiavi di voti o recensioni, né chiavi che dicono Google o TripAdvisor;
+ *  · delle sezioni nuove dell'AD solo i campi del contratto; i temi della reputazione solo se reggono
+ *    (`temaMostrabile`, tono noto, almeno 3 recensioni): un tema col nome o il testo di chi scrive non entra.
+ * Le sezioni di prima dell'AD (situazione, mercato…) restano come sono: le ripulisce `analisiAziendale` in lettura.
+ */
 export function analisiDaSalvare<T extends Record<string, unknown> | undefined>(analisi: T): T {
   if (!analisi) return analisi;
-  const { rapporto: _r, fatti: grezzi, ...resto } = analisi as Record<string, unknown>;
-  // Le chiavi che dicono Google o TripAdvisor si tolgono dappertutto (anche la vecchia busta `analisi.google`).
-  const a = senzaChiaviVietate(resto) as Record<string, unknown>;
+  const a = soloChiavi(analisi as Record<string, unknown>, CHIAVI_ANALISI);
 
-  const fg = comeOggetto(grezzi);
+  const fg = comeOggetto(a.fatti);
   if (fg) {
-    // I blocchi google e tripadvisor si tengono (col solo identificativo, controllato); il resto senza chiavi vietate.
-    const f = senzaChiaviVietate(fg, ['google', 'tripadvisor'], true) as Record<string, unknown>;
-    const soloId = (k: 'google' | 'tripadvisor', campo: string, forma: RegExp) => {
-      const b = comeOggetto(f[k]);
-      if (!b) return;
+    const f: Record<string, unknown> = soloChiavi(fg, ['versione', 'raccolti_il']);
+    for (const k of BLOCCHI_DEI_FATTI) {
+      const b = comeOggetto(fg[k]);
+      if (!b) continue;
+      const busta = soloChiavi(b, BUSTA_DEL_BLOCCO);
       const d = comeOggetto(b.dati);
-      const id = typeof d?.[campo] === 'string' ? String(d[campo]).trim() : '';
-      const busta = senzaChiaviVietate({ ...b, dati: null }, [], true) as Record<string, unknown>;
-      f[k] = { ...busta, dati: forma.test(id) ? { [campo]: id } : null };
-    };
-    soloId('google', 'place_id', PLACE_ID);
-    soloId('tripadvisor', 'location_id', LOCATION_ID);
-    const rec = comeOggetto(f.recensioni);
-    if (rec) {
-      const d = comeOggetto(rec.dati);
-      f.recensioni = { ...rec, dati: d ? Object.fromEntries(['lette', 'con_risposta', 'ultima_il'].filter((x) => x in d).map((x) => [x, d[x]])) : null };
+      let dati: unknown = null;
+      if (d && k === 'google') dati = typeof d.place_id === 'string' && PLACE_ID.test(d.place_id.trim()) ? { place_id: d.place_id.trim() } : null;
+      else if (d && k === 'tripadvisor') dati = typeof d.location_id === 'string' && LOCATION_ID.test(d.location_id.trim()) ? { location_id: d.location_id.trim() } : null;
+      else if (d && k === 'recensioni') dati = soloChiavi(d, ['lette', 'con_risposta', 'ultima_il']);
+      else if (d) dati = senzaVoti(senzaChiaviVietate(d, [], true));
+      f[k] = { ...busta, dati };
     }
     a.fatti = f;
   }
@@ -680,19 +740,15 @@ export function analisiDaSalvare<T extends Record<string, unknown> | undefined>(
   const bz = comeOggetto(a.business);
   if (bz) {
     const b2: Record<string, unknown> = { ...bz };
+    for (const [sezione, chiavi] of Object.entries(VOCI_DELLE_SEZIONI)) {
+      if (sezione in bz) b2[sezione] = elenco(bz[sezione]).flatMap((x) => (comeOggetto(x) ? [soloChiavi(comeOggetto(x)!, chiavi)] : []));
+    }
     if ('reputazione_temi' in bz) {
       b2.reputazione_temi = elenco(bz.reputazione_temi).flatMap((x) => {
         const o = comeOggetto(x);
         const q = intero(o?.quante);
-        return o && q !== null && q >= RECENSIONI_MINIME_PER_TEMA ? [{ tema: o.tema, tono: o.tono, quante: q, fonte: o.fonte }] : [];
-      });
-    }
-    if ('confronto_concorrenti' in bz) {
-      b2.confronto_concorrenti = elenco(bz.confronto_concorrenti).flatMap((x) => {
-        const o = comeOggetto(x);
-        if (!o) return [];
-        const { voto: _v, recensioni: _rc, ...resto } = o;
-        return [resto];
+        const tono = o?.tono === 'positivo' || o?.tono === 'negativo' || o?.tono === 'misto' ? o.tono : null;
+        return o && tono && temaMostrabile(o.tema) && q !== null && q >= RECENSIONI_MINIME_PER_TEMA ? [{ tema: o.tema, tono, quante: q, fonte: o.fonte }] : [];
       });
     }
     a.business = b2;
@@ -709,17 +765,36 @@ export function analisiDaSalvare<T extends Record<string, unknown> | undefined>(
  */
 const BLOCCO_DELLA_PARTE: Partial<Record<string, ParteRapporto>> = { ricerche: 'ricerche', concorrenti_canali: 'concorrenti_web', instagram: 'social', eventi: 'calendario', meteo: 'calendario', bandi: 'bandi' };
 const SEZIONE_DELLA_PARTE: Partial<Record<string, ParteRapporto>> = { idee_dal_confronto: 'concorrenti_web', occasioni: 'calendario', soldi_pubblici: 'bandi', piano_30_giorni: 'piano_30_giorni', reputazione_temi: 'reputazione' };
+export const CONCORRENTI_WEB_PER_FASCIA: Record<Abbonamento, number> = { base: 0, business: 3, premium: 5 };
 export function analisiPerLaFascia<T extends Record<string, unknown> | undefined>(analisi: T, fascia: Abbonamento | null): T {
   if (!analisi) return analisi;
   const parti = ANALISI_PER_FASCIA[fascia ?? 'base'].parti;
   const esclusa = (p: ParteRapporto | undefined) => !!p && parti[p] === null;
   const a = { ...(analisi as Record<string, unknown>) };
   const f = comeOggetto(a.fatti);
-  if (f) a.fatti = Object.fromEntries(Object.entries(f).filter(([k]) => !esclusa(BLOCCO_DELLA_PARTE[k])));
+  if (f) {
+    const tenuti: Record<string, unknown> = Object.fromEntries(Object.entries(f).filter(([k]) => !esclusa(BLOCCO_DELLA_PARTE[k])));
+    // Quanti concorrenti sui social e sul web: 3 nel Business, 5 nel Premium (`CONCORRENTI_WEB_PER_FASCIA`).
+    const cc = comeOggetto(tenuti.concorrenti_canali);
+    const d = comeOggetto(cc?.dati);
+    if (cc && d) tenuti.concorrenti_canali = { ...cc, dati: { ...d, elenco: elenco(d.elenco).slice(0, CONCORRENTI_WEB_PER_FASCIA[fascia ?? 'base']) } };
+    a.fatti = tenuti;
+  }
   const b = comeOggetto(a.business);
   if (b) {
     const b2 = Object.fromEntries(Object.entries(b).filter(([k]) => !esclusa(SEZIONE_DELLA_PARTE[k])));
     // Il confronto coi concorrenti serve alla parte 3; «fa meglio / fa peggio» è della parte 12.
+    if (Array.isArray(b2.idee_dal_confronto)) b2.idee_dal_confronto = b2.idee_dal_confronto.slice(0, 3);
+    if (Array.isArray(b2.confronto_concorrenti) && !esclusa('concorrenti_web')) {
+      // «Fa meglio / fa peggio» sui soli concorrenti della fascia.
+      const quanti = CONCORRENTI_WEB_PER_FASCIA[fascia ?? 'base'];
+      b2.confronto_concorrenti = b2.confronto_concorrenti.map((x, i) => {
+        const o = comeOggetto(x);
+        if (!o || i < quanti) return x;
+        const { meglio: _m, peggio: _p, fonte_canali: _fc, ...resto } = o;
+        return resto;
+      });
+    }
     if (esclusa('concorrenti_web') && Array.isArray(b2.confronto_concorrenti)) {
       b2.confronto_concorrenti = b2.confronto_concorrenti.map((x) => {
         const o = comeOggetto(x);
@@ -731,4 +806,52 @@ export function analisiPerLaFascia<T extends Record<string, unknown> | undefined
     a.business = b2;
   }
   return a as T;
+}
+
+/* ───────────────────────── la scheda parziale aggiunge, non sostituisce ───────────────────────── */
+
+const pieno = (v: unknown): boolean => {
+  if (v === null || v === undefined || v === '') return false;
+  if (Array.isArray(v)) return v.length > 0;
+  const o = comeOggetto(v);
+  return o ? Object.keys(o).length > 0 : true;
+};
+const bloccoLetto = (v: unknown) => {
+  const s = comeOggetto(v)?.stato;
+  return s === 'letto' || s === 'vuoto';
+};
+
+/**
+ * CONTRATTO v1.3, REGOLA 8 — Quando la ricerca si è fermata, il flusso manda `parziale: true`, `campi: {}` e solo le
+ * parti dell'analisi che ha davvero. Il sito aggiunge quello che arriva e non scrive mai un vuoto sopra un pieno:
+ *  · i campi e «da confermare» restano quelli di prima;
+ *  · un blocco dei fatti nuovo prende il posto del vecchio, tranne quando il nuovo non è letto e il vecchio sì;
+ *  · una sezione dell'analisi nuova prende il posto della vecchia solo se è piena.
+ * Senza una scheda di prima, la parziale si salva com'è.
+ */
+export function unisciSchedaParziale(vecchia: SchedaCliente | null, nuova: SchedaCliente): SchedaCliente {
+  if (!vecchia) return nuova;
+  const va = (vecchia.analisi ?? {}) as Record<string, unknown>;
+  const na = (nuova.analisi ?? {}) as Record<string, unknown>;
+  const analisi: Record<string, unknown> = { ...va };
+  for (const [k, v] of Object.entries(na)) {
+    if (k === 'fatti') {
+      const vf = comeOggetto(va.fatti) ?? {};
+      const nf = comeOggetto(v) ?? {};
+      const fatti: Record<string, unknown> = { ...vf };
+      for (const [b, blocco] of Object.entries(nf)) {
+        if (!pieno(blocco)) continue;
+        if (bloccoLetto(vf[b]) && !bloccoLetto(blocco)) continue;
+        fatti[b] = blocco;
+      }
+      analisi.fatti = fatti;
+    } else if (k === 'business') {
+      const vb = comeOggetto(va.business) ?? {};
+      const nb = comeOggetto(v) ?? {};
+      analisi.business = { ...vb, ...Object.fromEntries(Object.entries(nb).filter(([, x]) => pieno(x))) };
+    } else if (pieno(v)) {
+      analisi[k] = v;
+    }
+  }
+  return { ...vecchia, ...nuova, campi: vecchia.campi, da_confermare: vecchia.da_confermare ?? [], analisi: analisi as SchedaCliente['analisi'] };
 }

@@ -56,6 +56,9 @@ export const SchedaInArrivo = z.object({
     .passthrough()
     .optional(),
   da_confermare: z.array(z.string().max(40)).max(40).optional(),
+  // 26/11/2026 — Contratto v1.3 del rapporto, regola 8: una scheda «parziale» (la ricerca si è fermata) aggiunge,
+  // non sostituisce. Il sito la unisce a quella che ha (lib/agenzia/rapporto.ts, `unisciSchedaParziale`).
+  parziale: z.boolean().optional(),
 });
 export type SchedaCliente = z.infer<typeof SchedaInArrivo>;
 

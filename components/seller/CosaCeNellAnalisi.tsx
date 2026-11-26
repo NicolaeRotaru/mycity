@@ -35,11 +35,11 @@ export default function CosaCeNellAnalisi({ fascia }: { fascia?: Abbonamento }) 
               <ul className="mt-2 space-y-1 text-xs text-ink-500" aria-label={`Non compreso nel ${FASCE[f].nome}`}>
                 {escluse.map((r) => (
                   <li key={r.parte} data-esclusa={r.parte} className="flex gap-1.5">
-                    <X size={14} className="mt-0.5 shrink-0" aria-hidden /> <span>Non compreso: {r.titolo.charAt(0).toLowerCase() + r.titolo.slice(1)}</span>
+                    <X size={14} className="mt-0.5 shrink-0" aria-hidden /> <span>Non compreso nel rapporto: {r.titolo.charAt(0).toLowerCase() + r.titolo.slice(1)}</span>
                   </li>
                 ))}
                 {t.nonComprende.map((v) => (
-                  <li key={v} className="flex gap-1.5"><X size={14} className="mt-0.5 shrink-0" aria-hidden /> <span>Non compreso: {v.charAt(0).toLowerCase() + v.slice(1)}</span></li>
+                  <li key={v} className="flex gap-1.5"><X size={14} className="mt-0.5 shrink-0" aria-hidden /> <span>Non compreso nel rapporto: {v.charAt(0).toLowerCase() + v.slice(1)}</span></li>
                 ))}
               </ul>
             )}
