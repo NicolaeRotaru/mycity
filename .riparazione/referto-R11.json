@@ -241,6 +241,8 @@
  ],
  "conto": {
   "agenti": 6,
-  "nota": "2 subagenti che riparano (lotto 1 opus, lotto 2 sonnet), 1 giro di correzione (sonnet), 3 che smentiscono (lotto 1 opus, lotto 2 sonnet, correzione R11-009 sonnet)."
- }
+  "nota": "2 subagenti che riparano (lotto 1 opus, lotto 2 sonnet), 1 giro di correzione (sonnet), 3 che smentiscono (lotto 1 opus, lotto 2 sonnet, correzione R11-009 sonnet). Costo letto con get_session (senza id) prima della consegna: 12,51 $ all'ultimo turno chiuso.",
+  "subagenti": 6
+ },
+ "costo_usd": 12.51
 }
