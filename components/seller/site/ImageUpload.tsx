@@ -2,21 +2,14 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { useDropzone } from 'react-dropzone';
+import { useDropzone, type FileRejection } from 'react-dropzone';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
-import {
-  avvisoPerGliScartati,
-  mappaAccept,
-  pesoMassimo,
-  tipiScrittiPerUmani,
-  type OpzioniDelDrop,
-  type ScartoDellaCasella,
-} from '@/lib/storage/casella-di-caricamento';
+import { avvisoPerGliScartati, mappaAccept, pesoMassimo, tipiScrittiPerUmani } from '@/lib/storage/casella-di-caricamento';
 import { richiestaPerIlSito } from '@/lib/storage/foto-del-sito';
 
 /**
@@ -26,48 +19,34 @@ import { richiestaPerIlSito } from '@/lib/storage/foto-del-sito';
  * lo vedeva bene dal suo iPhone e i clienti su Chrome, Firefox, Edge e Android vedevano un
  * riquadro rotto. Come per le foto prodotto (`lib/products/uploadImages.ts`) si tolgono
  * dall'elenco della casella: senza HEIC nell'`accept` l'iPhone le converte da solo in JPEG, e un
- * .heic trascinato da un PC la casella lo scarta e `avvisoPerGliScartatiDelSito` dice perche' e
- * cosa fare.
- * Riconosce il tipo («…/heic»), l'estensione («.heif») e il nome del file («IMG_0421.HEIC»).
+ * .heic trascinato da un PC la casella lo scarta e `avvisoDelSito` dice perche'. Riconosce il tipo
+ * («…/heic»), l'estensione («.heif») e il nome del file («IMG_0421.HEIC»). La stessa regola sta
+ * in `GalleryFields.tsx`: ogni casella si regge da sola.
  */
 const FORMATO_DELL_IPHONE = /[./]hei[cf]$/i;
-
 const FOTO_HEIC =
   "Le foto HEIC (il formato dell'iPhone) non le carichiamo: su Chrome e sui telefoni Android si vedrebbero come un riquadro vuoto. Sceglile direttamente dall'iPhone, che le trasforma da solo in JPG, oppure salvale in JPG e riprova.";
-
-/** La foto e' un HEIC/HEIF? Dal tipo o, se il PC non lo sa dire, dal nome. */
-function fotoHeic(file: { name?: string; type?: string } | null | undefined): boolean {
-  return FORMATO_DELL_IPHONE.test(String(file?.type ?? '')) || FORMATO_DELL_IPHONE.test(String(file?.name ?? ''));
-}
-
-/** L'elenco del magazzino, senza i formati che i browser dei clienti non sanno mostrare. */
-export function soloFotoMostrate(mappa: Record<string, string[]>): Record<string, string[]> {
-  return Object.fromEntries(Object.entries(mappa).filter(([tipo]) => !FORMATO_DELL_IPHONE.test(tipo)));
-}
 
 /**
  * Vedi `lib/storage/casella-di-caricamento.ts`: l'elenco dei file che questa casella accetta lo
  * detta il magazzino. Prima erano tre tipi scritti qui a mano contro i sette del deposito, e una
  * foto scattata con l'iPhone spariva senza una parola.
  */
-const ACCETTA = soloFotoMostrate(mappaAccept());
+const ACCETTA = Object.fromEntries(Object.entries(mappaAccept()).filter(([tipo]) => !FORMATO_DELL_IPHONE.test(tipo)));
 const PESO_MASSIMO = pesoMassimo();
 
-/** «JPG, PNG, WEBP, GIF o AVIF»: i formati che la casella prende davvero, detti a parole. */
-const nomiMostrati = Object.values(ACCETTA).map((estensioni) => estensioni[0].replace('.', '').toUpperCase());
-const FORMATI_MOSTRATI = `${nomiMostrati.slice(0, -1).join(', ')} o ${nomiMostrati[nomiMostrati.length - 1]}`;
-
 /**
- * L'avviso per i file scartati dalle caselle della vetrina. Gli HEIC hanno la loro frase; per il
- * resto parla il cervello comune, con l'elenco dei formati senza HEIC/HEIF (la sua frase li
- * nomina, perche' il magazzino li accetta).
+ * Gli HEIC scartati hanno la loro frase; per il resto parla il cervello comune, con l'elenco dei
+ * formati senza HEIC/HEIF (la sua frase li nomina, perche' il magazzino li accetta).
  */
-export function avvisoPerGliScartatiDelSito(scartati: readonly ScartoDellaCasella[], opzioni: OpzioniDelDrop): string | null {
-  const heic = scartati.filter((s) => fotoHeic(s?.file));
-  const resto = avvisoPerGliScartati(scartati.filter((s) => !heic.includes(s)), opzioni);
-  const frasi: string[] = [];
-  if (heic.length > 0) frasi.push(FOTO_HEIC);
-  if (resto) frasi.push(resto.replace(tipiScrittiPerUmani(), FORMATI_MOSTRATI));
+function avvisoDelSito(scartati: readonly FileRejection[], postiLiberi: number): string | null {
+  const heic = scartati.filter(({ file }) => FORMATO_DELL_IPHONE.test(file?.type ?? '') || FORMATO_DELL_IPHONE.test(file?.name ?? ''));
+  const resto = avvisoPerGliScartati(scartati.filter((s) => !heic.includes(s)), { postiLiberi });
+  const formati = Object.values(ACCETTA).map((estensioni) => estensioni[0].slice(1).toUpperCase());
+  const frasi = [
+    heic.length > 0 ? FOTO_HEIC : '',
+    (resto ?? '').replace(tipiScrittiPerUmani(), `${formati.slice(0, -1).join(', ')} o ${formati[formati.length - 1]}`),
+  ].filter(Boolean);
   return frasi.length > 0 ? frasi.join(' ') : null;
 }
 
@@ -99,7 +78,7 @@ export function SingleImageUpload({ value, onChange }: { value: string; onChange
     maxFiles: 1,
     /** Il file buttato fuori adesso ha una voce: prima spariva e basta. */
     onDropRejected: (scartati) => {
-      const avviso = avvisoPerGliScartatiDelSito(scartati, { postiLiberi: 1 });
+      const avviso = avvisoDelSito(scartati, 1);
       if (avviso) toast.error(avviso);
     },
     onDrop: async (files) => {
