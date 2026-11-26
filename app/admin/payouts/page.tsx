@@ -356,9 +356,9 @@ export default function AdminPayoutsPage() {
         consegnati().or(PAGABILI).order('delivered_at', { ascending: true }).order('id', { ascending: true }).limit(TETTO_PAYOUT + 1),
         consegnati()
           .or(`payout_status.is.null,payout_status.not.in.(${STATI_CHIUSI.join(',')}),${RITIRO_DA_REGOLARE}`)
-          // R22-001 — dal più vecchio: se l'elenco si taglia, restano fuori i più recenti (questa settimana),
-          // non i contanti da versare da più tempo.
-          .order('created_at', { ascending: true })
+          // Dal più recente, come prima. R22-001 — oltre il tetto mancano le righe ferme più vecchie: i
+          // contanti da versare e i ritiri da regolare vengono dalla loro lettura (daPagabili), non da qui.
+          .order('created_at', { ascending: false })
           // Una riga in più: se arriva, l'elenco è tagliato davvero (con 1000 esatte no).
           .limit(TETTO_PAYOUT + 1),
         consegnati().in('payout_status', STATI_CHIUSI).order('created_at', { ascending: false }).limit(TETTO_PAYOUT + 1),
@@ -588,9 +588,9 @@ export default function AdminPayoutsPage() {
           <div className="space-y-1">
             {tagliato && (
               <p>
-                <strong>Elenco tagliato:</strong> mostro solo i {TETTO_PAYOUT} ordini consegnati più vecchi col bonifico ancora aperto.
-                Mancano i più recenti: i totali di questa pagina, anche quelli dei singoli negozi, possono essere più bassi
-                del vero.
+                <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PAYOUT} ordini consegnati col bonifico ancora aperto. Mancano i più
+                vecchi fra quelli fermi (dal fattorino, con un reclamo, senza IBAN); i contanti da versare si leggono a parte. I totali
+                di questa pagina, anche quelli dei singoli negozi, possono essere più bassi del vero.
               </p>
             )}
             {/* R22-001 — i contanti da versare hanno il loro tetto: tagliati loro, la cifra del lunedì è una parte. */}

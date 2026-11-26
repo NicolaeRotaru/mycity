@@ -10,7 +10,8 @@ import { disegna } from './aiuti/cabina-admin';
  * Gli aperti si leggevano dal più recente e se ne tenevano mille: oltre il tetto restavano fuori
  * proprio i contanti più vecchi, cioè quelli da versare da più tempo, e il tasto «Bonifico fatto»
  * non li segnava. E gli storni non riusciti (REVERSAL_FAILED), fuori dai totali, prendevano posto
- * fra gli aperti. Il finto server applica filtri, ordinamento e limite (mille righe) come quello vero.
+ * fra gli aperti. Gli aperti restano letti dal più recente: i contanti da versare hanno la loro lettura
+ * (dal consegnato prima), e l'avviso «Mancano i più vecchi» vale per le righe ferme. Il finto server applica filtri, ordinamento e limite (mille righe) come quello vero.
  * Orologio finto: lunedì 23/11/2026.
  */
 
@@ -170,7 +171,10 @@ describe('R22-001 — il contante vecchio da versare resta nel pannello oltre i 
     const host = await apri();
     const blocco = bloccoDi(host, 'Pane Quotidiano');
     expect(host.textContent, 'oltre il tetto la pagina deve dirlo').toMatch(/Elenco tagliato/);
-    expect(host.textContent, 'mancano i più recenti, non i più vecchi').toMatch(/Mancano i più recenti/);
+    // Gli aperti si leggono dal più recente: oltre il tetto mancano i più vecchi fra quelli fermi, ma il
+    // contante da versare del 2/8 arriva dalla lettura dei pagabili (sotto: lunedì e tasto).
+    expect(host.textContent, 'l\'avviso deve dire che mancano i più vecchi').toMatch(/Mancano i più\s+vecchi/);
+    expect(daVersareLunedi(blocco), 'il contante del 2/8 sparisce dal lunedì: 999 da 9,00 € + 18,00 €').toMatch(/9\.?009,00/);
 
     vi.stubGlobal('prompt', () => 'CRO-R22');
     const tasto = tastoIn(blocco);

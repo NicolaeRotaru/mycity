@@ -49,8 +49,7 @@ describe('bonifici ai negozi', () => {
     const host = await apri('@/app/admin/payouts/page');
     const testo = host.textContent ?? '';
     expect(testo.indexOf('Elenco tagliato')).toBeLessThan(testo.indexOf('Contanti da versare'));
-    // R22-001 — gli aperti si leggono dal più vecchio: oltre il tetto mancano i più recenti.
-    expect(testo).toMatch(/Mancano i più\s+recenti/);
+    expect(testo).toMatch(/Mancano i più\s+vecchi/);
     expect(testo).toMatch(/anche quelli dei singoli\s+negozi/);
     expect(testo).toMatch(/almeno /);
   });
