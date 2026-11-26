@@ -23,6 +23,8 @@ const stato = vi.hoisted(() => ({
   resi: [] as Record<string, unknown>[],
   risposta: null as null | { message: string },
   chiamate: [] as Record<string, unknown>[],
+  letture: [] as string[],
+  recuperiLancia: false,
 }));
 
 function spezza(s: string): string[] {
@@ -98,8 +100,12 @@ vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     from: (t: string) => tabella(t),
     rpc: vi.fn(async (n: string, args: Record<string, unknown>) => {
+      stato.letture.push(n);
       if (n === 'bonifici_manuali_per_mese') return { data: stato.manuali, error: null };
-      if (n === 'contanti_da_recuperare') return { data: stato.recuperi, error: null };
+      if (n === 'contanti_da_recuperare') {
+        if (stato.recuperiLancia) throw new Error('rete giù');
+        return { data: stato.recuperi, error: null };
+      }
       stato.chiamate.push({ n, ...args });
       if (stato.risposta) return { data: null, error: stato.risposta };
       return { data: (args.p_order_ids as string[]).length, error: null };
@@ -116,6 +122,8 @@ beforeEach(() => {
   stato.chiamate = [];
   stato.manuali = [];
   stato.recuperi = [];
+  stato.letture = [];
+  stato.recuperiLancia = false;
   stato.resi = [];
   stato.risposta = null;
 });
@@ -205,5 +213,33 @@ describe('R22-003 — dopo il bonifico a mano: quote da recuperare, ritiri fermi
     await premi(tastoIn(blocco)!);
     expect(host.textContent, 'la risposta della funzione si perde in un «riprova»').toMatch(/già scritto col riferimento CRO-PRIMO/);
     expect(host.textContent).not.toMatch(/Non sono riuscito a segnarlo/);
+  });
+});
+
+describe('R22-003 (giro corto) — le quote da recuperare si leggono solo se c\'è un bonifico a mano, e non fanno cadere la pagina', () => {
+  it('senza bonifici a mano la lettura non parte: la prima chiamata al server è il bonifico', async () => {
+    stato.ordini = [contante('c1', 1800, '2026-11-18')];
+    const host = await apri();
+    vi.stubGlobal('prompt', vi.fn(() => 'CRO-0011223344'));
+    await premi(tastoIn(bloccoDi(host, 'Pane Quotidiano'))!);
+    expect(stato.letture, 'la pagina legge le quote da recuperare senza un bonifico a mano').not.toContain('contanti_da_recuperare');
+    expect(stato.letture[0]).toBe('segna_bonifico_manuale');
+  });
+
+  it('con un contante versato a mano la lettura parte; esito strano o eccezione: l\'avviso, mai una pagina rotta', async () => {
+    const versato = () => [contante('c1', 1800, '2026-11-18', { payout_status: 'PAID_MANUALLY', payout_at: '2026-11-16T08:00:00Z' })];
+    stato.ordini = versato();
+    stato.recuperi = { da_recuperare_cents: 450 } as unknown as Record<string, unknown>[];
+    let host = await apri();
+    expect(stato.letture).toContain('contanti_da_recuperare');
+    expect(host.textContent).toMatch(/Non riesco a leggere i contanti da recuperare/);
+    chiudi?.();
+    chiudi = null;
+
+    stato.ordini = versato();
+    stato.recuperiLancia = true;
+    host = await apri();
+    expect(host.textContent, 'un\'eccezione nella lettura fa cadere la pagina').toMatch(/Pane Quotidiano/);
+    expect(host.textContent).toMatch(/Non riesco a leggere i contanti da recuperare/);
   });
 });

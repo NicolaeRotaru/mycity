@@ -455,26 +455,30 @@ export default function AdminPayoutsPage() {
   );
   // R22-003 — Contanti già versati a mano e poi rimborsati al cliente: il bonifico è partito, la quota
   // del negozio non si toglie più da un bonifico futuro. Va ripresa dal negozio: la pagina la mostra.
+  // Si legge solo se c'è un bonifico a mano, cioè la stessa traccia di sopra: un contante versato a mano
+  // tiene payout_at anche dopo il rimborso. Errore, eccezione o esito che non è un elenco: l'avviso.
   const recuperi = useQuery({
     queryKey: ['admin', 'payouts', 'da-recuperare'],
+    enabled: servonoManuali,
     refetchInterval: 60_000,
     queryFn: async (): Promise<DaRecuperare[]> => {
       const { data, error } = await supabase.rpc('contanti_da_recuperare');
       if (error) throw error;
-      return (Array.isArray(data) ? (data as Partial<DaRecuperare>[]) : []).map((r) => ({
-        order_id: String(r.order_id ?? ''),
-        seller_id: String(r.seller_id ?? ''),
-        store_name: r.store_name ?? null,
-        da_recuperare_cents: centesimi(r.da_recuperare_cents),
+      if (!Array.isArray(data)) throw new Error('quote da recuperare: esito non previsto');
+      return (data as (Partial<DaRecuperare> | null)[]).map((r) => ({
+        order_id: String(r?.order_id ?? ''),
+        seller_id: String(r?.seller_id ?? ''),
+        store_name: r?.store_name ?? null,
+        da_recuperare_cents: centesimi(r?.da_recuperare_cents),
       }));
     },
   });
-  const righeRecuperi = useMemo(() => recuperi.data ?? [], [recuperi.data]);
+  const righeRecuperi = useMemo(() => (servonoManuali ? (recuperi.data ?? []) : []), [servonoManuali, recuperi.data]);
   const rileggi = () => {
     void refetch();
     // refetch() parte anche a lettura spenta: senza traccia di bonifici a mano non si chiama.
     if (servonoManuali) void manuali.refetch();
-    void recuperi.refetch();
+    if (servonoManuali) void recuperi.refetch();
   };
 
   const meta = letti as LettiPayout;
@@ -621,7 +625,7 @@ export default function AdminPayoutsPage() {
         </div>
       )}
 
-      {recuperi.isError && (
+      {servonoManuali && recuperi.isError && (
         <p role="alert" className="text-sm text-secondary-700">
           Non riesco a leggere i contanti da recuperare dai negozi (rimborsi arrivati dopo un bonifico a mano). Riprova tra poco.
         </p>
