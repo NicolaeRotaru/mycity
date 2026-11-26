@@ -173,8 +173,16 @@ const whatsappSchema = z
 const websiteSchema = z
   .string()
   .trim()
-  .url("Scrivi l'indirizzo del sito, per esempio www.iltuonegozio.it")
   .max(200)
+  // R13-008 — Solo http o https: «ftp://», «mailto:», «javascript:» e gli schemi storpiati («http//», «https:/», «htp://»)
+  // si fermano con un messaggio chiaro. Il dominio nudo è già diventato https:// in normalizzaSocials.
+  .superRefine((v, ctx) => {
+    if (!/^https?:\/\/[^\s/]/i.test(v)) {
+      ctx.addIssue({ code: 'custom', message: "L'indirizzo del sito deve cominciare con http:// o https://, per esempio https://www.iltuonegozio.it" });
+    } else if (!z.string().url().safeParse(v).success) {
+      ctx.addIssue({ code: 'custom', message: "Scrivi l'indirizzo del sito, per esempio www.iltuonegozio.it" });
+    }
+  })
   .optional()
   .or(z.literal(''));
 
@@ -417,7 +425,9 @@ export function normalizzaSocials(s: StoreCustomization['socials']): StoreCustom
   out.tiktok = handleDaLink(s.tiktok, { dominio: /tiktok\.com/, riservati: RISERVATI_TIKTOK, arobaFaProfilo: true });
   if (s.website !== undefined) {
     const w = s.website.trim();
-    out.website = w && !/^https?:\/\//i.test(w) && /\./.test(w) ? `https://${w}` : w;
+    // Un dominio nudo prende https://; un indirizzo che ha già uno schema (giusto o sbagliato) resta com'è e lo schema lo giudica.
+    const conSchema = /^[a-z][a-z0-9+.-]*:(?!\d)/i.test(w) || /^[a-z]+\/\//i.test(w);
+    out.website = w && !conSchema && /\./.test(w) ? `https://${w}` : w;
   }
   if (s.google_maps !== undefined) {
     const g = s.google_maps.trim();
