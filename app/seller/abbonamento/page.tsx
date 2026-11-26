@@ -27,6 +27,7 @@ import {
   type Abbonamento,
 } from '@/lib/agenzia/preventivo';
 import { formatPriceFromCents } from '@/lib/format';
+import { FRASE_CONTANTI, PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagamento-servizi';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
 import { fasciaDaIndirizzo, hrefServizio, PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import { ETICHETTE_SERVIZI } from '@/components/seller/servizi-nel-menu';
@@ -292,7 +293,9 @@ export default function PaginaAbbonamento() {
           </ul>
           <p className="mt-3 text-xs text-ink-500">
             {Object.values(p.prezzi).some((v) => !v) && 'I canoni «su richiesta» te li confermiamo prima di iniziare. '}
-            Il pagamento è con carta, sicuro con Stripe: ogni mese si rinnova da solo. Se preferisci parlarne prima, chiedi di essere richiamato: non paghi niente.
+            {PAGAMENTO_ONLINE_SERVIZI
+              ? 'Il pagamento è con carta, sicuro con Stripe: ogni mese si rinnova da solo. Se preferisci parlarne prima, chiedi di essere richiamato: non paghi niente.'
+              : `${FRASE_CONTANTI} Chiedi di essere contattato e ci mettiamo d’accordo.`}
           </p>
         </section>
       </article>
@@ -308,7 +311,8 @@ export default function PaginaAbbonamento() {
         ) : (
           !p.attivo && (
             <>
-              {p.prezzi[fascia] ? (
+              {/* 26/11/2026 — Nicola: «tasto abbona toglilo», per ora si paga in contanti (lib/agenzia/pagamento-servizi.ts). */}
+              {PAGAMENTO_ONLINE_SERVIZI && p.prezzi[fascia] ? (
                 <Button onClick={() => paga.mutate(fascia)} loading={paga.isPending} disabled={richiama.isPending} icon={CreditCard}>
                   Paga e attiva il {FASCE[fascia].nome}
                   {p.primoMeseScontato && canonePrimoMese(p.prezzi[fascia]) ? ` · il primo mese ${formatPriceFromCents(canonePrimoMese(p.prezzi[fascia])!)}` : ''}
@@ -320,7 +324,7 @@ export default function PaginaAbbonamento() {
                 disabled={richiama.isPending || paga.isPending}
                 className="inline-flex items-center gap-2 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold disabled:opacity-60"
               >
-                <Send size={18} aria-hidden /> Preferisco essere richiamato
+                <Send size={18} aria-hidden /> {PAGAMENTO_ONLINE_SERVIZI ? 'Preferisco essere richiamato' : `Voglio il ${FASCE[fascia].nome}: contattatemi`}
               </button>
             </>
           )

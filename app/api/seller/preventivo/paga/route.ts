@@ -8,6 +8,7 @@ import { env } from '@/lib/env';
 import { ABBONAMENTI } from '@/lib/agenzia/preventivo';
 import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import { apriCassaServizi } from '@/lib/agenzia/cassa-servizi';
+import { MESSAGGIO_CASSA_SPENTA, pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
 
 export const runtime = 'nodejs';
 
@@ -46,6 +47,8 @@ const Richiesta = z.object({ abbonamento: z.enum(ABBONAMENTI, { message: 'Scegli
 export const POST = withSellerAnchePendingRateLimit(
   { name: 'seller-preventivo-paga', max: 10, windowMs: 10 * 60_000 },
   async ({ user, req }): Promise<NextResponse> => {
+    // 26/11/2026 — Per ora si paga in contanti (lib/agenzia/pagamento-servizi.ts).
+    if (!pagamentoOnlineAttivo()) return ApiErrors.conflict(MESSAGGIO_CASSA_SPENTA);
     if (!isStripeConfigured()) return ApiErrors.unavailable('I pagamenti non sono disponibili in questo momento. Scrivici e ti richiamiamo.');
     if (!user.email) return ApiErrors.unauthorized();
 
