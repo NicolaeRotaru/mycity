@@ -85,7 +85,7 @@ const preventivo = (): Preventivo =>
 beforeEach(() => {
   stato.pathname = '/seller/servizi/analisi';
   stato.slug = 'analisi';
-  stato.dati = { 'preventivo-agenzia': preventivo(), 'scheda-cliente': null, 'analisi-del-negozio': { sito: null, canali: null, canaliRichiestiIl: null }, canali: {} };
+  stato.dati = { 'preventivo-agenzia': preventivo(), 'scheda-cliente': null, 'scheda-e-abbonamento': { scheda: null, aperta: false }, 'analisi-del-negozio': { sito: null, canali: null, canaliRichiestiIl: null }, canali: {} };
 });
 afterEach(() => {
   for (const r of accesi.splice(0)) act(() => r.unmount());
@@ -134,7 +134,8 @@ describe('la pagina dell analisi è un anteprima già pronta', () => {
   });
 
   it('con la scheda di n8n, l analisi dei canali e quella del sito mostra tutto, con fonte e data, senza prezzi', async () => {
-    stato.dati['scheda-cliente'] = SchedaInArrivo.parse({
+    // 26/11/2026 — La pagina legge la scheda e «ha pagato?» dalla stessa risposta (rapporto dell'imprenditore).
+    const scheda = SchedaInArrivo.parse({
       tipo: 'scheda-cliente', id_attivita: '0de1905e-7000-4000-8000-000000000001', campi: {},
       analisi: {
         tipo_di_locale: 'Bar e pasticceria di quartiere',
@@ -143,6 +144,7 @@ describe('la pagina dell analisi è un anteprima già pronta', () => {
         idee_contenuti: ['Il laboratorio alle 6 del mattino'],
       },
     });
+    stato.dati['scheda-e-abbonamento'] = { scheda, aperta: false };
     stato.dati.canali = { instagram: 'oradelgusto', website: 'https://www.oradelgusto.it' };
     stato.dati['analisi-del-negozio'] = {
       canaliRichiestiIl: null,

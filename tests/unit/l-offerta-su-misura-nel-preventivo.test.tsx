@@ -97,7 +97,9 @@ describe('le proposte nascono dai dati veri', () => {
     expect(per('social-idee').cosa).not.toContain('2,50');
     expect(per('social-video-brevi').daFascia).toBe('business');
     expect(per('google-sistema-0').perche).toBe('Mancano gli orari della domenica');
-    expect(per('google-recensioni').perche).toContain('128 recensioni e 4,6 stelle');
+    // 26/11/2026 — Parere legale: i numeri di Google (voto, recensioni) non entrano nel preventivo.
+    expect(per('google-recensioni').perche).toContain('nessuno risponde alle recensioni');
+    expect(per('google-recensioni').perche).not.toMatch(/\d/);
     expect(per('google-recensioni').daFascia).toBe('business');
     expect(per('google-orari').perche).toContain('Lun–Sab 7.00–19.30');
     expect(cosaInFascia(per('analisi'), 'base')).toContain('all’avvio');

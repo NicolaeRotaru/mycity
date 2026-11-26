@@ -22,6 +22,8 @@ const RADICE = path.resolve(__dirname, '../..');
 const MIGRAZIONE = readFileSync(path.join(RADICE, 'migrations/707_sdg_agenzia_nel_marketplace.sql'), 'utf8');
 const MIGRAZIONE_710 = readFileSync(path.join(RADICE, 'migrations/710_gli_abbonamenti_di_sdg_dicono_i_servizi_a_tre.sql'), 'utf8');
 const MIGRAZIONE_711 = readFileSync(path.join(RADICE, 'migrations/711_l_analisi_del_business_e_la_bozza_del_sito.sql'), 'utf8');
+// 26/11/2026 — Il rapporto dell'imprenditore cambia il testo dell'analisi: l'ultima che scrive le descrizioni è la 863.
+const MIGRAZIONE_863 = readFileSync(path.join(RADICE, 'migrations/863_gli_abbonamenti_di_sdg_dicono_il_rapporto_dell_imprenditore.sql'), 'utf8');
 
 const abbonamento = (p: Partial<ProdottoDelCatalogo> = {}): ProdottoDelCatalogo => ({
   id: ID_PRODOTTO_SDG.base, name: 'Abbonamento Base — 300 € al mese', price: 300,
@@ -128,8 +130,14 @@ describe('i tre prodotti dicono quello che dice il listino', () => {
 
   // 24/11/2026 sera — L'analisi del business è il quarto servizio: la 711 riscrive le descrizioni,
   // che devono essere quelle del listino di oggi (sempre l'ultima migrazione che le scrive).
-  it('la migrazione 711 scrive le descrizioni di oggi, con l analisi del business', () => {
-    const sql = MIGRAZIONE_711.replace(/''/g, "'");
+  it('la migrazione 711 scrive le descrizioni con l analisi del business', () => {
+    expect(MIGRAZIONE_711).toContain('· Analisi del business:');
+    expect(MIGRAZIONE_711).toContain(`p.seller_id = '${SDG_SELLER_ID}'::uuid`);
+  });
+
+  it('la migrazione 863 scrive le descrizioni di oggi, col rapporto dell imprenditore', () => {
+    const sql = MIGRAZIONE_863.replace(/''/g, "'");
+    expect(MIGRAZIONE_863).toContain(`p.seller_id = '${SDG_SELLER_ID}'::uuid`);
     for (const p of PRODOTTI_SDG) {
       expect(sql).toContain(`('${p.id}'::uuid, '${p.descrizione}')`);
       expect(p.descrizione).toContain('· Analisi del business:');

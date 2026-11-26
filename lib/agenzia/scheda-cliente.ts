@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { analisiDaSalvare, campiDaSalvare } from './rapporto';
 
 /**
  * LA SCHEDA DEL CLIENTE CHE MANDA N8N — 24/11/2026.
@@ -56,6 +57,9 @@ export const SchedaInArrivo = z.object({
     .passthrough()
     .optional(),
   da_confermare: z.array(z.string().max(40)).max(40).optional(),
+  // 26/11/2026 — Contratto v1.3 del rapporto, regola 8: una scheda «parziale» (la ricerca si è fermata) aggiunge,
+  // non sostituisce. Il sito la unisce a quella che ha (lib/agenzia/rapporto.ts, `unisciSchedaParziale`).
+  parziale: z.boolean().optional(),
 });
 export type SchedaCliente = z.infer<typeof SchedaInArrivo>;
 
@@ -167,7 +171,11 @@ export function campiPerIlProfilo(scheda: SchedaCliente | null | undefined): { s
 /** Legge una scheda salvata: se non è nel formato, è come se non ci fosse (mai un dato a metà). */
 export function leggiSchedaSalvata(grezza: unknown): SchedaCliente | null {
   const esito = SchedaInArrivo.safeParse(grezza);
-  return esito.success ? esito.data : null;
+  if (!esito.success) return null;
+  // 26/11/2026 — Parere legale e revisione di mycity#336: una riga salvata prima delle regole sul rapporto si
+  // ripulisce anche in lettura, come all'ingresso (lib/agenzia/rapporto.ts): niente campi presi da Google Maps o
+  // TripAdvisor (orari, indirizzo…), niente voti, recensioni o autori nell'analisi. Vale per ogni pagina che legge.
+  return { ...esito.data, campi: campiDaSalvare(esito.data.campi), analisi: analisiDaSalvare(esito.data.analisi) };
 }
 
 /**
