@@ -90,6 +90,8 @@ beforeEach(() => {
 describe('R04-008 · la nota del negozio la scrive solo il negozio', () => {
   it('il cliente ritira la richiesta: la tappa non tocca la nota del negozio', async () => {
     stato.chiamante = ANNA;
+    // Approvato senza rimborso subito: con un rimborso in corso il ritiro non passa (R04-011).
+    stato.reso.refund_amount_cents = null;
     const res = await avanza({ stato: 'CANCELED' });
     expect(res.status, 'il ritiro del cliente doveva passare').toBe(200);
     expect(presa().status).toBe('CANCELED');
@@ -98,6 +100,7 @@ describe('R04-008 · la nota del negozio la scrive solo il negozio', () => {
 
   it('il cliente ritira con una nota sua: non diventa la nota del negozio', async () => {
     stato.chiamante = ANNA;
+    stato.reso.refund_amount_cents = null;
     const res = await avanza({ stato: 'CANCELED', note: 'ho cambiato idea' });
     expect(res.status).toBe(200);
     expect('decision_notes' in presa(), 'la nota del cliente è finita al posto di quella del negozio').toBe(false);

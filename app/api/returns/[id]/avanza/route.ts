@@ -208,6 +208,13 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         'La merce è già in viaggio o in negozio: la richiesta non si può più ritirare. Scrivi al negozio.',
       );
     }
+    // 26/11/2026 (R04-011) — Approvato CON un rimborso: `decide` lo sta facendo partire (o è già partito).
+    // Il ritiro passava, il negozio leggeva «il cliente ha ritirato» e poi il rimborso usciva lo stesso.
+    if (ret.status === 'APPROVED' && Number(ret.refund_amount_cents ?? 0) > 0) {
+      return ApiErrors.conflict(
+        'Il negozio ha già approvato il reso con il rimborso: la richiesta non si può più ritirare. Se il rimborso non arriva, scrivi al negozio.',
+      );
+    }
   }
 
   // Un «rimborsato» rimasto a meta' si riprende (vedi `ripresa`, piu' sotto).
