@@ -96,7 +96,16 @@ export function Segnala({
         }
         throw new Error('Segnalazione non inviata');
       }
-      toast.success('Segnalazione ricevuta: la esaminiamo.');
+      // 26/11/2026 (R02-010) — Il numero si vede subito, e chi ha lasciato l'email sa che la
+      // ricevuta con lo stesso numero gli è stata mandata (la rotta lo dice in `conferma`).
+      let ricevuta: { id?: string; conferma?: string } | null = null;
+      try { ricevuta = (await res.json()) as { id?: string; conferma?: string } | null; } catch { ricevuta = null; }
+      const numero = ricevuta?.id ? ` Numero: ${ricevuta.id}.` : '';
+      toast.success(
+        ricevuta?.conferma === 'inviata'
+          ? `Segnalazione ricevuta: la esaminiamo.${numero} Ti abbiamo mandato una conferma per email.`
+          : `Segnalazione ricevuta: la esaminiamo.${numero}`,
+      );
       setAperto(false);
       setDettaglio('');
     } catch {

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
@@ -8,6 +9,8 @@ import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { comunicaEsito, MOTIVAZIONE_MINIMA } from './esito/comunica';
 import { motivoLeggibile, oggettoConArticolo } from '@/lib/admin/segnalazioni-testi';
+import { sendEmail } from '@/lib/email/client';
+import { escapeHtml } from '@/lib/html-escape';
 
 export const runtime = 'nodejs';
 
@@ -36,6 +39,88 @@ const Corpo = z.object({
   dettaglio: z.string().max(2000).optional(),
   emailContatto: z.string().email().max(320).optional(),
 });
+
+/**
+ * 26/11/2026 (R02-010) — CHI LASCIA L'EMAIL RICEVE LA RICEVUTA.
+ *
+ * Il regolamento sui servizi digitali (art. 16.4) chiede una conferma di ricezione al recapito
+ * elettronico lasciato. Prima la rotta avvisava solo gli amministratori: chi segnalava una borsa
+ * contraffatta chiudeva la pagina senza nessuna prova né numero della segnalazione.
+ *
+ * Il modulo è aperto a tutti e l'indirizzo lo scrive chi segnala, quindi la ricevuta non deve
+ * diventare un modo per mandare email a un altro: dice solo numero, oggetto, motivo e data (mai il
+ * testo libero di chi ha scritto), e ogni indirizzo ne riceve al massimo `RICEVUTE_PER_INDIRIZZO`
+ * al giorno, contate sull'indirizzo normalizzato (maiuscole, «+etichetta», punti di Gmail) così
+ * le scritture diverse dello stesso indirizzo contano insieme. La segnalazione resta registrata
+ * anche se la ricevuta non parte: l'esito si legge, si scrive nei log e torna nella risposta.
+ */
+const RICEVUTE_PER_INDIRIZZO = 3;
+const FINESTRA_RICEVUTE_MS = 24 * 60 * 60_000;
+
+type ConfermaRicevuta = 'inviata' | 'fallita' | 'rinviata' | 'nessun_recapito';
+
+/** Lo stesso indirizzo scritto in modi diversi dà la stessa chiave. */
+function indirizzoNormalizzato(email: string): string {
+  const pulito = email.trim().toLowerCase();
+  const at = pulito.lastIndexOf('@');
+  if (at < 0) return pulito;
+  let locale = pulito.slice(0, at).split('+')[0];
+  let dominio = pulito.slice(at + 1).replace(/\.+$/, '');
+  if (dominio === 'googlemail.com') dominio = 'gmail.com';
+  if (dominio === 'gmail.com') locale = locale.replace(/\./g, '');
+  return `${locale}@${dominio}`;
+}
+
+async function mandaRicevuta(
+  segnalazione: { id: string; tipo: string; motivo: string; ricevutaIl: Date },
+  email: string,
+): Promise<ConfermaRicevuta> {
+  const impronta = createHash('sha256').update(indirizzoNormalizzato(email)).digest('hex');
+  const tetto = await rateLimitAsync({
+    key: `segnalazioni-ricevuta:${impronta}`,
+    max: RICEVUTE_PER_INDIRIZZO,
+    windowMs: FINESTRA_RICEVUTE_MS,
+  });
+  if (!tetto.allowed) {
+    logger.warn('[segnalazioni] ricevuta non mandata: troppe allo stesso indirizzo oggi', { segnalazione: segnalazione.id });
+    return 'rinviata';
+  }
+  const quando = segnalazione.ricevutaIl.toLocaleString('it-IT', {
+    timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+  const oggetto = oggettoConArticolo(segnalazione.tipo);
+  const motivo = motivoLeggibile(segnalazione.motivo);
+  const ignora = 'Se non hai fatto tu questa segnalazione, ignora questa email: qualcuno ha scritto il tuo indirizzo per errore.';
+  try {
+    const r = await sendEmail({
+      to: email,
+      subject: `Abbiamo ricevuto la tua segnalazione n. ${segnalazione.id}`,
+      html:
+        `<p>Abbiamo ricevuto la tua segnalazione: la esaminiamo e ti scriviamo qui l'esito motivato.</p>` +
+        `<ul><li><strong>Numero:</strong> ${escapeHtml(segnalazione.id)}</li>` +
+        `<li><strong>Cosa hai segnalato:</strong> ${escapeHtml(oggetto)}</li>` +
+        `<li><strong>Motivo:</strong> ${escapeHtml(motivo)}</li>` +
+        `<li><strong>Ricevuta il:</strong> ${escapeHtml(quando)}</li></ul>` +
+        `<p>${escapeHtml(ignora)}</p>`,
+      text:
+        `Abbiamo ricevuto la tua segnalazione: la esaminiamo e ti scriviamo qui l'esito motivato.\n\n` +
+        `Numero: ${segnalazione.id}\nCosa hai segnalato: ${oggetto}\nMotivo: ${motivo}\nRicevuta il: ${quando}\n\n${ignora}`,
+      tipo: 'transazionale',
+      idempotencyKey: `segnalazione-ricevuta-${segnalazione.id}`,
+    });
+    if (!r.ok) {
+      logger.error(new Error('[segnalazioni] ricevuta a chi ha segnalato non partita'), { segnalazione: segnalazione.id });
+      return 'fallita';
+    }
+    return 'inviata';
+  } catch (e) {
+    logger.error(new Error('[segnalazioni] ricevuta a chi ha segnalato non partita'), {
+      segnalazione: segnalazione.id,
+      err: e instanceof Error ? e.message : String(e),
+    });
+    return 'fallita';
+  }
+}
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   {
@@ -103,7 +188,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         segnalante_id: autoreId,
         email_contatto: corpo.emailContatto ?? null,
       })
-      .select('id')
+      .select('id, created_at')
       .single();
 
     if (error) {
@@ -160,7 +245,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       logger.warn('[segnalazioni] avviso agli amministratori non partito', { e });
     }
 
-    return NextResponse.json({ ok: true, id: data.id }, { status: 201 });
+    const creata = typeof (data as { created_at?: unknown }).created_at === 'string'
+      ? new Date((data as { created_at: string }).created_at)
+      : new Date();
+    const conferma: ConfermaRicevuta = corpo.emailContatto
+      ? await mandaRicevuta(
+        { id: data.id, tipo: corpo.tipo, motivo: corpo.motivo, ricevutaIl: Number.isNaN(creata.getTime()) ? new Date() : creata },
+        corpo.emailContatto,
+      )
+      : 'nessun_recapito';
+
+    return NextResponse.json({ ok: true, id: data.id, conferma }, { status: 201 });
   }
 }
 
