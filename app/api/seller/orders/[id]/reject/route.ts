@@ -76,6 +76,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   if (!esito.ok) {
     // Il rifiuto NON passa se i soldi non tornano: un ordine annullato con
     // l'addebito ancora in piedi è il difetto che stiamo chiudendo.
+    // 26/11/2026 — Due richieste che leggono tutte e due l'ordine NEW (il doppio
+    // tocco sul telefono): passa la prima, la seconda trova l'ordine già
+    // annullato. È lo stesso caso del controllo qui sopra e risponde allo stesso
+    // modo, non con «Rifiuto fallito».
+    if (esito.motivo === 'GIA_ANNULLATO') return ApiErrors.conflict('Ordine già annullato');
     if (esito.motivo === 'CONTANTI_INCASSATI') {
       return ApiErrors.conflict('Ordine già incassato in contanti: scrivi all assistenza per la restituzione.');
     }

@@ -194,7 +194,7 @@ export default function AdminDailyDropsPage() {
               <li key={d.id} className="bg-white border border-cream-200 rounded-lg p-3 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-ink-900 text-sm truncate">
-                    {new Date(d.drop_date).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'long' })} · {d.product?.name ?? '—'}
+                    {new Date(d.drop_date).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {d.product?.name ?? '—'}
                   </p>
                   <p className="text-xs text-ink-500">
                     {formatPrice(Number(d.drop_price))} (-{d.discount_percent}%){d.headline ? ` · ${d.headline}` : ''}

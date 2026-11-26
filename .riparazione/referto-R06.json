@@ -1,0 +1,381 @@
+{
+  "sessione": "R06",
+  "aggiornato": "2026-11-26 15:05",
+  "finita": true,
+  "testa": "5fb77f5579429153023749d9b0c7e79222282204",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "5fb77f5579429153023749d9b0c7e79222282204",
+    "nota": "typecheck, lint (0 errori, 122 avvisi già presenti) e 2155 file di prove (13269 casi) verdi. Il primo verify su f0619eccd5e73e705a3b813e3627958c3016d0ae era rosso per una prova esistente rotta dalla prima correzione di R06-004, rifatta in 5fb77f5579429153023749d9b0c7e79222282204."
+  },
+  "voci": [
+    {
+      "id": "R06-001",
+      "chiave": "qa-flussi|il fattorino in bici non può essere approvato senza patente di guida e polizza rc",
+      "esito": "gia_riparato_prima",
+      "prova": "lib/admin/regole-approvazione.ts:21 rider_vehicle_type in COLONNE_PER_APPROVARE; :57 RC_OBBLIGATORIA_PER_LA_BICI=false (interruttore); :64-71 documentiObbligatoriDelFattorino: BIKE/EBIKE chiedono solo documento e selfie, mezzo null o a motore tutti; moderate/route.ts:202 e :315, kyc/start-check/route.ts:105 e rider/onboarding/page.tsx:280-284 usano la stessa regola. Guardia: tests/unit/riparazione-r03-fattorino-in-bici-si-approva.test.ts e il-fattorino-in-bici-avvia-la-verifica.test.ts verdi (43 casi) sulla base ed12ed8ec8190e1132b690f6e034c30f0a5d55ba.",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-fattorino-in-bici-si-approva.test.ts tests/unit/il-fattorino-in-bici-avvia-la-verifica.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "file_toccati": [],
+      "nota": "Il comando di prova scritto nella voce esce ancora con 1 perché il suo profilo non dichiara il mezzo: senza mezzo la regola chiede tutti i documenti (via prudente voluta). Con rider_vehicle_type BIKE esce con 0.",
+      "verificato_da": "capo R06: letto lib/admin/regole-approvazione.ts:19-72 e rilanciate le due prove guardia (verdi)"
+    },
+    {
+      "id": "R06-002",
+      "chiave": "qa-flussi|se il fattorino sparisce senza dichiarare i contanti, l'ordine resta in consegna per sempre e l'amministratore non può chiuderlo",
+      "esito": "parziale",
+      "commit": "85a465c7265fdad635f47a1809fca9aef25eeea2",
+      "file_toccati": [
+        "lib/cassa/registra-incasso.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-chiudi-consegna.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-chiudi-consegna.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 85a465c7265fdad635f47a1809fca9aef25eeea2^ --file lib/cassa/registra-incasso.ts --prove tests/unit/riparazione-r06-chiudi-consegna.test.ts --json",
+        "nota": "la strada è nuova (chiudiConsegnaDaAmministratore), quindi la prova ne usa il nome; fatte a mano 6 mutazioni del comportamento (client di servizio al posto della sessione, quadratura tolta, giorno UTC invece di Piacenza, paletto del motivo tolto, 503 tolto, esito non verificato): tutte rosse"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La funzione del database admin_chiudi_consegna (migrazione 360, già nel deposito) non era chiamata da nessuna parte. In registra-incasso.ts ora chiudiConsegnaDaAmministratore la chiama con la sessione dell amministratore, traduce ogni rifiuto in 400/403/404/409 con un messaggio che dice cosa fare, dà un 503 chiaro se la 360 non è applicata e riallinea la quadratura sul giorno di Piacenza della chiusura.",
+      "cosa_resta": "La rotta e i pulsanti dell amministratore (file altrui, sotto) e l applicazione della migrazione 360 sul database (la decide Nicola): finché non ci sono, l ordine resta fermo come prima. PICKED_UP resta escluso per scelta del collaudo del 12/11 (la 360 lo rifiuta e dice «si annulla»), mentre il fix della voce lo chiedeva: lì resta solo l annullo.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/admin/chiudi-consegna/route.ts (nuovo)",
+          "modifica": "POST con withAdminAuthRateLimit({name:\"admin-chiudi-consegna\", max:30, windowMs:60*60_000}); corpo zod {orderId: uuid, incassatoCents: intero >=0 o null, motivo: trim min(MOTIVO_MINIMO_CHIUSURA) max(300)} letto con jsonRichiesta(req, TETTO_JSON); esito = await chiudiConsegnaDaAmministratore(supaUtente, getAdminSupabase(), {ordineId, incassatoCents, motivo}); se !esito.ok risponde apiError(esito.stato, esito.messaggio, esito.motivo), altrimenti 200 {ok:true, incassoRegistrato}. Due correzioni dal collaudo: un corpo troppo grande deve rispondere 413 e non 400 (regola di tests/unit/il-corpo-troppo-grande-non-e-un-dato-non-valido.test.ts); incassatoCents con un massimo nello schema zod (per esempio .max(10_000_000)), se no un intero oltre 2^31 dà 500."
+        },
+        {
+          "file": "app/admin/cod-remittance/page.tsx",
+          "modifica": "Seconda lettura: ordini con payment_method=cod, delivery_status=OUT_FOR_DELIVERY, rider_id non null, pickup_in_store=false, picked_up_at più vecchio di 3 ore; sezione «Consegne in contanti ferme in strada» con, per riga, un modulo «Chiudi la consegna» (contanti precompilati con contanteDaRimettereCents(ordine), motivo di almeno 10 caratteri) che fa POST /api/admin/chiudi-consegna {orderId, incassatoCents, motivo} e poi invalida queryKeys.admin.codRemittances. Non filtrare su cash_confirmed_at: anche un ordine in strada con i contanti già dichiarati ma mai chiuso va elencato (la 360 lo chiude). Precompilare con contanteDaRimettereCents nasconde l ammanco del fattorino sparito: dipende dalla risposta di Nicola alla domanda sull importo."
+        },
+        {
+          "file": "app/admin/orders/[id]/page.tsx",
+          "modifica": "Per un ordine cod in OUT_FOR_DELIVERY con fattorino e non ritiro in negozio, accanto ad «Annulla», pulsante «Chiudi la consegna» con gli stessi due campi, che chiama la stessa rotta e rilegge l ordine."
+        }
+      ],
+      "nota": "Nessuna migrazione nuova: va applicata la 360, già nel deposito. Un ordine chiuso così entra nella rimessa del giorno della chiusura (delivered_at = adesso), coerente con la 360. Prove esistenti che importano registra-incasso.ts verdi.",
+      "verificato_da": "smentita (modello grande, worktree separato): prova 17/17 e 13 prove vicine verdi (115); 11 mutazioni su 13 rosse sul comportamento; restano verdi «null diventa 0» e «negativo diventa positivo» in lib/cassa/registra-incasso.ts:328 perché nessuna prova manda un importo null o negativo alla funzione TS (la 360 sul Postgres locale li rifiuta comunque con INCASSO_MANCANTE). Sul Postgres locale la 360 combacia con la TS (nomi dei parametri e 9 motivi di rifiuto) e risponde NOT_ADMIN al client di servizio. La rotta proposta, provata in una copia usa-e-getta, chiude davvero l ordine. Verdetto: parziale, cosa_resta vero."
+    },
+    {
+      "id": "R06-003",
+      "chiave": "microcopy|in registrazione e nel cambio password del profilo il rifiuto di una password debole o rubata non si traduce o si perde",
+      "esito": "riparato",
+      "commit": "bb5c05098d56f68998ffeb95cc761dc8b5cbf3e5",
+      "file_toccati": [
+        "app/api/account/cambia-password/route.ts",
+        "app/api/auth/signup/route.ts",
+        "app/sign-up/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-password-debole-tradotta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-password-debole-tradotta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bb5c05098d56f68998ffeb95cc761dc8b5cbf3e5^ --file app/api/account/cambia-password/route.ts,app/api/auth/signup/route.ts,app/sign-up/page.tsx --prove tests/unit/riparazione-r06-password-debole-tradotta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Cambio password: weak_password/pwned dall'admin updateUserById ora torna 400 col testo di traduciErroreNuovaPassword (i guasti veri restano 500). La rotta e la pagina di registrazione usano lo stesso aiutante per la password rifiutata. La pagina ha una prova leggera sul sorgente; le due rotte hanno prove di comportamento.",
+      "verificato_da": "smentita (worktree separato): togliendo il riconoscimento in cambia-password 2 prove su 6 rosse; un guasto vero resta 500; same_password non viene catturato. La pagina sign-up è provata solo sul sorgente."
+    },
+    {
+      "id": "R06-004",
+      "chiave": "performance|la memoria a due secondi dei metadati usa la stessa chiave anche quando si passa un client da fuori",
+      "esito": "riparato",
+      "commit": "5fb77f5579429153023749d9b0c7e79222282204",
+      "file_toccati": [
+        "lib/supabase/lettura-per-metadati.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-metadati-client-da-fuori.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-metadati-client-da-fuori.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bb5c05098d56f68998ffeb95cc761dc8b5cbf3e5 --file lib/supabase/lettura-per-metadati.ts --prove tests/unit/riparazione-r06-metadati-client-da-fuori.test.ts --json",
+        "nota": "base = il genitore del primo commit della voce (d01521d73c864c412a0ff98822a83ac3f371babb^), cioè il file col difetto originale"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Un client passato da fuori ha la sua memoria a due secondi (WeakMap per client), separata da quella condivisa e da quella degli altri client; la memoria condivisa resta solo per le letture senza client. Nessuna riga letta con i permessi di una sessione arriva a chi legge senza client o con un altro client; lo stesso client che chiede due volte legge una volta sola.",
+      "verificato_da": "smentita (sonnet, worktree separato) della correzione attuale 5fb77f5579429153023749d9b0c7e79222282204: 13/13 verdi sulle due prove; tolta la riga if (!client) return memoria, 3 casi su 5 rossi sul comportamento; 21 file di prove che importano lettura-per-metadati o metadati-vetrina verdi (243); tsc pulito. In produzione nessuno passa un client: il cambiamento si vede solo in prove e anteprime. Il ritentativo dopo una lettura fallita con un client è controllato solo leggendo il codice. Prima correzione già vista dalla smentita del lotto 4.",
+      "nota": "Due commit sulla voce: d01521d73c864c412a0ff98822a83ac3f371babb spegneva la memoria per ogni client da fuori e rompeva la prova esistente tests/unit/le-pagine-dei-negozi-non-spariscono-in-silenzio.test.ts («arriva al database una volta sola», visto dal verify); 5fb77f5579429153023749d9b0c7e79222282204 la sostituisce con una memoria per client, e quella prova torna verde senza toccarla."
+    },
+    {
+      "id": "R06-005",
+      "chiave": "privacy-legale|con il fornitore onfido acceso, ogni chiamata (fino a 5 l'ora) crea da onfido una nuova scheda con nome, email e data di nascita, ma senza caricare i documenti. restano schede orfane con dati personali, e alla cancellazione dell'account nessuno le toglie",
+      "esito": "non_fatto",
+      "nota": "Non fatta: la sessione ha raggiunto l 80% del limite di spesa (21 $ su 25) prima del suo lotto (regola 4 della campagna). Il file è lib/kyc/providers.ts (OnfidoProvider.startCheck, righe 41-85, chiamato da start-check riga 118): riusare la scheda Onfido già creata invece di crearne una a ogni chiamata, e toglierla alla cancellazione dell account."
+    },
+    {
+      "id": "R06-006",
+      "chiave": "privacy-legale|l'informativa non dice che la partita iva del venditore viene controllata nel registro europeo vies della commissione europea",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "serve_file_altrui": [
+        {
+          "file": "app/privacy/page.tsx",
+          "modifica": "Nella sezione «4. Destinatari dei dati» (LegalSection id=\"destinatari\"), nella lista dei fornitori, dopo la voce OpenStreetMap Foundation: <li><strong>Commissione europea</strong> (Unione europea) — sistema VIES: la partita IVA di chi si registra come Venditore viene inviata al servizio VIES della Commissione europea per verificarne la validità; per una ditta individuale è un dato personale. Il servizio risponde con la validità e, se disponibile, la ragione sociale registrata.</li>. La Commissione non è un Responsabile art. 28 nominato da MyCity: se si preferisce, la riga va in un paragrafo a parte prima dell'elenco dei Responsabili (scelta di forma, non di contenuto)."
+        }
+      ],
+      "cosa_ho_fatto": "Verificato che viesVatLookup (lib/kyc/providers.ts:205) manda la partita IVA a ec.europa.eu e che la sezione 4 dell'informativa non cita VIES. Nessuna modifica a providers.ts: non c'è un comportamento da cambiare.",
+      "nota": "Lo stesso testo va anche in ogni elenco dei sub-fornitori o registro dei trattamenti fuori da app/privacy/page.tsx, se esiste."
+    },
+    {
+      "id": "R06-007",
+      "chiave": "qa-flussi|nella pagina admin dei drop l'etichetta del giorno si sposta indietro per chi è a ovest di greenwich",
+      "esito": "riparato",
+      "commit": "b3e419a0c453266610eb3fbd91e50b6b04957c79",
+      "file_toccati": [
+        "app/admin/daily-drops/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-giorno-del-drop.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-giorno-del-drop.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b3e419a0c453266610eb3fbd91e50b6b04957c79^ --file app/admin/daily-drops/page.tsx --prove tests/unit/riparazione-r06-giorno-del-drop.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Aggiunto timeZone: 'UTC' al toLocaleDateString della data del drop. La prova disegna la pagina con TZ=America/New_York e controlla che il 17 resti 17.",
+      "verificato_da": "smentita (worktree separato): 17/11/2026 giusto con TZ Tokyo, Kiritimati, Pago_Pago e New York, giorno della settimana giusto; tolto timeZone la prova diventa rossa; nessun altro rendering di drop_date."
+    },
+    {
+      "id": "R06-008",
+      "chiave": "qa-flussi|il salvataggio di prodotto e varianti non è una scrittura sola: resta una finestra di millisecondi",
+      "esito": "non_fatto",
+      "nota": "Non fatta: la sessione ha raggiunto l 80% del limite di spesa (21 $ su 25) prima del suo lotto (regola 4 della campagna). Per chiuderla serve una funzione del database che scriva prodotto e varianti in una transazione sola (migrazione nuova nella fascia 920-929) e la rotta app/api/admin/products/route.ts:200-238 che la chiami."
+    },
+    {
+      "id": "R06-009",
+      "chiave": "qa-flussi|il collegamento del negozio a stripe e il bonifico manuale non hanno nessuna prova",
+      "esito": "parziale",
+      "commit": "f0619eccd5e73e705a3b813e3627958c3016d0ae",
+      "file_toccati": [
+        "tests/unit/riparazione-r06-stripe-connect-rotte.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-stripe-connect-rotte.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-stripe-connect-rotte.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_applicabile",
+        "uscita": null,
+        "comando": "",
+        "nota": "la voce chiedeva solo prove: nessun file corretto da togliere"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "32 prove con Stripe e database finti e gli involucri di autenticazione veri: 401 senza sessione; 403 per ruolo sbagliato, negozio non approvato, KYC non approvato o nessun conto; account link creato (venditore e fattorino); refresh-status che scrive stripe_payouts_enabled (true e false); 503 se nessuna riga; payout con x-internal-secret e mappatura di tutti i codici d'errore. Nessuna rotta modificata.",
+      "nota": "Payout senza x-internal-secret risponde 403 (withInternalAuth, lib/api/middleware.ts:813), non 401 come scrive la voce: la prova fissa il 403 attuale, e il 503 se INTERNAL_API_SECRET manca.",
+      "cosa_resta": "La prova non dimostra il controllo di ruolo su /api/stripe/connect/login: sostituendo withSellerAuthRateLimit con withAuthRateLimit le 32 prove restano verdi, perché il 403 all acquirente (tests/unit/riparazione-r06-stripe-connect-rotte.test.ts:222) nasce dal stripe_account_id mancante, non dal ruolo. Va dato all acquirente finto un stripe_account_id, così il 403 dipende solo dal ruolo.",
+      "verificato_da": "smentita (worktree separato): Stripe finto (mock di @/lib/stripe/client, nessuna rete), nessuna rotta toccata; payout e onboarding diventano rossi togliendo il controllo; login no (vedi cosa_resta)."
+    },
+    {
+      "id": "R06-010",
+      "chiave": "qa-flussi|il reso vale sempre per tutto l'ordine: il cliente non può dire quale articolo, e al negozio si propone di rimborsare tutto e subito",
+      "esito": "parziale",
+      "commit": "8fc29327bf324b46d84b837faf70a688d0ec79f0",
+      "file_toccati": [
+        "app/orders/[id]/return/page.tsx",
+        "components/seller/ReturnRequestCard.tsx",
+        "app/seller/orders/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-reso-modulo-articolo.test.tsx",
+        "tests/unit/riparazione-r06-reso-scheda-negozio.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-reso-modulo-articolo.test.tsx tests/unit/riparazione-r06-reso-scheda-negozio.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8fc29327bf324b46d84b837faf70a688d0ec79f0^ --file \"app/orders/[id]/return/page.tsx,components/seller/ReturnRequestCard.tsx,app/seller/orders/[id]/page.tsx\" --prove \"tests/unit/riparazione-r06-reso-modulo-articolo.test.tsx,tests/unit/riparazione-r06-reso-scheda-negozio.test.tsx\" --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il modulo del cliente, con più righe, fa scegliere l'articolo (o «Tutto l'ordine», senza scelta già fatta) e manda orderItemId; la scheda del negozio mostra «Cosa torna» e propone il prezzo della riga (con la sua parte di sconto) invece del totale con la spedizione; il rimborso all'approvazione parte solo con la spunta esplicita «Rimborsa subito». La rotta returns/create non è cambiata (già validava order_item_id).",
+      "cosa_resta": "Quantità parziali di una riga e più articoli nello stesso reso: returns ha solo order_item_id singolo e nessuna colonna quantità, e l'indice unico della migrazione 119 tiene un solo reso aperto per ordine. Serve una migrazione (returns.quantity o una tabella return_items) e poi modulo, scheda e rotte decide/avanza. Il campo importo resta precompilato con l'importo proposto perché una prova comune (minori-s06-reso-misto) lo chiede; il rimborso immediato non dipende più da quel valore.",
+      "verificato_da": "smentita (modello grande, worktree separato): parziale confermato, cosa_resta vero; importo proposto giusto con sconto e con ordine di una riga; «Rimborsa subito» non spuntato; la rotta vera returns/create accetta orderItemId dal modulo (201). Togliendo ciascun file diventano rosse 3, 6 e 1 prove; 57 file vicini verdi. Buco di prova: nessuna prova copre il passaggio dello sconto dalla pagina del negozio alla scheda (app/seller/orders/[id]/page.tsx:519)."
+    },
+    {
+      "id": "R06-011",
+      "chiave": "qa-flussi|due ordini dello stesso carrello possono finire a due fattorini diversi, e il secondo fa un viaggio intero per 1 euro",
+      "esito": "non_fatto",
+      "nota": "Non fatta: la sessione ha raggiunto l 80% del limite di spesa (21 $ su 25) prima del suo lotto (regola 4 della campagna). Per chiuderla serve una migrazione nuova (fascia 920-929) perché prendi_ordine assegni insieme gli ordini pronti dello stesso carrello (cod_checkout o transfer_group), più la bacheca di app/rider/page.tsx raggruppata per carrello."
+    },
+    {
+      "id": "R06-012",
+      "chiave": "qa-flussi|un admin che pubblica una storia dall'area negozio lascia una foto orfana nel deposito: dopo la 404 l'inserimento gli è rifiutato",
+      "esito": "riparato",
+      "commit": "9aa9f56ac42f14f77bbb588395142409cd7f9df7",
+      "file_toccati": [
+        "app/seller/layout.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-admin-senza-storie.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-admin-senza-storie.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9aa9f56ac42f14f77bbb588395142409cd7f9df7^ --file app/seller/layout.tsx --prove tests/unit/riparazione-r06-admin-senza-storie.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Per un admin sul percorso /seller/stories il layout dell'area negozio mostra una spiegazione (le storie sono dei negozi, torna all'area admin) invece della pagina: la foto non si carica più prima di un inserimento che la migrazione 404 rifiuta. Le altre pagine restano aperte all'admin.",
+      "verificato_da": "smentita (worktree separato): con la condizione spenta 1 prova su 2 rossa; la regex ^/seller/stories(/|$) copre i sottopercorsi e non /seller/storiesX; la condizione chiede isAdmin, quindi il venditore non è toccato (nessuna prova esplicita col venditore); l admin su /seller/products entra ancora."
+    },
+    {
+      "id": "R06-013",
+      "chiave": "qa-flussi|col doppio clic su «rifiuta ordine» compare anche un avviso rosso di errore, e l'aiuto dice che il motivo è obbligatorio e promette un rimborso che coi contanti non esiste",
+      "esito": "parziale",
+      "commit": "a9adb1a6f13e282cd8b331d2e2e88392e36df35a",
+      "file_toccati": [
+        "app/seller/orders/[id]/page.tsx",
+        "app/api/seller/orders/[id]/reject/route.ts",
+        "app/seller/help/domande.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-rifiuto-doppio-tocco.test.tsx",
+        "tests/unit/riparazione-r06-rifiuto-una-cosa-sola.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-rifiuto-doppio-tocco.test.tsx tests/unit/riparazione-r06-rifiuto-una-cosa-sola.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a9adb1a6f13e282cd8b331d2e2e88392e36df35a^ --file \"app/seller/orders/[id]/page.tsx,app/api/seller/orders/[id]/reject/route.ts,app/seller/help/domande.ts\" --prove \"tests/unit/riparazione-r06-rifiuto-doppio-tocco.test.tsx,tests/unit/riparazione-r06-rifiuto-una-cosa-sola.test.ts\" --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "RejectDialog ha un freno sincrono useRef (si riapre a fine richiesta o alla riapertura); la rotta traduce GIA_ANNULLATO in 409 «Ordine già annullato»; la pagina tratta quel 409 come esito raggiunto (niente rosso, avvisi con lo stesso id); in domande.ts il motivo è facoltativo (la frase su contanti e carta era già giusta e resta).",
+      "cosa_resta": "1) Un 409 «già annullato» SENZA un successo prima oggi chiude il riquadro con un avviso neutro (app/seller/orders/[id]/page.tsx:312 e :323-324): la voce chiedeva quel trattamento solo dopo un successo, altrimenti deve restare un errore visibile. 2) In app/seller/help/domande.ts restano le altre due frasi false della voce: :55 («Come segnalo l ordine pronto?» propone il cliente che passa in negozio, ma il ritiro in negozio al lancio è spento) e :77-78 («Quando ricevo i soldi» rimanda al prossimo importo previsto in Guadagni, che la pagina non mostra).",
+      "verificato_da": "smentita (modello grande, worktree separato): doppio clic chiuso davvero (con react-query vero due click nello stesso tick fanno una fetch sola, dopo un 500 si riprova); rotta 409 e aiuto col motivo facoltativo, togliendo ciascun file la sua prova diventa rossa. Declassata a parziale per i due punti di cosa_resta."
+    },
+    {
+      "id": "R06-014",
+      "chiave": "qa-flussi|nelle domeniche del cambio d'ora la quadratura della cassa del fattorino sbaglia la giornata: in autunno le consegne dalle 23 a mezzanotte non entrano in nessun conto",
+      "esito": "riparato",
+      "commit": "ca77ab778cc9b3f5ab06eae77d62fd51e47adb88",
+      "file_toccati": [
+        "lib/cassa/quadratura.ts",
+        "app/api/cron/riquadra-casse/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-cassa-cambio-ora.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-cassa-cambio-ora.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ca77ab778cc9b3f5ab06eae77d62fd51e47adb88^ --file lib/cassa/quadratura.ts,app/api/cron/riquadra-casse/route.ts --prove tests/unit/riparazione-r06-cassa-cambio-ora.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "aggiornaQuadratura chiude la giornata alla mezzanotte del giorno di calendario dopo (giornoDopo), non a inizio+24h; riquadra-casse calcola «ieri» con ultimiGiorniPiacenza(2) e legge dalla mezzanotte di ieri. operational-alerts non cambiato: il suo yesterday (giorno UTC di adesso-24h, usato con gte) è sempre uguale o precedente a ieri di Piacenza, quindi non perde giornate. Prove con date esplicite 25/10/2026 e 28/3/2027 e orologio finto sul giro.",
+      "verificato_da": "smentita (modello grande, worktree separato): col codice vecchio 2 prove rosse sul comportamento (0 invece di 1500 in autunno, 3000 invece di 1500 in primavera; domenica non rifatta); giornate 25 h il 25/10/2026, 23 h il 28/3/2027, 24 h il 26/11/2026, ogni giornata 2026-2028 attaccata alla successiva; ieri alle 00:30 giusto; operational-alerts controllato ogni 15 minuti 2026-2028, non perde giornate; 26 file di prove vicine verdi."
+    },
+    {
+      "id": "R06-015",
+      "chiave": "qa-flussi|i 14 giorni per rispedire la merce del reso si contano ancora a blocchi di 24 ore",
+      "esito": "riparato",
+      "commit": "fd4d13c4ea493bd0c976903ca4a15ff05fb14426",
+      "file_toccati": [
+        "lib/rimborsi/regole-del-rimborso.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-rispedire-a-giorni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-rispedire-a-giorni.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fd4d13c4ea493bd0c976903ca4a15ff05fb14426^ --file lib/rimborsi/regole-del-rimborso.ts --prove tests/unit/riparazione-r06-rispedire-a-giorni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "percheIlRecessoNonSiChiude usa recessoAperto(inizio, adesso) di lib/ordini/termine-del-recesso.ts (riusato, non modificato) al posto di adesso-inizio > 14x24h: i 14 giorni finiscono a fine giornata a Piacenza. Prova con orologio finto dall'approvazione del 20/10/2026 al 3-4/11/2026, a cavallo del cambio d'ora.",
+      "nota": "Riusare recessoAperto porta anche lo slittamento al primo giorno lavorativo se il termine cade di sabato, domenica o festivo (Reg. 1182/71): coerente col termine del recesso, ma è un cambiamento in più che la voce non nominava.",
+      "verificato_da": "smentita (modello grande, worktree separato): togliendo la correzione 3 prove su 4 rosse; approvato sabato 21/11/2026, il quattordicesimo giorno slitta a lunedì 7/12 come ultimoGiornoDelRecesso già usato da returns/create; 31 file di prove vicine verdi."
+    },
+    {
+      "id": "R06-016",
+      "chiave": "qa-flussi|il ritiro in negozio è ancora spento, mentre nicola ha deciso che al lancio è acceso e gratis per il cliente",
+      "esito": "serve_file_altrui",
+      "nota": "Il ritiro non si può accendere solo dal mio file senza aprire un buco nei soldi: nessun codice conta il 10% di MyCity sugli ordini CASH_IN_STORE. Prima va chiuso il #30 (il codice di ritiro) e va controllato che le migrazioni 124 e 179 siano applicate in produzione (cosa da fare fuori dal codice, Nicola). Dopo: RITIRO_IN_NEGOZIO_ATTIVO = true e commento riscritto in lib/ritiro-in-negozio.ts:19.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/guadagni/negozio.ts",
+          "modifica": "Alle righe 68-71 oggi gli ordini CASH_IN_STORE sono solo esclusi: calcolare per negozio e per settimana la commissione MyCity (10%) su quegli ordini e toglierla dal bonifico del lunedì; il resto va in fattura (migrations/124_radiografia_21_agosto.sql:131-158 dice che resta da regolare)."
+        },
+        {
+          "file": "app/admin/delivery/page.tsx",
+          "modifica": "Righe 139-140: sostituire «Messo da parte: non se n è ancora parlato coi negozi» con lo stato vero secondo la regola ritiro.in-negozio dell 1/11: acceso dal lancio, gratis per il cliente, pagato con carta o in contanti al banco, con MyCity che prende comunque il 10%."
+        },
+        {
+          "file": "app/api/orders/cod/route.ts e app/api/stripe/checkout/route.ts",
+          "modifica": "Controllare che :309 e :133 spengano il ritiro solo leggendo RITIRO_IN_NEGOZIO_ATTIVO, così che all accensione si accenda anche lì."
+        }
+      ]
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "sicurezza",
+      "severita": "grave",
+      "file": "(nel referto privato)"
+    },
+    {
+      "titolo": "Nell elenco DOCS dell iscrizione del fattorino patente e polizza hanno ancora required: true, ma nessuno lo legge: dato morto che inganna",
+      "dimensione": "qualita-codice",
+      "severita": "minore",
+      "file": "app/rider/onboarding/page.tsx:34-35",
+      "descrizione": "L asterisco viene da obbligatorio() (riga 382); il campo required di DOCS non lo usa nessuno."
+    },
+    {
+      "titolo": "Il rifiuto dell ordine può dire «già annullato» quando lo stato è solo cambiato fra lettura e scrittura",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "lib/ordini/annulla.ts:401",
+      "descrizione": "GIA_ANNULLATO esce anche se lo stato è passato da NEW ad ACCEPTED fra lettura e scrittura; la rotta del rifiuto ora lo traduce in «Ordine già annullato». Caso raro; si corregge rileggendo lo stato."
+    },
+    {
+      "titolo": "Nel modulo del reso il controllo del ripensamento guarda tutto l ordine, non l articolo scelto",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/orders/[id]/return/page.tsx:96-112",
+      "descrizione": "Se il cliente sceglie un articolo escluso dal recesso, il rifiuto arriva solo all invio (la rotta controlla la riga)."
+    }
+  ],
+  "domande_per_nicola": [
+    "R06-002: se il fattorino sparisce senza dichiarare i contanti, l amministratore registra 0 (ammanco a carico del fattorino nella quadratura) o il dovuto? E dopo quante ore un ordine in strada va elencato come fermo (proposto: 3)?"
+  ],
+  "conto": {
+    "agenti": 8,
+    "nota": "8 subagenti su 8: 4 riparatori (lotti 1, 2 e 3a sul modello grande, lotto 4 su sonnet) e 4 per la smentita in worktree separati (R06-002 e lotto 3a sul modello grande; lotto 4 e la correzione rifatta di R06-004 su sonnet). Il lotto 3 è stato diviso in due metà da 4 voci; la seconda (005, 008, 011, 016) non è partita per il limite di spesa. Costo letto con get_session prima della consegna: 22,91 $.",
+    "subagenti": 8
+  },
+  "costo_usd": 22.91
+}

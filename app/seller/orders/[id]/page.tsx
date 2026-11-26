@@ -125,7 +125,19 @@ function RejectDialog({
   onConfirm: (reason: string) => void;
 }) {
   const [reason, setReason] = useState('');
-  useEffect(() => { if (open) setReason(''); }, [open]);
+  // 26/11/2026 — IL FRENO DEL DOPPIO TOCCO È SINCRONO.
+  // `pending` arriva al pulsante dopo un giro di disegno: col doppio tocco sul
+  // telefono il secondo clic partiva prima, e le richieste erano due. Il
+  // riferimento si accende al primo clic e si spegne quando la richiesta finisce
+  // (se è caduta, si può riprovare) o quando il riquadro si riapre.
+  const partitoRef = useRef(false);
+  useEffect(() => { if (open) { setReason(''); partitoRef.current = false; } }, [open]);
+  useEffect(() => { if (!pending) partitoRef.current = false; }, [pending]);
+  const conferma = () => {
+    if (partitoRef.current || pending) return;
+    partitoRef.current = true;
+    onConfirm(reason.trim());
+  };
   // 31/10/2026 — Si dichiara modale, quindi si comporta da modale: Esc, Tab che resta dentro e
   // fuoco che torna su «Rifiuta» alla chiusura, dallo stesso hook degli altri pannelli (regola in
   // useBottomSheetA11y). Il pulsante di partenza si prende prima che il fuoco entri nel riquadro.
@@ -173,7 +185,7 @@ function RejectDialog({
         </div>
         <div className="grid grid-cols-2 gap-3 px-6 pb-6 pt-4">
           <Button variant="secondary" onClick={onCancel} disabled={pending}>Annulla</Button>
-          <Button variant="danger" icon={X} loading={pending} onClick={() => onConfirm(reason.trim())}>
+          <Button variant="danger" icon={X} loading={pending} onClick={conferma}>
             Rifiuta ordine
           </Button>
         </div>
@@ -283,21 +295,34 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   // dov'era. Il rimborso e' una chiamata a Stripe e le chiavi stanno sul
   // server, quindi dal database non si poteva fare. Ora la rotta fa la stessa
   // cosa dell'annullamento del cliente: rimborsa, poi annulla.
+  //
+  // 26/11/2026 — Un 409 «già annullato» non è un errore: l'ordine è già dove il
+  // negoziante lo voleva (di solito l'ha annullato la prima delle due richieste
+  // di un doppio tocco). Niente avviso rosso; dopo un rifiuto riuscito non si
+  // aggiunge niente, e i due avvisi hanno lo stesso id, così ne resta uno solo.
+  const rifiutoRiuscitoRef = useRef(false);
   const reject = useMutation({
-    mutationFn: async (reason?: string) => {
+    mutationFn: async (reason?: string): Promise<'rifiutato' | 'gia_annullato'> => {
       const res = await fetch(`/api/seller/orders/${id}/reject`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ reason: reason ?? null }),
       });
       const r = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: { message?: string } };
+      if (res.status === 409 && /già annullato/i.test(r.error?.message ?? '')) return 'gia_annullato';
       if (!res.ok || !r.ok) throw new Error(r.error?.message ?? 'Impossibile rifiutare');
+      return 'rifiutato';
     },
-    onSuccess: () => {
+    onSuccess: (esito) => {
       setRejectOpen(false);
       qc.invalidateQueries({ queryKey: queryKeys.seller.order(id) });
       qc.invalidateQueries({ queryKey: queryKeys.seller.orders });
-      toast.success('Ordine rifiutato');
+      if (esito === 'rifiutato') {
+        rifiutoRiuscitoRef.current = true;
+        toast.success('Ordine rifiutato', { id: `rifiuto-${id}` });
+      } else if (!rifiutoRiuscitoRef.current) {
+        toast('Ordine già annullato', { id: `rifiuto-${id}` });
+      }
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -488,6 +513,10 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         <ReturnRequestCard
           ret={returnRow as unknown as ReturnRow}
           orderTotal={Number(order.total_price)}
+          // 26/11/2026 — Le righe dicono quale articolo torna e quanto vale: senza, la scheda
+          // proponeva il totale dell'ordine anche per un articolo solo.
+          righe={order.order_items}
+          scontoCents={Math.round(Number(order.discount_amount ?? 0) * 100)}
           onDecided={() => {
             qc.invalidateQueries({ queryKey: queryKeys.seller.returnForOrder(id) });
             qc.invalidateQueries({ queryKey: queryKeys.seller.order(id) });

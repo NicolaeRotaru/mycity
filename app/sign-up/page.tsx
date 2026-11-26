@@ -13,6 +13,7 @@ import { Input, PasswordInput, Checkbox } from '@/components/ui/Field';
 import { Button } from '@/components/ui/Button';
 import { AuthShell, AuthAlternatives } from '@/components/ui/AuthShell';
 import { friendlyError } from '@/lib/errors';
+import { traduciErroreNuovaPassword } from '@/lib/auth/errori-nuova-password';
 import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 import { ritornoDopoLaConferma } from '@/lib/analytics/porta-di-ingresso';
 import { memoriaDellaScheda, percorsoVerificaEmail, ricordaEmailDaConfermare } from '@/lib/auth/conferma-email';
@@ -201,7 +202,11 @@ function SignUpInner() {
       router.push(percorsoVerificaEmail(returnTo, { daRegistrazione: true }));
     } catch (error) {
       rigeneraGettone();
-      const msg = friendlyError(error);
+      // 26/11/2026 (R06-003) — Per la password debole o rubata si leggono i motivi
+      // (`reasons`) che manda Supabase, come in /reset-password: il messaggio grezzo è in inglese.
+      const e = error as { code?: unknown; name?: unknown; reasons?: unknown } | null;
+      const passwordRifiutata = e?.code === 'weak_password' || e?.name === 'AuthWeakPasswordError' || Array.isArray(e?.reasons);
+      const msg = passwordRifiutata ? traduciErroreNuovaPassword(error as never) : friendlyError(error);
       setErroreIscrizione(msg);
       toast.error(msg);
     } finally {
