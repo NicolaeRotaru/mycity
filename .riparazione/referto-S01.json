@@ -1,0 +1,168 @@
+{
+  "sessione": "S01",
+  "aggiornato": "2026-11-26 16:45",
+  "finita": true,
+  "testa": "391cba45514ef948bab4ffbd592062b83ee1888c",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "391cba45514ef948bab4ffbd592062b83ee1888c",
+    "nota": "typecheck ok, lint 0 errori (122 avvisi già presenti), vitest 2144/2144 file. Suite SQL intera (tests/sql/harness/run.sh) verde sul database ricostruito dalle 239 migrazioni. valida-referto non lanciato: per questa campagna riservata non c è una cartella in ad-mycity da passare a --cartella."
+  },
+  "voci": [
+    {
+      "id": "S01-01",
+      "chiave": "S01-01",
+      "esito": "riparato",
+      "commit": "d140c7a8",
+      "file_toccati": [
+        "migrations/990_prodotti_campi_di_sincronizzazione.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-s01-01.test.sql"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d140c7a8^ --file migrations/990_prodotti_campi_di_sincronizzazione.sql --prove tests/sql/rls/riparazione-s01-01.test.sql --sql s01_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Controllo più stretto su alcune colonne dei prodotti, con prova SQL.",
+      "verificato_da": "subagente generico (modello grande) con mandato di smentire: prova rilanciata con e senza la migrazione, varianti, scritture legittime del server, suite SQL intera; la sua riserva è stata chiusa nello stesso commit"
+    },
+    {
+      "id": "S01-03",
+      "chiave": "S01-03",
+      "esito": "riparato",
+      "commit": "9e56560a",
+      "file_toccati": [
+        "migrations/991_fattorino_cambio_mezzo.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-s01-03.test.sql"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9e56560a^ --file migrations/991_fattorino_cambio_mezzo.sql --prove tests/sql/rls/riparazione-s01-03.test.sql --sql s01_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Controllo più stretto su alcuni campi del profilo del fattorino, con prova SQL; le prove esistenti restano verdi.",
+      "verificato_da": "subagente generico (modello grande) con mandato di smentire, sulla prima versione: nessuna smentita, riserve sugli effetti accanto. Quelle riserve e le precisazioni della regista hanno portato alla versione finale, provata con la prova SQL (12 controlli), con la suite SQL intera e con la prova rimessa; la versione finale non è stata rivista da un secondo subagente"
+    },
+    {
+      "id": "S01-02",
+      "chiave": "S01-02",
+      "esito": "riparato",
+      "commit": "61e863a3",
+      "file_toccati": [
+        "lib/safe-redirect.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-s01-02.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-s01-02.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 61e863a3^ --file lib/safe-redirect.ts --prove tests/unit/riparazione-s01-02.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Controllo più stretto in un aiutante dei percorsi interni, con prova unitaria.",
+      "verificato_da": "subagente generico (modello grande) con mandato di smentire: ricerca automatica su centinaia di migliaia di input contro i consumatori reali, test dei consumatori; la sua riserva (troppo severo fuori dal percorso) è stata chiusa nello stesso commit"
+    },
+    {
+      "id": "S01-04",
+      "chiave": "S01-04",
+      "esito": "riparato",
+      "commit": "233eda3b",
+      "file_toccati": [
+        "migrations/992_profili_nome_spazi.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-s01-04.test.sql"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 233eda3b^ --file migrations/992_profili_nome_spazi.sql --prove tests/sql/rls/riparazione-s01-04.test.sql --sql s01_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Valutate le viste dello schema public una per una; una correzione sui dati del profilo, senza toccare le viste, con prova SQL. Dettagli alla regista.",
+      "verificato_da": "subagente generico (modello grande) con mandato di smentire la valutazione delle viste: valutazione confermata. La correzione nasce da una sua riserva ed è provata con la prova SQL e con la prova rimessa; non è stata rivista da un secondo subagente"
+    },
+    {
+      "id": "S01-05",
+      "chiave": "S01-05",
+      "esito": "riparato",
+      "commit": "391cba45",
+      "file_toccati": [
+        "migrations/993_risposta_avvisa_chi_ha_chiesto.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-s01-05.test.sql"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 391cba45^ --file migrations/993_risposta_avvisa_chi_ha_chiesto.sql --prove tests/sql/rls/riparazione-s01-05.test.sql --sql s01_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Una migrazione sola con due controlli più stretti sulla stessa tabella; va applicata dopo la 900 di un altro ramo. Prova SQL.",
+      "verificato_da": "senza subagente: cure indicate dalla regista; qui prova SQL con e senza la migrazione (6 controlli), prova rimessa, suite SQL intera e varianti provate a mano"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Falla di sicurezza da chiudere (prodotti): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "sicurezza",
+      "severita": "minore",
+      "file": "(nel referto privato)",
+      "riservato": true
+    },
+    {
+      "titolo": "Falla di sicurezza da chiudere (dati dei negozi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "privacy",
+      "severita": "minore",
+      "file": "(nel referto privato)",
+      "riservato": true
+    },
+    {
+      "titolo": "Falla di sicurezza da chiudere (viste pubbliche): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "sicurezza",
+      "severita": "minore",
+      "file": "(nel referto privato)",
+      "riservato": true
+    },
+    {
+      "titolo": "Il filtro dei link degli eventi è diverso da quello comune dei percorsi interni",
+      "dimensione": "coerenza",
+      "severita": "minore",
+      "file": "app/admin/events/page.tsx:25",
+      "descrizione": "Lo scrive solo lo staff; conviene usare lo stesso controllo dei percorsi interni."
+    }
+  ],
+  "domande_per_nicola": [
+    "S01-03: va bene la regola scelta per questa voce, o preferisci l altra strada? (dettagli nel messaggio alla regista)",
+    "Dopo l applicazione delle migrazioni 990-993: un controllo sul database vero (dettagli nel messaggio alla regista).",
+    "S01-05: la migrazione 993 va applicata DOPO la 900 di un altro ramo, che ridefinisce la stessa funzione."
+  ],
+  "conto": {
+    "agenti": 5,
+    "nota": "5 subagenti generici sul modello grande, solo per smentire (nessuno per riparare)"
+  }
+}
