@@ -5,7 +5,7 @@ import AnalisiAziendale from '@/components/seller/AnalisiAziendale';
 import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { AlertTriangle, Check, CheckCircle2, CreditCard, Send, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, CreditCard, Send } from 'lucide-react';
 import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
 import CosaCeNellAnalisi from '@/components/seller/CosaCeNellAnalisi';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
@@ -23,7 +23,6 @@ import {
   SCONTRINO_DI_PARTENZA,
   SERVIZI_AGENZIA,
   canonePrimoMese,
-  cosaCiGuadagni,
   frasePareggio,
   pareggio,
   type Abbonamento,
@@ -48,7 +47,8 @@ import {
  * preventivo, perché ognuna di quelle sezioni è di per sé un preventivo… fai in modo che ci sia poi
  * un bottone che manda alla pagina dove si sceglie quell'abbonamento». Questa è quella pagina, e
  * serve SOLO a scegliere e pagare:
- *  · «Cosa ci guadagni», con le frasi vere lette dalla vetrina;
+ *  · l'offerta su misura e l'analisi del business (il riquadro «Cosa ci guadagni» è stato tolto
+ *    il 27/11/2026, Nicola dal telefono: «togli questo pezzo»);
  *  · le tre fasce selezionabili, con la consigliata, il primo mese a metà e il pareggio;
  *  · condizioni e resoconto mensile;
  *  · «Paga e attiva» e «Preferisco essere richiamato»;
@@ -139,7 +139,6 @@ export default function PaginaAbbonamento() {
   const partenza = SCONTRINO_DI_PARTENZA[p.tipoAttivita];
   const testoScontrino = scontrino ?? (partenza.centesimi / 100).toFixed(2).replace('.', ',');
   const scontrinoCentesimi = Math.round(Number(testoScontrino.replace(',', '.')) * 100);
-  const guadagni = cosaCiGuadagni(p.righe, p.tipoAttivita);
 
   return (
     <div className="max-w-3xl">
@@ -191,20 +190,9 @@ export default function PaginaAbbonamento() {
         </div>
       ) : null}
 
-      <article className="rounded-2xl border border-cream-300 bg-white p-5 sm:p-8 shadow-warm">
-        {/* Cosa ci guadagni: prima di tutto, solo frasi vere lette dalla sua vetrina (24/11). */}
-        <section aria-labelledby="cosa-ci-guadagni" className="rounded-xl border-2 border-olive-300 bg-olive-50 p-4 sm:p-5">
-          <h2 id="cosa-ci-guadagni" className="inline-flex items-center gap-2 font-serif text-lg font-bold text-ink-900">
-            <TrendingUp size={18} className="text-olive-700" aria-hidden /> Cosa ci guadagni
-          </h2>
-          {guadagni.oggi.length > 0 && (
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-800">
-              {guadagni.oggi.map((frase) => <li key={frase}>{frase}</li>)}
-            </ul>
-          )}
-          <p className="mt-2 text-sm font-semibold text-ink-900">{guadagni.conNoi}</p>
-        </section>
-
+      {/* 27/11/2026 — Tolto «Cosa ci guadagni» (Nicola: «togli questo pezzo»): l'offerta su misura ora
+          apre il riquadro, e il suo margine sopra non serve più. */}
+      <article className="rounded-2xl border border-cream-300 bg-white p-5 sm:p-8 shadow-warm [&>section:first-child]:mt-0">
         {/* L'offerta su misura (24/11): le cose precise che facciamo per lui, coi suoi dati; la fascia
             scelta segna quelle che comprende. */}
         <OffertaSuMisura offerta={p.offerta} fascia={p.attivo?.fascia ?? fascia} />
