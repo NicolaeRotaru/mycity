@@ -7,6 +7,7 @@ import {
 } from '@/lib/category-attributes';
 import {
   MAX_DESCRIZIONE_PRODOTTO,
+  MAX_NOME_PRODOTTO,
   chiaveCampo,
   eCampoDichiarativo,
   prezzoAiFuoriBanda,
@@ -19,7 +20,7 @@ import {
   type DichiarazioneScartata,
 } from '@/lib/products/aiPatch';
 import { attributoCheEntra } from '@/lib/products/draftFromVision';
-import { SELLER_STATUSES } from '@/lib/products/schema';
+import { PRODUCT_UNITS, SELLER_STATUSES } from '@/lib/products/schema';
 import { formatPrice } from '@/lib/format';
 
 /**
@@ -702,6 +703,9 @@ export const ETICHETTE_STATO: Record<string, string> = {
  *     porta il testo nuovo intero, come lo salva il server, e i tag tolti.
  *     Il testo nella risposta della chat sta nella bolla del modello; questo,
  *     calcolato dalla proposta, il modello non lo puo' smentire.
+ *  4. 27/11/2026 — Nome e unita' come li scriveva il modello: un nome di soli
+ *     spazi, un nome tagliato dal server a 120 caratteri, un'unita' che il
+ *     server ignora. Adesso con lo stesso taglio e lo stesso elenco del server.
  */
 export function righeDellaProposta(
   patch: AiProductPatch,
@@ -715,7 +719,8 @@ export function righeDellaProposta(
   const out: string[] = [];
   const eur = (n: number) => formatPrice(n);
   const testo = (v: unknown): v is string => typeof v === 'string';
-  if (testo(patch.name)) out.push(`Nome → "${patch.name}"`);
+  const nome = testoDelPatch(patch.name, MAX_NOME_PRODOTTO);
+  if (nome) out.push(`Nome → "${nome}"`);
   const descrizione = testoDelPatch(patch.description, MAX_DESCRIZIONE_PRODOTTO);
   if (descrizione) out.push(`Descrizione nuova, al posto di quella attuale: «${descrizione}»`);
   if (typeof patch.price === 'number') {
@@ -726,7 +731,7 @@ export function righeDellaProposta(
     // 2646 — Il server rifiuta sempre il prezzo pieno proposto dall'AI: la scheda non lo promette.
     else if (typeof patch.compare_at_price === 'number') out.push(`Prezzo pieno ${eur(patch.compare_at_price)}: NON si applica, il prezzo barrato lo metti tu`);
   }
-  if (testo(patch.unit) && patch.unit) out.push(`Unità → ${patch.unit}`);
+  if (testo(patch.unit) && (PRODUCT_UNITS as readonly string[]).includes(patch.unit)) out.push(`Unità → ${patch.unit}`);
   if ('condition' in patch && (patch.condition == null || testo(patch.condition))) {
     out.push(`Condizione → ${patch.condition ?? 'non specificata'}`);
   }
