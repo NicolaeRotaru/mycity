@@ -18,8 +18,11 @@ export const FallbackEmoji: Story = {
   args: { logoUrl: null },
 };
 
+// 27/11/2026 — I loghi venivano da placehold.co, un sito di terzi: la storia dipendeva dalla sua rete
+// e il sito non lo usa piu' per i loghi. Ora sono immagini nostre, in public/ (Storybook la serve:
+// staticDirs in .storybook/main.ts), come il segnaposto delle foto (lib/foto-mancante.ts).
 export const WithLogo: Story = {
-  args: { logoUrl: 'https://placehold.co/200x200/C0492C/fff?text=PR' },
+  args: { logoUrl: '/icon-192.svg' },
 };
 
 export const Small: Story = {
@@ -31,5 +34,5 @@ export const Large: Story = {
 };
 
 export const ExtraLarge: Story = {
-  args: { logoUrl: 'https://placehold.co/300x300/4A7C59/fff?text=Bio', size: 'xl' },
+  args: { logoUrl: '/icon-512.svg', size: 'xl' },
 };
