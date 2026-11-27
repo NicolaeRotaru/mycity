@@ -288,6 +288,11 @@ export default function PrivacyPage() {
               dell'account, e le finestre arrivano a 24 ore (lib/rate-limit.ts). */}
           <li><strong>Upstash Inc.</strong> (Stati Uniti — SCC) — protezione dagli abusi: memorizza, da un minuto fino a 24 ore, contatori legati all&apos;indirizzo IP, all&apos;email usata per accedere o all&apos;identificativo dell&apos;account, per fermare chi tenta troppe richieste di fila.</li>
           <li><strong>Verifica dei documenti d&apos;identità (KYC):</strong> l&apos;esame dei documenti di Venditori e Rider è svolto internamente da MyCity. Se in futuro verrà affidato a un fornitore esterno, il suo nome comparirà qui prima che il primo documento gli venga inviato.</li>
+          {/* 27/11/2026 — La verifica del Venditore manda la sua partita IVA al servizio VIES della
+              Commissione europea (lib/kyc/providers.ts, viesVatLookup, chiamato da
+              app/api/kyc/start-check/route.ts): per una ditta individuale è un dato personale, e
+              qui non compariva. */}
+          <li><strong>Commissione europea (VIES)</strong> — non è nostro responsabile: è il servizio pubblico dell&apos;Unione europea che controlla le partite IVA nei registri degli Stati membri. Quando un Venditore avvia la verifica del proprio account, il sito manda la sua partita IVA (con il codice del paese) a VIES, che risponde se è valida e attiva e, quando lo Stato lo comunica, a nome di chi è registrata. Per una ditta individuale partita IVA e nome sono dati personali del titolare della ditta.</li>
           {/* 26/11/2026 — Diceva solo «geocoding indirizzi». Ma le mappe del sito (components/DeliveryMap.tsx,
               NearbyStoresMap.tsx, StoreLocationPicker.tsx) scaricano le tessere da tile.openstreetmap.org, e
               «Naviga» del Rider (app/rider/orders/[id]/page.tsx) apre Google Maps con la destinazione. */}
