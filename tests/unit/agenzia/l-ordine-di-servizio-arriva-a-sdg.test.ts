@@ -63,7 +63,9 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const { accettaPreventivoColCodice, leggiPreventivoColCodice } = await import('@/lib/agenzia/preventivo-col-codice');
-const { creaOrdineSdg, fraseVisita, aggiornaPianoCompleto } = await import('@/lib/agenzia/ordine-sdg');
+const { creaOrdineSdg, fraseVisita, aggiornaPianoCompleto, chiediIlPianoCompleto } = await import('@/lib/agenzia/ordine-sdg');
+const { pianoDallaRisposta } = await import('@/lib/agenzia/piano-completo-ad');
+const { passiDiSdg } = await import('@/lib/agenti/passi-di-sdg');
 const { pianoDelPrimoMese } = await import('@/lib/agenzia/piano-del-primo-mese');
 const { VENDITORE_DEI_PIANI, COMPITO_PIANO, SCHEMA_PIANO } = await import('@/lib/agenzia/piano-completo-ad');
 
@@ -135,6 +137,10 @@ describe('① il preventivo accettato fa nascere UN ordine per SDG', () => {
     expect(esito.ok).toBe(true);
     expect(stato.db.tabelle.preventivi_con_codice[0].stato).toBe('accettato');
     expect(await creaOrdineSdg({ sellerId: SELLER, codice: CODICE, fascia: 'business' })).toMatchObject({ ok: false, motivo: 'guasto' });
+    // L'ordine perso non resta solo nel log: Nicola lo sa, una volta.
+    const persi = stato.avvisi.filter((a) => a.titolo.startsWith('ATTENZIONE: l\'ordine di servizio per SDG di Caffè di Prova non è nato'));
+    expect(persi.length).toBeGreaterThanOrEqual(1);
+    expect(persi[0].opzioni).toEqual({ unaVoltaPer: `ordine-sdg-mancato:${SELLER}` });
     // Anche con un database che esplode.
     expect(await creaOrdineSdg(null as unknown as Parameters<typeof creaOrdineSdg>[0])).toMatchObject({ ok: false, motivo: 'guasto' });
   });
@@ -322,5 +328,108 @@ describe('il piano del primo mese, calcolato dal sito', () => {
     expect(p.periodo.dal).toBe('2026-11-30');
     expect(p.note.join(' ')).toContain('La visita non è ancora fissata');
     expect(p.contenuti.find((c) => c.tipo === 'Post')?.ora).toBe('18:30');
+  });
+});
+
+describe('dal collaudo del 27/11', () => {
+  it('nel Base la pagina dell agente non promette video né riprese; nel Business e nel Premium sì', () => {
+    const passi = (fascia: 'base' | 'business' | 'premium', visitaIl: string | null) =>
+      passiDiSdg({ nome: 'Caffè di Prova', fascia, visitaIl, canoneCentesimi: null, primoMeseCentesimi: null, pianoNellOrdine: { origine: 'sito', stato: 'da_collegare' } });
+    for (const v of ['2026-12-03T09:00:00Z', null]) {
+      // «senza video» è il listino del Base detto giusto, non una promessa.
+      const base = JSON.stringify(passi('base', v)).replace(/senza video/g, '');
+      expect(base).not.toMatch(/video|riprese/i);
+      expect(passi('base', v)[1].titolo).toBe('Le prime foto');
+      expect(JSON.stringify(passi('business', v))).toMatch(/video/);
+      expect(passi('premium', v)[1].titolo).toBe('Le prime foto e i primi video');
+    }
+  });
+
+  it('senza l ordine la pagina non inventa il primo mese', () => {
+    const p = passiDiSdg({ nome: 'X', fascia: 'business', visitaIl: null, canoneCentesimi: null, primoMeseCentesimi: null, pianoNellOrdine: null });
+    expect(p[4].testo).toContain('Quanto si ritira il primo mese lo dice l’ordine di SDG');
+  });
+
+  it('un nome con $& non rompe la frase della visita', () => {
+    const p = passiDiSdg({ nome: 'Bar $& Sport', fascia: 'business', visitaIl: '2026-12-03T09:00:00Z', canoneCentesimi: null, primoMeseCentesimi: null, pianoNellOrdine: null });
+    expect(p[0].testo).toContain('Bar $& Sport nel giorno scelto dal titolare (giovedì 3 dicembre alle 10:00)');
+  });
+
+  it('vale la fascia confermata dal titolare, non quella scelta dall agente', async () => {
+    // L'agente aveva detto Business; il titolare conferma Premium.
+    await accetta('premium');
+    expect(ordini()[0]).toMatchObject({ fascia: 'premium', canone_centesimi: 99900, primo_mese_centesimi: 49950 });
+    expect((ordini()[0].piano as { contenuti: { tipo: string }[] }).contenuti).toHaveLength(20);
+    await aspetta();
+  });
+
+  it('il canone è quello dello sblocco in contanti (il listino delle impostazioni), non quello scritto nel codice', async () => {
+    stato.db.tabelle.abbonamenti_servizi[0].canone_centesimi = 45000;
+    await accetta();
+    expect(ordini()[0]).toMatchObject({ canone_centesimi: 45000, primo_mese_centesimi: 22500 });
+    await aspetta();
+  });
+
+  it('due richieste del piano completo insieme fanno UN lavoro dell AD', async () => {
+    stato.db.tabelle.preventivi_con_codice[0].stato = 'accettato';
+    stato.n8nCollegato = false; // l'ordine nasce senza chiedere il piano
+    await creaOrdineSdg({ sellerId: SELLER, codice: CODICE, fascia: 'business', visitaIl: null });
+    await vi.waitFor(() => expect(ordini()[0].piano_completo_errore).toContain('non è acceso'));
+    stato.n8nCollegato = true;
+    const id = String(ordini()[0].id);
+    const esiti = await Promise.all([chiediIlPianoCompleto(id), chiediIlPianoCompleto(id)]);
+    expect(esiti.map((e) => e.esito).sort()).toEqual(['chiesto', 'non-serve']);
+    expect(stato.avviati).toHaveLength(1);
+  });
+
+  it('una visita al lunedì a mezzanotte e mezza (domenica in UTC) fa partire il piano il lunedì DOPO', () => {
+    // Lunedì 7 dicembre alle 00:30 di Roma = domenica 6 dicembre alle 23:30 UTC.
+    const p = pianoDelPrimoMese({ nome: 'Caffè di Prova', tipo: 'bar', fascia: 'business', visitaIl: '2026-12-06T23:30:00Z' });
+    expect(p.periodo.dal).toBe('2026-12-14');
+    expect(fraseVisita('2026-12-06T23:30:00Z')).toBe('Visita: lunedì 7 dicembre alle 00:30');
+    // E al lunedì alle 10: mai lo stesso giorno della visita.
+    expect(pianoDelPrimoMese({ nome: 'X', tipo: 'bar', fascia: 'base', visitaIl: '2026-12-07T09:00:00Z' }).periodo.dal).toBe('2026-12-14');
+  });
+
+  describe('il piano dell AD entra solo se rispetta le regole', () => {
+    const partenza = pianoDelPrimoMese({ nome: 'Caffè di Prova', tipo: 'bar', fascia: 'business', visitaIl: '2026-12-03T09:00:00Z', citta: 'Piacenza' });
+    const buono = () => ({
+      intestazione: { canali_e_tono: 'Instagram e Facebook', hashtag: '#Piacenza', prima_di_pubblicare: 'Confermare gli orari' },
+      contenuti: partenza.contenuti.map((c, i) => ({ data: c.data, ora: c.ora, tipo: c.tipo, tema: `Tema ${i}`, didascalia: `Didascalia ${i}`, cosa_riprendere: 'Foto', in_citta: null as string | null, fonte_evento: null as string | null })),
+      note: [] as string[],
+    });
+    const con = (f: (r: ReturnType<typeof buono>) => void) => { const r = buono(); f(r); return pianoDallaRisposta(r, partenza, 'business'); };
+
+    it('quello giusto entra', () => { expect(pianoDallaRisposta(buono(), partenza, 'business').ok).toBe(true); });
+    it('una data fuori dal periodo no', () => {
+      expect(con((r) => { r.contenuti[0].data = '2026-12-01'; })).toMatchObject({ ok: false, motivo: expect.stringContaining('fuori dal periodo') });
+    });
+    it('gioco o tabacco no; il nome del locale e gli hashtag non contano', () => {
+      expect(con((r) => { r.contenuti[2].didascalia = 'Prova la fortuna col gratta e vinci'; })).toMatchObject({ ok: false, motivo: expect.stringContaining('gioco o tabacco') });
+      expect(con((r) => { r.contenuti[2].tema = 'Le sigarette elettroniche'; })).toMatchObject({ ok: false });
+      const tabacchi = pianoDelPrimoMese({ nome: 'Bar Tabacchi Roma', tipo: 'bar', fascia: 'business', visitaIl: '2026-12-03T09:00:00Z' });
+      const r = buono(); r.contenuti[0].didascalia = 'Buongiorno dal Bar Tabacchi Roma #BarTabacchiRoma';
+      expect(pianoDallaRisposta(r, tabacchi, 'business').ok).toBe(true);
+    });
+    it('un indirizzo email no', () => {
+      expect(con((r) => { r.contenuti[3].didascalia = 'Scrivici a titolare@gmail.com'; })).toMatchObject({ ok: false, motivo: expect.stringContaining('email') });
+    });
+    it('le storie fuori dal Premium no', () => {
+      expect(con((r) => { r.contenuti.push({ ...r.contenuti[0], data: partenza.periodo.al, tipo: 'Storia' }); })).toMatchObject({ ok: false, motivo: expect.stringContaining('storie') });
+    });
+    it('due contenuti nello stesso giorno no', () => {
+      expect(con((r) => { r.contenuti[1].data = r.contenuti[0].data; })).toMatchObject({ ok: false, motivo: expect.stringContaining('stesso giorno') });
+    });
+    it('un evento in città senza la sua fonte non entra; con la fonte sì', () => {
+      const r = buono();
+      r.contenuti[0].in_citta = 'Mercato inventato';
+      r.contenuti[1].in_citta = 'Mercato del sabato'; r.contenuti[1].fonte_evento = 'https://www.comune.piacenza.it/mercato';
+      const e = pianoDallaRisposta(r, partenza, 'business');
+      expect(e.ok).toBe(true);
+      if (e.ok) {
+        expect(e.piano.contenuti[0].inCitta).toBeNull();
+        expect(e.piano.contenuti[1]).toMatchObject({ inCitta: 'Mercato del sabato', fonteEvento: 'https://www.comune.piacenza.it/mercato' });
+      }
+    });
   });
 });

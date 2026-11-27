@@ -24,7 +24,7 @@ import { FASCE, ID_FASCE, euro, type IdFascia } from '@/lib/agenti/fasce';
  * dopo 30 minuti; appena è «accettato» porta l'agente a «Adesso tocca a SDG» (app/agente/tocca-a-sdg).
  */
 type Fase = 'pronto' | 'conferma' | 'invio' | 'fatto' | 'errore';
-type Attesa = 'controllo' | 'confermato' | 'chiuso' | 'smesso';
+type Attesa = 'controllo' | 'confermato' | 'chiuso' | 'smesso' | 'persa';
 
 /** Ogni quanto si chiede se il titolare ha confermato, e dopo quanto si smette. */
 export const CONTROLLA_OGNI_MS = 10_000;
@@ -92,8 +92,8 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null, vai
             return;
           }
           if (r.ok && d?.data?.stato === 'chiuso') { setAttesa('chiuso'); return; }
-          // Un'attività che non c'è (o non è più sua) non diventerà mai confermata: tre risposte così e ci si ferma.
-          if (r.status === 404 && ++nonTrovate >= 3) { setAttesa('smesso'); return; }
+          // Un'attività che non c'è (o non è più sua) non diventerà mai confermata: tre risposte così DI FILA e ci si ferma.
+          if (r.status === 404) { if (++nonTrovate >= 3) { setAttesa('persa'); return; } } else nonTrovate = 0;
         } catch { /* rete ballerina: si riprova al prossimo giro */ }
       }
       timer = setTimeout(giro, CONTROLLA_OGNI_MS);
@@ -138,6 +138,7 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null, vai
         {attesa === 'confermato' && <p>Il titolare ha confermato. <a href={paginaDiSdg(lavoro)}>Adesso tocca a SDG →</a></p>}
         {attesa === 'chiuso' && <p className={c('errore')}>Questo preventivo è stato chiuso: scrivi a Nicola.</p>}
         {attesa === 'smesso' && <p className={c('nota')}>Ho smesso di controllare. Quando il titolare conferma, ricarica la pagina: la trovi fra «Hanno confermato».</p>}
+        {attesa === 'persa' && <p className={c('errore')}>Non trovo più questa attività fra le tue: forse l’ha aggiunta di nuovo un altro agente. Scrivi a Nicola.</p>}
       </section>
     );
   }

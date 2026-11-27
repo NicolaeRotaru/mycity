@@ -96,12 +96,21 @@ describe('⑤ dopo il «Sì» la pagina passa da sola a «Adesso tocca a SDG»',
     expect(andato).toEqual([]);
   });
 
-  it('tre risposte «non c è» di fila e si ferma; un preventivo chiuso si dice', async () => {
+  it('ogni 10 secondi, per 30 minuti: i numeri sono quelli chiesti', () => {
+    expect(CONTROLLA_OGNI_MS).toBe(10_000);
+    expect(SMETTI_DOPO_MS).toBe(30 * 60_000);
+  });
+
+  it('tre risposte «non c è» DI FILA e si ferma, e lo dice; un preventivo chiuso si dice', async () => {
     const r = await dopoIlSi();
-    risposte.push({ status: 404 }, { status: 404 }, { status: 404 });
-    await avanti(CONTROLLA_OGNI_MS * 6);
-    expect(domande).toHaveLength(3);
-    expect(r.textContent).toContain('Ho smesso di controllare');
+    // Due «non c'è», poi una risposta buona: il conto riparte.
+    risposte.push({ status: 404 }, { status: 404 }, { stato: 'aperto' }, { status: 404 }, { status: 404 }, { status: 404 });
+    await avanti(CONTROLLA_OGNI_MS * 5);
+    expect(domande).toHaveLength(5);
+    expect(r.textContent).not.toContain('Non trovo più');
+    await avanti(CONTROLLA_OGNI_MS * 4);
+    expect(domande).toHaveLength(6);
+    expect(r.textContent).toContain('Non trovo più questa attività fra le tue');
     act(() => root?.unmount());
     root = null;
     document.body.innerHTML = '';
@@ -110,5 +119,29 @@ describe('⑤ dopo il «Sì» la pagina passa da sola a «Adesso tocca a SDG»',
     await avanti(CONTROLLA_OGNI_MS);
     expect(r2.textContent).toContain('Questo preventivo è stato chiuso');
     expect(andato).toEqual([]);
+  });
+});
+
+describe('«Adesso tocca a SDG» aspetta che l ordine arrivi (collaudo del 27/11)', () => {
+  it('se il titolare ha appena confermato e l ordine non c è ancora, richiede finché arriva', async () => {
+    const { default: Pagina } = await import('@/app/agente/tocca-a-sdg/page');
+    window.history.replaceState(null, '', `/agente/tocca-a-sdg?lavoro=${LAVORO}`);
+    const base = { stato: 'accettato', nome: 'Caffè di Prova', fascia: 'business', accettatoIl: '2026-11-27T16:25:00Z', visitaIl: null, visita: 'Visita: da fissare col titolare', link: null };
+    const passi = [{ titolo: 'La visita del team creativo', testo: 'x' }];
+    const lette: unknown[] = [{ ...base, ordine: null, passi }, { ...base, ordine: null, passi }, { ...base, ordine: { pianoOrigine: 'sito', pianoStato: 'in_corso', contenuti: 12, periodo: 'dal 30 novembre al 27 dicembre 2026' }, passi }];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: true, data: lette.shift() ?? lette.at(-1) }), { status: 200 })));
+    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+    const radice = document.createElement('div');
+    document.body.appendChild(radice);
+    root = createRoot(radice);
+    await act(async () => { root!.render(createElement(Pagina)); });
+    await avanti(0);
+    expect(radice.textContent).toContain('aspetto che l’ordine arrivi a SDG');
+    expect(radice.textContent).not.toContain('La visita del team creativo');
+    await avanti(3000);
+    expect(radice.textContent).toContain('aspetto che l’ordine arrivi a SDG');
+    await avanti(3000);
+    expect(radice.textContent).toContain('La visita del team creativo');
+    expect(radice.textContent).toContain('L’ordine è arrivato a SDG');
   });
 });

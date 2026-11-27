@@ -183,6 +183,13 @@ async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: st
     .select('id');
   if (scritto.error) {
     logger.error('[ordine-sdg] ordine non scritto: controlla che la migrazione 999c sia applicata', { sellerId, message: scritto.error.message });
+    // Il titolare ha confermato lo stesso: l'ordine perso non deve restare solo nel log (collaudo del 27/11).
+    await notifyAdmins(
+      `ATTENZIONE: l'ordine di servizio per SDG di ${nome} non è nato`,
+      `Il titolare ha confermato l'abbonamento ${FASCE[fascia].nome}, ma l'ordine di SDG non si è scritto. Controlla che la migrazione 999c sia applicata e prepara l'ordine a mano. ${fraseVisita(visitaLetta)}.`,
+      '/admin/preventivi',
+      { unaVoltaPer: `ordine-sdg-mancato:${sellerId}` },
+    ).catch((e: unknown) => logger.warn('[ordine-sdg] avviso dell ordine mancato non partito', { sellerId, errore: String(e) }));
     return { ok: false, motivo: 'guasto', dettaglio: scritto.error.message };
   }
   const id = ((scritto.data ?? []) as { id?: string }[])[0]?.id ?? null;

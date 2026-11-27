@@ -34,21 +34,27 @@ export function passiDiSdg(d: {
     : d.pianoNellOrdine.origine === 'ad'
       ? 'È già nell’ordine di SDG, nella versione completa preparata dall’AD.'
       : 'È già nell’ordine di SDG nella prima versione; la versione completa, con gli eventi della città, il sito la chiede all’AD.';
+  // Nel Base niente video (listino: «Una sessione di foto all’avvio»): la pagina non li promette (collaudo del 27/11).
+  const conVideo = f.video > 0;
+  const riprese = conVideo ? 'fa le prime foto e i primi video' : 'fa le prime foto';
   return [
     {
       titolo: 'La visita del team creativo',
       testo: d.visitaIl
-        ? `Il team creativo di SDG passa da ${d.nome} nel giorno scelto dal titolare (${visita.replace(/^Visita: /, '')}): conosce il locale, raccoglie quello che serve e fa le prime riprese.`
-        : `Il team creativo di SDG passa da ${d.nome} per conoscere il locale e fare le prime riprese. La data è da fissare col titolare.`,
+        ? `Il team creativo di SDG passa da ${d.nome} nel giorno scelto dal titolare (${visita.replace(/^Visita: /, () => '')}): conosce il locale, raccoglie quello che serve e ${riprese}.`
+        : `Il team creativo di SDG passa da ${d.nome} per conoscere il locale: raccoglie quello che serve e ${riprese}. La data è da fissare col titolare.`,
     },
-    { titolo: 'Le prime foto e i primi video', testo: `Si parte dalla visita. Con l’abbonamento ${f.nome}: «${dalListino(d.fascia, 'foto_video')}»`, perLui: su.foto_video ?? null },
+    { titolo: conVideo ? 'Le prime foto e i primi video' : 'Le prime foto', testo: `Si parte dalla visita. Con l’abbonamento ${f.nome}: «${dalListino(d.fascia, 'foto_video')}»`, perLui: su.foto_video ?? null },
     { titolo: 'Il piano editoriale del primo mese', testo: `${f.inPratica.piano}. ${piano}`, perLui: su.social ?? null },
     { titolo: 'Il sito', testo: `SDG prepara la bozza del sito. Con l’abbonamento ${f.nome}: «${dalListino(d.fascia, 'sito_web')}»`, perLui: su.sito_web ?? null },
     {
       titolo: 'I contanti, al primo servizio',
       testo: d.primoMeseCentesimi
         ? `Al primo servizio SDG ritira in contanti il primo mese: ${euro(d.primoMeseCentesimi)}. Poi ${euro(canone)} al mese, senza vincolo di durata.`
-        : `L’abbonamento ${f.nome} costa ${euro(canone)} al mese, in contanti, di persona, al primo servizio. Senza vincolo di durata.`,
+        : d.pianoNellOrdine
+          ? `L’abbonamento ${f.nome} costa ${euro(canone)} al mese, in contanti, di persona, al primo servizio. Senza vincolo di durata.`
+          // Senza l'ordine non si sa se vale il primo mese a metà: si dice il canone, e chi lo sa.
+          : `L’abbonamento ${f.nome} costa ${euro(canone)} al mese, in contanti, di persona, al primo servizio. Quanto si ritira il primo mese lo dice l’ordine di SDG.`,
     },
   ];
 }

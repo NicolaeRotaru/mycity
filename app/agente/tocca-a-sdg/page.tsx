@@ -20,7 +20,9 @@ const ALL_ACCESSO = `/sign-in?returnTo=${encodeURIComponent('/agente')}`;
 const c = (nomi: string) => nomi.split(/\s+/).filter(Boolean).map((n) => sg[n] ?? st[n] ?? n).join(' ');
 const giorno = (d: string | null) => (d ? new Date(d).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', timeZone: 'Europe/Rome' }) : null);
 
-type Stato = { fase: 'leggo' } | { fase: 'errore'; messaggio: string } | { fase: 'pronta'; a: AttivitaDopoIlSi };
+type Stato = { fase: 'leggo' } | { fase: 'attendo' } | { fase: 'errore'; messaggio: string } | { fase: 'pronta'; a: AttivitaDopoIlSi };
+const ATTESA_ORDINE_MS = 3000;
+const ATTESA_ORDINE_TENTATIVI = 10;
 
 export default function AdessoToccaASdg() {
   const [stato, setStato] = useState<Stato>({ fase: 'leggo' });
@@ -28,17 +30,32 @@ export default function AdessoToccaASdg() {
   useEffect(() => {
     const lavoro = new URLSearchParams(location.search).get('lavoro') ?? '';
     if (!/^[0-9a-f-]{36}$/i.test(lavoro)) { setStato({ fase: 'errore', messaggio: 'Manca il codice della scheda: riapri l’attività dalla pagina dell’agente.' }); return; }
-    (async () => {
+    let spento = false;
+    let tentativi = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const leggiOra = async () => {
       try {
         const r = await fetch(`/api/agente/attivita?lavoro=${encodeURIComponent(lavoro)}`, { cache: 'no-store' });
+        if (spento) return;
         if (r.status === 401) { location.href = ALL_ACCESSO; return; }
         const d = (await r.json().catch(() => null)) as { ok?: boolean; data?: AttivitaDopoIlSi; error?: { message?: string } } | null;
+        if (spento) return;
         if (!r.ok || !d?.data) { setStato({ fase: 'errore', messaggio: d?.error?.message ?? 'Questa attività non si trova.' }); return; }
+        // Il titolare ha appena confermato e l'ordine di SDG nasce qualche istante dopo (collaudo del 27/11):
+        // si richiede ogni 3 secondi, per mezzo minuto, prima di dire che l'ordine non si legge.
+        if (d.data.stato === 'accettato' && !d.data.ordine && tentativi < ATTESA_ORDINE_TENTATIVI) {
+          tentativi += 1;
+          setStato({ fase: 'attendo' });
+          timer = setTimeout(leggiOra, ATTESA_ORDINE_MS);
+          return;
+        }
         setStato({ fase: 'pronta', a: d.data });
       } catch {
-        setStato({ fase: 'errore', messaggio: 'Niente rete, o il sito non risponde. Riprova fra un attimo.' });
+        if (!spento) setStato({ fase: 'errore', messaggio: 'Niente rete, o il sito non risponde. Riprova fra un attimo.' });
       }
-    })();
+    };
+    void leggiOra();
+    return () => { spento = true; if (timer) clearTimeout(timer); };
   }, []);
 
   return (
@@ -52,6 +69,7 @@ export default function AdessoToccaASdg() {
         </div>
 
         {stato.fase === 'leggo' && <p className={c('nota')} role="status">Leggo l’attività…</p>}
+        {stato.fase === 'attendo' && <p className={c('nota')} role="status">Il titolare ha appena confermato: aspetto che l’ordine arrivi a SDG…</p>}
         {stato.fase === 'errore' && <p className={c('errore')} role="alert">{stato.messaggio}</p>}
         {stato.fase === 'pronta' && <Contenuto a={stato.a} />}
 

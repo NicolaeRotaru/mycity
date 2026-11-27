@@ -127,7 +127,9 @@ function SchedaOrdine({ o, chiedendo, chiediPiano }: { o: Ordine; chiedendo: boo
             <div><dt className="inline font-semibold text-ink-900">Prima di pubblicare: </dt><dd className="inline text-ink-700">{piano.intestazione.primaDiPubblicare}</dd></div>
           </dl>
         )}
-        {/* La tabella scorre di lato nel suo riquadro, non la pagina: da tastiera ci si entra col Tab e si scorre con le frecce. */}
+        {/* La tabella scorre di lato nel suo riquadro, non la pagina: da tastiera ci si entra col Tab e si scorre con le
+            frecce. Un riquadro che scorre deve poter prendere il fuoco (axe: scrollable-region-focusable), per questo il tabIndex. */}
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
         <div className="mt-4 overflow-x-auto rounded-xl border border-ink-100" tabIndex={0} role="region" aria-label={`Piano editoriale di ${o.nome_attivita}, scorre di lato`}>
           <table className="w-full min-w-[56rem] border-collapse text-left text-sm">
             <thead className="bg-ink-50 text-ink-900">
