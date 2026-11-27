@@ -31,7 +31,7 @@ export function eDiSdg(sellerId: string | null | undefined): boolean {
  */
 export function doveSiAttivaLAbbonamento(chiGuardaEUnNegozio: boolean): { href: string; testo: string } {
   return chiGuardaEUnNegozio
-    ? { href: PERCORSO_ABBONAMENTO, testo: 'Scegli l’abbonamento dal tuo negozio' }
+    ? { href: PERCORSO_ABBONAMENTO, testo: 'Scegli l’abbonamento dalla tua attività' }
     : { href: '/sell', testo: 'Iscrivi la tua attività per attivarlo' };
 }
 

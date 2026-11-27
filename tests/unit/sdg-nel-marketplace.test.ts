@@ -98,6 +98,8 @@ describe('la pagina prodotto porta alla pagina Abbonamento, non al carrello', ()
   it('un negozio va alla sua pagina Abbonamento, chi non lo è va a iscriversi', () => {
     expect(doveSiAttivaLAbbonamento(true).href).toBe('/seller/abbonamento');
     expect(doveSiAttivaLAbbonamento(true).testo).not.toContain('preventivo');
+    // 27/11/2026, Nicola verso le 21:25: sul lato SDG «la tua attività», non «il tuo negozio».
+    expect(doveSiAttivaLAbbonamento(true).testo).toBe('Scegli l’abbonamento dalla tua attività');
     expect(doveSiAttivaLAbbonamento(false).href).toBe('/sell');
   });
 
