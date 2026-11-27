@@ -137,16 +137,30 @@ const MARCHIO = 'MyCity';
  * Con NEXT_PUBLIC_TITOLARE_NOME=«MyCity» (il marchio) o un segnaposto («da definire», «TBD»)
  * l'informativa tornava a «Il titolare del trattamento è MyCity» e la persona che gestisce
  * spariva da Termini, piede e modulo di recesso. Un nome cosi' vale come non messo.
+ *
+ * 27/11/2026 — Il marchio con una forma di societa' attaccata («MyCity S.r.l.», «MyCity SRLS»,
+ * «MyCity S.p.A.») passava: l'informativa avrebbe nominato una societa' che non esiste, la
+ * stessa dell'informativa finta di un tempo. Una societa' vera ha sempre la sua partita IVA:
+ * quel nome vale solo se c'e' anche una partita IVA vera.
  */
-function nomeLegale(valore: string | undefined): string | null {
+const FORMA_DI_SOCIETA = /^(srls?|spa|sas|snc|ss|sapa|scarl|scrl|coop|societacooperativa)(unipersonale)?$/;
+
+function nomeLegale(valore: string | undefined, partitaIva: string | null): string | null {
   const v = soloSeVero(valore);
   if (!v) return null;
   const nudo = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return nudo(v) === nudo(MARCHIO) ? null : v;
+  const n = nudo(v);
+  const marchio = nudo(MARCHIO);
+  if (n === marchio) return null;
+  if (n.startsWith(marchio) && FORMA_DI_SOCIETA.test(n.slice(marchio.length)) && !partitaIva) return null;
+  return v;
 }
 
 export function titolare(): Titolare {
-  const nome = nomeLegale(process.env.NEXT_PUBLIC_TITOLARE_NOME);
+  const nome = nomeLegale(
+    process.env.NEXT_PUBLIC_TITOLARE_NOME,
+    soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_PIVA),
+  );
   return {
     denominazione: nome ?? MARCHIO,
     gestore: nome ? null : PERSONA_CHE_GESTISCE,
