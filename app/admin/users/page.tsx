@@ -61,6 +61,8 @@ type Profile = {
   auth_phone: string | null;
   last_sign_in_at: string | null;
   email_confirmed_at: string | null;
+  /** R08-006 — la RPC delle email non ha risposto: l'email vuota di questa riga non vuol dire «senza email». */
+  email_non_letta?: boolean;
 };
 
 /** Miglior etichetta identificativa per un utente. */
@@ -151,11 +153,61 @@ async function leggiProfili(chiedi: (colonne: string) => PromiseLike<RispostaPro
 /**
  * Email e ultimo accesso vivono in auth.users: arrivano dalla RPC admin-only
  * (migrazione 074). Se la RPC non c'e', la pagina resta usabile senza email.
+ * `null` = la lettura non è riuscita (R08-006: l'elenco lo deve dire).
  */
+/**
+ * 26/11/2026 — OLTRE MILLE ISCRITTI LE EMAIL SI LEGGONO A PAGINE.
+ *
+ * PostgREST restituisce al massimo `max_rows` righe per richiesta (1000, supabase/config.toml), anche
+ * da una RPC: la lettura in un colpo solo si fermava alle prime mille righe di auth.users, e agli
+ * altri utenti mancavano email e ultimo accesso senza nessun avviso. Si legge a pagine di mille,
+ * in ordine di iscrizione (chi si iscrive mentre si legge finisce in fondo, non sposta le pagine),
+ * finché una pagina non torna più corta. Una pagina che cade vale come lettura non riuscita: meglio
+ * l'avviso «email non arrivate» che un elenco con le email a metà.
+ */
+const PAGINA_CONTATTI = 1000;
+/** Freno: centomila iscritti. Oltre, la lettura non si dichiara completa. */
+const PAGINE_CONTATTI_MASSIME = 100;
+
+async function leggiContattiAuthOppureNull(): Promise<RigaAuth[] | null> {
+  const tutte: RigaAuth[] = [];
+  for (let pagina = 0; pagina < PAGINE_CONTATTI_MASSIME; pagina++) {
+    const da = pagina * PAGINA_CONTATTI;
+    const { data, error } = await supabase
+      .rpc('admin_list_user_emails')
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(da, da + PAGINA_CONTATTI - 1);
+    if (error || !Array.isArray(data)) {
+      logger.warn('admin/users: email degli utenti non lette', { code: (error as { code?: string } | null)?.code, pagina });
+      return null;
+    }
+    tutte.push(...(data as RigaAuth[]));
+    if (data.length < PAGINA_CONTATTI) return tutte;
+  }
+  logger.warn('admin/users: email degli utenti oltre il freno delle pagine', { righe: tutte.length });
+  return null;
+}
+
 async function leggiContattiAuth(): Promise<RigaAuth[]> {
-  const { data, error } = await supabase.rpc('admin_list_user_emails');
-  if (error || !Array.isArray(data)) return [];
-  return data as RigaAuth[];
+  return (await leggiContattiAuthOppureNull()) ?? [];
+}
+
+/**
+ * 26/11/2026 (R08-003) — LA RICERCA NON SI PORTA PIÙ A CASA TUTTE LE EMAIL.
+ *
+ * Per trovare una persona per email la ricerca leggeva tutto auth.users (la lettura qui sopra) e
+ * filtrava qui: a ogni ricerca le email di tutti gli iscritti arrivavano nel browser. Adesso il
+ * testo lo cerca il database (migrazione 940, la stessa RPC con due argomenti, solo admin): tornano
+ * i contatti che corrispondono, più quelli dei profili già trovati per nome, perché anche quelle
+ * righe mostrino l'email. Finché la 940 non è applicata la funzione con questi argomenti non c'è
+ * (PGRST202) e si torna alla lettura di prima.
+ */
+async function cercaContattiAuth(termine: string, idsGiaTrovati: readonly string[]): Promise<RigaAuth[]> {
+  const { data, error } = await supabase.rpc('admin_list_user_emails', { p_termine: termine, p_ids: [...idsGiaTrovati] });
+  if (!error && Array.isArray(data)) return data as RigaAuth[];
+  if ((error as { code?: string } | null)?.code === 'PGRST202') return leggiContattiAuth();
+  return [];
 }
 
 /** Attacca a ogni profilo i contatti letti da auth.users. */
@@ -196,7 +248,10 @@ function AdminUsersPageInner() {
           .order('created_at', { ascending: false })
           .limit(TETTO_UTENTI) as unknown as PromiseLike<RispostaProfili>,
       );
-      return conContattiAuth(base, await leggiContattiAuth());
+      // 26/11/2026 (R08-006) — Se le email non arrivano le righe restano senza email, come prima,
+      // ma ognuna lo sa: sotto i filtri compare una riga che lo dice (`emailNonLette`).
+      const contatti = await leggiContattiAuthOppureNull();
+      return contatti === null ? base.map((p) => ({ ...p, email_non_letta: true })) : conContattiAuth(base, contatti);
     },
   });
 
@@ -228,7 +283,7 @@ function AdminUsersPageInner() {
    * Filtrare in memoria vuol dire cercare dentro i cinquecento piu' recenti: un
    * cliente iscritto sei mesi fa non usciva, e non usciva in silenzio. Qui la
    * domanda va al database, su tutti i profili, e l'email — che sta in
-   * auth.users, non in profiles — si cerca dalle righe della RPC admin.
+   * auth.users, non in profiles — la cerca la RPC admin (`cercaContattiAuth`).
    */
   const termineScritto = search.trim();
   const termine = useDebounce(termineScritto, 300);
@@ -242,9 +297,6 @@ function AdminUsersPageInner() {
     queryFn: async (): Promise<{ righe: Profile[]; troncato: boolean }> => {
       if (!filtro) return { righe: [], troncato: false };
 
-      const contatti = await leggiContattiAuth();
-      const idsPerContatto = idsDaContattiAuth(contatti, termine);
-
       const perTesto = await leggiProfili((colonne) =>
         supabase
           .from('profiles')
@@ -253,6 +305,9 @@ function AdminUsersPageInner() {
           .order('created_at', { ascending: false })
           .limit(TETTO_RISULTATI_RICERCA) as unknown as PromiseLike<RispostaProfili>,
       );
+
+      const contatti = await cercaContattiAuth(termine, perTesto.map((p) => p.id));
+      const idsPerContatto = idsDaContattiAuth(contatti, termine);
 
       // Chi combacia solo per email o telefono: si prende per identificativo, a
       // blocchi, perche' un elenco lungo di id non ci sta in un indirizzo (#93).
@@ -465,6 +520,8 @@ function AdminUsersPageInner() {
   });
 
   const detail = detailId ? inMano.find((p) => p.id === detailId) : null;
+  /** R08-006 — le righe a schermo sono senza email perché la RPC non ha risposto, non perché non ce l'hanno. */
+  const emailNonLette = inMano.some((p) => p.email_non_letta === true);
 
   /**
    * #81 — Codice fiscale e partita IVA si chiedono per UN utente, quando si apre
@@ -668,6 +725,18 @@ function AdminUsersPageInner() {
         >
           <AlertTriangle size={16} strokeWidth={2.2} className="text-accent-600 shrink-0 mt-0.5" aria-hidden />
           <span>{etichette.avviso}</span>
+        </p>
+      )}
+      {emailNonLette && (
+        <p
+          role="status"
+          className="flex items-start gap-2 bg-accent-50 border border-accent-200 text-accent-900 rounded-xl px-4 py-3 text-sm"
+        >
+          <AlertTriangle size={16} strokeWidth={2.2} className="text-accent-600 shrink-0 mt-0.5" aria-hidden />
+          <span>
+            Le email degli utenti non sono arrivate: in questo elenco mancano anche a chi ce l&apos;ha, quindi una
+            riga senza email non vuol dire che quell&apos;utente non ne abbia una. Ricarica la pagina fra poco.
+          </span>
         </p>
       )}
 

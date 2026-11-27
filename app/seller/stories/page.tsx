@@ -26,6 +26,25 @@ import { logger } from '@/lib/logger';
 /** Il magazzino delle storie. La sua regola sta in lib/storage/regole-secchi.ts, non qui. */
 const SECCHIO_STORIE = 'stories';
 
+/**
+ * R21-002 — LE FOTO HEIC/HEIF DELL'IPHONE NON SI PUBBLICANO PIU' COSI' COME SONO.
+ *
+ * Il magazzino le accetta, ma nessuno le converte: la storia la vedeva bene il negoziante dal suo
+ * iPhone, e i clienti su Chrome, Firefox, Edge e Android vedevano un riquadro rotto. Come per le
+ * foto prodotto (`lib/products/uploadImages.ts`) si tolgono dall'elenco del campo — cosi'
+ * l'iPhone le converte da solo in JPEG — e un .heic che arriva lo stesso (trascinato da un PC) si
+ * rifiuta con una frase chiara. Riconosce il tipo («…/heic») e il nome del file («IMG_0421.HEIC»).
+ */
+function formatoDellIphone(testo: string): boolean {
+  return /[./]hei[cf]$/i.test(testo);
+}
+const ACCEPT_STORIE = attributoAccept(SECCHIO_STORIE)
+  .split(',')
+  .filter((tipo) => !formatoDellIphone(tipo))
+  .join(',');
+const FOTO_HEIC =
+  "Questa foto è in formato HEIC (quello dell'iPhone): su Chrome e sui telefoni Android i clienti vedrebbero un riquadro vuoto. Sceglila direttamente dall'iPhone, che la trasforma da solo in JPG, oppure salvala in JPG e riprova.";
+
 /** R10-015 — Quello che legge il negoziante quando il magazzino delle foto non risponde. */
 const FOTO_STORIA_NON_CARICATA =
   'Non sono riuscito a caricare la foto della storia: il problema è nostro, non della tua foto. Riprova fra qualche minuto, e se succede ancora scrivi all\'assistenza.';
@@ -332,8 +351,17 @@ export default function SellerStoriesPage() {
                      (070): la foto scattata con un iPhone (HEIC) non compariva nemmeno nella
                      finestra «scegli un file». La lista arriva dalla stessa regola che poi
                      rifiuta il file. */
-                  accept={attributoAccept(SECCHIO_STORIE)}
-                  onChange={(e) => setImage(e.target.files?.[0] ?? null)}
+                  accept={ACCEPT_STORIE}
+                  onChange={(e) => {
+                    const scelta = e.target.files?.[0] ?? null;
+                    if (scelta && (formatoDellIphone(scelta.type) || formatoDellIphone(scelta.name))) {
+                      toast.error(FOTO_HEIC);
+                      e.target.value = '';
+                      setImage(null);
+                      return;
+                    }
+                    setImage(scelta);
+                  }}
                   className="w-full text-sm file:mr-3 file:bg-primary-100 file:text-primary-800 file:font-semibold file:rounded-lg file:px-3 file:py-2 file:border-0"
                 />
                 {image && (

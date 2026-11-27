@@ -1,4 +1,5 @@
 import { after } from 'next/server';
+import { workAsyncStorage } from 'next/dist/server/app-render/work-async-storage.external';
 import { logger } from '@/lib/logger';
 
 /**
@@ -33,30 +34,52 @@ import { logger } from '@/lib/logger';
  * fila per sempre: `TETTO_DEL_TURNO_MS` dopo che è PARTITO parte il successivo, e l'appeso continua
  * per conto suo. Il tetto conta dall'inizio del lavoro, non da quando è entrato in fila: contato
  * dall'ingresso, in una raffica scadeva per tutti insieme, e a 10 s partivano tutti quelli rimasti.
+ *
+ * R09-008 — UNA FILA PER RICHIESTA, NON UNA PER TUTTO IL SERVER. La fila era una variabile del modulo:
+ * con più richieste servite dallo stesso processo (Fluid compute) le email di una raffica di ordini
+ * si mettevano in coda dietro quelle delle altre, e la richiesta con gli ultimi lavori poteva arrivare
+ * al suo tetto di durata prima del suo turno. Ora ogni richiesta ha la sua fila, legata allo stato
+ * della richiesta di Next (`workAsyncStorage`); fuori da una richiesta (script, prove) resta una fila sola.
  */
 const TETTO_DEL_TURNO_MS = 10_000;
-let ultimoTurno: Promise<void> = Promise.resolve();
+const SENZA_RICHIESTA = {};
+const file = new WeakMap<object, Promise<void>>();
+
+/** La chiave della fila: lo stato della richiesta in corso, o una chiave unica fuori da una richiesta. */
+function chiaveDellaRichiesta(): object {
+  try {
+    return workAsyncStorage.getStore() ?? SENZA_RICHIESTA;
+  } catch {
+    return SENZA_RICHIESTA;
+  }
+}
 
 /**
  * Mette il lavoro in fila: parte quando il precedente è finito (o dopo il tetto del suo turno).
  * Esportata per chi registra da sé il suo `after()` (lib/ordini/annulla.ts): `after(() => nellaFila(lavoro))`.
  */
-export function nellaFila(lavoro: () => Promise<void>): Promise<void> {
-  const prima = ultimoTurno;
+export function nellaFila(
+  lavoro: () => Promise<void>,
+  chiave: object = chiaveDellaRichiesta(),
+): Promise<void> {
+  const prima = file.get(chiave) ?? Promise.resolve();
   const turno = prima.then(lavoro);
   // Il turno si libera quando il lavoro finisce (bene o male) o, se è appeso, a 10 s dal suo inizio:
   // la sveglia parte nello stesso momento del lavoro, quando il precedente ha liberato il turno.
-  ultimoTurno = prima.then(
-    () =>
-      new Promise<void>((libera) => {
-        const sveglia = setTimeout(libera, TETTO_DEL_TURNO_MS);
-        (sveglia as { unref?: () => void }).unref?.();
-        const fine = () => {
-          clearTimeout(sveglia);
-          libera();
-        };
-        turno.then(fine, fine);
-      }),
+  file.set(
+    chiave,
+    prima.then(
+      () =>
+        new Promise<void>((libera) => {
+          const sveglia = setTimeout(libera, TETTO_DEL_TURNO_MS);
+          (sveglia as { unref?: () => void }).unref?.();
+          const fine = () => {
+            clearTimeout(sveglia);
+            libera();
+          };
+          turno.then(fine, fine);
+        }),
+    ),
   );
   return turno;
 }
@@ -69,8 +92,10 @@ export function dopoLaRisposta(lavoro: () => Promise<void>, cosa: string): void 
       }),
     );
 
+  // La chiave si prende qui, dentro la richiesta: il callback di after() può girare fuori dal suo contesto.
+  const chiave = chiaveDellaRichiesta();
   try {
-    after(() => nellaFila(conRete));
+    after(() => nellaFila(conRete, chiave));
   } catch {
     // Nessun contesto di richiesta: si fa partire lo stesso, senza attendere.
     void conRete();

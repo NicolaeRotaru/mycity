@@ -98,7 +98,9 @@ async function fetchAchievements(userId: string) {
 export async function generateMetadata(props: { params: Promise<{ handle: string }> }) {
   const params = await props.params;
   const profile = await fetchProfileByHandle(params.handle);
-  if (!profile) return { title: 'Profilo non trovato · MyCity', robots: { index: false } };
+  // R21-007 — canonical nullo, come prodotto, negozio e categoria: senza, «non trovato» ereditava quello
+  // della home, e noindex più canonical alla home sono due segnali in contraddizione.
+  if (!profile) return { title: 'Profilo non trovato · MyCity', robots: { index: false }, alternates: { canonical: null } };
   const name = profile.full_name?.split(' ')[0] ?? profile.public_handle;
   return {
     title: `@${profile.public_handle} · ${name} · MyCity`,

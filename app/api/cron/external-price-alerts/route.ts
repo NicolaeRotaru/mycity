@@ -7,6 +7,7 @@ import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-d
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { AiCallError } from '@/lib/ai/run';
+import { TEMPO_TENTATIVO_AI_MS } from '@/lib/ai/client';
 import { fetchExternalSnapshot, ritentoDopoErroreConsentito } from '@/lib/products/externalSync';
 import { isStale, type ExternalData, type Marketplace } from '@/lib/products/externalSyncShared';
 import { detectExternalChange, changeMessage } from '@/lib/products/externalAlert';
@@ -29,6 +30,15 @@ export const runtime = 'nodejs';
 
 const BATCH = 10; // prodotti per giro (la verifica AI costa)
 
+/**
+ * 26/11/2026 (R03-003) — IL GIRO RESTA DENTRO LA SUA DURATA. Fino a 10 chiamate in fila da
+ * 60 s l'una (TEMPO_TENTATIVO_AI_MS) superavano i 300 s di `vercel.json`: la funzione veniva
+ * spenta a meta' giro. Una chiamata nuova parte solo se, anche impiegando tutto il suo tempo,
+ * finisce prima di (durata - margine); i prodotti rimasti non si toccano e vanno al giro dopo.
+ */
+const DURATA_GIRO_MS = 300_000;
+const MARGINE_GIRO_MS = 30_000;
+
 type Row = {
   id: string;
   name: string | null;
@@ -41,6 +51,8 @@ type Row = {
 };
 
 const handler = withCronAuth(async (req): Promise<NextResponse> => {
+  // R03-003 — il tempo del giro si conta da qui: avvio e selezione dei candidati fanno parte dei 300 s.
+  const inizioGiro = Date.now();
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   // 5/11/2026 — Con l'AI dei negozi spenta al lancio il giro non parte: con la chiave presente
@@ -96,9 +108,16 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
 
   let checked = 0, alerts = 0, errors = 0;
   let modelloNonTrovato = false;
+  let rimasti = 0;
   const now = new Date().toISOString();
 
-  for (const r of rows) {
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    // R03-003 — niente chiamata nuova se non c'e' il tempo di finirla.
+    if (Date.now() - inizioGiro + TEMPO_TENTATIVO_AI_MS > DURATA_GIRO_MS - MARGINE_GIRO_MS) {
+      rimasti = rows.length - i;
+      break;
+    }
     const prev = r.external_data;
     const query = prev?.source_title || r.name || '';
     if (!query) continue;
@@ -139,6 +158,10 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
       if (err instanceof AiCallError && err.status === 404) {
         modelloNonTrovato = true;
         logger.error('[ai] il fornitore non trova il modello: controllare AI_MODELLO_SMART', { feature: err.feature, productId: r.id });
+        // R03-002 — Il modello manca per tutti: il giro si ferma qui. Nessun prodotto, questo
+        // compreso, finisce segnato 'error' (dietro il freno di sei ore) per un guasto non suo.
+        rimasti = rows.length - i - 1;
+        break;
       } else {
         logger.warn('external-price-alerts: check failed', { productId: r.id });
       }
@@ -154,6 +177,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     checked,
     alerts,
     errors,
+    ...(rimasti > 0 ? { rimasti } : {}),
     ...(modelloNonTrovato ? { errore: 'Il fornitore AI non trova il modello: controllare AI_MODELLO_SMART.' } : {}),
   });
 });

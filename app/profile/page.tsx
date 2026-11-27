@@ -133,7 +133,7 @@ export default function ProfilePage() {
         {INVITI_E_PUNTI_ACCESI && (
         <Link
           href="/profile/referral"
-          className="block rounded-2xl bg-gradient-to-r from-primary-600 to-secondary-600 p-5 text-white transition-all hover:shadow-lg"
+          className="block rounded-2xl bg-gradient-to-r from-primary-600 to-secondary-600 p-5 text-white transition-all hover:shadow-warm-lg"
         >
           <div className="flex items-center justify-between gap-3">
             <div>

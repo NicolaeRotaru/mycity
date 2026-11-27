@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
+import { safeInternalPath } from '@/lib/safe-redirect';
 import {
   ArrowLeft,
   Banknote,
@@ -41,7 +42,7 @@ const BENEFITS: { Icon: LucideIcon; text: string }[] = [
   // gratuito su tutto — adesso nascono dalle promesse pubbliche, dove sono derivate dal codice.
   { Icon: Banknote, text: frasePagamento() },
   { Icon: Truck, text: `${CONSEGNA_ALL_ORA_CHE_SCEGLI}, dai negozi della tua città` },
-  { Icon: BadgeCheck, text: '100% commercianti locali verificati' },
+  { Icon: BadgeCheck, text: 'Commercianti locali' },
   { Icon: RotateCcw, text: FRASE_RESO },
 ];
 
@@ -119,7 +120,7 @@ export function AuthAlternatives({
   /**
    * R02-010 — Dove tornare dopo l'accesso con Google (già pulito da `safeInternalPath` nella
    * pagina), query compresa (?tab=…). Viaggia come `next` verso /auth/callback, che lo ripulisce
-   * e ci rimanda.
+   * e ci rimanda. Se manca, vale il `returnTo` dell'indirizzo della pagina.
    */
   returnTo?: string;
 } = {}) {
@@ -151,7 +152,10 @@ export function AuthAlternatives({
     try {
       const ritorno = new URL('/auth/callback', window.location.origin);
       ritorno.searchParams.set('versione', VERSIONE_TESTI_LEGALI);
-      if (returnTo && returnTo !== '/') ritorno.searchParams.set('next', returnTo);
+      // R23-011 — Una pagina che non passa `returnTo` (l'iscrizione) porta quello del suo indirizzo,
+      // ripulito come fa la pagina di accesso: chi si iscrive con Google torna dove era partito.
+      const ritornoDellaPagina = returnTo ?? safeInternalPath(new URLSearchParams(window.location.search).get('returnTo'), '/');
+      if (ritornoDellaPagina && ritornoDellaPagina !== '/') ritorno.searchParams.set('next', ritornoDellaPagina);
       // 25/11/2026 — «Aggiungi un altro account» (lib/account/piu-account.ts): Google deve chiedere quale
       // account usare, se no rientra da solo con quello di prima e «Aggiungi» non fa niente.
       const aggiunta = new URLSearchParams(window.location.search).get('aggiungi') === '1';

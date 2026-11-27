@@ -207,7 +207,11 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<
       .contains('order_ids', JSON.stringify([{ id: o.id }]))
       .limit(1);
     if (errT) throw new Error(`carrello dell'ordine ${o.id} non letto: ${errT.message}`);
-    if (!Array.isArray(tentativi) || tentativi.length === 0) return null;
+    if (!Array.isArray(tentativi) || tentativi.length === 0) {
+      // 26/11/2026 (R09-013) — Senza la riga l'ordine si tratta da solo, ma non in silenzio.
+      await segnalaIlCarrelloSenzaRiga(admin, o);
+      return null;
+    }
     const elenco = (tentativi[0] as { order_ids: unknown }).order_ids;
     const ids = Array.isArray(elenco)
       ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
@@ -220,6 +224,72 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<
   }
   if (!righe.some((r) => r.id === o.id)) return null;
   return righe.sort((x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id));
+}
+
+/**
+ * 26/11/2026 (R09-013) — IL CARRELLO IN CONTANTI SENZA LA SUA RIGA NON PASSA PIU' IN SILENZIO.
+ *
+ * Come nell'annullo (`segnalaIlCarrelloSenzaRiga` in lib/ordini/annulla.ts): il carrello in contanti
+ * si ritrova solo dalla riga del tentativo di cassa. Se la riga manca, il freno tratta l'ordine da
+ * solo: gli altri ordini dello stesso carrello passano alla fascia uno alla volta, ognuno con la sua
+ * campanella al cliente, e prima non lo sapeva nessuno (niente registro, niente avviso).
+ *
+ * Gli ordini non si uniscono MAI perché sono nati vicini (regola della regista): qui non si sposta
+ * niente in più. Si guarda soltanto se lo stesso cliente ha altri ordini in contanti ancora vivi, nati
+ * entro due minuti da questo e senza una riga di carrello (chi sta nella riga di un altro carrello è
+ * di quel carrello, con certezza). Se ce ne sono, resta una riga nel registro e gli amministratori lo
+ * sanno, una volta per gruppo di ordini: lo decide e lo sistema una persona.
+ */
+const VICINI_ENTRO_MS = 2 * 60_000;
+
+async function segnalaIlCarrelloSenzaRiga(admin: SupabaseClient, o: RigaVeloce): Promise<void> {
+  try {
+    const nato = Date.parse(String(o.created_at ?? ''));
+    if (!o.user_id || !Number.isFinite(nato)) return;
+    const { data, error } = await leggi('carrello-senza-riga', (c) =>
+      admin
+        .from('orders')
+        .select(c)
+        .eq('user_id', o.user_id)
+        .neq('id', o.id)
+        .lt('created_at', new Date(nato + VICINI_ENTRO_MS).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(20));
+    if (error || !Array.isArray(data)) {
+      logger.error('[veloce-non-confermata] carrello in contanti senza riga: altri ordini del cliente non letti', { orderId: o.id });
+      return;
+    }
+    const vicini = (data as unknown as RigaVeloce[]).filter((r) =>
+      !r.stripe_session_id?.trim() && !r.pickup_in_store && !FUORI_DAL_GIRO.includes(String(r.delivery_status))
+      && r.delivery_status !== 'DELIVERED' && Math.abs(Date.parse(String(r.created_at ?? '')) - nato) <= VICINI_ENTRO_MS);
+    const senzaRiga: RigaVeloce[] = [];
+    for (const r of vicini) {
+      const { data: suaRiga, error: errR } = await admin
+        .from('cod_checkout_attempts')
+        .select('order_ids')
+        .eq('user_id', o.user_id)
+        .contains('order_ids', JSON.stringify([{ id: r.id }]))
+        .limit(1);
+      if (!errR && Array.isArray(suaRiga) && suaRiga.length > 0) continue;
+      senzaRiga.push(r);
+    }
+    if (senzaRiga.length === 0) return;
+    const gruppo = [o.id, ...senzaRiga.map((r) => r.id)].sort();
+    logger.warn('[veloce-non-confermata] carrello in contanti senza riga: ordine trattato da solo', { orderId: o.id, vicini: gruppo });
+    const elenco = senzaRiga.map((r) => `${codiceDi(r.id)} (${r.delivery_status}, ${r.delivery_slot ?? 'senza fascia'})`).join(', ');
+    await notifyAdmins(
+      '⚠️ Veloce in contanti: carrello da controllare a mano',
+      `Il freno della veloce tratta l'ordine ${codiceDi(o.id)} da solo: la riga del suo carrello non c’è, e il sito non unisce gli ordini da solo. ` +
+        `Lo stesso cliente ha altri ordini in contanti nati entro due minuti e senza una riga di carrello: ${elenco}. ` +
+        'Se sono lo stesso carrello, il freno li sposta uno alla volta, ognuno con la sua fascia e la sua campanella al cliente, ' +
+        'e l’euro della veloce resta sull’ordine che lo porta: mettili tu nella stessa fascia, sistema la consegna e avvisa il cliente. ' +
+        'Se sono carrelli diversi, non serve fare niente.',
+      '/admin/orders',
+      { unaVoltaPer: `veloce-carrello-senza-riga-${gruppo.join('-')}` },
+    );
+  } catch (err) {
+    logger.error('[veloce-non-confermata] carrello in contanti senza riga: avviso agli amministratori non partito', { orderId: o.id, err });
+  }
 }
 
 /** 5/11/2026 — Dice se almeno campanella o email sono arrivate: chi sposta il carrello lo deve sapere. */

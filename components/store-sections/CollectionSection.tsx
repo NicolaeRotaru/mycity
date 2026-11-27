@@ -15,6 +15,8 @@ type Row = {
   name: string;
   description: string | null;
   price: number | string;
+  /** Prezzo pieno barrato impostato dal venditore, come nella griglia. */
+  compare_at_price: number | string | null;
   images: string[] | null;
   stock: number | null;
   has_variants: boolean | null;
@@ -42,7 +44,7 @@ function ManualCollection({
     queryFn: async (): Promise<Row[]> => {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, description, price, images, stock, created_at, has_variants')
+        .select('id, name, description, price, compare_at_price, images, stock, created_at, has_variants')
         .eq('seller_id', ctx.storeId)
         .eq('status', 'available')
         .in('id', ids);
@@ -86,6 +88,9 @@ function ManualCollection({
       description={p.description ?? ''}
       price={Number(p.price)}
       discountPercent={p.sconto ?? 0}
+      // R11-007 — Il prezzo barrato del venditore, come lo passa la griglia: senza, la collezione
+      // scelta a mano mostrava il prezzo senza il pieno barrato che la stessa scheda ha altrove.
+      compareAtPrice={p.compare_at_price != null ? Number(p.compare_at_price) : null}
       images={Array.isArray(p.images) ? p.images : []}
       stock={p.stock ?? undefined}
       hasVariants={p.has_variants ?? undefined}

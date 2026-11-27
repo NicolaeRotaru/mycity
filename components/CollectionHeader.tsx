@@ -76,8 +76,8 @@ export default function CollectionHeader({
           {emoji ? emoji : <Icon size={26} strokeWidth={2.2} />}
         </span>
         <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">{eyebrow}</p>
-          <h1 className="mt-0.5 break-words font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
+          <p className="break-words text-xs font-bold uppercase tracking-[0.05em] text-primary-700">{eyebrow}</p>
+          <h1 className="mt-0.5 break-words font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[2rem]">
             {title}
           </h1>
           {blurb && <p className="mt-1 text-sm text-ink-500">{blurb}</p>}

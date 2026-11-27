@@ -56,7 +56,7 @@ const TOPICS = [
   {
     icon: Bike,
     title: 'Diventa rider',
-    desc: 'Lavora con noi consegnando ordini in città. Ti candidi dal sito.',
+    desc: 'Lavora con noi consegnando ordini in città. Nuovo su MyCity? Ti candidi dal sito. Hai già un account cliente? Leggi qui sotto.',
     href: '/lavora-con-noi',
   },
 ];

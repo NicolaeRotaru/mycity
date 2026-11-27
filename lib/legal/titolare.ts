@@ -128,10 +128,28 @@ function soloSeVero(valore: string | undefined): string | null {
  */
 const PERSONA_CHE_GESTISCE = 'Nicolae Rotaru';
 
+/** L'insegna del sito: un marchio, non un soggetto che risponde dei dati o del contratto. */
+const MARCHIO = 'MyCity';
+
+/**
+ * 26/11/2026 — IL NOME LEGALE, SOLO SE E' UN SOGGETTO.
+ *
+ * Con NEXT_PUBLIC_TITOLARE_NOME=«MyCity» (il marchio) o un segnaposto («da definire», «TBD»)
+ * l'informativa tornava a «Il titolare del trattamento è MyCity» e la persona che gestisce
+ * spariva da Termini, piede e modulo di recesso. Un nome cosi' vale come non messo.
+ */
+function nomeLegale(valore: string | undefined): string | null {
+  const v = soloSeVero(valore);
+  if (!v) return null;
+  const nudo = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return nudo(v) === nudo(MARCHIO) ? null : v;
+}
+
 export function titolare(): Titolare {
+  const nome = nomeLegale(process.env.NEXT_PUBLIC_TITOLARE_NOME);
   return {
-    denominazione: process.env.NEXT_PUBLIC_TITOLARE_NOME?.trim() || 'MyCity',
-    gestore: process.env.NEXT_PUBLIC_TITOLARE_NOME?.trim() ? null : PERSONA_CHE_GESTISCE,
+    denominazione: nome ?? MARCHIO,
+    gestore: nome ? null : PERSONA_CHE_GESTISCE,
     indirizzo: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_INDIRIZZO),
     partitaIva: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_PIVA),
     rea: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_REA),

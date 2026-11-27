@@ -70,7 +70,7 @@ type Props = Omit<React.HTMLAttributes<HTMLElement>, 'className' | 'children'> &
   'aria-label'?: string;
 };
 
-export function Card({ variant = 'bordered', padding = 'md', className, children, as: Tag = 'div', hover = false, radius = 'xl', href, 'aria-label': ariaLabel, ...resto }: Props) {
+export function Card({ variant = 'bordered', padding = 'md', className, children, as: Tag = 'div', hover = false, radius = 'xl', href, ...resto }: Props) {
   const classi = cn(
     RADIUS[radius],
     VARIANTS[variant],
@@ -80,12 +80,12 @@ export function Card({ variant = 'bordered', padding = 'md', className, children
   );
   if (href) {
     return (
-      <Link href={href} aria-label={ariaLabel} className={cn('block', classi)}>
+      <Link {...resto} href={href} className={cn('block', classi)}>
         {children}
       </Link>
     );
   }
-  // R10-001 — il resto delle prop HTML (aria-live, id, role…) arriva all'elemento.
+  // R10-001 — il resto delle prop HTML (aria-label, aria-live, id, role…) arriva all'elemento.
   const Elemento = Tag as 'div';
   return <Elemento {...resto} className={classi}>{children}</Elemento>;
 }

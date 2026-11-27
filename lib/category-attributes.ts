@@ -47,7 +47,16 @@ export const NESSUN_ALLERGENE = 'Nessuno dei 14 allergeni';
 export const CATEGORY_ATTRIBUTES: Record<string, AttributeField[]> = {
   alimentari: [
     { key: 'marca', label: 'Marca', type: 'text', placeholder: 'Es. Barilla, Mulino Bianco' },
-    { key: 'peso', label: 'Peso / Quantità', type: 'text', placeholder: 'Es. 500g, 1L, 6 pezzi', variantable: true },
+    {
+      key: 'peso',
+      label: 'Peso / Quantità',
+      type: 'text',
+      placeholder: 'Es. 500g, 1L, 6 pezzi',
+      // R18-016 — Il campo resta facoltativo (se renderlo obbligatorio è una scelta di Nicola), ma chi compila
+      // sa a cosa serve: con peso o volume leggibili la scheda mostra il prezzo al chilo o al litro.
+      helpText: 'Scrivi quantità e unità (es. 500 g, 1 kg, 750 ml): con questo dato la scheda mostra il prezzo al chilo o al litro.',
+      variantable: true,
+    },
     { key: 'confezione', label: 'Tipo di confezione', type: 'select', options: ['Busta', 'Barattolo', 'Bottiglia', 'Scatola', 'Vasetto', 'Sottovuoto', 'Lattina', 'Brick', 'Sfuso'] },
     { key: 'origine', label: 'Origine', type: 'text', placeholder: 'Es. Italia, Sicilia, Piacenza' },
     { key: 'bio', label: 'Biologico', type: 'checkbox' },

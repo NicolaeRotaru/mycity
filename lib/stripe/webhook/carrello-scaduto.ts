@@ -40,7 +40,7 @@ export async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
     .update({ status: 'EXPIRED' })
     .eq('id', pid)
     .eq('status', 'PENDING')
-    .select('id, groups, coupon_code'), 'carrello scaduto');
+    .select('id, groups, coupon_code, delivery'), 'carrello scaduto');
   const pending = rivendicati?.[0];
   if (!pending) return;
   // La stessa lista del carrello chiuso per quadratura (quadratura.ts).
@@ -71,6 +71,27 @@ export async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
   const codiceAbbandonato = (pending as { coupon_code?: string | null }).coupon_code ?? null;
   if (codiceAbbandonato) {
     const { error: cErr } = await admin.rpc('release_coupon', { p_code: codiceAbbandonato });
-    if (cErr) logger.warn('[stripe] codice sconto non restituito', { pid, message: cErr.message });
+    if (cErr) {
+      logger.warn('[stripe] codice sconto non restituito', { pid, message: cErr.message });
+      return;
+    }
+    /**
+     * 26/11/2026 (R08-002) — E SI CHIUDE ANCHE LA RIVENDICAZIONE DI QUESTO TENTATIVO.
+     *
+     * `release_coupon` rimette l'uso nel contatore ma lascia aperta la rivendicazione del cliente
+     * (`coupon_redemptions`, migrazione 361). La cassa nuova la chiude per i tentativi che libera lei;
+     * se però questo evento arriva prima (la pulizia ha appena chiuso la pagina su Stripe), la cassa
+     * non trova più il carrello PENDING e il benvenuto restava bloccato fino a due minuti. Si chiude
+     * solo quella scritta nella riga di intento di questo carrello.
+     */
+    const rivendicazione = (pending as { delivery?: { rivendicazione?: unknown } | null }).delivery?.rivendicazione;
+    if (typeof rivendicazione === 'string' && rivendicazione !== '') {
+      const { error: errChiusa } = await admin
+        .from('coupon_redemptions')
+        .update({ released_at: new Date().toISOString() })
+        .eq('id', rivendicazione)
+        .is('released_at', null);
+      if (errChiusa) logger.warn('[stripe] rivendicazione del codice non chiusa', { pid, message: errChiusa.message });
+    }
   }
 }

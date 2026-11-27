@@ -231,6 +231,18 @@ qualche euro al mese: **la decide Nicola.**
 > lettere nel registro della notte. **Non è mai stato provato con chiavi
 > vere:** la prima notte che si accende, quella riga si guarda.
 
+> ⚠️ **Se la destinazione è un remote cifrato (`crypt`) o un alias, lo storico
+> si imposta a mano.** Un remote `crypt` o `alias` (come `cifrata:copie`) scrive
+> dentro il secchio di un altro remote: lo script non vede quel secchio, quindi
+> non può costruire da solo un secchio «-storico» accanto, e non propone nessun
+> valore predefinito. Il predefinito cadrebbe nello stesso secchio della copia,
+> sotto la cifratura. Per questo la notte resta **rossa** finché non si imposta
+> `STORAGE_SYNC_STORICO` a mano, con un secchio diverso da quello della copia, per
+> esempio: `STORAGE_SYNC_STORICO=b2:mycity-foto-storico/copie` (oppure un altro
+> remote `crypt` che punta a un secchio diverso). Il secchio va creato prima e la
+> chiave deve poterci scrivere. Lo stesso vale per un remote usato alla radice
+> (`cifrata:`, senza cartella).
+
 Ogni notte il lavoro scrive una riga che dice come è andata, e non ne esiste
 una quarta:
 

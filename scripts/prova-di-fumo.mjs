@@ -243,8 +243,10 @@ export function estraiIndirizzo(uscitaDellaCli) {
  * parte, dopo la CI, il primo rilascio pronto in produzione e' gia' lo STESSO
  * commit che sta per pubblicare. Tornare li' voleva dire rimettere online il
  * codice rotto e scrivere «annullato» nel riepilogo. Con `commitCheEsce` quei
- * rilasci si scartano; uno di cui l'elenco non dice il commit resta buono,
- * come prima, perche' da qui non si puo' sapere se e' lo stesso.
+ * rilasci si scartano. (24/11/2026: non e' piu' cosi'. Conoscendo il commit
+ * che esce, l'elenco da solo non sceglie piu' nessun rilascio; uno senza
+ * commit non e' un posto buono, e conta come un commit a se' solo quando il
+ * commit che esce non si sa. Vedi `rilascioDaTornare`.)
  */
 export function commitDelRilascio(rilascio) {
   const meta = rilascio?.meta ?? {};

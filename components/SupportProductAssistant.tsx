@@ -99,6 +99,34 @@ const STATUS_LABELS = ETICHETTE_STATO;
 const WELCOME =
   "Ciao! Dimmi quale prodotto vuoi sistemare — scrivi il nome o mandami una foto e lo trovo io nel tuo catalogo. Oppure mandami le foto di un prodotto NUOVO e lo inserisco io: compilo nome, prezzo, categoria, descrizione e tag.";
 
+/** Oltre questa lunghezza la risposta dell'assistente si ripiega e porta «Leggi tutto». */
+const RISPOSTA_LUNGA = 420;
+/** Anche tante righe brevi (un elenco) si ripiegano: oltre questo numero di righe. */
+const RIGHE_LUNGHE = 8;
+
+/**
+ * Il testo di una risposta: a capo ed elenchi restano (`whitespace-pre-line` sulla bolla, niente
+ * HTML grezzo) e una risposta lunga si ripiega su poche righe, con «Leggi tutto» per aprirla.
+ */
+function TestoDellaRisposta({ testo }: { testo: string }) {
+  const [aperta, setAperta] = useState(false);
+  const lunga = testo.length > RISPOSTA_LUNGA || testo.split('\n').length > RIGHE_LUNGHE;
+  if (!lunga) return <>{testo}</>;
+  return (
+    <>
+      <span className={aperta ? undefined : 'line-clamp-6'} data-testid="risposta-lunga">{testo}</span>
+      <button
+        type="button"
+        onClick={() => setAperta((v) => !v)}
+        aria-expanded={aperta}
+        className="mt-1 block text-xs font-bold text-primary-700 hover:underline"
+      >
+        {aperta ? 'Mostra meno' : 'Leggi tutto'}
+      </button>
+    </>
+  );
+}
+
 export default function SupportProductAssistant() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
@@ -398,8 +426,8 @@ export default function SupportProductAssistant() {
               <div
                 className={
                   m.role === 'user'
-                    ? 'rounded-2xl rounded-br-sm bg-primary-600 px-3 py-2 text-sm text-white'
-                    : 'rounded-2xl rounded-bl-sm bg-cream-100 px-3 py-2 text-sm text-ink-800'
+                    ? 'whitespace-pre-line break-words rounded-2xl rounded-br-sm bg-primary-600 px-3 py-2 text-sm text-white'
+                    : 'whitespace-pre-line break-words rounded-2xl rounded-bl-sm bg-cream-100 px-3 py-2 text-sm text-ink-800'
                 }
               >
                 {m.images && m.images.length > 0 && (
@@ -410,7 +438,7 @@ export default function SupportProductAssistant() {
                     ))}
                   </div>
                 )}
-                {m.content}
+                {m.role === 'assistant' ? <TestoDellaRisposta testo={m.content} /> : m.content}
               </div>
 
               {/* Card di riepilogo modifica */}

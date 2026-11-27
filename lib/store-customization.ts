@@ -161,7 +161,18 @@ const handleSchema = z
 
 // R10-003 — Un nome di Facebook non ha il trattino basso (lo stesso nome dentro un link è già rifiutato):
 // scritto a mano «pane_quotidiano» passava, incollato in un link no.
-const facebookSchema = handleSchema.refine((v) => !v || !v.includes('_'), 'Il nome di una pagina Facebook non ha il trattino basso: controlla che sia il nome della pagina');
+// R13-009 — Il messaggio del trattino basso viene PRIMA di quello generico: in un link
+// «facebook.com/nome_x» il motivo vero del rifiuto è il trattino, non i caratteri del link.
+const facebookSchema = z
+  .string()
+  .trim()
+  .superRefine((v, ctx) => {
+    if (v.length > 64) ctx.addIssue({ code: 'custom', message: 'Troppo lungo' });
+    if (v.includes('_')) ctx.addIssue({ code: 'custom', message: 'Il nome di una pagina Facebook non ha il trattino basso: controlla che sia il nome della pagina' });
+    if (v && !/^@?[A-Za-z0-9._-]+$/.test(v)) ctx.addIssue({ code: 'custom', message: 'Scrivi solo il nome del profilo, per esempio iltuonegozio' });
+  })
+  .optional()
+  .or(z.literal(''));
 
 const whatsappSchema = z
   .string()
@@ -173,8 +184,20 @@ const whatsappSchema = z
 const websiteSchema = z
   .string()
   .trim()
-  .url("Scrivi l'indirizzo del sito, per esempio www.iltuonegozio.it")
   .max(200)
+  // R13-008 — Solo http o https: «ftp://», «mailto:», «javascript:» e gli schemi storpiati («http//», «https:/», «htp://»)
+  // si fermano con un messaggio chiaro. Il dominio nudo è già diventato https:// in normalizzaSocials.
+  .superRefine((v, ctx) => {
+    // R21-016 — Uno spazio dentro l'indirizzo (nel percorso: «https://negozio.it/a b») non e' un link che funziona:
+    // si ferma invece di salvarlo cosi'.
+    if (/\s/.test(v)) {
+      ctx.addIssue({ code: 'custom', message: "L'indirizzo del sito non puo' avere spazi, per esempio https://www.iltuonegozio.it" });
+    } else if (!/^https?:\/\/[^\s/]/i.test(v)) {
+      ctx.addIssue({ code: 'custom', message: "L'indirizzo del sito deve cominciare con http:// o https://, per esempio https://www.iltuonegozio.it" });
+    } else if (!z.string().url().safeParse(v).success) {
+      ctx.addIssue({ code: 'custom', message: "Scrivi l'indirizzo del sito, per esempio www.iltuonegozio.it" });
+    }
+  })
   .optional()
   .or(z.literal(''));
 
@@ -235,10 +258,35 @@ export function normalizeCustomization(raw: unknown): StoreCustomization {
   if (!raw || typeof raw !== 'object') return {};
   const parsed = storeCustomizationSchema.safeParse(raw);
   // R01-010 — Un campo fuori regola non butta più via gli altri: si tiene quello che passa.
-  const data = parsed.success ? parsed.data : salvaQuelloCheVale(raw as Record<string, unknown>);
+  const letti = parsed.success ? parsed.data : salvaQuelloCheVale(raw as Record<string, unknown>);
+  const data = conIlSitoGiaSalvato(letti, raw as Record<string, unknown>);
   // Un badge spento già salvato non arriva alla pagina, né all'editor: il prossimo salvataggio lo toglie.
   const { badges } = data;
   return badges ? { ...data, badges: badges.filter(badgeAttivo) } : data;
+}
+
+/**
+ * Un sito GIÀ salvato che le regole di oggi rifiuterebbero (uno spazio nel percorso, «ftp://», scritto male)
+ * si tiene in lettura: altrimenti sparisce dalla vetrina e il primo salvataggio che rilegge la
+ * personalizzazione (ThemePicker, StoreDetailsEditor) lo cancella dal database. Si rifiuta solo un valore
+ * NUOVO, allo schema di salvataggio. Gli schemi che eseguono codice (javascript:, data:…) no: quelli si scartano.
+ * Come link in vetrina si mostra comunque solo http/https (socialLinks).
+ */
+const SCHEMI_PERICOLOSI = /^(?:javascript|vbscript|data|file|blob):/;
+function sitoGiaSalvatoDaTenere(v: unknown): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const w = v.trim();
+  if (!w || w.length > 500) return undefined;
+  // Il browser ignora spazi e caratteri di controllo dentro lo schema («java\tscript:»).
+  if (SCHEMI_PERICOLOSI.test(w.replace(/[\s\u0000-\u001f\u007f-\u009f]/g, '').toLowerCase())) return undefined;
+  return w;
+}
+function conIlSitoGiaSalvato(data: StoreCustomization, raw: Record<string, unknown>): StoreCustomization {
+  if (data.socials?.website !== undefined) return data;
+  const socials = raw.socials;
+  if (!socials || typeof socials !== 'object' || Array.isArray(socials)) return data;
+  const website = sitoGiaSalvatoDaTenere((socials as Record<string, unknown>).website);
+  return website === undefined ? data : { ...data, socials: { ...data.socials, website } };
 }
 
 /**
@@ -336,7 +384,7 @@ export type SocialLink = { key: string; label: string; href: string };
  * unico fermava anche un profilo vero di Instagram o TikTok chiamato «live», «help» o «business».
  */
 const RISERVATI_FACEBOOK = new RegExp(
-  '^(?:profile\\.php|p|reel|reels|share|groups|pages|watch|people|events|photo|photo\\.php|photos|marketplace|hashtag|stories|story\\.php|permalink\\.php|pg|gaming|video|videos|media|sharer|sharer\\.php|login|login\\.php|plugins|dialog|l\\.php|ads|business|help|policies|privacy|settings|notifications|messages|friends|bookmarks|search|public|fundraisers|live|reviews|lite|home|notes|recover|places|saved|memories|jobs|offers|menu|me|pymk|find-friends|onthisday|games|latest|feed|feeds|donate|fundraiser|watchparty|about|legal|terms|careers|composer|creatorstudio|messenger|unsupportedbrowser|checkpoint|crisisresponse|community|developers)$',
+  '^(?:profile\\.php|p|reel|reels|share|groups|pages|watch|people|events|photo|photo\\.php|photos|marketplace|hashtag|stories|story\\.php|permalink\\.php|pg|gaming|video|videos|media|sharer|sharer\\.php|login|login\\.php|plugins|dialog|l\\.php|ads|business|help|policies|privacy|settings|notifications|messages|friends|bookmarks|search|public|fundraisers|live|reviews|lite|home|notes|recover|places|saved|memories|jobs|offers|menu|me|pymk|find-friends|onthisday|games|latest|feed|feeds|donate|fundraiser|watchparty|about|legal|terms|careers|composer|creatorstudio|messenger|unsupportedbrowser|checkpoint|crisisresponse|community|developers|profile|story|permalink|topic|topics|directory|security|cookies|support|inbox|oauth|adsmanager|instantgames|logout|recommendations|biz|creators|tr|ajax|requests|invite|invites|groupcampaign|gamingvideo|tournaments|pokes|poke|birthdays|communities|fbreels|apps|flx|groupsbrowse|sharing|welcome|touch|zero|mobile|m|commerce|shops|workplace|oculus|fbwatch|newsroom)$',
   'i',
 );
 const RISERVATI_INSTAGRAM = /^(?:p|reel|reels|stories|explore|direct|accounts|tv|share|about|legal|developer|web)$/i;
@@ -349,7 +397,7 @@ const RISERVATI_TIKTOK = /^(?:t|tag|discover|video|music|search|share|embed|expl
  * sottopagina di un profilo («/pane-quotidiano/posts/1»).
  */
 const SOTTOPAGINE_DI_UN_PROFILO_FACEBOOK =
-  /^(?:posts|photos|videos|about|reviews|events|mentions|reels|live|menu|shop|services|followers|friends|community|grid|map)$/i;
+  /^(?:posts|photos|videos|about|reviews|events|mentions|reels|live|menu|shop|services|followers|friends|community|grid|map|timeline|info|photos_by|photos_of|photos_albums|photos_all|photos_stream|videos_by|videos_of|about_details|about_[a-z_]+|friends_[a-z_]+|offers|jobs|likes|following|groups|music|movies|tv|books|notes|photo|video|reviews_given|friends_mutual|sports|events_past|events_upcoming)$/i;
 function percorsoDiUnProfiloFacebook(nome: string, resto: string): boolean {
   if (/\.php$/i.test(nome)) return false;
   // R07-009 — Il nome di un profilo Facebook è fatto di lettere, cifre e punti, mai del trattino basso:
@@ -362,6 +410,8 @@ function percorsoDiUnProfiloFacebook(nome: string, resto: string): boolean {
 type RegolaDelSocial = {
   dominio: RegExp;
   riservati: RegExp;
+  /** R13-007 — Su TikTok un profilo si scrive sempre con la @: con la @ il nome non è mai un percorso riservato. */
+  arobaFaProfilo?: boolean;
   percorsoDiUnProfilo?: (nome: string, resto: string) => boolean;
 };
 
@@ -373,16 +423,17 @@ function handleDaLink(v: string | undefined, regola: RegolaDelSocial): string | 
   if (v === undefined) return v;
   const t = v.trim();
   const m = t.match(
-    new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${regola.dominio.source}\\/@?([A-Za-z0-9._-]+)(?=$|[\\/?#])([^?#]*)`, 'i'),
+    new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${regola.dominio.source}\\/(@?)([A-Za-z0-9._-]+)(?=$|[\\/?#])([^?#]*)`, 'i'),
   );
   // «profile.php?id=…», «/p/…», «/reel/…», «/share/…» non sono il nome del profilo: si lascia
   // il valore com'è, e il controllo lo ferma invece di salvare un link sbagliato.
   // R10-010 — Il link copiato dall'app porta dietro «?igsh=…» o «?hl=it»: dopo il nome del profilo
   // la coda non conta, si tiene il nome (prima ogni «?» fermava anche un profilo vero).
-  if (m && (regola.riservati.test(m[1]) || (regola.percorsoDiUnProfilo && !regola.percorsoDiUnProfilo(m[1], m[2])))) {
+  const riservato = m && !(regola.arobaFaProfilo && m[1] === '@') && regola.riservati.test(m[2]);
+  if (m && (riservato || (regola.percorsoDiUnProfilo && !regola.percorsoDiUnProfilo(m[2], m[3])))) {
     return t;
   }
-  return (m ? m[1] : t).replace(/^@+/, '');
+  return (m ? m[2] : t).replace(/^@+/, '');
 }
 
 /**
@@ -411,10 +462,13 @@ export function normalizzaSocials(s: StoreCustomization['socials']): StoreCustom
     riservati: RISERVATI_FACEBOOK,
     percorsoDiUnProfilo: percorsoDiUnProfiloFacebook,
   });
-  out.tiktok = handleDaLink(s.tiktok, { dominio: /tiktok\.com/, riservati: RISERVATI_TIKTOK });
+  out.tiktok = handleDaLink(s.tiktok, { dominio: /tiktok\.com/, riservati: RISERVATI_TIKTOK, arobaFaProfilo: true });
   if (s.website !== undefined) {
     const w = s.website.trim();
-    out.website = w && !/^https?:\/\//i.test(w) && /\./.test(w) ? `https://${w}` : w;
+    // Un dominio nudo prende https://; un indirizzo che ha già uno schema (giusto o sbagliato) resta com'è e lo schema lo giudica.
+    const conSchema = /^[a-z][a-z0-9+.-]*:(?!\d)/i.test(w) || /^[a-z]+\/\//i.test(w);
+    // R21-016 — «//negozio.it» non e' un dominio nudo: non prende https:// (diventava «https:////negozio.it»), resta com'e' e lo schema lo rifiuta.
+    out.website = w && !conSchema && !w.startsWith('//') && /\./.test(w) ? `https://${w}` : w;
   }
   if (s.google_maps !== undefined) {
     const g = s.google_maps.trim();
