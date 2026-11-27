@@ -178,9 +178,14 @@ export default function CookiesPage() {
           {recapito.eUnaCasella ? (
             <>a <a href={recapito.href} className="text-primary-700 underline">{recapito.testo}</a></>
           ) : (
-            // 5/11/2026 — Togliere la parentesi «la casella non è ancora attiva»: con quella del
-            // referente faceva due parentesi di fila, e l'informativa privacy non lo dice.
-            <>dal <Link href={recapito.href} className="text-primary-700 underline">modulo dei contatti</Link></>
+            // 27/11/2026 — Proponeva il modulo dei contatti anche quando non arriva a nessuno.
+            // Se arriva lo sa `stradaDeiDiritti`, che legge variabili del server: questa pagina
+            // gira anche nel browser, dove quelle variabili non ci sono (e il testo cambierebbe
+            // fra server e browser). Si manda alla sezione dell'informativa che lo decide.
+            <>
+              con la strada scritta nella sezione 9 dell&apos;
+              <Link href="/privacy#modifiche" className="text-primary-700 underline">Informativa sulla privacy</Link>
+            </>
           )}
           {chiSiamo.referentePrivacy ? <> (referente: {chiSiamo.referentePrivacy})</> : null}.
         </p>

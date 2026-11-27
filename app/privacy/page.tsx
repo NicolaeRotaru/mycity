@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
-import { recapitoPrivacy, stradaDeiDiritti, titolare } from '@/lib/legal/titolare';
+import { stradaDeiDiritti, titolare } from '@/lib/legal/titolare';
 import { GIORNI_DOCUMENTI_ISCRIZIONE_A_META, MESI_DEI_MESSAGGI_DEI_CONTATTI } from '@/lib/privacy/potature-ritenzione';
 import {
   DOVE_CHIEDIAMO_L_IBAN,
@@ -46,7 +46,7 @@ export default function PrivacyPage() {
   // casella della privacy non e' configurata, l'indirizzo scritto nel codice
   // non riceve niente: meglio mandare al modulo dei contatti, che qualcuno
   // legge davvero, che promettere una risposta che non arrivera' mai.
-  const dovePerIDiritti = recapitoPrivacy(ownerData);
+  // 27/11/2026 — E il modulo solo se arriva: tutte le sezioni leggono `stradaDeiDiritti`.
   const strada = stradaDeiDiritti(ownerData);
   return (
     <LegalLayout
@@ -420,13 +420,30 @@ export default function PrivacyPage() {
       <LegalSection id="modifiche" heading="9. Modifiche all&apos;informativa">
         <p>
           Possiamo aggiornare questa informativa per riflettere modifiche normative o operative.
-          Le versioni precedenti restano consultabili su richiesta scrivendo{' '}
-          {dovePerIDiritti.eUnaCasella ? (
-            <>a <a href={dovePerIDiritti.href} className="text-primary-700 underline">{dovePerIDiritti.testo}</a></>
+          {/* 27/11/2026 — Proponeva il modulo dei contatti anche quando non arriva a nessuno.
+              La strada e' quella delle sezioni 1 e 5 (`stradaDeiDiritti`): il modulo solo se
+              arriva; se no la PEC, se c'e'; se no lo si dice. */}
+          {strada.recapito ? (
+            <>
+              Le versioni precedenti restano consultabili su richiesta scrivendo{' '}
+              {strada.recapito.eUnaCasella ? (
+                <>a <a href={strada.recapito.href} className="text-primary-700 underline">{strada.recapito.testo}</a></>
+              ) : (
+                <>dal <Link href={strada.recapito.href} className="text-primary-700 underline">modulo dei contatti</Link></>
+              )}
+              .
+            </>
+          ) : ownerData.pec ? (
+            <>
+              Le versioni precedenti restano consultabili su richiesta scrivendo alla PEC{' '}
+              <a href={`mailto:${ownerData.pec}`} className="text-primary-700 underline">{ownerData.pec}</a>.
+            </>
           ) : (
-            <>dal <Link href={dovePerIDiritti.href} className="text-primary-700 underline">modulo dei contatti</Link></>
+            <>
+              Le versioni precedenti restano consultabili su richiesta, ma in questo momento non
+              abbiamo un canale attivo per chiederle: è un guasto nostro, non tuo.
+            </>
           )}
-          .
         </p>
       </LegalSection>
 
