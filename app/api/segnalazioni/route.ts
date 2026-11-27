@@ -375,6 +375,18 @@ async function contenutoAncoraOnline(
       ? 'La domanda è ancora visibile: nascondila prima di comunicare «rimosso».'
       : null;
   }
+  // 27/11/2026 (R01-007) — Una recensione segnalata come falsa si può accogliere: «rimosso» parte
+  // quando la recensione non è più pubblicata. Prima ogni recensione accolta riceveva 409, e
+  // l'esito non partiva mai. «recensione» vale per due tabelle (come nel POST qui sopra): basta
+  // che sia ancora in una delle due per fermarsi. Una lettura caduta si ferma, come sopra.
+  if (s.tipo === 'recensione') {
+    for (const tabella of ['reviews', 'store_reviews']) {
+      const { data: r, error: e } = await admin.from(tabella).select('id').eq('id', s.oggetto_id).maybeSingle();
+      if (e) return NON_VERIFICATO;
+      if (r) return 'La recensione è ancora pubblicata: toglila prima di comunicare «rimosso».';
+    }
+    return null;
+  }
   return 'Questo tipo di contenuto non si toglie da qui: l\'esito «rimosso» non può partire.';
 }
 
