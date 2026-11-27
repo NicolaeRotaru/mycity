@@ -1,0 +1,344 @@
+{
+  "sessione": "R12",
+  "aggiornato": "2026-11-27 02:05",
+  "finita": true,
+  "testa": "bb34512454098c01e7050443b48952d3bdb9e772",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "bb34512454098c01e7050443b48952d3bdb9e772",
+    "nota": "typecheck pulito, lint 0 errori (122 avvisi già nella base), vitest 2337 file passati e 1 saltato, 14323 prove passate e 2 saltate; SHA preso con git rev-parse HEAD nello stesso comando"
+  },
+  "voci": [
+    {
+      "id": "R12-012",
+      "chiave": "sicurezza-auth|la registrazione non passa ancora dal server: niente freno sulle iscrizioni e niente verifica anti-robot",
+      "esito": "parziale",
+      "commit": "7577fb14",
+      "file_toccati": [
+        "app/sign-up/page.tsx",
+        "app/sign-up/azioni.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-freno-iscrizioni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-freno-iscrizioni.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_sconosciuto",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7577fb14^ --file app/sign-up/page.tsx,app/sign-up/azioni.ts --prove tests/unit/riparazione-r12-freno-iscrizioni.test.ts --json",
+        "nota": "Con app/sign-up/page.tsx alla base la prova è rossa sul comportamento (la sesta iscrizione arriva a Supabase: 6 chiamate invece di 5), e il caso «sotto la soglia» resta verde come deve. Con azioni.ts tolto da solo la pagina corretta, che lo importa, non si compila: da qui il 3."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nuova azione del server app/sign-up/azioni.ts (chiediPermessoDiIscrizione): getClientIp più il freno che la base ha già (rateLimitAsync), con la chiave e la soglia della rotta app/api/auth/signup (signup:<ip>, 5 all'ora). La pagina la chiama prima di supabase.auth.signUp. Sopra la soglia mostra «Troppe registrazioni da questa rete» e non chiama Supabase. Sotto la soglia l'iscrizione resta uguale. Se l'azione non risponde, si prosegue come prima. La prova monta la pagina vera: sotto soglia passa, la sesta dalla stessa rete è rifiutata, un'altra rete passa.",
+      "cosa_resta": "(1) L'anti-robot: il fornitore è una scelta di Nicola. (2) Questo freno ferma solo chi passa dalla pagina: chi chiama Supabase direttamente con la chiave pubblica lo ferma solo Supabase, con il CAPTCHA e i limiti in Authentication (non codice, Nicola). (3) La rotta morta app/api/auth/signup/route.ts resta (non è un mio file): o si cancella, o si collega dopo la scelta dell'anti-robot.",
+      "domanda": "Quale anti-robot per l'iscrizione? Turnstile (già nel codice: chiave NEXT_PUBLIC_TURNSTILE_SITE_KEY, da accendere su Supabase in Authentication → Attack Protection insieme a CAPTCHA_SU_SUPABASE_ACCESO=1) o un altro?",
+      "nota": "Nessuna chiave aggiunta, nessun fornitore scelto, nessuna tabella nuova: il freno usa Upstash o la memoria, come le altre rotte. Rischio segnalato dal revisore: anche un tentativo che Supabase poi rifiuta (password debole, gettone anti-robot) consuma uno dei 5 posti dell’ora, quindi chi iscrive più negozi dalla stessa rete al sesto resta fermo un’ora. azioni.ts è la prima azione «use server» del sito.",
+      "verificato_da": "revisore (rev1): rimessa la pagina della base → rosse le 2 prove sopra soglia, verde quella sotto soglia; 13 file / 88 prove della pagina di iscrizione verdi; 69 file che scorrono app/ verdi; tsc pulito; getClientIp è la stessa della rotta signup (x-forwarded-for; cf-connecting-ip solo col segreto di bordo); il pulsante torna premibile (finally). Conferma parziale."
+    },
+    {
+      "id": "R12-001",
+      "chiave": "flussi-conversione|chi si iscrive con google dalla registrazione perde il ritorno",
+      "esito": "gia_riparato_prima",
+      "commit": "",
+      "file_toccati": [],
+      "prova": "components/ui/AuthShell.tsx:155-158 (commit 9bd177a2, già nella base): senza returnTo il pulsante Google prende il returnTo dell'indirizzo della pagina, lo ripulisce con safeInternalPath e lo manda come next a /auth/callback. npx vitest run tests/unit/riparazione-r23-google-ritorno-iscrizione.test.tsx --reporter=dot → 5/5 verdi, compreso «da /sign-up?returnTo=/checkout si torna alla cassa».",
+      "verificato_da": "revisore (rev1): AuthShell.tsx:157-158 uguale fra base e testa; app/auth/callback/route.ts:68 ripulisce next con safeInternalPath; r23 5/5 verde; https://evil.com, //evil.com, /\\evil.com, %2F%2F…, /..//evil.com e una tabulazione tornano tutti «/»; 2 mutanti di AuthShell rossi. Conferma."
+    },
+    {
+      "id": "R12-009",
+      "chiave": "qa-flussi|il ritiro in negozio è ancora spento, mentre nicola ha deciso che al lancio è acceso e gratis per il cliente",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "file_toccati": [],
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/ritiro-in-negozio-messo-da-parte.test.ts",
+          "modifica": "riga 23: expect(RITIRO_IN_NEGOZIO_ATTIVO).toBe(false) → toBe(true) (nome «l'opzione è accesa»); riga 154: la descrizione della pagina negozio .not.toMatch(/ritiro/i) → .toMatch(/ritiro in negozio/i)."
+        },
+        {
+          "file": "tests/unit/le-promesse-che-il-sito-non-mantiene.test.ts",
+          "modifica": "righe 62-69: RITIRO_IN_NEGOZIO_ATTIVO toBe(true); promesseRitiroInNegozio() not.toEqual([]); riquadroRitiroInNegozio() not.toBeNull(); PICKUP_DISCOUNT_PERCENT resta 0."
+        },
+        {
+          "file": "tests/unit/chiuso-per-ferie-ferma-gli-ordini-e-il-ritiro-spento-non-si-offre.test.tsx",
+          "modifica": "describe delle righe 93-114: righe 99-102 da .not.toMatch(/ritir/i) a «propone il ritiro» (motivoNegozioChiuso e motivoFasciaRifiutata, o legate all'interruttore); riga 106 not.toContain('ritiro_in_negozio') → toContain; riga 112 toEqual(['bio']) → toEqual(['ritiro_in_negozio','bio'])."
+        },
+        {
+          "file": "tests/unit/una-consegna-a-milano-non-passa-piu-in-cassa.test.ts",
+          "modifica": "riga 92: .not.toContain('Puoi ritirare in negozio') → .toContain('Puoi ritirare in negozio')."
+        },
+        {
+          "file": "components/checkout/PaymentMethodSelector.tsx",
+          "modifica": "righe 206-214: con pickupDiscountPercent 0 il bollino «Sconto {pickupDiscountPercent}%» diventa «Gratis», e «Niente spedizione, sconto subito.» diventa «Niente consegna da pagare: vai tu al negozio quando l'ordine è pronto.»; commento 175-187 riscritto; righe 165-168: con pickupInStore il testo dei contanti dice «Paghi in negozio quando ritiri», non «Paghi al rider»."
+        },
+        {
+          "file": "app/admin/delivery/page.tsx",
+          "modifica": "righe 140-143: value da `− ${PICKUP_DISCOUNT_PERCENT}%` (acceso scriverebbe «− 0%») a «gratis per il cliente»; il ramo «Messo da parte: non se n'è ancora parlato coi negozi» non serve più."
+        },
+        {
+          "file": "tests/unit/la-posta-in-coda-non-promette-regali-e-non-si-butta-via.test.ts",
+          "modifica": "fissa il ritiro spento: aggiornarla allo stato acceso nello stesso commit dell’interruttore (righe da individuare con la patch applicata: è rossa solo per quello)."
+        },
+        {
+          "file": "tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx",
+          "modifica": "con il ritiro acceso la pagina Spedizioni ha 5 frasi nuove sul ritiro: aggiungerle all’elenco delle promesse attese, nello stesso commit dell’interruttore."
+        },
+        {
+          "file": "tests/unit/minori-s07-promesse.test.ts",
+          "modifica": "è rossa per un difetto vero: con il ritiro acceso la descrizione per Google arriva a 171 caratteri, oltre il limite di 160. Va accorciata la frase sul ritiro nella descrizione (non la prova), prima di accendere."
+        }
+      ],
+      "nota": "I due buchi della nota del 26/11 sono CHIUSI nella base (verificato leggendo il codice). (a) Commissione sui ritiri pagati al banco: app/api/orders/cod/route.ts:1597-1636 scrive application_fee_cents (10% della merce) su ogni ordine in contanti; confirm_pickup_by_seller (migrations/179:145-220) lo porta a CASH_IN_STORE; app/admin/payouts/page.tsx:116-163 e migrations/916:225-290 (segna_bonifico_manuale) tolgono la commissione dal bonifico del lunedì. (b) Codice di ritiro: nasce all'inserimento dell'ordine (migrations/016:76-98), il cliente lo vede su ACCEPTED/READY (app/orders/[id]/page.tsx:236-243), il negozio lo scrive (app/seller/orders/[id]/page.tsx:403-420, 612-640), confirm_pickup_by_seller lo controlla (blocco di 15 minuti dopo 5 errori). (c) Costo zero per il cliente: lib/ordini/prezzi.ts:175-180 e :237. L'interruttore in lib/ritiro-in-negozio.ts (mio file) NON l'ho acceso: acceso da solo fa diventare rosse 10 prove in 7 file non miei (il riparatore ne aveva contate 7 in 4; il revisore, con la suite intera, 10 in 7), e la cassa scriverebbe «Sconto 0%». Va acceso NELLO STESSO COMMIT delle modifiche sopra: riga 22 RITIRO_IN_NEGOZIO_ATTIVO = true e commento 7-21 riscritto, con la prova nuova tests/unit/riparazione-r12-ritiro-acceso.test.ts (rossa da spento, verde da acceso).  Pezzo non_codice per Nicola: controllare che le migrazioni 124, 179 e 916 siano applicate in produzione. La patch pronta (git apply --check ok sulla testa 311a140e) è qui sotto per intero.\n\n--- PATCH ---\ndiff --git a/lib/ritiro-in-negozio.ts b/lib/ritiro-in-negozio.ts\nindex 4ec40feb..cc00ef3f 100644\n--- a/lib/ritiro-in-negozio.ts\n+++ b/lib/ritiro-in-negozio.ts\n@@ -7,16 +7,20 @@\n /**\n  * Il ritiro in negozio si puo' scegliere in cassa?\n  *\n- * No, per adesso: coi negozi non se n'e' ancora parlato (lo sconto per il ritiro,\n- * `PICKUP_DISCOUNT_PERCENT` in lib/constants.ts, e' a zero per lo stesso motivo).\n+ * Si', dal lancio (regola ritiro.in-negozio, Nicola 1/11/2026): gratis per il\n+ * cliente (col ritiro la consegna vale zero, lib/ordini/prezzi.ts), pagato con la\n+ * carta o in contanti al banco, e MyCity prende comunque la sua commissione.\n+ * Lo sconto per il ritiro (`PICKUP_DISCOUNT_PERCENT` in lib/constants.ts) resta a\n+ * zero: coi negozi non se n'e' parlato.\n  *\n- * 5/11/2026 — Come si chiude un ritiro: la via del venditore ESISTE. La funzione\n- * `confirm_pickup_by_seller` (migrazione 124, rifatta nella 179) porta l'ordine\n- * da «pronto» a «consegnato» col codice del ritiro e fa pagare il negozio; la\n- * usa app/seller/orders/[id]/page.tsx. Prima qui c'era scritto che il solo modo\n- * di chiudere un ordine era il bottone del fattorino: non e' piu' vero.\n+ * Come si chiude un ritiro: il negozio scrive il codice che il cliente gli mostra\n+ * (`confirm_pickup_by_seller`, migrazione 124 rifatta nella 179, da\n+ * app/seller/orders/[id]/page.tsx). L'ordine passa a «consegnato»; se era in\n+ * contanti diventa CASH_IN_STORE: il negozio ha gia' tutto in cassa e la\n+ * commissione MyCity si toglie dal bonifico del lunedi' (segna_bonifico_manuale,\n+ * migrazione 916; il resto va in fattura).\n  *\n- * Si riaccende cambiando questa riga in `true`, dopo aver controllato che le\n- * migrazioni 124 e 179 siano applicate in produzione.\n+ * Fuori dal codice: le migrazioni 124, 179 e 916 devono essere applicate in\n+ * produzione, se no il ritiro non si chiude o la commissione non si segna.\n  */\n-export const RITIRO_IN_NEGOZIO_ATTIVO = false;\n+export const RITIRO_IN_NEGOZIO_ATTIVO = true;\ndiff --git a/tests/unit/riparazione-r12-ritiro-acceso.test.ts b/tests/unit/riparazione-r12-ritiro-acceso.test.ts\nnew file mode 100644\nindex 00000000..3b1c2e03\n--- /dev/null\n+++ b/tests/unit/riparazione-r12-ritiro-acceso.test.ts\n@@ -0,0 +1,41 @@\n+import { describe, it, expect } from 'vitest';\n+import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/ritiro-in-negozio';\n+import { prezziDelCarrello } from '@/lib/ordini/prezzi';\n+import { compensoRiderCents } from '@/lib/shipping';\n+\n+/**\n+ * R12-009 — Il ritiro in negozio è acceso dal lancio, e per il cliente è gratis (regola\n+ * ritiro.in-negozio, Nicola 1/11): niente consegna da pagare, niente fattorino, solo la merce.\n+ */\n+const carrello = (pickupInStore: boolean) =>\n+  prezziDelCarrello({\n+    gruppi: [{ sellerId: 'forno', subtotalCents: 1250 }],\n+    coordinateNegozio: () => ({ lat: 45.05, lng: 9.69 }),\n+    consegnaLat: 45.06,\n+    consegnaLng: 9.7,\n+    pickupInStore,\n+    couponSpedizioneGratis: false,\n+    couponScontoCents: 0,\n+    consegnaVeloce: false,\n+  });\n+\n+describe('R12-009 · il ritiro in negozio è acceso e gratis per il cliente', () => {\n+  it('IL CASO DELLA VOCE — l’interruttore è acceso', () => {\n+    expect(RITIRO_IN_NEGOZIO_ATTIVO).toBe(true);\n+  });\n+\n+  it('col ritiro il cliente paga solo la merce: consegna e spedizione a zero', () => {\n+    const ritiro = carrello(true);\n+    expect(ritiro.grandDeliveryFeeCents).toBe(0);\n+    expect(ritiro.grandShippingCents).toBe(0);\n+    expect(ritiro.consegna.totaleCents).toBe(0);\n+    expect(ritiro.grandTotalCents).toBe(1250);\n+    expect(compensoRiderCents({ pickupInStore: true, negozioInPiu: false })).toBe(0);\n+  });\n+\n+  it('controprova: la stessa spesa portata a casa paga la consegna', () => {\n+    const casa = carrello(false);\n+    expect(casa.grandDeliveryFeeCents).toBeGreaterThan(0);\n+    expect(casa.grandTotalCents).toBeGreaterThan(1250);\n+  });\n+});\n",
+      "verificato_da": "revisore (rev1): citazioni lette e vere (commissione sulla merce, non su consegna); patch applicata → suite intera 10 rosse in 7 file (non 7 in 4), gli stessi file verdi senza patch; accendere da solo resta sbagliato (PaymentMethodSelector.tsx:211 «Sconto 0%», :215 «sconto subito», admin/delivery/page.tsx:143 «− 0%»). L’esito serve_file_altrui regge."
+    },
+    {
+      "id": "R12-011",
+      "chiave": "qa-flussi|la prova di prima sulle rotte del collegamento a stripe usa un database finto che ignora i filtri",
+      "esito": "parziale",
+      "commit": "311a140e",
+      "file_toccati": [
+        "tests/unit/riparazione-r12-stripe-connect-rotte.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-stripe-connect-rotte.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-stripe-connect-rotte.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge (mutanti a mano)",
+        "uscita": 0,
+        "comando": "per ogni mutante: togliere il filtro .eq('id', user.id) da app/api/stripe/connect/onboarding/route.ts (e lo stesso per login, refresh-status, rider-onboarding; .eq su orders, returns e disputes in payout; .eq('id', utenteId) in lib/stripe/salva-conto.ts; .eq('stripe_account_id', acct.id) in lib/stripe/payout.ts), poi npx vitest run tests/unit/riparazione-r12-stripe-connect-rotte.test.ts --reporter=dot e npx vitest run tests/unit/riparazione-r06-stripe-connect-rotte.test.ts --reporter=dot, poi git checkout -- <file>",
+        "nota": "La voce è una prova debole, non codice: nessun file del sito corretto, quindi la prova rimessa non si applica. Mutanti a mano, 9 su 9: la prova nuova diventa rossa (da 1 a 9 casi rossi), quella di prima resta verde 32/32."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Prova nuova con un database finto che applica davvero i filtri eq, neq, in, is e limit, con più righe per tabella (il mio profilo accanto a quello di un altro negozio collegato, il mio ordine accanto a uno con reso, reclamo e contestazione aperti). single() cade con zero o due righe (PGRST116). Porta tutti i 32 casi della prova di prima, più 2 (reclamo aperto sul mio ordine; consegna di meno di un'ora fa, con orologio finto), e controlla che il profilo dell'altro non venga mai scritto.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r06-stripe-connect-rotte.test.ts",
+          "modifica": "sostituire il finto delle righe 35-71 (costruttore e getServerSupabase che ignora eq) con la tabella() che applica i filtri, da tests/unit/riparazione-r12-stripe-connect-rotte.test.ts:37-82, e due profili; oppure cancellare il file, perché tutti i suoi casi sono nella prova nuova."
+        }
+      ],
+      "cosa_resta": "Quattro mutanti del revisore restano verdi con la prova nuova: (1) tolto .in(\"status\", RECLAMI_APERTI) sui reclami in app/api/stripe/payout/route.ts:19, che è proprio il caso della voce: nel finto manca un reclamo CHIUSO sul mio ordine; (2) tolti i controlli dispute_status e internal_dispute_status (payout/route.ts:24-25): nessun caso ha una contestazione sul MIO ordine; (3) tolto delivered_at dalla select (payout/route.ts:18): il finto ignora le colonne di select() (prova r12:56), quindi l’ora d’attesa può saltare senza che la prova se ne accorga; (4) un campo in più nell’aggiornamento di lib/stripe/payout.ts:71-75: la prova nuova usa toMatchObject (r12:316) dove la vecchia usava toEqual (r06:270), quindi qui è più debole della vecchia. Cura: aggiungere al finto un reclamo chiuso e una contestazione sul mio ordine, far rispettare le colonne di select() e tornare a toEqual sull’aggiornamento. Non l’ho fatta: il giro di correzione non entrava nel limite di spesa.",
+      "verificato_da": "revisore (rev1): 34/34 verdi, la vecchia 32/32, tutti i 32 casi della vecchia presenti; 6 mutanti suoi: 4 presi (resi con neq, resi senza filtro di stato, refresh-status con neq, login senza filtro), verdi lo stato dei reclami, la contestazione sul mio ordine, delivered_at tolto dalla select e un campo in più nell’aggiornamento (che la vecchia prende). Torna parziale."
+    },
+    {
+      "id": "R12-004",
+      "chiave": "flussi-conversione|l'ordine «prezzo crescente» ordina sul prezzo pieno, mentre la griglia mostra il prezzo scontato",
+      "esito": "gia_riparato_prima",
+      "insieme_a": "R12-008",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r21-prezzo-ordine.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-prezzo-ordine.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "prova": "lib/queries/griglia-prodotti.ts@2ba05a74:435 e :438 ordinano su prezzo_pagato e poi su price (con la migrazione 911); :329 nellOrdineDelDatabase confronta prezzo_pagato ?? price. La prova R21 è verde sulla base.",
+      "cosa_ho_fatto": "Nessuna modifica: la base ordina già sul prezzo pagato.",
+      "nota": "Funziona quando la migrazione 911 (già nel deposito) è applicata. Senza la 911 il ripiego ordina di proposito sul prezzo pieno: un ordine giusto fra le pagine lo può dare solo il database. Il resto è applicare la 911, e lo decide Nicola (K07: prima contare i prodotti del catalogo vero).",
+      "verificato_da": "revisore (rev3, sonnet): confermato gia_riparato_prima; griglia-prodotti.ts:473/:476 e nellOrdineDelDatabase ordinano su prezzo_pagato; i mutanti price al posto di prezzo_pagato (asc, desc, blocchi) fanno cadere riparazione-r21-prezzo-ordine; resta da applicare la 911 (Nicola)"
+    },
+    {
+      "id": "R12-008",
+      "chiave": "frontend-ux|ordinando per prezzo, le griglie guardano il prezzo pieno e non quello che si paga",
+      "esito": "gia_riparato_prima",
+      "insieme_a": "R12-004",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r21-prezzo-ordine.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-prezzo-ordine.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "prova": "Le stesse righe della voce abbinata: griglia-prodotti.ts@2ba05a74:435, 438, 329. Ricerca, categorie e piccoli prezzi passano tutti da ProductGrid → leggiProdottiDellaGriglia, e ProductGrid non riordina per prezzo.",
+      "cosa_ho_fatto": "Nessuna modifica: è lo stesso difetto della voce abbinata, e la base lo chiude già.",
+      "nota": "Come la voce abbinata: in produzione si chiude quando si applica la 911.",
+      "verificato_da": "revisore (rev3, sonnet): confermato gia_riparato_prima; ricerca, categorie e piccoli prezzi passano da ProductGrid → leggiProdottiDellaGriglia (ordine :473/:476 su prezzo_pagato); ProductGrid non riordina per prezzo; mutanti rossi; nessun’altra strada sul prezzo pieno con la 911 in app/components/lib; 911 da applicare (Nicola)"
+    },
+    {
+      "id": "R12-002",
+      "chiave": "flussi-conversione|il filtro «prezzo minimo» taglia sul prezzo pieno, non su quello che il cliente paga",
+      "esito": "gia_riparato_prima",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r21-prezzo-minimo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-prezzo-minimo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "prova": "lib/queries/griglia-prodotti.ts@2ba05a74:273 q.gte(pagato ? COLONNA_PREZZO_PAGATO : 'price', d.minPrice), e lo stesso nel conteggio. La prova R21 è verde.",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "nota": "Funziona con la 911 applicata (decisione di Nicola). Senza, resta il prezzo pieno.",
+      "verificato_da": "revisore (rev3, sonnet): confermato gia_riparato_prima; griglia-prodotti.ts:273 gte su prezzo_pagato, lettura e conteggio via applicaFiltriComuni; mutante price → riparazione-r21-prezzo-minimo rosso (2); 911 da applicare (Nicola)"
+    },
+    {
+      "id": "R12-005",
+      "chiave": "flussi-conversione|lo slider del prezzo massimo taglia ancora sul prezzo pieno",
+      "esito": "gia_riparato_prima",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r21-prezzo-massimo.test.ts",
+        "tests/unit/riparazione-r12-taglio-sul-massimo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-prezzo-massimo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "prova": "lib/queries/griglia-prodotti.ts@2ba05a74:265-266: con la 911 il massimo è q.lte('prezzo_pagato', maxPrice). Ricerca, categoria e StoreProductExplorer passano tutti da ProductGrid → leggiProdottiDellaGriglia.",
+      "cosa_ho_fatto": "Nessuna modifica. La prova nuova di R12-010 controlla anche questo taglio, con e senza la 911.",
+      "nota": "Funziona con la 911 applicata.",
+      "verificato_da": "revisore (rev3, sonnet): confermato gia_riparato_prima; griglia-prodotti.ts:266 lte su prezzo_pagato con la 911; mutante price → riparazione-r21-prezzo-massimo rosso (4); 911 da applicare (Nicola)"
+    },
+    {
+      "id": "R12-003",
+      "chiave": "flussi-conversione|il filtro «sotto i 10 €» sui prodotti in promozione si ferma a 1000 righe e 100 id",
+      "esito": "gia_riparato_prima",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r21-griglia-una-strada.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-griglia-una-strada.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "prova": "lib/queries/griglia-prodotti.ts@2ba05a74:266: con la 911 il massimo usa prezzo_pagato, senza elenchi di id né tetti (è la cura che chiede la voce). I tetti di 1000 righe e 100 id (:200, :217, :422) restano solo nel ripiego senza la 911.",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "nota": "Finché la 911 non è applicata, il ripiego tiene i tetti di proposito (un indirizzo troppo lungo dà 414). In produzione si chiude applicando la 911.",
+      "verificato_da": "revisore (rev3, sonnet): confermato gia_riparato_prima; con la 911 il massimo è lte su prezzo_pagato (:266), nessun id né tetto (:460 chiede gli id solo senza la 911); i tetti 1000/100 restano solo nel ripiego senza la 911; il mutante che forza gli id fa cadere riparazione-r21-griglia-una-strada (2); 911 da applicare (Nicola)"
+    },
+    {
+      "id": "R12-010",
+      "chiave": "qa-flussi|la prova «sotto i 10 €» non controlla il taglio sul massimo",
+      "esito": "riparato",
+      "commit": "3760f417",
+      "file_toccati": [
+        "tests/unit/aiuti/finto-r12-prezzo-pagato.ts",
+        "tests/unit/riparazione-r12-taglio-sul-massimo.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-taglio-sul-massimo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-taglio-sul-massimo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "bash /tmp/r12-mutanti-010.sh (testo dello script nella nota)",
+        "nota": "Voce di sola prova: nessun codice del sito cambiato, quindi prova-rimessa.mjs non si applica. Al suo posto, uno script di mutanti su lib/queries/griglia-prodotti.ts che esce 0 solo se la prova nuova è verde senza mutanti e rossa con ognuno: base verde 4/4; M1 senza il taglio sul massimo, 4/4 rosse; M2 lte→lt sul pagato, 2 rosse; M3 con la 911 taglio sul prezzo pieno invece che sul pagato, 2 rosse. Lanciato dal revisore: uscita 0.\n\n--- SCRIPT ---\n#!/usr/bin/env bash\n# R12-010 — tre mutanti, uno alla volta, su lib/queries/griglia-prodotti.ts contro la prova nuova.\n# Esce 0 solo se la prova e' verde senza mutanti e rossa con ognuno; il file torna sempre com'era.\nset -u\ncd /tmp/r12-rev2 || exit 1\nF=lib/queries/griglia-prodotti.ts\nT=tests/unit/riparazione-r12-taglio-sul-massimo.test.ts\ngit diff --quiet -- \"$F\" || { echo \"ABORT: $F gia' modificato\"; exit 1; }\ntrap 'git checkout -- \"$F\"' EXIT\nesito=0\n\nprova() { npx vitest run \"$T\" --reporter=dot > \"/tmp/r12-rev2-mut-$1.log\" 2>&1; }\nriassunto() { grep -E '^ +Tests ' \"/tmp/r12-rev2-mut-$1.log\" | sed 's/^ *//'; }\n\nprova base\nif [ $? -eq 0 ]; then echo \"base: verde ($(riassunto base))\"; else echo \"base: ROSSA ($(riassunto base))\"; esito=1; fi\n\nmuta() { # nome, testo da, testo a (sostituzione esatta, una sola occorrenza)\n  local nome=$1\n  if ! node -e '\n    const fs = require(\"fs\"); const [f, da, a] = process.argv.slice(1);\n    const s = fs.readFileSync(f, \"utf8\");\n    if (s.split(da).length !== 2) process.exit(2);\n    fs.writeFileSync(f, s.replace(da, () => a));' \"$F\" \"$2\" \"$3\"; then\n    echo \"$nome: sostituzione NON applicata\"; esito=1; git checkout -- \"$F\"; return\n  fi\n  prova \"$nome\"; local r=$?\n  git checkout -- \"$F\"\n  if [ $r -ne 0 ]; then echo \"$nome: rossa ($(riassunto \"$nome\"))\"; else echo \"$nome: VERDE, mutante sopravvissuto ($(riassunto \"$nome\"))\"; esito=1; fi\n}\n\n# M1 (dichiarato dalla voce): niente taglio sul massimo.\nmuta M1-senza-taglio 'if (d.maxPrice !== undefined) {' 'if (false) {'\n# M2: lte -> lt sul prezzo pagato (in forma che il finto capisce: <= max - 1 cent).\nmuta M2-lte-lt-pagato 'q.lte(COLONNA_PREZZO_PAGATO, d.maxPrice)' 'q.lte(COLONNA_PREZZO_PAGATO, d.maxPrice - 0.01)'\n# M3: con la 911 il taglio sul prezzo pieno invece che sul pagato.\nmuta M3-pieno-invece-di-pagato 'q.lte(COLONNA_PREZZO_PAGATO, d.maxPrice)' \"q.lte('price', d.maxPrice)\"\n\ngit diff --quiet -- \"$F\" || { echo \"ATTENZIONE: $F non rimesso\"; esito=1; }\necho \"esito=$esito\"\nexit $esito\n"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Un aiutante nuovo che valuta davvero l'or, condizione per condizione, e fa rispondere active_promo_products. Una prova sul massimo di 10 €, con e senza la 911, per la lista e per il conteggio: restano fuori il 20 € e il 15 € al -10%, entra il 12 € al -25%. Nessun codice del sito toccato.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/finto-postgrest.ts",
+          "modifica": "alle righe 126-129 il ramo `else if (f.tipo === 'or')` applica sempre il filtro della giacenza: va sostituito con `{ const parti = spezza(f.espressione).map(condizione); righe = righe.filter((r) => parti.some((c) => c(r))); }`, copiando le funzioni spezza e condizione da tests/unit/aiuti/finto-r12-prezzo-pagato.ts:16-41 (is.null, gt, gte, lte, in, not.in). Così anche le prove vecchie col massimo controllano l'or del prezzo."
+        }
+      ],
+      "verificato_da": "revisore (rev2): script dei mutanti scritto e lanciato dal revisore, esce 0 (base verde; M1 4/4, M2 2/4, M3 2/4 rosse); il finto non è permissivo (una condizione sconosciuta lancia); nota: un lt letterale diventa rosso solo perché il finto non ha .lt"
+    },
+    {
+      "id": "R12-006",
+      "chiave": "flussi-conversione|se la migrazione del prezzo pagato arriva a pagina aperta, lo scorrimento infinito può mescolare due ordini",
+      "esito": "parziale",
+      "commit": "16b406bf",
+      "file_toccati": [
+        "lib/queries/griglia-prodotti.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-scorrimento-un-ordine-solo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-scorrimento-un-ordine-solo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 16b406bfda9eeb3a58661b5147758640342295d3^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r12-scorrimento-un-ordine-solo.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "leggiProdottiDellaGriglia ora ricorda, per ogni client, come ha letto la prima pagina di ogni domanda (prezzo pagato o pieno): la domanda la riconoscono filtri e ordine, senza la finestra, e se ne tengono al massimo 50. Le pagine con finestra[0] > 0 leggono allo stesso modo; una prima pagina riletta decide di nuovo. La prova usa l'orologio finto e copre due casi: la 911 applicata dopo i 5 minuti, e la sonda caduta per rete alla prima pagina.",
+      "nota": "Se il chiamante cambia gli elenchi già risolti (apertiOra, idsColVoto) fra una pagina e l'altra, la chiave cambia e si torna alla sonda, come prima.",
+      "cosa_resta": "Un 57014 su una pagina dopo la prima, letta sul prezzo pagato come la prima, ripiega ancora sul prezzo pieno e mescola i due ordini (griglia-prodotti.ts:397-409): il revisore lo ha mostrato con una sonda (pagina 1 [otto, dodici-al-25] sul pagato, pagina 2 [dieci, dodici-al-25] sul pieno: dodici-al-25 esce due volte e nove-e-99 mai). In più comeLaPrima (:392) ignora il segno dei 5 minuti, quindi ogni pagina dopo riprova il pagato, aspetta il tempo scaduto e ripiega. Cura minima: se la pagina non è la prima ed è stata letta come la prima, rilanciare l’errore invece di ripiegare («Carica altri» mostra «riprova»), con una prova sul 57014 alla pagina 2. Non l’ho fatta: il giro di correzione non entrava nel limite di spesa della sessione.",
+      "verificato_da": "revisore (rev2): prova rimessa rilanciata, regge (uscita 0); torna parziale: un 57014 su una pagina dopo la prima ripiega sul pieno e mescola gli ordini (griglia-prodotti.ts:397-409, sonda); il resto regge (memoria per client del browser, tetto 50, chiave che distingue negozio, categoria, ricerca, ordine e filtri)"
+    },
+    {
+      "id": "R12-007",
+      "chiave": "flussi-conversione|un 57014 da carico (non da prezzo_pagato) spegne l'ordine e i filtri sul prezzo pagato per cinque minuti per quel client",
+      "esito": "riparato",
+      "commit": "bb345124",
+      "file_toccati": [
+        "lib/queries/griglia-prodotti.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-tempo-scaduto-da-carico.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-tempo-scaduto-da-carico.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bb34512454098c01e7050443b48952d3bdb9e772^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r12-tempo-scaduto-da-carico.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dopo un 57014 il prezzo pagato si spegne per 5 minuti solo se la lettura sul prezzo pieno riesce. Se cade anche quella, la colpa è del carico: niente segno, e al giro dopo si riprova subito il prezzo pagato. Vale per la lista e per il conteggio. Il 42703 (colonna mancante) segna come prima. La prova, con l'orologio finto, copre tre casi: la lista sotto carico, il conteggio sotto carico, e il 57014 del solo prezzo_pagato, che resta spento 5 minuti e poi si riprova.",
+      "nota": "La causa si riconosce così: se la lettura sul prezzo pieno, rifatta subito dopo, riesce, la colpa va a prezzo_pagato. Un picco di carico che colpisce solo la prima lettura viene ancora attribuito a prezzo_pagato. Lista e conteggio partono in parallelo, quindi nel passaggio possono ancora divergere.",
+      "verificato_da": "revisore (rev2): prova rimessa rilanciata, regge (uscita 0); se cadono tutte e due le letture la lista lancia l’errore (pagina «riprova», non vuota) e il conteggio torna null, senza segno; il 42703 segna ancora (:404, :647); nota: sotto carico continuo la lista costa 2 letture a giro e il conteggio 3; lista e conteggio possono divergere per un giro; 38 file di prova che importano griglia-prodotti verdi (182)"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "il finto della prova del taglio sul massimo non conosce lt: un mutante lte→lt diventa rosso per un TypeError, non per il comportamento",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "tests/unit/aiuti/finto-r12-prezzo-pagato.ts:16-41",
+      "descrizione": "Aggiungere lt (metodo e condizione dentro or) al finto, così un taglio stretto sbagliato cade sul risultato."
+    },
+    {
+      "titolo": "sotto carico continuo la griglia rilegge due volte a ogni giro dopo un tempo scaduto",
+      "dimensione": "flussi-conversione",
+      "severita": "minore",
+      "file": "lib/queries/griglia-prodotti.ts:404-407 · :645-648",
+      "descrizione": "Dopo la cura del 57014 da carico, ogni giro sotto carico costa 2 letture nella lista (la prima fino allo scadere del tempo) e 3 nel conteggio; prima, dopo il primo 57014, era una lettura per 5 minuti. Da valutare se serve un freno breve anche nel caso «carico»."
+    },
+    {
+      "titolo": "col ritiro in negozio acceso la descrizione per Google supera i 160 caratteri (171)",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "tests/unit/minori-s07-promesse.test.ts (descrizione del sito col ritiro acceso)",
+      "descrizione": "Da accorciare prima di accendere il ritiro: la prova minori-s07-promesse lo prende."
+    },
+    {
+      "titolo": "Falla di sicurezza da chiudere (pagamenti): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "pagamenti",
+      "severita": "minore",
+      "file": "(nel referto privato)",
+      "riservato": true
+    }
+  ],
+  "domande_per_nicola": [
+    "Quale anti-robot per l’iscrizione? Turnstile (già nel codice) o un altro?",
+    "Il freno è a 5 iscrizioni l’ora per rete (il numero della rotta che c’era già): va bene anche con le reti mobili condivise (CGNAT), o lo vuoi più alto?",
+    "Le migrazioni 124, 179 e 916 sono applicate in produzione? Serve saperlo prima di accendere il ritiro in negozio.",
+    "Applichiamo la migrazione 911, già nel deposito? Senza, l’ordine e i filtri sul prezzo pagato restano spenti in produzione: le cinque voci della griglia date per già riparate si chiudono davvero solo con lei. K07 consiglia di contare prima i prodotti del catalogo vero (oltre 6-7 mila la lettura rallenta)."
+  ],
+  "conto": {
+    "agenti": 5,
+    "nota": "5 subagenti su 6: 2 riparatori (modello grande), 3 revisori (2 grandi, 1 sonnet). Nessun giro di correzione: la spesa era già oltre il 70% del limite. Costo letto con get_session (con l’id della sessione: senza id il campo usage non compare) alle 02:00: 18,75 $ su 20 $.",
+    "subagenti": 5
+  },
+  "costo_usd": 18.75
+}
