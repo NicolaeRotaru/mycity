@@ -86,7 +86,7 @@ const PAGINE_UTENTI = 10;
 const PER_PAGINA = 1000;
 
 /** Un utente ritrovato dall'email, con quello che serve per capire se l'ha creato il sito. */
-type UtenteTrovato = { id: string; bloccato: boolean; creatoIl: number };
+type UtenteTrovato = { id: string; bloccato: boolean };
 
 /**
  * L'utente ritrovato dalla sua email, scorrendo gli utenti a pagine; `utente: null` se non c'è o se la lettura
@@ -101,15 +101,14 @@ async function utenteDallEmail(admin: SupabaseClient, email: string): Promise<{ 
     const u = data.users.find((x) => (x.email ?? '').toLowerCase() === email);
     if (u) {
       const finoA = u.banned_until ? Date.parse(u.banned_until) : NaN;
-      return { utente: { id: u.id, bloccato: Number.isFinite(finoA) && finoA > Date.now(), creatoIl: Date.parse(u.created_at) || 0 } };
+      return { utente: { id: u.id, bloccato: Number.isFinite(finoA) && finoA > Date.now() } };
     }
-    if (data.users.length < PER_PAGINA) return { utente: null, errore: 'utente esistente non ritrovato' };
+    // Ci si ferma sulla pagina vuota, non su quella corta: se il server desse pagine più piccole, fermarsi alla
+    // prima pagina corta perderebbe l'utente in silenzio (idea della mycity#345).
+    if (data.users.length === 0) return { utente: null, errore: 'utente esistente non ritrovato' };
   }
   return { utente: null, errore: `utente non ritrovato nei primi ${PAGINE_UTENTI * PER_PAGINA}` };
 }
-
-/** Un utente creato da meno di questo è di un invio ancora in corso: non si tocca, si riprova fra poco. */
-const IN_CORSO_MS = 2 * 60_000;
 
 export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): Promise<EsitoIscrizione> {
   const email = emailDiSistema(a);
@@ -145,17 +144,15 @@ export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): 
     if (!id) {
       // Iscrizione fermata a metà: l'utente c'è, ma il profilo col link no. Lo si ritrova dall'email e il
       // lavoro si finisce come la prima volta: per chi chiama è un'attività che nasce adesso (flusso 16,
-      // avviso), perché la prima volta quei passi non erano partiti. Tre paletti (collaudo del 27/11):
+      // avviso), perché la prima volta quei passi non erano partiti. Due paletti (collaudo del 27/11), e un
+      // terzo più sotto: «nuova» solo per chi scrive davvero il link.
       const trovato = await utenteDallEmail(admin, email);
       const u = trovato.utente;
       if (!u) return { ok: false, motivo: 'guasto', dettaglio: trovato.errore ?? creato.error?.message ?? 'utente non creato' };
       // ① solo un utente creato dal sito, cioè bloccato: nessuno si blocca da solo. Un account registrato a
       //    mano con la stessa email non diventa mai un negozio.
       if (!u.bloccato) return { ok: false, motivo: 'guasto', dettaglio: 'con questa email c’è un account non creato dal sito' };
-      // ② appena creato vuol dire un altro invio ancora in corso sulla stessa attività: si riprova fra poco,
-      //    così due invii insieme non fanno partire due volte il flusso 16.
-      if (Date.now() - u.creatoIl < IN_CORSO_MS) return { ok: false, motivo: 'guasto', dettaglio: 'iscrizione della stessa attività ancora in corso' };
-      // ③ col link l'iscrizione era finita: il nome diverso vuol dire un'altra attività che si scrive uguale
+      // ② col link l'iscrizione era finita: il nome diverso vuol dire un'altra attività che si scrive uguale
       //    («BAR SPORT» e «Bar Sport») o un negozio rinominato. Come prima, non si tocca.
       const giaColLink = await admin.from('preventivi_con_codice').select('seller_id').eq('seller_id', u.id).maybeSingle();
       if (giaColLink.error) return { ok: false, motivo: 'guasto', dettaglio: giaColLink.error.message };
@@ -196,8 +193,13 @@ export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): 
   // 3. Il link col codice, una volta sola.
   const link = await admin
     .from('preventivi_con_codice')
-    .upsert({ seller_id: id, codice: nuovoCodice() }, { onConflict: 'seller_id', ignoreDuplicates: true });
+    .upsert({ seller_id: id, codice: nuovoCodice() }, { onConflict: 'seller_id', ignoreDuplicates: true })
+    .select('seller_id');
   if (link.error) return { ok: false, motivo: 'guasto', dettaglio: link.error.message };
+  // ③ L'attività è «nuova» solo per l'invio che ha scritto il link adesso: il database restituisce la riga solo
+  //    in quel caso. Due invii insieme sulla stessa attività rimasta a metà non fanno partire due volte il
+  //    flusso 16 (idea della mycity#345, collaudo del 27/11).
+  nuova = (link.data ?? []).length > 0;
 
   return { ok: true, id, nuova, sito };
 }

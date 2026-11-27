@@ -18,6 +18,8 @@ const db = vi.hoisted(() => ({
   rompiProfilo: 0,
   /** Quanti minuti fa nascono gli utenti creati adesso (per simulare un'iscrizione vecchia). */
   etaMinuti: 0,
+  /** Un altro invio scrive il link un attimo prima di questo (due invii insieme). */
+  linkDaAltri: false,
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -55,12 +57,20 @@ vi.mock('@/lib/supabase/server', () => ({
             : tabella === 'preventivi_con_codice' ? db.link.get(String(filtri.seller_id)) ?? null : null,
           error: null,
         }),
-        upsert: async (riga: Record<string, unknown>, o?: { ignoreDuplicates?: boolean }) => {
-          if (tabella === 'profiles' && db.rompiProfilo > 0) { db.rompiProfilo -= 1; return { error: { message: 'connessione persa' } }; }
-          if (tabella === 'profiles') db.profili.set(String(riga.id), { ...db.profili.get(String(riga.id)), ...riga });
-          if (tabella === 'preventivi_con_codice' && !(o?.ignoreDuplicates && db.link.has(String(riga.seller_id))))
-            db.link.set(String(riga.seller_id), riga as { seller_id: string; codice: string });
-          return { error: null };
+        upsert: (riga: Record<string, unknown>, o?: { ignoreDuplicates?: boolean }) => {
+          // Come PostgREST: l'upsert si può attendere da solo, oppure con .select() che restituisce le righe
+          // scritte davvero (con ignoreDuplicates, nessuna se la riga c'era già).
+          let esito: { error: { message: string } | null; data: unknown[] };
+          if (tabella === 'profiles' && db.rompiProfilo > 0) { db.rompiProfilo -= 1; esito = { error: { message: 'connessione persa' }, data: [] }; }
+          else if (tabella === 'profiles') { db.profili.set(String(riga.id), { ...db.profili.get(String(riga.id)), ...riga }); esito = { error: null, data: [riga] }; }
+          else if (tabella === 'preventivi_con_codice') {
+            const scritta = !(o?.ignoreDuplicates && (db.link.has(String(riga.seller_id)) || db.linkDaAltri));
+            if (db.linkDaAltri && !db.link.has(String(riga.seller_id))) db.link.set(String(riga.seller_id), { seller_id: String(riga.seller_id), codice: 'd'.repeat(64) });
+            if (scritta) db.link.set(String(riga.seller_id), riga as { seller_id: string; codice: string });
+            esito = { error: null, data: scritta ? [{ seller_id: riga.seller_id }] : [] };
+          } else esito = { error: null, data: [] };
+          const promessa = Promise.resolve(esito);
+          return Object.assign(promessa, { select: () => promessa });
         },
         then: (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) => {
           const nome = filtri['profiles.store_name'];
@@ -83,7 +93,7 @@ const chiama = async (corpo: unknown, segreto: string | null = SEGRETO) => {
 const BAR = { tipo: 'nuova-attivita', nome: 'Bar Prova', tipo_attivita: 'bar', citta: 'Piacenza', indirizzo: 'Via Roma 1' };
 
 beforeEach(() => {
-  db.utenti.clear(); db.profili.clear(); db.link.clear(); db.creaUtente.length = 0; db.ultimoId = 0; db.rompiProfilo = 0; db.etaMinuti = 0;
+  db.utenti.clear(); db.profili.clear(); db.link.clear(); db.creaUtente.length = 0; db.ultimoId = 0; db.rompiProfilo = 0; db.etaMinuti = 0; db.linkDaAltri = false;
   process.env.N8N_SCHEDA_CLIENTE_SEGRETO = SEGRETO;
 });
 
@@ -150,7 +160,7 @@ describe('il negozio nasce come Ora del Gusto', () => {
 
   it('un iscrizione fermata a metà (utente creato, profilo no) si finisce al secondo invio, senza doppioni (collaudo del 27/11)', async () => {
     db.rompiProfilo = 1;
-    db.etaMinuti = 10; // il primo invio è di dieci minuti fa: non è un invio ancora in corso
+    db.etaMinuti = 10;
     expect((await chiama(BAR)).status).toBe(503);
     expect(db.utenti.size).toBe(1);
     expect(db.link.size).toBe(0);
@@ -184,12 +194,14 @@ describe('il negozio nasce come Ora del Gusto', () => {
     expect(String(db.profili.get(a.id_attivita)!.store_address)).toContain('Via Roma 1');
     db.utenti.clear(); db.profili.clear(); db.link.clear();
 
-    // ② Un utente appena creato (un altro invio ancora in corso) non si recupera: si riprova fra poco.
-    db.etaMinuti = 0;
+    // ③ Due invii insieme sull'attività rimasta a metà: chi trova il link già scritto da un altro non è «nuova»,
+    //    quindi il flusso 16 parte una volta sola.
     db.rompiProfilo = 1;
     expect((await chiama(BAR)).status).toBe(503);
-    expect((await chiama(BAR)).status).toBe(503);
-    expect(db.link.size).toBe(0);
+    db.linkDaAltri = true;
+    const doppio = await chiama(BAR);
+    expect(doppio.status).toBe(200);
+    expect(((await doppio.json()) as { nuova: boolean }).nuova).toBe(false);
   });
 
   it('un profilo approvato senza link non torna «non approvato» col recupero', async () => {
