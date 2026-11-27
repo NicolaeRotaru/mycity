@@ -6,7 +6,7 @@ import { apiSuccess, ApiErrors } from '@/lib/api/responses';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
-import { AiCallError } from '@/lib/ai/run';
+import { AiCallError, mapAiError } from '@/lib/ai/run';
 import {
   fetchExternalSnapshot,
   isStale,
@@ -164,6 +164,13 @@ export const POST = withAdminAuth(async ({ params }): Promise<NextResponse> => {
     if (!esito.data) {
       // R03-007 — Un 404 del fornitore non e' «riprova»: le stesse parole delle rotte AI.
       if (modelloNonTrovato(esito.errore)) return ApiErrors.unavailable('Funzione AI momentaneamente non disponibile.');
+      // R03-004 — Anche il tetto di spesa (503), il limite del fornitore (429) e la chiave rifiutata (401)
+      // si dicono per quello che sono, con le parole di `mapAiError` (come le altre rotte AI): prima
+      // l'admin leggeva «Riprova» anche a budget finito. Gli altri guasti restano «Riprova».
+      const e = esito.errore;
+      if (e instanceof AiCallError && (e.motivo === 'tetto_spesa' || e.status === 401 || e.status === 429 || e.status === 503)) {
+        return mapAiError(e, 'marketplace-import');
+      }
       return ApiErrors.badGateway('Aggiornamento non riuscito. Riprova.');
     }
     return apiSuccess({ external: esito.data, synced_at: new Date().toISOString() });

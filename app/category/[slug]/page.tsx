@@ -194,7 +194,17 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   const [onlyInStock, setOnlyInStock] = useState(false);
   const [onlyOpenStores, setOnlyOpenStores] = useState(false);
   const [minRating, setMinRating] = useState<number>(0);
-  const [resultCount, setResultCount] = useState<number | null>(null);
+  // R14-013 — Il conto della griglia vale solo per i filtri con cui è stato dato. La griglia, quando il
+  // conto non si sa (ferma al tetto, senza totale del database), non lo dice: il numero di prima
+  // non resta a video per i filtri nuovi. Il conto nuovo ha un `onCount` nuovo, e la griglia lo ridice
+  // appena lo sa; se «non so» (`null`) lo dice, il numero sparisce.
+  const chiaveFiltri = [slug, maxPrice, minPrice, onlyPromo, onlyInStock, onlyOpenStores, minRating, sort].join('|');
+  const [contoDato, setContoDato] = useState<{ chiave: string; n: number | null } | null>(null);
+  const segnaRisultati = useCallback(
+    (n: number | null) => setContoDato({ chiave: chiaveFiltri, n }),
+    [chiaveFiltri],
+  );
+  const resultCount = contoDato && contoDato.chiave === chiaveFiltri ? contoDato.n : null;
   const [filtersOpen, setFiltersOpen] = useState(false);
   // 5/11/2026 — Nel ramo hub ogni fila vuota si nasconde da sola: se lo fanno tutte, sotto i
   // bottoni delle sottocategorie la pagina restava bianca. Qui si raccolgono i conti delle file.
@@ -650,7 +660,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
         <ProductGrid
           {...gridProps}
           maxColumns={4}
-          onCount={setResultCount}
+          onCount={segnaRisultati}
           emptyTitle={t('noResultsGeneric')}
           emptyDescription={activeFilters > 0 ? t('noResultsFiltered') : CATEGORIA_ANCORA_VUOTA}
           onReset={activeFilters > 0 ? reset : undefined}

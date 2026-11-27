@@ -572,16 +572,50 @@ export async function anonimizzaTestoLibero(admin: Admin, userId: string): Promi
 /**
  * Toglie l'iscrizione alla newsletter, che vive per indirizzo email e non per
  * profilo. L'email va letta PRIMA di cancellare l'utente: dopo non esiste più.
+ *
+ * 26/11/2026 (R24-015) — SE L'EMAIL NON SI LEGGE, LA NEWSLETTER NON È RIPULITA.
+ * L'errore della lettura si buttava via: con la lettura caduta l'email valeva
+ * null, si usciva come per un utente senza email, senza una riga nel registro,
+ * e poi l'account si cancellava lasciando l'indirizzo iscritto per sempre (dopo
+ * la cancellazione non c'è più niente che lo ritrovi). Adesso ogni pulizia non
+ * riuscita torna a chi chiama come una riga che sopravvive: la cancellazione si
+ * ferma prima del passo irreversibile (②bis), la notte è rossa e si riprova.
  */
-export async function togliDallaNewsletter(admin: Admin, userId: string): Promise<void> {
+export async function togliDallaNewsletter(admin: Admin, userId: string): Promise<PuliziaNonRiuscita | null> {
+  const nonRiuscita = (errore: string): PuliziaNonRiuscita => ({
+    tabella: 'newsletter_subscribers', colonna: 'email', sopravvive: true, errore,
+  });
   try {
-    const { data: utenteAuth } = await admin.auth.admin.getUserById(userId);
+    // Il client vero ha sempre getUserById: uno senza (ridotto, finto) non può leggere l'email e si va
+    // avanti come prima, ma lo si scrive. La lettura che cade davvero (errore o eccezione) ferma sotto.
+    if (typeof admin.auth?.admin?.getUserById !== 'function') {
+      logger.warn('[cancellazione] lettura email per la newsletter non disponibile su questo client', { userId });
+      return null;
+    }
+    const { data: utenteAuth, error: erroreLettura } = await admin.auth.admin.getUserById(userId);
+    // L'utente di accesso già cancellato (giro precedente o cancellazione parallela):
+    // la newsletter è stata ripulita prima di cancellarlo, non c'è niente da togliere.
+    // Stessa regola del «già chiuso» del passo ③.
+    const utenteGiaTolto = !!erroreLettura && (
+      (erroreLettura as { code?: string }).code === 'user_not_found' ||
+      ((erroreLettura as { status?: number }).status === 404 && /^user not found$/i.test(String(erroreLettura.message ?? '').trim()))
+    );
+    if (utenteGiaTolto) return null;
+    if (erroreLettura) {
+      logger.warn('[cancellazione] lettura email per la newsletter fallita', { userId, err: erroreLettura.message });
+      return nonRiuscita(`email non letta (${erroreLettura.message})`);
+    }
     const emailUtente = utenteAuth?.user?.email ?? null;
-    if (!emailUtente) return;
+    if (!emailUtente) return null;
     const { error } = await admin.from('newsletter_subscribers').delete().ilike('email', emailUtente);
-    if (error) logger.warn('[cancellazione] newsletter non ripulita', { userId, err: error.message });
+    if (error) {
+      logger.warn('[cancellazione] newsletter non ripulita', { userId, err: error.message });
+      return nonRiuscita(error.message);
+    }
+    return null;
   } catch (e) {
     logger.warn('[cancellazione] lettura email per la newsletter fallita', { userId, e });
+    return nonRiuscita(`email non letta (${e instanceof Error ? e.message : 'errore'})`);
   }
 }
 
@@ -892,6 +926,12 @@ export type EsitoCancellazione = {
    * irreversibile non l'ha fatto questa chiamata (chi chiama non lo registra due volte).
    */
   giaCancellato?: boolean;
+  /**
+   * 26/11/2026 (R24-006) — Non fatta perché la scadenza data da chi chiama era passata: non si è
+   * cominciato nessun passo dopo quella scadenza. Non è un guasto né un rinvio deciso da noi: il
+   * giro notturno la tratta come una richiesta non presa in carico, che riparte la notte dopo.
+   */
+  tempoFinito?: true;
   fileRimossi: number;
   erroriFile: string[];
 };
@@ -941,7 +981,29 @@ const MOTIVO_PER_ESITO_CASSA: Record<EsitoCassa, 'cassa_da_versare' | null> = {
   non_verificabile: null,
 };
 
-export async function cancellaAccount(admin: Admin, userId: string): Promise<EsitoCancellazione> {
+export async function cancellaAccount(
+  admin: Admin,
+  userId: string,
+  opzioni: { scadenza?: number } = {},
+): Promise<EsitoCancellazione> {
+  // 26/11/2026 (R24-006) — LA CANCELLAZIONE HA UN TEMPO SUO. Il giro notturno dà una scadenza (in
+  // millisecondi, come Date.now()) e smette di aspettare quando passa: da lì l'account per lui è
+  // rimandato alla notte dopo. Qui, passata la scadenza, non si comincia un passo nuovo, così niente
+  // succede alle sue spalle — tanto meno il passo irreversibile (③). Senza scadenza (l'amministratore)
+  // tutto come prima. Fermarsi fra un passo e l'altro è sicuro: è lo stesso punto in cui si ferma un
+  // guasto, e la notte dopo si riprende da capo.
+  const fuoriTempo = (fileRimossi = 0, erroriFile: string[] = []): EsitoCancellazione | null =>
+    opzioni.scadenza !== undefined && Date.now() >= opzioni.scadenza
+      ? {
+          ok: false,
+          tempoFinito: true,
+          errore: 'Il tempo del giro è finito prima che la cancellazione fosse completa: si riprova.',
+          fileRimossi,
+          erroriFile,
+        }
+      : null;
+  let fermo: EsitoCancellazione | null;
+
   // ① Prima di toccare qualsiasi cosa: i soldi degli altri.
   const cassa = await contantiAncoraDaVersare(admin, userId);
   if (cassa.bloccante) {
@@ -967,11 +1029,17 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
 
   // ② I documenti d'identità e l'IBAN non aspettano: non si vedono a video,
   // toglierli non lascia nessuno con un account a metà.
+  if ((fermo = fuoriTempo())) return fermo;
   await anonimizzaDatiSensibili(admin, userId);
 
+  if ((fermo = fuoriTempo())) return fermo;
   const puliziaFallita = await anonimizzaTestoLibero(admin, userId);
-  await togliDallaNewsletter(admin, userId);
+  if ((fermo = fuoriTempo())) return fermo;
+  // R24-015 — Una newsletter non ripulita ferma la cancellazione al ②bis, come le righe che sopravvivono.
+  const newsletter = await togliDallaNewsletter(admin, userId);
+  if (newsletter) puliziaFallita.push(newsletter);
 
+  if ((fermo = fuoriTempo())) return fermo;
   const file = await cancellaFilePersonali(admin, userId);
   if (file.errori.length > 0) {
     logger.warn('[cancellazione] file personali non tutti rimossi', { userId, errori: file.errori });
@@ -979,6 +1047,7 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
 
   // Le prove di consegna stanno nella cartella del fattorino: si arriva a
   // quelle di questa persona solo passando dai suoi ordini (R058).
+  if ((fermo = fuoriTempo(file.rimossi, file.errori))) return fermo;
   const prove = await cancellaProveDiConsegna(admin, userId);
   if (prove.errori.length > 0) {
     logger.warn('[cancellazione] prove di consegna non tutte rimosse', { userId, errori: prove.errori });
@@ -1026,6 +1095,7 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
 
   // ②ter Chi tiene una copia dei dati fuori da qui. Va fatto adesso: dopo il
   // ③ la riga del profilo non c'è più, e con lei il codice del cliente Stripe.
+  if ((fermo = fuoriTempo(file.rimossi + prove.rimossi))) return fermo;
   const fuori = await propagaLaCancellazioneAStripe(admin, userId);
   if (!fuori.ok) {
     return {
@@ -1041,6 +1111,7 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
   // ③ Il passo che può fallire. Fin qui non abbiamo toccato niente di ciò che
   // la persona vede: se va male, il suo account resta intero e la richiesta
   // viene ritentata.
+  if ((fermo = fuoriTempo(file.rimossi + prove.rimossi))) return fermo;
   const { error: errAuth } = await admin.auth.admin.deleteUser(userId);
   // 13/11/2026 (R14-007, R14-015) — «Utente non trovato» vuol dire che l'account non c'è già
   // più: l'ha chiuso un'altra cancellazione dello stesso account partita insieme a questa (due

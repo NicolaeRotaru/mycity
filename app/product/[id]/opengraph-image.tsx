@@ -3,6 +3,8 @@ import { caratteriDelMarchio, MARCHIO_FONT_FAMILY, MARCHIO_FONT_WEIGHT } from '@
 import { leggiProdottoPerMetadati } from '@/lib/queries/metadati-vetrina';
 import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
+import { creaClientAnonimo } from '@/lib/supabase/anonimo';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 
 export const runtime = 'edge';
 export const alt = 'Prodotto su MyCity';
@@ -17,6 +19,20 @@ const CACHE_ANTEPRIMA = 'public, max-age=300, s-maxage=300, stale-while-revalida
 const fetchProduct = (id: string) => leggiProdottoPerMetadati(id);
 
 /**
+ * R11-002 — Lo sconto della promozione attiva, letto dalla stessa fonte di griglia, scheda e cassa
+ * (`fetchActiveDiscounts`, che sul runtime edge regge: il client anonimo e il registro li usa già la
+ * lettura del prodotto qui sopra). Una lettura che cade vale «nessuno sconto»: l'anteprima esce col
+ * prezzo pieno, come prima, invece di non uscire.
+ */
+async function scontoAttivo(id: string): Promise<number> {
+  try {
+    return (await fetchActiveDiscounts(creaClientAnonimo(), [id])).get(id) ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Open Graph image generata on-demand per ogni prodotto.
  * Quando un utente condivide il link prodotto su WhatsApp / Telegram / FB
  * il preview mostra titolo + prezzo + nome negozio + (se disponibile) foto.
@@ -24,11 +40,15 @@ const fetchProduct = (id: string) => leggiProdottoPerMetadati(id);
  * Rendering server-side via @vercel/og (incluso in Next.js).
  */
 export default async function ProductOG({ params }: { params: { id: string } }) {
-  const p = await fetchProduct(params.id);
+  const [p, sconto] = await Promise.all([fetchProduct(params.id), scontoAttivo(params.id)]);
   const name = p?.name ?? 'Prodotto su MyCity';
   const store = p?.profiles?.store_name ?? 'MyCity Piacenza';
   // 12/11/2026 (R09-024) — L'anteprima su WhatsApp scriveva «€12.50»: il prezzo si scrive come nella scheda, «12,50 €».
-  const price = typeof p?.price === 'number' ? formatPrice(p.price) : '';
+  // R11-002 — Con una promozione attiva il prezzo pubblicato è quello che si paga, scontato al
+  // centesimo come in cassa: prima la card mostrava il pieno mentre la scheda chiedeva meno.
+  const price = typeof p?.price === 'number'
+    ? formatPrice(sconto > 0 ? discountedUnitCents(p.price, sconto) / 100 : p.price)
+    : '';
   // 6/9/2026 — QUI SI SCARICAVA LA FOTO ORIGINALE PER UN RIQUADRO DA 460 PIXEL.
   // Questa immagine si genera su runtime edge, che ha un tempo massimo stretto, e
   // prendeva la foto com'e' stata caricata dal telefono del negoziante — fino a

@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { PROPORZIONE_FOTO } from '@/lib/griglia-prodotti';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiSimili, type ProdottoSimile } from '@/lib/queries/fasce-prodotti';
 import caricatoreFotoRemote from '@/lib/image-loader';
@@ -15,7 +16,7 @@ import caricatoreFotoRemote from '@/lib/image-loader';
 /** Le colonne di questa fila, in un posto solo: lo scheletro e le schede vere devono coincidere. */
 const GRIGLIA_SIMILI = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3';
 
-type Item = ProdottoSimile;
+type Item = ProdottoSimile & { sconto?: number };
 
 type Props = {
   productId: string;
@@ -36,7 +37,13 @@ export default function SimilarProducts({ productId, categoryId, sellerId }: Pro
     queryKey: queryKeys.products.similar(productId, categoryId, sellerId),
     // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il
     // negozio a `profiles`, che dopo la migrazione 161 un cliente non legge piu'.
-    queryFn: (): Promise<Item[]> => leggiSimili(supabase, { productId, categoryId, sellerId }),
+    // R21-011 — Con una promozione attiva il prezzo e' quello scontato della cassa (`discountedUnitCents`),
+    // come nella scheda; se gli sconti non si leggono si resta sul prezzo pieno.
+    queryFn: async (): Promise<Item[]> => {
+      const righe = await leggiSimili(supabase, { productId, categoryId, sellerId });
+      const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>());
+      return righe.map((p) => ({ ...p, sconto: sconti.get(p.id) ?? 0 }));
+    },
     enabled: !!productId,
   });
 
@@ -91,7 +98,7 @@ export default function SimilarProducts({ productId, categoryId, sellerId }: Pro
               <div className="p-2 space-y-0.5">
                 <p className="text-xs text-ink-500 truncate">{p.profiles?.store_name}</p>
                 <p className="text-sm font-semibold text-ink-900 line-clamp-2 leading-snug min-h-[2.5rem]">{p.name}</p>
-                <p className="text-sm font-bold text-primary-700">{formatPrice(p.price)}</p>
+                <p className="text-sm font-bold text-primary-700">{formatPrice(p.sconto ? discountedUnitCents(p.price, p.sconto) / 100 : p.price)}</p>
               </div>
             </Link>
           );

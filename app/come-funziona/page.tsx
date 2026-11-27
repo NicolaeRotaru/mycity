@@ -56,7 +56,7 @@ export default function ComeFunzionaPage() {
         <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary-700">
           Semplice e senza pensieri
         </span>
-        <h1 className="mt-2 font-serif text-3xl font-bold leading-[1.05] text-ink-900 md:text-5xl">
+        <h1 className="mt-2 break-words font-serif text-3xl font-bold leading-[1.05] text-ink-900 md:text-5xl">
           I negozi <em className="italic text-primary-600">veri</em> di Piacenza,
           <br className="hidden sm:block" /> ora a casa tua
         </h1>
@@ -73,11 +73,11 @@ export default function ComeFunzionaPage() {
         <div className="grid gap-4 sm:grid-cols-3">
           {REASSURANCE.map((r) => (
             <div key={r.title} className="rounded-2xl border border-cream-300 bg-white p-5 shadow-warm-sm">
-              <div className="mb-2 flex items-center gap-2.5">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-olive-50 text-olive-700">
+              <div className="mb-2 flex min-w-0 items-center gap-2.5">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-olive-50 text-olive-700">
                   <r.Icon size={20} strokeWidth={2.2} aria-hidden />
                 </span>
-                <h2 className="font-serif font-bold text-ink-900">{r.title}</h2>
+                <h2 className="min-w-0 break-words font-serif font-bold text-ink-900">{r.title}</h2>
               </div>
               <p className="text-sm leading-relaxed text-ink-600">{r.desc}</p>
             </div>
@@ -92,8 +92,8 @@ export default function ComeFunzionaPage() {
             href="/categorie"
             className="group flex items-center justify-between gap-3 rounded-2xl bg-primary-700 p-6 text-white shadow-warm transition-colors hover:bg-primary-800"
           >
-            <div>
-              <h3 className="text-lg font-bold">Inizia a esplorare</h3>
+            <div className="min-w-0">
+              <h3 className="break-words text-lg font-bold">Inizia a esplorare</h3>
               <p className="text-sm text-primary-100">Sfoglia i negozi e i prodotti di Piacenza.</p>
             </div>
             <ArrowRight size={22} strokeWidth={2.2} className="shrink-0 transition-transform group-hover:translate-x-1" aria-hidden />
@@ -102,9 +102,9 @@ export default function ComeFunzionaPage() {
             href="/sell"
             className="group flex items-center justify-between gap-3 rounded-2xl border border-cream-300 bg-white p-6 text-ink-900 shadow-warm-sm transition-colors hover:border-primary-200"
           >
-            <div>
-              <h3 className="flex items-center gap-2 text-lg font-bold">
-                <Store size={18} strokeWidth={2.2} className="text-primary-600" aria-hidden /> Hai un negozio?
+            <div className="min-w-0">
+              <h3 className="flex min-w-0 items-center gap-2 break-words text-lg font-bold">
+                <Store size={18} strokeWidth={2.2} className="shrink-0 text-primary-600" aria-hidden /> Hai un negozio?
               </h3>
               <p className="text-sm text-ink-600">Vendi su MyCity con la tua vetrina. {FRASE_PREZZO_NEGOZI}</p>
             </div>

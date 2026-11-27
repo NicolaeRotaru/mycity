@@ -9,7 +9,14 @@ import { formatPrice, formatDate } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { apiErrorMessage } from '@/lib/errors';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
-import { eUnRecesso, MOTIVO_MINIMO_CARATTERI, percheIlRecessoNonSiChiude } from '@/lib/rimborsi/regole-del-rimborso';
+import {
+  eUnRecesso,
+  MOTIVO_MINIMO_CARATTERI,
+  percheIlRecessoNonSiChiude,
+  rigaResaCents,
+  type RigaDellOrdine,
+} from '@/lib/rimborsi/regole-del-rimborso';
+import { nomeDellaRigaOrdine, type RigaOrdine } from '@/lib/ordini/riga-ordine';
 
 export type ReturnRow = {
   id: string;
@@ -43,11 +50,37 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   CANCELED:     { label: 'Annullato',               cls: 'bg-cream-200 text-ink-600' },
 };
 
+/** Una riga dell'ordine come la legge la pagina del negozio. */
+export type RigaDelReso = RigaDellOrdine & RigaOrdine & { variant_label?: string | null };
+
 type Props = {
   ret: ReturnRow;
   orderTotal: number;
+  /** Le righe dell'ordine: servono a dire quale articolo torna e quanto vale. */
+  righe?: RigaDelReso[] | null;
+  /** Lo sconto del codice sull'ordine, in centesimi: la riga resa ne porta la sua parte. */
+  scontoCents?: number;
   onDecided: () => void;
 };
+
+/**
+ * 26/11/2026 — L'IMPORTO PROPOSTO E' IL VALORE DI QUELLO CHE TORNA.
+ * Il campo partiva sempre dal totale dell'ordine, spedizione compresa, anche per
+ * un solo articolo di tre: un tocco su «Approva reso» rimborsava tutto. Se il
+ * reso indica una riga (e non e' l'unica dell'ordine) si propone il suo prezzo,
+ * con la sua parte dello sconto, come fanno le rotte quando controllano
+ * l'intero del recesso; se torna tutto l'ordine, il totale. In euro.
+ */
+export function importoPropostoDelReso(
+  orderTotal: number,
+  righe: RigaDellOrdine[] | null | undefined,
+  orderItemId: string | null | undefined,
+  scontoCents = 0,
+): number {
+  const totale = Number.isFinite(orderTotal) && orderTotal > 0 ? orderTotal : 0;
+  const rigaCents = rigaResaCents(righe ?? null, orderItemId ?? null, scontoCents);
+  return rigaCents === null ? totale : Math.min(rigaCents / 100, totale);
+}
 
 /**
  * Le tappe che il negoziante può far fare a un reso dopo averlo approvato, e
@@ -98,11 +131,17 @@ export function separaNotaDelReso(notes: string | null | undefined): { cliente: 
   return { cliente: cliente || null, esclusi: esclusi.length ? esclusi.join(' ') : null };
 }
 
-export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props) {
+export default function ReturnRequestCard({ ret, orderTotal, righe, scontoCents = 0, onDecided }: Props) {
   const nota = separaNotaDelReso(ret.notes);
+  const proposto = importoPropostoDelReso(orderTotal, righe, ret.order_item_id, scontoCents);
+  const tornaTutto = rigaResaCents(righe ?? null, ret.order_item_id ?? null, scontoCents) === null;
+  const rigaResa = ret.order_item_id ? (righe ?? []).find((r) => r.id === ret.order_item_id) ?? null : null;
   // Con prodotti esclusi dal recesso nell'ordine, il totale non si propone: rimborsarlo
   // tutto con un tocco rimborserebbe anche quello che la legge esclude.
-  const [amount, setAmount] = useState(orderTotal && !nota.esclusi ? orderTotal.toFixed(2) : '');
+  const [amount, setAmount] = useState(proposto && !nota.esclusi ? proposto.toFixed(2) : '');
+  // 26/11/2026 — Rimborsare all'approvazione, prima che la merce torni, e' una scelta che si
+  // fa apposta: l'importo scritto nel campo non basta piu' a farlo partire.
+  const [rimborsaSubito, setRimborsaSubito] = useState(false);
   const [notes, setNotes] = useState('');
   const meta = STATUS_META[ret.status] ?? { label: ret.status, cls: 'bg-cream-200 text-ink-600' };
   const isPending = ret.status === 'REQUESTED';
@@ -112,7 +151,7 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
       const { data: { session } } = await supabase.auth.getSession();
       const body: { decision: string; notes?: string; refundAmountCents?: number } = { decision };
       if (notes.trim()) body.notes = notes.trim();
-      if (decision === 'APPROVED') {
+      if (decision === 'APPROVED' && rimborsaSubito) {
         const cents = Math.round(parseFloat(amount.replace(',', '.')) * 100);
         if (Number.isFinite(cents) && cents > 0) body.refundAmountCents = cents;
       }
@@ -193,6 +232,16 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
           <p><span className="text-ink-500">Motivo:</span> <span className="font-medium text-ink-900">{REASON_LABEL[ret.reason ?? ''] ?? ret.reason ?? '—'}</span></p>
           <p><span className="text-ink-500">Richiesto il:</span> <span className="font-medium text-ink-900">{formatDate(ret.created_at)}</span></p>
         </div>
+        <p>
+          <span className="text-ink-500">Cosa torna:</span>{' '}
+          <span className="font-medium text-ink-900">
+            {rigaResa
+              ? `${nomeDellaRigaOrdine(rigaResa)}${rigaResa.variant_label ? ` · ${rigaResa.variant_label}` : ''}${Number(rigaResa.quantity ?? 1) > 1 ? ` × ${rigaResa.quantity}` : ''}`
+              : ret.order_item_id
+                ? 'un articolo dell’ordine'
+                : 'tutto l’ordine'}
+          </span>
+        </p>
 
         {nota.cliente && (
           <p className="text-ink-700 bg-cream-50 border border-cream-200 rounded-lg px-3 py-2">
@@ -238,9 +287,19 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
                 />
               </label>
               <p className="text-xs text-ink-400 mb-2.5">
-                Lascia il totale per rimborsare tutto subito, oppure svuota per decidere il rimborso quando ricevi il pacco.
+                {nota.esclusi ? '' : tornaTutto ? 'Proposto: il totale dell’ordine. ' : 'Proposto: il prezzo dell’articolo che torna. '}
+                Se non spunti «Rimborsa subito», lo decidi quando ricevi il pacco.
               </p>
             </div>
+            <label className="flex items-start gap-2 text-sm text-ink-700">
+              <input
+                type="checkbox"
+                checked={rimborsaSubito}
+                onChange={(e) => setRimborsaSubito(e.target.checked)}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>Rimborsa subito questo importo, senza aspettare che la merce torni (non si può annullare).</span>
+            </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}

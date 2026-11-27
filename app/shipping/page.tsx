@@ -15,7 +15,7 @@ import { Truck, Banknote, MapPin, Zap, Store, Clock, ChefHat, Package, Bike, Che
 // tests/unit/la-pagina-spedizioni-dice-la-consegna-di-oggi.test.tsx).
 import { NEGOZIO_CHIUSO_COSA_SUCCEDE, fraseTariffaConsegna, riquadroRitiroInNegozio, riquadroTariffaConsegna } from '@/lib/promesse-pubbliche';
 import { QUANDO_SI_PUO_LA_VELOCE, VELOCE_IN_MINUTI } from '@/lib/promessa-consegna';
-import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { CONFINE_DELLA_ZONA } from '@/lib/ordini/zona-di-consegna';
 import { etichettaPronto } from '@/lib/order-status';
 
 export const metadata = {
@@ -38,7 +38,7 @@ export default function ShippingPage() {
   // 29/10/2026 — Il riquadro scriveva «Consegna 3,00 € · qualunque sia la spesa» sopra una cassa che
   // sotto i 10 € addebita 4 €: titolo, riga sotto e il «si paga o no» del paragrafo vengono dallo stesso conto.
   const tariffa = riquadroTariffaConsegna();
-  const confine = `${RAGGIO_CONSEGNA_KM} km`;
+  const confine = CONFINE_DELLA_ZONA;
   // 29/10/2026 — Era «Consegna in …» e «Consegniamo in … minuti: è la nostra promessa», come cosa
   // certa. La normale arriva nella fascia scelta in cassa; la veloce si può solo alle sue condizioni.
   const titoloVeloce = VELOCE_IN_MINUTI.charAt(0).toUpperCase() + VELOCE_IN_MINUTI.slice(1);

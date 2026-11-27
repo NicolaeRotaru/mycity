@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { readConsent } from '@/lib/consent';
+import { ga } from '@/lib/analytics/events';
 import { POSTHOG_ACCESO } from '@/lib/funzioni-al-lancio';
 import type { CaptureResult } from 'posthog-js';
 import {
@@ -403,10 +404,21 @@ async function getPosthog() {
     return consented ? posthogInstance : null;
   }
   if (!consented) return null;
+  // Piu' chiamate in parallelo (consenso + primo evento + pagina vista) aspettano
+  // lo stesso avvio: un `init` solo, non due o tre.
+  if (!avvioInCorso) {
+    avvioInCorso = avviaPosthog().finally(() => { avvioInCorso = null; });
+  }
+  return avvioInCorso;
+}
+
+let avvioInCorso: Promise<PostHogLike | null> | null = null;
+
+async function avviaPosthog(): Promise<PostHogLike | null> {
   // Lazy import per non gonfiare bundle
   const { default: posthog } = await import('posthog-js').catch(() => ({ default: null }));
   if (!posthog) return null;
-  posthog.init(POSTHOG_KEY, {
+  posthog.init(POSTHOG_KEY as string, {
     api_host: POSTHOG_HOST,
     person_profiles: 'identified_only',
     capture_pageview: false, // gestiamo noi via useEffect
@@ -447,15 +459,12 @@ export async function track(event: string, properties?: Record<string, unknown>)
 export function mandaMisuraDiVelocita(name: string, metric: { value: number; rating: string }): void {
   if (typeof window === 'undefined' || !readConsent()?.analytics) return;
   void track('web_vital', { metric: name, value: metric.value, rating: metric.rating });
-  if (!window.gtag) return;
-  try {
-    window.gtag('event', 'web_vital', {
-      metric_name: name,
-      value: Math.round(name === 'CLS' ? metric.value * 1000 : metric.value),
-      metric_rating: metric.rating,
-      non_interaction: true,
-    });
-  } catch { /* noop */ }
+  ga('web_vital', {
+    metric_name: name,
+    value: Math.round(name === 'CLS' ? metric.value * 1000 : metric.value),
+    metric_rating: metric.rating,
+    non_interaction: true,
+  });
 }
 
 /**

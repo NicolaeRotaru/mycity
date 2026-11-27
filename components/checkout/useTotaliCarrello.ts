@@ -4,24 +4,25 @@ import { useMemo } from 'react';
 import { prezziDelCarrello, type EsitoPrezzo } from '@/lib/ordini/prezzi';
 
 /**
- * 22/8/2026 — I TOTALI CHE IL CLIENTE VEDE, CALCOLATI DALLA FUNZIONE DEL SERVER.
+ * ⚠️ 26/11/2026 (R09-006) — QUESTO NON È IL CONTO CHE IL CLIENTE VEDE. NON USARLO.
  *
- * La pagina del checkout è un file da quasi mille righe che tiene insieme
- * l'indirizzo, la fascia oraria, il coupon, il credito, il ritiro in negozio,
- * le chiamate di pagamento e — in mezzo a tutto questo — il calcolo dei totali
- * mostrati a schermo.
+ * Nessuna pagina importa questo file. La cassa (app/checkout/page.tsx) mostra
+ * `riepilogoDaMostrare` (lib/ordini/riepilogo-cassa.ts), ed è lì che si cambia
+ * il totale a schermo; la prova «lo schermo fa lo stesso conto del server»
+ * (`tests/unit/lo-schermo-e-il-server-fanno-lo-stesso-conto.test.ts`) guarda
+ * quello. Le parole qui hanno un altro significato: «totale» è il conto PRIMA
+ * del credito (in `riepilogoDaMostrare` è quello dopo), e il credito entra anche
+ * con la carta (la cassa lo applica solo al contrassegno). Collegarlo a una
+ * pagina cambierebbe il totale mostrato senza che nessuno se ne accorga.
  *
- * Quel calcolo è il pezzo che deve restare allineato al centesimo con il
- * server: se diverge, il cliente vede un prezzo e ne paga un altro. È già
- * successo, ed è il difetto più caro da spiegare a chi compra.
+ * Resta solo perché due prove lo importano ancora
+ * (`la-consegna-costa-3-o-4-euro-per-negozio.test.ts`,
+ * `la-consegna-e-una-sola-per-tutto-il-carrello.test.ts`, che controllano anche
+ * `riepilogoDaMostrare`): tolte da lì le righe di `calcolaTotali`, il file si
+ * cancella.
  *
- * Estrarlo qui non è ordine per l'ordine: dentro il file grande non era
- * provabile da solo, e adesso lo è — la prova in
- * `tests/unit/lo-schermo-e-il-server-fanno-lo-stesso-conto.test.ts` dà lo stesso
- * carrello a questo aggancio e alla rotta, e pretende gli stessi centesimi.
- *
- * Non c'è nessuna formula nuova: qui si chiama `prezziDelCarrello`, la stessa
- * identica funzione che il server usa per creare l'ordine.
+ * (22/8/2026 — nato come estrazione del conto dalla pagina del checkout; la
+ * pagina poi è passata a `riepilogoDaMostrare` e questa copia è rimasta sola.)
  */
 export type IngressiTotali = {
   gruppi: Array<{ sellerId: string; subtotalEuro: number; storeLat: number | null; storeLng: number | null }>;
@@ -92,7 +93,7 @@ export function calcolaTotali(ing: IngressiTotali): TotaliCarrello {
   };
 }
 
-/** La versione con memoria, per la pagina. Il conto è lo stesso. */
+/** @deprecated Nessuna pagina la usa: la cassa mostra `riepilogoDaMostrare` (lib/ordini/riepilogo-cassa.ts). */
 export function useTotaliCarrello(ing: IngressiTotali): TotaliCarrello {
   return useMemo(
     () => calcolaTotali(ing),

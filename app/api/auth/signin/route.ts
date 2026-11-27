@@ -41,6 +41,26 @@ function riprovaFra(secondi: number): string {
   return `Riprova fra ${minuti} ${minuti === 1 ? 'minuto' : 'minuti'}.`;
 }
 
+/**
+ * 26/11/2026 (R07-001) — IL GETTONE ANTI-ROBOT SI SPENDE UNA VOLTA SOLA.
+ *
+ * Un gettone Turnstile Cloudflare lo dà valido una volta: la seconda verifica
+ * risponde «timeout-or-duplicate». Qui il server lo verificava e poi lo passava
+ * a Supabase. Col CAPTCHA di Supabase spento Supabase lo ignora; il giorno che
+ * lo si accende, Supabase lo verifica di nuovo, lo trova già speso, e ogni
+ * accesso con email cade.
+ *
+ * Adesso il gettone lo verifica uno solo, deciso dalla configurazione:
+ *  - `CAPTCHA_SU_SUPABASE_ACCESO=1` (o `true`): verifica Supabase, il server
+ *    non chiama siteverify. Va impostata INSIEME al CAPTCHA acceso su Supabase,
+ *    mai prima: col CAPTCHA di Supabase spento nessuno controllerebbe il gettone.
+ *  - spenta (qualunque altro valore, o assente): verifica il server, come
+ *    prima, e Supabase col suo CAPTCHA spento il gettone non lo guarda.
+ */
+function captchaVerificatoDaSupabase(): boolean {
+  return /^(1|true)$/i.test((process.env.CAPTCHA_SU_SUPABASE_ACCESO ?? '').trim());
+}
+
 export async function POST(request: Request) {
   // Rate limit per IP: 10 tentativi / 5 min (anti brute-force)
   const ip = getClientIp(request);
@@ -76,14 +96,19 @@ export async function POST(request: Request) {
     return ApiErrors.rateLimited(rlEmail.retryAfterSec, `Troppi tentativi su questo account. ${riprovaFra(rlEmail.retryAfterSec)}`);
   }
 
-  const cap = await verifyTurnstileToken(captchaToken, ip);
-  if (!cap.ok) {
-    return ApiErrors.invalidRequest(cap.reason);
+  if (!captchaVerificatoDaSupabase()) {
+    const cap = await verifyTurnstileToken(captchaToken, ip);
+    if (!cap.ok) {
+      return ApiErrors.invalidRequest(cap.reason);
+    }
   }
 
   try {
     const { data, error, client } = await authServer.signIn(email, password, { captchaToken });
     if (error) {
+      // Il gettone rifiutato da Supabase si dice come lo dice il server, non
+      // come una password sbagliata.
+      if (error.code === 'captcha_failed') return ApiErrors.invalidRequest('CAPTCHA non valido');
       /**
        * 15/10/2026 (R43) — «PASSWORD SBAGLIATA» A CHI AVEVA SOLO L'EMAIL DA CONFERMARE.
        *

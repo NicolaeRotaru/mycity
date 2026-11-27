@@ -54,6 +54,21 @@ const MEMORIA_MS = 2_000;
 
 type VoceDiMemoria = { quando: number; riga: Promise<unknown> };
 const memoria = new Map<string, VoceDiMemoria>();
+// 26/11/2026 (R06-004) — Un client passato da fuori ha la sua memoria, separata da quella
+// condivisa e da quella degli altri client: la chiave non sa distinguere due client, e una riga
+// letta con i permessi di una sessione non deve finire dove la ritrova chiunque. Lo stesso client
+// che chiede due volte la stessa riga la legge una volta sola, come prima.
+let memoriePerClient = new WeakMap<SupabaseClient, Map<string, VoceDiMemoria>>();
+
+function memoriaPer(client?: SupabaseClient): Map<string, VoceDiMemoria> {
+  if (!client) return memoria;
+  let sua = memoriePerClient.get(client);
+  if (!sua) {
+    sua = new Map<string, VoceDiMemoria>();
+    memoriePerClient.set(client, sua);
+  }
+  return sua;
+}
 
 /**
  * La stessa domanda nella stessa richiesta: una lettura sola. La chiave è un testo perché `cache`
@@ -86,7 +101,8 @@ function leggiConMemoria(
 ): Promise<unknown> {
   const adesso = Date.now();
 
-  const gia = memoria.get(chiave);
+  const mappa = memoriaPer(client);
+  const gia = mappa.get(chiave);
   if (gia && adesso - gia.quando < MEMORIA_MS) return gia.riga;
 
   const lettura = (async () => {
@@ -109,11 +125,11 @@ function leggiConMemoria(
   })();
 
   // Una lettura fallita non resta in memoria: al prossimo giro si riprova davvero.
-  lettura.catch(() => memoria.delete(chiave));
+  lettura.catch(() => mappa.delete(chiave));
 
-  memoria.set(chiave, { quando: adesso, riga: lettura });
-  if (memoria.size > 200) {
-    for (const [k, v] of memoria) if (adesso - v.quando >= MEMORIA_MS) memoria.delete(k);
+  mappa.set(chiave, { quando: adesso, riga: lettura });
+  if (mappa.size > 200) {
+    for (const [k, v] of mappa) if (adesso - v.quando >= MEMORIA_MS) mappa.delete(k);
   }
   return lettura;
 }
@@ -121,4 +137,5 @@ function leggiConMemoria(
 /** Svuota la memoria. Serve alle prove: nel sito vero scade da sola in due secondi. */
 export function dimenticaLettureDeiMetadati(): void {
   memoria.clear();
+  memoriePerClient = new WeakMap();
 }

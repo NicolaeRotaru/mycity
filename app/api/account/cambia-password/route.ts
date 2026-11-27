@@ -8,6 +8,12 @@ import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
 import { LUNGHEZZA_MINIMA, PASSWORD_UGUALE } from '@/lib/account/cambio-password';
 import { esitoErroreDiAccesso } from '@/lib/auth/errore-di-accesso';
+import {
+  PASSWORD_RUBATA,
+  PASSWORD_SEMPLICE,
+  traduciErroreNuovaPassword,
+  type ErroreDiSupabase,
+} from '@/lib/auth/errori-nuova-password';
 
 export const runtime = 'nodejs';
 
@@ -37,6 +43,9 @@ export const runtime = 'nodejs';
 const Corpo = z.object({
   passwordAttuale: z.string().min(1).max(200),
   nuovaPassword: z.string().min(LUNGHEZZA_MINIMA).max(200),
+  // 26/11/2026 (R28-012) — Il gettone anti-robot della pagina, se lo manda: col CAPTCHA acceso su
+  // Supabase la prova della password attuale (un accesso vero) senza gettone viene rifiutata.
+  captchaToken: z.string().max(4096).optional(),
 });
 
 /** I fornitori con cui l'account accede (`email`, `google`…), da app_metadata o dalle identità. */
@@ -44,6 +53,27 @@ function fornitoriDiAccesso(user: { app_metadata?: { providers?: unknown }; iden
   const daiMetadati = user.app_metadata?.providers;
   if (Array.isArray(daiMetadati)) return daiMetadati.filter((p): p is string => typeof p === 'string');
   return (user.identities ?? []).map((i) => i.provider).filter((p): p is string => typeof p === 'string');
+}
+
+/**
+ * 26/11/2026 (R28-005) — LA NUOVA PASSWORD DEBOLE O RUBATA NON È UN GUASTO.
+ *
+ * Supabase la rifiuta con `weak_password` (motivi `pwned`, `length`,
+ * `characters`) e qui diventava un 500 «Non è stato possibile aggiornare la
+ * password»: la persona riprovava la stessa. È un rifiuto della richiesta: 400
+ * con la frase di /reset-password. Un testo che l'aiutante non riconosce lo farebbe
+ * ripiegare su una frase dei link di reset, che qui non ci sono: col codice
+ * `weak_password` il rifiuto è comunque della password, e vale «troppo semplice».
+ */
+function ePasswordRifiutata(errore: { code?: unknown; name?: unknown; reasons?: unknown }): boolean {
+  return errore.code === 'weak_password' || errore.name === 'AuthWeakPasswordError' || Array.isArray(errore.reasons);
+}
+
+function fraseDellaPasswordRifiutata(errore: ErroreDiSupabase): string {
+  const frase = traduciErroreNuovaPassword(errore);
+  return frase === PASSWORD_RUBATA || frase === PASSWORD_SEMPLICE || frase.startsWith('La password è troppo corta')
+    ? frase
+    : PASSWORD_SEMPLICE;
 }
 
 export const POST = withAuthRateLimit(
@@ -86,8 +116,17 @@ export const POST = withAuthRateLimit(
     const { error: erroreVerifica } = await prova.auth.signInWithPassword({
       email,
       password: corpo.passwordAttuale,
+      options: { captchaToken: corpo.captchaToken || undefined },
     });
     if (erroreVerifica) {
+      // 26/11/2026 (R28-012) — Col CAPTCHA acceso su Supabase, un gettone assente o scaduto non
+      // dice niente della password: Supabase non l'ha nemmeno provata. Prima finiva nel ramo
+      // «Password attuale non corretta» e chi la sapeva giusta credeva di averla dimenticata.
+      if (erroreVerifica.code === 'captcha_failed') {
+        return ApiErrors.invalidRequest(
+          "Il controllo anti-robot non è andato a buon fine, quindi la password attuale non si è potuta verificare: la password non c'entra. Ricarica la pagina e riprova.",
+        );
+      }
       // Si prova comunque la password (chi è entrato con Google può averne impostata una col
       // recupero): solo se non combacia e l'account non ha l'email fra i fornitori, la risposta
       // giusta è «accedi senza password», non «password non corretta».
@@ -111,6 +150,9 @@ export const POST = withAuthRateLimit(
       password: corpo.nuovaPassword,
     });
     if (erroreCambio) {
+      if (ePasswordRifiutata(erroreCambio)) {
+        return ApiErrors.invalidRequest(fraseDellaPasswordRifiutata(erroreCambio));
+      }
       logger.error('[cambia-password] scrittura fallita', { userId: user.id, message: erroreCambio.message });
       return ApiErrors.internal('Non è stato possibile aggiornare la password');
     }
