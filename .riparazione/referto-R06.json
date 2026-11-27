@@ -1,13 +1,13 @@
 {
  "sessione": "R06",
- "aggiornato": "2026-11-27 02:42",
+ "aggiornato": "2026-11-27 02:55",
  "finita": true,
- "testa": "d7006a5d36145c885e7e437a268dae25dde1eea0",
+ "testa": "79f5bb306c542846ba50f20e38f64bbb9fc8d672",
  "verifica": {
   "comando": "npm run verify",
-  "esito": "verde",
-  "testa": "d7006a5d36145c885e7e437a268dae25dde1eea0",
-  "nota": "typecheck, lint e test: 2341 file e 14322 prove verdi (1 file e 2 prove saltati, già così sulla base); SHA preso con git rev-parse HEAD nello stesso comando"
+  "esito": "rosso",
+  "testa": "79f5bb306c542846ba50f20e38f64bbb9fc8d672",
+  "nota": "Un solo rosso, atteso: tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts › «Nominatim risponde 429: 503 servizio_non_disponibile». È la prova comune riportata alla base su richiesta della regia: la correzione di R06-007 fa rispondere 429, e il diff che la allinea è nella nota di R06-007 (lo applica la regia all'unione). Tutto il resto verde: typecheck, lint, 2340 file e 14321 prove (2 saltate). Sul commit prima (d7006a5, con la prova aggiornata) il verify era verde intero. SHA preso con git rev-parse HEAD nello stesso comando."
  },
  "voci": [
   {
@@ -69,8 +69,7 @@
    "commit": "9d6dda4d9bc7db27fcb2ed596157c6627b366a67",
    "file_toccati": [
     "app/api/geocode/route.ts",
-    "tests/unit/riparazione-r06-mappe-troppe-richieste.test.ts",
-    "tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts"
+    "tests/unit/riparazione-r06-mappe-troppe-richieste.test.ts"
    ],
    "prova_file": [
     "tests/unit/riparazione-r06-mappe-troppe-richieste.test.ts"
@@ -84,8 +83,9 @@
     "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9d6dda4^ --file app/api/geocode/route.ts --prove tests/unit/riparazione-r06-mappe-troppe-richieste.test.ts --json"
    },
    "copre_tutta_la_voce": true,
-   "cosa_ho_fatto": "Il 429 delle mappe diventava 503 e la rubrica lo leggeva come «posizione non trovata», salvando senza coordinate. Ora la rotta risponde 429 e la rubrica entra nel ramo 429 che aveva già (addresses/page.tsx:86): niente salvataggio, «riprova». La prova esistente r13 importa la rotta (import POST da app/api/geocode/route) e fissava 429→503: aggiornata al 429, stesso corpo, niente indebolito (dichiarato).",
-   "verificato_da": "revisore V2 (subagente, modello piccolo per la spesa): rilanciata la prova; gli altri chiamanti (addresses/page.tsx:86, ShippingAddressForm, picker) non salvano senza coordinate sul 429; la modifica alla prova r13 non la indebolisce"
+   "cosa_ho_fatto": "Il 429 delle mappe diventava 503 e la rubrica lo leggeva come «posizione non trovata», salvando senza coordinate. Ora la rotta risponde 429 e la rubrica entra nel ramo 429 che aveva già (addresses/page.tsx:86): niente salvataggio, «riprova».",
+   "verificato_da": "revisore V2 (subagente, modello piccolo per la spesa): rilanciata la prova; gli altri chiamanti (addresses/page.tsx:86, ShippingAddressForm, picker) non salvano senza coordinate sul 429; la modifica alla prova r13 non la indebolisce",
+   "nota": "prova comune: la applica la regia all'unione. tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts usa anche file di altre sessioni ed è stata riportata alla base (commit «riporta alla base una prova comune»): con questa correzione il suo caso 429 è rosso finché non si applica questo diff:\ndiff --git a/tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts b/tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts\nindex 0fbd5af..995add3 100644\n--- a/tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts\n+++ b/tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts\n@@ -39,7 +39,7 @@ describe('/api/geocode: servizio giù contro nessun risultato', () => {\n     expect(await res.json()).toEqual({ lat: 45.05, lng: 9.69 });\n   });\n \n-  for (const stato of [429, 500, 502, 503]) {\n+  for (const stato of [500, 502, 503]) {\n     it(`Nominatim risponde ${stato}: 503 servizio_non_disponibile`, async () => {\n       vi.stubGlobal('fetch', async () => new Response('', { status: stato }));\n       const res = await chiedi();\n@@ -48,6 +48,15 @@ describe('/api/geocode: servizio giù contro nessun risultato', () => {\n     });\n   }\n \n+  // 27/11/2026 — «Troppe richieste» delle mappe resta un 429 (la rubrica indirizzi non lo salva come\n+  // «posizione non trovata»), con lo stesso corpo del servizio giù.\n+  it('Nominatim risponde 429: 429 servizio_non_disponibile', async () => {\n+    vi.stubGlobal('fetch', async () => new Response('', { status: 429 }));\n+    const res = await chiedi();\n+    expect(res.status).toBe(429);\n+    expect(await res.json()).toEqual({ lat: null, lng: null, error: 'servizio_non_disponibile' });\n+  });\n+\n   it('errore di rete o tempo scaduto: 503 servizio_non_disponibile', async () => {\n     vi.stubGlobal('fetch', async () => {\n       throw new TypeError('fetch failed');\n"
   },
   {
    "id": "R06-015",
