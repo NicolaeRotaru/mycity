@@ -76,6 +76,21 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   if (!esito.ok) {
     // Il rifiuto NON passa se i soldi non tornano: un ordine annullato con
     // l'addebito ancora in piedi è il difetto che stiamo chiudendo.
+    // 26/11/2026 — GIA_ANNULLATO vuol dire «lo stato è cambiato fra la lettura e la scrittura»,
+    // non per forza «annullato». Col doppio tocco l'ha annullato la prima richiesta: 409 come il
+    // controllo qui sopra, non 500 «Rifiuto fallito». Ma se un collega l'ha segnato pronto nel
+    // frattempo l'ordine è vivo, e lo si dice: si rilegge lo stato prima di rispondere.
+    if (esito.motivo === 'GIA_ANNULLATO') {
+      const { data: adesso, error: errAdesso } = await admin
+        .from('orders')
+        .select('delivery_status')
+        .eq('id', params.id)
+        .maybeSingle();
+      if (!errAdesso && (adesso as { delivery_status?: string } | null)?.delivery_status === 'CANCELED') {
+        return ApiErrors.conflict('Ordine già annullato');
+      }
+      return ApiErrors.conflict("L'ordine è cambiato nel frattempo: ricarica la pagina.");
+    }
     if (esito.motivo === 'CONTANTI_INCASSATI') {
       return ApiErrors.conflict('Ordine già incassato in contanti: scrivi all assistenza per la restituzione.');
     }

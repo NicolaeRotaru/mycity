@@ -63,14 +63,17 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   // solo di carrelli pagati a meta', si passa alla successiva, fino a PAGINE_MASSIME.
   const PAGINA = 200;
   const PAGINE_MASSIME = 5;
-  type Candidato = { id: string; groups: unknown; coupon_code: string | null; stripe_session_id: string | null; expires_at?: string };
+  type Candidato = {
+    id: string; groups: unknown; coupon_code: string | null; stripe_session_id: string | null; expires_at?: string;
+    delivery?: { rivendicazione?: unknown } | null;
+  };
   const candidati: Candidato[] = [];
   const conOrdini = new Set<string>();
   let cursore = new Date().toISOString();
   for (let pagina = 0; pagina < PAGINE_MASSIME; pagina++) {
     const { data: lette, error: errLettura } = await admin
       .from('pending_checkouts')
-      .select('id, groups, coupon_code, stripe_session_id, expires_at')
+      .select('id, groups, coupon_code, stripe_session_id, expires_at, delivery')
       .eq('status', 'PENDING')
       .lt('expires_at', cursore)
       .order('expires_at', { ascending: false })
@@ -281,7 +284,23 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     const codice = (pc as { coupon_code?: string | null }).coupon_code ?? null;
     if (codice) {
       const { error: cErr } = await admin.rpc('release_coupon', { p_code: codice });
-      if (cErr) logger.warn('[cron] codice sconto non restituito', { id: pc.id, message: cErr.message });
+      if (cErr) {
+        logger.warn('[cron] codice sconto non restituito', { id: pc.id, message: cErr.message });
+        continue;
+      }
+      // 26/11/2026 — E si chiude anche la rivendicazione di questo tentativo, come il gemello nel
+      // webhook (lib/stripe/webhook/carrello-scaduto.ts): `release_coupon` rimette l'uso nel
+      // contatore ma lascia aperta la riga di `coupon_redemptions` (migrazione 361), e il codice di
+      // benvenuto restava bloccato per il cliente. Si chiude solo quella scritta nella riga di intento.
+      const rivendicazione = pc.delivery?.rivendicazione;
+      if (typeof rivendicazione === 'string' && rivendicazione !== '') {
+        const { error: errChiusa } = await admin
+          .from('coupon_redemptions')
+          .update({ released_at: new Date().toISOString() })
+          .eq('id', rivendicazione)
+          .is('released_at', null);
+        if (errChiusa) logger.warn('[cron] rivendicazione del codice non chiusa', { id: pc.id, message: errChiusa.message });
+      }
     }
   }
 

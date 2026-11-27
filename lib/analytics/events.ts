@@ -33,7 +33,7 @@ import { registraAccessoNelRegistro } from './registro-accessi';
  * Sink GA4: fan-out parallelo a PostHog per gli eventi e-commerce.
  * No-op se gtag non è caricato (= nessun consenso analytics).
  */
-function ga(name: string, params: Record<string, unknown> = {}) {
+export function ga(name: string, params: Record<string, unknown> = {}) {
   if (typeof window === 'undefined' || !window.gtag) return;
   // #223 — Il cancello vero: lo stesso consenso che governa PostHog.
   if (!readConsent()?.analytics) return;

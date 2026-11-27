@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, PasswordInput } from '@/components/ui/Field';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { AuthShell } from '@/components/ui/AuthShell';
+import Turnstile, { type ManopolaAntiBot } from '@/components/Turnstile';
 import { logger } from '@/lib/logger';
 import { traduciErroreNuovaPassword, type ErroreDiSupabase } from '@/lib/auth/errori-nuova-password';
 import {
@@ -16,6 +17,8 @@ import {
   SPIEGAZIONE_RESET,
   type MotivoResetSenzaSessione,
 } from '@/lib/auth/link-email';
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
 /**
  * Pagina di reset password.
@@ -149,6 +152,9 @@ function ResetPasswordInner() {
   const [requestEmail, setRequestEmail] = useState('');
   const [sendingLink, setSendingLink] = useState(false);
   const [linkSent, setLinkSent] = useState(false);
+  // R23-013 — Il gettone anti-robot per la richiesta del link (col CAPTCHA acceso su Supabase).
+  const [captchaToken, setCaptchaToken] = useState('');
+  const antiBot = useRef<ManopolaAntiBot>(null);
   // Perche' il link aperto non ha dato una sessione: si dice, non si tace.
   const [motivo, setMotivo] = useState<MotivoResetSenzaSessione | null>(null);
   // S10 (5/11/2026) — Di chi e' la password che si sta cambiando: sul telefono
@@ -253,16 +259,24 @@ function ResetPasswordInner() {
       return;
     }
     setSendingLink(true);
+    // Il gettone vale una volta sola: dopo averlo mandato se ne chiede uno nuovo.
+    const gettone = captchaToken || undefined;
+    // Si toglie subito dallo stato: un secondo invio mentre la richiesta è in corso non lo rimanda.
+    if (gettone) setCaptchaToken('');
     try {
       const redirectTo = typeof window !== 'undefined'
         ? `${window.location.origin}/reset-password`
         : undefined;
-      const { error } = await supabase.auth.resetPasswordForEmail(requestEmail.trim(), { redirectTo });
+      const { error } = await supabase.auth.resetPasswordForEmail(requestEmail.trim(), { redirectTo, captchaToken: gettone });
       if (error) throw error;
       setLinkSent(true);
     } catch (err) {
       toast.error(translateError(err));
     } finally {
+      if (gettone) {
+        setCaptchaToken('');
+        antiBot.current?.reset();
+      }
       setSendingLink(false);
     }
   };
@@ -331,6 +345,16 @@ function ResetPasswordInner() {
             leading={<Mail size={18} aria-hidden />}
             required
           />
+          {TURNSTILE_SITE_KEY && (
+            <div className="flex justify-center">
+              <Turnstile
+                ref={antiBot}
+                siteKey={TURNSTILE_SITE_KEY}
+                onVerify={(t) => setCaptchaToken(t)}
+                onExpire={() => setCaptchaToken('')}
+              />
+            </div>
+          )}
           <Button type="submit" size="lg" loading={sendingLink} iconRight={ArrowRight} fullWidth>
             {sendingLink ? 'Invio…' : 'Invia il link'}
           </Button>

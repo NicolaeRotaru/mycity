@@ -9,6 +9,7 @@ import { Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiSponsorizzati, type Sponsorizzato } from '@/lib/queries/fasce-prodotti';
 import { giornoPiacenza } from '@/lib/tempo-piacenza';
@@ -18,7 +19,7 @@ type Props = {
   categorySlug?: string;
 };
 
-type SponsoredItem = Sponsorizzato;
+type SponsoredItem = Sponsorizzato & { sconto?: number };
 
 /**
  * R01-010 — Il conteggio parte davvero. `supabase.rpc(...)` non spedisce niente finché qualcuno
@@ -46,8 +47,12 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {
     // 17/11/2026 — «Oggi» è il giorno di Piacenza, non quello di Greenwich: fra
     // mezzanotte e l'una (le due d'estate) un annuncio che parte oggi restava
     // nascosto, e uno scaduto ieri restava in vetrina.
-    queryFn: (): Promise<SponsoredItem[]> =>
-      leggiSponsorizzati(supabase, { placement, categorySlug, oggi: giornoPiacenza() }),
+    // R21-011 — Prezzo scontato della cassa se c'e' una promozione attiva; senza lettura, prezzo pieno.
+    queryFn: async (): Promise<SponsoredItem[]> => {
+      const annunci = await leggiSponsorizzati(supabase, { placement, categorySlug, oggi: giornoPiacenza() });
+      const sconti = await fetchActiveDiscounts(supabase, annunci.flatMap((a) => (a.product ? [a.product.id] : []))).catch(() => new Map<string, number>());
+      return annunci.map((a) => ({ ...a, sconto: a.product ? (sconti.get(a.product.id) ?? 0) : 0 }));
+    },
   });
 
   /**
@@ -133,7 +138,7 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {
               <div className="p-2">
                 <p className="text-xs text-ink-500 truncate">{p.profiles?.store_name}</p>
                 <p className="text-sm font-semibold text-ink-900 line-clamp-2 min-h-[2.5rem]">{p.name}</p>
-                <p className="text-sm font-bold text-primary-700">{formatPrice(p.price)}</p>
+                <p className="text-sm font-bold text-primary-700">{formatPrice(it.sconto ? discountedUnitCents(p.price, it.sconto) / 100 : p.price)}</p>
               </div>
             </Link>
           );

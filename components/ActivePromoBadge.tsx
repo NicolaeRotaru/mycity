@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
+import { discountedUnitCents } from '@/lib/promotions';
 import { queryKeys } from '@/lib/queries/keys';
 
 /**
@@ -43,14 +44,21 @@ export default function ActivePromoBadge({ productId, basePrice }: Props) {
 
   if (!discount || discount <= 0) return null;
 
-  const discounted = basePrice * (1 - discount / 100);
-  const savings = basePrice - discounted;
+  // R16-012 — Lo scontato si calcola con la funzione della cassa (`discountedUnitCents`: al centesimo,
+  // sconto fra 0 e 70), come il prezzo grande della scheda. La formula a mano non arrotondava:
+  // 1,15 € al -10% il bollino scriveva 1,04 € e la cassa faceva pagare 1,03 €.
+  const discountedCents = discountedUnitCents(basePrice, discount);
+  const discounted = discountedCents / 100;
+  const savings = (Math.round(basePrice * 100) - discountedCents) / 100;
+  // R16-006 — La percentuale che il prezzo applica davvero (tetto 70 di `discountedUnitCents`), come
+  // il bollino di ProductCard: su 100 € lo scontato in centesimi dice lo sconto applicato.
+  const appliedPct = Math.round(100 - discountedUnitCents(100, discount) / 100);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="inline-flex items-center gap-2 bg-secondary-50 border border-secondary-200 rounded-lg px-3 py-1.5">
         <Tag size={14} className="text-secondary-700" strokeWidth={2.4} />
-        <span className="text-sm font-bold text-secondary-700">In promo -{discount}%</span>
+        <span className="text-sm font-bold text-secondary-700">In promo -{appliedPct}%</span>
         <span className="text-sm text-ink-500 line-through">{formatPrice(basePrice)}</span>
         <span className="text-sm font-bold text-secondary-700">{formatPrice(discounted)}</span>
       </div>

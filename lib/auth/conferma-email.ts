@@ -197,7 +197,7 @@ export type ClientPerReinvio = {
     resend(credenziali: {
       type: 'signup';
       email: string;
-      options?: { emailRedirectTo?: string };
+      options?: { emailRedirectTo?: string; captchaToken?: string };
     }): PromiseLike<{ error: { message?: string; code?: string; status?: number } | null }>;
   };
 };
@@ -250,10 +250,13 @@ function attesaDalFreno(error: { message?: string; code?: string; status?: numbe
  *
  * Il link nuovo torna alla stessa strada del primo (`ritornoDopoLaConferma`),
  * cosi' chi si stava registrando dal checkout torna al suo ordine.
+ *
+ * 26/11/2026 (R23-014) — Col CAPTCHA acceso su Supabase anche il reinvio vuole il
+ * gettone anti-robot: chi lo ha lo passa in `captchaToken`, e va a Supabase.
  */
 export async function rimandaLinkDiConferma(
   client: ClientPerReinvio,
-  dati: { email: string; base: string; returnTo?: string | null },
+  dati: { email: string; base: string; returnTo?: string | null; captchaToken?: string | null },
 ): Promise<EsitoReinvio> {
   const email = dati.email.trim();
   if (!emailPlausibile(email)) {
@@ -262,7 +265,10 @@ export async function rimandaLinkDiConferma(
   const { error } = await client.auth.resend({
     type: 'signup',
     email,
-    options: { emailRedirectTo: ritornoDopoLaConferma(dati.base, dati.returnTo, 'email') },
+    options: {
+      emailRedirectTo: ritornoDopoLaConferma(dati.base, dati.returnTo, 'email'),
+      ...(dati.captchaToken ? { captchaToken: dati.captchaToken } : {}),
+    },
   });
   if (error) {
     const freno = attesaDalFreno(error);

@@ -204,8 +204,10 @@ export async function recordActivity(entry: ActivityEntry): Promise<void> {
  *    quindi un minuto basta e avanza.
  *
  * ⚠️ Questo è il controllo dell'applicazione: fra la lettura e la scrittura c'è
- * una fessura di millisecondi. Il freno vero è un vincolo di unicità sul
- * database — è nella migrazione proposta, e finché non c'è questo regge il
+ * una fessura di millisecondi. Il freno vero è sul database: la migrazione 926
+ * fa la stessa regola dentro l'inserimento, col lucchetto della persona, e
+ * scarta in silenzio la seconda copia. Le due finestre qui sotto devono restare
+ * uguali a quelle scritte lì. Finché la 926 non è applicata, questo regge il
  * caso normale.
  */
 /** Due copie dello stesso accesso, quando la sessione del browser non si sa. */

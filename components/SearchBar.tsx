@@ -10,12 +10,13 @@ import { Search, X, Store, Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 import { queryKeys } from '@/lib/queries/keys';
 import { riquadroSuggerimenti } from '@/lib/ricerca/riquadro-suggerimenti';
 import { leggiSuggerimentiRicerca, type Suggerimento } from '@/lib/queries/suggerimenti-ricerca';
 import { domandaCategoriePiene, soloLePiene } from '@/lib/queries/categorie-piene';
 
-type Suggestion = Suggerimento;
+type Suggestion = Suggerimento & { sconto?: number };
 
 // 5/11/2026 — Tolto «Vino dei Colli»: il sito non verifica i 18 anni (né all'iscrizione, né sul
 // prodotto, né alla consegna), quindi non lo suggerisce a ogni visitatore.
@@ -54,7 +55,12 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
     // 15/10/2026 (R3) — La lettura vive in lib/queries/suggerimenti-ricerca.ts: il
     // ripiego per le parole a meta' agganciava il negozio a `profiles`, che dopo la
     // migrazione 161 un cliente non legge piu', e la tendina restava vuota.
-    queryFn: (): Promise<Suggestion[]> => leggiSuggerimentiRicerca(supabase, debounced),
+    // R21-011 — Prezzo scontato della cassa se c'e' una promozione attiva; senza lettura, prezzo pieno.
+    queryFn: async (): Promise<Suggestion[]> => {
+      const trovati = await leggiSuggerimentiRicerca(supabase, debounced);
+      const sconti = await fetchActiveDiscounts(supabase, trovati.flatMap((s) => (s.kind === 'product' ? [s.id] : []))).catch(() => new Map<string, number>());
+      return trovati.map((s) => (s.kind === 'product' ? { ...s, sconto: sconti.get(s.id) ?? 0 } : s));
+    },
   });
 
   // Stato-vuoto (zero-state): categorie principali per i suggerimenti rapidi
@@ -246,7 +252,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
                           <p className="text-sm font-semibold text-ink-900 truncate">{s.name}</p>
                           {s.store && <p className="text-xs text-ink-500 truncate">da {s.store}</p>}
                         </div>
-                        <span className="text-sm font-bold text-primary-600 shrink-0">{formatPrice(s.price)}</span>
+                        <span className="text-sm font-bold text-primary-600 shrink-0">{formatPrice(s.sconto ? discountedUnitCents(s.price, s.sconto) / 100 : s.price)}</span>
                       </Link>
                     </li>
                   );

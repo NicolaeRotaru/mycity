@@ -72,7 +72,10 @@ function geoFromHeaders(req: Request): { country: string | null; city: string | 
   // direttamente, se davanti non c'è Cloudflare. Valgono solo quando la regola
   // di bordo ha messo il segreto condiviso, come per l'indirizzo in
   // `getClientIp`; altrimenti si legge solo quello che scrive Vercel.
-  const segretoDiBordo = process.env.EDGE_TRUST_SECRET;
+  // 26/11/2026 — Ripulito come in `getClientIp`: con un «a capo» finale incollato su Vercel il
+  // gettone (che arriva già senza spazi in fondo) non combaciava mai. Un segreto di soli spazi
+  // diventa vuoto, cioè nessun bordo fidato.
+  const segretoDiBordo = process.env.EDGE_TRUST_SECRET?.trim();
   const daCloudflare = !!segretoDiBordo && segretiCombaciano(h.get('x-edge-token'), segretoDiBordo);
   const country = (daCloudflare ? h.get('cf-ipcountry') : null) || h.get('x-vercel-ip-country') || null;
   const city = (daCloudflare ? h.get('cf-ipcity') : null) || h.get('x-vercel-ip-city') || null;
@@ -133,6 +136,8 @@ export async function POST(request: Request) {
     // Trentaduemila byte sono molto piu' di qualunque evento legittimo.
     const letto = await jsonConTetto(request, 32 * 1024);
     if (letto === undefined) return noContent(); // troppo grande: si scarta in silenzio
+    // Corpo vuoto o rotto (jsonConTetto dà null) o non un oggetto: stesso esito «ignorato», mai 500.
+    if (letto === null || typeof letto !== 'object') return noContent();
     body = letto as typeof body;
   } catch {
     return noContent();

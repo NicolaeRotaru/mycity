@@ -43,16 +43,33 @@ function getLocalUpdatedAt(): number {
  * allineamento) da «il locale ha roba nuova mai salita» (l'ospite che riempie e poi accede).
  */
 const SYNCED_AT_KEY = 'mc_cart_synced_at';
-function getSyncedAt(): number {
-  try { return Number(localStorage.getItem(SYNCED_AT_KEY) ?? 0) || 0; } catch { return 0; }
-}
-function setSyncedAt(ts: number) {
-  try { localStorage.setItem(SYNCED_AT_KEY, String(ts)); } catch { /* noop */ }
-}
 
-function setLocalUpdatedAt(ts: number) {
-  if (typeof window === 'undefined') return;
-  try { localStorage.setItem(LAST_UPDATED_KEY, String(ts)); } catch { /* noop */ }
+/**
+ * R17-009 — UNA RIGA TOLTA SU UN DISPOSITIVO TORNAVA DALL'ALTRO.
+ *
+ * Il telefono toglie la torta e la manda su; il computer, col carrello vecchio, si apre: il cloud è più
+ * recente e si fondeva con «la quantità più alta», così la torta tornava nel carrello e poi sul cloud
+ * (e la spesa già pagata con lei). Adesso l'allineamento ricorda DUE cose, nella stessa chiave
+ * («locale:cloud»):
+ *  · `locale`: la data del carrello di QUESTO dispositivo quando era uguale al cloud (orologio di questo
+ *    dispositivo, mai quello di un altro);
+ *  · `cloud`: la data scritta sul cloud in quel momento, usata solo come segno di versione (uguale o no).
+ * Se il locale non è cambiato dopo l'allineamento e il cloud sì, vince il cloud INTERO: anche le righe
+ * tolte, anche il carrello svuotato. Se sono cambiati tutti e due, si fondono come prima. Una chiave
+ * vecchia (solo un numero) vale come `locale` senza `cloud`: si segue la regola di prima finché il primo
+ * allineamento non la riscrive.
+ */
+type Allineamento = { locale: number; cloud: number };
+function getAllineamento(): Allineamento {
+  try {
+    const [locale, cloud] = (localStorage.getItem(SYNCED_AT_KEY) ?? '').split(':');
+    return { locale: Number(locale) || 0, cloud: Number(cloud) || 0 };
+  } catch {
+    return { locale: 0, cloud: 0 };
+  }
+}
+function setAllineamento(locale: number, cloud: number) {
+  try { localStorage.setItem(SYNCED_AT_KEY, `${locale}:${cloud}`); } catch { /* noop */ }
 }
 
 export default function CartCrossDeviceSync() {
@@ -73,6 +90,46 @@ export default function CartCrossDeviceSync() {
       const cloudUpdated = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
       const localItems = getCart();
       const localUpdated = getLocalUpdatedAt();
+      const allineato = getAllineamento();
+
+      // R17-009 — Il cloud preso INTERO, righe tolte comprese. La data locale resta quella di questo
+      // dispositivo (saveCart la avanza): mai quella scritta da un altro orologio.
+      const prendiIlCloud = () => {
+        saveCart(cloudItems, { dallAltroDispositivo: true });
+        setAllineamento(getLocalUpdatedAt(), cloudUpdated);
+      };
+      // Tutte e due le liste, e per la stessa riga la quantità più alta (vedi sotto, R092).
+      const fondi = async () => {
+        const fuso = fondiCarrelli(localItems, cloudItems);
+        saveCart(fuso, { dallAltroDispositivo: true });
+        // Se dalla fusione è uscito qualcosa che il cloud non aveva, il cloud adesso è quello
+        // vecchio: si rimanda su, altrimenti al prossimo accesso da un altro dispositivo la roba
+        // sparirebbe di nuovo.
+        const cloudEraGiaCosi =
+          fuso.length === cloudItems.length &&
+          fuso.every((r, i) => r.id === cloudItems[i].id && r.quantity === cloudItems[i].quantity);
+        if (cloudEraGiaCosi) setAllineamento(getLocalUpdatedAt(), cloudUpdated);
+        else await syncUp(uid, fuso);
+      };
+
+      // R17-009 — Con un allineamento scritto da questa versione si confronta con quello.
+      if (data && allineato.cloud > 0) {
+        const localeCambiato = localUpdated > allineato.locale;
+        const cloudCambiato = cloudUpdated !== allineato.cloud;
+        if (!cloudCambiato) {
+          if (localeCambiato) await syncUp(uid, localItems);
+          return;
+        }
+        if (!localeCambiato) {
+          // Il locale è quello dell'ultimo allineamento e il cloud è cambiato dopo (un altro
+          // dispositivo ha tolto una riga, ha comprato, ha svuotato): vince il cloud.
+          prendiIlCloud();
+          return;
+        }
+        // Cambiati tutti e due: nessuno dei due si butta.
+        await fondi();
+        return;
+      }
 
       if (cloudItems.length === 0 && localItems.length > 0) {
         // 5/11/2026 — Il cloud vuoto PIÙ RECENTE del locale vuol dire che un altro dispositivo l'ha
@@ -80,11 +137,9 @@ export default function CartCrossDeviceSync() {
         // Prima la spesa appena pagata tornava nel cloud e poi, con la fusione, sul telefono.
         // Solo se il locale non è cambiato dopo l'ultimo allineamento riuscito: un carrello
         // riempito da ospite (mai salito) non si butta.
-        const allineatoIl = getSyncedAt();
+        const allineatoIl = allineato.locale;
         if (data && allineatoIl > 0 && localUpdated <= allineatoIl && cloudUpdated > allineatoIl) {
-          saveCart([], { dallAltroDispositivo: true });
-          setLocalUpdatedAt(cloudUpdated);
-          setSyncedAt(cloudUpdated);
+          prendiIlCloud();
           return;
         }
         // Carrello locale ma cloud vuoto (o mai scritto): spingi locale
@@ -95,20 +150,28 @@ export default function CartCrossDeviceSync() {
         // 27/8/2026 (R092) — QUI IL CLOUD SOSTITUIVA IL LOCALE, E LA SPESA DELL'ALTRO
         // DISPOSITIVO SPARIVA SENZA UN AVVISO. Adesso si fondono: tutte e due le liste, e per la
         // stessa riga la quantità più alta.
-        const fuso = fondiCarrelli(localItems, cloudItems);
-        saveCart(fuso, { dallAltroDispositivo: true });
-        // Se dalla fusione è uscito qualcosa che il cloud non aveva, il cloud adesso è quello
-        // vecchio: si rimanda su, altrimenti al prossimo accesso da un altro dispositivo la roba
-        // sparirebbe di nuovo.
-        const cloudEraGiaCosi =
-          fuso.length === cloudItems.length &&
-          fuso.every((r, i) => r.id === cloudItems[i].id && r.quantity === cloudItems[i].quantity);
-        if (cloudEraGiaCosi) { setLocalUpdatedAt(cloudUpdated); setSyncedAt(cloudUpdated); }
-        else await syncUp(uid, fuso);
+        await fondi();
       }
     };
 
-    const syncUp = async (uid: string, items: CartItem[]) => {
+    // R17-009 — Gli invii al cloud vanno uno dopo l'altro: due scritture in volo potevano arrivare
+    // al server nell'ordine sbagliato, e il cloud restava col carrello più vecchio.
+    let invii: Promise<void> = Promise.resolve();
+    const syncUp = (uid: string, items: CartItem[]): Promise<void> => {
+      // La data locale del carrello che parte, letta ADESSO: se mentre la risposta arriva il
+      // carrello cambia ancora, l'allineamento non deve coprire quel cambio (prima la data locale
+      // tornava indietro all'ora dell'invio, e il cambio sembrava già sul cloud).
+      const fotografia = getLocalUpdatedAt();
+      const giro = invii.then(() => scriviSulCloud(uid, items, fotografia));
+      invii = giro.catch(() => undefined);
+      return giro;
+    };
+
+    const scriviSulCloud = async (uid: string, items: CartItem[], fotografia: number) => {
+      // Niente da mandare: il cloud ha già questo carrello (preso da lì o mandato su), e
+      // rimandarlo coprirebbe il cambio fatto intanto da un altro dispositivo.
+      const allineato = getAllineamento();
+      if (allineato.cloud > 0 && fotografia <= allineato.locale) return;
       const now = Date.now();
       try {
         // 5/11/2026 — Il client non lancia sugli errori del database o della rete: li restituisce.
@@ -121,10 +184,9 @@ export default function CartCrossDeviceSync() {
             { onConflict: 'user_id' },
           );
         if (error) return;
-        setLocalUpdatedAt(now);
-        setSyncedAt(now);
+        setAllineamento(fotografia, now);
       } catch {
-        // Rete caduta: la data locale non avanza, al prossimo giro si riprova.
+        // Rete caduta: l'allineamento non avanza, al prossimo giro si riprova.
       }
     };
 

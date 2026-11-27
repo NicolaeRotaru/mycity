@@ -40,6 +40,12 @@ export function inizioGiornoLocale(isoDate: string): Date {
   return new Date(mezzanotteUtc.getTime() - scartoMin * 60_000);
 }
 
+/** Il giorno di calendario dopo `isoDate` (AAAA-MM-GG), contato sul calendario e non a blocchi di 24 ore. */
+export function giornoDopo(isoDate: string): string {
+  const [a, m, g] = isoDate.split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, g + 1)).toISOString().slice(0, 10);
+}
+
 /** Di quanti minuti Piacenza è avanti rispetto a Greenwich, in quella data. */
 export function scartoFusoMinuti(d: Date): number {
   const locale = new Date(d.toLocaleString('en-US', { timeZone: FUSO_PIACENZA }));
@@ -55,8 +61,12 @@ export async function aggiornaQuadratura(
   // 189 — Prima la finestra era `T00:00:00Z … T23:59:59Z`: sbagliato due volte.
   // Il fuso (le consegne serali finivano nel giorno dopo) e l'ultimo secondo,
   // che restava fuori — una consegna alle 23:59:59.400 non veniva contata.
+  // 26/11/2026 — La fine è la mezzanotte del giorno DOPO, non l'inizio più 24
+  // ore: nelle domeniche del cambio d'ora la giornata dura 25 o 23 ore, e le
+  // consegne dalle 23 a mezzanotte (autunno) non entravano in nessun conto,
+  // mentre quelle fra mezzanotte e l'una (primavera) entravano in due.
   const start = inizioGiornoLocale(isoDate).toISOString();
-  const end = new Date(inizioGiornoLocale(isoDate).getTime() + 24 * 60 * 60_000).toISOString();
+  const end = inizioGiornoLocale(giornoDopo(isoDate)).toISOString();
 
   // 🟡-7: atteso E incassato sono ancorati allo STESSO insieme di ordini —
   // quelli consegnati quel giorno (per delivered_at). Includere i COD

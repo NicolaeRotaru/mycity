@@ -40,6 +40,20 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   const pi = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
   if (!pi) return;
 
+  // 26/11/2026 — IL CARRELLO DI QUESTO PAGAMENTO È ANCORA APERTO E NESSUN ORDINE È NATO: l'avviso del pagamento
+  // non è passato e l'ordine può nascere fra un attimo. Uscire bene qui (buono, sponsorizzazione) lasciava nascere
+  // l'ordine PAID su una carta già rimborsata. Si fa ripetere a Stripe: al giro dopo l'avviso del pagamento avrà
+  // visto la carta tornata e chiuso il carrello (ordini.ts), o l'ordine sarà nato e qui si annulla. Il carrello si
+  // legge PRIMA degli ordini: COMPLETED si scrive solo quando sono nati tutti. Con ordini già nati si lavora subito:
+  // un carrello nato a metà può restare aperto per sempre (expire-checkouts lo lascia a mano).
+  const carrello = charge.metadata?.pending_checkout_id ?? (charge.transfer_group?.startsWith('mc_') ? charge.transfer_group.slice(3) : null);
+  let carrelloAperto = false;
+  if (carrello) {
+    const { data: delCarrello, error: errCarrello } = await admin.from('pending_checkouts').select('status').eq('id', carrello).maybeSingle();
+    if (errCarrello) throw new Error(`[stripe] carrello del rimborso non letto: ${errCarrello.message}`);
+    carrelloAperto = (delCarrello as { status?: string } | null)?.status === 'PENDING';
+  }
+
   // Multi-seller: una charge può avere N ordini (uno per seller).
   const { data: orders, error: errOrdini } = await admin
     .from('orders')
@@ -58,6 +72,7 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   // bene, la rotta rispondeva 200, e un rimborso pieno non veniva mai scritto.
   if (errOrdini) throw new Error(`[stripe] ordini del rimborso non letti: ${errOrdini.message}`);
   if (!orders || orders.length === 0) {
+    if (carrelloAperto) throw new Error(`[stripe] rimborso su un carrello ancora aperto (${carrello}): l'ordine può ancora nascere, si riprova`);
     // 31/10/2026 (178) — Un pagamento senza ordini puo' essere quello di un
     // buono regalo: rimborsato per intero, il buono si spegne con lui. Su un
     // rimborso parziale non si indovina quanto togliere: lo si dice e basta.

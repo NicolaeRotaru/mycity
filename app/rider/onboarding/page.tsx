@@ -14,7 +14,9 @@ import { Card } from '@/components/ui/Card';
 
 type DocKind = 'id_front' | 'id_back' | 'selfie' | 'rider_license' | 'rider_insurance' | 'rider_haccp';
 
-type DocDef = { kind: DocKind; label: string; required: boolean; hint: string };
+// R23-009 — Quali documenti sono obbligatori non sta qui: dipende dal mezzo e lo dice
+// documentiObbligatoriDelFattorino (lib/admin/regole-approvazione.ts), letta da obbligatorio() più sotto.
+type DocDef = { kind: DocKind; label: string; hint: string };
 
 /**
  * 13/11/2026 (R19-002) — IL TETTO VERO È 4 MB, NON 8.
@@ -28,12 +30,12 @@ const TETTO_DOCUMENTO_MB = 4;
 const FILE_TROPPO_GRANDE = `File troppo grande, massimo ${TETTO_DOCUMENTO_MB} MB. Scatta una foto più leggera (o riducila) e riprova.`;
 
 const DOCS: DocDef[] = [
-  { kind: 'id_front',       label: 'Documento d’identità — fronte',  required: true,  hint: `Carta d’identità o passaporto. JPG/PNG/PDF max ${TETTO_DOCUMENTO_MB} MB.` },
-  { kind: 'id_back',        label: 'Documento d’identità — retro',   required: false, hint: 'Necessario per carta d’identità italiana.' },
-  { kind: 'selfie',         label: 'Selfie con documento',           required: true,  hint: 'Foto del tuo viso tenendo il documento accanto, per confrontarlo con la foto del documento.' },
-  { kind: 'rider_license',  label: 'Patente di guida',               required: true,  hint: 'Obbligatoria per scooter/auto.' },
-  { kind: 'rider_insurance',label: 'Polizza RC',                     required: true,  hint: 'Assicurazione responsabilità civile valida.' },
-  { kind: 'rider_haccp',    label: 'Attestato HACCP (per gli alimenti)', required: false, hint: 'Solo se consegnerai alimenti.' },
+  { kind: 'id_front',       label: 'Documento d’identità — fronte',  hint: `Carta d’identità o passaporto. JPG/PNG/PDF max ${TETTO_DOCUMENTO_MB} MB.` },
+  { kind: 'id_back',        label: 'Documento d’identità — retro',   hint: 'Necessario per carta d’identità italiana.' },
+  { kind: 'selfie',         label: 'Selfie con documento',           hint: 'Foto del tuo viso tenendo il documento accanto, per confrontarlo con la foto del documento.' },
+  { kind: 'rider_license',  label: 'Patente di guida',               hint: 'Obbligatoria per scooter/auto.' },
+  { kind: 'rider_insurance',label: 'Polizza RC',                     hint: 'Assicurazione responsabilità civile valida.' },
+  { kind: 'rider_haccp',    label: 'Attestato HACCP (per gli alimenti)', hint: 'Solo se consegnerai alimenti.' },
 ];
 
 /** Il messaggio dopo un caricamento riuscito: in italiano, non col nome interno del documento («id_front»). */

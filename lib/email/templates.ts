@@ -300,7 +300,11 @@ export function veloceNonConfermataTemplate(args: { orderId: string; frase: stri
     : grezza;
   // Senza una fascia possibile (sabato sera, negozio chiuso la domenica) il titolo non ne promette una,
   // e non promette nemmeno un contatto: la frase dice l'ora vera in cui l'ordine si annulla.
-  const titolo = args.senzaFascia ? 'Il negozio non ha ancora confermato' : 'La tua spesa arriva in una fascia oraria';
+  // R21-013 — Se la frase dice «(tranne l'ordine …)» (un ordine del carrello non e' passato alla fascia) titolo e
+  // oggetto non promettono la fascia a tutta la spesa: dicono la stessa eccezione della campanella.
+  const tranne = args.senzaFascia ? '' : (grezza.match(/\(tranne (l’ordine|gli ordini) /)?.[1] ?? '');
+  const eccezione = tranne === 'l’ordine' ? ', tranne un ordine' : tranne ? ', tranne alcuni ordini' : '';
+  const titolo = args.senzaFascia ? 'Il negozio non ha ancora confermato' : `La tua spesa arriva in una fascia oraria${eccezione}`;
   // 5/11/2026 — Senza fascia la frase apre con le stesse parole del titolo: nel corpo dell'email non
   // si ripetono (nel testo semplice restano, lì il titolo non c'è).
   const corpo = frase.startsWith(`${titolo}. `) ? frase.slice(titolo.length + 2) : frase;
@@ -312,7 +316,7 @@ export function veloceNonConfermataTemplate(args: { orderId: string; frase: stri
   return {
     subject: args.senzaFascia
       ? 'La consegna veloce non è ancora confermata dal negozio'
-      : 'La consegna veloce non è partita: la tua spesa arriva in una fascia oraria',
+      : `La consegna veloce non è partita: la tua spesa arriva in una fascia oraria${eccezione}`,
     html: shell(titolo, body),
     text: `${frase} Il tuo ordine: ${orderUrl}`,
   };

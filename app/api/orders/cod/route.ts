@@ -19,7 +19,7 @@ import { fasciaAlGiornoDellOrdine, giornoDiPiacenza } from '@/lib/ordini/fascia-
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
-import { sendEmail } from '@/lib/email/client';
+import { sendEmail, type SendEmailResult } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { clientIdGaDalCookie } from '@/lib/analytics/ga-client-id';
@@ -169,6 +169,16 @@ const RIPETUTO_ENTRO_MS = 12 * 60 * 60_000;
 const GENERAZIONI_DELLA_CHIAVE = 10;
 
 /**
+ * 26/11/2026 — La migrazione 961 (la riserva scritta) non e' ancora sul
+ * database: PostgREST non trova `reserve_stock` a due parametri. Allora si
+ * riserva come prima, senza la riga, invece di fermare tutte le casse.
+ */
+function laRiservaScrittaNonCe(errore: unknown): boolean {
+  const code = (errore as { code?: string } | null)?.code;
+  return code === 'PGRST202' || code === '42883' || code === '42P01';
+}
+
+/**
  * 5/11/2026 — L'ALLARME CHE I COMMENTI PROMETTONO ARRIVA DAVVERO.
  *
  * Nei rami «serve una correzione a mano» (ordine nato in parte, ordine senza
@@ -181,6 +191,33 @@ async function allarmeAgliAmministratori(titolo: string, corpo: string, link = '
     await notifyAdmins(titolo, corpo, link);
   } catch (e) {
     logger.error('[cod] allarme agli amministratori non partito', { titolo, message: e instanceof Error ? e.message : String(e) });
+  }
+}
+
+/**
+ * 26/11/2026 — LA POSTA SPENTA NON FA PIÙ NASCERE GLI ORDINI IN SILENZIO.
+ *
+ * Senza RESEND_API_KEY (o RESEND_FROM) sul sito vero `sendEmail` risponde «skipped» e lascia solo
+ * una riga nel registro: l'ordine nasceva, il negozio non riceveva «Nuovo ordine», il cliente
+ * nessuna conferma, e nessuno lo sapeva (l'avviso della posta rifiutata salta apposta i «skipped»,
+ * e il semaforo /api/health lo vede solo chi lo apre). Adesso, sul sito vero, parte la campanella
+ * agli amministratori, una volta per ordine, per avvisare il negozio a voce. Le variabili mancanti
+ * restano da mettere su Vercel: questo è il segnale, non la cura. Non lancia mai.
+ */
+async function avvisaSeLaPostaESpenta(orderId: string, esito: SendEmailResult): Promise<void> {
+  if (process.env.VERCEL_ENV !== 'production') return;
+  if (esito.ok || !('skipped' in esito) || !/RESEND_(API_KEY|FROM)/.test(esito.reason)) return;
+  try {
+    await notifyAdmins(
+      '📭 Ordine senza email: la posta del sito è spenta',
+      `L'ordine in contanti #${orderId.slice(0, 8)} è nato, ma la posta non è partita (${esito.reason}): ` +
+        'il negozio non ha ricevuto «Nuovo ordine» e il cliente nessuna conferma. Avvisa tu il negozio; ' +
+        'la posta si riaccende mettendo la variabile su Vercel (Production).',
+      `/admin/orders/${orderId}`,
+      { unaVoltaPer: `posta-spenta:${orderId}` },
+    );
+  } catch (e) {
+    logger.error('[cod] campanella della posta spenta non partita', { orderId, message: e instanceof Error ? e.message : String(e) });
   }
 }
 
@@ -1315,6 +1352,30 @@ export const POST = withAuthRateLimit(
      * una per tentativo: il suo storno e' unico, e resta uno solo.
      */
     const walletAppliedPerGroup: Array<{ cents: number; ref: string }> = [];
+    /**
+     * 26/11/2026 — LA MERCE RISERVATA RESTA SCRITTA FINCHE' L'ORDINE NON LA PRENDE.
+     *
+     * La merce si scala e il credito si toglie PRIMA di scrivere l'ordine, e gli
+     * articoli arrivano DOPO. Se la funzione moriva in mezzo, di quella riserva
+     * restava traccia solo qui, in memoria: la merce restava scalata e il credito
+     * tolto, e li rimetteva solo una persona. Adesso la riserva nasce scritta nel
+     * database insieme alla merce scalata (`reserve_stock` con `p_riserva`,
+     * migrazione 961), si toglie appena l'ordine ha i suoi articoli, e se resta
+     * la libera il giro degli ordini fermi (`libera_riserve_orfane`).
+     *
+     * Qui, per ogni ordine nato, l'id della riga ancora aperta (null quando la
+     * riga e' gia' chiusa, o quando la 961 non c'e'): chi rimette la merce lo fa
+     * insieme alla riga, cosi' il giro non la rimette una seconda volta.
+     */
+    const riservePerGroup: Array<string | null> = [];
+    /** La merce di un gruppo torna a scaffale: con la riga aperta, insieme a lei e una volta sola. */
+    const rimettiLaMerce = (
+      items: Array<{ product_id: string; variant_id: string | null; qty: number }>,
+      riserva: string | null,
+    ) =>
+      riserva
+        ? admin.rpc('restore_stock', { p_items: items, p_riserva: riserva })
+        : admin.rpc('restore_stock', { p_items: items });
     // #159 — Gli avvisi da mandare a fine giro, non uno per volta dentro il
     // ciclo: se un negozio successivo fallisce non deve restare in giro la
     // posta di un ordine che poi viene cancellato.
@@ -1356,7 +1417,7 @@ export const POST = withAuthRateLimit(
           });
           continue;
         }
-        const { error: errMerce } = await admin.rpc('restore_stock', { p_items: reservedStockPerGroup[j] });
+        const { error: errMerce } = await rimettiLaMerce(reservedStockPerGroup[j], riservePerGroup[j] ?? null);
         if (errMerce) {
           logger.error('[cod] ordine annullato ma la merce non e tornata: va rimessa a mano', {
             userId: user.id, orderId: oid, merce: reservedStockPerGroup[j], message: errMerce.message,
@@ -1383,9 +1444,11 @@ export const POST = withAuthRateLimit(
         const ids = restano.map((j) => createdOrderIds[j]);
         const merce = restano.map((j) => reservedStockPerGroup[j]);
         const crediti = restano.map((j) => walletAppliedPerGroup[j]);
+        const riserve = restano.map((j) => riservePerGroup[j] ?? null);
         createdOrderIds.splice(0, createdOrderIds.length, ...ids);
         reservedStockPerGroup.splice(0, reservedStockPerGroup.length, ...merce);
         walletAppliedPerGroup.splice(0, walletAppliedPerGroup.length, ...crediti);
+        riservePerGroup.splice(0, riservePerGroup.length, ...riserve);
         ordiniCreati.length = 0;
         comunicazioni.length = 0;
         await allarmeAgliAmministratori(
@@ -1408,6 +1471,7 @@ export const POST = withAuthRateLimit(
       comunicazioni.length = 0;
       reservedStockPerGroup.length = 0;
       walletAppliedPerGroup.length = 0;
+      riservePerGroup.length = 0;
     };
 
     // 29/10/2026 — L'identificativo di ogni ordine nasce dalla chiave del
@@ -1435,7 +1499,24 @@ export const POST = withAuthRateLimit(
         variant_id: it.variantId,
         qty: it.quantity,
       }));
-      const { error: resErr } = await admin.rpc('reserve_stock', { p_items: groupStockItems });
+      // 26/11/2026 — L'id dell'ordine si sa prima di riservare: la riga della
+      // riserva dice quale ordine prendera' la merce, e il giro guarda quello.
+      // Il riferimento della spesa del credito anche: se l'ordine non nasce, il
+      // giro ridà il credito con lo stesso riferimento dello storno di qui sotto.
+      const idOrdine = idDiQuestoInvio ? idDiQuestoInvio[i] : crypto.randomUUID();
+      const walletRef = `${idDiQuestoInvio ? idDiQuestoInvio[i] : 'cod'}:${crypto.randomUUID()}`;
+      let riservaAperta: string | null = crypto.randomUUID();
+      let { error: resErr } = await admin.rpc('reserve_stock', {
+        p_items: groupStockItems,
+        p_riserva: { id: riservaAperta, order_id: idOrdine, user_id: user.id, wallet_ref: walletRef },
+      });
+      if (resErr && laRiservaScrittaNonCe(resErr)) {
+        logger.warn('[cod] migrazione 961 non ancora applicata: riservo senza la riga della riserva', {
+          codice: (resErr as { code?: string }).code,
+        });
+        riservaAperta = null;
+        ({ error: resErr } = await admin.rpc('reserve_stock', { p_items: groupStockItems }));
+      }
       if (resErr) {
         logger.warn('[cod] reserve_stock fallita', { sellerId: g.sellerId, message: resErr.message });
         // Annulla anche gli ordini dei negozi PRECEDENTI di questo carrello.
@@ -1455,7 +1536,6 @@ export const POST = withAuthRateLimit(
       // Il riferimento e' della spesa, uno per tentativo: lo storno lo riusa.
       // Davanti l'id dell'ordine (se c'e' la chiave), per chi legge il diario.
       let walletAppliedCents = 0;
-      const walletRef = `${idDiQuestoInvio ? idDiQuestoInvio[i] : 'cod'}:${crypto.randomUUID()}`;
       if (body.useCredit && grossTotalCents > 0) {
         const { data: applied, error: wErr } = await admin.rpc('wallet_debit', {
           p_user: user.id,
@@ -1486,7 +1566,7 @@ export const POST = withAuthRateLimit(
             .maybeSingle();
           if (errDiario) {
             await rollbackCreatedCodOrders();
-            const { error: errMerceCredito } = await admin.rpc('restore_stock', { p_items: groupStockItems });
+            const { error: errMerceCredito } = await rimettiLaMerce(groupStockItems, riservaAperta);
             if (errMerceCredito) {
               logger.error('[cod] credito incerto e merce non tornata: va rimessa a mano', {
                 userId: user.id, sellerId: g.sellerId, merce: groupStockItems, message: errMerceCredito.message,
@@ -1526,7 +1606,7 @@ export const POST = withAuthRateLimit(
       // una colonna che non conosce, fa fallire l'istruzione intera, e senza
       // ripiego non nascerebbe nessun ordine fino alla firma sul database.
       const rigaOrdine = {
-        ...(idDiQuestoInvio ? { id: idDiQuestoInvio[i] } : {}),
+        id: idOrdine,
         user_id: user.id,
         seller_id: g.sellerId,
         total_price: totalCents / 100,
@@ -1611,7 +1691,7 @@ export const POST = withAuthRateLimit(
         const rendiLaNostraParte = async () => {
           await rollbackCreatedCodOrders();
           // 5/11/2026 — Gli esiti si leggono: merce o credito che non tornano vanno nel registro.
-          const { error: errMerce } = await admin.rpc('restore_stock', { p_items: groupStockItems });
+          const { error: errMerce } = await rimettiLaMerce(groupStockItems, riservaAperta);
           if (errMerce) {
             logger.error('[cod] merce del gemello non tornata: va rimessa a mano', {
               chiave: chiaveTentativo, merce: groupStockItems, message: errMerce.message,
@@ -1680,7 +1760,7 @@ export const POST = withAuthRateLimit(
       if ((orderErr && !ripreso) || !order) {
         await rollbackCreatedCodOrders();
         // 5/11/2026 — Anche qui l'esito si legge: merce o credito che non tornano vanno nel registro.
-        const { error: errMerceGruppo } = await admin.rpc('restore_stock', { p_items: groupStockItems });
+        const { error: errMerceGruppo } = await rimettiLaMerce(groupStockItems, riservaAperta);
         if (errMerceGruppo) {
           logger.error('[cod] ordine non nato ma la merce non e tornata: va rimessa a mano', {
             userId: user.id, sellerId: g.sellerId, merce: groupStockItems, message: errMerceGruppo.message,
@@ -1710,6 +1790,7 @@ export const POST = withAuthRateLimit(
 
       reservedStockPerGroup.push(groupStockItems);
       walletAppliedPerGroup.push({ cents: walletAppliedCents, ref: walletRef });
+      riservePerGroup.push(riservaAperta);
 
       const itemsRows = itemsPerGroupCents[i].map((it) => ({
         order_id: order.id,
@@ -1728,6 +1809,21 @@ export const POST = withAuthRateLimit(
         createdOrderIds.push(order.id);
         await rollbackCreatedCodOrders();
         return esciERilascia(ApiErrors.internal('Errore nella creazione ordine.'));
+      }
+
+      // 26/11/2026 — Gli articoli ci sono: la merce adesso e' dell'ordine (la
+      // rimette chi lo annulla), e la riga della riserva si chiude. Se la
+      // chiusura non riesce la riga resta: il giro vede gli articoli e la chiude
+      // senza rimettere niente, e un annullo qui sotto la rimette insieme a lei.
+      if (riservaAperta) {
+        const { error: errChiudi } = await admin.rpc('chiudi_riserva_contanti', { p_riserva: riservaAperta });
+        if (errChiudi) {
+          logger.warn('[cod] riga della riserva non chiusa: la chiude il giro', {
+            orderId: order.id, riserva: riservaAperta, message: errChiudi.message,
+          });
+        } else {
+          riservePerGroup[riservePerGroup.length - 1] = null;
+        }
       }
 
       // 159 — GLI AVVISI PARTONO SOLO QUANDO L'ORDINE C'E' DAVVERO, TUTTO.
@@ -1880,6 +1976,7 @@ export const POST = withAuthRateLimit(
             // R03-003 — un rifiuto di Resend non lancia: si legge l'esito (lib/stripe/webhook/posta-non-partita.ts).
             const esito = await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
             await avvisaSeLaPostaNonParte('email «Nuovo ordine» al negozio', { orderId: c.orderId, sellerId: c.sellerId }, esito);
+            await avvisaSeLaPostaESpenta(c.orderId, esito);
           } catch (e) {
             logger.warn('[cod] email nuovo ordine al venditore fallita', { orderId: c.orderId, e });
           }
@@ -1902,6 +1999,7 @@ export const POST = withAuthRateLimit(
             // R24 — avviso di servizio: senza il tasto «annulla l'iscrizione».
             const esito = await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
             await avvisaSeLaPostaNonParte('conferma dell ordine al cliente', { orderId: c.orderId }, esito);
+            await avvisaSeLaPostaESpenta(c.orderId, esito);
           } catch (e) {
             logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: c.orderId, e });
           }

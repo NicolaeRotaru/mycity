@@ -7,9 +7,45 @@ import { getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { conDurataMassima } from '@/lib/auth/cookie-di-sessione';
 import { rimandoDelRitornoSenzaSessione } from '@/lib/auth/link-email';
-import { vaChiestaSenzaTrattenere, verbalizzaSenzaTrattenere, versioneAccettata } from '@/lib/auth/accettazione-testi';
+import { TETTO_VERBALE_MS, vaChiestaSenzaTrattenere, verbalizzaSenzaTrattenere, versioneAccettata } from '@/lib/auth/accettazione-testi';
+import { chiediConTetto } from '@/lib/auth/decisione-portiere';
 
 export const runtime = 'nodejs';
+
+/**
+ * 26/11/2026 (R23-004) — La regola di ruolo dell'accesso con email e password
+ * (app/sign-in/page.tsx) vale anche qui, cioè per chi entra con Google: se il
+ * ritorno è '/' (anche con ?query o #frammento) o sta nell'area di un ALTRO
+ * ruolo, amministratore, negozio e fattorino vanno sulla home del proprio.
+ * Prima un fattorino con ritorno /seller veniva rimandato dal portiere su '/'.
+ */
+const AREA_DEL_RUOLO: Record<string, string> = { admin: '/admin', seller: '/seller', rider: '/rider' };
+const HOME_DEL_RUOLO: Record<string, string> = { admin: '/admin', seller: '/seller/dashboard', rider: '/rider' };
+
+/**
+ * R23-006 — Il percorso dove si arriva davvero, non la stringa: '/rider/..', '/admin/../' e '/.'
+ * portano su '/', '/%73eller/dashboard' su /seller/dashboard.
+ */
+function percorsoRisolto(ritorno: string): string {
+  const { pathname } = new URL(ritorno, 'http://percorso.interno');
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return pathname;
+  }
+}
+
+function ritornoPerIlRuolo(ritorno: string, ruolo: unknown): string {
+  const casa = typeof ruolo === 'string' ? HOME_DEL_RUOLO[ruolo] : undefined;
+  if (!casa) return ritorno;
+  const percorso = percorsoRisolto(ritorno);
+  // Il portiere fa entrare l'amministratore anche in /seller e /rider (ROLE_PROTECTED): per lui non
+  // sono aree di un altro ruolo, e il ritorno lì resta, come prima di questa regola.
+  const inAreaAltrui = ruolo !== 'admin' && Object.entries(AREA_DEL_RUOLO).some(
+    ([altro, area]) => altro !== ruolo && (percorso === area || percorso.startsWith(`${area}/`)),
+  );
+  return percorso === '/' || inAreaAltrui ? casa : ritorno;
+}
 
 /**
  * Callback PKCE / OAuth / email confirmation.
@@ -78,6 +114,19 @@ export async function GET(req: NextRequest) {
   // arrivo emette l'evento: qui siamo sul server, dove PostHog non gira.
   const utente = data?.user;
 
+  // R23-004 — Il ruolo si legge insieme al verbale, con lo stesso tetto: un
+  // database muto non trattiene l'ingresso, e senza ruolo si va su `next`.
+  const ruoloLetto = utente
+    ? chiediConTetto(
+        () => getAdminSupabase().from('profiles').select('role').eq('id', utente.id).maybeSingle(),
+        TETTO_VERBALE_MS,
+      )
+    : null;
+  const arrivo = async (): Promise<string> => {
+    const r = ruoloLetto ? await ruoloLetto : null;
+    return r?.stato === 'ok' ? ritornoPerIlRuolo(next, r.valore.data?.role) : next;
+  };
+
   /**
    * #79 — Il verbale dell'accettazione, scritto dal server.
    *
@@ -137,7 +186,7 @@ export async function GET(req: NextRequest) {
         const domanda = await vaChiestaSenzaTrattenere(() => admin, utente.id);
         if (domanda === 'chiedi') {
           const chiedi = new URL('/accetta-condizioni', env.appUrl());
-          chiedi.searchParams.set('next', next);
+          chiedi.searchParams.set('next', await arrivo());
           const r = NextResponse.redirect(chiedi);
           for (const c of res.cookies.getAll()) r.cookies.set(c);
           return r;
@@ -151,7 +200,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const destinazione = new URL(next, env.appUrl());
+  const destinazione = new URL(await arrivo(), env.appUrl());
   if (utente) {
     const creato = utente.created_at ? new Date(utente.created_at).getTime() : 0;
     const appenaNato = creato > 0 && Date.now() - creato < 60_000;
