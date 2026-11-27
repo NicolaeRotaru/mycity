@@ -61,7 +61,8 @@ export default async function PreventivoDalLink({
     // Pagato davvero lo dice la tabella degli abbonamenti (la scrive il webhook di Stripe), non l'indirizzo.
     const abbonamento = await getAdminSupabase()
       .from('abbonamenti_servizi')
-      .select('stato, origine')
+      // `*`: regge anche prima della migrazione 999 (senza `origine` la riga vale Stripe).
+      .select('*')
       .eq('seller_id', pc.sellerId)
       .in('stato', ['active', 'past_due'])
       .limit(5);
