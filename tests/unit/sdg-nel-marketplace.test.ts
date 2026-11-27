@@ -48,6 +48,12 @@ describe('la regola del carrello rifiuta gli abbonamenti di SDG (carta e contant
     expect(esito.scarto.motivo).toBe('ABBONAMENTO_NON_IN_CARRELLO');
     expect(esito.scarto.messaggio).toContain('pagina Abbonamento');
     expect(esito.scarto.messaggio).not.toContain('preventivo');
+    // 27/11/2026 — Per ora si paga in contanti: finché il pagamento online è spento, il messaggio non dice
+    // che l'abbonamento «si attiva» dal sito (come la descrizione dei prodotti, migrazione 999e).
+    if (!PAGAMENTO_ONLINE_SERVIZI) {
+      expect(esito.scarto.messaggio).not.toContain('si attiva');
+      expect(esito.scarto.messaggio).toContain('si paga in contanti, di persona');
+    }
     expect(rispostaPerCarrelloNonVendibile(esito.scarto).status).toBe(400);
   });
 
