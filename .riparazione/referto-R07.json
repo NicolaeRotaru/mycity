@@ -1,6 +1,6 @@
 {
   "sessione": "R07",
-  "aggiornato": "2026-11-27 02:15",
+  "aggiornato": "2026-11-27 02:20",
   "finita": true,
   "testa": "598568c68cca965f0db65657c0fafc401df56139",
   "verifica": {
@@ -63,7 +63,7 @@
     {
       "id": "R07-006",
       "chiave": "qa-flussi|il collegamento del negozio a stripe e il bonifico manuale non hanno nessuna prova",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "3ac5617d83792619d3d056cbc2b95d278fa74e0b",
       "file_toccati": [
         "tests/unit/riparazione-r07-stripe-connect-ruoli.test.ts",
@@ -76,11 +76,6 @@
       "prova_comando": "npx vitest run tests/unit/riparazione-r07-stripe-connect-ruoli.test.ts tests/unit/riparazione-r07-bonifico-a-mano-cancelli.test.ts --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
-      "rimessa": {
-        "esito": "non_applicabile",
-        "uscita": null,
-        "comando": "voce di sole prove: al posto della rimessa 21 mutanti a mano, tutti rossi (vedi mutanti)"
-      },
       "mutanti": [
         {
           "comando": "sed -i 's/withSellerAuthRateLimit/withAuthRateLimit/g' app/api/stripe/connect/login/route.ts && npx vitest run tests/unit/riparazione-r07-stripe-connect-ruoli.test.ts tests/unit/riparazione-r07-bonifico-a-mano-cancelli.test.ts --reporter=dot; git checkout -- app/api/stripe/connect/login/route.ts",
@@ -116,9 +111,10 @@
           "uscita": 1
         }
       ],
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Due prove nuove (24 e 13 casi) con gli involucri di autenticazione veri, Stripe e database finti: le quattro rotte del collegamento (ruolo, 401/403/404/409/500/503, profilo proprio, riga giusta, percorso buono) e il bonifico manuale col vero releaseOrderPayout (segreto interno, ogni cancello, due chiamate insieme = un bonifico). Il 403 del login ora dipende dal ruolo: col mutante withAuthRateLimit la prova diventa rossa, la vecchia r06 no. Codice delle rotte non cambiato.",
-      "verificato_da": "non collaudata da un revisore indipendente: al 70% del limite di spesa la regia ha chiesto di chiudere senza revisori nuovi. Controllo del capo squadra: npm run verify verde su 598568c (comprende la prova) e prova rimessa del riparatore."
+      "verificato_da": "non collaudata da un revisore indipendente: al 70% del limite di spesa la regia ha chiesto di chiudere senza revisori nuovi. Controllo del capo squadra: npm run verify verde su 598568c (comprende la prova) e prova rimessa del riparatore.",
+      "cosa_resta": "Niente nel codice. È una voce di sole prove, quindi la prova rimessa non si può applicare: non c'è una correzione da togliere. Al suo posto ci sono 21 mutanti a mano, tutti rossi, con il metodo approvato dalla regia l'1:17 del 27/11. Resta solo che la regia o Nicola la promuovano a riparato, perché per valida-referto un riparato vuole la rimessa con uscita 0."
     },
     {
       "id": "R07-007",
@@ -315,6 +311,8 @@
   ],
   "conto": {
     "agenti": 5,
-    "nota": "5 subagenti su 8 (3 riparatori, 1 collaudo; quello del lotto 1 ha solo verificato). Costo letto: 19,63 $ prima della chiusura. Lotto 4 e il collaudo del lotto 3 non fatti per il limite di spesa."
-  }
+    "nota": "5 subagenti su 8 (3 riparatori, 1 collaudo; quello del lotto 1 ha solo verificato). Costo letto: 19,63 $ prima della chiusura. Lotto 4 e il collaudo del lotto 3 non fatti per il limite di spesa. costo_usd letto con get_session alle 01:54, ultimo aggiornamento disponibile: il dato arriva in ritardo, e la spesa vera alla consegna è più alta.",
+    "subagenti": 5
+  },
+  "costo_usd": 19.63
 }
