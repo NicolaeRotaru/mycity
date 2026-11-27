@@ -500,7 +500,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-pulse">
           <div className="bg-cream-200 h-96 rounded-xl" />
           <div className="space-y-3">
@@ -836,7 +836,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // un prezzo che nei risultati può mancare.
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-6">
+    <div className="container mx-auto px-4 sm:px-6 py-6 max-w-7xl">
       <Breadcrumb className="mb-4" items={[
         { label: 'Home', href: '/' },
         ...(product.categories?.name && product.categories?.slug

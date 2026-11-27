@@ -1423,7 +1423,7 @@ export default function CheckoutPage() {
    */
   if (vistaCarrello.mostraScheletro) {
     return (
-      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-6xl pb-28 lg:pb-8">
+      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl pb-28 lg:pb-8">
         <Link
           href="/cart"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-600 hover:text-ink-900 mb-1"
@@ -1458,7 +1458,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-8 max-w-6xl pb-28 lg:pb-8">
+    <div className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl pb-28 lg:pb-8">
       {/* Back-to-cart + H1 serif visibile */}
       <Link
         href="/cart"

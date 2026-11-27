@@ -465,7 +465,7 @@ export default function CartPage() {
 
   if (vista.mostraScheletro) {
     return (
-      <div className="container mx-auto px-4 sm:px-6 py-8" aria-busy="true">
+      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl" aria-busy="true">
         {/* Il titolo non aspetta i dati: e' gia' noto, e questa e' l'unica schermata che il
             server manda. Con il rettangolo grigio al suo posto la pagina arrivava senza h1 —
             senza titolo per Google e per chi naviga il sito per intestazioni. */}
@@ -585,7 +585,7 @@ export default function CartPage() {
 
   return (
     // Lo spazio in fondo è per la barra fissa del telefono: senza, copre l'ultima riga della pagina.
-    <div className="container mx-auto px-4 sm:px-6 py-8 pb-28 lg:pb-8">
+    <div className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl pb-28 lg:pb-8">
       {/* Step indicator condiviso col checkout (carrello = step 1) */}
       <StepIndicator steps={CHECKOUT_STEPS} currentStep={1} />
 
