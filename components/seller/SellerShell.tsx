@@ -109,18 +109,22 @@ function useSellerTodoCount(sellerId: string | null) {
 }
 
 /**
- * Le promozioni contano solo per chi le ha accese nelle impostazioni (`notif_promos`):
- * chi le ha spente non riceve la push, e il pallino non deve accendersi per loro.
- * Se la preferenza non si legge, si va avanti senza le promozioni: un errore
+ * Le promozioni e la newsletter contano solo per chi le ha accese nelle impostazioni
+ * (`notif_promos`, `notif_newsletter`): chi le ha spente non riceve la push, e il pallino
+ * non deve accendersi per loro. Ritorna le categorie da lasciare fuori dal conto.
+ * Se la preferenza non si legge, si va avanti senza le due categorie: un errore
  * sulla preferenza non deve spegnere il pallino degli ordini non letti.
  */
-async function promoAccese(userId: string): Promise<boolean> {
+export async function categorieSpenteDelCampanello(userId: string): Promise<string[]> {
   const { data: preferenze, error } = await supabase
     .from('profiles')
-    .select('notif_promos')
+    .select('notif_promos, notif_newsletter')
     .eq('id', userId)
     .maybeSingle();
-  return !error && preferenze?.notif_promos === true;
+  const spente: string[] = [];
+  if (error || preferenze?.notif_promos !== true) spente.push('promo');
+  if (error || preferenze?.notif_newsletter !== true) spente.push('newsletter');
+  return spente;
 }
 
 /** Conta le notifiche non lette per il pallino del campanello. */
@@ -137,7 +141,7 @@ function useNotifUnread(userId: string | null) {
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .eq('is_read', false);
-      if (!(await promoAccese(userId))) conta = conta.neq('category', 'promo');
+      for (const categoria of await categorieSpenteDelCampanello(userId)) conta = conta.neq('category', categoria);
       const { count, error } = await conta;
       if (error) return 0;
       return count ?? 0;
@@ -181,7 +185,7 @@ function useUltimeNotifiche(userId: string | null) {
         .from('notifications')
         .select('id, user_id, title, body, link, is_read, created_at')
         .eq('user_id', userId);
-      if (!(await promoAccese(userId))) lista = lista.neq('category', 'promo');
+      for (const categoria of await categorieSpenteDelCampanello(userId)) lista = lista.neq('category', categoria);
       const { data, error } = await lista
         .order('created_at', { ascending: false })
         .limit(ULTIME_NELLA_TENDINA);
