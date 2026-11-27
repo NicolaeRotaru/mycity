@@ -15,6 +15,8 @@ import type { SchedaProdotto } from '@/lib/queries/catalogo';
 import { notFound } from 'next/navigation';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { creaClientAnonimo } from '@/lib/supabase/anonimo';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 
 export const revalidate = 300; // 5 min ISR sui metadata
 
@@ -50,6 +52,20 @@ async function prodottoInesistente(id: string): Promise<boolean> {
 // questi metadati e' sempre un estraneo (Google, WhatsApp), e dopo la migrazione 161
 // `profiles` per lui e' chiusa. Ogni scheda avrebbe preso «noindex».
 const fetchProduct = (id: string) => leggiProdottoPerMetadati(id);
+
+/**
+ * R11-002 — Lo sconto della promozione attiva, dalla stessa fonte di griglia, scheda e cassa
+ * (`fetchActiveDiscounts`), letto col client anonimo come lo leggerebbe un estraneo. Una lettura che
+ * cade vale «nessuno sconto»: i dati strutturati restano col prezzo pieno, come prima, e la pagina
+ * si apre lo stesso. Non lancia mai: la si può far partire subito e aspettare dopo.
+ */
+async function scontoAttivo(id: string): Promise<number> {
+  try {
+    return (await fetchActiveDiscounts(creaClientAnonimo(), [id])).get(id) ?? 0;
+  } catch {
+    return 0;
+  }
+}
 
 /**
  * 22/11/2026 — I METADATI DALLA STESSA RISPOSTA DEL PRECARICO.
@@ -159,6 +175,8 @@ export default async function ProductLayout(
   //
   // 22/11/2026 — Una lettura sola: il prodotto per i metadati e la 404 viene dalla risposta del
   // precarico (vedi `prodottoDalPrecarico`), non da una seconda domanda allo stesso prodotto.
+  // R11-002 — Lo sconto parte insieme al precarico, non in fila dopo.
+  const scontoInArrivo = scontoAttivo(params.id);
   const precarico = await precaricaProdotto(params.id);
   const product = await prodottoDellaRichiesta(params.id, precarico);
   // R10-001 — Qui, nel guscio, si decide la 404. Arriva in rete solo quando sopra non c'è nessuna
@@ -166,6 +184,7 @@ export default async function ProductLayout(
   // arriva in streaming. Va tolto insieme alle prove comuni che lo leggono per nome.
   if (!product && (await prodottoInesistente(params.id))) notFound();
 
+  const sconto = product ? await scontoInArrivo : 0;
   const schema = product && {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -175,7 +194,10 @@ export default async function ProductLayout(
     image: Array.isArray(product.images) ? product.images : undefined,
     offers: {
       '@type': 'Offer',
-      price: Number(product.price).toFixed(2),
+      // R11-002 — Per Google `price` dell'offerta è il prezzo che il cliente paga ora: con la
+      // promozione attiva quello scontato, al centesimo come in cassa. Prima si pubblicava il pieno.
+      // La promozione non dice qui quando finisce, quindi niente `priceValidUntil`.
+      price: (sconto > 0 ? discountedUnitCents(product.price, sconto) / 100 : Number(product.price)).toFixed(2),
       priceCurrency: 'EUR',
       availability: disponibilitaPerGoogle(product),
       url: `${env.appUrl()}/product/${product.id}`,

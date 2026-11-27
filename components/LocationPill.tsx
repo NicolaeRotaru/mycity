@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { MapPin, ChevronDown, X } from 'lucide-react';
 import { useLocalStorage } from '@/lib/hooks';
-import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { FRASE_DELLA_ZONA } from '@/lib/ordini/zona-di-consegna';
 
 const STORAGE_KEY = 'mc_delivery_location';
 
@@ -218,7 +218,7 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
                 Col confine a 5 km restano fuori anche Podenzano, Rottofreno e Gossolengo. Il limite
                 vero è la distanza dal negozio, letta da dove la decide la cassa. */}
             <p className="text-[11px] text-ink-400 mt-2 text-center">
-              {`Consegniamo a Piacenza, fino a ${RAGGIO_CONSEGNA_KM} km dal negozio.`}
+              {`${FRASE_DELLA_ZONA}.`}
             </p>
           </div>
         </>

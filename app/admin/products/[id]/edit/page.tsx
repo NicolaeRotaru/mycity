@@ -55,7 +55,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
     refetchOnMount: 'always',
   });
 
-  const { data: variants = [], error: erroreVarianti, isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette } = useQuery({
+  const { data: variants = [], error: erroreVarianti, isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette, refetch: rileggiVarianti } = useQuery({
     queryKey: [...queryKeys.admin.product(id), 'variants'],
     queryFn: () => loadProductVariants(id),
     // R22-017 — Con un id che non ha la forma di un codice il database risponderebbe con un errore di
@@ -149,8 +149,9 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
               ? 'Non riesco a leggere le taglie e le varianti di questo prodotto. Ricarica la pagina prima di modificarlo: salvando adesso le varianti andrebbero perse.'
               : 'Prodotto non trovato'}
         </p>
-        {error && (
-          <button type="button" onClick={() => { void rileggiProdotto(); }} className="mr-4 text-sm font-semibold text-rose-700 hover:underline">
+        {/* R03-007 — Riprova anche quando a cadere sono le varianti: rilegge quelle (e il prodotto, se è caduto lui). */}
+        {(error || erroreVarianti) && (
+          <button type="button" onClick={() => { if (error) void rileggiProdotto(); if (erroreVarianti) void rileggiVarianti(); }} className="mr-4 text-sm font-semibold text-rose-700 hover:underline">
             Riprova
           </button>
         )}

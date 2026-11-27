@@ -5,7 +5,7 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Plus, X } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Field';
-import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { FRASE_DELLA_ZONA } from '@/lib/ordini/zona-di-consegna';
 
 /**
  * Form indirizzo di consegna per checkout.
@@ -67,12 +67,15 @@ export function useCoordinateDellaZona(
   useEffect(() => {
     if (!domanda) return;
     let vale = true;
+    // La ricerca vecchia si annulla davvero (non solo si ignora) quando si scrive ancora o si smonta.
+    const annulla = new AbortController();
     const timer = setTimeout(async () => {
       try {
         const res = await fetch('/api/geocode', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ q: domanda }),
+          signal: annulla.signal,
         });
         if (!res.ok) return;
         const j = (await res.json()) as { lat?: unknown; lng?: unknown };
@@ -86,6 +89,7 @@ export function useCoordinateDellaZona(
     return () => {
       vale = false;
       clearTimeout(timer);
+      annulla.abort();
     };
   }, [domanda]);
 
@@ -307,7 +311,7 @@ export function ShippingAddressForm({
                28/10/2026 — Via «e dintorni»: col confine a 5 km Podenzano,
                Rottofreno e Gossolengo restano fuori, e la frase li prometteva.
                Il limite vero è la distanza dal negozio, e la frase dice quella. */
-            hint={`Consegniamo a Piacenza, fino a ${RAGGIO_CONSEGNA_KM} km dal negozio`}
+            hint={FRASE_DELLA_ZONA}
           />
         </div>
         <Input

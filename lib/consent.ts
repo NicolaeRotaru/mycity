@@ -247,7 +247,9 @@ export function parseConsentCookie(value: string | undefined): {
 } {
   const nessunConsenso = { functional: false, analytics: false, marketing: false };
   if (!value) return nessunConsenso;
-  const decoded = decodeURIComponent(value);
+  // Un cookie storto (es. «%E0») non deve far cadere chi lo legge: vale come consenso assente.
+  let decoded: string;
+  try { decoded = decodeURIComponent(value); } catch { return nessunConsenso; }
   const duePunti = decoded.indexOf(':');
   if (duePunti < 0) return nessunConsenso;
   if (decoded.slice(0, duePunti) !== String(CONSENT_VERSION)) return nessunConsenso;

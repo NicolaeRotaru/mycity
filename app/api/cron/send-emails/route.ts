@@ -330,7 +330,6 @@ export const POST = handler;
 // e Database type (mai generato). Sicuro perche' processBatch fa solo query
 // validate al runtime.
 // Acceptable any: tipo Supabase troppo restrittivo senza Database type.
-// eslint-disable-next-line
 async function processBatch(
   supa: any,
   batch: {

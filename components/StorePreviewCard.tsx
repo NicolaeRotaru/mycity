@@ -121,7 +121,7 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
         {/* Rating (solo se ci sono recensioni vere) */}
         <div className="mt-1 text-xs">
           {reviews ? (
-            <span className="inline-flex items-center gap-1 font-semibold text-ink-800">
+            <span className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-1 font-semibold text-ink-800">
               <Star size={13} className="fill-accent-500 text-accent-500" aria-hidden />
               {reviews.avg.toFixed(1).replace('.', ',')}
               <span className="font-normal text-ink-400">({reviews.count})</span>

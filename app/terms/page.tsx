@@ -179,8 +179,11 @@ export default function TermsPage() {
           Modalità accettate: {conCarta ? <>pagamento in contanti alla consegna oppure con carta di credito o debito al momento dell&apos;ordine</> : <>pagamento in contanti alla consegna</>}.
           Si può pagare solo con i metodi proposti al momento dell&apos;ordine.
         </p>
+        {/* 26/11/2026 — Diceva che il Rider consegna i contanti a MyCity: in realtà se ne tiene
+            prima il compenso della consegna e versa il resto (compensoDalContante in lib/shipping.ts). */}
         <p>
-          I contanti li riceve il Rider alla consegna e li consegna a MyCity. MyCity versa al
+          I contanti li riceve il Rider alla consegna: ne trattiene il proprio compenso per la
+          consegna e consegna il resto a MyCity. MyCity versa al
           Venditore quanto gli spetta, al netto della commissione di servizio, con un bonifico
           <strong> ogni lunedì</strong> per le consegne della settimana precedente.
         </p>
@@ -192,12 +195,18 @@ export default function TermsPage() {
             conferma di consegna.
           </p>
         )}
+        {/* 26/11/2026 — Mandava a chiedere al Venditore la fattura «dell'ordine», consegna
+            compresa. Ma la consegna («Consegna MyCity») la incassa MyCity, non il negozio: il
+            Venditore non la può documentare. Qui si dice chi incassa cosa, senza promettere un
+            documento per la consegna che oggi non nasce (quello lo decide Nicola). */}
         <p>
           <strong>Documenti fiscali</strong>: MyCity è un intermediario e <strong>non emette
-          fatture</strong> per gli ordini. Ogni adempimento fiscale relativo alla vendita
-          (ricevuta, fattura, ecc.) è di esclusiva responsabilità del Venditore, secondo la
-          normativa applicabile. L&apos;Acquirente che necessiti di una fattura deve richiederla
-          direttamente al Venditore.
+          fatture</strong> per i prodotti. Ogni adempimento fiscale relativo alla vendita dei
+          prodotti (ricevuta, fattura, ecc.) è di esclusiva responsabilità del Venditore, secondo
+          la normativa applicabile. L&apos;Acquirente che necessiti di una fattura per i prodotti
+          deve richiederla direttamente al Venditore. Le spese di consegna invece le incassa
+          MyCity, non il Venditore: non fanno parte della vendita del negozio e il Venditore non
+          le documenta. Per le spese di consegna rivolgiti a MyCity, non al Venditore.
         </p>
       </LegalSection>
 

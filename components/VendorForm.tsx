@@ -307,11 +307,18 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
         // R10-010 — Un social sbagliato non ferma più nome, logo, descrizione e colore: quel social
         // resta com'era salvato, tutto il resto si salva, e l'errore resta sotto il suo campo.
         const salvati = (defaultValues?.storeCustomization?.socials ?? {}) as Record<string, string | undefined>;
+        // R21-012 — Un valore GIA' salvato che il negoziante non ha toccato non blocca il resto, anche se le
+        // regole di oggi lo rifiuterebbero (un sito salvato con «ftp://»): per il controllo si lascia vuoto,
+        // poi si rimette com'era. Un valore NUOVO sbagliato resta rifiutato come prima.
+        // Solo il sito: per i social con nome (Instagram, Facebook, TikTok) un valore salvato e rifiutato resta fermo come prima.
+        const nonToccati = Object.keys(sociali).filter(
+          (k) => k === 'website' && !!salvati[k] && ((custom.socials as Record<string, string | undefined> | undefined)?.[k] ?? '') === salvati[k],
+        );
         const conISocialDiPrima: StoreCustomization = {
           ...corretta,
           socials: {
             ...corretta.socials,
-            ...Object.fromEntries(Object.keys(sociali).map((k) => [k, salvati[k] ?? ''])),
+            ...Object.fromEntries(Object.keys(sociali).map((k) => [k, nonToccati.includes(k) ? '' : (salvati[k] ?? '')])),
           },
         };
         const riprova = altro === null ? storeCustomizationSchema.safeParse(conISocialDiPrima) : null;
@@ -321,16 +328,25 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
           );
           return;
         }
-        customData = riprova.data;
+        customData = nonToccati.length > 0
+          ? { ...riprova.data, socials: { ...riprova.data.socials, ...Object.fromEntries(nonToccati.map((k) => [k, salvati[k]])) } }
+          : riprova.data;
         const chiavi = Object.keys(sociali);
-        const nomi = chiavi.map((k) => campoDellErrore(['socials', k]) ?? k).join(', ');
+        const nomeDi = (k: string) => campoDellErrore(['socials', k]) ?? k;
         // Un campo che prima era vuoto non «resta com'era»: semplicemente non si salva.
-        const cheFine = chiavi.every((k) => !salvati[k])
-          ? (chiavi.length > 1 ? 'non si sono salvati' : 'non si è salvato')
-          : (chiavi.length > 1 ? "sono rimasti com'erano" : "è rimasto com'era");
+        // Con due campi diversi (uno vuoto, uno già salvato) la frase si divide per gruppo.
+        const vuoti = chiavi.filter((k) => !salvati[k]);
+        const rimasti = chiavi.filter((k) => !!salvati[k]);
+        const fraseVuoti = vuoti.length > 0
+          ? `${vuoti.map(nomeDi).join(', ')} ${vuoti.length > 1 ? 'non si sono salvati' : 'non si è salvato'}`
+          : '';
+        const fraseRimasti = rimasti.length > 0
+          ? `${rimasti.map(nomeDi).join(', ')} ${rimasti.length > 1 ? "sono rimasti com'erano" : "è rimasto com'era"}`
+          : '';
+        const cheFine = [fraseVuoti, fraseRimasti].filter(Boolean).join(', ');
         socialNonSalvati = true;
         setCustomError(`${campo}: ${primo.message}`);
-        avvisoASalvataggioRiuscito.current = `${campo}: ${primo.message} Il resto è salvato; ${nomi} ${cheFine}.`;
+        avvisoASalvataggioRiuscito.current = `${campo}: ${primo.message} Il resto è salvato; ${cheFine}.`;
       } else {
         customData = parsed.data;
       }
@@ -389,7 +405,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
                   </p>
                 ) : (
                   <p className="text-ink-500">
-                    <span className="font-medium text-primary-700">Carica</span> un'immagine quadrata (PNG, JPG)
+                    <span className="font-medium text-primary-700">Carica</span> un'immagine quadrata ({tipiScrittiPerUmani()})
                   </p>
                 )}
               </div>

@@ -294,6 +294,15 @@ export async function controllaTettoSpesaAi(feature: string, stimaCents: number 
     copieAttese: leggiCopieAttese(process.env.AI_COPIE_ATTESE),
   });
   if (!decisione.consentito) {
+    // 26/11/2026 (R20-008) — «Non so quanto si e' speso» non e' «il budget e'
+    // finito». Il conto condiviso che non risponde (un timeout, la pausa del
+    // circuito) e' un guasto di minuti: diventa un errore temporaneo suo, e il
+    // negoziante non legge «riprova domani».
+    if (decisione.motivo === 'spesa_sconosciuta') {
+      logger.warn('ai_spesa_sconosciuta', { feature, limitEur, contoCondiviso: conto.condiviso });
+      await condivisa?.libera();
+      throw AiCallError.perSpesaSconosciuta(feature);
+    }
     logger.warn('ai_budget_exceeded', {
       feature,
       spentEur: spesiCents / 100,
@@ -391,8 +400,11 @@ export class AiCallError extends Error {
      *
      * Lo status resta 503 (le rotte che lo guardano non cambiano
      * comportamento): quello che si aggiunge è il motivo, cioè chi ha frenato.
+     *
+     * 26/11/2026 (R20-008) — `spesa_sconosciuta`: il conto della spesa di oggi
+     * non si e' potuto leggere. Non e' il tetto: e' un guasto di minuti.
      */
-    readonly motivo?: 'tetto_spesa',
+    readonly motivo?: 'tetto_spesa' | 'spesa_sconosciuta',
   ) {
     super(`AI call failed (${feature}, status=${status ?? 'n/a'})`);
     this.name = 'AiCallError';
@@ -401,6 +413,11 @@ export class AiCallError extends Error {
   /** Il freno di spesa giornaliero: nostro, non del fornitore. */
   static perTettoSpesa(feature: string): AiCallError {
     return new AiCallError(feature, 503, undefined, undefined, 'tetto_spesa');
+  }
+
+  /** Il conto della spesa di oggi non risponde: non sappiamo se si puo' spendere. Temporaneo. */
+  static perSpesaSconosciuta(feature: string): AiCallError {
+    return new AiCallError(feature, 503, undefined, undefined, 'spesa_sconosciuta');
   }
 }
 
@@ -490,6 +507,11 @@ export function mapAiError(err: unknown, feature: string): NextResponse {
   // giornata di lavoro.
   if (err instanceof AiCallError && err.motivo === 'tetto_spesa') {
     return ApiErrors.unavailable('Budget AI giornaliero esaurito. Riprova domani.');
+  }
+  // R20-008 — Il conto della spesa non risponde: il budget non e' finito, e'
+  // il conto che per qualche minuto non si legge.
+  if (err instanceof AiCallError && err.motivo === 'spesa_sconosciuta') {
+    return ApiErrors.unavailable('Servizio AI momentaneamente non disponibile. Riprova fra qualche minuto.');
   }
   if (status === 503) return ApiErrors.unavailable('Servizio AI non disponibile in questo momento. Riprova fra qualche minuto.');
   // 12/11/2026 (R04-002) — Un 404 dal fornitore vuol dire «questo modello non

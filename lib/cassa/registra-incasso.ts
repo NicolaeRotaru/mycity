@@ -3,6 +3,9 @@ import { conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { compensoDalContante, contanteDaRimettereCents } from '@/lib/shipping';
 import { STATI_IN_CUI_SI_INCASSA } from '@/lib/rider/incasso-alla-consegna';
 import { recordActivity } from '@/lib/activity';
+import { aggiornaQuadratura } from '@/lib/cassa/quadratura';
+import { giornoLocale } from '@/lib/tempo/giorno-locale';
+import { logger } from '@/lib/logger';
 
 /**
  * 15/10/2026 (R33) — L'INCASSO IN CONTANTI SI REGISTRA IN UN POSTO SOLO.
@@ -63,7 +66,9 @@ export type MotivoRifiuto =
  *
  * L'amministratore: solo un ordine gia' consegnato da un fattorino. Mentre
  * l'ordine e' in strada i contanti li ha in mano il fattorino, ed e' lui che
- * li deve dichiarare.
+ * li deve dichiarare. Se il fattorino e' sparito con l'ordine in strada, la
+ * strada non e' questa: e' `chiudiConsegnaDaAmministratore`, qui sotto, che
+ * scrive incasso e consegna insieme.
  */
 export function motivoPerNonRegistrare(
   ordine: OrdineDaIncassare | null,
@@ -210,4 +215,149 @@ export async function tracciaIncassoSenzaFoto(dati: {
     targetId: dati.ordineId,
     metadata: { nota: dati.nota, incassato_cents: dati.incassatoCents, atteso_cents: dati.attesoCents },
   });
+}
+
+/**
+ * 26/11/2026 — SE IL FATTORINO SPARISCE, LA CONSEGNA LA CHIUDE L'AMMINISTRATORE.
+ *
+ * Il caso: martedi' sera il fattorino consegna pane per 25 euro pagato in
+ * contanti, intasca i soldi e non riapre piu' l'app. Dalla migrazione 163 un
+ * ordine in contanti non diventa DELIVERED senza l'incasso dichiarato, e qui
+ * sopra l'amministratore registra l'incasso solo a consegna chiusa
+ * (`motivoPerNonRegistrare`). Le due regole insieme lasciavano l'ordine «in
+ * consegna» per sempre: il negozio non veniva pagato, e restava solo il
+ * database a mano.
+ *
+ * Aprire qui sopra l'incasso dell'amministratore su un ordine in strada non
+ * basta (collaudo del 12/11): lascia un ordine pagato che non si chiude (serve
+ * il codice del cliente) e non si annulla (CONTANTI_INCASSATI). Incasso e
+ * consegna si scrivono insieme, nella stessa UPDATE, dentro la funzione del
+ * database `admin_chiudi_consegna` (migrazione 360): is_admin(), solo contanti
+ * a domicilio in OUT_FOR_DELIVERY con un fattorino, motivo obbligatorio, gli
+ * stessi conti di `campiDellIncasso` e `importoFuoriMisura`, una riga in
+ * audit_logs.
+ *
+ * Qui la si chiama con la SESSIONE dell'amministratore (is_admin() guarda
+ * auth.uid(), e il registro deve nominare lui), si traduce la risposta per la
+ * rotta, e si riallinea la giornata di cassa del fattorino come fanno le altre
+ * due strade: la consegna e' di adesso, ed e' la giornata che la rimessa guarda.
+ */
+
+/** Il motivo piu' corto che la funzione del database accetta (360: `length(v_motivo) < 10`). */
+export const MOTIVO_MINIMO_CHIUSURA = 10;
+
+export type MotivoChiusuraRifiutata =
+  | 'NOT_ADMIN'
+  | 'MOTIVO_MANCANTE'
+  | 'INCASSO_MANCANTE'
+  | 'IMPORTO_FUORI_MISURA'
+  | 'ORDER_NOT_FOUND'
+  | 'NON_IN_CONTANTI'
+  | 'RITIRO_IN_NEGOZIO'
+  | 'WRONG_STATUS'
+  | 'SENZA_FATTORINO'
+  | 'FUNZIONE_ASSENTE'
+  | 'ERRORE';
+
+export type EsitoChiusura =
+  | { ok: true; incassoRegistrato: boolean }
+  | { ok: false; motivo: MotivoChiusuraRifiutata; stato: 400 | 403 | 404 | 409 | 500 | 503; messaggio: string };
+
+const RIFIUTI_DELLA_CHIUSURA: Record<
+  Exclude<MotivoChiusuraRifiutata, 'WRONG_STATUS'>,
+  { stato: 400 | 403 | 404 | 409 | 500 | 503; messaggio: string }
+> = {
+  NOT_ADMIN: { stato: 403, messaggio: 'Solo un amministratore può chiudere la consegna' },
+  MOTIVO_MANCANTE: {
+    stato: 400,
+    messaggio: `Scrivi perché chiudi tu la consegna (almeno ${MOTIVO_MINIMO_CHIUSURA} caratteri)`,
+  },
+  INCASSO_MANCANTE: { stato: 400, messaggio: 'Scrivi i contanti dichiarati per questo ordine' },
+  IMPORTO_FUORI_MISURA: { stato: 400, messaggio: 'Importo fuori misura rispetto al totale dell’ordine.' },
+  ORDER_NOT_FOUND: { stato: 404, messaggio: 'Ordine non trovato' },
+  NON_IN_CONTANTI: { stato: 409, messaggio: 'Questo ordine non è in contanti' },
+  RITIRO_IN_NEGOZIO: { stato: 409, messaggio: 'È un ritiro in negozio: lo chiude il negozio con il codice' },
+  SENZA_FATTORINO: { stato: 409, messaggio: 'Questo ordine non ha un fattorino' },
+  FUNZIONE_ASSENTE: {
+    stato: 503,
+    messaggio: 'La chiusura della consegna non è ancora attiva: sul database manca la migrazione 360',
+  },
+  ERRORE: { stato: 500, messaggio: 'Chiusura della consegna non riuscita' },
+};
+
+/** Il rifiuto per uno stato sbagliato dice cosa si fa invece. */
+function messaggioStatoSbagliato(stato: unknown): string {
+  if (stato === 'DELIVERED') return 'La consegna è già chiusa: se manca l’incasso, registralo da Rimesse COD';
+  if (stato === 'PICKED_UP') {
+    return 'La merce non è ancora arrivata alla porta: questa consegna si annulla, non si chiude';
+  }
+  return 'Si chiude solo una consegna in strada';
+}
+
+function rifiutoDellaChiusura(motivo: MotivoChiusuraRifiutata, statoOrdine?: unknown): EsitoChiusura {
+  if (motivo === 'WRONG_STATUS') {
+    return { ok: false, motivo, stato: 409, messaggio: messaggioStatoSbagliato(statoOrdine) };
+  }
+  return { ok: false, motivo, ...RIFIUTI_DELLA_CHIUSURA[motivo] };
+}
+
+const FUNZIONE_DELLA_CHIUSURA = 'admin_chiudi_consegna';
+
+/** La funzione non c'e' (ancora): PostgREST risponde PGRST202, PostgreSQL 42883 col suo nome. */
+function funzioneDellaChiusuraMancante(e: { code?: string; message?: string }): boolean {
+  return e.code === 'PGRST202' || (e.code === '42883' && (e.message ?? '').includes(FUNZIONE_DELLA_CHIUSURA));
+}
+
+function eMotivoDellaChiusura(r: unknown): r is MotivoChiusuraRifiutata {
+  return typeof r === 'string' && (r === 'WRONG_STATUS' || Object.prototype.hasOwnProperty.call(RIFIUTI_DELLA_CHIUSURA, r));
+}
+
+/** Chiude la consegna in strada di un fattorino sparito, con l'incasso dichiarato (vedi sopra). */
+export async function chiudiConsegnaDaAmministratore(
+  /** Il client con la sessione dell'amministratore: dentro la funzione, is_admin() e il registro guardano lui. */
+  sessione: SupabaseClient,
+  /** Il client di servizio: rilegge l'ordine chiuso e riallinea la giornata di cassa. */
+  servizio: SupabaseClient,
+  richiesta: { ordineId: string; incassatoCents: number | null; motivo: string },
+): Promise<EsitoChiusura> {
+  const motivo = richiesta.motivo.trim();
+  if (motivo.length < MOTIVO_MINIMO_CHIUSURA) return rifiutoDellaChiusura('MOTIVO_MANCANTE');
+
+  const { data, error } = await sessione.rpc(FUNZIONE_DELLA_CHIUSURA, {
+    p_order_id: richiesta.ordineId,
+    p_incassato_cents: richiesta.incassatoCents,
+    p_motivo: motivo,
+  });
+  if (error) {
+    if (funzioneDellaChiusuraMancante(error)) return rifiutoDellaChiusura('FUNZIONE_ASSENTE');
+    logger.error('[admin] chiusura della consegna non riuscita', { orderId: richiesta.ordineId, message: error.message });
+    return rifiutoDellaChiusura('ERRORE');
+  }
+
+  const risposta = (data ?? null) as { ok?: unknown; reason?: unknown; status?: unknown; incasso_registrato?: unknown } | null;
+  if (!risposta || risposta.ok !== true) {
+    // Una risposta che non e' della funzione vera (niente ok, motivo sconosciuto) non e' una chiusura.
+    const motivoLetto = risposta?.reason;
+    const motivoRifiuto = eMotivoDellaChiusura(motivoLetto) ? motivoLetto : 'ERRORE';
+    return rifiutoDellaChiusura(motivoRifiuto, risposta?.status);
+  }
+
+  // La consegna e' scritta. La giornata di cassa e' quella della consegna (adesso):
+  // se il riallineamento cade, lo rifa' il giro notturno (riquadra-casse).
+  try {
+    const { data: chiuso, error: errLettura } = await servizio
+      .from('orders')
+      .select('rider_id, delivered_at')
+      .eq('id', richiesta.ordineId)
+      .maybeSingle();
+    if (errLettura) throw new Error(errLettura.message);
+    const riga = chiuso as { rider_id: string | null; delivered_at: string | null } | null;
+    if (riga?.rider_id && riga.delivered_at) {
+      await aggiornaQuadratura(servizio, riga.rider_id, giornoLocale(new Date(riga.delivered_at)));
+    }
+  } catch (e) {
+    logger.error('[admin] quadratura dopo la chiusura della consegna non aggiornata', { orderId: richiesta.ordineId, e });
+  }
+
+  return { ok: true, incassoRegistrato: risposta.incasso_registrato === true };
 }

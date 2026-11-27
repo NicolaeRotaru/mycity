@@ -70,9 +70,15 @@ export const MAX_PEZZI_PER_ARTICOLO = 99;
 // altrimenti un carrello cloud stale può "resuscitare" item rimossi al login.
 export const CART_UPDATED_AT_KEY = 'cart_updated_at';
 
+// R17-009 — L'orologio avanza SEMPRE a ogni modifica, anche nello stesso millesimo o con l'ora del
+// telefono tornata indietro: la sincronizzazione decide «il locale è cambiato dopo l'allineamento»
+// confrontando questo numero, e un cambio che non lo fa avanzare verrebbe coperto dal cloud.
 const bumpUpdatedAt = () => {
   if (typeof window === 'undefined') return;
-  try { localStorage.setItem(CART_UPDATED_AT_KEY, String(Date.now())); } catch { /* noop */ }
+  try {
+    const prima = Number(localStorage.getItem(CART_UPDATED_AT_KEY)) || 0;
+    localStorage.setItem(CART_UPDATED_AT_KEY, String(Math.max(Date.now(), prima + 1)));
+  } catch { /* noop */ }
 };
 
 export const getCart = (): CartItem[] => {

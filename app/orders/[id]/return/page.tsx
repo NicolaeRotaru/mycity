@@ -16,6 +16,8 @@ import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
 import { recessoAperto, ultimoGiornoDelRecesso } from '@/lib/ordini/termine-del-recesso';
 import { MOTIVO_RIPENSAMENTO } from '@/lib/ordini/recesso';
+import { nomeDellaRigaOrdine, type RigaOrdine } from '@/lib/ordini/riga-ordine';
+import { formatPrice } from '@/lib/format';
 import { useTranslations } from 'next-intl';
 import { Package, RefreshCw, AlertTriangle, MessageSquare, Clock, Pencil, type LucideIcon } from 'lucide-react';
 
@@ -40,6 +42,18 @@ const REASONS: Array<{ value: string; label: string; icon: LucideIcon }> = [
 const STATI_APERTI = ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED'];
 const STATI_RITIRABILI = ['REQUESTED', 'APPROVED'];
 
+/**
+ * 26/11/2026 — IL CLIENTE DICE QUALE ARTICOLO RENDE.
+ * La rotta e il database sapevano gia' tenere il reso di un solo articolo
+ * (`order_item_id`), ma il modulo non lo faceva scegliere: ogni reso valeva per
+ * tutto l'ordine, e al negozio arrivava il totale da rimborsare per un vasetto
+ * rotto. Con piu' di un articolo si sceglie, senza scelta gia' fatta, come il
+ * motivo. «Tutto l'ordine» resta una scelta. Una riga si rende intera: la
+ * quantita' parziale di una riga il database non la sa ancora tenere.
+ */
+const TUTTO_L_ORDINE = 'tutto';
+type RigaDaRendere = RigaOrdine & { id: string; quantity?: number | null; unit_price?: number | string | null; variant_label?: string | null };
+
 export default function NewReturnPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -47,6 +61,7 @@ export default function NewReturnPage() {
   // 5/11/2026 — Nessun motivo già scelto: «Prodotto danneggiato» è un'accusa al negozio, e col
   // motivo preselezionato il controllo dei freschi (solo su «Ho cambiato idea») non scattava.
   const [reason, setReason] = useState<string>('');
+  const [cosaRendo, setCosaRendo] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -65,7 +80,7 @@ export default function NewReturnPage() {
       const [{ data, error }, { data: aperti }] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, total_price, delivered_at, created_at, delivery_status, payment_method, stripe_payment_intent, wallet_applied_cents')
+          .select('id, total_price, delivered_at, created_at, delivery_status, payment_method, stripe_payment_intent, wallet_applied_cents, order_items ( id, quantity, unit_price, product_name, variant_label, products ( name ) )')
           .eq('id', params.id)
           .single(),
         supabase.from('returns').select('id, status').eq('order_id', params.id).in('status', STATI_APERTI).limit(1),
@@ -168,10 +183,14 @@ export default function NewReturnPage() {
     }
   }
 
+  const righe: RigaDaRendere[] = Array.isArray(order?.order_items) ? (order.order_items as RigaDaRendere[]) : [];
+  const serveSceltaArticolo = righe.length > 1;
+  const articoloMancante = serveSceltaArticolo && !cosaRendo;
+
   async function submit() {
     // 5/11/2026 — Con la foto ancora in caricamento il reso partiva senza, e dopo non si poteva
     // più aggiungere. Senza motivo non parte niente.
-    if (uploading || !reason) return;
+    if (uploading || !reason || articoloMancante) return;
     setSubmitting(true);
     try {
       const r = await fetch('/api/returns/create', {
@@ -179,6 +198,7 @@ export default function NewReturnPage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           orderId: params.id,
+          orderItemId: serveSceltaArticolo && cosaRendo !== TUTTO_L_ORDINE ? cosaRendo : undefined,
           reason,
           notes: notes || undefined,
           photoUrls: photos,
@@ -351,6 +371,45 @@ export default function NewReturnPage() {
       </p>
 
       <div className="mt-6 rounded-2xl bg-white p-6 shadow-sm-neutral ring-1 ring-cream-300">
+        {serveSceltaArticolo && (
+          <fieldset className="mb-6">
+            <legend className="block text-sm font-medium text-ink-700">Cosa vuoi rendere?</legend>
+            <div className="mt-2 space-y-2">
+              {righe.map((riga) => (
+                <label key={riga.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-cream-300 p-3 hover:bg-cream-50">
+                  <input
+                    type="radio"
+                    name="articolo"
+                    value={riga.id}
+                    checked={cosaRendo === riga.id}
+                    onChange={(e) => setCosaRendo(e.target.value)}
+                    className="h-4 w-4 text-primary-700"
+                  />
+                  <span className="text-sm">
+                    {nomeDellaRigaOrdine(riga)}
+                    {riga.variant_label ? ` · ${riga.variant_label}` : ''}
+                    {Number(riga.quantity ?? 1) > 1 ? ` × ${riga.quantity}` : ''}
+                    <span className="text-ink-500"> · {formatPrice(Number(riga.unit_price ?? 0) * Number(riga.quantity ?? 1))}</span>
+                  </span>
+                </label>
+              ))}
+              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-cream-300 p-3 hover:bg-cream-50">
+                <input
+                  type="radio"
+                  name="articolo"
+                  value={TUTTO_L_ORDINE}
+                  checked={cosaRendo === TUTTO_L_ORDINE}
+                  onChange={(e) => setCosaRendo(e.target.value)}
+                  className="h-4 w-4 text-primary-700"
+                />
+                <span className="text-sm">Tutto l&apos;ordine</span>
+              </label>
+            </div>
+            <p className="mt-2 text-xs text-ink-500">
+              Un articolo si rende per intero. Se ne rendi più di uno ma non tutti, scegline uno e scrivi gli altri nei dettagli: il negozio li aggiunge al rimborso.
+            </p>
+          </fieldset>
+        )}
         <fieldset>
         <legend className="block text-sm font-medium text-ink-700">Motivo del reso</legend>
         <div className="mt-2 space-y-2">
@@ -457,10 +516,10 @@ export default function NewReturnPage() {
 
         <button
           onClick={submit}
-          disabled={submitting || uploading || !reason}
+          disabled={submitting || uploading || !reason || articoloMancante}
           className="mt-6 w-full rounded-lg bg-primary-700 px-4 py-3 text-sm font-semibold text-white hover:bg-primary-800 disabled:opacity-50"
         >
-          {submitting ? tStates('sending') : uploading ? 'Attendi la foto…' : !reason ? 'Scegli il motivo del reso' : 'Invia richiesta di reso'}
+          {submitting ? tStates('sending') : uploading ? 'Attendi la foto…' : articoloMancante ? 'Scegli cosa vuoi rendere' : !reason ? 'Scegli il motivo del reso' : 'Invia richiesta di reso'}
         </button>
       </div>
     </div>

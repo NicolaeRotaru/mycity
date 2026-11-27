@@ -7,11 +7,11 @@ import {
 
 export const metadata = {
   title: 'Lavora con noi · MyCity',
-  description: 'Costruiamo il commercio di quartiere del futuro. Porta il tuo negozio, diventa rider o entra nel team MyCity a Piacenza.',
+  description: 'Costruiamo il commercio di quartiere del futuro. Porta il tuo negozio o scrivici se vuoi dare una mano a MyCity a Piacenza.',
   alternates: { canonical: '/lavora-con-noi' },
   openGraph: {
     title: 'Lavora con noi · MyCity',
-    description: 'Costruiamo il commercio di quartiere del futuro. Porta il tuo negozio, diventa rider o entra nel team MyCity.',
+    description: 'Costruiamo il commercio di quartiere del futuro. Porta il tuo negozio o scrivici se vuoi dare una mano a MyCity.',
     type: 'website',
     locale: 'it_IT',
     siteName: 'MyCity',
@@ -31,17 +31,17 @@ const PATHS = [
   },
   {
     Icon: Bike,
-    title: 'Diventa rider',
-    body: 'Consegna in bici o scooter nel centro di Piacenza, scegli i tuoi turni e ricevi un compenso fisso per ogni consegna. Tragitti brevi, tutto in città.',
+    title: 'Consegnare a Piacenza',
+    body: 'Se ti interessa consegnare a Piacenza, iscriviti e scrivici. Oggi non promettiamo né turni né un compenso fisso: ne parliamo insieme, caso per caso.',
     href: '/sign-up?role=rider',
-    cta: 'Candidati come rider',
+    cta: 'Iscriviti come fattorino',
   },
   {
     Icon: Laptop,
-    title: 'Entra nel team',
-    body: 'Prodotto, operazioni, supporto ai negozi: cerchiamo persone curiose che vogliono far crescere un servizio utile alla loro città.',
-    href: '#posizioni',
-    cta: 'Vedi le posizioni',
+    title: 'Dai una mano',
+    body: 'Prodotto, operazioni, supporto ai negozi: se hai voglia di far crescere un servizio utile alla tua città, scrivici una candidatura spontanea.',
+    href: mailtoContatto('lavoro', 'Candidatura spontanea'),
+    cta: 'Scrivici',
   },
 ];
 
@@ -54,7 +54,7 @@ const PERKS = [
   {
     Icon: CalendarClock,
     title: 'Flessibilità vera',
-    body: 'Turni e orari pensati per stare nella vita delle persone, non contro.',
+    body: 'Orari pensati per stare nella vita delle persone, non contro.',
   },
   {
     Icon: TrendingUp,
@@ -114,7 +114,7 @@ export default function LavoraConNoiPage() {
             Costruiamo il commercio di quartiere del futuro.
           </h1>
           <p className="text-lg md:text-xl leading-relaxed text-white/90 max-w-[54ch]">
-            MyCity è fatta di negozianti, rider e persone di prodotto che credono in una cosa
+            MyCity è fatta di negozianti e di persone che credono in una cosa
             semplice: la città è più viva quando si compra vicino. Scegli da dove vuoi partire.
           </p>
         </div>
@@ -185,7 +185,7 @@ export default function LavoraConNoiPage() {
           <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-1.5 break-words hyphens-auto">
             Posizioni aperte
           </h2>
-          <p className="text-base text-ink-500 mb-7">Piacenza · alcune posizioni sono ibride.</p>
+          <p className="text-base text-ink-500 mb-7">Piacenza.</p>
           <ul className="flex flex-col gap-3">
             {JOBS.map((job) => (
               <li

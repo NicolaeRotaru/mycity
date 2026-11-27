@@ -7,6 +7,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { scriviCampanella } from '@/lib/ordini/campanella';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -38,6 +39,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // 20/11/2026 (R04-002) — Un guasto del database non è «non trovato»: 500 «riprova». «Non c'è»
   // restano PGRST116 («nessuna riga») e 22P02 (un id che non è un UUID: nessuna riga può averlo).
   if (error && error.code !== 'PGRST116' && error.code !== '22P02') {
+    logger.error('[admin-cancel] lettura ordine fallita', { orderId: params.id, code: error.code, message: error.message });
     return ApiErrors.internal('Non riesco a leggere l’ordine adesso: riprova fra poco.');
   }
   if (!riga) return ApiErrors.notFound('Ordine non trovato');
@@ -95,6 +97,13 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
           'Dividilo nel riquadro «Rimborsi dal cruscotto da dividere» qui in Ordini, poi annulla di nuovo.',
       );
     }
+    // Un 500 senza riga nel registro non lo vede nessuno: il guasto resta solo nella risposta.
+    logger.error('[admin-cancel] annullo ordine fallito', {
+      orderId: order.id,
+      motivo: esito.motivo,
+      dettaglio: esito.dettaglio,
+      adminId: user.id,
+    });
     return ApiErrors.internal('Annullamento fallito');
   }
   const refundId = esito.refundId;

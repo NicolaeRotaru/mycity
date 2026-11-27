@@ -1,12 +1,19 @@
--- Seed 005: promuove nicolaflorea50@gmail.com ad admin + crea un rider demo
+-- Seed 005: promuove il titolare del marketplace ad admin + crea un rider demo
 --
 -- Idempotente. Cancella eventuali tentativi precedenti per partire pulito.
+--
+-- 26/11/2026 — L'email del titolare non sta piu' nel codice (il deposito e' pubblico):
+-- la semina la legge dall'impostazione mycity.email_titolare. Senza, il rider demo
+-- nasce lo stesso e nessuno viene promosso. Per esempio:
+--   psql "$DATABASE_URL" -c "SET mycity.email_titolare = '<email del titolare>'" -f seeds/005_admin_and_rider.sql
+-- Nell'editor SQL di Supabase: la stessa riga SET ...; in cima, poi il file.
 
 DO $$
 DECLARE
   rider_uuid    uuid := '22222222-2222-2222-2222-aaaaaaaa0001';
   rider_email   text := 'rider.demo@piacenza-demo.local';
   pwd text := crypt('PiacenzaDemo2025!', gen_salt('bf'));
+  email_titolare text := nullif(current_setting('mycity.email_titolare', true), '');
 BEGIN
   -- 12/11/2026 (R12-009) — La semina scrive con la stessa chiave delle prove SQL
   -- (tests/sql/harness): il guardiano dei profili (119) lascia l'approvazione solo
@@ -15,9 +22,13 @@ BEGIN
   ----------------------------------------------------------------
   -- 1) Promuovi il proprietario del marketplace ad admin
   ----------------------------------------------------------------
-  UPDATE public.profiles
-  SET role = 'admin', is_approved = true, approval_status = 'approved'
-  WHERE id = (SELECT id FROM auth.users WHERE email = 'nicolaflorea50@gmail.com');
+  IF email_titolare IS NULL THEN
+    RAISE NOTICE 'Semina 005: mycity.email_titolare non impostata, nessuno promosso ad admin';
+  ELSE
+    UPDATE public.profiles
+    SET role = 'admin', is_approved = true, approval_status = 'approved'
+    WHERE id = (SELECT id FROM auth.users WHERE email = email_titolare);
+  END IF;
 
   ----------------------------------------------------------------
   -- 2) Cleanup: rimuovi eventuali tentativi precedenti rotti

@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Search, RadioTower, Target, MapPin, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { dentroLAreaServita, FRASE_NEGOZIO_FUORI_AREA } from '@/lib/ordini/zona-di-consegna';
 
 // 31/10/2026 — LA MAPPA SI APRE SU PIACENZA, E QUEL PUNTO NON È IL NEGOZIO.
 // Prima si apriva su Roma e il selettore mandava subito quelle coordinate al modulo: chi scriveva
@@ -64,6 +65,13 @@ const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
   const indirizzoRef = useRef(address);
   const [confermata, setConfermata] = useState(posizioneSalvataVera);
   const [coords, setCoords] = useState(initialCoords);
+  // 26/11/2026 — Il posto che «Cerca» ha trovato, scritto per intero («Via Roma, Piacenza, …»): prima
+  // il negozio vedeva solo il segnaposto e non leggeva da nessuna parte in quale città era finito.
+  const [trovato, setTrovato] = useState<string | null>(null);
+  // Il testo è cambiato dopo l'ultima posizione data: la posizione vecchia non vale più (vedi sotto).
+  const [daRicercare, setDaRicercare] = useState(false);
+  // Una posizione fuori da Piacenza e dintorni non si conferma: qui il perché, finché non se ne dà una buona.
+  const [avvisoArea, setAvvisoArea] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(
@@ -113,8 +121,12 @@ const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
 
       const updatePos = (lat: number, lng: number) => {
         setCoords({ lat, lng });
-        setConfermata(true);
-        onChange({ address: indirizzoRef.current, lat, lng, confermata: true });
+        // 26/11/2026 — Un tocco o un trascinamento fuori da Piacenza e dintorni non è il negozio.
+        const buona = dentroLAreaServita(lat, lng);
+        setConfermata(buona);
+        setAvvisoArea(buona ? null : FRASE_NEGOZIO_FUORI_AREA);
+        if (buona) setDaRicercare(false);
+        onChange({ address: indirizzoRef.current, lat, lng, confermata: buona });
       };
 
       marker.on('dragend', () => {
@@ -185,6 +197,17 @@ const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
         setError('Posizione non valida ricevuta dal servizio. Sposta il pin sulla mappa.');
         return;
       }
+      const nome = typeof data.nome === 'string' && data.nome.trim() ? data.nome.trim() : null;
+      setTrovato(nome);
+      // 26/11/2026 — Il primo risultato poteva essere la Via Roma di un'altra città, e si confermava
+      // senza guardare dove fosse. Fuori da Piacenza e dintorni non si conferma e non si sposta il
+      // segnaposto: si dice cosa è stato trovato e cosa fare.
+      if (!dentroLAreaServita(lat, lng)) {
+        setAvvisoArea(FRASE_NEGOZIO_FUORI_AREA);
+        return;
+      }
+      setAvvisoArea(null);
+      setDaRicercare(false);
       setCoords({ lat, lng });
       setConfermata(true);
       onChange({ address, lat, lng, confermata: true });
@@ -205,10 +228,17 @@ const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setLocating(false);
+        // 26/11/2026 — Chi aggiorna il profilo da casa, fuori città, non sposta il negozio lì.
+        if (!dentroLAreaServita(newCoords.lat, newCoords.lng)) {
+          setAvvisoArea(FRASE_NEGOZIO_FUORI_AREA);
+          return;
+        }
+        setAvvisoArea(null);
+        setDaRicercare(false);
         setCoords(newCoords);
         setConfermata(true);
         onChange({ ...newCoords, address: indirizzoRef.current, confermata: true });
-        setLocating(false);
       },
       (err) => {
         // Il testo del browser (err.message) arriva in inglese o vuoto: si dice in italiano dal codice.
@@ -240,7 +270,14 @@ const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
             onChange={(e) => {
               setAddress(e.target.value);
               indirizzoRef.current = e.target.value;
-              onChange({ address: e.target.value, lat: coords.lat, lng: coords.lng, confermata });
+              // 26/11/2026 — Il testo nuovo partiva con le coordinate vecchie e `confermata` com'era:
+              // chi vedeva la mappa nel posto sbagliato e aggiungeva «, Piacenza» senza ripremere
+              // «Cerca» salvava le coordinate dell'altra città. Cambiato il testo, la posizione va
+              // ridata: con «Cerca» o toccando la mappa.
+              if (confermata) setDaRicercare(true);
+              setConfermata(false);
+              setTrovato(null);
+              onChange({ address: e.target.value, lat: coords.lat, lng: coords.lng, confermata: false });
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -265,6 +302,17 @@ const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
         </div>
       </div>
 
+      {trovato && (
+        <p className="text-xs text-ink-600">
+          Trovato: <span className="font-medium">{trovato}</span>
+        </p>
+      )}
+      {daRicercare && (
+        <p role="status" className="text-sm text-ink-700">
+          Hai cambiato l’indirizzo: premi «Cerca» per aggiornare la posizione, oppure tocca la mappa sul negozio.
+        </p>
+      )}
+
       <div className="flex justify-between items-center text-sm flex-wrap gap-2">
         <button
           type="button"
@@ -284,6 +332,12 @@ const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
           {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
         </span>
       </div>
+
+      {avvisoArea && (
+        <p role="alert" className="text-sm font-medium text-secondary-600 bg-secondary-50 border border-secondary-200 rounded p-2">
+          {avvisoArea}
+        </p>
+      )}
 
       {error && (
         <p role="alert" className="text-sm font-medium text-secondary-600 bg-secondary-50 border border-secondary-200 rounded p-2">

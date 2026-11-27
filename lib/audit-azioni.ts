@@ -28,6 +28,9 @@ export const AZIONI_AUDIT = [
   'order.force_cancel',
   // R33 — l'amministratore registra i contanti dichiarati dal fattorino.
   'order.cash_declared',
+  // La consegna chiusa a mano dallo staff (funzione del database): senza questa riga non aveva
+  // etichetta e il filtro non la offriva.
+  'order.delivery_closed_by_admin',
   'dispute.resolve_buyer',
   'dispute.resolve_seller',
   'dispute.reject',
@@ -67,6 +70,7 @@ export const ETICHETTE_AZIONI_AUDIT: Record<AuditAction, string> = {
   'order.refund': 'Ordine rimborsato',
   'order.force_cancel': 'Ordine cancellato (forzato)',
   'order.cash_declared': 'Contanti registrati al posto del fattorino',
+  'order.delivery_closed_by_admin': 'Consegna chiusa dallo staff',
   'dispute.resolve_buyer': 'Reclamo risolto a favore del buyer',
   'dispute.resolve_seller': 'Reclamo risolto a favore del seller',
   'dispute.reject': 'Reclamo rifiutato',
