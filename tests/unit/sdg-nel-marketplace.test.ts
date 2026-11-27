@@ -53,7 +53,7 @@ describe('la regola del carrello rifiuta gli abbonamenti di SDG (carta e contant
     if (!PAGAMENTO_ONLINE_SERVIZI) {
       expect(esito.scarto.messaggio).not.toContain('si attiva');
       expect(esito.scarto.messaggio).toContain('si paga in contanti, di persona');
-      // 27/11/2026, Nicola verso le 21:25: sul lato SDG si dice «la tua attività», non «il tuo negozio».
+      // 27/11/2026, Nicola verso le 22:10 (registro dei fatti: sdg.lessico): sul lato SDG si dice «la tua attività», non «il tuo negozio».
       expect(esito.scarto.messaggio).toContain('della tua attività');
       expect(esito.scarto.messaggio).not.toContain('tuo negozio');
     }
@@ -98,7 +98,7 @@ describe('la pagina prodotto porta alla pagina Abbonamento, non al carrello', ()
   it('un negozio va alla sua pagina Abbonamento, chi non lo è va a iscriversi', () => {
     expect(doveSiAttivaLAbbonamento(true).href).toBe('/seller/abbonamento');
     expect(doveSiAttivaLAbbonamento(true).testo).not.toContain('preventivo');
-    // 27/11/2026, Nicola verso le 21:25: sul lato SDG «la tua attività», non «il tuo negozio».
+    // 27/11/2026, Nicola verso le 22:10 (registro dei fatti: sdg.lessico): sul lato SDG «la tua attività», non «il tuo negozio».
     expect(doveSiAttivaLAbbonamento(true).testo).toBe('Scegli l’abbonamento dalla tua attività');
     expect(doveSiAttivaLAbbonamento(false).href).toBe('/sell');
   });
@@ -186,7 +186,7 @@ describe('i tre prodotti dicono quello che dice il listino', () => {
       if (!PAGAMENTO_ONLINE_SERVIZI) {
         expect(p.descrizione).toContain('si paga in contanti, di persona');
         expect(p.descrizione).not.toContain('Si attiva dalla pagina Abbonamento');
-        // Nicola, 27/11 verso le 21:25: sul lato SDG «la tua attività», non «il tuo negozio».
+        // Nicola, 27/11 verso le 22:10 (sdg.lessico): sul lato SDG «la tua attività», non «il tuo negozio».
         expect(p.descrizione).toContain('dalla pagina Abbonamento della tua attività');
         expect(p.descrizione).not.toContain('tuo negozio');
       }
