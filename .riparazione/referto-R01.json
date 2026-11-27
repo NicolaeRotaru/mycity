@@ -1,13 +1,13 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-27 02:10",
-  "finita": false,
-  "testa": "e5afeff89f0157c1fcae1fd80e6096918f685945",
+  "aggiornato": "2026-11-27 02:35",
+  "finita": true,
+  "testa": "90686780aba965422f6193d781234d3e7b369d30",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "90686780aba965422f6193d781234d3e7b369d30",
+    "nota": "typecheck, lint e 2344 file di prova verdi (14323 prove, 2 saltate già sulla base). Il primo verify su 12d7d6b era rosso solo per tests/unit/la-pagina-contatti-dice-chi-c-e-dietro.test.tsx: la correzione di R01-001 è stata tolta con 9068678."
   },
   "voci": [
     {
@@ -31,36 +31,30 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Sulla base il modulo admin non chiede più lo sconto, salva sempre NULL e ha la nota. Mancava l'avviso per gli eventi salvati prima: ora ogni riga dell'elenco (tabella e scheda del telefono) con discount_percent > 0 dice che lo sconto salvato non è applicato dalla cassa ma ai clienti può comparire «-n%». Il dato salvato non si tocca, così resta la prova di chi ha visto lo sconto.",
-      "cosa_resta": "(1) Il badge «-n%» su /events: vedi serve_file_altrui. (2) L'archivio prima dell'azzeramento della 880 è una migrazione, non permessa in quest'onda. File proposto: migrations/879_gli_sconti_degli_eventi_si_archiviano_prima_di_toglierli.sql (879 libero, prima della 880 che non si tocca). SQL esatto: BEGIN; CREATE SCHEMA IF NOT EXISTS private; REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated; CREATE TABLE IF NOT EXISTS private.sconti_eventi_archiviati (event_id uuid PRIMARY KEY, title text NOT NULL, discount_percent int NOT NULL, status text NOT NULL, starts_at timestamptz NOT NULL, ends_at timestamptz NOT NULL, event_created_at timestamptz NOT NULL, archiviato_at timestamptz NOT NULL DEFAULT now()); ALTER TABLE private.sconti_eventi_archiviati ENABLE ROW LEVEL SECURITY; REVOKE ALL ON private.sconti_eventi_archiviati FROM PUBLIC, anon, authenticated; INSERT INTO private.sconti_eventi_archiviati (event_id, title, discount_percent, status, starts_at, ends_at, event_created_at) SELECT id, title, discount_percent, status, starts_at, ends_at, created_at FROM public.marketplace_events WHERE discount_percent IS NOT NULL ON CONFLICT (event_id) DO NOTHING; COMMIT; — event_id senza chiave esterna apposta, così la prova resta se l'evento si cancella. Va applicata PRIMA della 880. (3) Una prova SQL tests/sql/rls/riparazione-r01-…test.sql che copra gli eventi già salvati va scritta nell'onda delle migrazioni, con --sql. (4) Finché l'archivio non c'è, salvare dal pannello un evento vecchio azzera lo sconto senza traccia (app/admin/events/page.tsx:109, già nella base).",
+      "cosa_resta": "(1) Il badge «-n%» su /events: vedi serve_file_altrui. (2) L'archivio prima dell'azzeramento della 880 è una migrazione, non permessa in quest'onda. File proposto: migrations/879_gli_sconti_degli_eventi_si_archiviano_prima_di_toglierli.sql (879 libero, prima della 880 che non si tocca). SQL esatto: BEGIN; CREATE SCHEMA IF NOT EXISTS private; REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated; CREATE TABLE IF NOT EXISTS private.sconti_eventi_archiviati (event_id uuid PRIMARY KEY, title text NOT NULL, discount_percent int NOT NULL, status text NOT NULL, starts_at timestamptz NOT NULL, ends_at timestamptz NOT NULL, event_created_at timestamptz NOT NULL, archiviato_at timestamptz NOT NULL DEFAULT now()); ALTER TABLE private.sconti_eventi_archiviati ENABLE ROW LEVEL SECURITY; REVOKE ALL ON private.sconti_eventi_archiviati FROM PUBLIC, anon, authenticated; INSERT INTO private.sconti_eventi_archiviati (event_id, title, discount_percent, status, starts_at, ends_at, event_created_at) SELECT id, title, discount_percent, status, starts_at, ends_at, created_at FROM public.marketplace_events WHERE discount_percent IS NOT NULL ON CONFLICT (event_id) DO NOTHING; COMMIT; — event_id senza chiave esterna apposta, così la prova resta se l'evento si cancella. Va applicata PRIMA della 880. (3) Una prova SQL tests/sql/rls/riparazione-r01-…test.sql che copra gli eventi già salvati va scritta nell'onda delle migrazioni, con --sql. (4) Finché l'archivio non c'è, salvare dal pannello un evento vecchio azzera lo sconto senza traccia (app/admin/events/page.tsx:123 sulla testa, :109 sulla base; l'avviso nell'elenco non dice che salvare di nuovo l'evento cancella lo sconto).",
       "serve_file_altrui": [
         {
           "file": "app/events/page.tsx",
           "modifica": "Togliere le righe 270-274 per intero: `{ev.discount_percent ? (` / `<Badge variant=\"discount\" size=\"md\" className=\"absolute top-3 right-3 rounded-full\">` / `-{ev.discount_percent}%` / `</Badge>` / `) : null}`. Togliere anche la riga 16 `import { Badge } from '@/components/ui/Badge';` che serve solo lì. Volendo anche `discount_percent` dalla select (riga 94) e dal tipo (riga 45). Con una prova: /events disegnata con un evento discount_percent: 20 e una copertina non mostra «-20%»."
         }
-      ]
+      ],
+      "verificato_da": "revisore A (opus): parziale_ok; rilanciate la prova e 8 prove sugli eventi (62 verdi), cercati tutti i lettori di discount_percent e marketplace_events (il «-n%» resta solo in app/events/page.tsx:270-274), SQL della 879 confrontato con 034, 880, 916 e l'ordine di applicazione"
     },
     {
       "id": "R01-001",
       "chiave": "privacy-legale|il sito non dice chi c'è dietro: niente nome, sede, partita iva né pec, il titolare risulta solo «mycity»",
-      "esito": "parziale",
-      "commit": "707e2cceb065419df4cfd50d7b3c0abc85038e7f",
-      "file_toccati": [
-        "lib/legal/titolare.ts"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r01-titolare-societa.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r01-titolare-societa.test.ts",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 707e2cc^ --file lib/legal/titolare.ts --prove tests/unit/riparazione-r01-titolare-societa.test.ts --json"
-      },
+      "esito": "serve_file_altrui",
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Sulla base il marchio da solo e i segnaposto erano già scartati (titolare.ts:141-146). Restava il buco della nota del 26/11: «MyCity S.r.l.», «SRLS» o «S.p.A.» senza partita IVA stampavano una società che non esiste. Ora il marchio con una forma di società vale come nome solo con una partita IVA vera; un'altra prova conferma che la sede si stampa anche da sola.",
-      "cosa_resta": "Nicola: su Vercel produzione mettere NEXT_PUBLIC_TITOLARE_NOME, _INDIRIZZO, _PIVA, _PEC (più _EMAIL_PRIVACY, e _REA/_CAPITALE se è una società), poi ripubblicare il sito (il piede le legge nel browser). L'indirizzo è dovuto già oggi. Aprire la posizione fiscale e decidere la soglia dei 5000 € (commento in titolare.ts:213-214) col commercialista o il legale. Il «deploy che fallisce se manca la P.IVA» proposto dal registro è una scelta di Nicola e sta fuori dai miei file."
+      "cosa_ho_fatto": "Sulla base il marchio da solo e i segnaposto erano già scartati (lib/legal/titolare.ts:141-146). La correzione del buco rimasto («MyCity S.r.l.» senza partita IVA stampava una società che non esiste) era nel commit 707e2cceb065419df4cfd50d7b3c0abc85038e7f (prova rimessa: regge), ma npm run verify l'ha trovata rossa nella prova esistente tests/unit/la-pagina-contatti-dice-chi-c-e-dietro.test.tsx:49-52, che non importa file miei: tolta con il revert 90686780aba965422f6193d781234d3e7b369d30.",
+      "cosa_resta": "(1) Nicola: su Vercel produzione mettere NEXT_PUBLIC_TITOLARE_NOME, _INDIRIZZO, _PIVA, _PEC (più _EMAIL_PRIVACY, e _REA/_CAPITALE se è una società), poi ripubblicare il sito (il piede le legge nel browser). L'indirizzo è dovuto già oggi. Aprire la posizione fiscale e decidere la soglia dei 5000 € (commento in lib/legal/titolare.ts:213-214) col commercialista o il legale. (2) Dal collaudo interno sulla correzione tolta, da sistemare quando si riprende: una P.IVA segnaposto non nota («N/A», «-», «TODO», «in attesa», «IT 000 000 000 00» con spazi) fa ripassare «MyCity S.r.l.»; `nudo` (titolare.ts:146,151 del commit 707e2cc) toglie le lettere accentate, quindi «MyCity Società Cooperativa», «MyCity Società a r.l.», «MyCity Italia S.r.l.», «S.r.l. MyCity», «MyCity Ltd/SA» passano ancora. (3) Il «deploy che fallisce se manca la P.IVA» proposto dal registro è una scelta di Nicola.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/la-pagina-contatti-dice-chi-c-e-dietro.test.tsx",
+          "modifica": "riga 50, nel caso «con indirizzo e nome legale veri»: aggiungere vi.stubEnv('NEXT_PUBLIC_TITOLARE_PIVA', '<una partita IVA valida di prova>'), così «MyCity S.r.l.» resta un nome legale vero; da applicare insieme al ripristino in lib/legal/titolare.ts del commit 707e2cceb065419df4cfd50d7b3c0abc85038e7f (e della sua prova tests/unit/riparazione-r01-titolare-societa.test.ts)."
+        }
+      ],
+      "nota": "Parte non di codice: i dati veri del titolare li mette Nicola su Vercel (vedi cosa_resta).",
+      "verificato_da": "revisore A (opus): rilanciata la prova e 7 prove del titolare, trovata la prova contatti rossa (poi confermata da npm run verify), 29 varianti di nome e P.IVA, tutti i lettori di titolare()"
     },
     {
       "id": "R01-009",
@@ -84,7 +78,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "La sezione 9 dell'informativa usa ora stradaDeiDiritti come le sezioni 1 e 5: il modulo solo se arriva, se no la PEC, se no dice che oggi non c'è un canale. La cookie policy è 'use client' e nel browser non può sapere se il modulo arriva: senza casella privacy rimanda a /privacy#modifiche.",
-      "nota": "Tolto da privacy/page.tsx il recapitoPrivacy rimasto inutilizzato."
+      "nota": "Tolto da privacy/page.tsx il recapitoPrivacy rimasto inutilizzato.",
+      "verificato_da": "revisore B (sonnet): regge; rilanciata la prova, letto il diff, controllati stradaDeiDiritti e l'ancora /privacy#modifiche"
     },
     {
       "id": "R01-016",
@@ -112,7 +107,8 @@
           "file": "docs/dpa-vendors.md",
           "modifica": "nella sezione «## Vendor che NON processano dati personali (no DPA)», dopo la riga di OpenStreetMap, aggiungere: «- **Commissione europea (VIES)**: riceve la partita IVA del venditore (con il codice del paese) alla verifica dell'account (lib/kyc/providers.ts viesVatLookup, da app/api/kyc/start-check/route.ts). Per una ditta individuale è un dato personale; servizio pubblico dell'UE, nessun DPA. Dichiarato in app/privacy/page.tsx, sezione 4.»"
         }
-      ]
+      ],
+      "verificato_da": "revisore B (sonnet): regge; testo confrontato con viesVatLookup e col solo chiamante app/api/kyc/start-check/route.ts:121; docs/dpa-vendors.md non cita VIES"
     },
     {
       "id": "R01-011",
@@ -134,7 +130,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0a72d07^ --file app/terms/page.tsx --prove tests/unit/riparazione-r01-termini-contante-non-basta.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il paragrafo 5 dei Termini dice quello che fa il codice (compensoDalContante in lib/shipping.ts): se il contante è meno del compenso, anche zero per il credito MyCity, il rider trattiene solo quello che riceve e il resto glielo versa MyCity con un bonifico, come gli altri compensi. La prova controlla anche le cifre del codice."
+      "cosa_ho_fatto": "Il paragrafo 5 dei Termini dice quello che fa il codice (compensoDalContante in lib/shipping.ts): se il contante è meno del compenso, anche zero per il credito MyCity, il rider trattiene solo quello che riceve e il resto glielo versa MyCity con un bonifico, come gli altri compensi. La prova controlla anche le cifre del codice.",
+      "verificato_da": "revisore B (sonnet): regge; frase confrontata con compensoDalContante (lib/shipping.ts:168-178) e col bonifico del residuo in lib/stripe/payout.ts"
     },
     {
       "id": "R01-005",
@@ -158,13 +155,15 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Ripresa la cura del 26/11 (6484d56a): elenco delle posizioni vuoto, la pagina dice «Oggi non abbiamo posizioni aperte» col collegamento alla candidatura spontanea. «Chi siamo» era già riparato sulla base (app/about/page.tsx:215-216, STATS senza numeri inventati).",
-      "nota": "Adattata la prova comune tests/unit/riparazione-r02-pagine-testo-grande.test.tsx, che importa app/lavora-con-noi/page per nome: controlla tutte le righe disegnate; a elenco vuoto controlla la riga modello nel file (flex-1 min-w-[min(200px,100%)], niente min-w-[200px], Candidati con max-w-full) e ogni collegamento alla candidatura spontanea. Le altre pagine non cambiano; verde anche con la pagina della base. Pubblicare posizioni vere resta una scelta di Nicola (basta aggiungerle a JOBS)."
+      "nota": "Adattata la prova comune tests/unit/riparazione-r02-pagine-testo-grande.test.tsx, che importa app/lavora-con-noi/page per nome: controlla tutte le righe disegnate; a elenco vuoto controlla la riga modello nel file (flex-1 min-w-[min(200px,100%)], niente min-w-[200px], Candidati con max-w-full) e ogni collegamento alla candidatura spontanea. Le altre pagine non cambiano; verde anche con la pagina della base. Pubblicare posizioni vere resta una scelta di Nicola (basta aggiungerle a JOBS).",
+      "verificato_da": "revisore B (sonnet): regge; prova comune confrontata prima/dopo, non indebolita; about sulla base senza flotta né numeri inventati"
     },
     {
       "id": "R01-008",
       "chiave": "privacy-legale|«lavora con noi» promette ancora un lavoro da rider con compenso fisso e turni, e «entra nel team» rimanda a posizioni che non ci sono",
       "esito": "gia_riparato_prima",
-      "prova": "Base 2ba05a74: app/lavora-con-noi/page.tsx:33-38 dice «Consegnare a Piacenza… Oggi non promettiamo né turni né un compenso fisso», e 40-45 «Dai una mano» manda alla candidatura spontanea: niente più «Entra nel team»/«Vedi le posizioni». `git show 2ba05a74:app/lavora-con-noi/page.tsx | grep -in 'rider\\|turni\\|ibride'` trova solo il collegamento /sign-up?role=rider e la posizione «Coordinatore flotta rider», tolta con l'altra voce di questa pagina (commit 7ee0f2f)."
+      "prova": "Base 2ba05a74: app/lavora-con-noi/page.tsx:33-38 dice «Consegnare a Piacenza… Oggi non promettiamo né turni né un compenso fisso», e 40-45 «Dai una mano» manda alla candidatura spontanea: niente più «Entra nel team»/«Vedi le posizioni». `git show 2ba05a74:app/lavora-con-noi/page.tsx | grep -in 'rider\\|turni\\|ibride'` trova solo il collegamento /sign-up?role=rider e la posizione «Coordinatore flotta rider», tolta con l'altra voce di questa pagina (commit 7ee0f2f).",
+      "verificato_da": "revisore B (sonnet): regge; git show 2ba05a74:app/lavora-con-noi/page.tsx e merge-base del commit che l'aveva già chiusa"
     },
     {
       "id": "R01-003",
@@ -186,7 +185,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a4d5e68^ --file stories/StoreAvatar.stories.tsx --prove tests/unit/riparazione-r01-storie-loghi-locali.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "I due loghi da placehold.co sono ora /icon-192.svg e /icon-512.svg, file di public/ che Storybook già serve (staticDirs in .storybook/main.ts). La prova importa le storie e controlla che ogni logo sia locale ed esista."
+      "cosa_ho_fatto": "I due loghi da placehold.co sono ora /icon-192.svg e /icon-512.svg, file di public/ che Storybook già serve (staticDirs in .storybook/main.ts). La prova importa le storie e controlla che ogni logo sia locale ed esista.",
+      "verificato_da": "revisore B (sonnet): regge; nessun altro placehold.co nelle storie, staticDirs e caricatore del logo controllati"
     },
     {
       "id": "R01-004",
@@ -230,7 +230,8 @@
           "modifica": "(facoltativo, nessun effetto visibile) passare `{ postiLiberi, accetta: ACCETTA }` ad avvisoPerGliScartati e togliere il `.replace(tipiScrittiPerUmani(), …)` di avvisoDelSito"
         }
       ],
-      "nota": "Modificata la prova esistente tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts perché importa lib/storage/carica-immagine per nome: solo l'attesa sulla frase della porta (riga ~103), ora /usa una foto JPG, PNG, WEBP, GIF o AVIF\\./."
+      "nota": "Modificata la prova esistente tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts perché importa lib/storage/carica-immagine per nome: solo l'attesa sulla frase della porta (riga ~103), ora /usa una foto JPG, PNG, WEBP, GIF o AVIF\\./.",
+      "verificato_da": "non smentita: il revisore C è stato fermato a metà dalla regia per il tetto di spesa; la guarda il collaudo indipendente"
     },
     {
       "id": "R01-007",
@@ -263,12 +264,13 @@
           "file": "app/api/admin/segnalazioni/accogli/route.ts",
           "modifica": "solo se accogliere vuol dire cancellare: accettare tipo 'recensione' e fare DELETE da reviews poi store_reviews per id (client di servizio), con writeAudit action 'review.delete' e origine 'segnalazione-accolta'"
         }
-      ]
+      ],
+      "verificato_da": "non smentita: il revisore C è stato fermato a metà dalla regia per il tetto di spesa; la guarda il collaudo indipendente"
     },
     {
       "id": "R01-006",
       "chiave": "privacy-legale|nel pannello delle segnalazioni lo staff decide su una recensione senza vederla: nessun link e nessun testo",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "647960cd1b21eb760de2084fb341169abca275bb",
       "file_toccati": [
         "app/api/segnalazioni/route.ts",
@@ -285,8 +287,10 @@
         "uscita": 0,
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 647960cd1b21eb760de2084fb341169abca275bb^ --file app/admin/segnalazioni/page.tsx,app/api/segnalazioni/route.ts --prove tests/unit/riparazione-r01-segnalazione-recensione-visibile.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nuova lettura GET /api/segnalazioni?recensione=<uuid>, solo con withAdminAuth e il client di servizio: cerca in reviews poi in store_reviews e dice di cosa è la recensione, voto, testo, data e link (/product/<id> o /store/<id>); se non c'è più risponde null. La scheda del pannello per tipo 'recensione' mostra tutto questo, oppure «non c'è più», oppure l'errore di lettura."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nuova lettura GET /api/segnalazioni?recensione=<uuid>, solo con withAdminAuth e il client di servizio: cerca in reviews poi in store_reviews e dice di cosa è la recensione, voto, testo, data e link (/product/<id> o /store/<id>); se non c'è più risponde null. La scheda del pannello per tipo 'recensione' mostra tutto questo, oppure «non c'è più», oppure l'errore di lettura.",
+      "verificato_da": "non smentita: il revisore C è stato fermato a metà dalla regia per il tetto di spesa; la guarda il collaudo indipendente",
+      "cosa_resta": "Il codice copre tutta la voce, ma nessun revisore interno l'ha smentita (fermato per il tetto di spesa): nel dubbio resta parziale finché il collaudo non controlla i permessi della nuova lettura GET /api/segnalazioni?recensione=<uuid> (withAdminAuth + client di servizio)."
     },
     {
       "id": "R01-013",
@@ -310,7 +314,8 @@
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Sulla base c'erano già il pulsante Segnala sotto ogni domanda (components/ProductQA.tsx:313), il tipo «domanda» nella rotta (route.ts:37, migrazione 364) e il tasto «Nascondi» per l'admin sulla pagina del prodotto (ProductQA.tsx:127-135). Mancava che il pannello delle segnalazioni potesse accoglierla: ora «Accolta» su una domanda la nasconde (is_public=false, regola qa_admin_nasconde) prima di registrare la decisione; se non riesce non salva niente e l'esito non parte; se la domanda non c'è più registra la decisione.",
       "cosa_resta": "Moderazione prima della pubblicazione e un tasto del negozio per nascondere le domande sui suoi prodotti: scelte di Nicola.",
-      "domanda": "Le domande sotto i prodotti devono aspettare un'approvazione prima di comparire? Il negozio può nascondere le domande sui propri prodotti?"
+      "domanda": "Le domande sotto i prodotti devono aspettare un'approvazione prima di comparire? Il negozio può nascondere le domande sui propri prodotti?",
+      "verificato_da": "non smentita: il revisore C è stato fermato a metà dalla regia per il tetto di spesa; la guarda il collaudo indipendente"
     },
     {
       "id": "R01-010",
@@ -328,7 +333,8 @@
           "file": "(modifica prodotto dello staff, rotta admin dei prodotti)",
           "modifica": "rimettere in vendita = UPDATE con tolto_dallo_staff_at = NULL e status = 'available' nella stessa scrittura"
         }
-      ]
+      ],
+      "verificato_da": "non smentita: il revisore C è stato fermato a metà dalla regia per il tetto di spesa; la guarda il collaudo indipendente"
     },
     {
       "id": "R01-014",
@@ -344,7 +350,8 @@
           "file": "app/admin/categories/page.tsx",
           "modifica": "tipo Cat (riga 24): + richiede_dichiarazioni_alimentari?: boolean | null. Riga di modifica (righe 62/67/94): casella «Alimenti: obbliga allergeni e ingredienti» inviata nel PATCH. Modulo nuova categoria (righe 113-170): stessa casella per le radici, inviata nel POST (riga 144), con l'avviso «Una categoria principale nuova nasce senza l'obbligo di allergeni e ingredienti: spuntala se ci vanno alimenti»."
         }
-      ]
+      ],
+      "verificato_da": "non smentita: il revisore C è stato fermato a metà dalla regia per il tetto di spesa; la guarda il collaudo indipendente"
     },
     {
       "id": "R01-012",
@@ -367,13 +374,14 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "La bozza è mc_checkout_draft (nome, telefono, indirizzo; app/checkout/page.tsx:1311). A ogni SIGNED_OUT («Esci» da qualunque tasto, o sessione finita) QueryProvider la toglie da localStorage e sessionStorage; l'ingresso di chi la aspettava non la tocca. Navbar non serve: l'ascolto di QueryProvider copre tutte le uscite. Il cambio da A a B senza uscire la mette già da parte per A (lib/account/piu-account.ts:191).",
-      "cosa_resta": "Una bozza lasciata da un ospite che non completa l'accesso passa al primo utente che entra dopo su quel browser (piu-account.ts:216, e checkout/page.tsx:528 la riprende senza guardare chi l'ha scritta né quando). Serve una scadenza nella lettura (bozzaLetta): scartare la bozza se sceltaIl è più vecchio di N minuti; N lo decide Nicola.",
+      "cosa_resta": "Una bozza lasciata da un ospite che non completa l'accesso passa al primo utente che entra dopo su quel browser (piu-account.ts:216, e checkout/page.tsx:528 la riprende senza guardare chi l'ha scritta né quando). Serve una scadenza nella lettura (bozzaLetta): scartare la bozza se sceltaIl è più vecchio di N minuti; N lo decide Nicola. Dal collaudo interno: la pulizia scatta solo su SIGNED_OUT; una sessione scaduta che arriva come INITIAL_SESSION vuota (lib/account/piu-account.ts:314) lascia la bozza. Le copie messe da parte al cambio account (mycity:da-parte:<id>:mc_checkout_draft, piu-account.ts:61 e 193) non le toglie nessuno, neanche dimenticaTutti (riga 180).",
       "serve_file_altrui": [
         {
           "file": "app/checkout/page.tsx",
           "modifica": "righe 528-531: scartare e togliere la bozza se bozzaLetta(...).sceltaIl è più vecchio di N minuti (N da decidere)"
         }
-      ]
+      ],
+      "verificato_da": "revisore D (sonnet): parziale_ok; rilanciata la prova, cercati tutti i signOut e i chiamanti di dopoEventoAccesso e dimenticaTutti; nessun caso in cui la bozza da tenere venga tolta"
     },
     {
       "id": "R01-015",
@@ -396,7 +404,7 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Sulla base i documenti si caricavano già prima del controllo, un tentativo fallito toglieva la scheda e una verifica PENDING non ne apriva un'altra. Ora startCheck accetta un terzo argomento facoltativo checkPrecedente: legge GET /checks/{id}, prende applicant_id e riusa quella scheda (PUT con i dati aggiornati) invece di crearne una; una scheda ripresa non si toglie se il nuovo controllo fallisce; se la scheda era sparita (404) ne crea una sola. Nuovo metodo OnfidoProvider.cancellaScheda(checkId): GET del check poi DELETE /applicants/{id}, risponde 'tolta', 'niente' o 'fallita', con traccia nel registro. Nessuna colonna nuova: basta kyc_provider_check_id che il profilo salva già.",
-      "cosa_resta": "Collegare le chiamate nei file altrui (vedi serve_file_altrui). Le schede create prima, senza id salvato, si tolgono a mano dal pannello Onfido.",
+      "cosa_resta": "Collegare le chiamate nei file altrui (vedi serve_file_altrui). Le schede create prima, senza id salvato, si tolgono a mano dal pannello Onfido. Dal collaudo interno: se GET /checks/{id} fallisce (5xx, 429, timeout) startCheck ignora letto:false e crea comunque una scheda nuova (lib/kyc/providers.ts:181): va fermato con ok:false come il PUT non riuscito (righe 189-191). cancellaScheda risponde 'niente' se il controllo è sparito ma la scheda può esistere ancora (providers.ts:150), senza traccia nel registro.",
       "serve_file_altrui": [
         {
           "file": "lib/kyc/types.ts",
@@ -410,7 +418,8 @@
           "file": "lib/account/cancellazione.ts",
           "modifica": "anonimizzaDatiSensibili (riga 630), prima dell'update che azzera i campi KYC: leggere profiles.kyc_provider_check_id e chiamare await getKycProvider().cancellaScheda?.(checkId); se risponde 'fallita' lasciare una PuliziaNonRiuscita senza bloccare la cancellazione"
         }
-      ]
+      ],
+      "verificato_da": "revisore D (sonnet): parziale_ok; rilanciate la prova e le prove KYC esistenti (105 verdi), endpoint confrontati con il resto del file; nessun rischio di cancellare la scheda sbagliata"
     }
   ],
   "nuovi_difetti_visti": [
@@ -458,7 +467,9 @@
     "R01-012: quanti minuti deve vivere la bozza della cassa di un ospite che va all'accesso senza completarlo?"
   ],
   "conto": {
-    "agenti": 3,
-    "nota": "lotti 1-3 fatti; revisori da lanciare"
-  }
+    "agenti": 7,
+    "nota": "3 riparatori (opus) + 4 revisori (A e C opus, B e D sonnet); il revisore C fermato dalla regia per il tetto di spesa. Spesa vicina al tetto di 25 $.",
+    "subagenti": 7
+  },
+  "costo_usd": 23.73
 }
