@@ -8,7 +8,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { contaProdottiDellaGriglia, leggiProdottiDellaGriglia } from '@/lib/queries/griglia-prodotti';
-import { NEGOZIO, fintoPrezzoPagato, prodotto, type StatoFinto } from './aiuti/finto-r12-prezzo-pagato';
+import { NEGOZIO, fintoPrezzoPagato, prodotto, type StatoFinto } from './aiuti/riparazione-r12-finto-prezzo-pagato';
 
 const TABELLE = {
   seller_public_profiles: [NEGOZIO],
