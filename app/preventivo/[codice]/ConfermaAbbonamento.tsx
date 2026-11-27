@@ -90,6 +90,8 @@ export default function ConfermaAbbonamento({
   const [rifiutati, setRifiutati] = useState<ReadonlySet<string>>(new Set());
   const scelta = fasce.find((f) => f.id === fascia) ?? fasce[0];
   const aperto = giorni.find((g) => g.giorno === giorno) ?? null;
+  /** C'è ancora un'ora da scegliere? Se il server ha appena rifiutato l'ultima, si conferma senza (lo chiamiamo noi). */
+  const cePosto = giorni.some((g) => g.orari.some((o) => o.libero && !rifiutati.has(o.id)));
   const quando = scriviScelta(giorni, visita);
 
   async function chiedi(percorso: 'codice' | 'accetta', corpo: Record<string, unknown>): Promise<Risposta | null> {
@@ -136,7 +138,7 @@ export default function ConfermaAbbonamento({
   async function conferma(e: React.FormEvent) {
     e.preventDefault();
     setErrore(null);
-    if (giorni.length > 0 && !visita) {
+    if (cePosto && !visita) {
       setErrore('Scegli il giorno e l’ora in cui passiamo da te.');
       return;
     }
@@ -274,7 +276,7 @@ export default function ConfermaAbbonamento({
           Il team creativo di SDG viene da te, nella tua attività. Con te scriviamo il piano dei contenuti del primo mese,
           poi il fotografo e il videomaker fanno subito le prime foto e i primi video. Ci vuole {DURATA_VISITA}.
         </p>
-        {giorni.length === 0 ? (
+        {!cePosto ? (
           <p className="mt-3 text-sm font-semibold text-ink-900">In queste due settimane siamo al completo: conferma lo stesso, ti chiamiamo noi per fissare il giorno.</p>
         ) : (
           <>
@@ -359,7 +361,7 @@ export default function ConfermaAbbonamento({
               <strong className="text-ink-900">Adesso.</strong> Ti mandiamo un codice per email: lo scrivi qui ed entri nella tua pagina
               {PAGAMENTO_ONLINE_SERVIZI ? '.' : `, con il ${scelta.nome} già attivo.`}
             </li>
-            {giorni.length > 0 ? (
+            {cePosto ? (
               <li><strong className="text-ink-900">{quando ?? 'Il giorno che scegli'}.</strong> Il team di SDG passa da te: piano dei contenuti, foto e video.</li>
             ) : (
               <li><strong className="text-ink-900">Nei prossimi giorni.</strong> Ti chiamiamo per fissare quando il team di SDG passa da te: piano dei contenuti, foto e video.</li>
@@ -373,7 +375,7 @@ export default function ConfermaAbbonamento({
           disabled={invio}
           className="mt-4 w-full rounded-lg bg-primary-700 py-3 text-lg font-bold text-white hover:bg-primary-800 disabled:opacity-60"
         >
-          {invio ? 'Un momento…' : giorni.length > 0 ? `Confermo il ${scelta.nome} e la visita` : `Confermo il ${scelta.nome}`}
+          {invio ? 'Un momento…' : cePosto ? `Confermo il ${scelta.nome} e la visita` : `Confermo il ${scelta.nome}`}
         </button>
         {!PAGAMENTO_ONLINE_SERVIZI && <p className="mt-2 text-center text-xs text-ink-600">{FRASE_CONTANTI}</p>}
       </div>

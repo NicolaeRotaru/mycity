@@ -444,4 +444,29 @@ describe('il titolare sceglie quando passa SDG', () => {
     expect(r.querySelector('[role="alert"]')?.textContent).toBe(GIORNO_NON_PIU_VALIDO);
     for (const ora of ['10:00', '14:30', '16:30']) expect(oraVisita(r, ora).disabled, ora).toBe(true);
   });
+
+  it('se l ora rifiutata era l ultima libera: «al completo», e si conferma senza visita (collaudo del 27/11)', async () => {
+    const { ORA_GIA_PRESA } = await import('@/lib/agenzia/visita-sdg');
+    // Libera solo lunedì alle 10:00.
+    stato.presi = giorniDellaVisita(ADESSO).flatMap((g) => g.orari.map((o) => o.id)).filter((id) => id !== LUNEDI_ALLE_10);
+    let risposta: { status: number; corpo: unknown } = { status: 409, corpo: { ok: false, error: { message: ORA_GIA_PRESA } } };
+    const chiamate: Array<{ url: string; corpo: Record<string, unknown> }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      chiamate.push({ url, corpo: JSON.parse(String(init.body)) });
+      if (url.endsWith('/codice')) return new Response(JSON.stringify({ ok: true, data: { gettone: 'gettone-firmato' } }), { status: 200 });
+      return new Response(JSON.stringify(risposta.corpo), { status: risposta.status });
+    }));
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await primoPasso(r);
+    await scriviCodice(r, '123456');
+    await invia(r);
+    expect(r.textContent).toContain('siamo al completo');
+    expect(pulsante(r).textContent).toBe('Confermo il Business');
+    risposta = { status: 200, corpo: { ok: true, data: { url: null, entra: '/seller/abbonamento', accessoInviato: true } } };
+    await invia(r);
+    await scriviCodice(r, '123456');
+    await invia(r);
+    expect(chiamate.at(-1)?.corpo).not.toHaveProperty('visita');
+    expect(vai).toHaveBeenCalledWith('/seller/abbonamento');
+  });
 });
