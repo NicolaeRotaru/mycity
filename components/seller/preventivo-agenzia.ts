@@ -208,7 +208,9 @@ export const CHIAVE_LAVORO_CONSEGNATO = ['seller', 'lavoro-consegnato'] as const
 
 /** Il lavoro consegnato del negozio, o `null` se non ne ha. Se la lettura non riesce l'errore sale: la pagina torna quella di sempre. */
 export async function leggiLavoroConsegnato(): Promise<import('@/lib/agenzia/lavoro-consegnato/tipi').LavoroConsegnato | null> {
-  const r = await fetch('/api/seller/lavoro-consegnato', { cache: 'no-store' });
+  // Collaudo 27/11: senza un tempo massimo una rotta lenta teneva TUTTI i venditori sul caricamento. Dopo 5 secondi
+  // l'errore riporta la pagina al preventivo di sempre.
+  const r = await fetch('/api/seller/lavoro-consegnato', { cache: 'no-store', signal: AbortSignal.timeout(5_000) });
   const corpo = (await r.json().catch(() => null)) as { ok?: boolean; data?: { lavoro?: unknown } } | null;
   if (!r.ok || !corpo?.ok) throw new Error('Non sono riuscito a leggere il lavoro consegnato.');
   return (corpo.data?.lavoro ?? null) as import('@/lib/agenzia/lavoro-consegnato/tipi').LavoroConsegnato | null;

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { scriviVisita } from '@/lib/agenzia/visita-sdg';
 
 /**
  * I PREVENTIVI COL LINK — 24/11/2026. Il link da mandare al titolare di un'attività in «modalità
@@ -19,6 +20,8 @@ type Riga = {
   accettatoIl: string | null;
   link: string;
   schedaRicevutaIl: string | null;
+  /** 27/11/2026 — Quando SDG passa dal titolare, scelto nel link (migrazione 999b). */
+  visitaIl?: string | null;
   /** 27/11/2026 — La fascia con cui la pagina è sbloccata in contanti, o `null`. */
   sbloccatoInContanti?: string | null;
 };
@@ -73,6 +76,9 @@ export default function PreventiviColLink() {
             <p className="text-xs text-ink-600">
               {STATO[r.stato]}{r.fascia ? ` · ${NOMI_FASCE[r.fascia] ?? r.fascia}` : ''} · creato {quando(r.creatoIl)}{r.accettatoIl ? ` · accettato ${quando(r.accettatoIl)}` : ''}
             </p>
+            {r.visitaIl && (
+              <p className="mt-1 text-xs font-semibold text-primary-700" data-testid="visita-sdg">Visita di SDG: {scriviVisita(r.visitaIl)}</p>
+            )}
             {r.sbloccatoInContanti && (
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <p className="text-xs font-semibold text-olive-800">Pagina sbloccata col {NOMI_FASCE[r.sbloccatoInContanti] ?? r.sbloccatoInContanti} · contanti da ritirare al primo servizio</p>

@@ -19,6 +19,14 @@
  *  · codice sbagliato → il messaggio, si resta sul codice; «rimanda il codice» e «ho sbagliato email» funzionano;
  *  · il server risponde senza `entra` → «Fatto», e il titolare entra dall'email;
  *  · il codice non può partire → il messaggio, e si resta sulla scelta.
+ *
+ * 27/11/2026 verso le 17:40 — Nicola: nella stessa pagina il titolare sceglie giorno e ora in cui il team
+ * creativo di SDG passa da lui, e legge cosa succede dopo. Casi (oggi è venerdì 27/11, 17:45 a Piacenza):
+ *  · i giorni partono da lunedì 30/11 (dopodomani è domenica), niente domenica, fino a due settimane;
+ *  · un'ora già presa da un'altra attività è barrata e non si tocca;
+ *  · senza l'ora non parte niente, e lo dice; «Cosa succede dopo» dice il giorno scelto;
+ *  · la conferma manda l'orario scelto; «ho sbagliato email» non lo perde;
+ *  · tutte le ore prese → «siamo al completo», si conferma lo stesso e la conferma parte senza visita.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -30,6 +38,8 @@ const CODICE = 'b'.repeat(64);
 const stato = vi.hoisted(() => ({
   pc: null as null | { sellerId: string; stato: 'aperto' | 'accettato' | 'chiuso'; fasciaScelta: string | null; nomeAttivita: string },
   preventivo: null as unknown,
+  /** Le ore della visita già prese da altre attività (lette da preventivi_con_codice.visita_il). */
+  presi: [] as string[],
 }));
 
 vi.mock('next/navigation', () => ({
@@ -56,6 +66,7 @@ vi.mock('@/lib/agenzia/leggi-preventivo', () => ({
 vi.mock('@/lib/supabase/server', () => {
   const q = {
     select: () => q, eq: () => q, in: () => q, limit: async () => ({ data: [], error: null }),
+    gte: async () => ({ data: stato.presi.map((visita_il) => ({ visita_il })), error: null }),
     maybeSingle: async () => ({ data: null, error: null }),
   };
   return { getAdminSupabase: () => ({ from: () => q }) };
@@ -63,6 +74,7 @@ vi.mock('@/lib/supabase/server', () => {
 
 import { FASCE, ABBONAMENTI, costruisciPreventivo, leggiImpostazioniAgenzia, type Preventivo } from '@/lib/agenzia/preventivo';
 import ConfermaDalLink from '@/app/preventivo/[codice]/page';
+import { giorniDellaVisita } from '@/lib/agenzia/visita-sdg';
 import LayoutDelLink from '@/app/preventivo/[codice]/layout';
 
 const vetrina = (): Preventivo => costruisciPreventivo({
@@ -94,6 +106,11 @@ async function monta(el: ReactElement): Promise<HTMLElement> {
 
 const pulsante = (r: HTMLElement) => r.querySelector('button[type="submit"]') as HTMLButtonElement;
 const radio = (r: HTMLElement, f: string) => r.querySelector(`input[type="radio"][value="${f}"]`) as HTMLInputElement;
+const giornoVisita = (r: HTMLElement, g: string) => r.querySelector(`[data-giorno="${g}"] input`) as HTMLInputElement;
+const oraVisita = (r: HTMLElement, o: string) => r.querySelector(`[data-ora="${o}"] input`) as HTMLInputElement;
+/** Venerdì 27/11/2026, 17:45 a Piacenza. Lunedì 30/11 alle 10:00 di Piacenza è alle 9:00 UTC. */
+const ADESSO = new Date('2026-11-27T16:45:00Z');
+const LUNEDI_ALLE_10 = '2026-11-30T09:00:00.000Z';
 
 async function scriviEmail(r: HTMLElement, email: string) {
   const campo = r.querySelector('#email-titolare') as HTMLInputElement;
@@ -122,6 +139,10 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   stato.pc = { sellerId: 'gc-1', stato: 'aperto', fasciaScelta: 'business', nomeAttivita: 'Grida Caffè' };
   stato.preventivo = vetrina();
+  stato.presi = [];
+  // Si finge solo l'orologio: i giri di setTimeout delle prove restano veri.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(ADESSO);
   vai.mockReset();
   Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign: vai } });
 });
@@ -132,6 +153,7 @@ afterEach(() => {
   radice = null;
   contenitore = null;
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('il link apre la conferma, non la demo', () => {
@@ -147,7 +169,7 @@ describe('il link apre la conferma, non la demo', () => {
     expect(radio(r, 'base').hasAttribute('checked')).toBe(false);
     expect(r.querySelector('[data-fascia="business"]')?.textContent).toContain('La tua scelta');
     expect(r.querySelector('[data-fascia="base"]')?.textContent).not.toContain('La tua scelta');
-    expect(pulsante(r).textContent).toBe('Confermo il Business');
+    expect(pulsante(r).textContent).toBe('Confermo il Business e la visita');
     // Niente guscio della demo, niente pagine della demo, niente area del negozio prima della conferma.
     expect(r.querySelector('[data-testid="pannello-demo"]')).toBeNull();
     expect(r.textContent).not.toContain('Demo del pannello');
@@ -156,8 +178,8 @@ describe('il link apre la conferma, non la demo', () => {
     // Il marchio riporta al sito, e si dice come si paga.
     expect(r.querySelector('a[href="/"]')?.textContent).toBe('MyCity');
     expect(r.textContent).toContain('si paga in contanti');
-    // Il primo mese a metà, detto una volta sola: «Il primo mese 250,00 €», non «… € al mese».
-    expect(r.querySelector('[data-fascia="business"]')?.textContent).toMatch(/Il primo mese 250,00\s€(?! al mese)/);
+    // Il primo mese a metà, detto una volta sola: «Il primo mese 300,00 €», non «… € al mese».
+    expect(r.querySelector('[data-fascia="business"]')?.textContent).toMatch(/Il primo mese 300,00\s€(?! al mese)/);
   });
 
   it('vale la fascia del venditore anche quando non è la consigliata (collaudo: la prova deve vederlo)', async () => {
@@ -168,7 +190,7 @@ describe('il link apre la conferma, non la demo', () => {
     expect(radio(r, diversa).hasAttribute('checked')).toBe(true);
     expect(radio(r, p.consigliato).hasAttribute('checked')).toBe(false);
     expect(r.querySelector(`[data-fascia="${diversa}"]`)?.textContent).toContain('La tua scelta');
-    expect(pulsante(r).textContent).toBe(`Confermo il ${FASCE[diversa].nome}`);
+    expect(pulsante(r).textContent).toBe(`Confermo il ${FASCE[diversa].nome} e la visita`);
   });
 
   it('con ?fascia= (dal pulsante della vecchia pagina della demo) è scelta quella, ma «La tua scelta» resta sul venditore', async () => {
@@ -177,7 +199,7 @@ describe('il link apre la conferma, non la demo', () => {
     expect(radio(r, 'business').hasAttribute('checked')).toBe(false);
     expect(r.querySelector('[data-fascia="business"]')?.textContent).toContain('La tua scelta');
     expect(r.querySelector('[data-fascia="premium"]')?.textContent).not.toContain('La tua scelta');
-    expect(pulsante(r).textContent).toBe('Confermo il Premium');
+    expect(pulsante(r).textContent).toBe('Confermo il Premium e la visita');
   });
 
   it('senza la scelta del venditore è segnata la consigliata, con «Consigliato»', async () => {
@@ -187,7 +209,7 @@ describe('il link apre la conferma, non la demo', () => {
     expect(radio(r, p.consigliato).hasAttribute('checked')).toBe(true);
     expect(r.querySelector(`[data-fascia="${p.consigliato}"]`)?.textContent).toContain('Consigliato');
     expect(r.textContent).not.toContain('La tua scelta');
-    expect(pulsante(r).textContent).toBe(`Confermo il ${FASCE[p.consigliato].nome}`);
+    expect(pulsante(r).textContent).toBe(`Confermo il ${FASCE[p.consigliato].nome} e la visita`);
   });
 
   it('una fascia scritta male nel database non rompe la pagina: vale la consigliata', async () => {
@@ -224,7 +246,9 @@ async function scriviCodice(r: HTMLElement, codice: string) {
   });
 }
 
-async function primoPasso(r: HTMLElement) {
+/** Il primo passo come il titolare: l'ora della visita (sul giorno aperto), l'email, la spunta, «Confermo». */
+async function primoPasso(r: HTMLElement, ora: string | null = '10:00') {
+  if (ora) await premi(oraVisita(r, ora));
   await scriviEmail(r, 'titolare@grida.it');
   await premi(r.querySelector('input[type="checkbox"]') as HTMLInputElement);
   await invia(r);
@@ -234,10 +258,10 @@ describe('il titolare tocca un altro abbonamento, conferma col codice dell email
   it('tocca il Premium, chiede il codice, lo scrive: la conferma manda il Premium e il browser entra nella sua pagina', async () => {
     const chiamate = serverFinto({ status: 200, corpo: { ok: true, data: { url: null, entra: '/seller/abbonamento', accessoInviato: true } } });
     const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
-    expect(pulsante(r).textContent).toBe('Confermo il Business');
+    expect(pulsante(r).textContent).toBe('Confermo il Business e la visita');
     await premi(radio(r, 'premium'));
     expect(radio(r, 'premium').checked).toBe(true);
-    expect(pulsante(r).textContent).toBe('Confermo il Premium');
+    expect(pulsante(r).textContent).toBe('Confermo il Premium e la visita');
     // «La tua scelta» resta sul Business: dice cosa aveva detto al venditore.
     expect(r.querySelector('[data-fascia="business"]')?.textContent).toContain('La tua scelta');
 
@@ -250,7 +274,7 @@ describe('il titolare tocca un altro abbonamento, conferma col codice dell email
     await scriviCodice(r, '12 34 56');
     expect((r.querySelector('#codice-email') as HTMLInputElement).value).toBe('123456');
     await invia(r);
-    expect(chiamate[1]).toEqual({ url: `/api/preventivo/${CODICE}/accetta`, corpo: { email: 'titolare@grida.it', abbonamento: 'premium', accettoCondizioni: true, codice: '123456', gettone: 'gettone-firmato' } });
+    expect(chiamate[1]).toEqual({ url: `/api/preventivo/${CODICE}/accetta`, corpo: { email: 'titolare@grida.it', abbonamento: 'premium', accettoCondizioni: true, codice: '123456', gettone: 'gettone-firmato', visita: LUNEDI_ALLE_10 } });
     expect(vai).toHaveBeenCalledWith('/seller/abbonamento');
   });
 
@@ -258,6 +282,7 @@ describe('il titolare tocca un altro abbonamento, conferma col codice dell email
     const posta = vi.fn();
     vi.stubGlobal('fetch', posta);
     const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await premi(oraVisita(r, '10:00'));
     await scriviEmail(r, 'titolare@grida.it');
     await invia(r);
     expect(posta).not.toHaveBeenCalled();
@@ -290,6 +315,7 @@ describe('il titolare tocca un altro abbonamento, conferma col codice dell email
     await premi(sbagliata);
     expect(radio(r, 'base').checked).toBe(true);
     expect((r.querySelector('#email-titolare') as HTMLInputElement).value).toBe('titolare@grida.it');
+    expect(oraVisita(r, '10:00').checked).toBe(true);
   });
 
   it('se la sessione non si apre (risposta senza `entra`), dice «Fatto» e il titolare entra dall email', async () => {
@@ -311,6 +337,136 @@ describe('il titolare tocca un altro abbonamento, conferma col codice dell email
     expect(r.querySelector('[role="alert"]')?.textContent).toContain('già stato accettato');
     expect(r.querySelector('#codice-email')).toBeNull();
     expect(pulsante(r).disabled).toBe(false);
+    expect(pulsante(r).textContent).toBe('Confermo il Business e la visita');
+  });
+});
+
+describe('il titolare sceglie quando passa SDG', () => {
+  it('i giorni partono da lunedì 30/11, niente domenica; l ora presa è barrata; la pagina dice cosa succede dopo', async () => {
+    stato.presi = [LUNEDI_ALLE_10];
+    const r = disegna(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    expect(r.textContent).toContain('Quando passiamo da te?');
+    expect(r.textContent).toContain('il fotografo e il videomaker fanno subito le prime foto e i primi video');
+    const giorni = [...r.querySelectorAll('[data-giorno]')].map((e) => e.getAttribute('data-giorno'));
+    expect(giorni[0]).toBe('2026-11-30');
+    expect(giorni).not.toContain('2026-11-28'); // domani: troppo presto
+    expect(giorni).not.toContain('2026-11-29'); // domenica
+    expect(giorni).not.toContain('2026-12-06'); // domenica
+    expect(giorni).not.toContain('2026-12-08'); // l'Immacolata (collaudo del 27/11)
+    expect(giorni.at(-1)).toBe('2026-12-11'); // due settimane
+    expect(giornoVisita(r, '2026-11-30').hasAttribute('checked')).toBe(true);
+    // Lunedì alle 10:00 l'ha già presa un'altra attività: barrata e non si tocca. Le altre ore sì.
+    expect(oraVisita(r, '10:00').hasAttribute('disabled')).toBe(true);
+    expect(oraVisita(r, '14:30').hasAttribute('disabled')).toBe(false);
+    expect(r.textContent).toContain('Cosa succede dopo');
+    expect(r.textContent).toContain('Ti mandiamo un codice per email: lo scrivi qui ed entri nella tua pagina, con il Business già attivo.');
+    expect(r.textContent).toContain('Prepariamo i primi post e te li facciamo vedere prima di pubblicarli.');
+  });
+
+  it('senza l ora non parte niente, e lo dice', async () => {
+    const posta = vi.fn();
+    vi.stubGlobal('fetch', posta);
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await primoPasso(r, null);
+    expect(posta).not.toHaveBeenCalled();
+    expect(r.querySelector('[role="alert"]')?.textContent).toContain('Scegli il giorno e l’ora in cui passiamo da te');
+  });
+
+  it('martedì 1/12 alle 16:30: «Cosa succede dopo» e il riepilogo dicono il giorno, e la conferma lo manda', async () => {
+    const chiamate = serverFinto({ status: 200, corpo: { ok: true, data: { url: null, entra: null, accessoInviato: true } } });
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await premi(giornoVisita(r, '2026-12-01'));
+    expect(r.textContent).toContain('L’ora, martedì 1 dicembre');
+    await premi(oraVisita(r, '16:30'));
+    expect(r.textContent).toContain('Martedì 1 dicembre alle 16:30. Il team di SDG passa da te');
+    await primoPasso(r, null);
+    expect(r.textContent).toContain('visita martedì 1 dicembre alle 16:30');
+    await scriviCodice(r, '123456');
+    await invia(r);
+    // Le 16:30 di Piacenza, il 1° dicembre, sono le 15:30 UTC.
+    expect(chiamate[1].corpo.visita).toBe('2026-12-01T15:30:00.000Z');
+    expect(r.querySelector('[role="status"]')?.textContent).toContain('Ci vediamo martedì 1 dicembre alle 16:30.');
+  });
+
+  it('cambiando giorno l ora scelta si azzera: non parte un ora di un altro giorno', async () => {
+    const posta = vi.fn();
+    vi.stubGlobal('fetch', posta);
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await premi(oraVisita(r, '10:00'));
+    await premi(giornoVisita(r, '2026-12-02'));
+    expect(oraVisita(r, '10:00').checked).toBe(false);
+    await primoPasso(r, null);
+    expect(posta).not.toHaveBeenCalled();
+    expect(r.querySelector('[role="alert"]')?.textContent).toContain('Scegli il giorno e l’ora');
+  });
+
+  it('tutte le ore prese: «siamo al completo», si conferma lo stesso e la conferma parte senza visita', async () => {
+    stato.presi = giorniDellaVisita(ADESSO).flatMap((g) => g.orari.map((o) => o.id));
+    const chiamate = serverFinto({ status: 200, corpo: { ok: true, data: { url: null, entra: '/seller/abbonamento', accessoInviato: true } } });
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    expect(r.querySelector('[data-giorno]')).toBeNull();
+    expect(r.textContent).toContain('siamo al completo');
+    expect(r.textContent).toContain('Ti chiamiamo per fissare quando il team di SDG passa da te');
+    expect(r.textContent).not.toContain('Il giorno che scegli');
     expect(pulsante(r).textContent).toBe('Confermo il Business');
+    await primoPasso(r, null);
+    await scriviCodice(r, '123456');
+    await invia(r);
+    expect(chiamate[1].corpo).not.toHaveProperty('visita');
+    expect(vai).toHaveBeenCalledWith('/seller/abbonamento');
+  });
+
+  it('l ora appena presa da un altro: si torna alla scelta, quell ora è barrata e si sceglie un altra', async () => {
+    const { ORA_GIA_PRESA } = await import('@/lib/agenzia/visita-sdg');
+    const chiamate = serverFinto({ status: 409, corpo: { ok: false, error: { message: ORA_GIA_PRESA } } });
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await primoPasso(r);
+    await scriviCodice(r, '123456');
+    await invia(r);
+    expect(chiamate[1].corpo.visita).toBe(LUNEDI_ALLE_10);
+    // Di nuovo sulla scelta, col messaggio; le 10:00 di lunedì barrate, l'email e la fascia restano.
+    expect(r.querySelector('#codice-email')).toBeNull();
+    expect(r.querySelector('[role="alert"]')?.textContent).toBe(ORA_GIA_PRESA);
+    expect(oraVisita(r, '10:00').disabled).toBe(true);
+    expect(oraVisita(r, '10:00').checked).toBe(false);
+    expect((r.querySelector('#email-titolare') as HTMLInputElement).value).toBe('titolare@grida.it');
+    await premi(oraVisita(r, '14:30'));
+    expect(oraVisita(r, '14:30').checked).toBe(true);
+  });
+
+  it('quel giorno non vale più (pagina aperta oltre la mezzanotte): si torna alla scelta e tutto quel giorno è barrato', async () => {
+    const { GIORNO_NON_PIU_VALIDO } = await import('@/lib/agenzia/visita-sdg');
+    serverFinto({ status: 400, corpo: { ok: false, error: { message: GIORNO_NON_PIU_VALIDO } } });
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await primoPasso(r);
+    await scriviCodice(r, '123456');
+    await invia(r);
+    expect(r.querySelector('[role="alert"]')?.textContent).toBe(GIORNO_NON_PIU_VALIDO);
+    for (const ora of ['10:00', '14:30', '16:30']) expect(oraVisita(r, ora).disabled, ora).toBe(true);
+  });
+
+  it('se l ora rifiutata era l ultima libera: «al completo», e si conferma senza visita (collaudo del 27/11)', async () => {
+    const { ORA_GIA_PRESA } = await import('@/lib/agenzia/visita-sdg');
+    // Libera solo lunedì alle 10:00.
+    stato.presi = giorniDellaVisita(ADESSO).flatMap((g) => g.orari.map((o) => o.id)).filter((id) => id !== LUNEDI_ALLE_10);
+    let risposta: { status: number; corpo: unknown } = { status: 409, corpo: { ok: false, error: { message: ORA_GIA_PRESA } } };
+    const chiamate: Array<{ url: string; corpo: Record<string, unknown> }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      chiamate.push({ url, corpo: JSON.parse(String(init.body)) });
+      if (url.endsWith('/codice')) return new Response(JSON.stringify({ ok: true, data: { gettone: 'gettone-firmato' } }), { status: 200 });
+      return new Response(JSON.stringify(risposta.corpo), { status: risposta.status });
+    }));
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await primoPasso(r);
+    await scriviCodice(r, '123456');
+    await invia(r);
+    expect(r.textContent).toContain('siamo al completo');
+    expect(pulsante(r).textContent).toBe('Confermo il Business');
+    risposta = { status: 200, corpo: { ok: true, data: { url: null, entra: '/seller/abbonamento', accessoInviato: true } } };
+    await invia(r);
+    await scriviCodice(r, '123456');
+    await invia(r);
+    expect(chiamate.at(-1)?.corpo).not.toHaveProperty('visita');
+    expect(vai).toHaveBeenCalledWith('/seller/abbonamento');
   });
 });

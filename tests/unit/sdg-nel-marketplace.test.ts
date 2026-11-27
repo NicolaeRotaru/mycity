@@ -23,6 +23,7 @@ const MIGRAZIONE = readFileSync(path.join(RADICE, 'migrations/707_sdg_agenzia_ne
 const MIGRAZIONE_710 = readFileSync(path.join(RADICE, 'migrations/710_gli_abbonamenti_di_sdg_dicono_i_servizi_a_tre.sql'), 'utf8');
 const MIGRAZIONE_711 = readFileSync(path.join(RADICE, 'migrations/711_l_analisi_del_business_e_la_bozza_del_sito.sql'), 'utf8');
 // 26/11/2026 — Il rapporto dell'imprenditore cambia il testo dell'analisi: l'ultima che scrive le descrizioni è la 863.
+const MIGRAZIONE_999D = readFileSync(path.join(RADICE, 'migrations/999d_i_tre_abbonamenti_di_sdg_costano_300_600_900.sql'), 'utf8');
 const MIGRAZIONE_863 = readFileSync(path.join(RADICE, 'migrations/863_gli_abbonamenti_di_sdg_dicono_il_rapporto_dell_imprenditore.sql'), 'utf8');
 
 const abbonamento = (p: Partial<ProdottoDelCatalogo> = {}): ProdottoDelCatalogo => ({
@@ -71,7 +72,7 @@ describe('il carrello del browser non prende un abbonamento di SDG', () => {
 
   it('addToCart lo lascia fuori, e una merce normale entra', async () => {
     const { addToCart, getCart } = await import('@/lib/cart');
-    addToCart({ id: ID_PRODOTTO_SDG.premium, name: 'Abbonamento Premium', price: 999, sellerId: SDG_SELLER_ID });
+    addToCart({ id: ID_PRODOTTO_SDG.premium, name: 'Abbonamento Premium', price: 900, sellerId: SDG_SELLER_ID });
     expect(getCart()).toHaveLength(0);
     addToCart({ id: 'pane', name: 'Pane', price: 3, sellerId: 'aaaaaaaa-0000-0000-0000-000000000001' });
     expect(getCart().map((r) => r.id)).toEqual(['pane']);
@@ -98,8 +99,8 @@ describe('i tre prodotti dicono quello che dice il listino', () => {
   it('nome e prezzo vengono da FASCE', () => {
     expect(PRODOTTI_SDG.map((p) => p.nome)).toEqual([
       'Abbonamento Base — 300 € al mese',
-      'Abbonamento Business — 500 € al mese',
-      'Abbonamento Premium — 999 € al mese',
+      'Abbonamento Business — 600 € al mese',
+      'Abbonamento Premium — 900 € al mese',
     ]);
     for (const p of PRODOTTI_SDG) expect(Math.round(Number(p.prezzoEuro) * 100)).toBe(FASCE[p.fascia].prezzoMese);
   });
@@ -113,11 +114,22 @@ describe('i tre prodotti dicono quello che dice il listino', () => {
     }
   });
 
-  it('la migrazione 707 scrive gli stessi id, nomi e prezzi', () => {
-    for (const p of PRODOTTI_SDG) {
-      expect(MIGRAZIONE).toMatch(new RegExp(`\\('${p.id}'::uuid, '${p.nome}', '[^]*?', ${p.prezzoEuro.replace('.', '\\.')}\\)`));
-    }
+  it('la migrazione 707 scrive gli stessi id e il negozio (nomi e prezzi di allora sono storia: li riscrive la 999d)', () => {
+    for (const p of PRODOTTI_SDG) expect(MIGRAZIONE).toContain(`'${p.id}'::uuid`);
     expect(MIGRAZIONE).toContain(SDG_SELLER_ID);
+  });
+
+  // 27/11/2026 — Prezzi 300, 600, 900: la 999d riscrive nome, prezzo e descrizione. Se il listino cambia e
+  // la migrazione no, questa prova diventa rossa.
+  it('la migrazione 999d scrive nome, prezzo e descrizione di oggi, quelli del listino', () => {
+    const sql = MIGRAZIONE_999D.replace(/''/g, "'");
+    expect(MIGRAZIONE_999D).toContain(`p.seller_id = '${SDG_SELLER_ID}'::uuid`);
+    for (const p of PRODOTTI_SDG) {
+      expect(sql).toContain(`('${p.id}'::uuid, '${p.nome}', '${p.descrizione}', ${p.prezzoEuro})`);
+    }
+    expect(PRODOTTI_SDG.map((p) => p.prezzoEuro)).toEqual(['300.00', '600.00', '900.00']);
+    expect(MIGRAZIONE_999D).toMatch(/RIESEGUIRE/);
+    expect(MIGRAZIONE_999D).toMatch(/TORNA INDIETRO/);
   });
 
   // 24/11/2026 — Servizi da 4 a 3 (la scheda Google dentro la gestione social) e «si attiva dalla

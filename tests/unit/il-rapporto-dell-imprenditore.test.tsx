@@ -259,8 +259,8 @@ describe('prova 6 — il preventivo Base', () => {
     expect(FASCE.premium.servizi.analisi).toContain('concorrenti');
   });
 
-  it('prezzi invariati: 300, 500, 999 € al mese', () => {
-    expect(ABBONAMENTI.map((f) => FASCE[f].prezzoMese)).toEqual([30_000, 50_000, 99_900]);
+  it('prezzi: 300, 600, 900 € al mese (27/11/2026)', () => {
+    expect(ABBONAMENTI.map((f) => FASCE[f].prezzoMese)).toEqual([30_000, 60_000, 90_000]);
   });
 });
 

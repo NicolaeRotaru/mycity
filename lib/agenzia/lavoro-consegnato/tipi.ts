@@ -15,7 +15,7 @@ export const AnalisiSchema = z.object({
   titolo: testo,
   aggiornata_il: testo,
   sintesi: testo,
-  numeri_chiave: z.array(z.object({ voce: testo, valore: testo, fonte: httpsONull })).default([]),
+  numeri_chiave: z.array(z.object({ voce: testo, valore: testo, fonte: httpsONull, da_confermare: z.boolean().nullish() })).default([]),
   mercato: z.array(z.object({ titolo: testo, testo, fonti: z.array(https).default([]) })).default([]),
   concorrenti: z.array(z.object({
     nome: testo, tipo: testo.nullish(), cosa_fanno: testo, prezzo_indicativo: testo.nullish(),

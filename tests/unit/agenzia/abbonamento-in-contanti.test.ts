@@ -71,7 +71,7 @@ describe('lo sblocco in contanti', () => {
     const admin = finto();
     expect(await sbloccaInContanti(admin, NEGOZIO, 'business')).toEqual({ esito: 'sbloccata', fascia: 'business' });
     expect(inCorso()).toHaveLength(1);
-    expect(inCorso()[0]).toMatchObject({ fascia: 'business', canone_centesimi: 50_000, origine: 'contanti', stato: 'active', rinnovo_il: null });
+    expect(inCorso()[0]).toMatchObject({ fascia: 'business', canone_centesimi: 60_000, origine: 'contanti', stato: 'active', rinnovo_il: null });
     expect(inCorso()[0]).not.toHaveProperty('stripe_subscription_id');
     expect(await sbloccaInContanti(admin, NEGOZIO, 'business')).toEqual({ esito: 'gia-sbloccata', fascia: 'business' });
     expect(inCorso()).toHaveLength(1);
@@ -83,7 +83,7 @@ describe('lo sblocco in contanti', () => {
     await sbloccaInContanti(admin, NEGOZIO, 'base');
     expect(inCorso()[0].canone_centesimi).toBe(25_000);
     await sbloccaInContanti(admin, NEGOZIO, 'premium');
-    expect(inCorso()[0].canone_centesimi).toBe(99_900);
+    expect(inCorso()[0].canone_centesimi).toBe(90_000);
   });
 
   it('un altra fascia aggiorna la riga che c è, senza farne una seconda', async () => {
@@ -91,7 +91,7 @@ describe('lo sblocco in contanti', () => {
     await sbloccaInContanti(admin, NEGOZIO, 'base');
     expect(await sbloccaInContanti(admin, NEGOZIO, 'premium')).toEqual({ esito: 'cambiata', fascia: 'premium', da: 'base' });
     expect(inCorso()).toHaveLength(1);
-    expect(inCorso()[0]).toMatchObject({ fascia: 'premium', canone_centesimi: 99_900 });
+    expect(inCorso()[0]).toMatchObject({ fascia: 'premium', canone_centesimi: 90_000 });
   });
 
   it('chi ha già un abbonamento pagato online lo tiene: niente riga in contanti accanto', async () => {
