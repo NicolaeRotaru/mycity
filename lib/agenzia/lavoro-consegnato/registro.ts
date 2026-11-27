@@ -53,9 +53,11 @@ export function negoziConLavoroConsegnato(): string[] {
 /**
  * 27/11/2026 — Solo il sito del negozio, per la pagina del link del preventivo (Nicola: «mettilo nel momento in
  * cui l'imprenditore ha cliccato sul link che gli ha inviato il venditore»). Quella pagina è aperta a chi ha il
- * link: qui non passano mai il piano social né l'analisi.
+ * link: qui non passano mai il piano social né l'analisi. Passa la fascia del sito (versione Business, Premium…),
+ * perché la pagina dica con quale abbonamento quel sito va online (collaudo del 27/11).
  */
-export function sitoConsegnatoDi(negozioId: string): Sito | null {
-  return lavoroConsegnatoDi(negozioId)?.sito ?? null;
+export function sitoConsegnatoDi(negozioId: string): { sito: Sito; fascia: LavoroConsegnato['fascia'] } | null {
+  const lavoro = lavoroConsegnatoDi(negozioId);
+  return lavoro?.sito ? { sito: lavoro.sito, fascia: lavoro.fascia } : null;
 }
 
