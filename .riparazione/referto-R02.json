@@ -363,6 +363,8 @@
   ],
   "conto": {
     "agenti": 8,
-    "nota": "8 subagenti su 8: 4 riparatori (un lotto ciascuno, modello grande) e 4 revisori di sola lettura (2 grandi per i gravi, 2 piccoli per i minori). Nessun giro di correzione: tetto raggiunto. Spesa letta da get_session prima della chiusura: 22,09 $ (dalla regia)."
-  }
+    "nota": "8 subagenti su 8: 4 riparatori (un lotto ciascuno, modello grande) e 4 revisori di sola lettura (2 grandi per i gravi, 2 piccoli per i minori). Nessun giro di correzione: tetto raggiunto. Spesa letta da get_session prima della chiusura: 22,09 $ (dalla regia).",
+    "subagenti": 8
+  },
+  "costo_usd": 22.09
 }
