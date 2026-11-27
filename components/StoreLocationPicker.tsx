@@ -172,14 +172,17 @@ const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
     setSearching(true);
     setError(null);
     try {
-      const hasCountry = /italia|italy/i.test(address);
-      const parts = [address];
-      if (!hasCountry) parts.push('Italia');
+      // 27/11/2026 — Senza città la ricerca era un testo libero nel riquadro di Piacenza e dintorni:
+      // «Via Roma 12» poteva diventare la Via Roma di Podenzano, a 10 km, e si confermava. Se la città
+      // manca (dopo l'ultima virgola, come la legge lib/geocodifica.ts, o in fondo al testo) si cerca a Piacenza.
+      const testo = address.trim().replace(/,\s*(italia|italy)\s*$/i, '').replace(/[\s,]+$/, '');
+      const coda = testo.includes(',') ? testo.slice(testo.lastIndexOf(',') + 1) : '';
+      const haCitta = /\d{5}|\p{L}/u.test(coda) || /piacenza(\s*\(?pc\)?)?$/i.test(testo);
       // 🟠-15: geocoding via proxy server-side (UA corretto, rate-limit, timeout).
       const res = await fetch('/api/geocode', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ q: parts.join(', ') }),
+        body: JSON.stringify({ q: `${testo}${haCitta ? '' : ', Piacenza'}, Italia` }),
       });
       // Servizio degli indirizzi giù o limitato (429, 5xx): non è «indirizzo non trovato».
       if (res.status === 429 || res.status >= 500) {
