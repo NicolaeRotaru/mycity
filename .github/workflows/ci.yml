@@ -245,9 +245,13 @@ jobs:
     # verde che non provava niente — e proprio sui controlli che tengono chiusi
     # i dati dei clienti. Qui si ricostruisce lo schema VERO dalle migrazioni su
     # un Postgres del runner: nessuna chiave, nessuna rete, e non si salta mai.
+    #
+    # 27/11/2026 — Postgres 17, la versione della produzione (VERSIONE_ATTESA in
+    # backup-db.yml, major_version in supabase/config.toml). Su 16 le prove dei
+    # permessi certificavano un motore che la produzione non usa.
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres

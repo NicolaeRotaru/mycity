@@ -20,6 +20,26 @@ name: Deriva migrazioni (produzione)
 # Serve il segreto SUPABASE_DB_URL (la stessa stringa usata dal backup: la riga
 # del «Session pooler», IPv4). La lettura è sola lettura: una SELECT su una
 # tabella di sistema.
+#
+# 27/11/2026 — I NOMI NON BASTANO: SI CONFRONTANO LE REGOLE, E SI STAMPANO SOLO I CONTI.
+#
+# Le prove dei permessi in SQL (tests/sql/rls/) girano su un database che la CI
+# ricostruisce dai file, con TUTTE le migrazioni. Il controllo dei nomi non vede
+# una regola tornata indietro con lo stesso nome (il 9/9: 11 funzioni e 27 regole
+# di accesso riportate a com'erano, vedi la 161). Adesso il lavoro ricostruisce il
+# database dai file su un Postgres 17, la versione della produzione, e confronta
+# con quello vero l'impronta di quello che decide i permessi: RLS accesa, regole di
+# accesso, funzioni, chi le può eseguire, permessi di anon e authenticated su
+# tabelle e colonne, inneschi, e le viste (definizione e opzioni).
+#
+# Il log di questo deposito è pubblico: del database vero non si stampa NIENTE,
+# né righe, né nomi, né espressioni, né definizioni. Ogni oggetto esce dalla
+# domanda già ridotto a md5 (chiave e contenuto) e il confronto dice solo quanti
+# oggetti per tipo sono diversi, mancano o sono in più. Il database vero si
+# legge in una transazione READ ONLY, solo SELECT sui cataloghi, con lo stesso
+# segreto di sempre. Gli errori di psql verso il database vero non si stampano
+# (direbbero l'indirizzo e l'utente): il perché del collegamento lo dice il
+# passo dei nomi qui sopra.
 
 on:
   schedule:
@@ -33,7 +53,22 @@ jobs:
   deriva:
     name: Migrazioni nel repo ma non in produzione
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    # Il database ricostruito dai file, per il confronto delle regole: la stessa
+    # versione della produzione (17). Vive quanto il giro e non vede nessun dato.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,6 +89,7 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Verifica di avere la stringa di connessione
+        id: segreto
         env:
           DB: ${{ secrets.SUPABASE_DB_URL }}
         run: |
@@ -88,3 +124,125 @@ jobs:
             echo "::error::Il confronto NON e' partito: non mi sono collegata al database (il perche' e' nel log qui sopra). Non vuol dire che mancano migrazioni. Da GitHub Actions in SUPABASE_DB_URL serve la riga del «Session pooler» (IPv4, porta 5432), non la connessione diretta db.<progetto>.supabase.co."
           fi
           exit "$codice"
+
+      # 27/11/2026 — Da qui in giù le regole, non solo i nomi. Girano anche se il
+      # passo dei nomi è rosso per migrazioni mancanti: è proprio quando le regole
+      # vere sono diverse da quelle che le prove certificano.
+      - name: Installa il client psql
+        if: ${{ !cancelled() && steps.segreto.outcome == 'success' }}
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      # Le variabili puntano SOLO al Postgres del giro: apply.sh cancella e ricrea il
+      # database che gli si nomina, e qui la stringa del database vero non c'è apposta.
+      - name: Ricostruisci il database dai file, come lo vedono le prove dei permessi
+        if: ${{ !cancelled() && steps.segreto.outcome == 'success' }}
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: bash tests/sql/harness/apply.sh mycity_dai_file
+
+      - name: Le regole del database vero sono quelle dei file (solo i conti)
+        if: ${{ !cancelled() && steps.segreto.outcome == 'success' }}
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DB_DAI_FILE: postgresql://postgres:postgres@localhost:5432/mycity_dai_file
+          PGCONNECT_TIMEOUT: "20"
+        run: |
+          set -euo pipefail
+          cartella="$(mktemp -d)"
+          trap 'rm -rf "$cartella"' EXIT
+          # Una riga per oggetto: tipo|md5(chiave)|md5(contenuto). Nomi, espressioni e
+          # definizioni restano dentro il database: fuori escono solo le impronte.
+          # search_path = pg_catalog: i nomi escono con lo schema, uguali dai due lati.
+          # Le funzioni delle estensioni non contano (in produzione stanno altrove).
+          cat > "$cartella/impronta.sql" <<'FINE_SQL'
+          BEGIN TRANSACTION READ ONLY;
+          SET LOCAL search_path = pg_catalog;
+          WITH funzioni AS (
+            SELECT p.oid, p.prosecdef
+            FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.prokind IN ('f', 'p')
+              AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                              WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')
+          ), tabelle AS (
+            SELECT c.oid, c.relkind, c.relrowsecurity, c.relforcerowsecurity, c.reloptions
+            FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+          ), ruoli AS (
+            SELECT oid, rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated')
+          ), oggetti(tipo, chiave, contenuto) AS (
+            SELECT 'rls', t.oid::regclass::text, format('attiva=%s forzata=%s', t.relrowsecurity, t.relforcerowsecurity)
+              FROM tabelle t WHERE t.relkind IN ('r', 'p')
+            UNION ALL
+            SELECT 'regola', format('%s.%I.%I', schemaname, tablename, policyname),
+                   format('%s ruoli=%s per=%s using=%s check=%s', permissive, array_to_string(roles, ','), cmd,
+                          coalesce(qual, '-'), coalesce(with_check, '-'))
+              FROM pg_policies WHERE schemaname IN ('public', 'storage')
+            UNION ALL
+            SELECT 'funzione', f.oid::regprocedure::text, format('definer=%s %s', f.prosecdef, pg_get_functiondef(f.oid))
+              FROM funzioni f
+            UNION ALL
+            SELECT 'esegue', format('%s %s', r.rolname, f.oid::regprocedure), 'si'
+              FROM funzioni f CROSS JOIN ruoli r WHERE has_function_privilege(r.oid, f.oid, 'EXECUTE')
+            UNION ALL
+            SELECT 'permesso', format('%s %s %s', r.rolname, t.oid::regclass, pr.priv), 'si'
+              FROM tabelle t CROSS JOIN ruoli r
+              CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS pr(priv)
+              WHERE has_table_privilege(r.oid, t.oid, pr.priv)
+            UNION ALL
+            SELECT 'colonna', format('%s %s.%I %s', r.rolname, a.attrelid::regclass, a.attname, x.privilege_type), 'si'
+              FROM pg_attribute a JOIN tabelle t ON t.oid = a.attrelid
+              CROSS JOIN LATERAL aclexplode(a.attacl) x JOIN ruoli r ON r.oid = x.grantee
+              WHERE a.attnum > 0 AND NOT a.attisdropped
+            UNION ALL
+            SELECT 'innesco', format('%s.%I', tg.tgrelid::regclass, tg.tgname), format('abilitato=%s %s', tg.tgenabled, pg_get_triggerdef(tg.oid))
+              FROM pg_trigger tg JOIN tabelle t ON t.oid = tg.tgrelid
+              WHERE NOT tg.tgisinternal
+            UNION ALL
+            SELECT 'vista', t.oid::regclass::text,
+                   format('tipo=%s opzioni=%s %s', t.relkind, coalesce(array_to_string(t.reloptions, ','), '-'), pg_get_viewdef(t.oid))
+              FROM tabelle t WHERE t.relkind IN ('v', 'm')
+          )
+          SELECT tipo || '|' || md5(chiave) || '|' || md5(contenuto) FROM oggetti;
+          ROLLBACK;
+          FINE_SQL
+          if ! psql "$SUPABASE_DB_URL" -X -q -At -v ON_ERROR_STOP=1 -f "$cartella/impronta.sql" > "$cartella/vero.grezzo" 2>/dev/null; then
+            echo "::error::Il confronto delle regole NON è partito: non ho letto il database vero (il motivo di psql non si stampa: direbbe indirizzo e utente in un log pubblico; il passo dei nomi qui sopra dice perché non ci si collega)."
+            exit 1
+          fi
+          if ! psql "$DB_DAI_FILE" -X -q -At -v ON_ERROR_STOP=1 -f "$cartella/impronta.sql" > "$cartella/file.grezzo"; then
+            echo "::error::Il confronto delle regole NON è partito: non ho letto il database ricostruito dai file."
+            exit 1
+          fi
+          # Solo le righe d'impronta (tipo|32 cifre|32 cifre): BEGIN, SET e ROLLBACK con -q non scrivono niente.
+          grep -E '^[a-z]+\|[0-9a-f]{32}\|[0-9a-f]{32}$' "$cartella/vero.grezzo" | LC_ALL=C sort -u > "$cartella/vero.txt" || true
+          grep -E '^[a-z]+\|[0-9a-f]{32}\|[0-9a-f]{32}$' "$cartella/file.grezzo" | LC_ALL=C sort -u > "$cartella/file.txt" || true
+          if [ ! -s "$cartella/vero.txt" ] || [ ! -s "$cartella/file.txt" ]; then
+            echo "::error::Il confronto delle regole NON vale: uno dei due database non ha restituito nessun oggetto."
+            exit 1
+          fi
+          # Per tipo: diversi (stessa chiave, contenuto diverso), mancano nel vero, in più nel vero.
+          LC_ALL=C awk -F'|' '
+            FNR == NR { vero[$1 "|" $2] = $3; tipi[$1] = 1; next }
+            { k = $1 "|" $2; tipi[$1] = 1
+              if (!(k in vero)) mancano[$1]++
+              else { if (vero[k] != $3) diversi[$1]++; delete vero[k] } }
+            END {
+              for (k in vero) { split(k, p, "|"); inpiu[p[1]]++ }
+              for (t in tipi) printf "%s %d %d %d\n", t, diversi[t] + 0, mancano[t] + 0, inpiu[t] + 0
+            }' "$cartella/vero.txt" "$cartella/file.txt" | LC_ALL=C sort > "$cartella/conti.txt"
+          oggetti="$(wc -l < "$cartella/file.txt" | tr -d ' ')"
+          differenze=0
+          echo "Oggetti confrontati (dai file): $oggetti. Per tipo: diversi · mancano nel database vero · in più nel database vero."
+          while read -r tipo diversi mancano inpiu; do
+            echo "  - $tipo: $diversi diversi · $mancano mancano · $inpiu in più"
+            differenze=$((differenze + diversi + mancano + inpiu))
+          done < "$cartella/conti.txt"
+          if [ "$differenze" -eq 0 ]; then
+            echo "✅ Le regole del database vero sono quelle dei file: nessuna differenza."
+            exit 0
+          fi
+          echo "::error::Il database vero non è quello che le prove dei permessi certificano: $differenze oggetti diversi fra produzione e file (solo i conti per tipo: il log è pubblico). Un verde delle prove SQL non vale per la produzione finché non tornano uguali."
+          exit 1
