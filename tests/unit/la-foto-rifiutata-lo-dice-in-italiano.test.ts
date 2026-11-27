@@ -96,8 +96,10 @@ describe('② la porta rifiuta prima di spedire quello che il deposito rifiutere
     const svg = new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' }) as never;
     await expect(
       caricaImmagine(d.client, { file: svg, userId: UID, cartella: 'logos' }),
-      // S06 (1605): la frase elenca tutti i formati che la porta accetta, non tre su sette.
-    ).rejects.toThrow(/JPG, PNG, WEBP, GIF, AVIF, HEIC o HEIF/);
+      // S06 (1605): la frase elenca i formati che la porta accetta, non tre su sette.
+      // 27/11/2026: tolti HEIC e HEIF, che le caselle delle foto pubbliche non offrono piu'
+      // (la porta li accetta ancora: vedi `formatiDaProporre` in lib/storage/carica-immagine.ts).
+    ).rejects.toThrow(/usa una foto JPG, PNG, WEBP, GIF o AVIF\./);
     expect(
       d.chiamate,
       'il file partiva, saliva, e veniva respinto alla fine: il negoziante aspettava per niente',

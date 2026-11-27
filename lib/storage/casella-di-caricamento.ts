@@ -110,9 +110,14 @@ export function elencoAccept(secchio: string = SECCHIO_PUBBLICO): string[] {
  * Nasce dalle estensioni della regola, non da una frase scritta a mano: il giorno che il magazzino
  * cambia idea, la frase che l'utente legge cambia con lui invece di diventare una bugia gentile.
  */
-export function tipiScrittiPerUmani(secchio: string = SECCHIO_PUBBLICO): string {
+export function tipiScrittiPerUmani(
+  secchio: string = SECCHIO_PUBBLICO,
+  // 27/11/2026 — L'`accept` vero della casella, quando non e' tutta la regola del magazzino: le
+  // caselle della vetrina tolgono HEIC e HEIF, e la frase li nominava lo stesso.
+  accetta: Readonly<Record<string, readonly string[]>> = mappaAccept(secchio),
+): string {
   const viste = new Set<string>();
-  for (const estensioni of Object.values(mappaAccept(secchio))) {
+  for (const estensioni of Object.values(accetta)) {
     viste.add(estensioni[0].replace('.', '').toUpperCase());
   }
   const elenco = [...viste];
@@ -199,6 +204,12 @@ export interface OpzioniDelDrop {
   postiLiberi: number;
   /** Il magazzino, per dire il tetto giusto e i formati giusti nella frase. */
   secchio?: string;
+  /**
+   * 27/11/2026 — L'`accept` che la casella passa davvero a `react-dropzone`, se non e' tutta la
+   * regola del magazzino. «Puoi caricare …» nasce da qui: prima nasceva sempre dal magazzino, e
+   * nominava HEIC e HEIF anche nelle caselle che li scartano.
+   */
+  accetta?: Readonly<Record<string, readonly string[]>>;
 }
 
 /** Un nome di file da mettere in una frase: accorciato, e mai vuoto. */
@@ -232,7 +243,7 @@ function codiciDi(scarto: ScartoDellaCasella): string[] {
 export function decidiCosaFareDelDrop<T>(
   accettati: readonly T[],
   scartati: readonly ScartoDellaCasella[],
-  { postiLiberi, secchio = SECCHIO_PUBBLICO }: OpzioniDelDrop,
+  { postiLiberi, secchio = SECCHIO_PUBBLICO, accetta }: OpzioniDelDrop,
 ): EsitoDelDrop<T> {
   const entrati = accettati ?? [];
   const fuori = (scartati ?? []).filter(Boolean);
@@ -249,7 +260,7 @@ export function decidiCosaFareDelDrop<T>(
   if (perTipo.length > 0) {
     frasi.push(
       `${elencaNomi(perTipo)}: questo formato non lo accettiamo. ` +
-        `Puoi caricare ${tipiScrittiPerUmani(secchio)}.`,
+        `Puoi caricare ${tipiScrittiPerUmani(secchio, accetta)}.`,
     );
   }
 
