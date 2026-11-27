@@ -68,15 +68,15 @@ export async function attivitaGiaIscritta(admin: SupabaseClient, a: Pick<NuovaAt
   const righe = (esistente.data ?? []) as Array<{ seller_id: string; profiles: { store_address?: string | null } | { store_address?: string | null }[] }>;
   for (const r of righe) {
     const u = await admin.auth.admin.getUserById(r.seller_id);
-    if (u.data?.user?.email === email) {
+    if (u.data?.user && comeLoRiconosce(u.data.user, email)) {
       const p = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
       return { id: r.seller_id, indirizzo: p?.store_address ?? null };
     }
   }
   // Collaudo del 27/11: un nome scritto in un altro modo («BAR SPORT» e «Bar Sport») ha la stessa email ma non
-  // si trova dal nome. Si cerca allora dall'email, solo fra gli utenti creati dal sito (bloccati).
+  // si trova dal nome. Si cerca allora dall'email, solo fra gli utenti creati dal sito.
   const trovato = await utenteDallEmail(admin, email);
-  if (!trovato.utente?.bloccato) return null;
+  if (!trovato.utente?.delSito) return null;
   const profilo = await admin.from('profiles').select('store_address').eq('id', trovato.utente.id).maybeSingle();
   return { id: trovato.utente.id, indirizzo: (profilo.data as { store_address?: string | null } | null)?.store_address ?? null };
 }
@@ -85,83 +85,112 @@ export async function attivitaGiaIscritta(admin: SupabaseClient, a: Pick<NuovaAt
 const PAGINE_UTENTI = 10;
 const PER_PAGINA = 1000;
 
-/** Un utente ritrovato dall'email, con quello che serve per capire se l'ha creato il sito. */
-type UtenteTrovato = { id: string; bloccato: boolean };
+/**
+ * Il segno dell'email di sistema sull'utente: `app_metadata.email_di_sistema`. 27/11/2026 (collaudo, difetto
+ * grave): quando il titolare accetta il preventivo, la sua email prende il posto di quella finta
+ * (lib/agenzia/preventivo-col-codice.ts). Senza un segno, un nuovo invio dello stesso negozio trovava libera
+ * l'email finta e creava un secondo negozio col suo secondo link. `app_metadata` lo scrive solo il server:
+ * nessuno può darselo da solo, quindi chi lo porta l'ha creato il sito.
+ */
+const SEGNO = 'email_di_sistema';
+
+type UtenteAuth = { email?: string | null; app_metadata?: Record<string, unknown> | null };
+
+/** Come si riconosce l'utente di quest'attività: dall'email (finché è quella finta) o dal segno; `null` se non è lui. */
+function comeLoRiconosce(u: UtenteAuth, email: string): 'email' | 'segno' | null {
+  if (u.app_metadata?.[SEGNO] === email) return 'segno';
+  if ((u.email ?? '').toLowerCase() === email) return 'email';
+  return null;
+}
 
 /**
- * L'utente ritrovato dalla sua email, scorrendo gli utenti a pagine; `utente: null` se non c'è o se la lettura
- * non riesce (e allora `errore` dice perché). 27/11/2026 (collaudo del pulsante dell'agente): serve quando
- * un'iscrizione si è fermata a metà — l'utente creato, il profilo o il link no. Prima lo si cercava solo dal
- * profilo col link, che in quel caso non c'è: l'attività restava bloccata per sempre su «Riprova fra poco».
+ * Un utente ritrovato dall'email di sistema. `delSito`: l'ha creato il sito, perché è ancora bloccato (nessuno
+ * si blocca da solo) o porta il segno.
  */
-async function utenteDallEmail(admin: SupabaseClient, email: string): Promise<{ utente: UtenteTrovato | null; errore?: string }> {
+type UtenteTrovato = { id: string; bloccato: boolean; delSito: boolean };
+
+/**
+ * L'utente ritrovato dall'email di sistema, scorrendo gli utenti a pagine. `cercato: true` vuol dire che la
+ * ricerca è arrivata in fondo: allora `utente: null` è un «non c'è» sicuro. Con `cercato: false` la lettura
+ * non è riuscita o ha toccato il tetto, e `errore` dice perché. 27/11/2026 (collaudo del pulsante
+ * dell'agente): serve quando un'iscrizione si è fermata a metà. Dallo stesso giorno riconosce anche l'utente
+ * il cui titolare ha già accettato, dal segno dell'email di sistema.
+ */
+async function utenteDallEmail(admin: SupabaseClient, email: string): Promise<{ utente: UtenteTrovato | null; cercato: boolean; errore?: string }> {
   for (let page = 1; page <= PAGINE_UTENTI; page += 1) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: PER_PAGINA });
-    if (error || !data) return { utente: null, errore: `utenti non letti: ${error?.message ?? 'risposta vuota'}` };
-    const u = data.users.find((x) => (x.email ?? '').toLowerCase() === email);
+    if (error || !data) return { utente: null, cercato: false, errore: `utenti non letti: ${error?.message ?? 'risposta vuota'}` };
+    const u = data.users.find((x) => comeLoRiconosce(x, email) !== null);
     if (u) {
       const finoA = u.banned_until ? Date.parse(u.banned_until) : NaN;
-      return { utente: { id: u.id, bloccato: Number.isFinite(finoA) && finoA > Date.now() } };
+      const bloccato = Number.isFinite(finoA) && finoA > Date.now();
+      return { utente: { id: u.id, bloccato, delSito: bloccato || comeLoRiconosce(u, email) === 'segno' }, cercato: true };
     }
     // Ci si ferma sulla pagina vuota, non su quella corta: se il server desse pagine più piccole, fermarsi alla
     // prima pagina corta perderebbe l'utente in silenzio (idea della mycity#345).
-    if (data.users.length === 0) return { utente: null, errore: 'utente esistente non ritrovato' };
+    if (data.users.length === 0) return { utente: null, cercato: true };
   }
-  return { utente: null, errore: `utente non ritrovato nei primi ${PAGINE_UTENTI * PER_PAGINA}` };
+  return { utente: null, cercato: false, errore: `ricerca ferma ai primi ${PAGINE_UTENTI * PER_PAGINA} utenti` };
 }
 
 export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): Promise<EsitoIscrizione> {
   const email = emailDiSistema(a);
+  const guasto = (dettaglio: string): EsitoIscrizione => ({ ok: false, motivo: 'guasto', dettaglio });
 
-  // 1. L'utente senza accesso (o quello già creato da un invio precedente con lo stesso nome e città).
+  // 1. L'utente senza accesso, o quello già creato da un invio precedente con lo stesso nome e città.
+  //    27/11/2026 (collaudo, difetto grave): lo si cerca PRIMA di crearlo. Dopo che il titolare ha accettato,
+  //    l'email finta è di nuovo libera e `createUser` riusciva: nasceva un secondo negozio col suo link.
   let id: string | null = null;
   let nuova = false;
   let recuperata = false;
-  const creato = await admin.auth.admin.createUser({
-    email,
-    email_confirm: true,
-    user_metadata: { role: 'seller' },
-    ban_duration: BLOCCO_ACCESSO,
-  });
-  if (creato.data?.user) {
-    id = creato.data.user.id;
-    nuova = true;
-  } else {
-    // Già creato prima: lo si ritrova dal profilo che porta il suo nome nel link col codice.
-    const esistente = await admin
-      .from('preventivi_con_codice')
-      .select('seller_id, profiles!inner(store_name)')
-      .eq('profiles.store_name', a.nome)
-      .limit(5);
-    const righe = (esistente.data ?? []) as Array<{ seller_id: string }>;
-    for (const r of righe) {
-      const u = await admin.auth.admin.getUserById(r.seller_id);
-      if (u.data?.user?.email === email) {
-        id = r.seller_id;
-        break;
-      }
+  let trovato = await utenteDallEmail(admin, email);
+  if (!trovato.cercato) return guasto(trovato.errore ?? 'utenti non letti');
+  if (!trovato.utente) {
+    const creato = await admin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      user_metadata: { role: 'seller' },
+      app_metadata: { [SEGNO]: email },
+      ban_duration: BLOCCO_ACCESSO,
+    });
+    if (creato.data?.user) {
+      id = creato.data.user.id;
+      nuova = true;
+    } else {
+      // Un altro invio della stessa attività l'ha creato un attimo prima: lo si ritrova.
+      trovato = await utenteDallEmail(admin, email);
+      if (!trovato.utente) return guasto(trovato.errore ?? creato.error?.message ?? 'utente non creato');
     }
-    if (!id) {
-      // Iscrizione fermata a metà: l'utente c'è, ma il profilo col link no. Lo si ritrova dall'email e il
-      // lavoro si finisce come la prima volta: per chi chiama è un'attività che nasce adesso (flusso 16,
-      // avviso), perché la prima volta quei passi non erano partiti. Due paletti (collaudo del 27/11), e un
-      // terzo più sotto: «nuova» solo per chi scrive davvero il link.
-      const trovato = await utenteDallEmail(admin, email);
-      const u = trovato.utente;
-      if (!u) return { ok: false, motivo: 'guasto', dettaglio: trovato.errore ?? creato.error?.message ?? 'utente non creato' };
-      // ① solo un utente creato dal sito, cioè bloccato: nessuno si blocca da solo. Un account registrato a
-      //    mano con la stessa email non diventa mai un negozio.
-      if (!u.bloccato) return { ok: false, motivo: 'guasto', dettaglio: 'con questa email c’è un account non creato dal sito' };
-      // ② col link l'iscrizione era finita: il nome diverso vuol dire un'altra attività che si scrive uguale
-      //    («BAR SPORT» e «Bar Sport») o un negozio rinominato. Come prima, non si tocca.
-      const giaColLink = await admin.from('preventivi_con_codice').select('seller_id').eq('seller_id', u.id).maybeSingle();
-      if (giaColLink.error) return { ok: false, motivo: 'guasto', dettaglio: giaColLink.error.message };
-      if (giaColLink.data) return { ok: false, motivo: 'guasto', dettaglio: 'stessa email di un’attività già iscritta con un altro nome' };
+  }
+  if (!id && trovato.utente) {
+    const u = trovato.utente;
+    const colLink = await admin.from('preventivi_con_codice').select('seller_id, stato').eq('seller_id', u.id).maybeSingle();
+    if (colLink.error) return guasto(colLink.error.message);
+    const link = colLink.data as { stato?: string | null } | null;
+    if (link) {
+      // Il titolare ha accettato (o Nicola ha chiuso il preventivo): il negozio non si riscrive e non ne nasce
+      // un altro. Proposta del collaudo del 27/11.
+      if ((link.stato ?? 'aperto') !== 'aperto') return { ok: false, motivo: 'gia-con-accesso' };
+      // Col link l'iscrizione era finita. Un nome diverso con la stessa email vuol dire un'altra attività che
+      // si scrive uguale («BAR SPORT» e «Bar Sport») o un negozio rinominato: come prima, non si tocca.
+      const nome = await admin.from('profiles').select('store_name').eq('id', u.id).maybeSingle();
+      if (nome.error) return guasto(nome.error.message);
+      if ((nome.data as { store_name?: string | null } | null)?.store_name !== a.nome) {
+        return guasto('stessa email di un’attività già iscritta con un altro nome');
+      }
+      id = u.id;
+    } else {
+      // Iscrizione fermata a metà: l'utente c'è, ma il profilo col link no. Il lavoro si finisce come la prima
+      // volta: per chi chiama è un'attività che nasce adesso (flusso 16, avviso), perché la prima volta quei
+      // passi non erano partiti. Solo un utente creato dal sito: un account registrato a mano con la stessa
+      // email non diventa mai un negozio. «nuova» resta solo per chi scrive davvero il link (più sotto).
+      if (!u.delSito) return guasto('con questa email c’è un account non creato dal sito');
       id = u.id;
       nuova = true;
       recuperata = true;
     }
   }
+  if (!id) return guasto('utente non creato');
 
   // 2. Il profilo: venditore non approvato, fuori vetrina, coi dati pubblici dell'attività.
   const profilo = await admin.from('profiles').select('id, approval_status, is_approved').eq('id', id).maybeSingle();
