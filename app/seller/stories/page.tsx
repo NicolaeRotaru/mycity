@@ -20,6 +20,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
+import { acceptSenzaHeic, avvisoFotoHeic, eFotoHeic, senzaHeic } from '@/lib/immagini/heic-in-jpeg';
 import { safeInternalPath } from '@/lib/safe-redirect';
 import { logger } from '@/lib/logger';
 
@@ -27,23 +28,15 @@ import { logger } from '@/lib/logger';
 const SECCHIO_STORIE = 'stories';
 
 /**
- * R21-002 — LE FOTO HEIC/HEIF DELL'IPHONE NON SI PUBBLICANO PIU' COSI' COME SONO.
+ * LE FOTO HEIC/HEIF DELL'IPHONE NON SI PUBBLICANO PIU' COSI' COME SONO.
  *
- * Il magazzino le accetta, ma nessuno le converte: la storia la vedeva bene il negoziante dal suo
- * iPhone, e i clienti su Chrome, Firefox, Edge e Android vedevano un riquadro rotto. Come per le
- * foto prodotto (`lib/products/uploadImages.ts`) si tolgono dall'elenco del campo — cosi'
- * l'iPhone le converte da solo in JPEG — e un .heic che arriva lo stesso (trascinato da un PC) si
- * rifiuta con una frase chiara. Riconosce il tipo («…/heic») e il nome del file («IMG_0421.HEIC»).
+ * Il magazzino le accetta, ma la storia salvata in HEIC la vedeva solo il negoziante dal suo
+ * iPhone: i clienti su Chrome, Firefox, Edge e Android vedevano un riquadro rotto. Il campo non
+ * offre HEIC (cosi' l'iPhone consegna gia' un JPEG), e un .heic che arriva lo stesso passa da
+ * `senzaHeic` (`lib/immagini/heic-in-jpeg.ts`) appena scelto: dove il browser lo sa leggere
+ * diventa un JPEG, altrove si rifiuta con una frase chiara e non si puo' pubblicare.
  */
-function formatoDellIphone(testo: string): boolean {
-  return /[./]hei[cf]$/i.test(testo);
-}
-const ACCEPT_STORIE = attributoAccept(SECCHIO_STORIE)
-  .split(',')
-  .filter((tipo) => !formatoDellIphone(tipo))
-  .join(',');
-const FOTO_HEIC =
-  "Questa foto è in formato HEIC (quello dell'iPhone): su Chrome e sui telefoni Android i clienti vedrebbero un riquadro vuoto. Sceglila direttamente dall'iPhone, che la trasforma da solo in JPG, oppure salvala in JPG e riprova.";
+const ACCEPT_STORIE = acceptSenzaHeic(attributoAccept(SECCHIO_STORIE));
 
 /** R10-015 — Quello che legge il negoziante quando il magazzino delle foto non risponde. */
 const FOTO_STORIA_NON_CARICATA =
@@ -120,6 +113,8 @@ export default function SellerStoriesPage() {
    * ancora attivo, e la stessa storia si pubblicava due volte. Questo si accende subito, nel clic.
    */
   const pubblicazioneInCorso = useRef(false);
+  /** L'ultima foto scelta: una conversione finita dopo una scelta piu' nuova non la sovrascrive. */
+  const sceltaCorrente = useRef(0);
 
   const queryStories = useQuery({
     queryKey: queryKeys.seller.myStories,
@@ -352,15 +347,23 @@ export default function SellerStoriesPage() {
                      finestra «scegli un file». La lista arriva dalla stessa regola che poi
                      rifiuta il file. */
                   accept={ACCEPT_STORIE}
-                  onChange={(e) => {
-                    const scelta = e.target.files?.[0] ?? null;
-                    if (scelta && (formatoDellIphone(scelta.type) || formatoDellIphone(scelta.name))) {
-                      toast.error(FOTO_HEIC);
-                      e.target.value = '';
-                      setImage(null);
+                  onChange={async (e) => {
+                    const campo = e.target;
+                    const scelta = campo.files?.[0] ?? null;
+                    const questa = ++sceltaCorrente.current;
+                    if (!scelta || !eFotoHeic(scelta)) {
+                      setImage(scelta);
                       return;
                     }
-                    setImage(scelta);
+                    setImage(null);
+                    const pronta = await senzaHeic(scelta);
+                    if (questa !== sceltaCorrente.current) return;
+                    if (!pronta) {
+                      toast.error(avvisoFotoHeic());
+                      campo.value = '';
+                      return;
+                    }
+                    setImage(pronta);
                   }}
                   className="w-full text-sm file:mr-3 file:bg-primary-100 file:text-primary-800 file:font-semibold file:rounded-lg file:px-3 file:py-2 file:border-0"
                 />
