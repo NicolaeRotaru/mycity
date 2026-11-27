@@ -973,7 +973,6 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 largo il 95% dello schermo: su un portatile fine si vedeva la foto di prima,
                 solo piu' grande e piu' morbida. Qui si chiede la larghezza massima che il
                 sito considera sensata. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={zoomFallito === sizedImage(images[activeImg], LARGHEZZA_MASSIMA) ? FOTO_MANCANTE : sizedImage(images[activeImg], LARGHEZZA_MASSIMA)}
               alt={activeImg === 0 ? altPrimaFoto : `${product.name} — foto ${activeImg + 1}`}
