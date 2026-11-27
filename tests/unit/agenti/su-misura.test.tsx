@@ -46,9 +46,10 @@ function disegna(s) {
 }
 afterEach(() => { for (const { root, radice } of aperti.splice(0)) { act(() => root.unmount()); radice.remove(); } });
 // Per tag, non per id: con due schede aperte nella stessa prova jsdom cerca l'id in tutto il documento e trova l'altra.
+// 27/11: il menu non è più una tendina ma una fila di bottoni (data-pagina); la parte aperta ha aria-current.
 function scegli(r, id) {
-  const sel = r.querySelector('select');
-  act(() => { sel.value = id; sel.dispatchEvent(new Event('change', { bubbles: true })); });
+  const b = r.querySelector(`button[data-pagina="${id}"]`);
+  act(() => b.click());
 }
 
 test('la risposta dell’AD «su misura» passa i paletti: niente «nessuna percentuale», niente promesse fuori fascia', () => {
@@ -151,7 +152,7 @@ test('nelle tre schede ogni servizio ha la riga «Per <negozio>»: dal programma
     premium: { perche: '', foto_video: '', sito_web: '', social: '', analisi: '' },
   } });
   ridisegna(unisci(p, ad));
-  expect(radice.querySelector('select').value, 'la pagina scelta resta quando arriva la risposta dell’AD').toBe('abbonamenti');
+  expect(radice.querySelector('button[aria-current="page"]')?.getAttribute('data-pagina'), 'la pagina scelta resta quando arriva la risposta dell’AD').toBe('abbonamenti');
   const business = radice.querySelector('[data-fascia="business"]');
   expect(business.querySelector('[data-su-misura="perche"]').textContent).toMatch(/Cosa ci guadagna Forno Rossi: Il sabato c’è la coda/);
   const righe = [...business.querySelectorAll('[data-su-misura]:not([data-su-misura="perche"])')];
@@ -179,11 +180,11 @@ test('le frasi fisse di prima ci sono ancora, ognuna nella sua pagina', () => {
   const s = unisci(prima(), pulisci(JSON.parse(readFileSync(path.resolve(__dirname, 'dolce-dispensa-ad.json'), 'utf8'))), []);
   const { radice } = disegna(s);
   const testo = {};
-  for (const id of ['breve', 'offerta', 'abbonamenti', 'domande', 'online', 'reputazione', 'dati']) { scegli(radice, id); testo[id] = radice.textContent; }
+  for (const id of ['breve', 'abbonamenti', 'domande', 'online', 'reputazione', 'dati']) { scegli(radice, id); testo[id] = radice.textContent; }
   expect(testo.breve).toContain('Il gancio per aprire:');
   expect(testo.breve).toContain(s.gancio);
-  expect(testo.offerta).toContain('Sui prodotti venduti tramite MyCity resta il 10%; al banco niente. Oggi si paga in contanti, di persona.');
-  expect(testo.offerta).toContain('Perché il Base:');
+  expect(testo.breve).toContain('Sui prodotti venduti tramite MyCity resta il 10%; al banco niente. Oggi si paga in contanti, di persona.');
+  expect(testo.breve).toContain('Perché il Base:'); // 27/11: le offerte stanno nella prima pagina
   for (const h of ['Voce', 'Valore', 'Quanto è sicuro', 'Fonte']) expect(testo.dati).toContain(h);
   for (const t of Object.values(testo)) expect(t).toContain('Consigliato: Base · 300 € al mese');
   const { radice: r2 } = disegna(prima());

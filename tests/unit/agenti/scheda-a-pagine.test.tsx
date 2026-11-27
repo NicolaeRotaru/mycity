@@ -6,6 +6,12 @@
 // pagine dentro un menù a tendina», «senza togliere nulla di quello che c'è».
 // Sul codice di prima queste prove sono rosse: non c'era il menu a tendina né la pagina dei tre abbonamenti.
 // Diventano rosse anche se una sezione di prima sparisce, o se un beneficio della scheda si separa dal listino del sito.
+//
+// 27/11/2026 — Nicola: «inserisci cosa possiamo offrire e perché dentro la scheda cosa ha e non ha», «elimina le 3
+// schede abbonamento». Le offerte stanno nella prima pagina (la pagina «Cosa offrire» non c'è più) e i tre riquadri
+// riassuntivi Base/Business/Premium sotto le offerte spariscono. Sul codice di prima la prova qui sotto è rossa.
+// Subito dopo: «migliora il menu, in questo modo è scomodo». La tendina tagliava il titolo e chiedeva due tocchi:
+// ora le parti sono bottoni corti, tutti in vista. La prova del menu è rossa sulla tendina di prima.
 import { afterEach, expect, test } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -14,7 +20,7 @@ import path from 'node:path';
 import Scheda, { PAGINE } from '@/components/agenti/Scheda';
 import { primaScheda, pulisci, unisci } from '@/lib/agenti/scheda';
 import { FASCE as LISTINO, LISTINO as VOCI, SERVIZI_AGENZIA, ABBONAMENTI } from '@/lib/agenzia/preventivo';
-import { euro } from '@/lib/agenti/fasce';
+import { FASCE, ID_FASCE, euro } from '@/lib/agenti/fasce';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -42,10 +48,13 @@ function disegna(s) {
 }
 afterEach(() => { for (const { root, radice } of aperti.splice(0)) { act(() => root.unmount()); radice.remove(); } });
 
-const tendina = (r) => r.querySelector('select#pagina-scheda');
+const voci = (r) => [...r.querySelectorAll('nav[aria-label="Parti della scheda"] button[data-pagina]')];
+/** La parte aperta: la voce del menu segnata come pagina corrente. */
+const aperta = (r) => voci(r).find((b) => b.getAttribute('aria-current') === 'page')?.getAttribute('data-pagina');
 function scegli(r, id) {
-  const sel = tendina(r);
-  act(() => { sel.value = id; sel.dispatchEvent(new Event('change', { bubbles: true })); });
+  const b = voci(r).find((x) => x.getAttribute('data-pagina') === id);
+  expect(b, `la voce «${id}» del menu`).toBeTruthy();
+  act(() => b.click());
 }
 const titoli = (r) => [...r.querySelectorAll('h2')].map((h) => h.textContent.trim());
 const premi = (r, testo) => {
@@ -54,16 +63,14 @@ const premi = (r, testo) => {
   act(() => b.click());
 };
 
-test('la scheda si apre sulla prima pagina e il menu a tendina elenca tutte le pagine, con i tre abbonamenti', () => {
+test('la scheda si apre sulla prima pagina e il menu elenca tutte le pagine, con i tre abbonamenti', () => {
   const r = disegna(intera());
-  const sel = tendina(r);
-  expect(sel, 'il menu a tendina').toBeTruthy();
-  expect([...sel.options].map((o) => o.value)).toEqual(PAGINE.map((p) => p.id));
+  expect(voci(r).map((b) => b.getAttribute('data-pagina'))).toEqual(PAGINE.map((p) => p.id));
   expect(PAGINE.map((p) => p.id)).toContain('abbonamenti');
-  expect(sel.value).toBe('breve');
+  expect(aperta(r)).toBe('breve');
   expect(r.textContent).toContain('In 30 secondi, prima di entrare');
-  // Una pagina sola alla volta: la prima non porta le sezioni delle altre.
-  expect(titoli(r)).toEqual(['Cosa ha, cosa non ha, cosa va migliorato']);
+  // Una pagina sola alla volta: la prima porta «cosa ha» e, subito sotto, «cosa offrire» (27/11); niente delle altre.
+  expect(titoli(r)).toEqual(['Cosa ha, cosa non ha, cosa va migliorato', 'Cosa possiamo offrire, e perché']);
   // Testata e piede restano in vista su ogni pagina.
   expect(r.querySelector('h1').textContent).toBe('La Dolce Dispensa');
   expect(r.textContent).toContain('© OpenStreetMap contributors');
@@ -114,15 +121,70 @@ test('le tre schede degli abbonamenti portano prezzo, primo mese e tutti i benef
   expect(r.textContent).toContain('in contanti');
 });
 
+test('il menu è comodo: tutte le parti in vista come bottoni dal nome corto, un tocco per cambiare, niente tendina (27/11)', () => {
+  const r = disegna(intera());
+  expect(r.querySelector('select'), 'la tendina di prima').toBeNull();
+  expect(voci(r)).toHaveLength(PAGINE.length);
+  // I nomi sul bottone sono corti e interi: niente «Reputazione, concorrenti e…» tagliato.
+  for (const [i, b] of voci(r).entries()) { expect(b.textContent).toBe(PAGINE[i].corto); expect(b.textContent.length).toBeLessThanOrEqual(14); }
+  for (const p of PAGINE) {
+    scegli(r, p.id); // un tocco solo
+    expect(aperta(r)).toBe(p.id);
+    expect(voci(r).filter((b) => b.getAttribute('aria-current') === 'page')).toHaveLength(1);
+    expect(r.textContent).toContain(`Parte della scheda · ${PAGINE.indexOf(p) + 1} di ${PAGINE.length}`);
+  }
+});
+
+test('le offerte stanno nella prima pagina, senza i tre riquadri riassuntivi degli abbonamenti (27/11)', () => {
+  const s = intera();
+  const r = disegna(s);
+  expect(PAGINE.map((p) => p.id)).not.toContain('offerta');
+  expect(aperta(r)).toBe('breve');
+  expect(s.offerta.length).toBeGreaterThan(0);
+  for (const o of s.offerta) { expect(r.textContent).toContain(o.servizio); expect(r.textContent).toContain(o.perche); }
+  expect(r.textContent).toContain(`Perché il ${FASCE[s.consigliato].nome}:`);
+  expect(r.textContent).toContain('Sui prodotti venduti tramite MyCity resta il 10%; al banco niente. Oggi si paga in contanti, di persona.');
+  // I tre riquadri «Base / Business / Premium · prezzo · piano · sito» non ci sono più, su nessuna pagina.
+  for (const p of PAGINE) {
+    scegli(r, p.id);
+    for (const id of ID_FASCE) expect(r.textContent, `${p.id} · ${id}`).not.toContain(`${FASCE[id].inPratica.piano}. Sito:`);
+  }
+  // Nemmeno ridotti a nome e prezzo: fuori dalla testata (che porta il consigliato) la prima pagina non mostra listini.
+  scegli(r, 'breve');
+  const corpo = [...r.querySelectorAll('section')].map((x) => x.textContent).join(' ');
+  for (const id of ID_FASCE) expect(corpo, `prezzo del ${FASCE[id].nome}`).not.toContain(euro(FASCE[id].centesimi));
+});
+
+test('mentre l’AD scrive, la prima pagina mostra già il posto delle offerte, col segnaposto e il bottone', () => {
+  const r = disegna(prima());
+  expect(aperta(r)).toBe('breve');
+  const offerte = [...r.querySelectorAll('section')].find((x) => x.querySelector('h2')?.textContent === 'Cosa possiamo offrire, e perché');
+  expect(offerte, 'la sezione delle offerte nella prima pagina').toBeTruthy();
+  expect(offerte.querySelector('[aria-label="L’AD sta scrivendo questa parte"]'), 'il segnaposto «sta scrivendo»').toBeTruthy();
+  expect(offerte.textContent).toContain('Apri le tre schede degli abbonamenti');
+});
+
+test('dopo «Avanti» e «indietro» il fuoco va sulla voce del menu della pagina nuova, non si perde', () => {
+  const r = disegna(intera());
+  premi(r, 'Avanti: I tre abbonamenti');
+  expect(document.activeElement?.getAttribute('data-pagina')).toBe('abbonamenti');
+  premi(r, '‹ In breve: cosa ha e cosa non ha');
+  expect(document.activeElement?.getAttribute('data-pagina')).toBe('breve');
+  // All'ultima pagina «Avanti» sparisce: il fuoco resta sul menu.
+  scegli(r, 'reputazione');
+  premi(r, 'Avanti: Dati e fonti');
+  expect(document.activeElement?.getAttribute('data-pagina')).toBe('dati');
+});
+
 test('«Avanti», «indietro» e il bottone dell’offerta portano alla pagina giusta', () => {
   const r = disegna(intera());
-  premi(r, 'Avanti: Cosa offrire');
-  expect(tendina(r).value).toBe('offerta');
-  expect(titoli(r)).toContain('Cosa possiamo offrire, e perché');
   premi(r, 'Apri le tre schede degli abbonamenti');
-  expect(tendina(r).value).toBe('abbonamenti');
-  premi(r, '‹ Cosa offrire');
-  expect(tendina(r).value).toBe('offerta');
+  expect(aperta(r)).toBe('abbonamenti');
+  premi(r, '‹ In breve: cosa ha e cosa non ha');
+  expect(aperta(r)).toBe('breve');
+  expect(titoli(r)).toContain('Cosa possiamo offrire, e perché');
+  premi(r, 'Avanti: I tre abbonamenti');
+  expect(aperta(r)).toBe('abbonamenti');
   scegli(r, 'dati');
   expect([...r.querySelectorAll('button')].some((b) => b.textContent.startsWith('Avanti'))).toBe(false);
 });
