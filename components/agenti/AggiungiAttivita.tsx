@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import st from '@/components/agenti/scheda.module.css';
 import ag from '@/components/agenti/aggiungi.module.css';
 import { FASCE, ID_FASCE, euro, type IdFascia } from '@/lib/agenti/fasce';
@@ -17,13 +17,25 @@ import { FASCE, ID_FASCE, euro, type IdFascia } from '@/lib/agenti/fasce';
  * e «in automatico deve sbloccarsi la pagina del venditore in base all'abbonamento». L'agente sceglie Base,
  * Business o Premium; «Sì, aggiungi» si accende solo dopo la scelta. Nessuna fascia è scelta in partenza:
  * deve essere quella detta dal titolare, non quella consigliata.
+ *
+ * 27/11/2026 17:25 — Nicola: quando il titolare conferma l'abbonamento dal link, questa pagina «deve aggiornarsi e
+ * portarlo alla pagina con su scritto tutte le cose che deve fare adesso SDG». Dopo il «Sì» il riquadro chiede da
+ * solo ogni 10 secondi a che punto è il preventivo (app/api/agente/attivita), solo con la scheda visibile, e smette
+ * dopo 30 minuti; appena è «accettato» porta l'agente a «Adesso tocca a SDG» (app/agente/tocca-a-sdg).
  */
 type Fase = 'pronto' | 'conferma' | 'invio' | 'fatto' | 'errore';
+type Attesa = 'controllo' | 'confermato' | 'chiuso' | 'smesso';
+
+/** Ogni quanto si chiede se il titolare ha confermato, e dopo quanto si smette. */
+export const CONTROLLA_OGNI_MS = 10_000;
+export const SMETTI_DOPO_MS = 30 * 60_000;
+export const paginaDiSdg = (lavoro: string) => `/agente/tocca-a-sdg?lavoro=${encodeURIComponent(lavoro)}`;
 
 const c = (nomi: string) => nomi.split(/\s+/).filter(Boolean).map((n) => ag[n] ?? st[n] ?? n).join(' ');
 
-export default function AggiungiAttivita({ lavoro, nome, consigliato = null }: { lavoro: string; nome: string; consigliato?: IdFascia | null }) {
+export default function AggiungiAttivita({ lavoro, nome, consigliato = null, vai }: { lavoro: string; nome: string; consigliato?: IdFascia | null; vai?: (indirizzo: string) => void }) {
   const [fase, setFase] = useState<Fase>('pronto');
+  const [attesa, setAttesa] = useState<Attesa>('controllo');
   const [fascia, setFascia] = useState<IdFascia | null>(null);
   const [sbloccata, setSbloccata] = useState(false);
   const [giaOnline, setGiaOnline] = useState(false);
@@ -59,6 +71,37 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null }: {
     }
   }
 
+  // Dopo il «Sì»: il titolare ha confermato? Si chiede solo con la scheda visibile, e per 30 minuti al massimo.
+  useEffect(() => {
+    if (fase !== 'fatto') return;
+    let spento = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let nonTrovate = 0;
+    const inizio = Date.now();
+    const giro = async () => {
+      if (spento) return;
+      if (Date.now() - inizio >= SMETTI_DOPO_MS) { setAttesa('smesso'); return; }
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        try {
+          const r = await fetch(`/api/agente/attivita?lavoro=${encodeURIComponent(lavoro)}`, { cache: 'no-store' });
+          const d = (await r.json().catch(() => null)) as { ok?: boolean; data?: { stato?: string } } | null;
+          if (spento) return;
+          if (r.ok && d?.data?.stato === 'accettato') {
+            setAttesa('confermato');
+            (vai ?? ((u: string) => window.location.assign(u)))(paginaDiSdg(lavoro));
+            return;
+          }
+          if (r.ok && d?.data?.stato === 'chiuso') { setAttesa('chiuso'); return; }
+          // Un'attività che non c'è (o non è più sua) non diventerà mai confermata: tre risposte così e ci si ferma.
+          if (r.status === 404 && ++nonTrovate >= 3) { setAttesa('smesso'); return; }
+        } catch { /* rete ballerina: si riprova al prossimo giro */ }
+      }
+      timer = setTimeout(giro, CONTROLLA_OGNI_MS);
+    };
+    timer = setTimeout(giro, CONTROLLA_OGNI_MS);
+    return () => { spento = true; if (timer) clearTimeout(timer); };
+  }, [fase, lavoro, vai]);
+
   async function copia() {
     if (!link) return;
     try {
@@ -91,6 +134,10 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null }: {
           <p className={c('errore')}>Il link del preventivo non si legge da qui: lo trovi in Admin → Preventivi col link.</p>
         )}
         <p className={c('nota')}>Per ora l’abbonamento si paga in contanti, di persona, al primo servizio.</p>
+        {attesa === 'controllo' && <p className={c('nota')}>Controllo da solo, ogni 10 secondi, se il titolare ha confermato: appena conferma ti porto alla pagina «Adesso tocca a SDG».</p>}
+        {attesa === 'confermato' && <p>Il titolare ha confermato. <a href={paginaDiSdg(lavoro)}>Adesso tocca a SDG →</a></p>}
+        {attesa === 'chiuso' && <p className={c('errore')}>Questo preventivo è stato chiuso: scrivi a Nicola.</p>}
+        {attesa === 'smesso' && <p className={c('nota')}>Ho smesso di controllare. Quando il titolare conferma, ricarica la pagina: la trovi fra «Hanno confermato».</p>}
       </section>
     );
   }

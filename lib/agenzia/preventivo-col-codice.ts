@@ -10,6 +10,7 @@ import { campiPerIlProfilo, leggiSchedaSalvata } from '@/lib/agenzia/scheda-clie
 import { leggiSchedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
 import { pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
 import { sbloccaInContanti, sbloccoRiuscito } from '@/lib/agenzia/abbonamento-contanti';
+import { creaOrdineSdg } from '@/lib/agenzia/ordine-sdg';
 
 /**
  * IL PREVENTIVO COL LINK COL CODICE — 24/11/2026.
@@ -170,6 +171,7 @@ export async function accettaPreventivoColCodice(input: {
     '/admin/preventivi',
     { unaVoltaPer: `preventivo-codice:${id}` },
   ).catch((e: unknown) => logger.warn('[preventivo-codice] avviso a Nicola non partito', { sellerId: id, errore: String(e) }));
+  await creaOrdineSdg({ sellerId: id, codice, fascia }); // 27/11/2026 — L'ordine di servizio arriva a SDG (lib/agenzia/ordine-sdg.ts): non lancia mai.
 
   // 4) Il titolare entra subito, se chi chiama lo sa fare. Se non riesce, resta l'email qui sotto.
   let entrato = false;

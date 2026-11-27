@@ -75,6 +75,24 @@ export function attivitaDallaScheda(scheda: Scheda): NuovaAttivita | null {
   return esito.success ? esito.data : null;
 }
 
+/**
+ * 27/11/2026 — Chi ha portato il cliente, scritto sul preventivo (migrazione 999c): la scheda dell'agente (`lavoro`)
+ * e la sua email. Serve a due cose: la pagina dell'agente sa quando il titolare conferma e lo porta a «Adesso tocca
+ * a SDG», e l'ordine di servizio per SDG dice quale agente l'ha portato (lib/agenzia/ordine-sdg.ts). Si scrive solo a
+ * preventivo aperto: chi preme «Sì, aggiungi» per ultimo prima della conferma è chi segue il cliente. Senza la 999c
+ * la colonna non c'è: si va avanti senza, e l'agente ha il suo link come prima. Vero se è scritto.
+ */
+export async function segnaChiHaPortatoIlCliente(admin: SupabaseClient, idAttivita: string, chi: { lavoro: string; agenteEmail: string }): Promise<boolean> {
+  const email = chi.agenteEmail.trim().toLowerCase();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chi.lavoro) || !email.includes('@')) return false;
+  try {
+    const { error } = await admin.from('preventivi_con_codice').update({ lavoro: chi.lavoro.toLowerCase(), agente_email: email }).eq('seller_id', idAttivita).eq('stato', 'aperto');
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 /** Il link del preventivo col codice di un'attività, o `null` se il link non c'è o non si legge. */
 export async function linkDelPreventivo(admin: SupabaseClient, idAttivita: string): Promise<string | null> {
   const { data, error } = await admin.from('preventivi_con_codice').select('codice').eq('seller_id', idAttivita).maybeSingle();

@@ -1736,6 +1736,72 @@ export interface Database {
         };
         Relationships: [];
       };
+      ordini_sdg: {
+        Row: {
+          id: string;
+          seller_id: string;
+          nome_attivita: string;
+          dati_attivita: Json;
+          fascia: string;
+          canone_centesimi: number | null;
+          primo_mese_centesimi: number | null;
+          visita_il: string | null;
+          agente_email: string | null;
+          lavoro: string | null;
+          accettato_il: string | null;
+          piano: Json;
+          piano_origine: string;
+          piano_completo_stato: string;
+          lavoro_piano: string | null;
+          piano_completo_errore: string | null;
+          piano_completo_il: string | null;
+          creato_il: string;
+          aggiornato_il: string;
+        };
+        Insert: {
+          id?: string;
+          seller_id: string;
+          nome_attivita: string;
+          dati_attivita?: Json;
+          fascia: string;
+          canone_centesimi?: number | null;
+          primo_mese_centesimi?: number | null;
+          visita_il?: string | null;
+          agente_email?: string | null;
+          lavoro?: string | null;
+          accettato_il?: string | null;
+          piano: Json;
+          piano_origine?: string;
+          piano_completo_stato?: string;
+          lavoro_piano?: string | null;
+          piano_completo_errore?: string | null;
+          piano_completo_il?: string | null;
+          creato_il?: string;
+          aggiornato_il?: string;
+        };
+        Update: {
+          id?: string;
+          seller_id?: string;
+          nome_attivita?: string;
+          dati_attivita?: Json;
+          fascia?: string;
+          canone_centesimi?: number | null;
+          primo_mese_centesimi?: number | null;
+          visita_il?: string | null;
+          agente_email?: string | null;
+          lavoro?: string | null;
+          accettato_il?: string | null;
+          piano?: Json;
+          piano_origine?: string;
+          piano_completo_stato?: string;
+          lavoro_piano?: string | null;
+          piano_completo_errore?: string | null;
+          piano_completo_il?: string | null;
+          creato_il?: string;
+          aggiornato_il?: string;
+        };
+        Relationships: [];
+      };
       payment_attempts: {
         Row: {
           id: string;
@@ -1862,6 +1928,8 @@ export interface Database {
           creato_il: string;
           accettato_il: string | null;
           condizioni_accettate_il: string | null;
+          lavoro: string | null;
+          agente_email: string | null;
         };
         Insert: {
           seller_id: string;
@@ -1871,6 +1939,8 @@ export interface Database {
           creato_il?: string;
           accettato_il?: string | null;
           condizioni_accettate_il?: string | null;
+          lavoro?: string | null;
+          agente_email?: string | null;
         };
         Update: {
           seller_id?: string;
@@ -1880,6 +1950,8 @@ export interface Database {
           creato_il?: string;
           accettato_il?: string | null;
           condizioni_accettate_il?: string | null;
+          lavoro?: string | null;
+          agente_email?: string | null;
         };
         Relationships: [];
       };
