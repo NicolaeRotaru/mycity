@@ -111,6 +111,24 @@ const TENTATIVI_STORNO_CREDITO = 3;
 const PAUSA_STORNO_CREDITO_MS = 200;
 
 /**
+ * R06-008 — Dopo un rimborso caduto: sull'ordine adesso risulta reso (o prenotato) tutto il totale,
+ * e più di quanto aveva letto chi annulla? Allora l'ha fatto un altro annullo nel frattempo. Un reso
+ * parziale arrivato in mezzo non basta: lì l'ordine resta vivo e il rimborso è fallito davvero.
+ * Nel dubbio (lettura caduta) no: si risponde come prima.
+ */
+async function resoTuttoDaUnAltro(admin: SupabaseClient, order: OrdineDaAnnullare): Promise<boolean> {
+  try {
+    const { data, error } = await admin.from('orders').select('total_price, refunded_amount_cents').eq('id', order.id).maybeSingle();
+    if (error || !data) return false;
+    const adesso = data as { total_price?: number | string | null; refunded_amount_cents?: number | null };
+    const reso = Number(adesso.refunded_amount_cents ?? 0);
+    return reso > Number(order.refunded_amount_cents ?? 0) && reso >= Math.round(Number(adesso.total_price ?? 0) * 100);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Porta l'ordine ad annullato e rimette a posto il denaro: rimborso sulla carta
  * se era pagato, credito MyCity restituito se ne era stato usato, merce a
  * magazzino. NON decide CHI può annullare: quello resta a chi la chiama.
@@ -309,6 +327,7 @@ export async function annullaERimborsa(
     }
 
     let giro: GiroDelCarrello | null = null;
+    let rimborsoUscito = false;
     try {
       // 30/10/2026 — Prima si rifà la consegna dei negozi rimasti: il rimborso rende il totale nuovo.
       giro = await ricalcolaLaConsegnaDelGiro(admin, order.id);
@@ -325,6 +344,7 @@ export async function annullaERimborsa(
         notifyBuyer: false,
         ...(merceUscita ? { merceNonTorna: true } : {}),
       });
+      rimborsoUscito = true;
       await avvisaIlClienteDelRimborso(admin, order, res.importoCents, opts.reason);
       // refundOrder ha già impostato CANCELED + canceled_at + payment_status.
       //
@@ -357,6 +377,20 @@ export async function annullaERimborsa(
         ...(creditoNonTornato > 0 ? { creditoNonTornatoCents: creditoNonTornato } : {}),
       };
     } catch (err) {
+      // 27/11/2026 (R06-008) — IL DOPPIO TOCCO NON È UN RIMBORSO FALLITO.
+      // Due tocchi su «Annulla» con la carta: il primo prenota il rimborso, il secondo trova il tetto
+      // pieno e `refundOrder` lancia («già registrato», o «importo non valido» se il primo ha finito).
+      // Qui si rispondeva «rimborso fallito» a chi aveva toccato, e la `rimetti` del secondo, che aveva
+      // scritto il suo segno col rimborsato letto prima, trovava la riga cambiata dal primo e mandava
+      // agli amministratori un falso «Carrello da sistemare a mano». Se adesso sull'ordine risulta reso
+      // tutto, e più di quanto aveva letto chi annulla, i soldi li ha già presi un altro annullo: lo si
+      // dice (GIA_ANNULLATO) e il carrello resta com'è, quello su cui il primo ha fatto il rimborso.
+      if (!rimborsoUscito && (await resoTuttoDaUnAltro(admin, order))) {
+        logger.info('[annullaERimborsa] doppio annullo: il rimborso l ha già preso un altro annullo dello stesso ordine', {
+          orderId: order.id, err: err instanceof Error ? err.message : String(err),
+        });
+        return { ok: false, motivo: 'GIA_ANNULLATO' };
+      }
       logger.error('[annullaERimborsa] rimborso fallito', { orderId: order.id, err });
       // 30/10/2026 (collaudo) — Il rimborso non è partito e l'ordine resta vivo: la consegna del
       // carrello torna com'era. Senza, il pane restava a 1 € di consegna e il fattorino a 0.
