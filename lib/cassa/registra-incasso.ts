@@ -330,6 +330,8 @@ export async function chiudiConsegnaDaAmministratore(
   });
   if (error) {
     if (funzioneDellaChiusuraMancante(error)) return rifiutoDellaChiusura('FUNZIONE_ASSENTE');
+    // Senza sessione (anon) la 360 non si può nemmeno chiamare: è un «non sei amministratore», non un guasto.
+    if (error.code === '42501') return rifiutoDellaChiusura('NOT_ADMIN');
     logger.error('[admin] chiusura della consegna non riuscita', { orderId: richiesta.ordineId, message: error.message });
     return rifiutoDellaChiusura('ERRORE');
   }
