@@ -12,7 +12,13 @@ import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import AnalisiDelBusiness from '@/components/seller/AnalisiDelBusiness';
 import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
+import SitoConsegnato from '@/components/seller/lavoro-consegnato/SitoConsegnato';
+import PianoEditorialeConsegnato from '@/components/seller/lavoro-consegnato/PianoEditorialeConsegnato';
+import AnalisiConsegnata from '@/components/seller/lavoro-consegnato/AnalisiConsegnata';
+import { parteDaMostrare } from '@/lib/agenzia/lavoro-consegnato/quale-parte';
 import {
+  CHIAVE_LAVORO_CONSEGNATO,
+  leggiLavoroConsegnato,
   CHIAVE_BOZZA_AD,
   CHIAVE_PREVENTIVO,
   CHIAVE_SCHEDA_E_APERTA,
@@ -51,6 +57,10 @@ export default function PaginaDelServizio() {
   const haPagato: boolean | null = schedaEAbbonamento ? schedaEAbbonamento.aperta : null;
   // 24/11/2026 — La bozza del sito scritta dall'AD, se c'è: la pagina «Sito web» mostra quella.
   const { data: bozzaAd } = useQuery({ queryKey: CHIAVE_BOZZA_AD, queryFn: leggiBozzaDellAd, enabled: id === 'sito_web' });
+  // 27/11/2026 — Chi ha già il lavoro Premium consegnato (oggi solo SDG) vede quello, non il preventivo.
+  // Se la lettura fallisce (`lavoroInErrore`) resta la pagina di sempre: mai una pagina vuota.
+  const { data: lavoro, isLoading: lavoroInLettura } = useQuery({ queryKey: CHIAVE_LAVORO_CONSEGNATO, queryFn: leggiLavoroConsegnato, retry: false });
+  const parte = parteDaMostrare(id, lavoro);
   const voce = LISTINO[id];
   const riga = p?.righe.find((r) => r.id === id) ?? null;
   const giaAPosto = !!p && !riga && p.giaAPosto.includes(id);
@@ -62,6 +72,16 @@ export default function PaginaDelServizio() {
       {/* Il partner che realizza il servizio (Nicola, 24/11): nella pagina, non nel menu. */}
       <p className="mb-4 text-sm font-semibold text-primary-700">{FRASE_PARTNER}</p>
 
+      {lavoroInLettura ? (
+        <LoadingState />
+      ) : parte && lavoro ? (
+        <>
+          {parte === 'sito' && lavoro.sito && <SitoConsegnato sito={lavoro.sito} />}
+          {parte === 'social' && lavoro.social && <PianoEditorialeConsegnato social={lavoro.social} />}
+          {parte === 'analisi' && lavoro.analisi && <AnalisiConsegnata analisi={lavoro.analisi} />}
+        </>
+      ) : (
+        <>
       {isLoading && <LoadingState />}
 
       {isError && (
@@ -128,6 +148,8 @@ export default function PaginaDelServizio() {
             </Button>
           </div>
         </section>
+      )}
+        </>
       )}
     </div>
   );

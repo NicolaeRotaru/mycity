@@ -174,10 +174,10 @@ describe('la cassa dell abbonamento dei servizi', () => {
     expect(((await r.json()) as { data: { url: string } }).data.url).toBe('https://checkout.stripe.com/c/pay/cs_1');
     const s = stato.sessioni[0] as Record<string, any>;
     expect(s.mode).toBe('subscription');
-    expect(s.line_items[0].price_data).toMatchObject({ currency: 'eur', unit_amount: 50000, recurring: { interval: 'month' } });
+    expect(s.line_items[0].price_data).toMatchObject({ currency: 'eur', unit_amount: 60000, recurring: { interval: 'month' } });
     expect(s.line_items[0].price_data.product_data.description).toContain('SDG Agenzia');
     expect(s.discounts).toEqual([{ coupon: 'mycity-servizi-primo-mese-meta' }]);
-    expect(s.metadata).toEqual({ kind: 'servizi_subscription', seller_id: 'negozio-1', fascia: 'business', canone_centesimi: '50000', negozio: 'Ora del Gusto' });
+    expect(s.metadata).toEqual({ kind: 'servizi_subscription', seller_id: 'negozio-1', fascia: 'business', canone_centesimi: '60000', negozio: 'Ora del Gusto' });
     expect(s.subscription_data.metadata).toEqual(s.metadata);
     // il cliente Stripe dei servizi, nuovo e segnato col negozio (non quello della vetrina)
     expect(s.customer).toBe('cus_nuovo');
@@ -186,7 +186,7 @@ describe('la cassa dell abbonamento dei servizi', () => {
     expect(s.expires_at - Math.floor(Date.now() / 1000)).toBeGreaterThanOrEqual(30 * 60); // la cassa scade presto
     expect(s.success_url).toBe('https://www.mycity-marketplace.com/seller/abbonamento?pagato=1');
     expect(s.cancel_url).toBe('https://www.mycity-marketplace.com/seller/abbonamento?pagato=0');
-    expect(String(stato.opzioniSessioni[0].idempotencyKey)).toMatch(/^servizi:negozio-1:business:50000:abbonamento:\d+$/);
+    expect(String(stato.opzioniSessioni[0].idempotencyKey)).toMatch(/^servizi:negozio-1:business:60000:abbonamento:\d+$/);
   });
 
   it('il canone lo decide il server: un prezzo mandato dal browser non conta', async () => {
@@ -204,7 +204,7 @@ describe('la cassa dell abbonamento dei servizi', () => {
   it('una cassa aperta della stessa fascia si ridà; una di un altra fascia si chiude prima di aprirne una nuova (collaudo)', async () => {
     stato.clienti = [{ id: 'cus_servizi', metadata: { kind: 'servizi_subscription', seller_id: 'negozio-1' } }];
     // 24/11 — Stripe ridà anche l'indirizzo di ritorno: si riusa solo una cassa che torna allo stesso posto.
-    stato.casseAperte = [{ id: 'cs_vecchia', url: 'https://checkout.stripe.com/c/pay/cs_vecchia', success_url: 'https://www.mycity-marketplace.com/seller/abbonamento?pagato=1', metadata: { kind: 'servizi_subscription', fascia: 'business', canone_centesimi: '50000' } }];
+    stato.casseAperte = [{ id: 'cs_vecchia', url: 'https://checkout.stripe.com/c/pay/cs_vecchia', success_url: 'https://www.mycity-marketplace.com/seller/abbonamento?pagato=1', metadata: { kind: 'servizi_subscription', fascia: 'business', canone_centesimi: '60000' } }];
     const r = await paga({ abbonamento: 'business' });
     expect(((await r.json()) as { data: { url: string } }).data.url).toBe('https://checkout.stripe.com/c/pay/cs_vecchia');
     expect(stato.sessioni).toHaveLength(0);
@@ -216,7 +216,7 @@ describe('la cassa dell abbonamento dei servizi', () => {
 
   it('una cassa aperta dal link col codice non si ridà nella dashboard: si chiude e se ne apre una nuova (collaudo del 24/11)', async () => {
     stato.clienti = [{ id: 'cus_servizi', metadata: { kind: 'servizi_subscription', seller_id: 'negozio-1' } }];
-    stato.casseAperte = [{ id: 'cs_link', url: 'https://checkout.stripe.com/c/pay/cs_link', success_url: 'https://www.mycity-marketplace.com/preventivo/abc?pagato=1', metadata: { kind: 'servizi_subscription', fascia: 'business', canone_centesimi: '50000' } }];
+    stato.casseAperte = [{ id: 'cs_link', url: 'https://checkout.stripe.com/c/pay/cs_link', success_url: 'https://www.mycity-marketplace.com/preventivo/abc?pagato=1', metadata: { kind: 'servizi_subscription', fascia: 'business', canone_centesimi: '60000' } }];
     const r = await paga({ abbonamento: 'business' });
     expect(((await r.json()) as { data: { url: string } }).data.url).not.toBe('https://checkout.stripe.com/c/pay/cs_link');
     expect(stato.casseChiuse).toEqual(['cs_link']);

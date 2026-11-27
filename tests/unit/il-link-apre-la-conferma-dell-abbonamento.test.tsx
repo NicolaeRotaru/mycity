@@ -178,8 +178,8 @@ describe('il link apre la conferma, non la demo', () => {
     // Il marchio riporta al sito, e si dice come si paga.
     expect(r.querySelector('a[href="/"]')?.textContent).toBe('MyCity');
     expect(r.textContent).toContain('si paga in contanti');
-    // Il primo mese a metà, detto una volta sola: «Il primo mese 250,00 €», non «… € al mese».
-    expect(r.querySelector('[data-fascia="business"]')?.textContent).toMatch(/Il primo mese 250,00\s€(?! al mese)/);
+    // Il primo mese a metà, detto una volta sola: «Il primo mese 300,00 €», non «… € al mese».
+    expect(r.querySelector('[data-fascia="business"]')?.textContent).toMatch(/Il primo mese 300,00\s€(?! al mese)/);
   });
 
   it('vale la fascia del venditore anche quando non è la consigliata (collaudo: la prova deve vederlo)', async () => {

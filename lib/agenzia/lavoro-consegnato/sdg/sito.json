@@ -1,0 +1,105 @@
+{
+  "titolo": "Il sito di SDG Agenzia — versione Premium",
+  "aggiornato_il": "2026-11-27T18:30:00+01:00",
+  "stato": "da_pubblicare",
+  "indirizzo": null,
+  "codice": "https://github.com/NicolaeRotaru/SDG",
+  "pagine": [
+    {
+      "titolo": "Home",
+      "percorso": "/",
+      "cosa_contiene": "Il problema del titolare di un'attività di Piacenza in parole sue, la promessa «ci occupiamo di tutto il tuo online, tu pensi alla tua attività» (clienti tuoi, niente app nuove, primo risultato in 2-4 settimane), cinque passi, i servizi, i tre abbonamenti in breve, un riquadro onesto sui lavori, domande frequenti e invito alla diagnosi gratuita."
+    },
+    {
+      "titolo": "Abbonamenti",
+      "percorso": "/abbonamenti",
+      "cosa_contiene": "Base 300 €, Business 600 €, Premium 900 € al mese (primo mese a metà: 150, 300, 450 €) con tutto ciò che comprende ognuno, Premium in evidenza, e le condizioni: nessun vincolo, disdetta con 30 giorni di preavviso."
+    },
+    {
+      "titolo": "Servizi",
+      "percorso": "/servizi",
+      "cosa_contiene": "I cinque servizi veri: Foto e video, Sito web, Gestione social, Scheda Google Maps, Analisi del business."
+    },
+    {
+      "titolo": "Pagina di ogni servizio",
+      "percorso": "/servizi/[servizio]",
+      "cosa_contiene": "Cosa comprende il servizio e cosa ne ricevi in Base, Business e Premium (5 pagine)."
+    },
+    {
+      "titolo": "Come lavoriamo",
+      "percorso": "/come-lavoriamo",
+      "cosa_contiene": "Il percorso in cinque passi dalla diagnosi gratuita al rapporto dell'imprenditore, cosa c'è nel rapporto e le regole: esce solo dopo l'ok, i clienti restano tuoi."
+    },
+    {
+      "titolo": "Chi siamo",
+      "percorso": "/chi-siamo",
+      "cosa_contiene": "Chi è SDG, il legame con MyCity e con il partner scattiDG, i quattro principi di lavoro."
+    },
+    {
+      "titolo": "Contatti",
+      "percorso": "/contatti",
+      "cosa_contiene": "Modulo per la diagnosi gratuita (si accende solo con email o WhatsApp compilati) e pulsante WhatsApp visibile solo se il numero è compilato."
+    },
+    {
+      "titolo": "Lavori",
+      "percorso": "/lavori",
+      "cosa_contiene": "Riquadro onesto «I primi lavori arrivano a dicembre». Nascosta ai motori di ricerca finché non ci sono lavori veri."
+    }
+  ],
+  "cosa_ha_di_premium": [
+    "Scritto per tutte le attività locali di Piacenza (negozi, bar e ristoranti, artigiani, estetiste e parrucchieri, palestre, studi, B&B), con la loro lingua e il loro problema",
+    "Pagina Abbonamenti con i tre prezzi (300, 600, 900 € al mese) e Premium in evidenza",
+    "Niente di inventato: tolti lavori finti, clienti, numeri, email e contatti segnaposto",
+    "Dati strutturati per Google (ProfessionalService con area Piacenza e le tre offerte), sitemap e robots aggiornati, titoli e descrizioni in italiano per ogni pagina, anteprima social coerente",
+    "Accessibilità: contrasti alzati, focus visibile da tastiera, collegamento «Vai al contenuto», animazioni ferme per chi le disattiva",
+    "Pensato per il telefono: provato a 390 px senza scorrimento laterale",
+    "Pulsante WhatsApp pronto: basta compilare il numero in src/lib/site.ts"
+  ],
+  "da_confermare": [
+    {
+      "voce": "Email dell'agenzia",
+      "perche": "il vecchio indirizzo ciao@sdg-agenzia.it era un segnaposto inventato: ora è vuoto e il modulo resta spento finché non c'è un'email o un numero WhatsApp"
+    },
+    {
+      "voce": "Numero WhatsApp",
+      "perche": "campo whatsapp vuoto in src/lib/site.ts: finché è vuoto il pulsante non si vede"
+    },
+    {
+      "voce": "Telefono",
+      "perche": "facoltativo, vuoto: non viene mostrato"
+    },
+    {
+      "voce": "Link ai social (Instagram, TikTok, Facebook, LinkedIn)",
+      "perche": "vuoti: non vengono mostrati né inseriti nei dati per Google"
+    },
+    {
+      "voce": "Dominio",
+      "perche": "non c'è ancora un indirizzo definitivo: va messo in NEXT_PUBLIC_SITE_URL su Vercel, serve a sitemap e anteprime"
+    },
+    {
+      "voce": "Foto vere e primi lavori",
+      "perche": "non ci sono foto vere né lavori consegnabili: arrivano a dicembre, solo col permesso dei titolari"
+    },
+    {
+      "voce": "Prezzi con o senza IVA",
+      "perche": "il sito dice 300, 600 e 900 € al mese ma non se l'IVA è inclusa; i testi degli abbonamenti sul sito vanno allineati a MyCity"
+    }
+  ],
+  "prossimi_passi": [
+    {
+      "cosa": "Compilare email e numero WhatsApp (e i link social veri) in src/lib/site.ts",
+      "chi": "Nicola",
+      "colore": "giallo"
+    },
+    {
+      "cosa": "Pubblicarlo su Vercel (Add New Project, scegliere il repository SDG, Deploy) e impostare il dominio",
+      "chi": "Nicola",
+      "colore": "rosso"
+    },
+    {
+      "cosa": "Aggiungere i primi lavori veri a dicembre, col permesso dei titolari",
+      "chi": "Nicola",
+      "colore": "giallo"
+    }
+  ]
+}

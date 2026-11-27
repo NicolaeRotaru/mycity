@@ -1,0 +1,807 @@
+{
+  "titolo": "Piano editoriale Premium di SDG — dicembre 2026",
+  "fascia": "premium",
+  "mese": "2026-12",
+  "aggiornato_il": "2026-11-27T16:30:00+01:00",
+  "obiettivo": "Far conoscere SDG ai titolari di attività di Piacenza (negozi, bar, studi, palestre, B&B) come l'agenzia che si occupa di tutto il loro online, e portare 8 richieste di diagnosi gratuita e 10 messaggi WhatsApp nel primo mese. Sono obiettivi, non promesse.",
+  "a_chi_parliamo": "Ai titolari di tutte le attività locali di Piacenza che hanno bisogno di digitalizzarsi: negozi, bar e ristoranti, artigiani, estetiste e parrucchieri, palestre, studi professionali, B&B e strutture. SDG gestisce tutto il loro online; loro pensano all'attività. Poco tempo, nessuna voglia di imparare app nuove: parliamo di clienti, incassi e tempo risparmiato, non di tecnologia. In più, su LinkedIn, ad aziende e associazioni di categoria che hanno una rete di commercianti.",
+  "canali": [
+    {
+      "nome": "Instagram",
+      "account": null,
+      "ruolo": "Vetrina dell'agenzia: reel, caroselli e storie quotidiane. Il titolare ci guarda come guarda un collega, e vede il nostro lavoro.",
+      "da_aprire": true
+    },
+    {
+      "nome": "Facebook",
+      "account": null,
+      "ruolo": "Gli stessi contenuti di Instagram, pubblicati insieme: Facebook è ancora molto usato dai titolari di attività locali.",
+      "da_aprire": true
+    },
+    {
+      "nome": "Scheda Google",
+      "account": null,
+      "ruolo": "Un post alla settimana circa (12 nel mese) più 15 foto nuove: chi cerca «agenzia social Piacenza» deve trovare una scheda viva. È anche la nostra prova: facciamo a noi quello che consigliamo a loro.",
+      "da_aprire": true
+    },
+    {
+      "nome": "LinkedIn",
+      "account": null,
+      "ruolo": "Un post a settimana per aziende e associazioni di categoria: sono loro che possono portarci tante attività insieme.",
+      "da_aprire": true
+    },
+    {
+      "nome": "TikTok",
+      "account": null,
+      "ruolo": "Non si gira niente di apposta: i reel di Instagram si riusano. Serve a farci trovare, non a vendere.",
+      "da_aprire": true
+    },
+    {
+      "nome": "Lista WhatsApp",
+      "account": null,
+      "ruolo": "Due messaggi al mese solo a chi ha detto sì alla lista. È il canale dove il titolare risponde davvero. Opt-out sempre chiaro.",
+      "da_aprire": true
+    }
+  ],
+  "pilastri": [
+    {
+      "nome": "Diagnosi in un minuto",
+      "percentuale": 20,
+      "descrizione": "Il pilastro che porta richieste: la diagnosi gratuita e il rapporto dell'imprenditore, spiegati in modo semplice."
+    },
+    {
+      "nome": "Prima e dopo",
+      "percentuale": 15,
+      "descrizione": "Lavori fatti, mostrati prima e dopo. Servono il consenso scritto del cliente (mai il nome nel post) oppure lavori fatti da SDG su se stessa."
+    },
+    {
+      "nome": "Il tempo del titolare",
+      "percentuale": 35,
+      "descrizione": "Consigli brevi e utili per il titolare con poco tempo: scheda Google, recensioni, orari delle feste, foto. Si salvano e si applicano in dieci minuti."
+    },
+    {
+      "nome": "Dietro le quinte e Piacenza",
+      "percentuale": 15,
+      "descrizione": "Chi siamo, come lavoriamo dentro un'attività, il Natale in centro a Piacenza. Mette un volto sull'agenzia."
+    },
+    {
+      "nome": "Abbonamenti e auguri",
+      "percentuale": 15,
+      "descrizione": "I tre abbonamenti (con parsimonia), il primo mese a metà, l'invito all'evento, gli auguri."
+    }
+  ],
+  "quantita": [
+    {
+      "voce": "Contenuti (post, caroselli, reel)",
+      "quanti": 20
+    },
+    {
+      "voce": "di cui reel",
+      "quanti": 8
+    },
+    {
+      "voce": "di cui reel girati nel negozio (almeno 4)",
+      "quanti": 5
+    },
+    {
+      "voce": "Storie (una ogni sera lavorativa)",
+      "quanti": 19
+    },
+    {
+      "voce": "Post su Google",
+      "quanti": 12
+    },
+    {
+      "voce": "Post LinkedIn",
+      "quanti": 4
+    },
+    {
+      "voce": "Messaggi WhatsApp alla lista",
+      "quanti": 2
+    }
+  ],
+  "calendario": [
+    {
+      "giorno": "2026-12-01",
+      "ora": "07:45",
+      "canale": "Instagram + Facebook + TikTok",
+      "formato": "Reel",
+      "pilastro": "Diagnosi in un minuto",
+      "titolo": "Reel: scrivi il nome della tua attività, in un minuto vedi cosa ti manca",
+      "testo": "Hai un'attività a Piacenza: negozio, bar, studio, palestra, B&B? Scrivi il nome e in un minuto vedi cosa ti manca online: scheda Google, foto, recensioni, sito. È gratis.\nLink in bio, oppure scrivici su WhatsApp.\n#piacenza #negozipiacenza",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-01",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Diagnosi in un minuto",
+      "titolo": "Diagnosi in un minuto",
+      "testo": "Hai un'attività a Piacenza? Scrivi il nome e in un minuto vedi cosa ti manca. Gratis. (sticker link)",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-02",
+      "ora": "08:15",
+      "canale": "LinkedIn",
+      "formato": "LinkedIn",
+      "pilastro": "Aziende e associazioni",
+      "titolo": "Per aziende e associazioni: le attività locali hanno poco tempo",
+      "testo": "Per le aziende e le associazioni di Piacenza: le attività del territorio (negozi, bar, studi, palestre, B&B) hanno poco tempo per il loro online. SDG Agenzia, partner di MyCity, se ne occupa per intero: foto, video, social, sito, scheda Google. Ogni cosa passa da un'anteprima approvata dal titolare.\nSe lavorate con attività locali, parliamone.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-02",
+      "ora": "13:30",
+      "canale": "Scheda Google",
+      "formato": "Post Google",
+      "pilastro": "Presenza su Google",
+      "titolo": "Novità: diagnosi gratuita",
+      "testo": "Diagnosi gratuita: scrivi il nome della tua attività e in un minuto vedi cosa ti manca su Google, sito e recensioni. Scrivici su WhatsApp per averla.",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-02",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Dietro le quinte e Piacenza",
+      "titolo": "Cosa serve per una buona foto",
+      "testo": "Per una buona foto di un banco servono luce, ordine e mezz'ora. Il resto lo facciamo noi.",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-03",
+      "ora": "13:15",
+      "canale": "Instagram + Facebook",
+      "formato": "Carosello",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Carosello: 5 cose da controllare sulla scheda Google prima di Natale",
+      "testo": "Prima di Natale, 5 controlli da 10 minuti sulla tua scheda Google: orari giusti, telefono, foto nuove, recensioni con risposta, un post della settimana.\nSfoglia e salva. Se non hai tempo, scrivici su WhatsApp: la guardiamo insieme.\n#piacenza #negozipiacenza",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-03",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Sondaggio recensioni",
+      "testo": "Rispondi alle recensioni dei clienti? (sondaggio: Sì sempre / Quando ho tempo)",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-04",
+      "ora": "13:30",
+      "canale": "Scheda Google",
+      "formato": "Post Google",
+      "pilastro": "Presenza su Google",
+      "titolo": "Foto e video per negozi e locali",
+      "testo": "Foto e video per negozi, bar, studi, palestre e B&B di Piacenza: veniamo da te e li facciamo mentre lavori. Scrivici su WhatsApp per un appuntamento.",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-04",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Orari del weekend",
+      "testo": "Weekend in arrivo: gli orari di sabato e domenica sono giusti su Google? Controlla adesso, ci vuole un minuto.",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-05",
+      "ora": "08:00",
+      "canale": "Instagram + Facebook",
+      "formato": "Post foto",
+      "pilastro": "Dietro le quinte e Piacenza",
+      "titolo": "Post foto: chi siamo (serve una foto vera del team SDG)",
+      "testo": "Siamo SDG Agenzia. Ci occupiamo di tutto il tuo online: foto, video, social, sito, scheda Google, recensioni. Per negozi, bar, studi, palestre, B&B e ogni attività di Piacenza.\nTu pensi alla tua attività: ogni cosa ti arriva in anteprima su WhatsApp prima di uscire, e approvi tu.\nScrivici per conoscerci.\n#piacenza #negozipiacenza",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-07",
+      "ora": "13:15",
+      "canale": "Instagram + Facebook + TikTok",
+      "formato": "Reel",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Reel (girato): gli orari delle feste vanno scritti adesso",
+      "testo": "24, 25, 26 e 31 dicembre: il cliente lo chiede prima di uscire di casa. Scrivi gli orari delle feste su Google, su Instagram e sul cartello in vetrina.\nCi vogliono cinque minuti e ti evitano porte chiuse in faccia. Non hai tempo? Scrivici su WhatsApp.\n#piacenza #negozipiacenza",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-07",
+      "ora": "13:30",
+      "canale": "Scheda Google",
+      "formato": "Post Google",
+      "pilastro": "Presenza su Google",
+      "titolo": "Tre controlli sulla scheda",
+      "testo": "La tua attività ha gli orari giusti su Google? Tre controlli in dieci minuti. Se vuoi una mano, scrivici su WhatsApp.",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-07",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Consiglio del lunedì",
+      "testo": "Un consiglio per questa settimana: metti una foto nuova sulla tua scheda Google. Una sola, oggi.",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-09",
+      "ora": "07:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Carosello",
+      "pilastro": "Prima e dopo",
+      "titolo": "Carosello: prima e dopo di una scheda Google (serve il consenso scritto del cliente, oppure usare un lavoro di SDG)",
+      "testo": "Prima e dopo: la scheda Google di un'attività di Piacenza. Foto nuove, orari giusti, risposte alle recensioni. Niente di complicato: è ordine, fatto con costanza.\nVuoi sapere cosa cambierebbe nella tua? Diagnosi gratuita, link in bio.\n#piacenza #negozipiacenza",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-09",
+      "ora": "08:30",
+      "canale": "Lista WhatsApp",
+      "formato": "WhatsApp",
+      "pilastro": "Abbonamenti e auguri",
+      "titolo": "Messaggio WhatsApp: invito alla diagnosi dal vivo",
+      "testo": "Ciao, sono SDG Agenzia. Lunedì 14 dicembre, di mattina, facciamo la diagnosi dal vivo per i titolari di Piacenza: in dieci minuti ti diciamo cosa manca alla tua attività. Gratis. Vuoi un posto? Rispondi SÌ. Per non ricevere più messaggi rispondi STOP. (solo a chi ha detto sì alla lista; solo se l'evento è confermato)",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-09",
+      "ora": "13:30",
+      "canale": "Scheda Google",
+      "formato": "Post Google",
+      "pilastro": "Presenza su Google",
+      "titolo": "Diagnosi dal vivo il 14 dicembre",
+      "testo": "Lunedì 14 dicembre, di mattina: diagnosi dal vivo per i titolari di Piacenza. Gratis. Scrivici su WhatsApp per prenotare un posto. (solo se l'evento è confermato)",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-09",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Abbonamenti e auguri",
+      "titolo": "Diagnosi dal vivo",
+      "testo": "Lunedì 14 dicembre, di mattina: diagnosi dal vivo. Scrivici su WhatsApp per un posto. (solo se l'evento è confermato)",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-10",
+      "ora": "08:15",
+      "canale": "LinkedIn",
+      "formato": "LinkedIn",
+      "pilastro": "Aziende e associazioni",
+      "titolo": "Tre cose che controlliamo sulla scheda Google",
+      "testo": "La scheda Google è una delle vetrine che i clienti guardano per prime. Tre cose che controlliamo sempre: orari, foto, risposte alle recensioni.\nSe avete una rete di clienti con un'attività locale, vi mostriamo la diagnosi gratuita.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-10",
+      "ora": "13:15",
+      "canale": "Instagram + Facebook",
+      "formato": "Post foto",
+      "pilastro": "Abbonamenti e auguri",
+      "titolo": "Post foto: lunedì 14 dicembre, diagnosi dal vivo (solo se Nicola conferma l'evento)",
+      "testo": "Lunedì 14 dicembre, di mattina: porta il nome della tua attività e la guardiamo insieme, dal vivo, in dieci minuti. Gratis, posti limitati.\nScrivici su WhatsApp per prenotare il tuo posto: ti diciamo orario e luogo.\n#piacenza #negozipiacenza",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-10",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Sondaggio messaggi",
+      "testo": "Quanti messaggi ricevi in un giorno sul telefono dell'attività? (sondaggio: Meno di 5 / Più di 5)",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-11",
+      "ora": "13:30",
+      "canale": "Scheda Google",
+      "formato": "Post Google",
+      "pilastro": "Presenza su Google",
+      "titolo": "Social, sito e scheda Google",
+      "testo": "Ci occupiamo di tutto il tuo online: social, sito, scheda Google, recensioni. Anteprima su WhatsApp prima che esca ogni cosa, nessun vincolo. Tu pensi alla tua attività.",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-11",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook + TikTok",
+      "formato": "Reel",
+      "pilastro": "Dietro le quinte e Piacenza",
+      "titolo": "Reel (girato): come lavoriamo dentro un'attività",
+      "testo": "Come lavoriamo: veniamo da te, facciamo foto e video della tua attività mentre lavori, poi pensiamo noi a tutto il tuo online: social, sito, scheda Google.\nTu non devi imparare niente, pensi alla tua attività. Scrivici su WhatsApp e ci mettiamo d'accordo.\n#piacenza #negozipiacenza",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-11",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Dietro le quinte e Piacenza",
+      "titolo": "Dietro le quinte",
+      "testo": "Dietro le quinte: la prima mezz'ora in un'attività, che sia un bar, uno studio o una palestra. Sistemiamo la luce, spostiamo due cose, scattiamo.",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-12",
+      "ora": "08:00",
+      "canale": "Instagram + Facebook + TikTok",
+      "formato": "Reel",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Reel: le 4 domande che il cliente si fa prima di venire",
+      "testo": "Prima di uscire di casa il cliente si chiede: è aperto? Dov'è? Quanto costa? Cosa dicono gli altri?\nSe sulla tua scheda Google la risposta non c'è, va dal vicino. Ti diciamo cosa manca alla tua: diagnosi gratuita, link in bio.\n#piacenza #negozipiacenza",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-14",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Abbonamenti e auguri",
+      "titolo": "Oggi diagnosi dal vivo",
+      "testo": "Oggi è il giorno della diagnosi dal vivo. Se non riesci a venire, scrivici su WhatsApp. (solo se l'evento si fa; altrimenti sostituire con un consiglio)",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-15",
+      "ora": "13:15",
+      "canale": "Instagram + Facebook + TikTok",
+      "formato": "Reel",
+      "pilastro": "Diagnosi in un minuto",
+      "titolo": "Reel (girato): le tre cose da guardare per prime (solo se l'evento del 14 si è fatto)",
+      "testo": "Lunedì mattina abbiamo guardato insieme le schede Google di chi è venuto. Tre cose da controllare per prime: foto, orari, recensioni senza risposta.\nVuoi la diagnosi della tua attività? Gratis, link in bio.\n#piacenza #negozipiacenza",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-15",
+      "ora": "13:30",
+      "canale": "Scheda Google",
+      "formato": "Post Google",
+      "pilastro": "Presenza su Google",
+      "titolo": "Offerta: primo mese a metà",
+      "testo": "Il primo mese di abbonamento costa la metà. Base 300 €, Business 600 €, Premium 900 € al mese, disdetta con 30 giorni di preavviso. Il primo mese: 150, 300 o 450 €.",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-15",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Rispondi all'ultima recensione",
+      "testo": "Una cosa da fare oggi: rispondi alla tua ultima recensione. Un minuto, non di più.",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-16",
+      "ora": "07:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Post foto",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Post foto: rispondi alle recensioni, ci vuole un minuto",
+      "testo": "Una recensione senza risposta è un cliente che nessuno ha salutato. Ringrazia, anche quando è brutta: chi legge guarda come rispondi.\nSe non hai tempo, ti prepariamo le risposte e le approvi con un tocco su WhatsApp.\n#piacenza #negozipiacenza",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-16",
+      "ora": "08:15",
+      "canale": "LinkedIn",
+      "formato": "LinkedIn",
+      "pilastro": "Aziende e associazioni",
+      "titolo": "Il rapporto dell'imprenditore",
+      "testo": "Il rapporto dell'imprenditore: un'analisi in 12 parti per un'attività locale, con Google, recensioni, concorrenti, zona, sito, social e calendario della città.\nSi può offrire ai soci di un'associazione. Scriveteci.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-16",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Quanto tempo perdi sui social",
+      "testo": "Quanto tempo perdi ogni settimana per i social? (cursore: 0-1 ore / 2-4 ore / di più)",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-17",
+      "ora": "13:15",
+      "canale": "Instagram + Facebook",
+      "formato": "Carosello",
+      "pilastro": "Prima e dopo",
+      "titolo": "Carosello: prima e dopo delle foto di un locale (serve il consenso scritto del cliente, oppure usare un lavoro di SDG)",
+      "testo": "Le foto sono la prima cosa che vede chi ti cerca. A sinistra prima, a destra dopo: stessa porta, stessa vetrina, altra impressione.\nVuoi foto nuove della tua attività prima di fine anno? Scrivici su WhatsApp.\n#piacenza #negozipiacenza",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-17",
+      "ora": "13:30",
+      "canale": "Scheda Google",
+      "formato": "Post Google",
+      "pilastro": "Presenza su Google",
+      "titolo": "Il rapporto dell'imprenditore",
+      "testo": "Il rapporto dell'imprenditore: 12 parti su Google, recensioni, concorrenti, zona, sito e social. Chiedilo su WhatsApp.",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-17",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Più clienti o più tempo",
+      "testo": "A Natale cosa ti serve di più: più clienti o più tempo? (sondaggio)",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-18",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook + TikTok",
+      "formato": "Reel",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Reel: 3 errori che fanno perdere clienti a Natale",
+      "testo": "3 errori che fanno perdere clienti a Natale: orari vecchi su Google, foto d'estate, nessuno che risponde ai messaggi.\nSi sistemano in una mattina. Diagnosi gratuita, link in bio.\n#piacenza #negozipiacenza",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-18",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Ultimo weekend prima di Natale",
+      "testo": "Ultimo weekend prima di Natale: foto nuova in vetrina e orari aggiornati. Due minuti, ne vale la pena.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-19",
+      "ora": "08:00",
+      "canale": "Instagram + Facebook",
+      "formato": "Post foto",
+      "pilastro": "Abbonamenti e auguri",
+      "titolo": "Post foto: tre abbonamenti, nessun vincolo",
+      "testo": "Base 300 €, Business 600 €, Premium 900 € al mese. Nessun vincolo, disdetta con 30 giorni di preavviso. Il primo mese costa la metà: 150, 300 o 450 €.\nTi diciamo quale ti serve davvero. Scrivici su WhatsApp.\n#piacenza #negozipiacenza",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-19",
+      "ora": "13:30",
+      "canale": "Scheda Google",
+      "formato": "Post Google",
+      "pilastro": "Presenza su Google",
+      "titolo": "Prima di Natale, scheda in ordine",
+      "testo": "Prima di Natale aggiorniamo orari, foto e risposte alle recensioni della tua scheda Google. Scrivici su WhatsApp.",
+      "strato": "business",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-21",
+      "ora": "07:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Post foto",
+      "pilastro": "Diagnosi in un minuto",
+      "titolo": "Post foto: il rapporto dell'imprenditore",
+      "testo": "Il rapporto dell'imprenditore: un'analisi in 12 parti con la tua scheda Google, le recensioni, i concorrenti della zona, il sito, i social e il calendario della città.\nSi legge in dieci minuti e dice cosa fare per primo. Chiedilo su WhatsApp.\n#piacenza #negozipiacenza",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-21",
+      "ora": "13:30",
+      "canale": "Scheda Google",
+      "formato": "Post Google",
+      "pilastro": "Presenza su Google",
+      "titolo": "Foto nuove per la tua scheda",
+      "testo": "Foto nuove per la tua scheda Google prima della fine dell'anno: le facciamo noi, tu approvi. Scrivici su WhatsApp.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-21",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Diagnosi in un minuto",
+      "titolo": "Il rapporto dell'imprenditore",
+      "testo": "Il rapporto dell'imprenditore: 12 parti, dieci minuti di lettura. Chiedilo su WhatsApp.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-22",
+      "ora": "08:15",
+      "canale": "LinkedIn",
+      "formato": "LinkedIn",
+      "pilastro": "Aziende e associazioni",
+      "titolo": "Buone feste e un invito per il 2027",
+      "testo": "Buone feste da SDG Agenzia. Nel 2027 vogliamo lavorare con più attività e più associazioni di Piacenza.\nSe avete una rete di attività e volete una diagnosi gratuita per i vostri soci, scriveteci.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-22",
+      "ora": "13:15",
+      "canale": "Instagram + Facebook + TikTok",
+      "formato": "Reel",
+      "pilastro": "Dietro le quinte e Piacenza",
+      "titolo": "Reel (girato): il centro di Piacenza a Natale, visto da chi ci lavora",
+      "testo": "A Natale il centro è pieno di luci e di gente che cerca un regalo. Dietro ogni vetrina c'è qualcuno che si è alzato presto.\nNoi lavoriamo per loro: foto, video, social. Se vuoi che la tua attività si veda anche da casa, scrivici su WhatsApp.\n#piacenza #negozipiacenza",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-22",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Abbonamenti e auguri",
+      "titolo": "I tre abbonamenti",
+      "testo": "Base, Business, Premium. Nessun vincolo, disdetta con 30 giorni. Il primo mese costa la metà.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-23",
+      "ora": "07:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Post foto",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Post foto: ultima occasione per aggiornare orari e foto",
+      "testo": "Domani è la Vigilia. Hai scritto gli orari dei prossimi giorni su Google e sui social? Bastano cinque minuti.\nSe ti sei dimenticato, scrivici su WhatsApp: ci pensiamo noi.\n#piacenza #negozipiacenza",
+      "strato": "base",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-23",
+      "ora": "13:30",
+      "canale": "Scheda Google",
+      "formato": "Post Google",
+      "pilastro": "Presenza su Google",
+      "titolo": "Buone feste",
+      "testo": "Buone feste dal team di SDG Agenzia. Dopo le feste: diagnosi gratuita per la tua attività, scrivici su WhatsApp.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-23",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Orari delle feste in vetrina",
+      "testo": "Domani è la Vigilia: fotografa il cartello con gli orari delle feste e pubblicalo qui.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-24",
+      "ora": "10:00",
+      "canale": "Instagram + Facebook",
+      "formato": "Post foto",
+      "pilastro": "Abbonamenti e auguri",
+      "titolo": "Post foto: auguri di Natale",
+      "testo": "Buon Natale da SDG Agenzia a tutte le attività di Piacenza: negozi, bar, studi, palestre, laboratori, B&B.\nA chi apre presto e chiude tardi: buone feste e un 2027 pieno di clienti.\n#piacenza #negozipiacenza",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-28",
+      "ora": "13:15",
+      "canale": "Instagram + Facebook",
+      "formato": "Carosello",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Carosello: come è andato il Natale? Tre numeri da guardare",
+      "testo": "Tre numeri che contano più dei like: quante persone hanno chiamato, quante hanno chiesto le indicazioni, quanti messaggi sono arrivati.\nSono sulla tua scheda Google: ti facciamo vedere dove. Scrivici su WhatsApp.\n#piacenza #negozipiacenza",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-28",
+      "ora": "13:30",
+      "canale": "Scheda Google",
+      "formato": "Post Google",
+      "pilastro": "Presenza su Google",
+      "titolo": "Nuovo anno, scheda in ordine",
+      "testo": "Nuovo anno, scheda Google in ordine: orari, foto, recensioni. Cominciamo con la diagnosi gratuita, scrivici su WhatsApp.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-28",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Come è andato il Natale",
+      "testo": "Come è andato il Natale? Guarda quante chiamate hai avuto sulla tua scheda Google.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-29",
+      "ora": "07:45",
+      "canale": "Instagram + Facebook + TikTok",
+      "formato": "Reel",
+      "pilastro": "Diagnosi in un minuto",
+      "titolo": "Reel (girato): il tuo 2027 comincia con una diagnosi",
+      "testo": "Gennaio è il mese giusto per mettere in ordine l'attività. Scrivi il nome della tua attività e in un minuto vedi cosa ti manca. Gratis, link in bio.\nIl primo mese di abbonamento costa la metà.\n#piacenza #negozipiacenza",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-29",
+      "ora": "08:30",
+      "canale": "Lista WhatsApp",
+      "formato": "WhatsApp",
+      "pilastro": "Abbonamenti e auguri",
+      "titolo": "Messaggio WhatsApp: dopo le feste, la diagnosi",
+      "testo": "Buongiorno, SDG Agenzia. Dopo le feste: vuoi la diagnosi gratuita della tua attività? In un minuto vedi cosa manca su Google, recensioni e sito. Rispondi SÌ e ti scriviamo il link. Il primo mese di abbonamento costa la metà. Per non ricevere più messaggi rispondi STOP. (solo a chi ha detto sì alla lista)",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-29",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Il tempo del titolare",
+      "titolo": "Una cosa da sistemare a gennaio",
+      "testo": "Una cosa sola da sistemare a gennaio: quale? (sondaggio: Foto / Sito / Recensioni / Social)",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-30",
+      "ora": "13:15",
+      "canale": "Instagram + Facebook",
+      "formato": "Post foto",
+      "pilastro": "Prima e dopo",
+      "titolo": "Post foto: prima e dopo di un sito (serve il consenso scritto del cliente, oppure usare un lavoro di SDG)",
+      "testo": "Prima e dopo: un sito fatto per chi lo guarda dal telefono. Gli orari, l'indirizzo, un tasto per chiamare. Niente di più.\nVuoi vedere come sarebbe il tuo? Scrivici su WhatsApp.\n#piacenza #negozipiacenza",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-30",
+      "ora": "13:30",
+      "canale": "Scheda Google",
+      "formato": "Post Google",
+      "pilastro": "Presenza su Google",
+      "titolo": "Primo mese a metà prezzo",
+      "testo": "Il primo mese costa la metà. Nessun vincolo, disdetta con 30 giorni di preavviso. Scrivici su WhatsApp.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    },
+    {
+      "giorno": "2026-12-30",
+      "ora": "20:45",
+      "canale": "Instagram + Facebook",
+      "formato": "Storia",
+      "pilastro": "Abbonamenti e auguri",
+      "titolo": "Grazie e a presto",
+      "testo": "Ultima storia dell'anno: grazie a chi ci ha letto. Se vuoi cominciare il 2027 con la diagnosi gratuita, scrivici su WhatsApp.",
+      "strato": "premium",
+      "stato": "da_approvare"
+    }
+  ],
+  "extra_premium": [
+    {
+      "voce": "Pubblicità su Meta",
+      "cosa": "2 campagne gestite: una per la diagnosi gratuita (dal 1 al 13 dicembre) e una per l'evento o il primo mese a metà (dal 14 al 28). Pubblico: titolari di attività a Piacenza. Parte solo col via di Nicola.",
+      "costo_fuori_canone": "Budget da decidere (🔴 serve il via di Nicola); proposta di partenza: circa 150 € in totale"
+    },
+    {
+      "voce": "Creator locali",
+      "cosa": "1-2 creator di Piacenza (food, vita di città) invitati a vedere un lavoro nostro e a raccontarlo. Da scegliere e contattare: nessun nome ancora.",
+      "costo_fuori_canone": null
+    },
+    {
+      "voce": "Comunicato ai giornali locali",
+      "cosa": "1 comunicato sulla diagnosi dal vivo per i titolari, da mandare intorno al 9 dicembre. Parla di un servizio, non di risultati.",
+      "costo_fuori_canone": null
+    },
+    {
+      "voce": "Aziende e associazioni di categoria",
+      "cosa": "1 contatto con un'associazione di commercianti per proporre la diagnosi gratuita ai soci. Nessun contatto avviato.",
+      "costo_fuori_canone": null
+    },
+    {
+      "voce": "Evento: diagnosi dal vivo",
+      "cosa": "Lunedì 14 dicembre, mattina (molte attività aprono più tardi il lunedì): i titolari portano il nome dell'attività e vedono in 10 minuti cosa manca. Luogo, orario e numero di posti da decidere.",
+      "costo_fuori_canone": null
+    },
+    {
+      "voce": "Lettera email",
+      "cosa": "1 lettera a fine mese per chi si è iscritto: oggi la lista non esiste, va creata dalla diagnosi.",
+      "costo_fuori_canone": null
+    },
+    {
+      "voce": "Foto nuove sulla scheda Google",
+      "cosa": "15 foto caricate nel mese, accanto ai post. Non sono righe del calendario. Servono foto vere (scattiDG o Nicola).",
+      "costo_fuori_canone": null
+    }
+  ],
+  "misure": [
+    {
+      "kpi": "Richieste di diagnosi gratuita",
+      "obiettivo": "8 nel mese (obiettivo, non promessa)",
+      "come_si_misura": "Moduli compilati sulla pagina diagnosi, con un link diverso per ogni canale"
+    },
+    {
+      "kpi": "Messaggi WhatsApp di titolari che chiedono informazioni",
+      "obiettivo": "10 nel mese",
+      "come_si_misura": "Ogni canale ha il suo link WhatsApp con una frase diversa, così si vede da dove arrivano"
+    },
+    {
+      "kpi": "Iscritti alla lista WhatsApp",
+      "obiettivo": "30 nel mese",
+      "come_si_misura": "Chi risponde SÌ al messaggio o spunta la casella nel modulo"
+    },
+    {
+      "kpi": "Titolari alla diagnosi dal vivo",
+      "obiettivo": "8 persone (se l'evento si fa)",
+      "come_si_misura": "Elenco dei prenotati e dei presenti"
+    },
+    {
+      "kpi": "Appuntamenti fissati con un titolare (chiamata o visita)",
+      "obiettivo": "4 nel mese",
+      "come_si_misura": "Appuntamenti segnati da Nicola"
+    }
+  ],
+  "regole": [
+    "Esce solo quello che Nicola approva su WhatsApp o Telegram: niente si pubblica da solo.",
+    "Giorni di festa: 8/12, 25/12, 26/12 e 31/12 nessun contenuto; il 24/12 solo gli auguri.",
+    "Nessun nome di cliente nei post. «Prima e dopo» solo con il consenso scritto del cliente, oppure con lavori di SDG su se stessa.",
+    "Nessun risultato non provato, nessun «i migliori di Piacenza».",
+    "WhatsApp solo a chi ha detto sì alla lista; ogni messaggio ha il modo di dire STOP.",
+    "Nelle didascalie: «link in bio» o «scrivici su WhatsApp» finché l'indirizzo della diagnosi non è confermato.",
+    "Foto e video veri: servono scattiDG o Nicola; niente foto d'archivio al posto delle persone.",
+    "La pubblicità parte solo col via di Nicola. Non si cancella niente: si archivia.",
+    "I pezzi che citano l'evento del 14/12 si usano solo se l'evento è confermato; altrimenti si sostituiscono."
+  ]
+}
