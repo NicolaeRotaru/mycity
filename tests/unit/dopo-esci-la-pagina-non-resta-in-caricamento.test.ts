@@ -122,9 +122,15 @@ describe('dopo «Esci» la pagina va all\'accesso e non resta in caricamento', (
       }
     };
     for (const c of ['app', 'components', 'lib']) visita(path.join(radice, c));
+    // Collaudo del 27/11: il rinfresco torna anche scritto dopo la funzione nuova, col router chiamato
+    // in un altro modo, sulla stessa riga o dopo qualche riga di commento. Si guarda la chiusura della
+    // sessione (o la funzione) e le dieci righe dopo, qualunque sia il nome del router.
+    const chiusura = /auth\.signOut\(|esciEVaiAllAccesso\(/;
+    const rinfresco = /\.refresh\(\s*\)/;
     const colpevoli = sorgenti.filter((f) => {
+      if (f.endsWith(path.join('lib', 'auth', 'uscita.ts'))) return false; // qui il rinfresco è solo nella spiegazione
       const righe = readFileSync(f, 'utf8').split('\n');
-      return righe.some((r, i) => /auth\.signOut\(/.test(r) && righe.slice(i + 1, i + 6).some((dopo) => /router\.refresh\(\)/.test(dopo)));
+      return righe.some((r, i) => chiusura.test(r) && righe.slice(i, i + 11).some((dopo) => rinfresco.test(dopo)));
     });
     expect(colpevoli.map((f) => path.relative(radice, f))).toEqual([]);
   });

@@ -21,7 +21,13 @@ import { supabase } from '@/lib/supabase/client';
  * Il rinfresco non serviva: la pagina dell'accesso arriva comunque nuova dal
  * server, e i dati dell'account li toglie già l'ascolto dell'uscita
  * (components/providers/QueryProvider.tsx). Quindi qui c'è un solo cambio pagina
- * e nessun `refresh()`: un secondo comando dopo la navigazione rimette il blocco.
+ * e nessun `refresh()`.
+ *
+ * ⚠️ La trappola resta dentro Next: dopo i due cambi pagina il segno «ultimo in
+ * coda» è ancora su quello scartato. Qualunque comando che non sia un cambio
+ * pagina, mandato mentre l'accesso sta arrivando (un `refresh()` scritto dopo
+ * questa funzione, in un ascolto dell'uscita, o un'azione server), si blocca allo
+ * stesso modo. Oggi nel sito non ce n'è nessuno: non aggiungerne.
  * Ogni «Esci» del sito passa da qui. La prova, col vero motore dei cambi pagina
  * di Next: tests/unit/dopo-esci-la-pagina-non-resta-in-caricamento.test.ts
  */
