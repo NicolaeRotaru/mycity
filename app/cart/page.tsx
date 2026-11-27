@@ -36,6 +36,7 @@ import { AlertCircle, Banknote, Check, Lightbulb, Lock, Package, RotateCcw, Shie
 import { toast } from 'sonner';
 import { fondoDellaBarra, corsieSotto } from '@/lib/ui/barra-in-fondo';
 import { chiaveDellaRiga, merceCheTengoIo, type TentativoAperto } from '@/lib/ordini/merce-che-tengo-io';
+import { esclusiAncheDallaCategoria } from '@/lib/ordini/recesso-per-categoria';
 import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
 import { leggiEsitoDellaVeloce, rigaQuandoArrivaNelCarrello } from '@/lib/ordini/consegna-veloce';
 import { prezziDelCarrello } from '@/lib/ordini/prezzi';
@@ -327,12 +328,13 @@ export default function CartPage() {
       // se la colonna `non_recedibile` (migrazione 180) mancasse, chiederla per nome farebbe
       // cadere tutta la lettura delle scorte. Se cade questa, il carrello dice la frase generale.
       const { data: perIlReso } = await supabase.from('products').select('*').in('id', ids);
-      if (!vivo) return;
-      setEsclusiDalReso(
-        Object.fromEntries(
-          ((perIlReso ?? []) as Array<{ id: string; non_recedibile?: boolean | null }>).map((p) => [p.id, p.non_recedibile === true]),
-        ),
+      // R09-015 — Anche il pane escluso per categoria (non solo con la spunta): la regola dei resi.
+      const esclusi = await esclusiAncheDallaCategoria(
+        supabase,
+        (perIlReso ?? []) as Array<{ id: string; category_id?: unknown; non_recedibile?: boolean | null }>,
       );
+      if (!vivo) return;
+      setEsclusiDalReso(Object.fromEntries(esclusi.map((p) => [p.id, p.non_recedibile === true])));
       setDovEIlNegozio(
         Object.fromEntries(
           [...negoziRes.values()].map((n) => [n.id, { lat: n.store_lat ?? null, lng: n.store_lng ?? null }]),
@@ -883,9 +885,8 @@ export default function CartPage() {
                   Consumo) e la nostra pagina dei resi lo scrive già; il primo negozio vero è un
                   forno, quindi la riga era sbagliata su ogni suo ordine. In più nessuna pagina del
                   percorso diceva come si fa un reso: adesso ci si arriva da qui.
-                  ⚠️ Resta da fare la versione per categoria — mostrarla solo sul non alimentare —
-                  che ha bisogno della categoria del prodotto (il carrello non ce l'ha) e di una
-                  decisione su quali categorie sono escluse: non è una scelta da prendere qui. */}
+                  27/11/2026 (R09-015) — Gli esclusi si contano anche per categoria (pane, freschi:
+                  lib/ordini/recesso-per-categoria.ts), non solo con la spunta del negozio. */}
               <p className="flex items-start gap-2">
                 <RotateCcw size={14} className="text-olive-600 shrink-0 mt-0.5" aria-hidden />
                 {/* 5/11/2026 — Con dentro solo prodotti esclusi (la torta su ordinazione) «Reso entro 14
