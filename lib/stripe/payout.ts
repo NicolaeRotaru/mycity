@@ -1091,6 +1091,8 @@ async function notifyRefundBuyer(
   amountCents: number,
   opts: RefundOrderOpts,
   riparto: RipartoDelRimborso,
+  /** R03-002 — L'account del cliente: se Resend rifiuta l'email, la coda la rimanda a lui. */
+  buyerId: string | null = null,
 ): Promise<'partita' | 'non-partita' | 'non-richiesta'> {
   if (!opts.notifyBuyer || !buyerEmail) return 'non-richiesta';
   try {
@@ -1108,6 +1110,7 @@ async function notifyRefundBuyer(
       html: t.html,
       text: t.text,
       ...(riparto.modo === 'carta' ? {} : { replyTo: indirizzoContatto('info') }),
+      rimandaA: buyerId,
     });
     // 5/11/2026 — Con la posta spenta (o un rifiuto) `sendEmail` non lancia: risponde ok=false.
     if (res && (res as { ok?: boolean }).ok === false) {
@@ -2703,7 +2706,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     });
   }
 
-  const emailAlCliente = await notifyRefundBuyer(emailCliente, order.id, safeAmountCents, opts, ripartoVero);
+  const emailAlCliente = await notifyRefundBuyer(emailCliente, order.id, safeAmountCents, opts, ripartoVero, order.user_id ?? null);
   // 5/11/2026 — L'IBAN si chiede solo con quell'email, e l'avviso del bonifico
   // da fare dice a Nicola che e' partita. Se non e' partita, glielo si dice.
   if (emailAlCliente === 'non-partita' && ripartoVero.bonificoCents > 0) {

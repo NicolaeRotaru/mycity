@@ -1974,7 +1974,8 @@ export const POST = withAuthRateLimit(
               storeHours: orariNegozio.get(c.sellerId),
             });
             // R03-003 — un rifiuto di Resend non lancia: si legge l'esito (lib/stripe/webhook/posta-non-partita.ts).
-            const esito = await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+            // R03-002 — se Resend la rifiuta, l'email entra in coda e il giro send-emails la rimanda.
+            const esito = await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale', rimandaA: c.sellerId });
             await avvisaSeLaPostaNonParte('email «Nuovo ordine» al negozio', { orderId: c.orderId, sellerId: c.sellerId }, esito);
             await avvisaSeLaPostaESpenta(c.orderId, esito);
           } catch (e) {

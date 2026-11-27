@@ -576,7 +576,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           createdAt: new Date(),
           storeHours: orari,
         });
-        return sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
+        return sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, rimandaA: created.sellerId }); // R03-002: se non parte, la coda la rimanda
       });
     }
   }, 'avvisi post-ordine');
