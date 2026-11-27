@@ -561,12 +561,14 @@ export async function allarmiTettoSpesaAiPerIlCron(opzioni: {
     return [];
   }
   const copieAttese = opzioni.copieAttese ?? copie(process.env.AI_COPIE_ATTESE);
+  // In rete, senza conto condiviso, l'AI si ferma: l'allarme non parla di quota per copia.
+  const fermoSenzaConto = contoCondivisoObbligatorio();
   const primo = await sondaContoCondiviso(opzioni.quando);
   try {
     const admin = getAdminSupabase();
     if (primo.condiviso) {
       await admin.from('operational_alert_log').delete().eq('alert_key', CHIAVE_RIPIEGO_DA);
-      return allarmi(primo, { tettoEur, copieAttese });
+      return allarmi(primo, { tettoEur, copieAttese, fermoSenzaConto });
     }
     await admin
       .from('operational_alert_log')
@@ -580,9 +582,9 @@ export async function allarmiTettoSpesaAiPerIlCron(opzioni: {
       ? Date.parse((data as { last_sent_at: string }).last_sent_at)
       : NaN;
     const conto = Number.isFinite(da) ? await sondaContoCondiviso(opzioni.quando, da) : primo;
-    return allarmi(conto, { tettoEur, copieAttese });
+    return allarmi(conto, { tettoEur, copieAttese, fermoSenzaConto });
   } catch {
     // Se anche questa tabella non risponde, vale quello che sa la copia.
-    return allarmi(primo, { tettoEur, copieAttese });
+    return allarmi(primo, { tettoEur, copieAttese, fermoSenzaConto });
   }
 }
