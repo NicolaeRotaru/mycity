@@ -46,6 +46,7 @@ import {
   INDIRIZZO_SEGNALAZIONI_CSP,
   reportingEndpoints,
 } from '@/lib/sicurezza/segnalazioni-csp';
+import { originiDeiSitiOnline } from '@/lib/agenzia/lavoro-consegnato/siti';
 
 /**
  * Middleware strict: il client browser usa @supabase/ssr, la sessione
@@ -337,6 +338,8 @@ function dominiGoogleMaps(): { script: string; connect: string; img: string; fon
   };
 }
 
+const FRAME_SITI_CONSEGNATI = originiDeiSitiOnline().map((o) => ` ${o}`).join('');
+
 function buildCsp(nonce: string, isDev: boolean): string {
   const supaHost = getSupabaseHost();
   const gm = dominiGoogleMaps();
@@ -365,7 +368,8 @@ function buildCsp(nonce: string, isDev: boolean): string {
     // (/api/geocode), il browser non chiama più direttamente Nominatim.
     `connect-src 'self' https://${supaHost} wss://${supaHost} https://challenges.cloudflare.com https://api.stripe.com https://www.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io${gm.connect}`,
     // youtube-nocookie + vimeo: embed del blocco "video" della vetrina (VideoSection).
-    "frame-src 'self' https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://connect.stripe.com https://www.youtube-nocookie.com https://player.vimeo.com",
+    // 27/11/2026 — e i siti già fatti per i negozi, visti dal vivo nella voce «Sito web» (solo i loro indirizzi esatti).
+    `frame-src 'self' https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://connect.stripe.com https://www.youtube-nocookie.com https://player.vimeo.com${FRAME_SITI_CONSEGNATI}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

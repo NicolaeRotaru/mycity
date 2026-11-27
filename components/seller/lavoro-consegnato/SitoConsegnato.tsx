@@ -1,9 +1,18 @@
-import type { Sito } from '@/lib/agenzia/lavoro-consegnato/tipi';
+import type { LavoroConsegnato, Sito } from '@/lib/agenzia/lavoro-consegnato/tipi';
 import { Button } from '@/components/ui/Button';
-import { Elenco, IntestazioneConsegnato, LinkEsterno, Sezione } from './comuni';
+import { Elenco, IntestazioneConsegnato, LinkEsterno, SCHEDA, Sezione } from './comuni';
 
-export default function SitoConsegnato({ sito }: { sito: Sito }) {
+const NOME_FASCIA: Record<LavoroConsegnato['fascia'], string> = { base: 'Base', business: 'Business', premium: 'Premium' };
+
+/**
+ * 27/11/2026 — Nicola: «dentro la voce del menu sito web ci deve essere già il suo sito web versione business».
+ * Quando il sito è online lo si vede qui dentro, dal vivo, e si può navigare. Il portiere (middleware.ts) lo lascia
+ * entrare solo se il suo indirizzo è nell'elenco dei siti consegnati (lib/agenzia/lavoro-consegnato/siti.ts).
+ */
+export default function SitoConsegnato({ sito, fascia = 'premium' }: { sito: Sito; fascia?: LavoroConsegnato['fascia'] }) {
   const online = sito.stato === 'online';
+  const nomeFascia = NOME_FASCIA[fascia];
+  const cosaHaInPiu = fascia === 'business' ? sito.cosa_ha_di_business : sito.cosa_ha_di_premium;
   return (
     <div>
       <IntestazioneConsegnato aggiornato={sito.aggiornato_il} />
@@ -17,8 +26,28 @@ export default function SitoConsegnato({ sito }: { sito: Sito }) {
         {sito.indirizzo && (
           <div className="mt-3"><Button href={sito.indirizzo} target="_blank" rel="noopener noreferrer">Apri il sito</Button></div>
         )}
+        {!sito.indirizzo && (
+          <p className="mt-3 text-sm text-ink-700">Il sito è pronto: appena è pubblicato lo vedi qui, dal vivo.</p>
+        )}
         {sito.codice && <p className="mt-3 text-sm text-ink-700">Il codice del sito: <LinkEsterno href={sito.codice}>{sito.codice}</LinkEsterno></p>}
       </section>
+
+      {online && sito.indirizzo && (
+        <section className={`mb-4 ${SCHEDA}`} aria-labelledby="sito-dal-vivo">
+          <h2 id="sito-dal-vivo" className="text-sm font-bold text-ink-900">Il tuo sito, dal vivo</h2>
+          <p className="mt-0.5 text-xs text-ink-500">Puoi navigarlo anche da qui. Per vederlo a tutto schermo premi «Apri il sito».</p>
+          <div className="mt-3 overflow-hidden rounded-xl border border-cream-300 bg-cream-50">
+            <iframe
+              src={sito.indirizzo}
+              title={`Il sito: ${sito.titolo}`}
+              loading="lazy"
+              referrerPolicy="strict-origin-when-cross-origin"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              className="block h-[560px] w-full bg-white"
+            />
+          </div>
+        </section>
+      )}
 
       {sito.pagine.length > 0 && (
         <Sezione id="sito-pagine" titolo="Le pagine del sito">
@@ -32,7 +61,9 @@ export default function SitoConsegnato({ sito }: { sito: Sito }) {
           </ul>
         </Sezione>
       )}
-      <Sezione id="sito-premium" titolo="Cosa ha di Premium"><Elenco voci={sito.cosa_ha_di_premium} /></Sezione>
+      {cosaHaInPiu.length > 0 && (
+        <Sezione id="sito-in-piu" titolo={`Cosa ha di ${nomeFascia}`}><Elenco voci={cosaHaInPiu} /></Sezione>
+      )}
       {sito.da_confermare.length > 0 && (
         <Sezione id="sito-da-confermare" titolo="Da confermare">
           <ul className="list-disc space-y-1 pl-5">{sito.da_confermare.map((d) => <li key={d.voce}><b>{d.voce}</b>: {d.perche}</li>)}</ul>

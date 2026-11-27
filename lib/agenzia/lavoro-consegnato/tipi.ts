@@ -60,6 +60,8 @@ export const SitoSchema = z.object({
   codice: httpsONull,
   pagine: z.array(z.object({ titolo: testo, percorso: testo, cosa_contiene: testo })).default([]),
   cosa_ha_di_premium: elenco,
+  // 27/11/2026 — Il sito del Caffè di Piacenza è Business: la stessa lista, col nome della sua fascia.
+  cosa_ha_di_business: elenco,
   da_confermare: z.array(z.object({ voce: testo, perche: testo })).default([]),
   prossimi_passi: z.array(z.object({ cosa: testo, chi: testo, colore: testo.nullish() })).default([]),
 });

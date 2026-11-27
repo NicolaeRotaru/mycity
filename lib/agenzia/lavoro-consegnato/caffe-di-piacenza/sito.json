@@ -1,0 +1,41 @@
+{
+  "titolo": "Il sito del Caffè di Piacenza — versione Business",
+  "aggiornato_il": "2026-11-27T17:30:00+01:00",
+  "stato": "da_pubblicare",
+  "indirizzo": null,
+  "codice": "https://github.com/NicolaeRotaru/ad-mycity/tree/ccr-e11c610c-9x59zw/consegne/clienti/caffe-di-piacenza",
+  "pagine": [
+    { "titolo": "Home", "percorso": "/", "cosa_contiene": "Il nome sopra la scena del Duomo vista dai portici, l'avviso «aperto ora / chiuso» con l'ora di Piacenza, colazione-pranzo-aperitivo, i prossimi appuntamenti in Piazza Duomo, gli orari e i pulsanti per chiamare e arrivare." },
+    { "titolo": "Il bar", "percorso": "/il-bar/", "cosa_contiene": "La storia del bar di Piazza Duomo, la nuova gestione dal 2021, cosa c'è da sapere (tavoli dentro e sotto i portici, il mercato del mercoledì e del sabato), il collegamento alle recensioni su Tripadvisor." },
+    { "titolo": "Menu", "percorso": "/menu/", "cosa_contiene": "Caffetteria, pasticceria, pranzo e aperitivo, senza prezzi: il menu completo coi prezzi lo manda il titolare." },
+    { "titolo": "Dicembre", "percorso": "/dicembre/", "cosa_contiene": "Gli otto appuntamenti di Natale 2026 dal programma del Comune; quelli in Piazza Duomo sono segnati e quelli già passati si spengono da soli." },
+    { "titolo": "Contatti", "percorso": "/contatti/", "cosa_contiene": "Indirizzo, telefono, email, orari con il giorno di oggi in evidenza, la mappa e il pulsante «Indicazioni»." }
+  ],
+  "cosa_ha_di_business": [
+    "Cinque pagine vere, ognuna col suo indirizzo, titolo e descrizione per Google (la bozza era una pagina sola)",
+    "Dati per Google del bar: indirizzo, telefono, orari, posizione sulla mappa (tipo «Caffetteria»)",
+    "Anteprima pronta per WhatsApp e social: la scena del Duomo col nome",
+    "Sul telefono una barra fissa con «Chiama» e «Indicazioni»",
+    "Avviso «aperto ora / chiude alle 19:30» calcolato con l'ora di Piacenza",
+    "Mappa nella pagina Contatti e collegamento alla vetrina su MyCity",
+    "Tema scuro automatico, collegamento «Vai al contenuto», contrasti e pulsanti grandi per il dito"
+  ],
+  "da_confermare": [
+    { "voce": "Orari", "perche": "lunedì-sabato 7:30-19:30 e domenica chiuso vengono dalle fonti pubbliche, non dal titolare" },
+    { "voce": "Menu e prezzi", "perche": "le voci vengono dal vecchio sito e dalle recensioni; i prezzi non ci sono" },
+    { "voce": "Testi della storia", "perche": "la nuova gestione dal 2021 viene dalle fonti pubbliche" },
+    { "voce": "Orari delle feste", "perche": "la pagina Dicembre dice che arrivano" },
+    { "voce": "Foto vere", "perche": "oggi c'è solo il disegno del Duomo; le foto le fa scattiDG col permesso del titolare" },
+    { "voce": "Dominio", "perche": "il vecchio sito è su sites.google.com; un dominio col nome del bar si compra solo col via di Nicola" }
+  ],
+  "prossimi_passi": [
+    { "cosa": "Pubblicarlo su Vercel nel progetto caffe-di-piacenza", "chi": "AD, col permesso Vercel che manca", "colore": "giallo" },
+    { "cosa": "Far confermare al titolare testi, orari e menu, poi togliere «Anteprima» e il blocco per Google (CONFERMATO = true nel costruttore)", "chi": "Nicola o l'agente, col titolare", "colore": "giallo" },
+    { "cosa": "Collegare un dominio col nome del bar", "chi": "Nicola", "colore": "rosso" }
+  ],
+  "fonti": [
+    "https://sites.google.com/view/bardipiacenza/home",
+    "https://www.tripadvisor.it/Restaurant_Review-g187805-d13484948-Reviews-Caffe_di_Piacenza-Piacenza_Province_of_Piacenza_Emilia_Romagna.html",
+    "https://wecake.it/pasticcerie/piacenza/Bar-Caffe-Di-Piacenza-8357"
+  ]
+}
