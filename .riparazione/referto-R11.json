@@ -247,7 +247,7 @@
       "descrizione": "Gli invii dei conti Stripe passano solo accountId (e profiloId), che la catena del riferimento non guarda: la chiave unaVoltaPer diventa posta-non-partita:<cosa>:senza-riferimento, e dopo il primo rifiuto di Resend per un conto, quello di un altro conto risulta già mandato. Cura: aggiungere dati.accountId alla catena del riferimento. Non riparato: la voce non lo nomina."
     },
     {
-      "titolo": "Falla di sicurezza da chiudere (log dei flussi CI): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "titolo": "Falla di sicurezza da chiudere (rilascio): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
       "dimensione": "sicurezza",
       "severita": "minore",
       "file": "(nel referto privato)",
@@ -261,6 +261,9 @@
   ],
   "conto": {
     "agenti": 2,
-    "nota": "1 riparatore per il lotto 1, fermato al limite di spesa, e 1 revisore sonnet. Il lotto 2 non è partito."
-  }
+    "subagenti": 2,
+    "costo_usd": 16.44,
+    "nota": "1 riparatore per il lotto 1, fermato al limite di spesa, e 1 revisore sonnet. Il lotto 2 non è partito. Spesa letta con get_session alle 02:10: 16,44 $."
+  },
+  "costo_usd": 16.44
 }
