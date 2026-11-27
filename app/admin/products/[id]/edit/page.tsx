@@ -64,7 +64,10 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
     refetchOnMount: 'always',
   });
 
-  const { data: categories = [] } = useQuery({
+  // R10-012 — Il ripiego `= []` apriva il modulo senza categorie quando la lettura era ferma senza
+  // rete (o caduta) e l'elenco non era in memoria: il prodotto sembrava senza categoria, e al Salva
+  // gli attributi della sua categoria non si riconoscevano. Senza l'elenco il modulo non si apre.
+  const { data: categories = [], isError: categorieNonLette, isLoading: categorieInLettura, isPending: categorieSenzaDati, fetchStatus: categorieFetchStatus, refetch: rileggiCategorie } = useQuery({
     queryKey: queryKeys.categories.form,
     queryFn: async (): Promise<Category[]> => {
       const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id').order('name');
@@ -134,7 +137,21 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette)) return <LoadingState />;
+  if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette) || categorieInLettura) return <LoadingState />;
+  if ((categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0) {
+    return (
+      <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
+        <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Non riesco a leggere le categorie</p>
+        <p className="text-sm mb-3">
+          Senza l’elenco delle categorie il prodotto sembrerebbe senza categoria. Non l’ha persa: controlla la connessione e riprova.
+        </p>
+        <button type="button" onClick={() => { void rileggiCategorie(); }} className="mr-4 text-sm font-semibold text-rose-700 hover:underline">
+          Riprova
+        </button>
+        <Link href="/admin/products" className="text-sm font-semibold text-rose-700 hover:underline">← Torna ai prodotti</Link>
+      </div>
+    );
+  }
   // 31/10/2026 — SENZA LE VARIANTI IL MODULO NON SI APRE. Se la lettura delle
   // taglie cade, `variants` resta [] e il modulo partiva senza taglie: al «Salva»
   // la PATCH le riceveva vuote. Come nella pagina del negozio, si ferma e lo dice.
