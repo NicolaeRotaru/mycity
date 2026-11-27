@@ -1,6 +1,6 @@
 {
  "sessione": "R06",
- "aggiornato": "2026-11-27 02:55",
+ "aggiornato": "2026-11-27 02:58",
  "finita": true,
  "testa": "79f5bb306c542846ba50f20e38f64bbb9fc8d672",
  "verifica": {
@@ -359,5 +359,5 @@
   "nota": "6 subagenti: 4 riparatori (L1, L2, L3+L4, L5 fermato per spesa) e 2 revisori (V1 sui gravi, modello grande; V2 sui minori, modello piccolo per la spesa). L6 non lavorato per spesa.",
   "subagenti": 6
  },
- "costo_usd": 21.44
+ "costo_usd": 22.71
 }
