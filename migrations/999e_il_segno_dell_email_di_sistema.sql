@@ -13,15 +13,19 @@
 -- Supabase), solo sugli utenti che hanno un preventivo col codice e non hanno ancora il segno:
 --   1. chi ha ancora l'email finta, cioè il titolare non ha accettato: il segno è la sua email;
 --   2. chi ha già accettato, se Supabase conserva l'email finta nell'identità «email»
---      (`auth.identities.identity_data`): il segno è quella.
+--      (`auth.identities.identity_data`): il segno è quella. Su Supabase vero questo passo non trova quasi
+--      nessuno: quando cambia l'email, il server di login (GoTrue, `adminUserUpdate`) riscrive anche
+--      l'identità. Resta per chi l'identità vecchia ce l'ha ancora (le prove della CI, un server diverso).
 -- Aggiunge una chiave a un oggetto JSON e non toglie niente: email, password, accessi, blocchi, profili e
 -- preventivi restano come sono. Nessuna tabella nuova, nessun permesso nuovo.
 -- L'email finta ha sempre la forma `<nome>-<10 cifre esadecimali>.preventivo@mycity-system.local`:
 -- Ora del Gusto (migrazione 708, `ora-del-gusto.preventivo@…`) non ha quella forma e resta fuori.
 --
--- CHI PUÒ RESTARE FUORI. Un negozio che ha già accettato, se Supabase ha riscritto anche l'identità con
--- l'email vera: il suo segno non si ricostruisce con certezza da qui. Dopo averla applicata si contano così
--- (una riga per negozio; se escono righe, il segno si scrive a mano, negozio per negozio):
+-- CHI RESTA FUORI. I negozi che hanno già accettato prima della correzione: per quanto detto al punto 2,
+-- quasi certamente tutti. L'email finta non si ricostruisce con certezza da qui (il nome in vetrina può
+-- essere cambiato all'accettazione). Dopo averla applicata si contano così, una riga per negozio; per
+-- ognuno il segno si scrive a mano, con l'email che `emailDiSistema` dà per il nome e la città con cui era
+-- stato iscritto:
 --   select p.seller_id, p.stato, pr.store_name, pr.city
 --   from public.preventivi_con_codice p
 --   join auth.users u on u.id = p.seller_id
@@ -29,10 +33,11 @@
 --   where not (coalesce(u.raw_app_meta_data, '{}'::jsonb) ? 'email_di_sistema');
 --
 -- SI PUÒ RIESEGUIRE: scrive solo dove il segno manca. Se non ci sono negozi iscritti, non fa niente.
--- COME SI TORNA INDIETRO: si toglie la chiave a chi l'ha presa da qui, cioè
+-- COME SI TORNA INDIETRO: si toglie la chiave solo a chi l'ha presa da qui, cioè agli utenti nati PRIMA che
+-- la correzione del codice fosse unita (quelli nati dopo l'hanno avuta alla nascita e la devono tenere):
 --   update auth.users set raw_app_meta_data = raw_app_meta_data - 'email_di_sistema'
---   where raw_app_meta_data ? 'email_di_sistema' and created_at < '<ora in cui è stata applicata>';
---   Togliendola anche agli utenti nati dopo la correzione, per loro torna il difetto.
+--   where raw_app_meta_data ? 'email_di_sistema' and created_at < '<ora in cui è stata unita la correzione del codice>';
+--   Togliendola anche a chi è nato dopo, per lui torna il difetto.
 --
 -- NUMERO. «999e»: le migrazioni si applicano in ordine di byte (LC_ALL=C sort) e lo script «Migrazioni a mano»
 -- accetta tre cifre più una lettera. La 999d è già in main; la 999c sta nella mycity#353, ancora aperta.
