@@ -15,6 +15,7 @@ const db = vi.hoisted(() => ({
   link: new Map<string, { seller_id: string; codice: string }>(),
   creaUtente: [] as Array<Record<string, unknown>>,
   ultimoId: 0,
+  rompiProfilo: 0,
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -36,6 +37,8 @@ vi.mock('@/lib/supabase/server', () => ({
           return { data: { user: { id } }, error: null };
         },
         getUserById: async (id: string) => ({ data: { user: db.utenti.get(id) ?? null }, error: null }),
+        listUsers: async ({ page = 1, perPage = 50 }: { page?: number; perPage?: number } = {}) =>
+          ({ data: { users: [...db.utenti.values()].slice((page - 1) * perPage, page * perPage) }, error: null }),
       },
     },
     from: (tabella: string) => {
@@ -44,8 +47,13 @@ vi.mock('@/lib/supabase/server', () => ({
         select: () => q,
         limit: () => q,
         eq: (c: string, v: unknown) => { filtri[c] = v; return q; },
-        maybeSingle: async () => ({ data: tabella === 'profiles' ? db.profili.get(String(filtri.id)) ?? null : null, error: null }),
+        maybeSingle: async () => ({
+          data: tabella === 'profiles' ? db.profili.get(String(filtri.id)) ?? null
+            : tabella === 'preventivi_con_codice' ? db.link.get(String(filtri.seller_id)) ?? null : null,
+          error: null,
+        }),
         upsert: async (riga: Record<string, unknown>, o?: { ignoreDuplicates?: boolean }) => {
+          if (tabella === 'profiles' && db.rompiProfilo > 0) { db.rompiProfilo -= 1; return { error: { message: 'connessione persa' } }; }
           if (tabella === 'profiles') db.profili.set(String(riga.id), { ...db.profili.get(String(riga.id)), ...riga });
           if (tabella === 'preventivi_con_codice' && !(o?.ignoreDuplicates && db.link.has(String(riga.seller_id))))
             db.link.set(String(riga.seller_id), riga as { seller_id: string; codice: string });
@@ -72,7 +80,7 @@ const chiama = async (corpo: unknown, segreto: string | null = SEGRETO) => {
 const BAR = { tipo: 'nuova-attivita', nome: 'Bar Prova', tipo_attivita: 'bar', citta: 'Piacenza', indirizzo: 'Via Roma 1' };
 
 beforeEach(() => {
-  db.utenti.clear(); db.profili.clear(); db.link.clear(); db.creaUtente.length = 0; db.ultimoId = 0;
+  db.utenti.clear(); db.profili.clear(); db.link.clear(); db.creaUtente.length = 0; db.ultimoId = 0; db.rompiProfilo = 0;
   process.env.N8N_SCHEDA_CLIENTE_SEGRETO = SEGRETO;
 });
 
@@ -135,6 +143,22 @@ describe('il negozio nasce come Ora del Gusto', () => {
     expect(b).toMatchObject({ id_attivita: a.id_attivita, nuova: false });
     expect(db.utenti.size).toBe(1);
     expect(db.link.get(a.id_attivita)!.codice).toBe(codice);
+  });
+
+  it('un iscrizione fermata a metà (utente creato, profilo no) si finisce al secondo invio, senza doppioni (collaudo del 27/11)', async () => {
+    db.rompiProfilo = 1;
+    expect((await chiama(BAR)).status).toBe(503);
+    expect(db.utenti.size).toBe(1);
+    expect(db.link.size).toBe(0);
+    const r = await chiama(BAR);
+    expect(r.status).toBe(201);
+    const b = (await r.json()) as { id_attivita: string; nuova: boolean };
+    expect(b.nuova).toBe(true);
+    expect(db.utenti.size).toBe(1);
+    expect(db.profili.get(b.id_attivita)).toMatchObject({ store_name: 'Bar Prova', business_type: 'bar', is_approved: false });
+    expect(db.link.has(b.id_attivita)).toBe(true);
+    // E un terzo invio è un invio qualunque: stesso negozio, non più «nuovo».
+    expect(((await (await chiama(BAR)).json()) as { nuova: boolean }).nuova).toBe(false);
   });
 
   it('un secondo invio senza tipo non cancella il tipo scritto prima (collaudo del 27/11, pulsante dell agente)', async () => {

@@ -76,6 +76,27 @@ export async function attivitaGiaIscritta(admin: SupabaseClient, a: Pick<NuovaAt
   return null;
 }
 
+/** Quanti utenti si guardano al massimo cercando un'email (10 pagine da 1000): il caso è raro, il tetto c'è. */
+const PAGINE_UTENTI = 10;
+const PER_PAGINA = 1000;
+
+/**
+ * L'utente di sistema ritrovato dalla sua email, scorrendo gli utenti a pagine; `null` se non c'è o se la
+ * lettura non riesce. 27/11/2026 (collaudo del pulsante dell'agente): serve quando un'iscrizione si è fermata
+ * a metà — l'utente creato, il profilo o il link no. Prima lo si cercava solo dal profilo col link, che in
+ * quel caso non c'è: l'attività restava bloccata per sempre su «Riprova fra poco».
+ */
+async function utenteDallEmail(admin: SupabaseClient, email: string): Promise<string | null> {
+  for (let page = 1; page <= PAGINE_UTENTI; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: PER_PAGINA });
+    if (error || !data) return null;
+    const trovato = data.users.find((u) => (u.email ?? '').toLowerCase() === email);
+    if (trovato) return trovato.id;
+    if (data.users.length < PER_PAGINA) return null;
+  }
+  return null;
+}
+
 export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): Promise<EsitoIscrizione> {
   const email = emailDiSistema(a);
 
@@ -106,7 +127,16 @@ export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): 
         break;
       }
     }
-    if (!id) return { ok: false, motivo: 'guasto', dettaglio: creato.error?.message ?? 'utente non creato' };
+    if (!id) {
+      // Iscrizione fermata a metà: l'utente c'è, ma il profilo col link no. Lo si ritrova dall'email e il
+      // lavoro si finisce come la prima volta: per chi chiama è un'attività che nasce adesso (flusso 16,
+      // avviso), perché la prima volta quei passi non erano partiti.
+      id = await utenteDallEmail(admin, email);
+      if (!id) return { ok: false, motivo: 'guasto', dettaglio: creato.error?.message ?? 'utente non creato' };
+      const giaColLink = await admin.from('preventivi_con_codice').select('seller_id').eq('seller_id', id).maybeSingle();
+      if (giaColLink.error) return { ok: false, motivo: 'guasto', dettaglio: giaColLink.error.message };
+      nuova = !giaColLink.data;
+    }
   }
 
   // 2. Il profilo: venditore non approvato, fuori vetrina, coi dati pubblici dell'attività.
