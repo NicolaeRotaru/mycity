@@ -4,9 +4,12 @@
 // video dà ogni fascia, e cosa vuol dire in pratica (uguale a cervello/scheda-cliente.mjs nel repo dell'AD).
 // La prova tests/unit/agenti/fasce.test.ts diventa rossa se il listino del sito e questi numeri si separano.
 
-import { FASCE as LISTINO, type Abbonamento } from '@/lib/agenzia/preventivo';
+import { FASCE as LISTINO, LISTINO as VOCI, SERVIZI_AGENZIA, type Abbonamento, type ServizioAgenzia } from '@/lib/agenzia/preventivo';
 
 export type IdFascia = Abbonamento;
+
+/** Un beneficio dell'abbonamento: la voce (es. «Foto e video»), cosa dà questa fascia, e il servizio se è uno dei quattro. */
+export type Beneficio = { voce: string; testo: string; servizio?: ServizioAgenzia };
 
 export type Fascia = {
   nome: string;
@@ -15,9 +18,24 @@ export type Fascia = {
   video: number;
   inPratica: { sito: string; piano: string; foto: string; analisi: string };
   perChi: string;
+  /** I benefici per le tre schede degli abbonamenti (Nicola, 26/11/2026): gli stessi testi della pagina abbonamento del negozio. */
+  benefici: Beneficio[];
 };
 
-const PRATICA: Record<IdFascia, Omit<Fascia, 'nome' | 'centesimi' | 'perChi'>> = {
+/**
+ * I benefici di una fascia, tutti dal listino del sito: i quattro servizi coi loro titoli, poi vetrina e assistenza.
+ * Niente testo copiato qui: se Nicola cambia una riga del listino, cambia anche la scheda dell'agente.
+ */
+export function beneficiDi(id: IdFascia): Beneficio[] {
+  const f = LISTINO[id];
+  return [
+    ...SERVIZI_AGENZIA.map((s) => ({ voce: VOCI[s].titolo, testo: f.servizi[s], servizio: s })),
+    { voce: 'Vetrina su MyCity', testo: f.vetrina },
+    { voce: 'Assistenza', testo: f.assistenza },
+  ];
+}
+
+const PRATICA: Record<IdFascia, Omit<Fascia, 'nome' | 'centesimi' | 'perChi' | 'benefici'>> = {
   base: {
     post: 8, video: 0,
     inPratica: { sito: 'Una pagina col vostro nome', piano: '8 contenuti al mese, senza video', foto: 'Una sessione all’avvio', analisi: 'Una, all’avvio' },
@@ -35,7 +53,7 @@ const PRATICA: Record<IdFascia, Omit<Fascia, 'nome' | 'centesimi' | 'perChi'>> =
 export const ID_FASCE = Object.keys(PRATICA) as IdFascia[];
 
 export const FASCE: Record<IdFascia, Fascia> = Object.fromEntries(
-  ID_FASCE.map((id) => [id, { nome: LISTINO[id].nome, centesimi: LISTINO[id].prezzoMese, perChi: LISTINO[id].perChi, ...PRATICA[id] }]),
+  ID_FASCE.map((id) => [id, { nome: LISTINO[id].nome, centesimi: LISTINO[id].prezzoMese, perChi: LISTINO[id].perChi, benefici: beneficiDi(id), ...PRATICA[id] }]),
 ) as Record<IdFascia, Fascia>;
 
 /** Il 10% sui prodotti venduti tramite MyCity resta anche con l'abbonamento (pricing.commissione, 26/11/2026). */
