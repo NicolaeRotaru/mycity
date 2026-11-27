@@ -31,7 +31,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
   // ogni nuovo «Salva» ridava lo stesso errore finché non si usciva.
   const [versioneModulo, setVersioneModulo] = useState(0);
 
-  const { data: product, isLoading, error, refetch: rileggiProdotto, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto, fetchStatus: prodottoFetchStatus } = useQuery({
+  const { data: product, isLoading, error, refetch: rileggiProdotto, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto } = useQuery({
     queryKey: queryKeys.admin.product(id),
     queryFn: async () => {
       // R22-017 — Un id che non ha la forma di un codice non è un guasto: il prodotto non c'è.
@@ -55,7 +55,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
     refetchOnMount: 'always',
   });
 
-  const { data: variantiLette, error: erroreVarianti, isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette, refetch: rileggiVarianti, fetchStatus: variantiFetchStatus } = useQuery({
+  const { data: variants = [], error: erroreVarianti, isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette, refetch: rileggiVarianti } = useQuery({
     queryKey: [...queryKeys.admin.product(id), 'variants'],
     queryFn: () => loadProductVariants(id),
     // R22-017 — Con un id che non ha la forma di un codice il database risponderebbe con un errore di
@@ -63,9 +63,6 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
     enabled: FORMA_UUID.test(id),
     refetchOnMount: 'always',
   });
-  const variants = variantiLette ?? [];
-  // R10-013 — Il modulo, una volta aperto, resta aperto (per questo prodotto).
-  const [apertoPer, setApertoPer] = useState<string | null>(null);
 
   // R10-012 — Il ripiego `= []` apriva il modulo senza categorie quando la lettura era ferma senza
   // rete (o caduta) e l'elenco non era in memoria: il prodotto sembrava senza categoria, e al Salva
@@ -140,21 +137,8 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  /**
-   * R10-013 — SENZA RETE E AL RITORNO DELLA RETE.
-   * Senza rete le letture vanno «in pausa»: né in caricamento né cadute. Le taglie mai lette
-   * restavano `[]` e il modulo si apriva con 0 taglie (al «Salva» la PATCH le riceveva vuote); un
-   * prodotto mai letto diceva «Prodotto non trovato». Adesso la pagina dice che serve la rete e offre
-   * «Riprova». E aperta la pagina senza rete (prodotto e taglie in memoria), al ritorno della rete
-   * le letture ripartivano e il caricamento prendeva il posto del modulo: il modulo si smontava e le
-   * modifiche sparivano. Il caricamento e gli avvisi valgono solo finché il modulo non si è aperto;
-   * dopo resta dov'è (una scorta cambiata intanto la ferma la PATCH, con «riapri e controlla»).
-   */
-  const prodottoInPausa = product === undefined && prodottoFetchStatus === 'paused';
-  const taglieInPausa = variantiLette === undefined && variantiFetchStatus === 'paused';
-  const giaAperto = apertoPer === id;
-  if (!giaAperto && (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette) || categorieInLettura)) return <LoadingState />;
-  if (!giaAperto && (categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0) {
+  if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette) || categorieInLettura) return <LoadingState />;
+  if ((categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0) {
     return (
       <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
         <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Non riesco a leggere le categorie</p>
@@ -171,7 +155,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
   // 31/10/2026 — SENZA LE VARIANTI IL MODULO NON SI APRE. Se la lettura delle
   // taglie cade, `variants` resta [] e il modulo partiva senza taglie: al «Salva»
   // la PATCH le riceveva vuote. Come nella pagina del negozio, si ferma e lo dice.
-  if ((!giaAperto && (error || erroreVarianti || prodottoInPausa || taglieInPausa)) || !product) {
+  if (error || erroreVarianti || !product) {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
         <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Errore</p>
@@ -180,15 +164,11 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
             ? 'Non riesco a leggere questo prodotto. Non vuol dire che non esista: vuol dire che non l’ho potuto guardare. Riprova fra un momento.'
             : erroreVarianti
               ? 'Non riesco a leggere le taglie e le varianti di questo prodotto. Ricarica la pagina prima di modificarlo: salvando adesso le varianti andrebbero perse.'
-              : prodottoInPausa
-                ? 'Senza rete non riesco a leggere questo prodotto: controlla la connessione e riprova.'
-                : taglieInPausa
-                  ? 'Senza rete non riesco a leggere le taglie e le varianti di questo prodotto: il modulo non si apre senza, perché salvando andrebbero perse. Controlla la connessione e riprova.'
-                  : 'Prodotto non trovato'}
+              : 'Prodotto non trovato'}
         </p>
         {/* R03-007 — Riprova anche quando a cadere sono le varianti: rilegge quelle (e il prodotto, se è caduto lui). */}
-        {(error || erroreVarianti || prodottoInPausa || taglieInPausa) && (
-          <button type="button" onClick={() => { if (error || prodottoInPausa) void rileggiProdotto(); if (erroreVarianti || taglieInPausa) void rileggiVarianti(); }} className="mr-4 text-sm font-semibold text-rose-700 hover:underline">
+        {(error || erroreVarianti) && (
+          <button type="button" onClick={() => { if (error) void rileggiProdotto(); if (erroreVarianti) void rileggiVarianti(); }} className="mr-4 text-sm font-semibold text-rose-700 hover:underline">
             Riprova
           </button>
         )}
@@ -196,8 +176,6 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
       </div>
     );
   }
-
-  if (!giaAperto) setApertoPer(id);
 
   const attrs = (product.attributes as Record<string, unknown>) ?? {};
   const legacyStato = typeof attrs.stato === 'string' ? attrs.stato : '';
