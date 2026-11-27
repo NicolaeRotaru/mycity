@@ -221,6 +221,8 @@
   ],
   "conto": {
     "agenti": 5,
-    "nota": "L1 (opus), S1 (opus), L2 (opus), S2 (opus), correzione di R03-002 (opus). Spesa misurata col mio id: 17,13 $ prima del verify."
-  }
+    "nota": "L1 (opus), S1 (opus), L2 (opus), S2 (opus), correzione di R03-002 (opus). Spesa misurata col mio id: 17,13 $ prima del verify. costo_usd = usage.cost_usd di get_session alle 02:15 (il valore era fermo all aggiornamento delle 01:51 del server).",
+    "subagenti": 5
+  },
+  "costo_usd": 17.13
 }
