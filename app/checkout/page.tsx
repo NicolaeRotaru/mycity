@@ -527,6 +527,10 @@ export default function CheckoutPage() {
       // comunque appena viene ripresa, come prima.
       const raw = localStorage.getItem('mc_checkout_draft') ?? sessionStorage.getItem('mc_checkout_draft');
       if (!raw) return;
+      // Si toglie dal browser appena letta, PRIMA di capirla: una bozza illeggibile (JSON rotto o
+      // di forma sbagliata) usciva prima della cancellazione e restava lì coi dati dell'ospite.
+      localStorage.removeItem('mc_checkout_draft');
+      sessionStorage.removeItem('mc_checkout_draft');
       // R03-025 — con l'orologio: «Domani» salvato ieri sera è «Oggi», una fascia passata non torna.
       const bozza = bozzaLetta(JSON.parse(raw), new Date());
       if (!bozza) return;
@@ -550,9 +554,6 @@ export default function CheckoutPage() {
       if (oggi) setSlotTodayTime(oggi);
       const domani = fasciaDaRimettere('tomorrow', bozza.fasciaDomani, adesso, orariNegozi);
       if (domani) setSlotTomorrowTime(domani);
-
-      localStorage.removeItem('mc_checkout_draft');
-      sessionStorage.removeItem('mc_checkout_draft');
     } catch { /* noop */ }
   }, []);
 
