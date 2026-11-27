@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { leggiSchedaSalvata, type SchedaCliente } from './scheda-cliente';
-import { leggiSchedaEPagellaAperte, schedaEPagellaAperte, schedaPerIlSito } from './scheda-dopo-abbonamento';
+import { leggiSchedaEPagellaAperte, schedaEPagellaAperte, schedaPerIlSito, statoCheApre } from './scheda-dopo-abbonamento';
 import { analisiPerLaFascia } from './rapporto';
 import { ABBONAMENTI, type Abbonamento } from './preventivo';
 
@@ -30,9 +30,9 @@ export function fasciaAttiva(righe: ReadonlyArray<{ fascia?: unknown; stato?: un
  */
 export function schedaComeLaVedeIlNegozio(
   grezza: unknown,
-  d: { visibileSenzaAbbonamento: unknown; abbonamenti: ReadonlyArray<{ fascia?: unknown; stato?: unknown }> | null | undefined },
+  d: { visibileSenzaAbbonamento: unknown; abbonamenti: ReadonlyArray<{ fascia?: unknown; stato?: unknown; origine?: unknown }> | null | undefined },
 ): SchedaCliente | null {
-  const aperta = schedaEPagellaAperte({ visibileSenzaAbbonamento: d.visibileSenzaAbbonamento, statiAbbonamenti: (d.abbonamenti ?? []).map((r) => r.stato) });
+  const aperta = schedaEPagellaAperte({ visibileSenzaAbbonamento: d.visibileSenzaAbbonamento, statiAbbonamenti: (d.abbonamenti ?? []).map(statoCheApre) });
   const intera = schedaPerIlSito(leggiSchedaSalvata(grezza), aperta);
   return intera && aperta ? { ...intera, analisi: analisiPerLaFascia(intera.analisi, fasciaAttiva(d.abbonamenti)) } : intera;
 }

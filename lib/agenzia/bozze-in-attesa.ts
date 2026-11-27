@@ -3,7 +3,7 @@ import { aspettaLaBozza, senzaPrezzoTranneOrari, type InAttesa } from './bozza-s
 import { leggiRisultatoSito } from './analisi';
 import { leggiGiudizioSito, sitoDaRifareInQualcheFascia } from './offerta-su-misura';
 import { leggiSchedaSalvata, prodottiTipici, senzaPrezzo, sitoUfficialeDi, vociSenzaPrezzo } from './scheda-cliente';
-import { schedaEPagellaAperte, schedaPerIlSito } from './scheda-dopo-abbonamento';
+import { schedaEPagellaAperte, schedaPerIlSito, statoCheApre } from './scheda-dopo-abbonamento';
 
 /**
  * I NEGOZI CHE ASPETTANO LA BOZZA DEL SITO — 24/11/2026.
@@ -64,7 +64,8 @@ export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } 
       ? admin.from('profiles').select('id, visibile_senza_abbonamento').eq('role', 'seller').limit(TETTO_NEGOZI)
       : Promise.resolve({ data: [], error: null }),
     // Sempre: serve anche a sapere quando la scheda si è aperta, e quindi se la bozza va rifatta.
-    admin.from('abbonamenti_servizi').select('seller_id, stato, creato_il').limit(TETTO_NEGOZI * 5),
+    // `*`: regge anche prima della migrazione 999 (l'abbonamento in contanti fermato non apre la scheda).
+    admin.from('abbonamenti_servizi').select('*').limit(TETTO_NEGOZI * 5),
     // 25/11/2026 — La misura di Google del sito che hanno già. Facoltativa: se cade, chi ha un sito non aspetta.
     Promise.resolve()
       .then(() => admin.from('analisi_negozi').select('id_attivita, sito').limit(TETTO_NEGOZI))
@@ -99,10 +100,11 @@ export async function negoziCheAspettanoLaBozza(opzioni: { conIDati?: boolean } 
   const statiPerNegozio = new Map<string, unknown[]>();
   // Il primo abbonamento pagato di ogni negozio: lì la scheda si è aperta.
   const apertaIl = new Map<string, string>();
-  for (const r of (abbonamenti.error ? [] : abbonamenti.data ?? []) as Array<{ seller_id: string; stato: unknown; creato_il?: string | null }>) {
-    statiPerNegozio.set(r.seller_id, [...(statiPerNegozio.get(r.seller_id) ?? []), r.stato]);
+  for (const r of (abbonamenti.error ? [] : abbonamenti.data ?? []) as Array<{ seller_id: string; stato: unknown; origine?: unknown; creato_il?: string | null }>) {
+    const conta = statoCheApre(r);
+    statiPerNegozio.set(r.seller_id, [...(statiPerNegozio.get(r.seller_id) ?? []), conta]);
     const quando = typeof r.creato_il === 'string' ? r.creato_il : null;
-    if (quando && schedaEPagellaAperte({ visibileSenzaAbbonamento: false, statiAbbonamenti: [r.stato] })) {
+    if (quando && schedaEPagellaAperte({ visibileSenzaAbbonamento: false, statiAbbonamenti: [conta] })) {
       const prima = apertaIl.get(r.seller_id);
       if (!prima || new Date(quando).getTime() < new Date(prima).getTime()) apertaIl.set(r.seller_id, quando);
     }

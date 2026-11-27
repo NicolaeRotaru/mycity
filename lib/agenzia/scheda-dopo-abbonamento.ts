@@ -22,10 +22,24 @@ import { analisiPerChiNonHaPagato } from './rapporto';
  *  · oppure era già online prima della modalità demo (`profiles.visibile_senza_abbonamento`,
  *    migrazione 709: Pane Quotidiano, i negozi di sistema). Per loro la pagella resta com'è.
  * Se la lettura non riesce la risposta è «chiusa»: meglio niente pagella che una mostrata a chi è in demo.
+ *
+ * 27/11/2026 — L'abbonamento in contanti (migrazione 999) nasce al «Sì» dell'agente, PRIMA dei soldi: apre la
+ * scheda finché è in corso, ma fermato da Nicola (non ha pagato, o ha disdetto) non la tiene aperta, perché non
+ * dice che una cassa sia mai stata pagata (collaudo del 27/11: dopo «Ferma» scheda e rapporto restavano).
  */
 
 /** Gli stati di Stripe in cui un abbonamento non è mai stato pagato. Tutti gli altri vengono da una cassa pagata. */
 const MAI_PAGATO = new Set(['incomplete', 'incomplete_expired']);
+
+/**
+ * Lo stato di una riga di `abbonamenti_servizi` che conta per aprire la scheda: quello della riga, tranne per
+ * un abbonamento in contanti non più in corso, che non conta (`null`). Una riga senza `origine` (di prima
+ * della 999, o letta senza quella colonna) è di Stripe.
+ */
+export function statoCheApre(r: { stato?: unknown; origine?: unknown }): unknown {
+  if (r.origine === 'contanti' && r.stato !== 'active' && r.stato !== 'past_due') return null;
+  return r.stato;
+}
 
 export type DatiSblocco = {
   visibileSenzaAbbonamento: unknown;
@@ -69,7 +83,8 @@ export function conLAnalisi(confermata: SchedaCliente | null, intera: SchedaClie
 export async function leggiSchedaEPagellaAperte(admin: SupabaseClient, idAttivita: string): Promise<boolean> {
   const [profilo, abbonamenti] = await Promise.all([
     admin.from('profiles').select('visibile_senza_abbonamento').eq('id', idAttivita).maybeSingle(),
-    admin.from('abbonamenti_servizi').select('stato').eq('seller_id', idAttivita).limit(20),
+    // `*` e non «stato, origine»: così la lettura regge anche prima della migrazione 999.
+    admin.from('abbonamenti_servizi').select('*').eq('seller_id', idAttivita).limit(20),
   ]);
   const colonnaAssente = profilo.error && ['42703', 'PGRST204'].includes(String((profilo.error as { code?: string }).code));
   if (profilo.error && !colonnaAssente) {
@@ -84,6 +99,6 @@ export async function leggiSchedaEPagellaAperte(admin: SupabaseClient, idAttivit
   }
   return schedaEPagellaAperte({
     visibileSenzaAbbonamento: visibile,
-    statiAbbonamenti: ((abbonamenti.data ?? []) as Array<{ stato?: unknown }>).map((r) => r.stato),
+    statiAbbonamenti: ((abbonamenti.data ?? []) as Array<{ stato?: unknown; origine?: unknown }>).map(statoCheApre),
   });
 }

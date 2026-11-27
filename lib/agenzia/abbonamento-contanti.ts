@@ -118,8 +118,9 @@ export async function segnaLaSceltaSulPreventivo(admin: SupabaseClient, sellerId
 
 /**
  * Ferma l'abbonamento in contanti di un negozio (Nicola, 27/11: «se non paga, fermalo tu»; o la disdetta del
- * titolare). La riga non si cancella: passa a `canceled` e resta nello storico. La pagina torna in demo da sola,
- * perché i lettori guardano solo gli abbonamenti in corso. Un abbonamento Stripe non si tocca mai da qui.
+ * titolare). La riga non si cancella: passa a `canceled` e resta nello storico. La pagina torna in demo da sola:
+ * la vetrina guarda solo gli abbonamenti in corso, e scheda e rapporto non contano un abbonamento in contanti
+ * fermato (`statoCheApre`, lib/agenzia/scheda-dopo-abbonamento.ts). Un abbonamento Stripe non si tocca mai da qui.
  * Restituisce quante righe ha fermato (0 se non ce n'era una in corso), o `null` per un guasto.
  */
 export async function fermaInContanti(admin: SupabaseClient, sellerId: string): Promise<number | null> {

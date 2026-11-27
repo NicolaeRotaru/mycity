@@ -77,7 +77,7 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null }: {
         {giaOnline
           ? <p>Ha già un abbonamento pagato online: resta quello.</p>
           : sbloccata
-            ? <p>La sua pagina è sbloccata col {nomeFascia}: i servizi del {nomeFascia} sono attivi da adesso, fino alla disdetta.</p>
+            ? <p>La sua pagina è sbloccata col {nomeFascia}, fino alla disdetta. Sul marketplace la sua vetrina si vede solo dopo l’approvazione di Nicola.</p>
             : <p className={c('errore')}>La sua pagina non si è sbloccata col {nomeFascia}: dillo a Nicola.</p>}
         <p>Il titolare entra quando accetta il preventivo dal link.{avvisato ? ' Nicola ha ricevuto l’avviso.' : ''}</p>
         {avvisoDovuto && !avvisato && <p className={c('errore')}>L’avviso a Nicola non è partito: diglielo tu.</p>}

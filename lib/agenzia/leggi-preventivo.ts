@@ -14,7 +14,7 @@ import { tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
 import { leggiSchedaSalvata, sitoUfficialeDi, soloConfermati } from '@/lib/agenzia/scheda-cliente';
 import { analisiAziendale, leggiAnalisiCanali, leggiRisultatoSito, sitoInParole, statoAnalisiBusiness } from '@/lib/agenzia/analisi';
 import { leggiGiudizioSito, offertaSuMisura } from '@/lib/agenzia/offerta-su-misura';
-import { conLAnalisi, schedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
+import { conLAnalisi, schedaEPagellaAperte, schedaPerIlSito, statoCheApre } from '@/lib/agenzia/scheda-dopo-abbonamento';
 import { primoMeseAncoraScontato } from '@/lib/agenzia/abbonamento-contanti';
 
 /**
@@ -72,7 +72,8 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
     // 24/11/2026 — L'abbonamento dei servizi già pagato, se c'è (migrazione 706).
     admin
       .from('abbonamenti_servizi')
-      .select('fascia, stato, rinnovo_il, origine')
+      // `*`: regge anche prima della migrazione 999 (senza `origine` ogni riga vale Stripe).
+      .select('*')
       .eq('seller_id', idAttivita)
       .order('creato_il', { ascending: false })
       .limit(20),
@@ -117,7 +118,7 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
   // misura resta l'analisi (lib/agenzia/scheda-dopo-abbonamento.ts). Una lettura caduta vale «chiusa».
   const aperta = schedaEPagellaAperte({
     visibileSenzaAbbonamento: p.visibile_senza_abbonamento,
-    statiAbbonamenti: abbonamento.error ? [] : ((abbonamento.data as Array<{ stato?: unknown }> | null) ?? []).map((r) => r.stato),
+    statiAbbonamenti: abbonamento.error ? [] : ((abbonamento.data as Array<{ stato?: unknown; origine?: unknown }> | null) ?? []).map(statoCheApre),
   });
   // 25/11/2026 sera — Un sito noto conta come sito anche senza la misura di Google: oltre alla vetrina (dove lo scrive
   // anche il modulo 12) e alla misura, quello che il flusso 16 ha trovato (`campi.sito_ufficiale`), ma solo se è
