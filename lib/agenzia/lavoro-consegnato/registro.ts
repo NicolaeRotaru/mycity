@@ -41,3 +41,11 @@ export function lavoroConsegnatoDi(negozioId: string): LavoroConsegnato | null {
     analisi: leggi('analisi', id, AnalisiSchema, voce.analisi),
   };
 }
+
+/**
+ * 27/11/2026 — I negozi che hanno un lavoro consegnato, per la pagina Admin «Lavoro dei clienti»
+ * (Nicola: «dammi modo di accedere all'account Caffè di Piacenza» → «vederlo da Admin», in sola lettura).
+ */
+export function negoziConLavoroConsegnato(): string[] {
+  return [...REGISTRO.keys()];
+}

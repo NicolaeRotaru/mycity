@@ -13,6 +13,7 @@ import {
   type LucideIcon,
   UserPlus,
   ClipboardList,
+  Globe,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
@@ -43,6 +44,8 @@ const NAV: NavGroup[] = [
     { href: '/admin/agenti', icon: UserPlus, label: 'Agenti' },
     // 27/11/2026 — Gli ordini di servizio che arrivano a SDG quando il titolare conferma (migrazione 999c).
     { href: '/admin/ordini-sdg', icon: ClipboardList, label: 'Ordini di SDG' },
+    // 27/11/2026 — Quello che ogni cliente vede alle voci dei servizi (Nicola: «vederlo da Admin»).
+    { href: '/admin/lavoro-consegnato', icon: Globe, label: 'Lavoro dei clienti' },
     // 24/11/2026 — I negozi che aspettano la bozza del sito scritta dall'AD nel suo giro.
     { href: '/admin/bozze-sito', icon: FileText, label: 'Bozze del sito' },
   ] },

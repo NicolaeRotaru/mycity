@@ -74,3 +74,6 @@ export type LavoroConsegnato = {
   social?: Social;
   analisi?: Analisi;
 };
+
+/** 27/11/2026 — Una riga della pagina Admin «Lavoro dei clienti». */
+export type NegozioConLavoro = { negozioId: string; nome: string; lavoro: LavoroConsegnato };
