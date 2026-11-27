@@ -242,6 +242,11 @@ describe('il piano completo dell AD', () => {
     expect(tutto).not.toContain('titolare@esempio.it');
     expect(tutto).not.toContain('agente@esempio.it');
     expect(tutto).not.toContain('09:00:00');
+    // Né scritta come la legge il titolare (collaudo del 27/11: la prova guardava solo l'ora UTC).
+    expect(tutto).not.toContain('2026-12-03');
+    expect(tutto).not.toContain('3 dicembre');
+    // Il compito per l'AD nomina la visita come idea («cosa preparare alla visita»); i dati del locale no.
+    expect(JSON.stringify({ prima: a.prima, dati: a.job.dati })).not.toMatch(/visita/i);
     expect((a.job.dati as { abbonamento: { contenuti: number; video: number } }).abbonamento).toMatchObject({ contenuti: 12, video: 2 });
   });
 
@@ -431,5 +436,21 @@ describe('dal collaudo del 27/11', () => {
         expect(e.piano.contenuti[1]).toMatchObject({ inCitta: 'Mercato del sabato', fonteEvento: 'https://www.comune.piacenza.it/mercato' });
       }
     });
+  });
+});
+
+describe('«scarica i miei dati» del titolare non fa uscire l email dell agente (collaudo del 27/11)', () => {
+  const rotta = fs.readFileSync(path.join(process.cwd(), 'app/api/account/export/route.ts'), 'utf8');
+  const colonne = (tabella: string) => {
+    const m = rotta.match(new RegExp(`from\\('${tabella}'\\)\\.select\\('([^']*)'\\)`));
+    return m ? m[1].split(',').map((c) => c.trim()) : null;
+  };
+  it('dell ordine di SDG escono solo abbonamento, canone, visita e date', () => {
+    expect(colonne('ordini_sdg')).toEqual(['seller_id', 'nome_attivita', 'fascia', 'canone_centesimi', 'primo_mese_centesimi', 'visita_il', 'accettato_il', 'creato_il']);
+  });
+  it('del preventivo non escono il codice, l agente né la sua scheda', () => {
+    const c = colonne('preventivi_con_codice');
+    expect(c).not.toBeNull();
+    for (const vietata of ['*', 'codice', 'agente_email', 'lavoro']) expect(c).not.toContain(vietata);
   });
 });
