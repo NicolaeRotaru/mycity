@@ -1136,12 +1136,15 @@ export function codiceDelPreventivoTemplate(args: { negozio: string; codice: str
  * questo link per entrare (lib/agenzia/preventivo-col-codice.ts). Il link è di Supabase e vale una
  * volta sola; dopo, entra con «Accedi» e la stessa email.
  */
-export function accessoDopoIlPreventivoTemplate(args: { negozio: string; link: string }) {
+export function accessoDopoIlPreventivoTemplate(args: { negozio: string; link: string; visita?: string | null }) {
   const negozio = escapeHtml(args.negozio);
+  // 27/11/2026 — Il giorno in cui SDG passa dal titolare, scelto nel link (lib/agenzia/visita-sdg.ts).
+  const visita = args.visita ? escapeHtml(args.visita) : null;
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Benvenuto su MyCity, ${negozio}</h1>
     <p style="margin:0 0 12px;line-height:1.6">Hai accettato il preventivo dei servizi di MyCity, realizzati da SDG Agenzia, il partner di MyCity. Da qui entri nel tuo account: mentre controlliamo i dati del negozio vedi a che punto è; quando è approvato trovi la tua pagina, l'abbonamento e i dati del locale da controllare.</p>
-    <p style="margin:0 0 12px;line-height:1.6">${PAGAMENTO_ONLINE_SERVIZI ? "Se non hai ancora pagato l'abbonamento, lo paghi dallo stesso link del preventivo che ti abbiamo mandato." : "L'abbonamento, per ora, si paga in contanti, di persona: ti contattiamo noi per fissare l'inizio."}</p>
+    ${visita ? `<p style="margin:0 0 12px;line-height:1.6"><strong>Ci vediamo ${visita}.</strong> Il team creativo di SDG passa da te: scriviamo insieme il piano dei contenuti del primo mese, e il fotografo e il videomaker fanno subito le prime foto e i primi video. Se quel giorno non ti va più bene, rispondi a questa email e lo spostiamo.</p>` : ''}
+    <p style="margin:0 0 12px;line-height:1.6">${PAGAMENTO_ONLINE_SERVIZI ? "Se non hai ancora pagato l'abbonamento, lo paghi dallo stesso link del preventivo che ti abbiamo mandato." : visita ? "L'abbonamento, per ora, si paga in contanti, di persona." : "L'abbonamento, per ora, si paga in contanti, di persona: ti contattiamo noi per fissare l'inizio."}</p>
     <p style="margin:0 0 12px;line-height:1.6">I dati che abbiamo trovato in rete li vedi con la loro fonte: in pubblico va solo quello che confermi tu. Prezzi e allergeni li scrivi sempre tu.</p>
     <p style="margin:24px 0">${btn(args.link, 'Entra nel tuo account')}</p>
     <p style="margin:0 0 12px;line-height:1.6;font-size:13px">Il pulsante vale una volta sola. Dopo, entri da «Accedi» con questa email.</p>
@@ -1149,7 +1152,7 @@ export function accessoDopoIlPreventivoTemplate(args: { negozio: string; link: s
   return {
     subject: `${args.negozio}: entra nel tuo account MyCity`,
     html: shell('Entra nel tuo account', body),
-    text: `Hai accettato il preventivo dei servizi di MyCity. Entra nel tuo account da qui (vale una volta sola): ${args.link}`,
+    text: `Hai accettato il preventivo dei servizi di MyCity.${args.visita ? ` Ci vediamo ${args.visita}: il team creativo di SDG passa da te per il piano dei contenuti, le foto e i video.` : ''} Entra nel tuo account da qui (vale una volta sola): ${args.link}`,
   };
 }
 
