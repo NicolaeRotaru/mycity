@@ -5,6 +5,7 @@ import { isStripeConfigured } from '@/lib/stripe/client';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { apriCassaDalLink } from '@/lib/agenzia/cassa-dal-link';
+import { MESSAGGIO_CASSA_SPENTA, pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
 import { CODICE_VALIDO, leggiPreventivoColCodice } from '@/lib/agenzia/preventivo-col-codice';
 
 export const runtime = 'nodejs';
@@ -23,6 +24,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
   if (!CODICE_VALIDO.test(codice)) return ApiErrors.notFound('Preventivo non trovato');
   const rl = await rateLimitAsync({ key: `preventivo-codice-paga:${getClientIp(req)}`, max: 10, windowMs: 10 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
+  // 26/11/2026 — Per ora si paga in contanti (lib/agenzia/pagamento-servizi.ts).
+  if (!pagamentoOnlineAttivo()) return ApiErrors.conflict(MESSAGGIO_CASSA_SPENTA);
   if (!isStripeConfigured()) return ApiErrors.unavailable('I pagamenti non sono disponibili in questo momento. Scrivici e ti richiamiamo.');
 
   let preventivo;

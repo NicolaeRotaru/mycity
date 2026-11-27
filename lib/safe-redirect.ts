@@ -62,14 +62,19 @@ export function safeInternalPath(input: unknown, fallback = '/'): string {
 
   // Deve iniziare con singolo slash
   if (!pulito.startsWith('/')) return fallback;
-  // Blocca protocol-relative // e backslash
-  if (pulito.startsWith('//') || pulito.startsWith('/\\')) return fallback;
+  // Blocca protocol-relative // e backslash nel percorso (prima di ? e #)
+  const soloPercorso = pulito.split(/[?#]/, 1)[0];
+  if (pulito.startsWith('//') || soloPercorso.includes('\\')) return fallback;
   // Blocca schemi noti (finiscono anche dentro un href, non solo in un redirect)
   if (/^\/?(javascript|data|vbscript|file):/i.test(pulito)) return fallback;
 
   // ③ La domanda che conta: risolto contro una casa qualunque, ci resta?
+  //    E il percorso risolto (segmenti «.» e «..», anche codificati) resta un
+  //    percorso, non un indirizzo che comincia con //.
   try {
-    if (new URL(pulito, CASA).origin !== CASA) return fallback;
+    const risolto = new URL(pulito, CASA);
+    if (risolto.origin !== CASA) return fallback;
+    if (risolto.pathname.startsWith('//')) return fallback;
   } catch {
     return fallback;
   }

@@ -8,6 +8,7 @@ import { FASCE, type Abbonamento } from '@/lib/agenzia/preventivo';
 import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import { campiPerIlProfilo, leggiSchedaSalvata } from '@/lib/agenzia/scheda-cliente';
 import { leggiSchedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
+import { pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
 
 /**
  * IL PREVENTIVO COL LINK COL CODICE — 24/11/2026.
@@ -26,6 +27,9 @@ import { leggiSchedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda
  *  4. Nicola riceve l'avviso, il titolare il link per entrare (link di Supabase, una volta sola).
  * Il pagamento si apre subito dopo (lib/agenzia/cassa-servizi.ts); se non lo chiude, paga dalla
  * sua pagina quando entra.
+ *
+ * 26/11/2026 — Nicola: per ora si paga in contanti, di persona. Con il pagamento online spento
+ * (lib/agenzia/pagamento-servizi.ts) non si apre nessuna cassa e l'avviso a Nicola lo ricorda.
  */
 
 export const CODICE_VALIDO = /^[0-9a-f]{64}$/;
@@ -71,7 +75,7 @@ export async function accettaPreventivoColCodice(input: {
 }): Promise<EsitoAccettazione> {
   const { preventivo, codice, email, fascia } = input;
   if (preventivo.stato === 'accettato') {
-    return { ok: false, motivo: 'GIA_ACCETTATO', messaggio: 'Questo preventivo è già stato accettato: controlla la tua email per entrare e pagare dalla tua pagina.' };
+    return { ok: false, motivo: 'GIA_ACCETTATO', messaggio: 'Questo preventivo è già stato accettato: controlla la tua email per entrare.' };
   }
   if (preventivo.stato === 'chiuso') {
     return { ok: false, motivo: 'CHIUSO', messaggio: 'Questo preventivo non è più valido. Scrivici e te ne prepariamo uno nuovo.' };
@@ -133,6 +137,8 @@ export async function accettaPreventivoColCodice(input: {
       profiloCompilato
         ? 'Il negozio è in revisione, ma arriva dal preventivo: mancano i dati dell’iscrizione (IBAN, documenti). Non approvarlo prima di averli.'
         : 'ATTENZIONE: il profilo non si è aggiornato (non è in revisione): sistemalo a mano.',
+      // 26/11/2026 — Per ora niente pagamento online (lib/agenzia/pagamento-servizi.ts).
+      ...(pagamentoOnlineAttivo() ? [] : ['Pagamento in contanti, di persona: accordati col titolare per incassarlo.']),
     ].join(' '),
     '/admin/preventivi',
     { unaVoltaPer: `preventivo-codice:${id}` },

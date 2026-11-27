@@ -216,9 +216,11 @@ describe('cosa ricevi, già pronto dentro il servizio', () => {
     expect(radio.find((x) => x.checked)?.value).toBe('business'); // vetrina vuota: mancano foto e sito
     expect(r.textContent).toContain('Ti consigliamo il Business.');
     await act(async () => { radio[2].click(); });
-    // 24/11/2026: si paga subito (il primo mese a metà), oppure si chiede di essere richiamati
-    expect(r.textContent).toMatch(/Paga e attiva il Premium · il primo mese 499,50\s€/);
-    expect(r.textContent).toContain('Preferisco essere richiamato');
+    // 26/11/2026: per ora si paga in contanti (lib/agenzia/pagamento-servizi.ts): niente «Paga e attiva»,
+    // si chiede di essere contattati per la fascia scelta. Il primo mese a metà resta scritto sulla fascia.
+    expect(r.textContent).not.toContain('Paga e attiva');
+    expect(r.textContent).toContain('Voglio il Premium: contattatemi');
+    expect(r.textContent).toMatch(/Il primo mese 499,50\s€/);
     expect(r.textContent).toContain('I servizi li realizza SDG Agenzia, il partner di MyCity');
     // in cima «Cosa ci guadagni»; sotto ogni piano il primo mese e il pareggio in colazioni
     expect(r.textContent!.indexOf('Cosa ci guadagni')).toBeLessThan(r.textContent!.indexOf('Base, Business o Premium'));
