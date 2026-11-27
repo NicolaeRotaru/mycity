@@ -196,6 +196,19 @@ describe('dopo la conferma il titolare entra subito nella sua pagina', () => {
     expect(db.link).toHaveLength(0);
   });
 
+  it('Origin «null» (pagina in un riquadro protetto) è rifiutata (collaudo M2)', async () => {
+    const r = await conferma(BUONO, { origin: 'null' });
+    expect(r.status).toBe(403);
+    expect(db.preventivo?.stato).toBe('aperto');
+  });
+
+  it('un corpo che non è JSON dichiarato (un modulo text/plain) è rifiutato (collaudo M3)', async () => {
+    const r = await conferma(BUONO, { 'content-type': 'text/plain' });
+    expect(r.status).toBe(400);
+    expect(db.preventivo?.stato).toBe('aperto');
+    expect(db.link).toHaveLength(0);
+  });
+
   it('dal sito stesso passa', async () => {
     const r = await conferma(BUONO, { origin: 'https://mycity.example' });
     expect(r.status).toBe(200);

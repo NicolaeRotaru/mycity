@@ -86,7 +86,16 @@ export function sessioneDalLink(intestazioneCookie: string | null, tetto = TETTO
           return true;
         }
         const id = risposta.data?.user?.id ?? null;
-        return id !== null && id !== sellerId;
+        if (id !== null) return id !== sellerId;
+        // Nessun utente. Se è perché non c'è nessuna sessione, si entra. Se è un errore (rete giù, 5xx:
+        // la libreria non lancia, lo restituisce), una sessione di un altro potrebbe esserci: prudenza
+        // (collaudo del 27/11, minore M1).
+        const errore = risposta.error as { name?: string } | null;
+        if (errore && errore.name !== 'AuthSessionMissingError') {
+          logger.warn('[preventivo-codice] chi c è dentro non si sa: il titolare entra dall email', { errore: errore.name ?? 'sconosciuto' });
+          return true;
+        }
+        return false;
       } catch (e) {
         logger.warn('[preventivo-codice] chi c è dentro non si sa: il titolare entra dall email', { errore: String(e) });
         return true;

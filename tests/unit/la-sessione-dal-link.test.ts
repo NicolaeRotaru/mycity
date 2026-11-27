@@ -78,6 +78,27 @@ describe('chi c è già dentro', () => {
     expect(await sessioneDalLink('sb-test-auth-token=abc')!.dentroUnAltro('gc-1')).toBe(true);
   });
 
+  it('se Supabase risponde con un errore di rete invece di lanciare, si resta prudenti (collaudo M1)', async () => {
+    // auth-js non lancia sugli errori di rete e sui 5xx: restituisce { user: null, error }.
+    finto.getUser = async () => ({ data: { user: null }, error: { name: 'AuthRetryableFetchError', status: 0 } });
+    expect(await sessioneDalLink('sb-test-auth-token=abc')!.dentroUnAltro('gc-1')).toBe(true);
+    finto.getUser = async () => ({ data: { user: null }, error: { name: 'AuthApiError', status: 500 } });
+    expect(await sessioneDalLink('sb-test-auth-token=abc')!.dentroUnAltro('gc-1')).toBe(true);
+    // Nessuna sessione nel browser: è il caso del telefono del titolare, si entra.
+    finto.getUser = async () => ({ data: { user: null }, error: { name: 'AuthSessionMissingError', status: 400 } });
+    expect(await sessioneDalLink(null)!.dentroUnAltro('gc-1')).toBe(false);
+  });
+
+  it('dopo una risposta veloce non resta nessun timer acceso (collaudo M4)', async () => {
+    vi.useFakeTimers();
+    try {
+      expect(await sessioneDalLink(null)!.dentroUnAltro('gc-1')).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('se non risponde in tempo o si rompe, si resta prudenti', async () => {
     finto.getUser = () => new Promise(() => undefined);
     expect(await sessioneDalLink(null, 20)!.dentroUnAltro('gc-1')).toBe(true);

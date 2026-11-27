@@ -51,6 +51,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
     logger.warn('[preventivo-codice] conferma arrivata da un altro sito', { origine });
     return ApiErrors.forbidden('Richiesta non valida');
   }
+  // Solo JSON: un modulo «text/plain» di un altro sito non deve poter passare la lettura del corpo
+  // (collaudo del 27/11, minore M3). La pagina della conferma manda sempre application/json.
+  if (!(req.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) {
+    return ApiErrors.invalidRequest('Richiesta non valida');
+  }
 
   const ip = getClientIp(req);
   const rl = await rateLimitAsync({ key: `preventivo-codice:${ip}`, max: 10, windowMs: 10 * 60_000 });
