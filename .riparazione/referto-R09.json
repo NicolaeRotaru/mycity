@@ -489,6 +489,8 @@
   ],
   "conto": {
     "agenti": 5,
-    "nota": "lotto 1 (modello grande), lotto 2 (sonnet), 3 revisori (1 grande, 2 sonnet); giro di correzione saltato per il tetto di spesa (17,35 $ su 19 $ di tetto duro)"
-  }
+    "nota": "lotto 1 (modello grande), lotto 2 (sonnet), 3 revisori (1 grande, 2 sonnet); giro di correzione saltato per il tetto di spesa (17,35 $ su 19 $ di tetto duro)",
+    "subagenti": 5
+  },
+  "costo_usd": 17.77
 }
