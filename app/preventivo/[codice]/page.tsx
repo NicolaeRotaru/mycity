@@ -48,6 +48,9 @@ export default async function DashboardDemo({
   if (demo.tipo === 'guasto') return <p className="text-ink-700">{demo.messaggio}</p>;
 
   const p = demo.preventivo;
+  // 27/11/2026 — La fascia scelta dal titolare davanti all'agente vale più di quella consigliata dai dati.
+  const scelta = demo.pc.fasciaScelta;
+  const evidenziata = scelta ?? p.consigliato;
   const servizi = pulsantiServizi(p.righe, (id) => ind.servizio(SLUG_SERVIZIO[id]));
 
   return (
@@ -61,17 +64,18 @@ export default async function DashboardDemo({
         <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Le tre fasce dell'abbonamento">
           {ABBONAMENTI.map((f) => {
             const primo = p.primoMeseScontato ? canonePrimoMese(p.prezzi[f]) : null;
-            const consigliata = f === p.consigliato;
+            const consigliata = f === evidenziata;
+            const etichetta = scelta ? 'La tua scelta' : 'Consigliato';
             return (
               <li key={f}>
                 <Link
                   href={hrefFascia(f, ind.abbonamento)}
-                  aria-label={`Il preventivo col ${FASCE[f].nome}: ${scriviCanone(p.prezzi[f])}${consigliata ? ', consigliato' : ''}`}
+                  aria-label={`Il preventivo col ${FASCE[f].nome}: ${scriviCanone(p.prezzi[f])}${consigliata ? `, ${etichetta.toLowerCase()}` : ''}`}
                   className={`block h-full rounded-xl border-2 bg-white p-3 transition-colors hover:border-primary-300 hover:bg-cream-50 ${consigliata ? 'border-primary-700' : 'border-cream-200'}`}
                 >
                   <p className="flex flex-wrap items-center gap-2">
                     <span className="font-serif text-lg font-bold text-ink-900">{FASCE[f].nome}</span>
-                    {consigliata && <span className="rounded-full bg-olive-700 px-2 py-0.5 text-[11px] font-bold text-white">Consigliato</span>}
+                    {consigliata && <span className="rounded-full bg-olive-700 px-2 py-0.5 text-[11px] font-bold text-white">{etichetta}</span>}
                   </p>
                   <p className="text-sm font-semibold text-ink-900">{scriviCanone(p.prezzi[f])}</p>
                   {primo !== null && <p className="text-xs font-semibold text-olive-800">Il primo mese {formatPriceFromCents(primo)}</p>}
@@ -84,7 +88,7 @@ export default async function DashboardDemo({
           })}
         </ul>
         <Link
-          href={hrefFascia(p.consigliato, ind.abbonamento)}
+          href={hrefFascia(evidenziata, ind.abbonamento)}
           className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-primary-800"
         >
           {TESTI_RIQUADRO.pulsante} <ArrowRight size={16} aria-hidden />

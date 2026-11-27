@@ -9,6 +9,7 @@ import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import { campiPerIlProfilo, leggiSchedaSalvata } from '@/lib/agenzia/scheda-cliente';
 import { leggiSchedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
 import { pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
+import { sbloccaInContanti, sbloccoRiuscito } from '@/lib/agenzia/abbonamento-contanti';
 
 /**
  * IL PREVENTIVO COL LINK COL CODICE — 24/11/2026.
@@ -30,6 +31,10 @@ import { pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
  *
  * 26/11/2026 — Nicola: per ora si paga in contanti, di persona. Con il pagamento online spento
  * (lib/agenzia/pagamento-servizi.ts) non si apre nessuna cassa e l'avviso a Nicola lo ricorda.
+ *
+ * 27/11/2026 02:26 — Nicola: «in automatico deve sbloccarsi la pagina del venditore in base all'abbonamento»,
+ * subito e fino alla disdetta. Con il pagamento online spento, chi accetta ha la pagina sbloccata nella fascia
+ * che accetta (lib/agenzia/abbonamento-contanti.ts): se l'agente ne aveva scelta un'altra, si allinea a questa.
  */
 
 export const CODICE_VALIDO = /^[0-9a-f]{64}$/;
@@ -102,7 +107,8 @@ export async function accettaPreventivoColCodice(input: {
   const utente = await admin.auth.admin.updateUserById(id, { email, email_confirm: true, ban_duration: 'none' });
   if (utente.error) {
     // Il preventivo torna aperto: il titolare può riprovare con un'altra email.
-    await admin.from('preventivi_con_codice').update({ stato: 'aperto', fascia_scelta: null, accettato_il: null, condizioni_accettate_il: null }).eq('codice', codice);
+    // La scelta dell'agente (se c'era) torna com'era: il link riapre il preventivo su quella fascia.
+    await admin.from('preventivi_con_codice').update({ stato: 'aperto', fascia_scelta: preventivo.fasciaScelta, accettato_il: null, condizioni_accettate_il: null }).eq('codice', codice);
     const giaUsata = /already|exists|registered|email_exists/i.test(`${utente.error.message} ${(utente.error as { code?: string }).code ?? ''}`);
     logger.warn('[preventivo-codice] email non collegata', { sellerId: id, giaUsata, message: utente.error.message });
     // Stesso messaggio e stesso codice (409) nei due casi: non si deve poter scoprire da qui se un'email
@@ -127,6 +133,11 @@ export async function accettaPreventivoColCodice(input: {
   if (profilo.error) logger.error('[preventivo-codice] profilo non compilato', { sellerId: id, message: profilo.error.message });
   const profiloCompilato = !profilo.error;
 
+  // 2-bis) Con il pagamento online spento, la pagina del negozio si sblocca nella fascia accettata: i contanti
+  // si ritirano al primo servizio. Con il pagamento online acceso la sblocca il webhook di Stripe, come prima.
+  const sblocco = pagamentoOnlineAttivo() ? null : await sbloccaInContanti(admin, id, fascia);
+  if (sblocco && !sbloccoRiuscito(sblocco)) logger.error('[preventivo-codice] pagina non sbloccata', { sellerId: id, fascia, dettaglio: sblocco.dettaglio });
+
   // 3) Gli avvisi: a Nicola sempre, al titolare il link per entrare.
   // L'email non è verificata prima di collegarla: chi ha il link può darne una sua. Per questo l'avviso
   // a Nicola la dice, così la controlla col titolare prima di approvare (collaudo del 24/11).
@@ -138,7 +149,13 @@ export async function accettaPreventivoColCodice(input: {
         ? 'Il negozio è in revisione, ma arriva dal preventivo: mancano i dati dell’iscrizione (IBAN, documenti). Non approvarlo prima di averli.'
         : 'ATTENZIONE: il profilo non si è aggiornato (non è in revisione): sistemalo a mano.',
       // 26/11/2026 — Per ora niente pagamento online (lib/agenzia/pagamento-servizi.ts).
-      ...(pagamentoOnlineAttivo() ? [] : ['Pagamento in contanti, di persona: accordati col titolare per incassarlo.']),
+      ...(sblocco === null
+        ? []
+        : sblocco.esito === 'gia-online'
+          ? [`Ha già un abbonamento ${FASCE[sblocco.fascia].nome} pagato online: resta quello.`]
+          : sbloccoRiuscito(sblocco)
+            ? [`La sua pagina è sbloccata col ${FASCE[fascia].nome}${sblocco.esito === 'cambiata' ? ` (l'agente aveva scelto il ${FASCE[sblocco.da].nome})` : ''}, fino alla disdetta. Pagamento in contanti, al primo servizio: accordati col titolare per incassarlo.`]
+            : [`ATTENZIONE: la sua pagina NON si è sbloccata col ${FASCE[fascia].nome}: sistemalo a mano. Pagamento in contanti, di persona.`]),
     ].join(' '),
     '/admin/preventivi',
     { unaVoltaPer: `preventivo-codice:${id}` },
