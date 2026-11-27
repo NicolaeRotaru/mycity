@@ -186,7 +186,14 @@ const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
       });
       // Servizio degli indirizzi giù o limitato (429, 5xx): non è «indirizzo non trovato».
       if (res.status === 429 || res.status >= 500) {
-        setError('Il servizio che cerca gli indirizzi non risponde in questo momento. Riprova fra poco, o sposta il pin sulla mappa.');
+        // 27/11/2026 — Il freno della rotta (`rate_limited`: troppe ricerche da qui in un minuto) non è il
+        // servizio che non risponde: si dice che il limite viene dalle ricerche del negozio.
+        const corpo = await res.json().catch(() => null);
+        setError(
+          corpo?.error === 'rate_limited'
+            ? 'Hai fatto troppe ricerche di indirizzi in un minuto. Riprova fra poco, o sposta il pin sulla mappa.'
+            : 'Il servizio che cerca gli indirizzi non risponde in questo momento. Riprova fra poco, o sposta il pin sulla mappa.',
+        );
         return;
       }
       const data = await res.json();
