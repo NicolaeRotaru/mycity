@@ -9,6 +9,9 @@ import { fasciaDaIndirizzo } from '@/lib/agenzia/indirizzi-servizi';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
 import { formatPriceFromCents } from '@/lib/format';
 import { fasciaValida } from '@/lib/agenzia/abbonamento-contanti';
+import { getAdminSupabase } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
+import { giorniDellaVisita } from '@/lib/agenzia/visita-sdg';
 import ConfermaAbbonamento, { type FasciaDaConfermare } from './ConfermaAbbonamento';
 
 /**
@@ -26,9 +29,28 @@ import ConfermaAbbonamento, { type FasciaDaConfermare } from './ConfermaAbboname
  *
  * Il ritorno dal pagamento Stripe e un preventivo già accettato vanno ancora alla pagina dell'abbonamento,
  * che sa cosa dire (app/preventivo/[codice]/(demo)/abbonamento).
+ *
+ * 27/11/2026 verso le 17:40 — Nicola: nella stessa pagina il titolare sceglie anche giorno e ora in cui il
+ * team creativo di SDG passa da lui (piano editoriale, foto e video). I giorni li calcola il server
+ * (lib/agenzia/visita-sdg.ts), senza le ore già prese da altre attività.
  */
 
 export const dynamic = 'force-dynamic';
+
+/** Le ore già fissate da altre attività, da oggi in poi. Se non si leggono (o manca la 999b), nessuna. */
+async function orariGiaPresi(): Promise<string[]> {
+  try {
+    const { data, error } = await getAdminSupabase()
+      .from('preventivi_con_codice')
+      .select('visita_il')
+      .gte('visita_il', new Date().toISOString());
+    if (error) throw new Error(error.message);
+    return ((data ?? []) as { visita_il: string | null }[]).map((r) => r.visita_il).filter((v): v is string => Boolean(v));
+  } catch (errore) {
+    logger.warn('[preventivo-codice] ore della visita già prese non lette: tutte libere', { errore: String(errore) });
+    return [];
+  }
+}
 
 export default async function ConfermaDalLink({
   params,
@@ -83,6 +105,7 @@ export default async function ConfermaDalLink({
         iniziale={fasciaDaIndirizzo(fascia) ?? dalVenditore ?? p.consigliato}
         segnata={dalVenditore ?? p.consigliato}
         dalVenditore={dalVenditore !== null}
+        giorni={giorniDellaVisita(new Date(), await orariGiaPresi())}
       />
     </Cornice>
   );

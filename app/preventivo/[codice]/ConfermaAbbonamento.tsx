@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Check } from 'lucide-react';
 import type { Abbonamento } from '@/lib/agenzia/preventivo';
 import { FRASE_CONTANTI, PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagamento-servizi';
+import { DURATA_VISITA, type GiornoVisita } from '@/lib/agenzia/visita-sdg';
 
 /**
  * LE TRE FASCE, IL CODICE DELL'EMAIL E L'INGRESSO — 27/11/2026 (app/preventivo/[codice]/page.tsx).
@@ -18,7 +19,22 @@ import { FRASE_CONTANTI, PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagament
  *     niente cambia sul negozio (secondo collaudo della sicurezza, 27/11).
  * Senza `entra` (un altro account già dentro in questo browser) entra dal link dell'email, come prima.
  * Il testo delle fasce lo prepara il server (`fasce`).
+ *
+ * 27/11/2026 verso le 17:40 — Nicola: nello stesso passo il titolare sceglie giorno e ora in cui il team creativo
+ * di SDG passa da lui (piano editoriale, foto e video), e la pagina gli dice cosa succede dopo la conferma, con
+ * parole sue. I giorni li prepara il server (`giorni`, lib/agenzia/visita-sdg.ts) senza le ore già prese; la
+ * scelta va al server con la conferma (`visita`). Se non c'è nessun giorno libero si conferma lo stesso e lo
+ * chiamiamo noi.
  */
+
+/** «Lunedì 30 novembre alle 10:00», dall'orario scelto. */
+function scriviScelta(giorni: GiornoVisita[], id: string | null): string | null {
+  for (const g of giorni) {
+    const o = g.orari.find((x) => x.id === id);
+    if (o) return `${g.lungo.charAt(0).toUpperCase()}${g.lungo.slice(1)} alle ${o.ora}`;
+  }
+  return null;
+}
 
 export type FasciaDaConfermare = {
   id: Abbonamento;
@@ -41,6 +57,7 @@ export default function ConfermaAbbonamento({
   iniziale,
   segnata,
   dalVenditore,
+  giorni,
 }: {
   codice: string;
   fasce: FasciaDaConfermare[];
@@ -50,6 +67,8 @@ export default function ConfermaAbbonamento({
   segnata: Abbonamento;
   /** Vero se `segnata` l'ha scelta il titolare davanti al venditore: l'etichetta dice «La tua scelta». */
   dalVenditore: boolean;
+  /** I giorni e le ore in cui SDG può passare, già senza quelli pieni. */
+  giorni: GiornoVisita[];
 }) {
   const [fascia, setFascia] = useState<Abbonamento>(iniziale);
   const [email, setEmail] = useState('');
@@ -63,7 +82,12 @@ export default function ConfermaAbbonamento({
   /** Il gettone firmato che accompagna il codice (lib/agenzia/codice-dal-link.ts): il codice in chiaro non c'è. */
   const [gettone, setGettone] = useState('');
   const [rimandato, setRimandato] = useState(false);
+  /** Il giorno aperto (si vede subito il primo) e l'orario scelto per la visita di SDG: quello lo tocca il titolare. */
+  const [giorno, setGiorno] = useState<string | null>(giorni[0]?.giorno ?? null);
+  const [visita, setVisita] = useState<string | null>(null);
   const scelta = fasce.find((f) => f.id === fascia) ?? fasce[0];
+  const aperto = giorni.find((g) => g.giorno === giorno) ?? null;
+  const quando = scriviScelta(giorni, visita);
 
   async function chiedi(percorso: 'codice' | 'accetta', corpo: Record<string, unknown>): Promise<Risposta | null> {
     const r = await fetch(`/api/preventivo/${codice}/${percorso}`, {
@@ -100,6 +124,10 @@ export default function ConfermaAbbonamento({
   async function conferma(e: React.FormEvent) {
     e.preventDefault();
     setErrore(null);
+    if (giorni.length > 0 && !visita) {
+      setErrore('Scegli il giorno e l’ora in cui passiamo da te.');
+      return;
+    }
     if (!condizioni) {
       setErrore('Per continuare accetta le condizioni e l’informativa privacy.');
       return;
@@ -113,7 +141,7 @@ export default function ConfermaAbbonamento({
     setErrore(null);
     setInvio(true);
     try {
-      const r = await chiedi('accetta', { email, abbonamento: fascia, accettoCondizioni: true, codice: codiceEmail, gettone });
+      const r = await chiedi('accetta', { email, abbonamento: fascia, accettoCondizioni: true, codice: codiceEmail, gettone, ...(visita ? { visita } : {}) });
       if (r) {
         const dove = r.data?.url ?? r.data?.entra ?? null;
         if (dove) {
@@ -132,7 +160,7 @@ export default function ConfermaAbbonamento({
   if (fatto) {
     return (
       <div role="status" className="mt-6 rounded-2xl border-2 border-olive-300 bg-olive-50 p-5">
-        <p className="font-semibold text-ink-900">Fatto, il {scelta.nome} è confermato.</p>
+        <p className="font-semibold text-ink-900">Fatto, il {scelta.nome} è confermato.{quando ? ` Ci vediamo ${quando.charAt(0).toLowerCase()}${quando.slice(1)}.` : ''}</p>
         <p className="mt-1 text-sm text-ink-700">
           {fatto.accessoInviato
             ? `Ti abbiamo scritto a ${email}: da lì entri nella tua pagina.`
@@ -146,7 +174,8 @@ export default function ConfermaAbbonamento({
     return (
       <form onSubmit={entra} className="mx-auto mt-6 max-w-xl rounded-2xl border-2 border-primary-200 bg-surface-0 p-5" aria-label="Scrivi il codice">
         <p className="text-sm text-ink-700">
-          Hai scelto il <strong className="text-ink-900">{scelta.nome}</strong> · {scelta.canone}{' '}
+          Hai scelto il <strong className="text-ink-900">{scelta.nome}</strong> · {scelta.canone}
+          {quando && <> · visita <strong className="text-ink-900">{quando.charAt(0).toLowerCase()}{quando.slice(1)}</strong></>}{' '}
           <button type="button" onClick={() => { setFase('scelta'); setErrore(null); }} className="font-semibold text-primary-700 underline">Cambia</button>
         </p>
         <h2 className="mt-3 text-lg font-bold text-ink-900">{rimandato ? 'Ti abbiamo mandato un codice nuovo' : 'Ti abbiamo mandato un codice'}</h2>
@@ -227,6 +256,70 @@ export default function ConfermaAbbonamento({
         </div>
       </fieldset>
 
+      <fieldset className="mx-auto mt-6 max-w-xl rounded-2xl border-2 border-cream-300 bg-surface-0 p-5" aria-describedby="visita-cosa">
+        <legend className="px-1 text-lg font-bold text-ink-900">Quando passiamo da te?</legend>
+        <p id="visita-cosa" className="text-sm text-ink-700">
+          Il giorno che scegli viene nella tua attività il team creativo di SDG. Con te scriviamo il piano dei contenuti
+          del primo mese, poi il fotografo e il videomaker fanno subito le prime foto e i primi video. Ci vuole {DURATA_VISITA}.
+        </p>
+        {giorni.length === 0 ? (
+          <p className="mt-3 text-sm font-semibold text-ink-900">In queste due settimane siamo al completo: conferma lo stesso, ti chiamiamo noi per fissare il giorno.</p>
+        ) : (
+          <>
+            <p className="mt-4 text-sm font-medium text-ink-800" id="visita-giorno">Il giorno</p>
+            <div role="radiogroup" aria-labelledby="visita-giorno" className="mt-1 flex flex-wrap gap-2">
+              {giorni.map((g) => {
+                const attivo = g.giorno === giorno;
+                return (
+                  <label key={g.giorno} data-giorno={g.giorno} className="cursor-pointer">
+                    <input
+                      type="radio"
+                      name="giorno-visita"
+                      value={g.giorno}
+                      checked={attivo}
+                      onChange={() => { setGiorno(g.giorno); setVisita(null); }}
+                      className="peer sr-only"
+                      aria-label={g.lungo}
+                    />
+                    <span className={`block rounded-lg border-2 px-3 py-2 text-sm font-semibold capitalize peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 ${attivo ? 'border-primary-700 bg-primary-50 text-ink-900' : 'border-cream-200 text-ink-700 hover:border-primary-300'}`}>
+                      {g.breve}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {aperto && (
+              <>
+                <p className="mt-4 text-sm font-medium text-ink-800" id="visita-ora">L’ora, {aperto.lungo}</p>
+                <div role="radiogroup" aria-labelledby="visita-ora" className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {aperto.orari.map((o) => {
+                    const attiva = o.id === visita;
+                    return (
+                      <label key={o.id} data-ora={o.ora} className={o.libero ? 'cursor-pointer' : 'cursor-not-allowed'}>
+                        <input
+                          type="radio"
+                          name="ora-visita"
+                          value={o.id}
+                          checked={attiva}
+                          disabled={!o.libero}
+                          onChange={() => setVisita(o.id)}
+                          className="peer sr-only"
+                          aria-label={o.libero ? `alle ${o.ora}` : `alle ${o.ora}, già presa`}
+                        />
+                        <span className={`block rounded-lg border-2 px-3 py-2 text-center text-base font-bold peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 ${!o.libero ? 'border-cream-200 text-ink-400 line-through' : attiva ? 'border-primary-700 bg-primary-50 text-ink-900' : 'border-cream-200 text-ink-800 hover:border-primary-300'}`}>
+                          {o.ora}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            <p className="mt-3 text-xs text-ink-500">Nessun giorno ti va bene? Scegli il più comodo: ti chiamiamo e lo spostiamo insieme.</p>
+          </>
+        )}
+      </fieldset>
+
       <div className="mx-auto mt-6 max-w-xl rounded-2xl border-2 border-cream-300 bg-surface-0 p-5">
         <label className="block text-sm font-medium text-ink-800" htmlFor="email-titolare">La tua email</label>
         <input
@@ -246,13 +339,21 @@ export default function ConfermaAbbonamento({
             Accetto le <Link href="/terms" className="underline" target="_blank">condizioni</Link> e ho letto l’<Link href="/privacy" className="underline" target="_blank">informativa privacy</Link>.
           </span>
         </label>
+        <div className="mt-4 rounded-xl bg-cream-50 p-4">
+          <p className="text-sm font-bold text-ink-900">Cosa succede dopo</p>
+          <ol className="mt-2 space-y-2 text-sm text-ink-700">
+            <li><strong className="text-ink-900">Adesso.</strong> Ti mandiamo un codice per email: lo scrivi qui ed entri nella tua pagina, con il {scelta.nome} già attivo.</li>
+            <li><strong className="text-ink-900">{quando ?? 'Il giorno che scegli'}.</strong> Il team di SDG passa da te: piano dei contenuti, foto e video.</li>
+            <li><strong className="text-ink-900">Nei giorni dopo.</strong> Prepariamo i primi post e te li facciamo vedere prima di pubblicarli.</li>
+          </ol>
+        </div>
         {errore && <p role="alert" className="mt-3 text-sm text-secondary-700">{errore}</p>}
         <button
           type="submit"
           disabled={invio}
           className="mt-4 w-full rounded-lg bg-primary-700 py-3 text-lg font-bold text-white hover:bg-primary-800 disabled:opacity-60"
         >
-          {invio ? 'Un momento…' : `Confermo il ${scelta.nome}`}
+          {invio ? 'Un momento…' : giorni.length > 0 ? `Confermo il ${scelta.nome} e la visita` : `Confermo il ${scelta.nome}`}
         </button>
         {!PAGAMENTO_ONLINE_SERVIZI && <p className="mt-2 text-center text-xs text-ink-600">{FRASE_CONTANTI}</p>}
       </div>

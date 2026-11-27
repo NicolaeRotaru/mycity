@@ -13,6 +13,7 @@ import { accettaPreventivoColCodice, CODICE_VALIDO, leggiPreventivoColCodice } f
 import { chiaveDelGettone, verificaCodice } from '@/lib/agenzia/codice-dal-link';
 import { sessioneDalLink, type SessioneDalLink } from '@/lib/agenzia/entra-dal-link';
 import { richiestaDalSito } from '@/lib/agenzia/richiesta-dal-sito';
+import { orarioDellaVisitaValido } from '@/lib/agenzia/visita-sdg';
 
 export const runtime = 'nodejs';
 
@@ -37,6 +38,11 @@ export const runtime = 'nodejs';
  *     dell'abbonamento del negozio, dove vede la fascia confermata attiva. Se in questo browser c'è già
  *     dentro un altro account, la sua sessione non si tocca: `entra` è null e il titolare entra dall'email.
  * Le richieste devono essere JSON partito dal sito stesso (lib/agenzia/richiesta-dal-sito.ts).
+ *
+ * 27/11/2026 verso le 17:40 — Nicola: insieme all'abbonamento il titolare sceglie giorno e ora in cui il team
+ * creativo di SDG passa da lui. `visita` è uno degli orari che il server propone adesso (lib/agenzia/visita-sdg.ts):
+ * un orario passato, troppo vicino o inventato è rifiutato prima di guardare il codice. Si salva col preventivo.
+ * Senza `visita` si accetta lo stesso (nessun giorno libero, o pagina vecchia): l'avviso a Nicola lo dice.
  */
 
 const Richiesta = z.object({
@@ -45,6 +51,9 @@ const Richiesta = z.object({
   accettoCondizioni: z.literal(true, { message: 'Per continuare accetta le condizioni e l’informativa privacy' }),
   codice: z.string().trim().regex(/^[0-9]{6}$/, 'Scrivi il codice di 6 cifre che ti è arrivato per email'),
   gettone: z.string().min(10).max(2000),
+  // Facoltativa per il server: senza giorni liberi (o da una pagina aperta prima di oggi) si accetta lo stesso
+  // e Nicola nell'avviso legge «chiamalo per fissare la visita». La pagina la chiede sempre quando ci sono giorni.
+  visita: z.string().max(40).optional(),
 });
 
 const QUARTO_D_ORA = 15 * 60_000;
@@ -75,7 +84,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
   }
   const esito = Richiesta.safeParse(corpo);
   if (!esito.success) return ApiErrors.invalidRequest(esito.error.issues[0]?.message ?? 'Dati non validi');
-  const { email, abbonamento, codice: codiceEmail, gettone } = esito.data;
+  const { email, abbonamento, codice: codiceEmail, gettone, visita } = esito.data;
+  if (visita !== undefined && !orarioDellaVisitaValido(visita, new Date())) {
+    return ApiErrors.invalidRequest('Quel giorno non si può più scegliere: torna indietro e scegli un altro giorno per la visita.');
+  }
 
   // 1) Il codice dell'email. Al sesto tentativo sullo stesso gettone serve un codice nuovo.
   const perGettone = await rateLimitAsync({ key: `preventivo-codice-gettone:${chiaveDelGettone(gettone)}`, max: 5, windowMs: QUARTO_D_ORA });
@@ -101,6 +113,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
     codice,
     email,
     fascia: abbonamento,
+    visita,
     entraSubito: puoEntrare && sessione ? sessione.entra : undefined,
   });
   if (!accettato.ok) {

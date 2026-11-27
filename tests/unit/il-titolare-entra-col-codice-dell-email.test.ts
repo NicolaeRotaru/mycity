@@ -19,13 +19,22 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  *    gettone mancanti → niente si accetta e l'utente non si tocca;
  *  · un altro account già dentro → si accetta (l'email è provata) ma la sua sessione non si tocca: `entra` null;
  *  · da un altro sito, da Origin «null», con un corpo non JSON → rifiutate tutte e due le porte.
+ *
+ * 27/11/2026 verso le 17:40 — la visita di SDG scelta nella stessa pagina (lib/agenzia/visita-sdg.ts):
+ *  · con un orario proposto → si salva sul preventivo con l'accettazione, e l'email al titolare dice il giorno;
+ *  · un orario inventato o passato → 400 prima del codice, niente si accetta;
+ *  · l'ora appena presa da un'altra attività (indice unico, 23505) → 409, niente si accetta, l'utente non si tocca;
+ *  · senza la colonna (migrazione 999b non applicata) → si accetta lo stesso, senza la visita sul preventivo;
+ *  · senza visita → si accetta (nessun giorno libero, o pagina vecchia).
  */
 
 const GC = '0de1905e-7000-4000-8000-0000000000aa';
 const CODICE = 'c'.repeat(64);
 
 const db = vi.hoisted(() => ({
-  preventivo: null as null | { seller_id: string; codice: string; stato: string; fascia_scelta: string | null; profiles: { store_name: string } },
+  preventivo: null as null | { seller_id: string; codice: string; stato: string; fascia_scelta: string | null; visita_il?: string | null; profiles: { store_name: string } },
+  /** L'errore che il database dà a una scrittura con la visita: ora già presa, o colonna che non c'è. */
+  erroreVisita: null as null | { code: string; message: string },
   posta: [] as Array<Record<string, unknown>>,
   link: [] as Array<Record<string, unknown>>,
   utente: [] as Array<Record<string, unknown>>,
@@ -33,6 +42,7 @@ const db = vi.hoisted(() => ({
   postaRotta: false,
   sblocchi: [] as string[],
   avvisi: [] as string[],
+  testiAvvisi: [] as string[],
   ordine: [] as string[],
   contatori: new Map<string, number>(),
   sessione: null as null | {
@@ -61,7 +71,7 @@ vi.mock('@/lib/email/client', () => ({
     return { ok: true, id: 'e1' };
   }),
 }));
-vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: vi.fn(async (titolo: string) => { db.avvisi.push(titolo); }) }));
+vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: vi.fn(async (titolo: string, testo: string) => { db.avvisi.push(titolo); db.testiAvvisi.push(testo); }) }));
 vi.mock('@/lib/agenzia/abbonamento-contanti', () => ({
   sbloccaInContanti: vi.fn(async (_admin: unknown, _id: string, fascia: string) => { db.sblocchi.push(fascia); return { esito: 'sbloccata', fascia }; }),
   sbloccoRiuscito: () => true,
@@ -90,6 +100,7 @@ vi.mock('@/lib/supabase/server', () => {
       const catena = {
         eq: (c: string, v: unknown) => { filtri[c] = v; return catena; },
         select: async () => {
+          if (db.erroreVisita && 'visita_il' in valori) return { data: null, error: db.erroreVisita };
           const p = db.preventivo;
           if (p && p.codice === filtri.codice && (filtri.stato === undefined || p.stato === filtri.stato)) {
             Object.assign(p, valori);
@@ -174,9 +185,11 @@ beforeEach(() => {
   db.link = [];
   db.utente = [];
   db.erroreUtente = null;
+  db.erroreVisita = null;
   db.postaRotta = false;
   db.sblocchi = [];
   db.avvisi = [];
+  db.testiAvvisi = [];
   db.ordine = [];
   db.contatori = new Map();
   db.sessione = { altro: false, gettoni: [], scritti: [] };
@@ -388,5 +401,72 @@ describe('le porte accettano solo JSON partito dal sito', () => {
   }
   it('dal sito stesso passa', async () => {
     expect((await porta('codice', EMAIL, { origin: 'https://mycity.example' })).status).toBe(200);
+  });
+});
+
+describe('la visita di SDG scelta nel link', () => {
+  /** Il secondo orario del primo giorno che il server propone adesso. */
+  const orarioProposto = async () => (await import('@/lib/agenzia/visita-sdg')).giorniDellaVisita(new Date())[0].orari[1].id;
+
+  it('un orario proposto si salva col preventivo, e l email al titolare dice il giorno', async () => {
+    const visita = await orarioProposto();
+    const { scriviVisita } = await import('@/lib/agenzia/visita-sdg');
+    const c = await chiediCodice();
+    const r = await conferma(c, { visita });
+    expect(r.status).toBe(200);
+    expect(db.preventivo?.stato).toBe('accettato');
+    expect(db.preventivo?.visita_il).toBe(visita);
+    const html = String(db.posta.at(-1)?.html ?? '');
+    expect(html).toContain(`Ci vediamo ${scriviVisita(visita)}.`);
+    expect(html).not.toContain('ti contattiamo noi per fissare l');
+    // E Nicola nell'avviso legge quando SDG deve passare.
+    expect(db.testiAvvisi[0]).toContain(`Il team di SDG passa da lui ${scriviVisita(visita)} (piano editoriale, foto e video).`);
+  });
+
+  it('un orario inventato o passato: 400 prima del codice, niente si accetta', async () => {
+    const c = await chiediCodice();
+    for (const visita of ['2020-01-06T09:00:00.000Z', 'domani alle dieci']) {
+      const r = await conferma(c, { visita });
+      expect(r.status, visita).toBe(400);
+      expect((await r.json()).error.message).toContain('torna indietro e scegli un altro giorno');
+    }
+    expect(db.preventivo?.stato).toBe('aperto');
+    expect(db.utente).toEqual([]);
+    // Il codice non si è consumato: con un orario giusto entra.
+    const r = await conferma(c, { visita: await orarioProposto() });
+    expect(r.status).toBe(200);
+  });
+
+  it('l ora appena presa da un altra attività: 409, niente si accetta e l utente non si tocca', async () => {
+    db.erroreVisita = { code: '23505', message: 'duplicate key value violates unique constraint "preventivi_con_codice_una_visita_per_ora"' };
+    const c = await chiediCodice();
+    const r = await conferma(c, { visita: await orarioProposto() });
+    expect(r.status).toBe(409);
+    expect((await r.json()).error.message).toContain('Quell’orario l’ha appena preso un’altra attività');
+    expect(db.preventivo?.stato).toBe('aperto');
+    expect(db.utente).toEqual([]);
+    expect(db.avvisi).toEqual([]);
+  });
+
+  it('senza la colonna nel database (999b non applicata): si accetta lo stesso, senza la visita sul preventivo', async () => {
+    db.erroreVisita = { code: 'PGRST204', message: "Could not find the 'visita_il' column of 'preventivi_con_codice' in the schema cache" };
+    const c = await chiediCodice();
+    const r = await conferma(c, { visita: await orarioProposto() });
+    expect(r.status).toBe(200);
+    expect(db.preventivo?.stato).toBe('accettato');
+    expect(db.preventivo?.visita_il).toBeUndefined();
+    expect(db.avvisi).toHaveLength(1);
+    expect(db.testiAvvisi[0]).toContain('il giorno NON è salvato nel database (manca la migrazione 999b)');
+    // Il titolare il giorno lo legge lo stesso nell'email.
+    expect(String(db.posta.at(-1)?.html ?? '')).toContain('Ci vediamo');
+  });
+
+  it('senza visita si accetta (nessun giorno libero, o pagina aperta prima): l email dice che lo chiamiamo', async () => {
+    const c = await chiediCodice();
+    const r = await conferma(c);
+    expect(r.status).toBe(200);
+    expect(db.preventivo?.visita_il).toBeUndefined();
+    expect(String(db.posta.at(-1)?.html ?? '')).toContain('ti contattiamo noi per fissare l');
+    expect(db.testiAvvisi[0]).toContain('Non ha scelto il giorno della visita di SDG: chiamalo per fissarlo.');
   });
 });

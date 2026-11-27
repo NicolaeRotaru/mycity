@@ -1862,6 +1862,7 @@ export interface Database {
           creato_il: string;
           accettato_il: string | null;
           condizioni_accettate_il: string | null;
+          visita_il: string | null;
         };
         Insert: {
           seller_id: string;
@@ -1871,6 +1872,7 @@ export interface Database {
           creato_il?: string;
           accettato_il?: string | null;
           condizioni_accettate_il?: string | null;
+          visita_il?: string | null;
         };
         Update: {
           seller_id?: string;
@@ -1880,6 +1882,7 @@ export interface Database {
           creato_il?: string;
           accettato_il?: string | null;
           condizioni_accettate_il?: string | null;
+          visita_il?: string | null;
         };
         Relationships: [];
       };
