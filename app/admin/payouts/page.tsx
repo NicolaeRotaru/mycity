@@ -639,13 +639,14 @@ export default function AdminPayoutsPage() {
       />
 
       {/* L'avviso viene PRIMA dei riquadri: chi legge solo il numero deve già sapere che è parziale. */}
-      {(tagliato || tagliatoPagabili) && (
+      {(tagliato || tagliatoPagabili || tagliatoChiusi) && (
         <div role="status" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
           <div className="space-y-1">
             {tagliato && (
               <p>
-                <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PAYOUT} ordini consegnati col bonifico ancora aperto. Mancano i più
+                <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PAYOUT} ordini consegnati ancora da chiudere (bonifico aperto
+                o ritiro al banco da regolare). Mancano i più
                 vecchi fra quelli fermi (dal fattorino, con un reclamo, senza IBAN); i contanti da versare si leggono a parte. I totali
                 di questa pagina, anche quelli dei singoli negozi, possono essere più bassi del vero.
               </p>
@@ -655,6 +656,13 @@ export default function AdminPayoutsPage() {
               <p>
                 <strong>Contanti da versare oltre {TETTO_PAYOUT}:</strong> mostro i consegnati prima. La cifra da versare e il tasto
                 «Bonifico fatto» sono solo una parte del dovuto: dopo il bonifico ricarica la pagina per il resto.
+              </p>
+            )}
+            {/* I chiusi hanno il loro tetto: oltre, l'elenco dei pagati si taglia e «Già pagato» è un minimo. */}
+            {tagliatoChiusi && (
+              <p>
+                <strong>Ordini già chiusi oltre {TETTO_PAYOUT}:</strong> nell&apos;elenco ci sono solo gli ultimi {TETTO_PAYOUT} (pagati,
+                rimborsati, stornati). Mancano i più vecchi: «Già pagato» è un minimo.
               </p>
             )}
           </div>
