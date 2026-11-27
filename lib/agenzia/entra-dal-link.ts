@@ -4,20 +4,19 @@ import { logger } from '@/lib/logger';
 import { conDurataMassima } from '@/lib/auth/cookie-di-sessione';
 
 /**
- * IL TITOLARE ENTRA SUBITO DOPO LA CONFERMA — 27/11/2026.
+ * IL TITOLARE ENTRA SUBITO DOPO LA CONFERMA, COL CODICE DELL'EMAIL — 27/11/2026.
  *
- * Nicola: «dopo il click entra nella sua pagina venditore con l'abbonamento che ha scelto». Prima il
- * titolare confermava dal link e poi doveva aprire l'email per entrare. Ora la conferma apre anche la sua
- * sessione, nella stessa risposta: il server crea un gettone d'accesso monouso per l'utente del negozio
- * (lib/agenzia/preventivo-col-codice.ts) e lo consuma qui con `verifyOtp`, come /auth/confirm. I cookie
- * della sessione si raccolgono in `scritti` e chi risponde li copia sulla risposta.
- *
- * Non è un accesso in più rispetto a prima: chi ha il link poteva già dare una sua email e ricevere lì il
- * link per entrare (collaudo del 24/11). Cambia solo che non serve aprire la posta.
+ * Nicola: «dopo il click entra nella sua pagina venditore con l'abbonamento che ha scelto». Il collaudo della
+ * sicurezza ha bocciato la prima versione: chi aveva il link poteva scrivere l'email vera del titolare ed
+ * entrare al suo posto, senza possederla. Nicola ha scelto «codice dall'email»: il titolare scrive nella
+ * pagina il codice che gli arriva per email (lib/agenzia/preventivo-col-codice.ts, `mandaCodiceDalLink`) e
+ * qui `verifyOtp` lo controlla. Se è giusto la sessione si apre nella stessa risposta: i cookie si
+ * raccolgono in `scritti` e chi risponde li copia. Entra solo chi possiede l'email, come prima col link
+ * dell'email, ma senza lasciare la pagina.
  *
  * Una regola di prudenza: se in questo browser c'è già dentro un ALTRO account (Nicola, o un venditore che
- * prova il link dal suo telefono), la sua sessione non si tocca. Il titolare entra dall'email, come prima.
- * Nel dubbio (la domanda «chi c'è dentro?» non risponde in tempo) vale la stessa regola.
+ * prova il link dal suo telefono), la sua sessione non si tocca. Nel dubbio (la domanda «chi c'è dentro?»
+ * non risponde in tempo, o torna con un errore) vale la stessa regola.
  */
 
 export type CookieScritto = { name: string; value: string; options: CookieOptions };
@@ -25,8 +24,8 @@ export type CookieScritto = { name: string; value: string; options: CookieOption
 export type SessioneDalLink = {
   /** Vero se in questo browser c'è dentro un altro account, o se non si riesce a saperlo in tempo. */
   dentroUnAltro: (sellerId: string) => Promise<boolean>;
-  /** Consuma il gettone monouso e apre la sessione. Vero solo se la sessione c'è davvero. */
-  entra: (gettone: string) => Promise<boolean>;
+  /** Verifica il codice dell'email e apre la sessione. L'id dell'utente entrato, o null se il codice non va. */
+  entraColCodice: (email: string, codice: string) => Promise<string | null>;
   /** I cookie da copiare sulla risposta, comprese le cancellazioni. */
   scritti: CookieScritto[];
 };
@@ -103,13 +102,13 @@ export function sessioneDalLink(intestazioneCookie: string | null, tetto = TETTO
         if (timer) clearTimeout(timer);
       }
     },
-    async entra(gettone: string) {
-      const { data, error } = await supabase.auth.verifyOtp({ token_hash: gettone, type: 'magiclink' });
-      if (error || !data?.session) {
-        logger.warn('[preventivo-codice] sessione del titolare non aperta', { codice: error?.code ?? null });
-        return false;
+    async entraColCodice(email: string, codice: string) {
+      const { data, error } = await supabase.auth.verifyOtp({ email, token: codice, type: 'email' });
+      if (error || !data?.session || !data.user) {
+        logger.warn('[preventivo-codice] codice non verificato', { codice: error?.code ?? null });
+        return null;
       }
-      return true;
+      return data.user.id;
     },
   };
 }

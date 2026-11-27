@@ -1111,6 +1111,30 @@ export function avvisoCancellazioneTemplate(args: { titolo: string; corpoHtml: s
  * questo link per entrare (lib/agenzia/preventivo-col-codice.ts). Il link è di Supabase e vale una
  * volta sola; dopo, entra con «Accedi» e la stessa email.
  */
+/**
+ * IL CODICE PER CONFERMARE L'ABBONAMENTO DAL LINK — 27/11/2026.
+ *
+ * Nicola ha scelto «codice dall'email»: il titolare conferma l'abbonamento dalla pagina del link e, per
+ * entrare subito nella sua pagina, scrive lì il codice che arriva qui. Così entra solo chi possiede
+ * l'email (collaudo della sicurezza del 27/11). Niente pulsanti: il codice si scrive nella pagina.
+ */
+export function codiceDelPreventivoTemplate(args: { negozio: string; codice: string; abbonamento: string }) {
+  const negozio = escapeHtml(args.negozio);
+  const codice = escapeHtml(args.codice);
+  const abbonamento = escapeHtml(args.abbonamento);
+  const body = `
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Il tuo codice per ${negozio}</h1>
+    <p style="margin:0 0 12px;line-height:1.6">Stai confermando l'abbonamento ${abbonamento} ai servizi di MyCity. Scrivi questo codice nella pagina dove hai premuto «Confermo»:</p>
+    <p style="margin:24px 0;font-size:32px;font-weight:800;letter-spacing:8px;color:${COLORI.titolo}">${codice}</p>
+    <p style="margin:0 0 12px;line-height:1.6;font-size:13px">Il codice vale una volta sola e scade dopo poco. Se non sei stato tu a chiederlo, ignora questa email: senza il codice non entra nessuno.</p>
+  `;
+  return {
+    subject: `${args.codice} è il tuo codice per ${args.negozio}`,
+    html: shell('Il tuo codice', body),
+    text: `Il tuo codice per confermare l'abbonamento ${args.abbonamento} di ${args.negozio}: ${args.codice}. Scrivilo nella pagina dove hai premuto «Confermo». Vale una volta sola.`,
+  };
+}
+
 export function accessoDopoIlPreventivoTemplate(args: { negozio: string; link: string }) {
   const negozio = escapeHtml(args.negozio);
   const body = `

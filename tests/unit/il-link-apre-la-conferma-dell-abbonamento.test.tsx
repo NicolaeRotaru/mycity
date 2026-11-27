@@ -13,9 +13,12 @@
  *  · nessuna scelta del venditore → è segnata la consigliata, con «Consigliato»;
  *  · il titolare tocca il Premium → il pulsante dice «Confermo il Premium» e la conferma manda il Premium;
  *  · senza la spunta delle condizioni → non parte niente, e lo dice;
- *  · il server risponde con `entra` → il browser va lì (la pagina del negozio);
+ *  · «Confermo» chiede il codice dell'email (Nicola, 27/11: «codice dall'email»); il titolare lo scrive e
+ *    la conferma parte con fascia, email e codice;
+ *  · il server risponde con `entra` → il browser va lì (la pagina dell'abbonamento del negozio);
+ *  · codice sbagliato → il messaggio, si resta sul codice; «rimanda il codice» e «ho sbagliato email» funzionano;
  *  · il server risponde senza `entra` → «Fatto», e il titolare entra dall'email;
- *  · il server rifiuta → il suo messaggio, e il pulsante torna premibile.
+ *  · il codice non può partire → il messaggio, e si resta sulla scelta.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -192,13 +195,35 @@ describe('il link apre la conferma, non la demo', () => {
   });
 });
 
-describe('il titolare tocca un altro abbonamento e conferma quello', () => {
-  it('tocca il Premium: il pulsante dice Premium, la conferma manda il Premium, e il browser entra nella sua pagina', async () => {
-    const chiamate: Array<{ url: string; corpo: Record<string, unknown> }> = [];
-    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
-      chiamate.push({ url, corpo: JSON.parse(String(init.body)) });
-      return new Response(JSON.stringify({ ok: true, data: { url: null, entra: '/seller/abbonamento', accessoInviato: true } }), { status: 200 });
-    }));
+/** Il server finto: /codice risponde «inviato», /conferma come gli si dice. */
+function serverFinto(conferma: { status: number; corpo: unknown }) {
+  const chiamate: Array<{ url: string; corpo: Record<string, unknown> }> = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+    chiamate.push({ url, corpo: JSON.parse(String(init.body)) });
+    if (url.endsWith('/codice')) return new Response(JSON.stringify({ ok: true, data: { inviato: true } }), { status: 200 });
+    return new Response(JSON.stringify(conferma.corpo), { status: conferma.status });
+  }));
+  return chiamate;
+}
+
+async function scriviCodice(r: HTMLElement, codice: string) {
+  const campo = r.querySelector('#codice-email') as HTMLInputElement;
+  const imposta = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  await act(async () => {
+    imposta.call(campo, codice);
+    campo.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function primoPasso(r: HTMLElement) {
+  await scriviEmail(r, 'titolare@grida.it');
+  await premi(r.querySelector('input[type="checkbox"]') as HTMLInputElement);
+  await invia(r);
+}
+
+describe('il titolare tocca un altro abbonamento, conferma col codice dell email, ed entra', () => {
+  it('tocca il Premium, chiede il codice, lo scrive: la conferma manda il Premium e il browser entra nella sua pagina', async () => {
+    const chiamate = serverFinto({ status: 200, corpo: { ok: true, data: { url: null, entra: '/seller/abbonamento', accessoInviato: true } } });
     const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
     expect(pulsante(r).textContent).toBe('Confermo il Business');
     await premi(radio(r, 'premium'));
@@ -207,10 +232,16 @@ describe('il titolare tocca un altro abbonamento e conferma quello', () => {
     // «La tua scelta» resta sul Business: dice cosa aveva detto al venditore.
     expect(r.querySelector('[data-fascia="business"]')?.textContent).toContain('La tua scelta');
 
-    await scriviEmail(r, 'titolare@grida.it');
-    await premi(r.querySelector('input[type="checkbox"]') as HTMLInputElement);
+    await primoPasso(r);
+    expect(chiamate).toEqual([{ url: `/api/preventivo/${CODICE}/codice`, corpo: { email: 'titolare@grida.it', abbonamento: 'premium' } }]);
+    // Il secondo passo: il riepilogo della scelta e il campo del codice.
+    expect(r.textContent).toContain('Hai scelto il Premium');
+    expect(r.textContent).toContain('È arrivato a titolare@grida.it');
+    expect(pulsante(r).disabled).toBe(true);
+    await scriviCodice(r, '12 34 56');
+    expect((r.querySelector('#codice-email') as HTMLInputElement).value).toBe('123456');
     await invia(r);
-    expect(chiamate).toEqual([{ url: `/api/preventivo/${CODICE}/accetta`, corpo: { email: 'titolare@grida.it', abbonamento: 'premium', accettoCondizioni: true } }]);
+    expect(chiamate[1]).toEqual({ url: `/api/preventivo/${CODICE}/conferma`, corpo: { email: 'titolare@grida.it', abbonamento: 'premium', accettoCondizioni: true, codice: '123456' } });
     expect(vai).toHaveBeenCalledWith('/seller/abbonamento');
   });
 
@@ -224,11 +255,39 @@ describe('il titolare tocca un altro abbonamento e conferma quello', () => {
     expect(r.querySelector('[role="alert"]')?.textContent).toContain('accetta le condizioni');
   });
 
-  it('se la sessione non si apre (risposta senza `entra`), dice «Fatto» e il titolare entra dall email', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: true, data: { url: null, entra: null, accessoInviato: true } }), { status: 200 })));
+  it('un codice sbagliato: il messaggio del server, si resta sul codice e si può riprovare', async () => {
+    serverFinto({ status: 400, corpo: { ok: false, error: { message: 'Il codice non è giusto o è scaduto. Controlla l’ultima email che ti abbiamo mandato, o chiedine un altro.' } } });
     const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
-    await scriviEmail(r, 'titolare@grida.it');
-    await premi(r.querySelector('input[type="checkbox"]') as HTMLInputElement);
+    await primoPasso(r);
+    await scriviCodice(r, '000000');
+    await invia(r);
+    expect(r.querySelector('[role="alert"]')?.textContent).toContain('non è giusto');
+    expect(r.querySelector('#codice-email')).not.toBeNull();
+    expect(pulsante(r).disabled).toBe(false);
+    expect(vai).not.toHaveBeenCalled();
+  });
+
+  it('«rimanda il codice» lo chiede di nuovo; «ho sbagliato email» torna alla scelta senza perderla', async () => {
+    const chiamate = serverFinto({ status: 200, corpo: { ok: true, data: { url: null, entra: null, accessoInviato: true } } });
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await premi(radio(r, 'base'));
+    await primoPasso(r);
+    const rimanda = [...r.querySelectorAll('button')].find((b) => b.textContent === 'rimanda il codice')!;
+    await premi(rimanda);
+    await act(async () => { await new Promise((ok) => setTimeout(ok, 0)); });
+    expect(chiamate.filter((c) => c.url.endsWith('/codice'))).toHaveLength(2);
+    expect(r.textContent).toContain('Ti abbiamo mandato un codice nuovo');
+    const sbagliata = [...r.querySelectorAll('button')].find((b) => b.textContent === 'ho sbagliato email')!;
+    await premi(sbagliata);
+    expect(radio(r, 'base').checked).toBe(true);
+    expect((r.querySelector('#email-titolare') as HTMLInputElement).value).toBe('titolare@grida.it');
+  });
+
+  it('se la sessione non si apre (risposta senza `entra`), dice «Fatto» e il titolare entra dall email', async () => {
+    serverFinto({ status: 200, corpo: { ok: true, data: { url: null, entra: null, accessoInviato: true } } });
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await primoPasso(r);
+    await scriviCodice(r, '123456');
     await invia(r);
     expect(vai).not.toHaveBeenCalled();
     const fatto = r.querySelector('[role="status"]')?.textContent ?? '';
@@ -236,13 +295,12 @@ describe('il titolare tocca un altro abbonamento e conferma quello', () => {
     expect(fatto).toContain('Ti abbiamo scritto a titolare@grida.it');
   });
 
-  it('se il server rifiuta, mostra il suo messaggio e il pulsante torna premibile', async () => {
+  it('se il codice non può partire, lo dice e si resta sulla scelta', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: false, error: { message: 'Questo preventivo è già stato accettato: controlla la tua email per entrare.' } }), { status: 409 })));
     const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
-    await scriviEmail(r, 'titolare@grida.it');
-    await premi(r.querySelector('input[type="checkbox"]') as HTMLInputElement);
-    await invia(r);
+    await primoPasso(r);
     expect(r.querySelector('[role="alert"]')?.textContent).toContain('già stato accettato');
+    expect(r.querySelector('#codice-email')).toBeNull();
     expect(pulsante(r).disabled).toBe(false);
     expect(pulsante(r).textContent).toBe('Confermo il Business');
   });
