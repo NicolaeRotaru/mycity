@@ -355,20 +355,53 @@ async function leggiFraGliIdsColVoto(
   return { data: data.sort(nellOrdineDelDatabase(sort)).slice(da, a + 1), error: null };
 }
 
+/**
+ * 27/11/2026 — LE PAGINE DOPO LA PRIMA LEGGONO COME LA PRIMA.
+ *
+ * Se fra una pagina e l'altra la risposta su `prezzo_pagato` cambiava (la 911 applicata a pagina
+ * aperta, la sonda caduta per rete alla prima pagina), la pagina 1 era ordinata sul prezzo pieno e la
+ * 2 sul prezzo pagato: doppioni e prodotti saltati. Ora per ogni client si ricorda come è stata letta
+ * la prima pagina di ogni domanda (filtri e ordine, senza la finestra) e le pagine dopo leggono
+ * uguale; una prima pagina riletta (un nuovo scorrimento) decide di nuovo.
+ */
+const modiDelloScorrimento = new WeakMap<object, Map<string, boolean>>();
+const TETTO_MODI = 50;
+
+function chiaveDelloScorrimento(d: DomandaGriglia): string {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { finestra, ...resto } = d;
+  return JSON.stringify(resto);
+}
+
+function ricordaModo(supabase: SupabaseClient, chiave: string, pagato: boolean): void {
+  let modi = modiDelloScorrimento.get(supabase);
+  if (!modi) { modi = new Map(); modiDelloScorrimento.set(supabase, modi); }
+  modi.delete(chiave);
+  modi.set(chiave, pagato);
+  if (modi.size > TETTO_MODI) modi.delete(modi.keys().next().value as string);
+}
+
 export async function leggiProdottiDellaGriglia(
   supabase: SupabaseClient,
   d: DomandaGriglia,
 ): Promise<PaginaGriglia> {
   if (!guardaIlPrezzo(d)) return leggiLaGriglia(supabase, d, false);
-  const pagato = await cePrezzoPagato(supabase);
+  const chiave = chiaveDelloScorrimento(d);
+  const primaPagina = !d.finestra || d.finestra[0] === 0;
+  const comeLaPrima = primaPagina ? undefined : modiDelloScorrimento.get(supabase)?.get(chiave);
+  const pagato = comeLaPrima ?? (await cePrezzoPagato(supabase));
   try {
-    return await leggiLaGriglia(supabase, d, pagato);
+    const pagina = await leggiLaGriglia(supabase, d, pagato);
+    if (primaPagina) ricordaModo(supabase, chiave, pagato);
+    return pagina;
   } catch (errore) {
     // R21-003 — Il ripiego: la colonna non c'è (migrazione 911 non applicata) o il database ha superato
     // il tempo (57014) → la lettura di prima.
     if (!pagato || !prezzoPagatoNonVa(errore)) throw errore;
     segnaSenzaPrezzoPagato(supabase);
-    return leggiLaGriglia(supabase, d, false);
+    const pagina = await leggiLaGriglia(supabase, d, false);
+    if (primaPagina) ricordaModo(supabase, chiave, false);
+    return pagina;
   }
 }
 
