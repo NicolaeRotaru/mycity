@@ -101,9 +101,12 @@ describe('R23-004 — il ritorno da Google applica la regola di ruolo', () => {
     expect(await tornaDaGoogle('seller', '/seller/products')).toBe('/seller/products');
   });
 
-  it('l\'amministratore torna anche nelle aree di negozio e fattorino: il portiere lo fa entrare', async () => {
-    expect(await tornaDaGoogle('admin', '/seller/orders')).toBe('/seller/orders');
-    expect(await tornaDaGoogle('admin', '/rider')).toBe('/rider');
+  // 28/11/2026 — Nicola: «hai reso l'admin un venditore». L'amministratore atterra sempre sul suo pannello.
+  it('l\'amministratore con ritorno nell\'area negozio o fattorino atterra su /admin', async () => {
+    expect(await tornaDaGoogle('admin', '/seller/dashboard')).toBe('/admin');
+    expect(await tornaDaGoogle('admin', '/seller/orders')).toBe('/admin');
+    expect(await tornaDaGoogle('admin', '/rider')).toBe('/admin');
+    expect(await tornaDaGoogle('admin', '/admin/utenti')).toBe('/admin/utenti');
   });
 
   it('il cliente non cambia: va dove dice il ritorno, anche verso /seller o «/»', async () => {

@@ -39,9 +39,10 @@ function ritornoPerIlRuolo(ritorno: string, ruolo: unknown): string {
   const casa = typeof ruolo === 'string' ? HOME_DEL_RUOLO[ruolo] : undefined;
   if (!casa) return ritorno;
   const percorso = percorsoRisolto(ritorno);
-  // Il portiere fa entrare l'amministratore anche in /seller e /rider (ROLE_PROTECTED): per lui non
-  // sono aree di un altro ruolo, e il ritorno lì resta, come prima di questa regola.
-  const inAreaAltrui = ruolo !== 'admin' && Object.entries(AREA_DEL_RUOLO).some(
+  // 28/11/2026 — L'amministratore che entra con Google atterra SEMPRE sul suo pannello, anche se il
+  // ritorno punta all'area negozio o fattorino: la stessa regola della pagina di accesso
+  // (app/sign-in/page.tsx). Nicola, 28/11 00:41: «hai reso l'admin un venditore».
+  const inAreaAltrui = Object.entries(AREA_DEL_RUOLO).some(
     ([altro, area]) => altro !== ruolo && (percorso === area || percorso.startsWith(`${area}/`)),
   );
   return percorso === '/' || inAreaAltrui ? casa : ritorno;

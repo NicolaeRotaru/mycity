@@ -6,11 +6,12 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 
 /**
- * R23-005 — Dopo l'accesso con email e password l'amministratore non perde il ritorno verso /seller o /rider.
+ * 28/11/2026 — Dopo l'accesso con email e password l'amministratore atterra SEMPRE sul suo pannello.
  *
- * Il portiere (middleware.ts, ROLE_PROTECTED) fa entrare l'amministratore anche nelle aree di negozio e
- * fattorino, ma la pagina le trattava come aree di un altro ruolo e lo mandava su /admin. Qui si monta la
- * pagina vera, si accede con un profilo di ogni ruolo e si guarda dove manda il router.
+ * Nicola, 28/11 00:41: entrato con l'account di assistenza, si è trovato il menu da venditore e
+ * «Questo è il cruscotto di un negozio» («hai reso l'admin un venditore»). La regola del 26/11 (R23-005)
+ * lasciava l'amministratore sul ritorno verso /seller o /rider: questa prova diventa rossa se torna.
+ * Qui si monta la pagina vera, si accede con un profilo di ogni ruolo e si guarda dove manda il router.
  */
 const stato = vi.hoisted(() => ({
   cerca: '' as string,
@@ -103,18 +104,22 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); });
 
-describe('R23-005 — l\'amministratore torna anche nelle aree di negozio e fattorino', () => {
-  it('IL CASO DELLA VOCE — l\'amministratore con ritorno /seller/orders ci torna, non su /admin', async () => {
-    expect(await accediCome('admin', '/seller/orders')).toBe('/seller/orders');
+describe('l\'amministratore che accede atterra sul suo pannello, mai nell\'area negozio', () => {
+  it('IL CASO DELLA VOCE — l\'amministratore con ritorno /seller/dashboard va su /admin, non nel cruscotto del negozio', async () => {
+    expect(await accediCome('admin', '/seller/dashboard')).toBe('/admin');
+    expect(await accediCome('admin', '/seller/earnings')).toBe('/admin');
+    expect(await accediCome('admin', '/seller')).toBe('/admin');
   });
 
-  it('l\'amministratore con ritorno /rider ci torna', async () => {
-    expect(await accediCome('admin', '/rider')).toBe('/rider');
+  it('l\'amministratore con ritorno nell\'area fattorino va su /admin', async () => {
+    expect(await accediCome('admin', '/rider')).toBe('/admin');
+    expect(await accediCome('admin', '/%73eller/orders')).toBe('/admin');
   });
 
-  it('l\'amministratore senza ritorno (o con «/?x») va ancora su /admin', async () => {
+  it('l\'amministratore senza ritorno (o con «/?x») va su /admin; un ritorno dentro /admin resta', async () => {
     expect(await accediCome('admin', '/')).toBe('/admin');
     expect(await accediCome('admin', '/?x=1')).toBe('/admin');
+    expect(await accediCome('admin', '/admin/utenti')).toBe('/admin/utenti');
   });
 
   it('per negozio e fattorino la regola resta: l\'area dell\'altro porta sulla propria home', async () => {

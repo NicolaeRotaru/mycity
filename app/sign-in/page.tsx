@@ -283,9 +283,12 @@ const SignInForm = () => {
           const casa = prof?.role ? HOME_DEL_RUOLO[prof.role as string] : undefined;
           if (casa) {
             const percorso = percorsoRisolto(returnTo);
-            // R23-005 — Il portiere fa entrare l'amministratore anche in /seller e /rider (ROLE_PROTECTED):
-            // per lui non sono aree di un altro ruolo, e il ritorno lì resta.
-            const inAreaAltrui = prof?.role !== 'admin' && Object.entries(AREA_DEL_RUOLO).some(
+            // 28/11/2026 — L'amministratore che accede atterra SEMPRE sul suo pannello, anche se il ritorno
+            // punta all'area negozio o fattorino. Nicola, 28/11 00:41: entrato con l'account di assistenza,
+            // si è trovato il menu da venditore e «Questo è il cruscotto di un negozio» («hai reso l'admin
+            // un venditore»). La regola del 26/11 (R23-005) lo lasciava lì: tolta. Nelle aree degli altri
+            // ruoli l'amministratore ci entra ancora, ma solo se ci va lui, non dopo l'accesso.
+            const inAreaAltrui = Object.entries(AREA_DEL_RUOLO).some(
               ([ruolo, area]) => ruolo !== prof?.role && (percorso === area || percorso.startsWith(`${area}/`)),
             );
             if (percorso === '/' || inAreaAltrui) dest = casa;
