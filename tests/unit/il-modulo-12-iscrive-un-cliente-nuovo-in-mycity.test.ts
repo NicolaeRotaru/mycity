@@ -15,6 +15,8 @@ const db = vi.hoisted(() => ({
   link: new Map<string, { seller_id: string; codice: string }>(),
   creaUtente: [] as Array<Record<string, unknown>>,
   ultimoId: 0,
+  /** 27/11/2026 — Quante scritture far fallire di fila, per simulare un primo invio rimasto a metà. */
+  guasti: { profili: 0, link: 0 },
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -32,10 +34,20 @@ vi.mock('@/lib/supabase/server', () => ({
           db.ultimoId += 1;
           const id = `00000000-0000-4000-8000-${String(db.ultimoId).padStart(12, '0')}`;
           db.utenti.set(id, { id, email: o.email });
-          db.profili.set(id, { id, role: 'pending_approval' });
+          // Come il trigger handle_new_user (migrazione 421): il profilo nasce venditore, non approvato, «in attesa».
+          db.profili.set(id, { id, role: 'seller', is_approved: false, approval_status: 'pending' });
           return { data: { user: { id } }, error: null };
         },
         getUserById: async (id: string) => ({ data: { user: db.utenti.get(id) ?? null }, error: null }),
+        // Come Supabase Auth: gli utenti a pagine, in ordine di nascita.
+        listUsers: async ({ page = 1, perPage = 50 }: { page?: number; perPage?: number } = {}) => {
+          const tutti = [...db.utenti.values()];
+          const users = tutti.slice((page - 1) * perPage, page * perPage);
+          return {
+            data: { users, aud: 'authenticated', nextPage: page * perPage < tutti.length ? page + 1 : null, lastPage: Math.max(1, Math.ceil(tutti.length / perPage)), total: tutti.length },
+            error: null,
+          };
+        },
       },
     },
     from: (tabella: string) => {
@@ -44,8 +56,16 @@ vi.mock('@/lib/supabase/server', () => ({
         select: () => q,
         limit: () => q,
         eq: (c: string, v: unknown) => { filtri[c] = v; return q; },
-        maybeSingle: async () => ({ data: tabella === 'profiles' ? db.profili.get(String(filtri.id)) ?? null : null, error: null }),
+        maybeSingle: async () => ({
+          data:
+            tabella === 'profiles' ? db.profili.get(String(filtri.id)) ?? null
+            : tabella === 'preventivi_con_codice' ? db.link.get(String(filtri.seller_id)) ?? null
+            : null,
+          error: null,
+        }),
         upsert: async (riga: Record<string, unknown>, o?: { ignoreDuplicates?: boolean }) => {
+          if (tabella === 'profiles' && db.guasti.profili > 0) { db.guasti.profili -= 1; return { error: { message: 'connessione persa' } }; }
+          if (tabella === 'preventivi_con_codice' && db.guasti.link > 0) { db.guasti.link -= 1; return { error: { message: 'connessione persa' } }; }
           if (tabella === 'profiles') db.profili.set(String(riga.id), { ...db.profili.get(String(riga.id)), ...riga });
           if (tabella === 'preventivi_con_codice' && !(o?.ignoreDuplicates && db.link.has(String(riga.seller_id))))
             db.link.set(String(riga.seller_id), riga as { seller_id: string; codice: string });
@@ -73,6 +93,7 @@ const BAR = { tipo: 'nuova-attivita', nome: 'Bar Prova', tipo_attivita: 'bar', c
 
 beforeEach(() => {
   db.utenti.clear(); db.profili.clear(); db.link.clear(); db.creaUtente.length = 0; db.ultimoId = 0;
+  db.guasti.profili = 0; db.guasti.link = 0;
   process.env.N8N_SCHEDA_CLIENTE_SEGRETO = SEGRETO;
 });
 
@@ -150,5 +171,70 @@ describe('il negozio nasce come Ora del Gusto', () => {
     const r = await chiama({ ...BAR, tipo_attivita: 'negozio' });
     expect(r.status).toBe(409);
     expect(db.profili.get(a.id_attivita)!.business_type).toBe('bar');
+  });
+});
+
+/**
+ * 27/11/2026 — COLLAUDO: UN PRIMO INVIO RIMASTO A METÀ NON BLOCCA PIÙ L'ATTIVITÀ PER SEMPRE.
+ *
+ * Il primo invio crea l'utente di sistema, poi la scrittura del profilo o del link cade. Prima della
+ * correzione il secondo invio cercava l'utente passando dal link e dal nome nel profilo, che non erano mai
+ * stati scritti: non lo trovava e rispondeva «Riprova fra poco» a ogni tentativo. Ora lo ritrova dalla sua
+ * email di sistema e finisce il lavoro come al primo invio. Nessun doppione, niente cancellato.
+ */
+describe('un primo invio rimasto a metà si completa al secondo', () => {
+  it('utente creato e profilo non scritto: il secondo invio lo ritrova dall’email e completa profilo e link', async () => {
+    db.guasti.profili = 1;
+    expect((await chiama(BAR)).status).toBe(503);
+    expect(db.utenti.size).toBe(1);
+    const [id] = [...db.utenti.keys()];
+    // Resta solo il profilo vuoto del trigger: nessun nome, nessun link.
+    expect(db.profili.get(id)).toEqual({ id, role: 'seller', is_approved: false, approval_status: 'pending' });
+    expect(db.link.has(id)).toBe(false);
+
+    const r = await chiama(BAR);
+    expect(r.status).toBe(201);
+    expect(await r.json()).toMatchObject({ id_attivita: id, nuova: true });
+    expect(db.utenti.size).toBe(1);
+    expect(db.profili.get(id)).toMatchObject({ role: 'seller', is_approved: false, approval_status: null, store_name: 'Bar Prova', business_type: 'bar', store_address: 'Via Roma 1, Piacenza' });
+    const codice = db.link.get(id)?.codice;
+    expect(codice).toMatch(/^[0-9a-f]{64}$/);
+
+    // Un terzo invio è un doppione vero: stesso negozio, stesso link.
+    const t = await chiama(BAR);
+    expect(t.status).toBe(200);
+    expect(await t.json()).toMatchObject({ id_attivita: id, nuova: false });
+    expect(db.utenti.size).toBe(1);
+    expect(db.link.get(id)?.codice).toBe(codice);
+  });
+
+  it('profilo scritto e link non scritto: il secondo invio crea il link e scrive il sito', async () => {
+    db.guasti.link = 1;
+    const conSito = { ...BAR, sito: 'https://www.barprova.it/' };
+    expect((await chiama(conSito)).status).toBe(503);
+    const [id] = [...db.utenti.keys()];
+    expect(db.link.has(id)).toBe(false);
+
+    const r = await chiama(conSito);
+    expect(r.status).toBe(201);
+    expect(await r.json()).toMatchObject({ id_attivita: id, nuova: true });
+    expect(db.utenti.size).toBe(1);
+    expect(db.link.get(id)?.codice).toMatch(/^[0-9a-f]{64}$/);
+    expect(db.profili.get(id)!.store_customization).toEqual({ socials: { website: 'https://www.barprova.it/' } });
+  });
+
+  it('lo ritrova anche quando gli utenti di MyCity riempiono più di una pagina', async () => {
+    for (let i = 0; i < 1200; i += 1) {
+      const altro = `10000000-0000-4000-8000-${String(i).padStart(12, '0')}`;
+      db.utenti.set(altro, { id: altro, email: `cliente-${i}@example.com` });
+    }
+    db.guasti.profili = 1;
+    expect((await chiama(BAR)).status).toBe(503);
+    const r = await chiama(BAR);
+    expect(r.status).toBe(201);
+    const { id_attivita } = (await r.json()) as { id_attivita: string };
+    expect(db.utenti.get(id_attivita)?.email).toMatch(/\.preventivo@mycity-system\.local$/);
+    expect(db.utenti.size).toBe(1201);
+    expect(db.profili.get(id_attivita)?.store_name).toBe('Bar Prova');
   });
 });

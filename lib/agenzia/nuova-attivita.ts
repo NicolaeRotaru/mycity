@@ -46,6 +46,28 @@ export function emailDiSistema(a: Pick<NuovaAttivita, 'nome' | 'citta'>): string
 /** Il codice del link: 256 bit casuali, come la migrazione 708. */
 export const nuovoCodice = (): string => randomBytes(32).toString('hex');
 
+/** Gli utenti letti per pagina, e il tetto di pagine: 50.000 utenti prima di arrendersi con un «guasto». */
+const UTENTI_PER_PAGINA = 1000;
+const PAGINE_MASSIME = 50;
+
+/**
+ * 27/11/2026 (collaudo) — L'utente di sistema ritrovato dalla sua email, senza passare dal profilo né dal
+ * link col codice: se il primo invio si è fermato dopo aver creato l'utente, quei due non esistono ancora.
+ * Supabase Auth non cerca per email: si leggono gli utenti a pagine finché non spunta. `null` se non c'è;
+ * `errore` se Supabase Auth non risponde.
+ */
+async function utenteDaEmail(admin: SupabaseClient, email: string): Promise<{ id: string | null; errore?: string }> {
+  for (let pagina = 1; pagina <= PAGINE_MASSIME; pagina += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page: pagina, perPage: UTENTI_PER_PAGINA });
+    if (error) return { id: null, errore: error.message };
+    const utenti = data?.users ?? [];
+    const trovato = utenti.find((u) => u.email?.toLowerCase() === email);
+    if (trovato) return { id: trovato.id };
+    if (utenti.length < UTENTI_PER_PAGINA) return { id: null };
+  }
+  return { id: null, errore: `utente non trovato nelle prime ${PAGINE_MASSIME * UTENTI_PER_PAGINA}` };
+}
+
 export type EsitoIscrizione =
   | { ok: true; id: string; nuova: boolean; sito: string | null }
   | { ok: false; motivo: 'gia-con-accesso' | 'guasto'; dettaglio?: string };
@@ -58,6 +80,9 @@ export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): 
 
   // 1. L'utente senza accesso (o quello già creato da un invio precedente con lo stesso nome e città).
   let id: string | null = null;
+  // `creatoOra`: l'utente nasce in questo invio. `nuova`: l'iscrizione si completa in questo invio — anche
+  // quella di un primo invio rimasto a metà, che non aveva ancora il link e non era partita da nessuna parte.
+  let creatoOra = false;
   let nuova = false;
   const creato = await admin.auth.admin.createUser({
     email,
@@ -67,29 +92,23 @@ export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): 
   });
   if (creato.data?.user) {
     id = creato.data.user.id;
+    creatoOra = true;
     nuova = true;
   } else {
-    // Già creato prima: lo si ritrova dal profilo che porta il suo nome nel link col codice.
-    const esistente = await admin
-      .from('preventivi_con_codice')
-      .select('seller_id, profiles!inner(store_name)')
-      .eq('profiles.store_name', a.nome)
-      .limit(5);
-    const righe = (esistente.data ?? []) as Array<{ seller_id: string }>;
-    for (const r of righe) {
-      const u = await admin.auth.admin.getUserById(r.seller_id);
-      if (u.data?.user?.email === email) {
-        id = r.seller_id;
-        break;
-      }
-    }
-    if (!id) return { ok: false, motivo: 'guasto', dettaglio: creato.error?.message ?? 'utente non creato' };
+    // Già creato prima: lo si ritrova dalla sua email di sistema (collaudo del 27/11: passando dal profilo
+    // e dal link, un primo invio caduto dopo createUser lasciava l'attività bloccata per sempre).
+    const trovato = await utenteDaEmail(admin, email);
+    if (!trovato.id) return { ok: false, motivo: 'guasto', dettaglio: trovato.errore ?? creato.error?.message ?? 'utente non creato' };
+    id = trovato.id;
+    const linkPrima = await admin.from('preventivi_con_codice').select('seller_id').eq('seller_id', id).maybeSingle();
+    if (linkPrima.error) return { ok: false, motivo: 'guasto', dettaglio: linkPrima.error.message };
+    nuova = !linkPrima.data;
   }
 
   // 2. Il profilo: venditore non approvato, fuori vetrina, coi dati pubblici dell'attività.
   const profilo = await admin.from('profiles').select('id, approval_status, is_approved').eq('id', id).maybeSingle();
   const p = profilo.data as { approval_status?: string | null; is_approved?: boolean } | null;
-  if (p && !nuova && (p.is_approved || (p.approval_status && p.approval_status !== 'pending'))) {
+  if (p && !creatoOra && (p.is_approved || (p.approval_status && p.approval_status !== 'pending'))) {
     // Il titolare ha già accettato o è stato approvato: il modulo non riscrive più niente.
     return { ok: false, motivo: 'gia-con-accesso' };
   }
