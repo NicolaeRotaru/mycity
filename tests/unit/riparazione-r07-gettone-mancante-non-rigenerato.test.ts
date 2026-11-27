@@ -19,6 +19,8 @@ const SENZA_GETTONE = [
   'no captcha response (captcha_token) found in request',
   'captcha protection: request disallowed (no captcha response)',
   'captcha protection: request disallowed (missing-input-response)',
+  // Il testo di GoTrue di oggi (2.190+), con codice captcha_failed: è il caso più frequente.
+  'captcha protection: request disallowed (no captcha_token found)',
   'CAPTCHA mancante',
 ];
 
