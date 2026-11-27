@@ -130,7 +130,7 @@ describe('il pulsante del link', () => {
     document.body.appendChild(radice);
     root = createRoot(radice);
     await act(async () => {
-      root!.render(createElement(AccettaDalLink, { codice: CODICE, consigliato: 'business', prezzi: { base: 30000, business: 50000, premium: 99900 }, primoMeseScontato: true }));
+      root!.render(createElement(AccettaDalLink, { codice: CODICE, consigliato: 'business', prezzi: { base: 30000, business: 60000, premium: 90000 }, primoMeseScontato: true }));
     });
     // 27/11/2026 — Da qui non si accetta più: si va alla pagina della conferma, col codice dell'email.
     expect(radice.querySelector('button[type="submit"]')).toBeNull();

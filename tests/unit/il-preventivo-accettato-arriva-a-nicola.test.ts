@@ -104,7 +104,7 @@ describe('GET /api/seller/preventivo', () => {
     type R = { data: { prezzi: Record<string, number | null>; consigliato: string } };
     stato.erroreImpostazioni = { code: '42703', message: 'column site_settings.agenzia does not exist' };
     const prima = (await (await chiama('GET')).json()) as R;
-    expect(prima.data.prezzi).toEqual({ base: 30000, business: 50000, premium: 99900 });
+    expect(prima.data.prezzi).toEqual({ base: 30000, business: 60000, premium: 90000 });
     expect(prima.data.consigliato).toBe('business'); // mancano foto e sito
     stato.erroreImpostazioni = { code: '57014', message: 'canceling statement due to statement timeout' };
     const guasto = (await (await chiama('GET')).json()) as R;
@@ -136,7 +136,7 @@ describe('POST /api/seller/preventivo', () => {
     expect(((await r.json()) as { data: { abbonamento: string } }).data.abbonamento).toBe('business');
     expect(stato.avvisi).toHaveLength(1);
     expect(stato.avvisi[0].titolo).toBe('Preventivo accettato: Bar Roma');
-    expect(stato.avvisi[0].corpo).toMatch(/sceglie l'abbonamento Business \(500,00\s€ al mese, il primo mese 250,00\s€\)/);
+    expect(stato.avvisi[0].corpo).toMatch(/sceglie l'abbonamento Business \(600,00\s€ al mese, il primo mese 300,00\s€\)/);
     expect(stato.avvisi[0].corpo).toContain('3331234567');
     // l'id intero dell'attività è nella chiave: due negozi con le stesse prime 6 cifre non si scambiano
     expect(stato.avvisi[0].opzioni.unaVoltaPer).toMatch(/^preventivo-agenzia:a1b2c3d4-0000:P-\d{8}-A1B2C3:business$/);

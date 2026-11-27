@@ -122,8 +122,8 @@ describe('la pagina di un servizio', () => {
     expect(r.textContent).toContain('Nella vetrina non c’è nessun video.');
     // 24/11/2026: il servizio non si vende più da solo, è dentro le tre fasce
     expect(r.textContent).toMatch(/Base · 300,00\s€ al mese/);
-    expect(r.textContent).toMatch(/Business · 500,00\s€ al mese/);
-    expect(r.textContent).toMatch(/Premium · 999,00\s€ al mese/);
+    expect(r.textContent).toMatch(/Business · 600,00\s€ al mese/);
+    expect(r.textContent).toMatch(/Premium · 900,00\s€ al mese/);
     expect(r.textContent).toContain('Una sessione di foto e video ogni mese.');
     expect(r.textContent).not.toMatch(/da 50,00/);
     expect(r.querySelector('a[href="/seller/abbonamento"]')?.textContent).toContain('Scegli l');
@@ -220,12 +220,12 @@ describe('cosa ricevi, già pronto dentro il servizio', () => {
     // si chiede di essere contattati per la fascia scelta. Il primo mese a metà resta scritto sulla fascia.
     expect(r.textContent).not.toContain('Paga e attiva');
     expect(r.textContent).toContain('Voglio il Premium: contattatemi');
-    expect(r.textContent).toMatch(/Il primo mese 499,50\s€/);
+    expect(r.textContent).toMatch(/Il primo mese 450,00\s€/);
     expect(r.textContent).toContain('I servizi li realizza SDG Agenzia, il partner di MyCity');
     // in cima «Cosa ci guadagni»; sotto ogni piano il primo mese e il pareggio in colazioni
     expect(r.textContent!.indexOf('Cosa ci guadagni')).toBeLessThan(r.textContent!.indexOf('Base, Business o Premium'));
-    expect(r.textContent).toMatch(/Il primo mese 250,00\s€/);
-    expect(r.textContent).toContain('l’incasso di 6 colazioni in più');
+    expect(r.textContent).toMatch(/Il primo mese 300,00\s€/);
+    expect(r.textContent).toContain('l’incasso di 7 colazioni in più');
     expect(r.textContent).toContain('disdici quando vuoi, con 30 giorni di preavviso');
     expect(r.textContent).toContain('Ogni mese ti mandiamo il resoconto');
     // il titolare cambia lo scontrino e i conti si rifanno
