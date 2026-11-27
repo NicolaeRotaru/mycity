@@ -461,6 +461,29 @@ describe('la visita di SDG scelta nel link', () => {
     expect(String(db.posta.at(-1)?.html ?? '')).toContain('Ci vediamo');
   });
 
+  it('un altro errore del database sulla scrittura con la visita non si ritenta: niente si accetta', async () => {
+    db.erroreVisita = { code: '57P01', message: 'terminating connection due to administrator command' };
+    const c = await chiediCodice();
+    const r = await conferma(c, { visita: await orarioProposto() });
+    expect(r.status).toBe(503);
+    expect(db.preventivo?.stato).toBe('aperto');
+    expect(db.utente).toEqual([]);
+  });
+
+  it('il ritentativo senza colonna prende il preventivo solo se è ancora aperto (due conferme insieme)', async () => {
+    db.erroreVisita = { code: 'PGRST204', message: "Could not find the 'visita_il' column of 'preventivi_con_codice' in the schema cache" };
+    const c = await chiediCodice();
+    // Un'altra conferma è arrivata prima: il preventivo è già accettato quando parte il ritentativo.
+    const { leggiPreventivoColCodice } = await import('@/lib/agenzia/preventivo-col-codice');
+    const letto = await leggiPreventivoColCodice(CODICE);
+    db.preventivo!.stato = 'accettato';
+    const { accettaPreventivoColCodice } = await import('@/lib/agenzia/preventivo-col-codice');
+    const esito = await accettaPreventivoColCodice({ preventivo: letto!, codice: CODICE, email: 'titolare@grida.it', fascia: 'premium', visita: await orarioProposto() });
+    expect(esito).toMatchObject({ ok: false, motivo: 'GIA_ACCETTATO' });
+    expect(db.utente).toEqual([]);
+    expect(c.codice).toHaveLength(6);
+  });
+
   it('senza visita si accetta (nessun giorno libero, o pagina aperta prima): l email dice che lo chiamiamo', async () => {
     const c = await chiediCodice();
     const r = await conferma(c);

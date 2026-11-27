@@ -86,9 +86,13 @@ export type EsitoAccettazione =
   | { ok: true; sellerId: string; accessoInviato: boolean; entrato: boolean }
   | { ok: false; motivo: 'GIA_ACCETTATO' | 'CHIUSO' | 'EMAIL_GIA_USATA' | 'ORA_PRESA' | 'GUASTO'; messaggio: string };
 
-/** La colonna della visita non c'è ancora (migrazione 999b non applicata): PostgREST o Postgres. */
+/**
+ * La colonna della visita non c'è ancora (migrazione 999b non applicata): PostgREST o Postgres. Solo allora si
+ * ritenta senza la visita; ogni altro errore (ora già presa, database giù) non si ritenta.
+ */
 function colonnaVisitaMancante(e: { code?: string; message?: string }): boolean {
-  return e.code === 'PGRST204' || e.code === '42703' || /visita_il/.test(e.message ?? '');
+  if (e.code === '23505') return false;
+  return e.code === 'PGRST204' || e.code === '42703' || /visita_il/.test(e.message ?? '') && /column|colonna|schema/i.test(e.message ?? '');
 }
 
 /** Il titolare accetta dal link: email, profilo compilato, revisione, avvisi. Il pagamento lo apre chi chiama. */
@@ -116,6 +120,7 @@ export async function accettaPreventivoColCodice(input: {
   // Con la visita di SDG nella stessa scrittura: l'indice unico della 999b non dà la stessa ora a due attività.
   const ora = new Date().toISOString();
   const valori = { stato: 'accettato', fascia_scelta: fascia, accettato_il: ora, condizioni_accettate_il: ora };
+  // Anche il ritentativo senza la visita prende il preventivo solo se è ancora aperto, e conta le righe tornate.
   const prendi = (v: Record<string, unknown>) =>
     admin.from('preventivi_con_codice').update(v).eq('codice', codice).eq('stato', 'aperto').select('seller_id');
   let visitaSalvata = Boolean(visita);
