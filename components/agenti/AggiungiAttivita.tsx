@@ -27,6 +27,7 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null }: {
   const [fascia, setFascia] = useState<IdFascia | null>(null);
   const [sbloccata, setSbloccata] = useState(false);
   const [giaOnline, setGiaOnline] = useState(false);
+  const [avvisoDovuto, setAvvisoDovuto] = useState(true);
   const [link, setLink] = useState<string | null>(null);
   const [gia, setGia] = useState(false);
   const [avvisato, setAvvisato] = useState(false);
@@ -39,7 +40,7 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null }: {
     setErrore(null);
     try {
       const r = await fetch('/api/agente/aggiungi', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lavoro, fascia }) });
-      const d = (await r.json().catch(() => null)) as { ok?: boolean; data?: { link?: string | null; nuova?: boolean; avvisato?: boolean; sbloccata?: boolean; giaOnline?: boolean }; error?: { message?: string } } | null;
+      const d = (await r.json().catch(() => null)) as { ok?: boolean; data?: { link?: string | null; nuova?: boolean; avvisato?: boolean; avvisoDovuto?: boolean; sbloccata?: boolean; giaOnline?: boolean }; error?: { message?: string } } | null;
       if (!r.ok || !d?.ok) {
         setErrore(d?.error?.message ?? 'Non sono riuscito ad aggiungere l’attività. Riprova fra poco.');
         setFase('errore');
@@ -50,6 +51,7 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null }: {
       setAvvisato(d.data?.avvisato === true);
       setSbloccata(d.data?.sbloccata === true);
       setGiaOnline(d.data?.giaOnline === true);
+      setAvvisoDovuto(d.data?.avvisoDovuto ?? d.data?.nuova !== false);
       setFase('fatto');
     } catch {
       setErrore('Non sono riuscito ad aggiungere l’attività. Controlla la connessione e riprova.');
@@ -78,7 +80,7 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null }: {
             ? <p>La sua pagina è sbloccata col {nomeFascia}: i servizi del {nomeFascia} sono attivi da adesso, fino alla disdetta.</p>
             : <p className={c('errore')}>La sua pagina non si è sbloccata col {nomeFascia}: dillo a Nicola.</p>}
         <p>Il titolare entra quando accetta il preventivo dal link.{avvisato ? ' Nicola ha ricevuto l’avviso.' : ''}</p>
-        {!gia && !avvisato && <p className={c('errore')}>L’avviso a Nicola non è partito: diglielo tu.</p>}
+        {avvisoDovuto && !avvisato && <p className={c('errore')}>L’avviso a Nicola non è partito: diglielo tu.</p>}
         {link ? (
           <>
             <p className={c('nota')}>Manda questo link al titolare: apre il suo preventivo e preme «Accetto il preventivo».</p>

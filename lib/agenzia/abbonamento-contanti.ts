@@ -133,3 +133,13 @@ export async function fermaInContanti(admin: SupabaseClient, sellerId: string): 
   if (error) return null;
   return (data ?? []).length;
 }
+
+/**
+ * Il primo mese a metà vale ancora? Sì se il negozio non ha mai avuto un abbonamento, OPPURE se l'unico che ha
+ * è quello in contanti in corso: è proprio il primo, sbloccato al «Sì» e non ancora pagato (collaudo del 27/11:
+ * la riga scritta al «Sì» toglieva dal link il «primo mese a metà»). Un abbonamento in contanti già fermato,
+ * o uno Stripe, è già stato avuto: niente sconto.
+ */
+export function primoMeseAncoraScontato(righe: { stato?: string | null; origine?: string | null }[]): boolean {
+  return righe.every((r) => r.origine === 'contanti' && (IN_CORSO as readonly string[]).includes(String(r.stato)));
+}

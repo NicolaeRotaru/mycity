@@ -110,7 +110,11 @@ export const POST = conAgente({ name: 'agente-aggiungi', max: 20, windowMs: 60 *
   let avvisato = false;
   const nomeFascia = FASCE[fascia].nome;
   const fasciaCambiata = sblocco.esito === 'cambiata';
-  if (fatto.nuova || fasciaCambiata) {
+  // Collaudo del 27/11: anche su un'attività che c'era già (modulo 12, o fermata da Nicola per mancato
+  // pagamento) una pagina che si sblocca adesso va detta a Nicola, sennò «se non paga, fermalo tu» si annulla.
+  const sbloccataOra = sblocco.esito === 'sbloccata';
+  const avvisoDovuto = fatto.nuova || fasciaCambiata || sbloccataOra;
+  if (avvisoDovuto) {
     const pagina = sblocco.esito === 'gia-online'
       ? `Ha già un abbonamento ${FASCE[sblocco.fascia].nome} pagato online: quello resta.`
       : sbloccoRiuscito(sblocco)
@@ -119,10 +123,13 @@ export const POST = conAgente({ name: 'agente-aggiungi', max: 20, windowMs: 60 *
     avvisato = await notifyAdmins(
       fasciaCambiata
         ? `${attivita.nome}: l'abbonamento passa dal ${FASCE[sblocco.da].nome} al ${nomeFascia}`
-        : `${attivita.nome} ha detto sì col ${nomeFascia}: attività aggiunta dall'agente`,
+        : fatto.nuova
+          ? `${attivita.nome} ha detto sì col ${nomeFascia}: attività aggiunta dall'agente`
+          : `${attivita.nome}: la pagina si è sbloccata di nuovo col ${nomeFascia}`,
       `L'agente ${email} ha premuto «Aggiungi attività» e ha scelto il ${nomeFascia}. ${pagina} Il negozio è su MyCity, nascosto e senza accesso finché il titolare non accetta il preventivo; il link lo trovi in Admin → Preventivi col link.`,
       '/admin/preventivi',
-      { unaVoltaPer: fasciaCambiata ? `agente-aggiungi:${fatto.id}:${fascia}` : `agente-aggiungi:${fatto.id}` },
+      // Una volta per attività alla nascita; ogni cambio di fascia e ogni nuovo sblocco ha il suo avviso.
+      { unaVoltaPer: fatto.nuova ? `agente-aggiungi:${fatto.id}` : `agente-aggiungi:${fatto.id}:${sblocco.esito}:${fascia}:${new Date().toISOString()}` },
     ).then(() => true, (e: unknown) => {
       logger.warn('[agente-aggiungi] avviso a Nicola non partito', { id: fatto.id, errore: String(e) });
       return false;
@@ -131,7 +138,7 @@ export const POST = conAgente({ name: 'agente-aggiungi', max: 20, windowMs: 60 *
 
   // 4. Il link da mandare al titolare.
   return NextResponse.json(
-    { ok: true, data: { nome: attivita.nome, nuova: fatto.nuova, link, avvisato, fascia, sbloccata: sbloccoRiuscito(sblocco), giaOnline: sblocco.esito === 'gia-online' } },
+    { ok: true, data: { nome: attivita.nome, nuova: fatto.nuova, link, avvisato, avvisoDovuto, fascia, sbloccata: sbloccoRiuscito(sblocco), giaOnline: sblocco.esito === 'gia-online' } },
     { status: fatto.nuova ? 201 : 200, headers: { 'Cache-Control': 'no-store' } },
   );
 });

@@ -121,6 +121,8 @@ describe('il pulsante «Aggiungi attività»', () => {
 
   it('premere due volte ridà lo stesso link, senza rimandare al flusso 16 né riavvisare', async () => {
     stato.esitoIscrizione = { ok: true, id: 'att-1', nuova: false, sito: null };
+    // Alla seconda pressione la pagina è già sbloccata nella stessa fascia.
+    stato.esitoSblocco = { esito: 'gia-sbloccata', fascia: 'business' };
     const r = await premi();
     expect(r.status).toBe(200);
     expect(((await r.json()) as { data: { link: string } }).data.link).toContain('/preventivo/');
@@ -214,6 +216,19 @@ describe('l abbonamento scelto dal titolare sblocca la sua pagina (27/11)', () =
     expect(r.status).toBe(200);
     expect(stato.avvisi).toHaveLength(1);
     expect(stato.avvisi[0]).toContain('dal Business al Premium');
+  });
+
+  it('un attività che c era già (o fermata per mancato pagamento) e si sblocca adesso: Nicola lo sa (collaudo)', async () => {
+    stato.esitoIscrizione = { ok: true, id: 'att-1', nuova: false, sito: null };
+    stato.esitoSblocco = { esito: 'sbloccata', fascia: 'business' };
+    const r = await premi();
+    expect(r.status).toBe(200);
+    expect(((await r.json()) as { data: { avvisoDovuto: boolean; avvisato: boolean } }).data).toMatchObject({ avvisoDovuto: true, avvisato: true });
+    expect(stato.avvisi).toHaveLength(1);
+    expect(stato.avvisi[0]).toContain('sbloccata di nuovo col Business');
+    // Un secondo sblocco dopo un altro fermo ha il suo avviso, non resta muto per la chiave di prima.
+    await premi();
+    expect(stato.avvisi).toHaveLength(2);
   });
 
   it('se lo sblocco non riesce, la risposta e l avviso a Nicola lo dicono', async () => {

@@ -15,6 +15,7 @@ import { leggiSchedaSalvata, sitoUfficialeDi, soloConfermati } from '@/lib/agenz
 import { analisiAziendale, leggiAnalisiCanali, leggiRisultatoSito, sitoInParole, statoAnalisiBusiness } from '@/lib/agenzia/analisi';
 import { leggiGiudizioSito, offertaSuMisura } from '@/lib/agenzia/offerta-su-misura';
 import { conLAnalisi, schedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
+import { primoMeseAncoraScontato } from '@/lib/agenzia/abbonamento-contanti';
 
 /**
  * IL PREVENTIVO LETTO DAL DATABASE — una funzione sola per la dashboard (/api/seller/preventivo) e
@@ -71,7 +72,7 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
     // 24/11/2026 — L'abbonamento dei servizi già pagato, se c'è (migrazione 706).
     admin
       .from('abbonamenti_servizi')
-      .select('fascia, stato, rinnovo_il')
+      .select('fascia, stato, rinnovo_il, origine')
       .eq('seller_id', idAttivita)
       .order('creato_il', { ascending: false })
       .limit(20),
@@ -151,7 +152,8 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
     scelto,
     attivo: abbonamentoAttivo(abbonamento),
     // Chi ha già avuto un abbonamento dei servizi non ha più il primo mese a metà (lo rifiuta anche la cassa).
-    primoMeseScontato: abbonamento.error ? true : ((abbonamento.data as unknown[] | null) ?? []).length === 0,
+    // 27/11/2026 — Quello in contanti in corso, sbloccato al «Sì» dell'agente, è il primo: lo sconto resta.
+    primoMeseScontato: abbonamento.error ? true : primoMeseAncoraScontato((abbonamento.data as { stato?: string | null; origine?: string | null }[] | null) ?? []),
   });
   // L'offerta su misura (24/11/2026): dalla vetrina, dalla scheda e dalle analisi. Un guasto qui non
   // ferma il preventivo: senza offerta la pagina mostra quello che mostrava prima.

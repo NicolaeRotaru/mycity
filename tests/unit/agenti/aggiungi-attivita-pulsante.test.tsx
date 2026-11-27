@@ -85,4 +85,14 @@ describe('il pulsante sotto la scheda', () => {
     await act(async () => { bottone(r, 'Sì, aggiungi').click(); });
     expect(r.textContent).toContain('non si è sbloccata col Base');
   });
+
+  it('su un attività che c era già, se l avviso dovuto non parte, l agente lo legge (collaudo)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: true, data: { nuova: false, link: null, avvisato: false, avvisoDovuto: true, fascia: 'base', sbloccata: true, giaOnline: false } }), { status: 200 })));
+    const r = await monta();
+    await act(async () => { bottone(r, 'Aggiungi attività').click(); });
+    await scegli(r, 'base');
+    await act(async () => { bottone(r, 'Sì, aggiungi').click(); });
+    expect(r.textContent).toContain('era già su MyCity');
+    expect(r.textContent).toContain('L’avviso a Nicola non è partito');
+  });
 });
