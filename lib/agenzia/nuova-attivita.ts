@@ -63,7 +63,9 @@ async function utenteDaEmail(admin: SupabaseClient, email: string): Promise<{ id
     const utenti = data?.users ?? [];
     const trovato = utenti.find((u) => u.email?.toLowerCase() === email);
     if (trovato) return { id: trovato.id };
-    if (utenti.length < UTENTI_PER_PAGINA) return { id: null };
+    // Ci si ferma sulla pagina vuota, non su quella corta: se il server desse pagine più piccole di mille,
+    // fermarsi alla prima pagina corta perderebbe l'utente in silenzio (collaudo del 27/11).
+    if (utenti.length === 0) return { id: null };
   }
   return { id: null, errore: `utente non trovato nelle prime ${PAGINE_MASSIME * UTENTI_PER_PAGINA}` };
 }
@@ -130,11 +132,15 @@ export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): 
   const scritto = await admin.from('profiles').upsert({ id, ...valori }, { onConflict: 'id' });
   if (scritto.error) return { ok: false, motivo: 'guasto', dettaglio: scritto.error.message };
 
-  // 3. Il link col codice, una volta sola.
+  // 3. Il link col codice, una volta sola. Il database restituisce la riga solo se l'ha scritta adesso.
   const link = await admin
     .from('preventivi_con_codice')
-    .upsert({ seller_id: id, codice: nuovoCodice() }, { onConflict: 'seller_id', ignoreDuplicates: true });
+    .upsert({ seller_id: id, codice: nuovoCodice() }, { onConflict: 'seller_id', ignoreDuplicates: true })
+    .select('seller_id');
   if (link.error) return { ok: false, motivo: 'guasto', dettaglio: link.error.message };
+  // Per un utente ritrovato, l'iscrizione è nuova solo se il link l'ha scritto questo invio: due invii
+  // arrivati insieme non fanno partire due volte il flusso 16 (collaudo del 27/11).
+  if (!creatoOra) nuova = (link.data ?? []).length > 0;
 
   return { ok: true, id, nuova, sito };
 }
