@@ -1,13 +1,13 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-27 02:13",
+  "aggiornato": "2026-11-27 02:14",
   "finita": true,
   "testa": "f14a7f0f3269f4f1c34930315806167ab3654323",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
     "testa": "f14a7f0f3269f4f1c34930315806167ab3654323",
-    "nota": "Lanciato sulla testa del codice f14a7f0f (SHA preso con git rev-parse HEAD nello stesso comando) e aspettato. typecheck verde, lint 0 errori (122 avvisi), vitest 2340 file verdi su 2342 (14315 casi), uscita reale del comando 1. I soli 3 casi rossi sono nelle 2 prove comuni che la regia aggiorna sull integrazione (rosse sul ramo come atteso, per sua indicazione): tests/unit/la-chat-mostra-la-proposta-che-il-server-applica.test.ts:131 (nota di R02-001) e tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts:230-237 (nota di R02-004). Con quelle due modifiche applicate solo nell albero e poi tolte: 17 casi su 17 verdi."
+    "nota": "Lanciato sulla testa del codice f14a7f0f (SHA preso con git rev-parse HEAD nello stesso comando) e aspettato: typecheck verde, lint 0 errori (122 avvisi), vitest 2340 file verdi su 2342 (14315 casi), uscita reale 1. I 3 casi rossi, tutti e soli: (1) tests/unit/la-chat-mostra-la-proposta-che-il-server-applica.test.ts riga 131 «voci scritte male negli elenchi»; (2) e (3) tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts, i due casi it.each «senza la colonna (errore 42703)» e «senza la colonna (errore PGRST204)». Perché: sono prove comuni (importano file di altre sessioni dell onda), quindi per regola sono riportate alla base sul ramo e le aggiorna la regia sull integrazione. Con le modifiche scritte nelle note di R02-001 e R02-004 applicate solo nell albero e poi tolte: 17 casi su 17 verdi. Il verify vero lo rifà la regia sull integrazione con quelle modifiche dentro."
   },
   "voci": [
     {
