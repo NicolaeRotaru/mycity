@@ -1,4 +1,4 @@
--- 999e — Il segno dell'email di sistema sui negozi già iscritti (27/11/2026).
+-- 999f — Il segno dell'email di sistema sui negozi già iscritti (27/11/2026).
 --
 -- IL DIFETTO (collaudo del 27/11, grave). Il modulo 12 di n8n e il pulsante «Aggiungi attività» iscrivono un
 -- negozio con un'email finta, ricavata da nome e città (lib/agenzia/nuova-attivita.ts, emailDiSistema). Quando
@@ -39,8 +39,9 @@
 --   where raw_app_meta_data ? 'email_di_sistema' and created_at < '<ora in cui è stata unita la correzione del codice>';
 --   Togliendola anche a chi è nato dopo, per lui torna il difetto.
 --
--- NUMERO. «999e»: le migrazioni si applicano in ordine di byte (LC_ALL=C sort) e lo script «Migrazioni a mano»
--- accetta tre cifre più una lettera. La 999d è già in main; la 999c sta nella mycity#353, ancora aperta.
+-- NUMERO. «999f»: le migrazioni si applicano in ordine di byte (LC_ALL=C sort) e lo script «Migrazioni a mano»
+-- accetta tre cifre più una lettera. La 999d è già in main; la 999c sta nella mycity#353 e la 999e nella
+-- mycity#355, tutte e due ancora aperte.
 -- Questa non dipende da loro e loro non dipendono da questa.
 -- NON si applica a mano: lo decide Nicola. Attenzione: il rilascio dopo l'unione applica da solo le
 -- migrazioni che mancano (scripts/applica-migrazioni-mancanti.sh), quindi unire questa vuol dire applicarla.
