@@ -56,7 +56,7 @@ vi.mock('@/lib/supabase/server', () => ({
         }),
       }),
     }) : tabella === 'notifications' ? ({
-      insert: (righe: Array<{ id?: string; user_id: string; title: string; body: string }> | { user_id: string; title: string; body: string }) => {
+      insert: (righe: Array<{ id?: string; user_id: string; title: string; body: string }> | { id?: string; user_id: string; title: string; body: string }) => {
         const elenco = Array.isArray(righe) ? righe : [righe];
         const doppia = elenco.some((r) => r.id && campanelle.some((c) => c.id === r.id));
         if (!doppia) campanelle.push(...elenco);

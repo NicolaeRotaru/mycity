@@ -110,6 +110,7 @@ describe('③ il passo vero, con un psql finto: solo i conti per tipo', () => {
     const esito = spawnSync('bash', ['-e', '-c', confronto.run], {
       encoding: 'utf8',
       env: {
+        NODE_ENV: 'test',
         PATH: `${cestino}:${process.env.PATH}`,
         SUPABASE_DB_URL: 'postgresql://postgres.rifsegreto:pw@pooler.esempio:5432/postgres',
         DB_DAI_FILE: 'postgresql://postgres:postgres@localhost:5432/mycity_dai_file',
