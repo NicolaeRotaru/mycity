@@ -35,6 +35,14 @@ import { sbloccaInContanti, sbloccoRiuscito } from '@/lib/agenzia/abbonamento-co
  * 27/11/2026 02:26 — Nicola: «in automatico deve sbloccarsi la pagina del venditore in base all'abbonamento»,
  * subito e fino alla disdetta. Con il pagamento online spento, chi accetta ha la pagina sbloccata nella fascia
  * che accetta (lib/agenzia/abbonamento-contanti.ts): se l'agente ne aveva scelta un'altra, si allinea a questa.
+ *
+ * 27/11/2026 — Nicola: «dopo il click entra nella sua pagina venditore con l'abbonamento che ha scelto», e sul
+ * rischio trovato dal collaudo della sicurezza «codice dall'email». Chi chiama (app/api/preventivo/[codice]/accetta)
+ * accetta solo dopo che il titolare ha scritto il codice giusto (lib/agenzia/codice-dal-link.ts): fino a lì
+ * l'utente del negozio resta bloccato e senza email. Con `entraSubito` chi chiama apre poi la sessione del
+ * titolare nella stessa risposta (lib/agenzia/entra-dal-link.ts): qui si crea il gettone d'accesso monouso e
+ * glielo si passa, PRIMA del link dell'email, perché un gettone nuovo dello stesso tipo può annullare quello
+ * di prima, e il link dell'email deve restare buono.
  */
 
 export const CODICE_VALIDO = /^[0-9a-f]{64}$/;
@@ -68,7 +76,7 @@ export async function leggiPreventivoColCodice(codice: string): Promise<Preventi
 }
 
 export type EsitoAccettazione =
-  | { ok: true; sellerId: string; accessoInviato: boolean }
+  | { ok: true; sellerId: string; accessoInviato: boolean; entrato: boolean }
   | { ok: false; motivo: 'GIA_ACCETTATO' | 'CHIUSO' | 'EMAIL_GIA_USATA' | 'GUASTO'; messaggio: string };
 
 /** Il titolare accetta dal link: email, profilo compilato, revisione, avvisi. Il pagamento lo apre chi chiama. */
@@ -77,6 +85,8 @@ export async function accettaPreventivoColCodice(input: {
   codice: string;
   email: string;
   fascia: Abbonamento;
+  /** Apre la sessione del titolare col gettone monouso; vero se è entrato. Assente: entra dall'email. */
+  entraSubito?: (gettone: string) => Promise<boolean>;
 }): Promise<EsitoAccettazione> {
   const { preventivo, codice, email, fascia } = input;
   if (preventivo.stato === 'accettato') {
@@ -161,6 +171,19 @@ export async function accettaPreventivoColCodice(input: {
     { unaVoltaPer: `preventivo-codice:${id}` },
   ).catch((e: unknown) => logger.warn('[preventivo-codice] avviso a Nicola non partito', { sellerId: id, errore: String(e) }));
 
+  // 4) Il titolare entra subito, se chi chiama lo sa fare. Se non riesce, resta l'email qui sotto.
+  let entrato = false;
+  if (input.entraSubito) {
+    try {
+      const gettone = await admin.auth.admin.generateLink({ type: 'magiclink', email });
+      const hash = (gettone.data as { properties?: { hashed_token?: string } } | null)?.properties?.hashed_token;
+      if (gettone.error || !hash) throw new Error(gettone.error?.message ?? 'gettone senza codice');
+      entrato = await input.entraSubito(hash);
+    } catch (e) {
+      logger.warn('[preventivo-codice] ingresso subito non riuscito: entra dall email', { sellerId: id, errore: String(e) });
+    }
+  }
+
   let accessoInviato = false;
   try {
     const link = await admin.auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: `${env.appUrl()}${PERCORSO_ABBONAMENTO}` } });
@@ -173,5 +196,5 @@ export async function accettaPreventivoColCodice(input: {
   } catch (e) {
     logger.error('[preventivo-codice] link di accesso non creato', { sellerId: id, errore: String(e) });
   }
-  return { ok: true, sellerId: id, accessoInviato };
+  return { ok: true, sellerId: id, accessoInviato, entrato };
 }
