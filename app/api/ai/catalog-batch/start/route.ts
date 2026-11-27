@@ -349,6 +349,14 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       await chiudi({ status: 'canceled', error: 'tetto di spesa AI del giorno raggiunto: il lavoro non è partito' });
       return mapAiError(err, 'ai-catalog-batch-start');
     }
+    // 26/11/2026 (R20-008) — Il conto della spesa che non risponde non e' il
+    // tetto raggiunto: il lavoro non e' partito per un guasto di minuti. La riga
+    // si chiude (cosi' non blocca un nuovo avvio) senza dire «budget finito», e
+    // il negoziante legge di riprovare fra qualche minuto.
+    if (err instanceof AiCallError && err.motivo === 'spesa_sconosciuta') {
+      await chiudi({ status: 'failed', error: 'conto della spesa AI momentaneamente non raggiungibile: il lavoro non è partito, si può riprovare' });
+      return mapAiError(err, 'ai-catalog-batch-start');
+    }
     // Fallito davvero: il motivo «forse partito» con cui la riga e' nata va tolto.
     await chiudi({ status: 'failed', error: null });
     if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');

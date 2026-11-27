@@ -38,6 +38,8 @@ export type RigaGriglia = {
   created_at: string;
   seller_id: string | null;
   category_id: string | null;
+  /** R21-005 — Solo ordinando per prezzo, con la migrazione 911: il prezzo che si paga. */
+  prezzo_pagato?: string | number | null;
   profiles?: SellerPublicProfile | null;
 };
 
@@ -47,13 +49,11 @@ export interface DomandaGriglia {
   sellerId?: string;
   search?: string;
   sort: OrdineGriglia;
-  maxPrice?: number;
   /**
-   * R01-008 — Prodotti col prezzo pieno sopra `maxPrice` che con la promozione attiva ci scendono
-   * sotto (li risolve `idsCheInPromoScendonoSotto`): passano lo stesso il filtro di prezzo.
-   * Assente o vuoto = il filtro di prezzo di sempre.
+   * Il prezzo massimo, compreso: guarda il prezzo che si paga (R21-006). R21-010 — Senza la
+   * migrazione 911 gli id che solo in promozione ci scendono sotto li chiede la lettura da sé.
    */
-  idsScontatiSotto?: string[];
+  maxPrice?: number;
   minPrice?: number;
   onlyInStock?: boolean;
   /** Negozi aperti adesso (già risolti dal chiamante) — assente = filtro spento. */
@@ -87,6 +87,78 @@ export interface DomandaGriglia {
 const COLONNE = 'id, name, price, compare_at_price, images, stock, has_variants, created_at, seller_id, category_id';
 
 /**
+ * 26/11/2026 (R21-003) — IL PREZZO CHE SI PAGA LO SA IL DATABASE.
+ *
+ * I filtri e l'ordine di prezzo guardavano il prezzo pieno (`price`), mentre la scheda mostra e la
+ * cassa addebita quello scontato: con «minimo 10 €» un prodotto da 12 € al -25% (9 € alla cassa)
+ * restava nell'elenco. La migrazione 911 dà a `products` la colonna calcolata `prezzo_pagato` (il
+ * pieno meno la promozione attiva, con la regola di `product_active_discounts` e l'arrotondamento di
+ * `discountedUnitCents`) e la lettura taglia su quella.
+ *
+ * IL RIPIEGO, PERCHÉ IL CODICE ARRIVA PRIMA DELLA MIGRAZIONE. Il sito va online a ogni unione, le
+ * migrazioni le applica Nicola dopo: senza la colonna PostgREST risponde 42703 e la griglia andava
+ * in errore (/regali già all'apertura). Allora prima di usarla si chiede se c'è (`cePrezzoPagato`,
+ * una riga, una volta per client), e se una lettura cade lo stesso perché manca la si rifà alla
+ * vecchia maniera, sul prezzo pieno. Con la migrazione applicata il ripiego non scatta più.
+ */
+const COLONNA_PREZZO_PAGATO = 'prezzo_pagato';
+/** Senza la colonna si richiede dopo cinque minuti: la migrazione può arrivare con la pagina aperta. */
+const RICHIEDI_SENZA_PREZZO_PAGATO_MS = 5 * 60_000;
+const notiPrezzoPagato = new WeakMap<object, { c: boolean; finoA: number }>();
+
+/** L'errore dice che la colonna calcolata non c'è (migrazione 911 non applicata)? */
+function mancaPrezzoPagato(error: unknown): boolean {
+  const e = (error ?? {}) as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown };
+  const codice = String(e.code ?? '');
+  if (codice === '42703' || codice === '42883') return true;
+  return codice.startsWith('PGRST') && `${e.message ?? ''} ${e.details ?? ''} ${e.hint ?? ''}`.includes(COLONNA_PREZZO_PAGATO);
+}
+
+/**
+ * Con la colonna la lettura non va: manca (sopra) oppure il database ha superato il suo tempo
+ * (57014, `statement_timeout` di anon) ordinando o tagliando su `prezzo_pagato` in un catalogo grande.
+ * In tutti e due i casi lista e conteggio ripiegano sul prezzo pieno, e per cinque minuti non la riprovano.
+ */
+function prezzoPagatoNonVa(error: unknown): boolean {
+  return mancaPrezzoPagato(error) || String((error as { code?: unknown } | null)?.code ?? '') === '57014';
+}
+
+function segnaSenzaPrezzoPagato(supabase: SupabaseClient): void {
+  notiPrezzoPagato.set(supabase, { c: false, finoA: Date.now() + RICHIEDI_SENZA_PREZZO_PAGATO_MS });
+}
+
+/**
+ * La colonna `prezzo_pagato` c'è? Una riga sola, e la risposta si ricorda per questo client. Una
+ * risposta che non porta la colonna (uno schema vecchio, un database finto delle prove) vale «no»;
+ * una lettura caduta per un altro motivo vale «no» solo per questa volta.
+ */
+async function cePrezzoPagato(supabase: SupabaseClient): Promise<boolean> {
+  const noto = notiPrezzoPagato.get(supabase);
+  if (noto && (noto.c || Date.now() < noto.finoA)) return noto.c;
+  try {
+    const { data, error } = await supabase.from('products').select(`id, ${COLONNA_PREZZO_PAGATO}`).limit(1);
+    if (error) {
+      if (mancaPrezzoPagato(error)) segnaSenzaPrezzoPagato(supabase);
+      return false;
+    }
+    const prima = (Array.isArray(data) ? data[0] : undefined) as Record<string, unknown> | undefined;
+    if (prima !== undefined && !(COLONNA_PREZZO_PAGATO in prima)) {
+      segnaSenzaPrezzoPagato(supabase);
+      return false;
+    }
+    notiPrezzoPagato.set(supabase, { c: true, finoA: Infinity });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** La domanda guarda il prezzo (filtro o ordine)? Solo allora serve sapere se `prezzo_pagato` c'è. */
+function guardaIlPrezzo(d: Pick<DomandaGriglia, 'minPrice' | 'maxPrice'> & { sort?: OrdineGriglia }): boolean {
+  return d.minPrice !== undefined || d.maxPrice !== undefined || d.sort === 'price_asc' || d.sort === 'price_desc';
+}
+
+/**
  * 17/11/2026 (R02-012) — «CARICA ALTRI» SI FERMAVA SE IL FILTRO IN FONDO SCARTAVA RIGHE.
  *
  * La pagina si chiede al database piena (la `finestra`), poi in fondo a `leggiProdottiDellaGriglia`
@@ -113,6 +185,9 @@ export function inizioFinestraNovita(adesso: Date = new Date(), giorni: number =
 
 /**
  * R01-008 — I PRODOTTI CHE SOLO IN PROMOZIONE SCENDONO SOTTO LA SOGLIA.
+ *
+ * R21-010 — Oggi è solo il ripiego della lettura qui sotto, finché la migrazione 911 non è applicata
+ * (con lei il massimo guarda `prezzo_pagato`): ProductGrid non lo chiama più per conto suo.
  *
  * «Sotto i 10 €» tagliava sul prezzo pieno: un prodotto da 12 € al -25% (9 € alla cassa) restava
  * fuori. Qui si leggono i prodotti con una promozione attiva (`active_promo_products`, la stessa
@@ -143,6 +218,15 @@ export async function idsCheInPromoScendonoSotto(
     .map((r) => r.id);
 }
 
+/**
+ * R21-010 — Il massimo senza `prezzo_pagato`: gli id che col prezzo pieno stanno sopra `maxPrice` e
+ * in promozione ci scendono, fino a `maxPrice` compreso. `idsCheInPromoScendonoSotto` vuole la soglia
+ * esclusa: è il centesimo dopo il massimo (9,995 → 10,00; 10 → 10,01).
+ */
+function idsScontatiFinoA(supabase: SupabaseClient, maxPrice: number, sellerId?: string): Promise<string[]> {
+  return idsCheInPromoScendonoSotto(supabase, (Math.floor(maxPrice * 100 + 1e-6) + 1) / 100, sellerId);
+}
+
 /** Quanti risultati chiedere alla ricerca del database: mai più della finestra a schermo. */
 const TETTO_PERTINENZA = 200;
 
@@ -165,19 +249,28 @@ async function idsPiuPertinenti(supabase: SupabaseClient, termine: string, tetto
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applicaFiltriComuni<Q extends { in: any; eq: any; lte: any; gte: any; or: any }>(
   q: Q,
-  d: Pick<DomandaGriglia, 'sellerId' | 'maxPrice' | 'idsScontatiSotto' | 'minPrice' | 'onlyInStock' | 'apertiOra' | 'creatiDal'>,
+  d: Pick<DomandaGriglia, 'sellerId' | 'maxPrice' | 'minPrice' | 'onlyInStock' | 'apertiOra' | 'creatiDal'>,
   categorie: string[] | null,
+  /** La colonna `prezzo_pagato` c'è (migrazione 911): i filtri di prezzo guardano lei. */
+  pagato: boolean,
+  /** Senza `prezzo_pagato`: chi supera il massimo solo a prezzo pieno (`idsScontatiFinoA`). */
+  scontatiSotto: readonly string[],
 ): Q {
   if (categorie) q = q.in('category_id', categorie);
   if (d.sellerId) q = q.eq('seller_id', d.sellerId);
   if (d.maxPrice !== undefined) {
-    // R01-008 — «Sotto i 10 €» è il prezzo che si paga: chi ci scende solo in promozione entra lo stesso.
-    const scontati = d.idsScontatiSotto ?? [];
-    q = scontati.length > 0
-      ? q.or(`price.lte.${d.maxPrice},id.in.(${scontati.join(',')})`)
-      : q.lte('price', d.maxPrice);
+    // R21-006 R21-004 — Il massimo (lo slider, «Sotto i 10 €») è il prezzo che si paga, come il minimo:
+    // con la migrazione 911 lo dice `prezzo_pagato`, senza elenchi di id e senza i loro tetti.
+    // R01-008 — Senza la migrazione, chi ci scende solo in promozione entra con i suoi id.
+    q = pagato
+      ? q.lte(COLONNA_PREZZO_PAGATO, d.maxPrice)
+      : scontatiSotto.length > 0
+        ? q.or(`price.lte.${d.maxPrice},id.in.(${scontatiSotto.join(',')})`)
+        : q.lte('price', d.maxPrice);
   }
-  if (d.minPrice !== undefined) q = q.gte('price', d.minPrice);
+  // R21-003 — «Prezzo minimo» è il prezzo che si paga: un 12 € al -25% (9 €) con minimo 10 € non entra.
+  // Senza la migrazione 911 resta il prezzo pieno, come prima.
+  if (d.minPrice !== undefined) q = q.gte(pagato ? COLONNA_PREZZO_PAGATO : 'price', d.minPrice);
   // #91 — «Solo disponibili» lo decide il database. Attenzione: `stock` a NULL vuol dire
   // disponibilità illimitata.
   if (d.onlyInStock) q = q.or('stock.is.null,stock.gt.0');
@@ -232,8 +325,11 @@ function nellOrdineDelDatabase(sort: OrdineGriglia): (a: RigaGriglia, b: RigaGri
   const crescente = sort === 'price_asc';
   const confronta = (x: string | number, y: string | number) => (x === y ? 0 : x < y ? -1 : 1);
   return (a, b) => {
-    const primo = perPrezzo ? confronta(Number(a.price), Number(b.price)) : confronta(a.created_at, b.created_at);
+    // R21-005 R21-014 — Come `base()`: il prezzo che si paga (dove manca, il pieno), poi il pieno, poi l'id.
+    const primo = perPrezzo ? confronta(Number(a.prezzo_pagato ?? a.price), Number(b.prezzo_pagato ?? b.price)) : confronta(a.created_at, b.created_at);
     if (primo !== 0) return crescente ? primo : -primo;
+    const secondo = perPrezzo ? confronta(Number(a.price), Number(b.price)) : 0;
+    if (secondo !== 0) return crescente ? secondo : -secondo;
     return -confronta(a.id, b.id);
   };
 }
@@ -262,6 +358,24 @@ async function leggiFraGliIdsColVoto(
 export async function leggiProdottiDellaGriglia(
   supabase: SupabaseClient,
   d: DomandaGriglia,
+): Promise<PaginaGriglia> {
+  if (!guardaIlPrezzo(d)) return leggiLaGriglia(supabase, d, false);
+  const pagato = await cePrezzoPagato(supabase);
+  try {
+    return await leggiLaGriglia(supabase, d, pagato);
+  } catch (errore) {
+    // R21-003 — Il ripiego: la colonna non c'è (migrazione 911 non applicata) o il database ha superato
+    // il tempo (57014) → la lettura di prima.
+    if (!pagato || !prezzoPagatoNonVa(errore)) throw errore;
+    segnaSenzaPrezzoPagato(supabase);
+    return leggiLaGriglia(supabase, d, false);
+  }
+}
+
+async function leggiLaGriglia(
+  supabase: SupabaseClient,
+  d: DomandaGriglia,
+  pagato: boolean,
 ): Promise<PaginaGriglia> {
   const termine = d.search ? d.search.replace(/[%_]/g, '\\$&').slice(0, 100) : undefined;
 
@@ -303,12 +417,26 @@ export async function leggiProdottiDellaGriglia(
         ? await conLeSueSottocategorie(supabase, d.categoryId)
         : null;
 
-  const base = (colonne: string = COLONNE) => {
-    let q = supabase.from('products').select(colonne).eq('status', 'available');
+  // R21-010 — Senza la migrazione 911 il massimo vuole gli id che solo in promozione ci scendono
+  // sotto: li chiede la lettura, qui, una volta. Con la migrazione non servono.
+  const scontatiSotto = !pagato && d.maxPrice !== undefined ? await idsScontatiFinoA(supabase, d.maxPrice, d.sellerId) : [];
 
+  const perPrezzo = d.sort === 'price_asc' || d.sort === 'price_desc';
+  const base = (colonne: string = COLONNE) => {
+    // R21-005 — Ordinando per prezzo le righe portano anche il prezzo pagato: serve a rimettere
+    // nell'ordine del database le righe lette a blocchi (`leggiFraGliIdsColVoto`).
+    const conPagato = pagato && perPrezzo && colonne === COLONNE;
+    let q = supabase.from('products').select(conPagato ? `${colonne}, ${COLONNA_PREZZO_PAGATO}` : colonne).eq('status', 'available');
+
+    // R21-005 R21-014 — Con la migrazione 911 si ordina sul prezzo che si paga, quello che la griglia
+    // mostra e la cassa addebita; a parità decide il prezzo pieno. Senza, sul pieno come prima.
     switch (d.sort) {
-      case 'price_asc':  q = q.order('price', { ascending: true }); break;
-      case 'price_desc': q = q.order('price', { ascending: false }); break;
+      case 'price_asc':
+        q = pagato ? q.order(COLONNA_PREZZO_PAGATO, { ascending: true }).order('price', { ascending: true }) : q.order('price', { ascending: true });
+        break;
+      case 'price_desc':
+        q = pagato ? q.order(COLONNA_PREZZO_PAGATO, { ascending: false }).order('price', { ascending: false }) : q.order('price', { ascending: false });
+        break;
       default:           q = q.order('created_at', { ascending: false });
     }
     // 30/8/2026 (R080) — Il secondo criterio d'ordine non e' un dettaglio: con
@@ -318,7 +446,7 @@ export async function leggiProdottiDellaGriglia(
     // una riga saltata o una riga vista due volte fra una pagina e l'altra.
     q = q.order('id', { ascending: false });
 
-    q = applicaFiltriComuni(q, d, categorieDaLeggere);
+    q = applicaFiltriComuni(q, d, categorieDaLeggere, pagato, scontatiSotto);
     // Col ramo pertinenza il filtro sul testo l'ha già fatto il database, meglio di così.
     if (termine && !perPertinenza) q = q.ilike('name', `%${termine}%`);
     // Il taglio sugli id col voto NON sta qui: lo mette `leggiFraGliIdsColVoto`, a blocchi (R02-010).
@@ -441,14 +569,24 @@ export async function contaProdottiDellaGriglia(
         ? await conLeSueSottocategorie(supabase, d.categoryId)
         : null;
   const termine = d.search ? d.search.replace(/[%_]/g, '\\$&').slice(0, 100) : undefined;
+  // R21-003 — Gli stessi filtri di prezzo della lettura, con lo stesso ripiego se `prezzo_pagato` non c'è.
+  let pagato = guardaIlPrezzo(d) && (await cePrezzoPagato(supabase));
+  // R21-010 — Come nella lettura: senza `prezzo_pagato` il massimo vuole i suoi id.
+  const scontatiSenzaPagato = async () => (d.maxPrice !== undefined ? idsScontatiFinoA(supabase, d.maxPrice, d.sellerId) : []);
+  let scontatiSotto = pagato ? [] : await scontatiSenzaPagato();
   // R11-010 R11-011 — Il numero conta solo i prodotti dei negozi approvati, come la griglia: il
   // negozio si aggancia con `!inner` alla vista pubblica, NOMINANDO il vincolo (fra products e la
   // vista ci sono due strade: senza nome PostgREST risponde 300). Se l'aggancio non va si conta com'era (`senzaAggancio`) invece di non dare nessun numero.
   let senzaAggancio = false;
   const conta = (blocco?: string[]) => {
     const colonne = senzaAggancio ? 'id' : 'id, negozio:seller_public_profiles!products_seller_id_fkey!inner(id)';
-    let q = supabase.from('products').select(colonne, { count: 'exact', head: true }).eq('status', 'available');
-    q = applicaFiltriComuni(q, d, categorie);
+    // R21-003 — Guardando `prezzo_pagato` si conta con una GET senza righe (limit 0) invece che con una HEAD:
+    // così l'errore porta il suo codice e il conteggio ripiega solo dove ripiega la lista.
+    let q = (pagato
+      ? supabase.from('products').select(colonne, { count: 'exact' }).limit(0)
+      : supabase.from('products').select(colonne, { count: 'exact', head: true })
+    ).eq('status', 'available');
+    q = applicaFiltriComuni(q, d, categorie, pagato, scontatiSotto);
     if (termine) q = q.ilike('name', `%${termine}%`);
     if (blocco) q = q.in('id', blocco);
     return q;
@@ -459,10 +597,20 @@ export async function contaProdottiDellaGriglia(
   let totale = 0;
   for (const blocco of blocchi) {
     let { count, error } = await conta(blocco);
-    // Su una HEAD postgrest-js non dà il codice dell'errore (solo `message: ""`): il ripiego scatta
-    // su QUALSIASI errore della lettura agganciata, mai sul codice.
-    if (error && !senzaAggancio) {
-      senzaAggancio = true;
+    for (;;) {
+      if (!error) break;
+      // R21-003 — La stessa strada della lista: si conta sul prezzo pieno solo se `prezzo_pagato` manca o
+      // ha superato il tempo (57014), e da lì anche la lista legge sul prezzo pieno. Un altro errore non
+      // cambia il prezzo su cui si conta: il numero sopra la griglia deve tornare con la lista.
+      if (pagato && prezzoPagatoNonVa(error)) {
+        pagato = false;
+        segnaSenzaPrezzoPagato(supabase);
+        scontatiSotto = await scontatiSenzaPagato();
+      } else if (!senzaAggancio) {
+        // Su una HEAD postgrest-js non dà il codice dell'errore (solo `message: ""`): il ripiego
+        // dell'aggancio scatta su QUALSIASI altro errore della lettura agganciata, mai sul codice.
+        senzaAggancio = true;
+      } else break;
       ({ count, error } = await conta(blocco));
     }
     if (error || count == null) return null;

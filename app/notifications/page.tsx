@@ -24,6 +24,7 @@ type Notification = {
   link: string | null;
   is_read: boolean;
   created_at: string;
+  category?: string | null;
 };
 
 /** Un errore di sessione (non c'è, è scaduta): quello sì manda all'accesso. Gli altri no. */
@@ -93,6 +94,21 @@ export default function NotificationsPage() {
         .limit(quante);
       if (error) throw error;
       return data ?? [];
+    },
+  });
+
+  // R14-010 — Le promozioni si vedono solo a chi le ha accese (`notif_promos`), come sul campanello
+  // del negozio. Finché la preferenza non si legge, o se non si legge, le promozioni restano fuori.
+  const { data: promoAccese = false } = useQuery({
+    queryKey: ['notifiche-promo-accese', userId],
+    enabled: !!userId,
+    queryFn: async (): Promise<boolean> => {
+      const { data: righe, error: errPref } = await supabase
+        .from('profiles')
+        .select('notif_promos')
+        .eq('id', userId as string);
+      if (errPref) return false;
+      return (righe as { notif_promos?: boolean | null }[] | null)?.[0]?.notif_promos === true;
     },
   });
 
@@ -230,7 +246,9 @@ export default function NotificationsPage() {
 
   if (serveAccesso) return null;
 
-  const notifications = data ?? ultimoElenco ?? [];
+  const lette = data ?? ultimoElenco ?? [];
+  // Il conto «ce ne sono altre» guarda le righe lette, promozioni comprese: sono quelle che chiedono il limite.
+  const notifications = promoAccese ? lette : lette.filter((n) => n.category !== 'promo');
   const hasUnread = nonLetteDelCampanello > 0 || notifications.some((n) => !n.is_read);
   // A video c'è l'elenco di prima mentre arrivano le altre: il tasto resta, fermo, e dice che carica.
   const caricaAltre = isFetching && (isPlaceholderData || !data);
@@ -240,7 +258,7 @@ export default function NotificationsPage() {
   // rilettura dell'elenco già a video, e si dice quello.
   const altreCadute = letturaCaduta && !data && quante > PER_VOLTA;
   // Se ne sono arrivate quante ne ho chieste, ce ne possono essere altre più indietro.
-  const forseAltre = caricaAltre || notifications.length >= quante;
+  const forseAltre = caricaAltre || lette.length >= quante;
 
   return (
     <div className="max-w-3xl">

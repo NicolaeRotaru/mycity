@@ -436,9 +436,13 @@ export default function CartPage() {
    * Finché la lettura non è tornata, `prezzoDiOggi` è vuoto e qui non cambia niente: la pagina si
    * disegna subito col prezzo che ha, e si corregge da sola quando arriva quello vero.
    */
+  // R16-012 — Il prezzo di oggi vale anche quando la differenza è sotto il centesimo: un carrello
+  // salvato con lo scontato non arrotondato (1,035 € invece di 1,03 €, dalla vetrina di prima) teneva
+  // il suo, e il totale contava un centesimo in più per pezzo rispetto alla cassa. L'avviso «prezzo
+  // cambiato» qui sotto resta solo per le differenze da un centesimo in su.
   const righe: CartItem[] = items.map((it) => {
     const oggi = prezzoDiOggi[it.id];
-    return oggi != null && Math.abs(oggi - it.price) >= 0.01 ? { ...it, price: oggi } : it;
+    return oggi != null && oggi !== it.price ? { ...it, price: oggi } : it;
   });
   /** Quali prezzi sono cambiati sotto il naso di chi compra: si dice, non si cambia il totale in silenzio. */
   const cambiatoDaQuandoLoHaiMesso = new Map<string, number>(

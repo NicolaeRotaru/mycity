@@ -58,6 +58,24 @@ function translateAuthError(msg: string): string {
   return 'Accesso non riuscito. Riprova.';
 }
 
+// Le aree riservate a un ruolo (le stesse di ROLE_PROTECTED nel portiere, lib/auth/decisione-portiere.ts)
+// e la home di ciascuno, dove si atterra dopo l'accesso.
+const AREA_DEL_RUOLO: Record<string, string> = { admin: '/admin', seller: '/seller', rider: '/rider' };
+const HOME_DEL_RUOLO: Record<string, string> = { admin: '/admin', seller: '/seller/dashboard', rider: '/rider' };
+
+/**
+ * R23-006 — Il percorso dove si arriva davvero, non la stringa: '/rider/..', '/admin/../' e '/.'
+ * portano su '/', '/%73eller/dashboard' su /seller/dashboard.
+ */
+function percorsoRisolto(ritorno: string): string {
+  const { pathname } = new URL(ritorno, 'http://percorso.interno');
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return pathname;
+  }
+}
+
 const SignInForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -251,18 +269,27 @@ const SignInForm = () => {
       // diceva: il canale restava «sconosciuto» e i due ingressi non si
       // potevano confrontare.
       if (data?.user?.id) trackSignedIn(data.user.id, 'email');
-      // Atterra sulla home del ruolo (seller/rider/admin) così, dopo un cambio
-      // account, non resti sulla pagina del ruolo precedente. I buyer rispettano
-      // l'eventuale returnTo (es. checkout).
+      // Senza un ritorno atterra sulla home del ruolo (seller/rider/admin) così,
+      // dopo un cambio account, non resti sulla pagina del ruolo precedente.
+      // R10-001 — Un ritorno (già pulito da `safeInternalPath`: un indirizzo
+      // esterno diventa '/') vale per tutti i ruoli, per esempio verso /accetta-condizioni;
+      // ma se il suo percorso è '/' (anche con ?query o #frammento) o sta nell'area di un
+      // ALTRO ruolo, amministratore, negozio e fattorino vanno sulla home del proprio.
       let dest = returnTo;
       if (data?.user?.id) {
         try {
           const { data: prof } = await supabase
             .from('profiles').select('role').eq('id', data.user.id).single();
-          const r = prof?.role;
-          if (r === 'admin') dest = '/admin';
-          else if (r === 'seller') dest = '/seller/dashboard';
-          else if (r === 'rider') dest = '/rider';
+          const casa = prof?.role ? HOME_DEL_RUOLO[prof.role as string] : undefined;
+          if (casa) {
+            const percorso = percorsoRisolto(returnTo);
+            // R23-005 — Il portiere fa entrare l'amministratore anche in /seller e /rider (ROLE_PROTECTED):
+            // per lui non sono aree di un altro ruolo, e il ritorno lì resta.
+            const inAreaAltrui = prof?.role !== 'admin' && Object.entries(AREA_DEL_RUOLO).some(
+              ([ruolo, area]) => ruolo !== prof?.role && (percorso === area || percorso.startsWith(`${area}/`)),
+            );
+            if (percorso === '/' || inAreaAltrui) dest = casa;
+          }
         } catch { /* fallback: returnTo */ }
       }
       router.push(dest);
@@ -284,16 +311,22 @@ const SignInForm = () => {
       return;
     }
     setSendingReset(true);
+    // R23-013 — Col CAPTCHA acceso su Supabase anche la richiesta del link vuole il gettone; vale una
+    // volta sola, quindi dopo averlo mandato se ne chiede uno nuovo per l'accesso.
+    const gettone = captchaToken || undefined;
+    // Si toglie subito dallo stato: un «Accedi» premuto mentre la richiesta è in corso non lo rimanda.
+    if (gettone) setCaptchaToken('');
     try {
       const redirectTo = typeof window !== 'undefined'
         ? `${window.location.origin}/reset-password`
         : undefined;
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo, captchaToken: gettone });
       if (error) throw error;
       toast.success('Ti abbiamo inviato un\'email per reimpostare la password');
     } catch (err) {
       toast.error(translateAuthError(err instanceof Error ? err.message : ''));
     } finally {
+      if (gettone) rigeneraGettone();
       setSendingReset(false);
     }
   };

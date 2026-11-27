@@ -110,11 +110,14 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
         // Si sospende solo un negozio che è online (approvato). Già sospeso, in attesa o respinto
         // vuol dire che dalla vetrina è già fuori: la decisione si registra senza risospenderlo
         // (la rotta di moderazione risponderebbe 400 e la decisione non entrerebbe mai).
-        const { data: negozio } = await supabase
+        const { data: negozio, error: erroreNegozio } = await supabase
           .from('profiles')
           .select('approval_status')
           .eq('id', s.oggetto_id)
           .maybeSingle();
+        // 26/11/2026 — Una lettura caduta non dice che il negozio e' fuori dalla vetrina: prima
+        // si saltava la sospensione e «accolta» si registrava col negozio ancora online.
+        if (erroreNegozio) throw new Error('Non sono riuscito a leggere lo stato del negozio: decisione non registrata. Riprova.');
         if ((negozio as { approval_status?: string } | null)?.approval_status === 'approved') {
           if (!window.confirm('Accogliere la segnalazione sospende il negozio. Confermi?')) {
             throw new Error('Decisione annullata: il negozio resta attivo.');

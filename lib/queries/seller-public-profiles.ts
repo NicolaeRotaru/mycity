@@ -1,5 +1,6 @@
 import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
 import { logger } from '@/lib/logger';
+import { leggiInBlocchi } from '@/lib/supabase/blocchi';
 
 /**
  * IL NEGOZIO PUBBLICO SI LEGGE DALLA VETRINA, NON DALLA TABELLA DEI PROFILI.
@@ -163,17 +164,24 @@ async function leggiDallaVista(
   // select intera: qui l'errore veniva rilanciato, quindi ogni pagina che
   // passa da questo lettore — prodotti, ordini, vetrine — si fermava del tutto
   // invece di mostrarsi senza due bandierine.
+  // R15-014 — Gli id vanno nell'indirizzo (circa 37 caratteri l'uno): un solo `.in` con oltre
+  // ~216 negozi diversi dava 414. Si legge a blocchi da cento e le righe si riuniscono; un
+  // blocco che cade fa cadere la lettura intera, come prima.
   const conBandierine = (): PromiseLike<{ data: unknown; error: unknown }> =>
-    supabase.from('seller_public_profiles').select(colonne).in('id', unique);
+    leggiInBlocchi<SellerPublicProfile>(unique, (blocco) =>
+      supabase.from('seller_public_profiles').select(colonne).in('id', blocco),
+    );
   const { data, error } = await conRipiegoSchema(
     'fetchSellerPublicMap',
     conBandierine,
     () =>
       stessaFormaDi<Awaited<ReturnType<typeof conBandierine>>>(
-        supabase
-          .from('seller_public_profiles')
-          .select(senzaColonne(colonne, COLONNE_124_VISTA))
-          .in('id', unique),
+        leggiInBlocchi<SellerPublicProfile>(unique, (blocco) =>
+          supabase
+            .from('seller_public_profiles')
+            .select(senzaColonne(colonne, COLONNE_124_VISTA))
+            .in('id', blocco),
+        ),
       ),
   );
   if (error) throw error;
@@ -249,6 +257,9 @@ function vistaNonAncoraCreata(errore: unknown): boolean {
   return code === 'PGRST205' || code === '42P01';
 }
 
+/** L'avviso «vista assente» è già nel registro di questo processo. */
+let avvisoSenzaLaVistaDato = false;
+
 /** id -> nome di battesimo, per le persone che chi legge puo' vedere. Gli id senza nome mancano. */
 export async function fetchNomiPubblici(
   supabase: LettoreVista,
@@ -263,7 +274,12 @@ export async function fetchNomiPubblici(
   if (!vista.error) {
     righe = (vista.data ?? []) as Array<{ id: string; nome: string | null }>;
   } else if (vistaNonAncoraCreata(vista.error)) {
-    logger.warn('[nomi] vista nomi_pubblici assente (migrazione 164 non applicata): leggo profiles', vista.error);
+    // R15-004 — L'avviso si scrive una volta per processo, come quello della 181: finché la vista manca
+    // diceva la stessa cosa a ogni chiamata. Il ripiego su `profiles` lavora comunque a ogni chiamata.
+    if (!avvisoSenzaLaVistaDato) {
+      avvisoSenzaLaVistaDato = true;
+      logger.warn('[nomi] vista nomi_pubblici assente (migrazione 164 non applicata): leggo profiles', vista.error);
+    }
     const vecchia = await supabase.from('profiles').select('id, full_name').in('id', unici);
     if (vecchia.error) {
       logger.warn('[nomi] nomi non letti nemmeno da profiles: le firme restano generiche', vecchia.error);

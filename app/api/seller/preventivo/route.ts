@@ -3,7 +3,7 @@ import { withSellerAnchePendingRateLimit } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
-import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import { notifyAdmins, togliLAvvisoAgliAmministratori } from '@/lib/stripe/webhook/comune';
 import {
   ABBONAMENTI,
   testoAvvisoPreventivo,
@@ -26,7 +26,8 @@ export const runtime = 'nodejs';
  *
  * Quello che succede all'accettazione:
  *  · un avviso agli amministratori, una volta sola per giorno e per fascia
- *    (due clic di fila non mandano due avvisi);
+ *    (due clic di fila non mandano due avvisi); se nello stesso giorno il cliente
+ *    cambia fascia, resta solo l'avviso dell'ultima scelta;
  *  · se Nicola l'ha collegato, il flusso n8n dell'agenzia (`lib/agenzia/flusso-n8n.ts`).
  * Nessun addebito: i prezzi sono quelli del listino e il pagamento lo concorda
  * l'agenzia. Niente passa da Stripe.
@@ -75,7 +76,15 @@ export const POST = withSellerAnchePendingRateLimit(
     // Una volta per giorno e per fascia: lo stesso clic ripetuto non manda due avvisi.
     // L'id intero dell'attività: due negozi con le stesse prime sei cifre hanno lo stesso numero
     // breve, e senza l'id il secondo avviso sarebbe scambiato per un doppione (collaudo, 23/11).
-    const chiave = `preventivo-agenzia:${user.id}:${preventivo.numero}:${scelto}`;
+    const chiaveDi = (fascia: string) => `preventivo-agenzia:${user.id}:${preventivo.numero}:${fascia}`;
+    const chiave = chiaveDi(scelto);
+    // 26/11/2026 — Accettato oggi due volte con fasce diverse, restavano due avvisi che si
+    // contraddicevano («sceglie Base», «sceglie Premium»): resta solo quello dell'ultima scelta.
+    // Si tolgono PRIMA di scrivere il nuovo: se la scrittura cade il cliente legge «riprova»;
+    // tolti dopo, due scelte arrivate insieme si sarebbero cancellate a vicenda, senza avviso.
+    await Promise.allSettled(
+      ABBONAMENTI.filter((f) => f !== scelto).map(async (f) => togliLAvvisoAgliAmministratori(chiaveDi(f))),
+    );
     let avviso: Awaited<ReturnType<typeof notifyAdmins>>;
     try {
       avviso = await notifyAdmins(

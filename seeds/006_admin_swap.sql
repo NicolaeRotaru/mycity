@@ -1,24 +1,35 @@
--- Seed 006: crea admin demo dedicato + demoziona nicolaflorea50 a buyer
+-- Seed 006: crea admin demo dedicato + retrocede il titolare a buyer
 --
 -- Idempotente: ripetibile senza danni.
 -- Crea admin con email admin@piacenza-demo.local e password PiacenzaDemo2025!
+--
+-- 26/11/2026 — L'email del titolare non sta piu' nel codice (il deposito e' pubblico):
+-- la semina la legge dall'impostazione mycity.email_titolare. Senza, l'admin demo
+-- nasce lo stesso e nessuno viene retrocesso. Per esempio:
+--   psql "$DATABASE_URL" -c "SET mycity.email_titolare = '<email del titolare>'" -f seeds/006_admin_swap.sql
+-- Nell'editor SQL di Supabase: la stessa riga SET ...; in cima, poi il file.
 
 DO $$
 DECLARE
   admin_uuid  uuid := '33333333-3333-3333-3333-aaaaaaaa0001';
   admin_email text := 'admin@piacenza-demo.local';
   pwd text := crypt('PiacenzaDemo2025!', gen_salt('bf'));
+  email_titolare text := nullif(current_setting('mycity.email_titolare', true), '');
 BEGIN
   -- 12/11/2026 (R12-009) — La semina scrive con la stessa chiave delle prove SQL
   -- (tests/sql/harness): il guardiano dei profili (119) lascia l'approvazione solo
   -- allo staff, e qui chi scrive è la semina, non un utente. Vale per questa transazione.
   PERFORM set_config('mycity.allow_profile_write', '1', true);
   ----------------------------------------------------------------
-  -- 1) Demoziona l'attuale admin (nicolaflorea50@gmail.com) a buyer
+  -- 1) Demoziona l'attuale admin (il titolare, da mycity.email_titolare) a buyer
   ----------------------------------------------------------------
-  UPDATE public.profiles
-  SET role = 'buyer', is_approved = false, approval_status = NULL
-  WHERE id = (SELECT id FROM auth.users WHERE email = 'nicolaflorea50@gmail.com');
+  IF email_titolare IS NULL THEN
+    RAISE NOTICE 'Semina 006: mycity.email_titolare non impostata, nessuno retrocesso a buyer';
+  ELSE
+    UPDATE public.profiles
+    SET role = 'buyer', is_approved = false, approval_status = NULL
+    WHERE id = (SELECT id FROM auth.users WHERE email = email_titolare);
+  END IF;
 
   ----------------------------------------------------------------
   -- 2) Cleanup: rimuovi eventuali tentativi precedenti rotti
@@ -104,4 +115,5 @@ SELECT
   p.full_name
 FROM auth.users u
 JOIN public.profiles p ON p.id = u.id
-WHERE u.email IN ('admin@piacenza-demo.local', 'nicolaflorea50@gmail.com');
+WHERE u.email = 'admin@piacenza-demo.local'
+   OR u.email = nullif(current_setting('mycity.email_titolare', true), '');

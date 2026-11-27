@@ -87,3 +87,63 @@ export function riepilogoDaMostrare(ing: IngressiRiepilogo): RiepilogoDaMostrare
     supplementoVeloce: supplementoDellaVeloceCents(ing) / 100,
   };
 }
+
+/**
+ * 26/11/2026 (R26-005) — GLI INGRESSI DEL CONTO SI PRENDONO DALLO STATO DELLA CASSA, QUI.
+ *
+ * La pagina della cassa passava a `riepilogoDaMostrare` un oggetto scritto a mano dentro il
+ * componente: il codice sconto, il credito, la consegna senza codice. Nessuna prova lo vedeva.
+ * Con `couponScontoCents: 0` scritto lì, un codice da 5 € su 24,50 € faceva leggere 27,50 € a
+ * schermo mentre il server ne addebitava 22,50, e le prove restavano tutte verdi: guardavano il
+ * conto, non quello che la pagina gli passava.
+ *
+ * Adesso la pagina passa il suo stato così com'è, con i suoi nomi (`groups`, `form`,
+ * `appliedCoupon`, …; il credito con la sua regola, solo coi contanti), e il passaggio agli
+ * ingressi del conto vive qui, puro, dove una prova lo
+ * esegue (`tests/unit/riparazione-r26-la-cassa-passa-al-conto-quello-che-vede.test.ts`). La
+ * consegna veloce resta fuori: dipende dall'ora, e la pagina la ricava con `eConsegnaVeloce`
+ * come le due rotte.
+ */
+export type StatoDellaCassa = {
+  /** I negozi del carrello come li legge la cassa: prezzi di riga già di adesso (e già scontati). */
+  groups: ReadonlyArray<{
+    sellerId: string;
+    storeLat?: number | null;
+    storeLng?: number | null;
+    items: ReadonlyArray<{ price: number; quantity: number }>;
+  }>;
+  /** Il modulo dell'indirizzo: qui servono solo le coordinate di dove si consegna. */
+  form: { lat: number | null; lng: number | null };
+  pickupInStore: boolean;
+  /** Il codice sconto già verificato (lo sconto in euro), o niente. */
+  appliedCoupon: { discount: number; freeShipping: boolean } | null;
+  /**
+   * Il credito entra in questo ordine? La regola («solo coi contanti, se spuntato») la scrive la
+   * pagina accanto alla scelta del pagamento: `paymentMethod === 'cod' && useCredit`.
+   */
+  usaCredito: boolean;
+  /** Il credito della persona in centesimi (finché non è letto, niente). */
+  walletCents: number | null | undefined;
+};
+
+export function ingressiDellaCassa(s: StatoDellaCassa): Omit<IngressiRiepilogo, 'consegnaVeloce'> {
+  return {
+    // Il sottototale di OGNI negozio, in centesimi: si passa dagli euro ai centesimi riga per riga,
+    // come fa il server (#114: il prezzo di riga è già quello di adesso e già scontato).
+    gruppi: s.groups.map((g) => ({
+      sellerId: g.sellerId,
+      subtotalCents: g.items.reduce((t, it) => t + Math.round(it.price * 100) * it.quantity, 0),
+    })),
+    coordinateNegozio: (sellerId) => {
+      const g = s.groups.find((x) => x.sellerId === sellerId);
+      return { lat: g?.storeLat ?? null, lng: g?.storeLng ?? null };
+    },
+    consegnaLat: s.form.lat,
+    consegnaLng: s.form.lng,
+    pickupInStore: s.pickupInStore,
+    couponSpedizioneGratis: !!s.appliedCoupon?.freeShipping,
+    couponScontoCents: Math.round((s.appliedCoupon?.discount ?? 0) * 100),
+    usaCredito: s.usaCredito,
+    creditoDisponibileCents: s.walletCents ?? 0,
+  };
+}

@@ -77,6 +77,8 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
           "Abbiamo avvisato l'assistenza: riprova più tardi o scrivile.",
       );
     }
+    // Un 500 senza riga nel registro non lo vede nessuno: il guasto resta solo nella risposta.
+    logger.error('[cancel] annullo ordine fallito', { orderId: order.id, motivo: esito.motivo, dettaglio: esito.dettaglio });
     return ApiErrors.internal('Annullamento fallito');
   }
 

@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { stripePronto } from '@/components/seller/pronto-a-incassare';
 
 /**
  * Bottone "Gestisci su Stripe" per seller con Connect già attivo.
@@ -16,7 +17,7 @@ import { queryKeys } from '@/lib/queries/keys';
  * monouso generato da POST /api/stripe/connect/login. L'utente viene
  * reindirizzato lì.
  *
- * Si renderizza SOLO quando i pagamenti sono attivi (charges + payouts):
+ * Si renderizza SOLO quando i pagamenti sono attivi (conto + payouts, stripePronto):
  * prima dell'onboarding non esiste una dashboard da aprire e il flusso
  * resta su <StripeConnectButton>. Condivide la stessa queryKey di
  * StripeConnectButton, quindi React Query deduplica: nessuna fetch extra.
@@ -69,7 +70,10 @@ export default function StripeDashboardButton() {
   // Mostra solo a pagamenti attivi: prima non c'è una dashboard da aprire.
   // Una lettura caduta non fa sparire il pulsante in silenzio.
   if (isError && !status) return <StatoPagamentiNonLetto onRiprova={() => { void refetch(); }} />;
-  const isActive = !!status?.stripe_charges_enabled && !!status?.stripe_payouts_enabled;
+  // 26/11/2026 — La stessa regola che fa dire «Pagamenti attivi» a StripeConnectButton
+  // (conto + versamenti): prima qui servivano anche gli incassi, e accanto a «Pagamenti
+  // attivi» il pulsante per aprire il conto Stripe non c'era.
+  const isActive = stripePronto(status);
   if (!isActive) return null;
 
   return (

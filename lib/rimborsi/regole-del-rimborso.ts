@@ -13,6 +13,7 @@
  */
 
 import { formatPriceFromCents } from '@/lib/format';
+import { recessoAperto } from '@/lib/ordini/termine-del-recesso';
 
 /**
  * Come torna il rimborso al cliente. «misto» e' l'ordine in contanti pagato in
@@ -345,7 +346,6 @@ export const MOTIVO_DEL_RECESSO = 'CHANGED_MIND';
 export const GIORNI_PER_RISPEDIRE = 14;
 /** Sotto questa lunghezza la nota non spiega niente: «x» non e' un motivo. */
 export const MOTIVO_MINIMO_CARATTERI = 10;
-const UN_GIORNO_MS = 24 * 60 * 60 * 1000;
 
 export interface ResoDaValutare {
   reason?: string | null;
@@ -378,7 +378,11 @@ export function percheIlRecessoNonSiChiude(reso: ResoDaValutare, adesso: number)
   if (!eUnRecesso(reso)) return null;
   if (reso.status === 'APPROVED') {
     const inizio = inizioDeiGiorni(reso);
-    if (inizio !== null && adesso - inizio > GIORNI_PER_RISPEDIRE * UN_GIORNO_MS) return null;
+    // 26/11/2026 — I 14 giorni si contano a giorni di calendario a Piacenza, come
+    // il termine del recesso, non a blocchi di 24 ore: il quattordicesimo giorno
+    // il negozio poteva chiudere all'ora esatta dell'approvazione, e dopo il
+    // cambio d'ora d'autunno anche un'ora prima.
+    if (inizio !== null && !recessoAperto(inizio, adesso)) return null;
     return (
       `Il cliente ha ${GIORNI_PER_RISPEDIRE} giorni dall'approvazione per rispedire la merce (Cod. Cons. art. 57): ` +
       'il recesso non si chiude senza rimborso prima che siano passati. Se ci ha ripensato, può ritirare lui la richiesta.'

@@ -2,6 +2,15 @@ import { RAGGIO_CONSEGNA_KM, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { haversineKm } from '@/lib/geo';
 
 /**
+ * R09-005 — LA FRASE DELLA ZONA SI SCRIVE QUI, UNA VOLTA SOLA.
+ * La cassa, la pagina Spedizioni, il rifiuto, la pillola della posizione, le FAQ e «Vicino a te» la
+ * importano da qui: il confine vero (`RAGGIO_CONSEGNA_KM`) e le parole che lo dicono non si separano.
+ */
+export const CONFINE_DELLA_ZONA = `${RAGGIO_CONSEGNA_KM} km`;
+export const FINO_AL_CONFINE = `fino a ${CONFINE_DELLA_ZONA} dal negozio`;
+export const FRASE_DELLA_ZONA = `Consegniamo a Piacenza, ${FINO_AL_CONFINE}`;
+
+/**
  * FIN DOVE CONSEGNIAMO — la domanda in un posto solo.
  *
  * Vive qui, e non dentro lib/shipping.ts, per un motivo pratico: la chiedono le
@@ -61,8 +70,27 @@ export function fuoriZonaDiConsegna(opts: DoveVaLaConsegna & { pickupInStore?: b
 export function motivoFuoriZona(nomeNegozio?: string | null): string {
   const negozio = nomeNegozio?.trim();
   const dove = negozio ? `da ${negozio}` : 'da questo negozio';
-  const troppoLontano = `Per ora consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio: il tuo indirizzo è troppo lontano ${dove}.`;
+  const troppoLontano = `Per ora consegniamo ${FINO_AL_CONFINE}: il tuo indirizzo è troppo lontano ${dove}.`;
   return RITIRO_IN_NEGOZIO_ATTIVO
     ? `${troppoLontano} Puoi ritirare in negozio.`
     : `${troppoLontano} Prova con un negozio più vicino a te.`;
 }
+
+/**
+ * 26/11/2026 — DOVE PUÒ STARE UN NEGOZIO, E DOVE SI CERCANO GLI INDIRIZZI: PIACENZA E DINTORNI.
+ *
+ * Un riquadro solo, qui, perché lo leggono il browser (il selettore della posizione del negozio,
+ * il profilo) e il server (la ricerca degli indirizzi in lib/geocodifica.ts, l'iscrizione del
+ * negozio). Un negozio fuori da qui non riceve consegne dai clienti di Piacenza: il «Cerca» che
+ * trovava la Via Roma di un'altra città lo segnava confermato e il modulo lo salvava.
+ * (Coordinate: ovest/est in longitudine, sud/nord in latitudine.)
+ */
+export const AREA_SERVITA = { ovest: 9.55, sud: 44.93, est: 9.85, nord: 45.15 } as const;
+
+export function dentroLAreaServita(lat: number, lng: number): boolean {
+  const a = AREA_SERVITA;
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= a.sud && lat <= a.nord && lng >= a.ovest && lng <= a.est;
+}
+
+export const FRASE_NEGOZIO_FUORI_AREA =
+  'Questa posizione è fuori da Piacenza e dintorni, dove consegniamo: cerca di nuovo l’indirizzo con la città o tocca la mappa sul negozio.';

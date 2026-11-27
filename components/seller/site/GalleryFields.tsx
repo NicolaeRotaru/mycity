@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import Image from 'next/image';
-import { useDropzone } from 'react-dropzone';
+import { useDropzone, type FileRejection } from 'react-dropzone';
 import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/Field';
@@ -15,6 +15,7 @@ import {
   decidiCosaFareDelDrop,
   mappaAccept,
   pesoMassimo,
+  tipiScrittiPerUmani,
 } from '@/lib/storage/casella-di-caricamento';
 import { uploadSiteImage } from './ImageUpload';
 
@@ -37,6 +38,20 @@ type Cfg = GallerySec['config'];
 type Item = Cfg['items'][number];
 
 /**
+ * R21-002 — LE FOTO HEIC/HEIF DELL'IPHONE NON ENTRANO PIU' NELLA GALLERIA COSI' COME SONO.
+ *
+ * Il magazzino le accetta, ma nessuno le converte: il negoziante le vedeva bene dal suo iPhone e i
+ * clienti su Chrome, Firefox, Edge e Android vedevano un riquadro rotto. Come per le foto prodotto
+ * (`lib/products/uploadImages.ts`) si tolgono dall'elenco della casella: senza HEIC nell'`accept`
+ * l'iPhone le converte da solo in JPEG, e un .heic trascinato da un PC la casella lo scarta e
+ * `avvisoDelSito` dice perche'. Riconosce il tipo («…/heic»), l'estensione («.heif») e il nome del
+ * file («IMG_0421.HEIC»). La stessa regola sta in `ImageUpload.tsx`: ogni casella si regge da sola.
+ */
+const FORMATO_DELL_IPHONE = /[./]hei[cf]$/i;
+const FOTO_HEIC =
+  "Le foto HEIC (il formato dell'iPhone) non le carichiamo: su Chrome e sui telefoni Android si vedrebbero come un riquadro vuoto. Sceglile direttamente dall'iPhone, che le trasforma da solo in JPG, oppure salvale in JPG e riprova.";
+
+/**
  * QUELLO CHE LA CASELLA ACCETTA LO DECIDE IL MAGAZZINO, NON QUESTO FILE.
  *
  * Fino all'8/9/2026 qui c'erano tre tipi scritti a mano — JPG, PNG, WEBP — mentre il deposito ne
@@ -44,8 +59,23 @@ type Item = Cfg['items'][number];
  * negoziante le trascinava e non succedeva niente. Calcolati una volta sola fuori dal componente
  * perche' l'oggetto non cambi identita' a ogni ridisegno.
  */
-const ACCETTA = mappaAccept();
+const ACCETTA = Object.fromEntries(Object.entries(mappaAccept()).filter(([tipo]) => !FORMATO_DELL_IPHONE.test(tipo)));
 const PESO_MASSIMO = pesoMassimo();
+
+/**
+ * Gli HEIC scartati hanno la loro frase; per il resto parla il cervello comune, con l'elenco dei
+ * formati senza HEIC/HEIF (la sua frase li nomina, perche' il magazzino li accetta).
+ */
+function avvisoDelSito(scartati: readonly FileRejection[], postiLiberi: number): string | null {
+  const heic = scartati.filter(({ file }) => FORMATO_DELL_IPHONE.test(file?.type ?? '') || FORMATO_DELL_IPHONE.test(file?.name ?? ''));
+  const resto = avvisoPerGliScartati(scartati.filter((s) => !heic.includes(s)), { postiLiberi });
+  const formati = Object.values(ACCETTA).map((estensioni) => estensioni[0].slice(1).toUpperCase());
+  const frasi = [
+    heic.length > 0 ? FOTO_HEIC : '',
+    (resto ?? '').replace(tipiScrittiPerUmani(), `${formati.slice(0, -1).join(', ')} o ${formati[formati.length - 1]}`),
+  ].filter(Boolean);
+  return frasi.length > 0 ? frasi.join(' ') : null;
+}
 
 /** Config del blocco "galleria": upload multiplo di immagini con testo alternativo. */
 export default function GalleryFields({ section, onChange }: { section: GallerySec; onChange: (s: SiteSection) => void }) {
@@ -67,7 +97,7 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
     disabled: busy || items.length >= MAX_GALLERY_ITEMS,
     /** Il file che la casella butta fuori — formato, peso, quantità — adesso ha una voce. */
     onDropRejected: (scartati) => {
-      const avviso = avvisoPerGliScartati(scartati, { postiLiberi: MAX_GALLERY_ITEMS - items.length });
+      const avviso = avvisoDelSito(scartati, MAX_GALLERY_ITEMS - items.length);
       if (avviso) toast.error(avviso);
     },
     /**

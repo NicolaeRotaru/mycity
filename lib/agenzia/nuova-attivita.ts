@@ -77,6 +77,29 @@ export type EsitoIscrizione =
 /** Cento anni: l'accesso resta chiuso finché il titolare non accetta il preventivo dal link. */
 const BLOCCO_ACCESSO = '876000h';
 
+/**
+ * L'attività già iscritta con lo stesso nome e la stessa città (la stessa email di sistema), con l'indirizzo
+ * che ha in vetrina; `null` se non c'è. 27/11/2026: serve al pulsante dell'agente per non fondere due negozi
+ * diversi con lo stesso nome (collaudo: due «Bar Sport» a Piacenza diventavano uno).
+ */
+export async function attivitaGiaIscritta(admin: SupabaseClient, a: Pick<NuovaAttivita, 'nome' | 'citta'>): Promise<{ id: string; indirizzo: string | null } | null> {
+  const email = emailDiSistema(a);
+  const esistente = await admin
+    .from('preventivi_con_codice')
+    .select('seller_id, profiles!inner(store_name, store_address)')
+    .eq('profiles.store_name', a.nome)
+    .limit(5);
+  const righe = (esistente.data ?? []) as Array<{ seller_id: string; profiles: { store_address?: string | null } | { store_address?: string | null }[] }>;
+  for (const r of righe) {
+    const u = await admin.auth.admin.getUserById(r.seller_id);
+    if (u.data?.user?.email === email) {
+      const p = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+      return { id: r.seller_id, indirizzo: p?.store_address ?? null };
+    }
+  }
+  return null;
+}
+
 export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): Promise<EsitoIscrizione> {
   const email = emailDiSistema(a);
 
@@ -120,9 +143,11 @@ export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): 
     approval_status: null,
     store_name: a.nome,
     offers_express: false,
-    business_type: a.tipo_attivita ?? 'negozio',
-    business_type_detail: a.dettaglio || null,
   };
+  // 27/11/2026 (collaudo) — Il tipo si scrive alla nascita, o quando chi iscrive lo sa: un secondo invio senza
+  // tipo (il pulsante dell'agente, il modulo 12 rimandato) non cancella più quello scritto prima.
+  if (a.tipo_attivita || nuova) valori.business_type = a.tipo_attivita ?? 'negozio';
+  if (a.dettaglio || nuova) valori.business_type_detail = a.dettaglio || null;
   if (a.indirizzo) valori.store_address = a.citta && !a.indirizzo.toLowerCase().includes(a.citta.toLowerCase()) ? `${a.indirizzo}, ${a.citta}` : a.indirizzo;
   if (a.citta) valori.city = a.citta;
   // Il sito va nei canali della vetrina solo se è un indirizzo pubblico https, e solo alla nascita del

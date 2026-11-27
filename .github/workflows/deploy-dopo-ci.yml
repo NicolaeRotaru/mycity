@@ -650,8 +650,12 @@ jobs:
           # CLIENTI. Se X era stato riportato a W, l'elenco dice ancora [X, W] e
           # il primo di un altro commit e' X, il codice gia' tolto perche' rotto.
           # Lo sa solo il dominio: si chiede a Vercel quale rilascio lo serve
-          # adesso. Se non risponde e i candidati sono piu' di uno, lo script
-          # non sceglie a caso e il ritorno indietro resta da fare a mano.
+          # adesso, e si torna li' solo se il dominio dice un ALTRO commit.
+          # Se non risponde, o dice il commit che esce, o non dice il suo
+          # commit, lo script non sceglie: qui gli si passa sempre il commit
+          # che esce, e con quello l'elenco da solo non sceglie mai, nemmeno
+          # con un candidato solo (puo' essere un rilascio gia' tolto perche'
+          # rotto). Il ritorno indietro resta da fare a mano.
           DOMINIO="${DOMINIO_DI_PRODUZIONE:-mycity-marketplace.com}"
           SUL_DOMINIO="$(curl -sS --max-time 30 -H "Authorization: Bearer $TOKEN" \
             "https://api.vercel.com/v13/deployments/$DOMINIO?teamId=$VERCEL_ORG_ID" || true)"

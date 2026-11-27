@@ -20,7 +20,7 @@ import {
 import { ErrorState } from './ui/ErrorState';
 import { chiaveDiOggi, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { useOraDiPiacenza } from '@/components/ui/DeliveryCutoff';
-import { contaProdottiDellaGriglia, idsCheInPromoScendonoSotto, inizioFinestraNovita, leggiProdottiDellaGriglia, type OrdineGriglia } from '@/lib/queries/griglia-prodotti';
+import { contaProdottiDellaGriglia, inizioFinestraNovita, leggiProdottiDellaGriglia, type OrdineGriglia } from '@/lib/queries/griglia-prodotti';
 import { cEUnAltraPagina, finestraDellaPagina, pagineSuccessiva, unisciPagine } from '@/lib/paginazione';
 import { trackSearchPerformed } from '@/lib/analytics/events';
 import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
@@ -261,37 +261,26 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // quasi vuota si chiede il doppio, ma resta una finestra, non un tetto che
   // cresce.
   const righePerPagina = onlyPromo ? Math.min(dimensionePagina * 2, 300) : dimensionePagina;
-  // 12/11/2026 (R07-016) — Con «sotto la soglia» il database taglia già sul prezzo pieno,
-  // soglia esclusa (il prezzo è in euro con due decimali: mezzo centesimo sotto basta).
+  // 12/11/2026 (R07-016) — Con «sotto la soglia» il database taglia già, soglia esclusa (il prezzo
+  // è in euro con due decimali: mezzo centesimo sotto basta).
+  // R21-010 — Il taglio è sul prezzo che si paga, e lo fa tutto la lettura: con la migrazione 911
+  // guarda `prezzo_pagato`, senza chiede lei gli id che solo in promozione scendono sotto la soglia
+  // (R01-008). Qui non si chiede più niente per conto proprio: una strada sola per lo stesso conto.
   const maxPrice = prezzoSotto !== undefined
     ? Math.min(maxPricePieno ?? Infinity, prezzoSotto - 0.005)
     : maxPricePieno;
-  // R01-008 — I prodotti che solo in promozione scendono sotto la soglia restavano fuori. Si chiede
-  // prima chi sono (pochi id esatti, non una finestra allargata da sfoltire) e il database li
-  // lascia passare insieme a quelli sotto la soglia, nella lettura e nel conteggio. Se la domanda
-  // cade la griglia resta quella di prima, senza i prodotti in promozione.
-  const domandaScontatiSotto = useQuery<string[]>({
-    queryKey: [...queryKeys.promotions.active, 'scontati-sotto', prezzoSotto ?? null, sellerId ?? null],
-    enabled: prezzoSotto !== undefined,
-    staleTime: 60_000,
-    queryFn: () => idsCheInPromoScendonoSotto(supabase, prezzoSotto as number, sellerId),
-  });
-  const idsScontatiSotto = prezzoSotto === undefined
-    ? undefined
-    : domandaScontatiSotto.isError ? [] : domandaScontatiSotto.data;
 
   const creatiDal = soloNovita ? inizioFinestraNovita() : undefined;
 
   const domanda = useInfiniteQuery({
     placeholderData: keepPreviousData,
-    queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit: righePerPagina, maxPrice, idsScontatiSotto, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, soloRecensiti, sort, creatiDal }),
+    queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit: righePerPagina, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, soloRecensiti, sort, creatiDal }),
     initialPageParam: 0,
     // Senza gli insiemi la query non parte: partirebbe senza filtro, e
     // mostrerebbe proprio i prodotti che il filtro doveva escludere.
     enabled:
       (!onlyOpenStores || apertiOra !== undefined) &&
-      (!vistaPerVoto || idsColVoto !== undefined) &&
-      (prezzoSotto === undefined || idsScontatiSotto !== undefined),
+      (!vistaPerVoto || idsColVoto !== undefined),
     queryFn: async ({ pageParam }) => {
       // 27/8/2026 (R069, R073) — la lettura vera sta in `lib/queries/griglia-prodotti.ts`, dove una
       // prova la puo' eseguire: qui dentro nessuno poteva accorgersi ne' del viaggio in piu' ai
@@ -303,7 +292,6 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
         search,
         sort,
         maxPrice,
-        idsScontatiSotto,
         minPrice,
         onlyInStock,
         apertiOra: onlyOpenStores ? apertiOra ?? [] : undefined,
@@ -328,12 +316,12 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // l'elenco degli id col voto, gli stessi della lettura.
   const contaVero = !!soloNovita || prezzoSotto !== undefined || !!soloRecensiti;
   const domandaTotale = useQuery<number | null>({
-    queryKey: queryKeys.products.grid({ conteggio: true, categoryId, categoryIds, sellerId, search, maxPrice, idsScontatiSotto, minPrice, onlyInStock, creatiDal, soloRecensiti, minRating, apertiOra: onlyOpenStores ? apertiOra ?? null : undefined }),
+    queryKey: queryKeys.products.grid({ conteggio: true, categoryId, categoryIds, sellerId, search, maxPrice, minPrice, onlyInStock, creatiDal, soloRecensiti, minRating, apertiOra: onlyOpenStores ? apertiOra ?? null : undefined }),
     // R11-008 — Anche «aperti ora» e «col voto» entrano nel conteggio: finché l'elenco non c'è, non parte.
-    enabled: contaVero && (!onlyOpenStores || apertiOra !== undefined) && (!vistaPerVoto || idsColVoto !== undefined) && (prezzoSotto === undefined || idsScontatiSotto !== undefined),
+    enabled: contaVero && (!onlyOpenStores || apertiOra !== undefined) && (!vistaPerVoto || idsColVoto !== undefined),
     staleTime: 60_000,
     queryFn: () => contaProdottiDellaGriglia(supabase, {
-      categoryId, categoryIds, sellerId, search, maxPrice, idsScontatiSotto, minPrice, onlyInStock, creatiDal,
+      categoryId, categoryIds, sellerId, search, maxPrice, minPrice, onlyInStock, creatiDal,
       apertiOra: onlyOpenStores ? apertiOra ?? [] : undefined,
       idsColVoto: vistaPerVoto ? idsColVoto ?? [] : undefined,
     }),
@@ -475,7 +463,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     }
     if (prezzoSotto !== undefined) {
       // Il prezzo che si paga, calcolato come lo calcola la cassa (rete di sicurezza: il
-      // database ha già tagliato sul prezzo pieno, e uno sconto lo abbassa soltanto).
+      // database ha già tagliato, e uno sconto lo abbassa soltanto).
       arr = arr.filter((p) => discountedUnitCents(Number(p.price), scontiPromo?.get(p.id) ?? 0) < Math.round(prezzoSotto * 100));
     }
     if (onlyInStock) {
@@ -514,7 +502,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // 5/11/2026 — Le letture da cui dipendono i filtri contano come «sto caricando»: finché non
   // arrivano, l'elenco vuoto non vuol dire «nessun prodotto».
   const caricando =
-    isLoading || domandaAperti.isLoading || domandaVoto.isLoading || domandaPromo.isLoading || domandaScontatiSotto.isLoading;
+    isLoading || domandaAperti.isLoading || domandaVoto.isLoading || domandaPromo.isLoading;
   const inErrore = isError || filtroInErrore;
 
   // R11-012 R11-007 — Se le righe mostrate sono zero ma il database dice che ce ne sono altre

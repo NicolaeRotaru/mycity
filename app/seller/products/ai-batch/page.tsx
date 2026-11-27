@@ -451,9 +451,15 @@ function CatalogTab() {
       const saltati = (Array.isArray(data.esiti) ? data.esiti : []).filter(
         (e: { esito?: string }) => e.esito === 'saltato',
       ) as { productId: string; motivo?: string }[];
+      // R12-014 — La rotta può restituire anche un `avviso` (il lavoro non si è potuto rimettere
+      // pronto) e i motivi dei saltati sono tutti da leggere, non solo i primi tre.
+      const avviso = typeof data.avviso === 'string' ? data.avviso.trim() : '';
       if (saltati.length > 0) {
-        const motivi = Array.from(new Set(saltati.map((e) => e.motivo).filter(Boolean))).slice(0, 3).join('; ');
-        toast.error(`${saltati.length} prodotti saltati${motivi ? `: ${motivi}` : ''}.${data.ripetibile ? ' Puoi riprovare.' : ''}`);
+        const motivi = Array.from(new Set(saltati.map((e) => e.motivo).filter(Boolean))).join('; ');
+        const coda = avviso && !motivi.includes(avviso) ? ` ${avviso}` : '';
+        toast.error(`${saltati.length} prodotti saltati${motivi ? `: ${motivi}` : ''}.${data.ripetibile ? ' Puoi riprovare.' : ''}${coda}`);
+      } else if (avviso) {
+        toast.warning(avviso);
       }
       setJob({ ...job, status: data.ripetibile ? 'ready' : 'applied' });
       // 5/11/2026 (unione) — Il lavoro ricordato si dimentica solo quando è applicato davvero (S06).
