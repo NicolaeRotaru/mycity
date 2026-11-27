@@ -1,15 +1,35 @@
 {
   "titolo": "Il sito del Caffè di Piacenza — versione Business",
-  "aggiornato_il": "2026-11-27T17:50:00+01:00",
+  "aggiornato_il": "2026-11-27T18:05:00+01:00",
   "stato": "da_pubblicare",
   "indirizzo": null,
-  "codice": "https://github.com/NicolaeRotaru/ad-mycity/tree/ccr-e11c610c-9x59zw/consegne/clienti/caffe-di-piacenza",
+  "codice": null,
   "pagine": [
-    { "titolo": "Home", "percorso": "/", "cosa_contiene": "Il nome sopra la scena del Duomo vista dai portici, l'avviso «aperto ora / chiuso» con l'ora di Piacenza, colazione-pranzo-aperitivo, i prossimi appuntamenti in Piazza Duomo, gli orari e i pulsanti per chiamare e arrivare." },
-    { "titolo": "Il bar", "percorso": "/il-bar/", "cosa_contiene": "La storia del bar di Piazza Duomo, la nuova gestione dal 2021, cosa c'è da sapere (tavoli dentro e sotto i portici, il mercato del mercoledì e del sabato), il collegamento alle recensioni su Tripadvisor." },
-    { "titolo": "Menu", "percorso": "/menu/", "cosa_contiene": "Caffetteria, pasticceria, pranzo e aperitivo, senza prezzi: il menu completo coi prezzi lo manda il titolare." },
-    { "titolo": "Dicembre", "percorso": "/dicembre/", "cosa_contiene": "Gli otto appuntamenti di Natale 2026 dal programma del Comune; quelli in Piazza Duomo sono segnati e quelli già passati si spengono da soli." },
-    { "titolo": "Contatti", "percorso": "/contatti/", "cosa_contiene": "Indirizzo, telefono, email, orari con il giorno di oggi in evidenza, la mappa e il pulsante «Indicazioni»." }
+    {
+      "titolo": "Home",
+      "percorso": "/",
+      "cosa_contiene": "Il nome sopra la scena del Duomo vista dai portici, l'avviso «aperto ora / chiuso» con l'ora di Piacenza, colazione-pranzo-aperitivo, i prossimi appuntamenti in Piazza Duomo, gli orari e i pulsanti per chiamare e arrivare."
+    },
+    {
+      "titolo": "Il bar",
+      "percorso": "/il-bar/",
+      "cosa_contiene": "La storia del bar di Piazza Duomo, la nuova gestione dal 2021, cosa c'è da sapere (tavoli dentro e sotto i portici, il mercato del mercoledì e del sabato), il collegamento alle recensioni su Tripadvisor."
+    },
+    {
+      "titolo": "Menu",
+      "percorso": "/menu/",
+      "cosa_contiene": "Caffetteria, pasticceria, pranzo e aperitivo, senza prezzi: il menu completo coi prezzi lo manda il titolare."
+    },
+    {
+      "titolo": "Dicembre",
+      "percorso": "/dicembre/",
+      "cosa_contiene": "Gli otto appuntamenti di Natale 2026 dal programma del Comune; quelli in Piazza Duomo sono segnati e quelli già passati si spengono da soli."
+    },
+    {
+      "titolo": "Contatti",
+      "percorso": "/contatti/",
+      "cosa_contiene": "Indirizzo, telefono, email, orari con il giorno di oggi in evidenza, la mappa e il pulsante «Indicazioni»."
+    }
   ],
   "cosa_ha_di_business": [
     "Cinque pagine vere, ognuna col suo indirizzo, titolo e descrizione per Google (la bozza era una pagina sola)",
@@ -21,17 +41,47 @@
     "Tema scuro automatico, collegamento «Vai al contenuto», contrasti e pulsanti grandi per il dito"
   ],
   "da_confermare": [
-    { "voce": "Orari", "perche": "lunedì-sabato 7:30-19:30 e domenica chiuso vengono dalle fonti pubbliche, non dal titolare" },
-    { "voce": "Menu e prezzi", "perche": "le voci vengono dal vecchio sito e dalle recensioni; i prezzi non ci sono" },
-    { "voce": "Testi della storia", "perche": "la nuova gestione dal 2021 viene dalle fonti pubbliche" },
-    { "voce": "Orari delle feste", "perche": "la pagina Dicembre dice che arrivano" },
-    { "voce": "Foto vere e stile del locale", "perche": "oggi c'è solo il disegno del Duomo; le foto del Caffè le aggiunge SDG nei prossimi giorni, e colori e stile del sito si rifanno su quelle (Nicola, 27/11)" },
-    { "voce": "Dominio", "perche": "il vecchio sito è su sites.google.com; un dominio col nome del bar si compra solo col via di Nicola" }
+    {
+      "voce": "Orari",
+      "perche": "lunedì-sabato 7:30-19:30 e domenica chiuso vengono dalle fonti pubbliche, non dal titolare"
+    },
+    {
+      "voce": "Menu e prezzi",
+      "perche": "le voci vengono dal vecchio sito e dalle recensioni; i prezzi non ci sono"
+    },
+    {
+      "voce": "Testi della storia",
+      "perche": "la nuova gestione dal 2021 viene dalle fonti pubbliche"
+    },
+    {
+      "voce": "Orari delle feste",
+      "perche": "la pagina Dicembre dice che arrivano"
+    },
+    {
+      "voce": "Foto vere e stile del locale",
+      "perche": "oggi c'è solo il disegno del Duomo; le foto del Caffè le aggiunge SDG nei prossimi giorni, e colori e stile del sito si rifanno su quelle"
+    },
+    {
+      "voce": "Dominio",
+      "perche": "il sito di oggi è su sites.google.com; il dominio col nome del bar si sceglie insieme"
+    }
   ],
   "prossimi_passi": [
-    { "cosa": "Pubblicarlo su Vercel nel progetto caffe-di-piacenza", "chi": "AD, col permesso Vercel che manca", "colore": "giallo" },
-    { "cosa": "Far confermare al titolare testi, orari e menu, poi togliere «Anteprima» e il blocco per Google (CONFERMATO = true nel costruttore)", "chi": "Nicola o l'agente, col titolare", "colore": "giallo" },
-    { "cosa": "Collegare un dominio col nome del bar", "chi": "Nicola", "colore": "rosso" }
+    {
+      "cosa": "Pubblicare il sito a un indirizzo suo",
+      "chi": "SDG",
+      "colore": "giallo"
+    },
+    {
+      "cosa": "Controllare testi, orari e menu: quando dici sì togliamo la scritta «Anteprima» e lo apriamo a Google",
+      "chi": "Tu, con SDG",
+      "colore": "giallo"
+    },
+    {
+      "cosa": "Scegliere un dominio col nome del bar",
+      "chi": "Tu, con SDG",
+      "colore": "giallo"
+    }
   ],
   "fonti": [
     "https://sites.google.com/view/bardipiacenza/home",

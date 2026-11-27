@@ -32,7 +32,8 @@ export function originiDeiSitiOnline(siti: Iterable<unknown> = SITI_PER_NEGOZIO.
     if (stato !== 'online' || typeof indirizzo !== 'string') continue;
     try {
       const u = new URL(indirizzo);
-      if (u.protocol === 'https:') origini.add(u.origin);
+      // Solo un nome di host pulito: niente «*», niente «;» che aprirebbe un'altra regola nella politica.
+      if (u.protocol === 'https:' && /^[a-z0-9.-]+$/.test(u.hostname) && !u.port) origini.add(u.origin);
     } catch {
       /* indirizzo storto: non entra */
     }

@@ -69,6 +69,10 @@ describe('quali siti possono entrare nella pagina (frame-src)', () => {
       { stato: 'online', indirizzo: 'http://senza-lucchetto.it' },
       { stato: 'online', indirizzo: 'non è un indirizzo' },
       { stato: 'online', indirizzo: null },
+      { stato: 'online', indirizzo: 'https://*' },
+      { stato: 'online', indirizzo: 'https://*.vercel.app' },
+      { stato: 'online', indirizzo: 'https://a.vercel.app%3Bsandbox' },
+      { stato: 'online', indirizzo: 'https://caffe-di-piacenza.vercel.app:8443/' },
       null,
       'testo',
     ]);
@@ -100,7 +104,8 @@ describe('la voce «Sito web» mostra il sito dal vivo quando è online', () => 
     const el = monta({ ...base, stato: 'online', indirizzo: 'https://caffe-di-piacenza.vercel.app' }, 'business');
     const frame = el.querySelector('iframe');
     expect(frame?.getAttribute('src')).toBe('https://caffe-di-piacenza.vercel.app');
-    expect(frame?.getAttribute('sandbox')).toContain('allow-scripts');
+    // Il sito non può portare via la pagina del venditore né mandare moduli: il permesso è questo, esatto.
+    expect(frame?.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
     expect(el.textContent).toContain('Il tuo sito, dal vivo');
     expect(el.textContent).toContain('Cosa ha di Business');
     expect(el.textContent).not.toContain('Cosa ha di Premium');
@@ -112,6 +117,17 @@ describe('la voce «Sito web» mostra il sito dal vivo quando è online', () => 
     expect(el.querySelector('iframe')).toBeNull();
     expect(el.textContent).toContain('Da pubblicare');
     expect(el.textContent).toContain('appena è pubblicato lo vedi qui');
+  });
+
+  it('un sito con indirizzo ma ancora da pubblicare non apre un riquadro (il portiere lo bloccherebbe: riquadro grigio)', () => {
+    const el = monta({ ...base, stato: 'da_pubblicare', indirizzo: 'https://caffe-di-piacenza.vercel.app' }, 'business');
+    expect(el.querySelector('iframe')).toBeNull();
+  });
+
+  it('con la fascia Base non compare la lista di un\'altra fascia', () => {
+    const el = monta({ ...base, cosa_ha_di_premium: ['Riga del Premium'] }, 'base' as 'business');
+    expect(el.textContent).not.toContain('Riga del Premium');
+    expect(el.textContent).not.toContain('Cosa ha di');
   });
 
   it('un indirizzo «online» ma vuoto non apre un riquadro', () => {

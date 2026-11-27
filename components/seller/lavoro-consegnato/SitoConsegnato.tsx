@@ -12,7 +12,8 @@ const NOME_FASCIA: Record<LavoroConsegnato['fascia'], string> = { base: 'Base', 
 export default function SitoConsegnato({ sito, fascia = 'premium' }: { sito: Sito; fascia?: LavoroConsegnato['fascia'] }) {
   const online = sito.stato === 'online';
   const nomeFascia = NOME_FASCIA[fascia];
-  const cosaHaInPiu = fascia === 'business' ? sito.cosa_ha_di_business : sito.cosa_ha_di_premium;
+  const LISTA_PER_FASCIA: Record<LavoroConsegnato['fascia'], string[]> = { base: [], business: sito.cosa_ha_di_business, premium: sito.cosa_ha_di_premium };
+  const cosaHaInPiu = LISTA_PER_FASCIA[fascia];
   return (
     <div>
       <IntestazioneConsegnato aggiornato={sito.aggiornato_il} />
