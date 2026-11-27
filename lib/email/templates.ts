@@ -1104,14 +1104,6 @@ export function avvisoCancellazioneTemplate(args: { titolo: string; corpoHtml: s
 }
 
 /**
- * 24/11/2026 — «ENTRA NELLA TUA PAGINA», AL TITOLARE CHE HA ACCETTATO IL PREVENTIVO DAL LINK.
- *
- * Un'attività in «modalità preventivo» (Ora del Gusto) non ha ancora un accesso: quando il
- * titolare accetta dal link col codice e lascia la sua email, il sito gliela collega e gli manda
- * questo link per entrare (lib/agenzia/preventivo-col-codice.ts). Il link è di Supabase e vale una
- * volta sola; dopo, entra con «Accedi» e la stessa email.
- */
-/**
  * IL CODICE PER CONFERMARE L'ABBONAMENTO DAL LINK — 27/11/2026.
  *
  * Nicola ha scelto «codice dall'email»: il titolare conferma l'abbonamento dalla pagina del link e, per
@@ -1126,15 +1118,24 @@ export function codiceDelPreventivoTemplate(args: { negozio: string; codice: str
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Il tuo codice per ${negozio}</h1>
     <p style="margin:0 0 12px;line-height:1.6">Stai confermando l'abbonamento ${abbonamento} ai servizi di MyCity. Scrivi questo codice nella pagina dove hai premuto «Confermo»:</p>
     <p style="margin:24px 0;font-size:32px;font-weight:800;letter-spacing:8px;color:${COLORI.titolo}">${codice}</p>
-    <p style="margin:0 0 12px;line-height:1.6;font-size:13px">Il codice vale una volta sola e scade dopo poco. Se non sei stato tu a chiederlo, ignora questa email: senza il codice non entra nessuno.</p>
+    <p style="margin:0 0 12px;line-height:1.6;font-size:13px">Il codice vale 10 minuti. Se non sei stato tu a chiederlo, ignora questa email: senza il codice non entra nessuno.</p>
   `;
   return {
-    subject: `${args.codice} è il tuo codice per ${args.negozio}`,
+    // Il codice non va nell'oggetto: si leggerebbe sulle notifiche del telefono (collaudo del 27/11).
+    subject: `${args.negozio}: il tuo codice per confermare l'abbonamento`,
     html: shell('Il tuo codice', body),
-    text: `Il tuo codice per confermare l'abbonamento ${args.abbonamento} di ${args.negozio}: ${args.codice}. Scrivilo nella pagina dove hai premuto «Confermo». Vale una volta sola.`,
+    text: `Il tuo codice per confermare l'abbonamento ${args.abbonamento} di ${args.negozio}: ${args.codice}. Scrivilo nella pagina dove hai premuto «Confermo». Vale 10 minuti.`,
   };
 }
 
+/**
+ * 24/11/2026 — «ENTRA NELLA TUA PAGINA», AL TITOLARE CHE HA ACCETTATO IL PREVENTIVO DAL LINK.
+ *
+ * Un'attività in «modalità preventivo» (Ora del Gusto) non ha ancora un accesso: quando il
+ * titolare accetta dal link col codice e lascia la sua email, il sito gliela collega e gli manda
+ * questo link per entrare (lib/agenzia/preventivo-col-codice.ts). Il link è di Supabase e vale una
+ * volta sola; dopo, entra con «Accedi» e la stessa email.
+ */
 export function accessoDopoIlPreventivoTemplate(args: { negozio: string; link: string }) {
   const negozio = escapeHtml(args.negozio);
   const body = `

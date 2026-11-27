@@ -1,7 +1,7 @@
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/client';
-import { accessoDopoIlPreventivoTemplate, codiceDelPreventivoTemplate } from '@/lib/email/templates';
+import { accessoDopoIlPreventivoTemplate } from '@/lib/email/templates';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { env } from '@/lib/env';
 import { FASCE, type Abbonamento } from '@/lib/agenzia/preventivo';
@@ -36,10 +36,13 @@ import { sbloccaInContanti, sbloccoRiuscito } from '@/lib/agenzia/abbonamento-co
  * subito e fino alla disdetta. Con il pagamento online spento, chi accetta ha la pagina sbloccata nella fascia
  * che accetta (lib/agenzia/abbonamento-contanti.ts): se l'agente ne aveva scelta un'altra, si allinea a questa.
  *
- * 27/11/2026 — Nicola: «dopo il click entra nella sua pagina venditore con l'abbonamento che ha scelto», e
- * poi, sul rischio trovato dal collaudo della sicurezza, «codice dall'email». La pagina della conferma
- * (app/preventivo/[codice]/page.tsx) prima chiede il codice (`mandaCodiceDalLink`, qui sotto), poi lo
- * verifica e solo allora accetta (app/api/preventivo/[codice]/conferma): entra solo chi possiede l'email.
+ * 27/11/2026 — Nicola: «dopo il click entra nella sua pagina venditore con l'abbonamento che ha scelto», e sul
+ * rischio trovato dal collaudo della sicurezza «codice dall'email». Chi chiama (app/api/preventivo/[codice]/accetta)
+ * accetta solo dopo che il titolare ha scritto il codice giusto (lib/agenzia/codice-dal-link.ts): fino a lì
+ * l'utente del negozio resta bloccato e senza email. Con `entraSubito` chi chiama apre poi la sessione del
+ * titolare nella stessa risposta (lib/agenzia/entra-dal-link.ts): qui si crea il gettone d'accesso monouso e
+ * glielo si passa, PRIMA del link dell'email, perché un gettone nuovo dello stesso tipo può annullare quello
+ * di prima, e il link dell'email deve restare buono.
  */
 
 export const CODICE_VALIDO = /^[0-9a-f]{64}$/;
@@ -73,7 +76,7 @@ export async function leggiPreventivoColCodice(codice: string): Promise<Preventi
 }
 
 export type EsitoAccettazione =
-  | { ok: true; sellerId: string; accessoInviato: boolean }
+  | { ok: true; sellerId: string; accessoInviato: boolean; entrato: boolean }
   | { ok: false; motivo: 'GIA_ACCETTATO' | 'CHIUSO' | 'EMAIL_GIA_USATA' | 'GUASTO'; messaggio: string };
 
 /** Il titolare accetta dal link: email, profilo compilato, revisione, avvisi. Il pagamento lo apre chi chiama. */
@@ -82,6 +85,8 @@ export async function accettaPreventivoColCodice(input: {
   codice: string;
   email: string;
   fascia: Abbonamento;
+  /** Apre la sessione del titolare col gettone monouso; vero se è entrato. Assente: entra dall'email. */
+  entraSubito?: (gettone: string) => Promise<boolean>;
 }): Promise<EsitoAccettazione> {
   const { preventivo, codice, email, fascia } = input;
   if (preventivo.stato === 'accettato') {
@@ -166,6 +171,19 @@ export async function accettaPreventivoColCodice(input: {
     { unaVoltaPer: `preventivo-codice:${id}` },
   ).catch((e: unknown) => logger.warn('[preventivo-codice] avviso a Nicola non partito', { sellerId: id, errore: String(e) }));
 
+  // 4) Il titolare entra subito, se chi chiama lo sa fare. Se non riesce, resta l'email qui sotto.
+  let entrato = false;
+  if (input.entraSubito) {
+    try {
+      const gettone = await admin.auth.admin.generateLink({ type: 'magiclink', email });
+      const hash = (gettone.data as { properties?: { hashed_token?: string } } | null)?.properties?.hashed_token;
+      if (gettone.error || !hash) throw new Error(gettone.error?.message ?? 'gettone senza codice');
+      entrato = await input.entraSubito(hash);
+    } catch (e) {
+      logger.warn('[preventivo-codice] ingresso subito non riuscito: entra dall email', { sellerId: id, errore: String(e) });
+    }
+  }
+
   let accessoInviato = false;
   try {
     const link = await admin.auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: `${env.appUrl()}${PERCORSO_ABBONAMENTO}` } });
@@ -178,57 +196,5 @@ export async function accettaPreventivoColCodice(input: {
   } catch (e) {
     logger.error('[preventivo-codice] link di accesso non creato', { sellerId: id, errore: String(e) });
   }
-  return { ok: true, sellerId: id, accessoInviato };
-}
-
-export type EsitoCodice =
-  | { ok: true }
-  | { ok: false; motivo: 'GIA_ACCETTATO' | 'CHIUSO' | 'EMAIL_GIA_USATA' | 'GUASTO'; messaggio: string };
-
-/** Lo stesso messaggio per «email già su MyCity» e per ogni altro rifiuto: da qui non si scopre chi è iscritto. */
-const NON_COLLEGATA = 'Non sono riuscito a collegare questa email. Prova con un’altra, oppure scrivici e lo sistemiamo noi.';
-
-/**
- * IL CODICE PER ENTRARE, PRIMA DI ACCETTARE — 27/11/2026 (Nicola: «codice dall'email»).
- *
- * Il titolare ha scelto la fascia e scritto l'email nella pagina del link. Qui la sua email va sull'utente
- * dell'attività (stesso id, sbloccato perché il codice si possa verificare) e gli si manda un codice di
- * poche cifre. Il preventivo resta APERTO: si accetta solo quando il codice torna giusto
- * (app/api/preventivo/[codice]/conferma). Se ha sbagliato email, la riscrive e chiede un altro codice.
- * Un codice nuovo può annullare quello di prima: vale l'ultimo arrivato.
- */
-export async function mandaCodiceDalLink(input: {
-  preventivo: PreventivoColCodice;
-  email: string;
-  fascia: Abbonamento;
-}): Promise<EsitoCodice> {
-  const { preventivo, email, fascia } = input;
-  if (preventivo.stato === 'accettato') {
-    return { ok: false, motivo: 'GIA_ACCETTATO', messaggio: 'Questo preventivo è già stato accettato: controlla la tua email per entrare.' };
-  }
-  if (preventivo.stato === 'chiuso') {
-    return { ok: false, motivo: 'CHIUSO', messaggio: 'Questo preventivo non è più valido. Scrivici e te ne prepariamo uno nuovo.' };
-  }
-  const admin = getAdminSupabase();
-  const id = preventivo.sellerId;
-
-  const utente = await admin.auth.admin.updateUserById(id, { email, email_confirm: true, ban_duration: 'none' });
-  if (utente.error) {
-    const giaUsata = /already|exists|registered|email_exists/i.test(`${utente.error.message} ${(utente.error as { code?: string }).code ?? ''}`);
-    logger.warn('[preventivo-codice] email non collegata per il codice', { sellerId: id, giaUsata, message: utente.error.message });
-    return { ok: false, motivo: 'EMAIL_GIA_USATA', messaggio: NON_COLLEGATA };
-  }
-
-  try {
-    const link = await admin.auth.admin.generateLink({ type: 'magiclink', email });
-    const codice = (link.data as { properties?: { email_otp?: string } } | null)?.properties?.email_otp;
-    if (link.error || !codice) throw new Error(link.error?.message ?? 'codice non creato');
-    const posta = codiceDelPreventivoTemplate({ negozio: preventivo.nomeAttivita, codice, abbonamento: FASCE[fascia].nome });
-    const inviata = await sendEmail({ to: email, ...posta });
-    if (!inviata.ok) throw new Error('email non partita');
-  } catch (e) {
-    logger.error('[preventivo-codice] codice non mandato', { sellerId: id, errore: String(e) });
-    return { ok: false, motivo: 'GUASTO', messaggio: 'Non sono riuscito a mandarti il codice. Riprova fra un momento.' };
-  }
-  return { ok: true };
+  return { ok: true, sellerId: id, accessoInviato, entrato };
 }

@@ -8,9 +8,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *  · dentro c'è lo stesso negozio → non è «un altro»;
  *  · dentro c'è un altro account → è «un altro»: la sua sessione non si tocca;
  *  · la domanda «chi c'è dentro?» non risponde in tempo, o si rompe → prudenza: come «un altro»;
- *  · il codice dell'email apre la sessione → l'id dell'utente, e i cookie scritti da Supabase finiscono in
- *    `scritti` (anche le cancellazioni); email e codice vanno a `verifyOtp` come OTP di tipo email;
- *  · il codice non apre la sessione → null;
+ *  · il gettone apre la sessione → vero, e i cookie scritti da Supabase finiscono in `scritti`
+ *    (anche le cancellazioni); il gettone va a `verifyOtp` come token_hash di un magiclink;
+ *  · il gettone non apre la sessione → falso;
  *  · i cookie della richiesta arrivano a Supabase, anche codificati;
  *  · senza chiavi pubbliche → null.
  */
@@ -47,7 +47,7 @@ vi.mock('@supabase/ssr', () => ({
             finto.cookie!.set('sb-test-auth-token', 'base64-nuova', { path: '/', maxAge: 400 * 24 * 3600 });
             finto.cookie!.remove('sb-test-auth-token-code-verifier', { path: '/', maxAge: 0 });
           }
-          return { data: { session: finto.verifica.error ? null : finto.verifica.session, user: finto.verifica.error ? null : { id: 'gc-1' } }, error: finto.verifica.error };
+          return { data: { session: finto.verifica.error ? null : finto.verifica.session }, error: finto.verifica.error };
         },
       },
     };
@@ -107,11 +107,11 @@ describe('chi c è già dentro', () => {
   });
 });
 
-describe('il codice dell email apre la sessione', () => {
-  it('va a verifyOtp come OTP di tipo email, e i cookie scritti (anche le cancellazioni) si raccolgono', async () => {
+describe('il gettone apre la sessione', () => {
+  it('va a verifyOtp come magiclink, e i cookie scritti (anche le cancellazioni) si raccolgono', async () => {
     const s = sessioneDalLink(null)!;
-    expect(await s.entraColCodice('titolare@grida.it', '123456')).toBe('gc-1');
-    expect(finto.chiamateVerifica).toEqual([{ email: 'titolare@grida.it', token: '123456', type: 'email' }]);
+    expect(await s.entra('hash-1')).toBe(true);
+    expect(finto.chiamateVerifica).toEqual([{ token_hash: 'hash-1', type: 'magiclink' }]);
     expect(s.scritti.map((c) => [c.name, c.value])).toEqual([
       ['sb-test-auth-token', 'base64-nuova'],
       ['sb-test-auth-token-code-verifier', ''],
@@ -120,10 +120,10 @@ describe('il codice dell email apre la sessione', () => {
     expect(Number(s.scritti[0].options.maxAge)).toBeLessThanOrEqual(DURATA_MASSIMA_SESSIONE_S);
   });
 
-  it('un codice che non apre la sessione dice di no', async () => {
+  it('un gettone che non apre la sessione dice di no', async () => {
     finto.verifica = { session: null, error: { code: 'otp_expired' } };
     const s = sessioneDalLink(null)!;
-    expect(await s.entraColCodice('titolare@grida.it', '000000')).toBeNull();
+    expect(await s.entra('hash-vecchio')).toBe(false);
     expect(s.scritti).toEqual([]);
   });
 

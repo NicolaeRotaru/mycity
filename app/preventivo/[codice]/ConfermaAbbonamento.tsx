@@ -14,7 +14,8 @@ import { FRASE_CONTANTI, PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagament
  * trovato dal collaudo della sicurezza ha scelto «codice dall'email». Quindi due passi nella stessa pagina:
  *  1. fascia, email, condizioni → «Confermo il …»: parte il codice (app/api/preventivo/[codice]/codice);
  *  2. il titolare scrive il codice → «Entra nella mia pagina»: il server lo verifica, accetta e apre la
- *     sessione (…/conferma), e risponde con `entra`, la pagina dell'abbonamento del negozio.
+ *     sessione (…/accetta), e risponde con `entra`, la pagina dell'abbonamento del negozio. Fino a lì
+ *     niente cambia sul negozio (secondo collaudo della sicurezza, 27/11).
  * Senza `entra` (un altro account già dentro in questo browser) entra dal link dell'email, come prima.
  * Il testo delle fasce lo prepara il server (`fasce`).
  */
@@ -30,7 +31,7 @@ export type FasciaDaConfermare = {
 
 type Risposta = {
   ok?: boolean;
-  data?: { url?: string | null; entra?: string | null; accessoInviato?: boolean };
+  data?: { url?: string | null; entra?: string | null; accessoInviato?: boolean; gettone?: string };
   error?: { message?: string };
 };
 
@@ -38,13 +39,16 @@ export default function ConfermaAbbonamento({
   codice,
   fasce,
   iniziale,
+  segnata,
   dalVenditore,
 }: {
   codice: string;
   fasce: FasciaDaConfermare[];
   /** La fascia detta al venditore; senza, la consigliata. */
   iniziale: Abbonamento;
-  /** Vero se `iniziale` l'ha scelta il titolare davanti al venditore: l'etichetta dice «La tua scelta». */
+  /** La fascia con l'etichetta: quella detta al venditore, o la consigliata. */
+  segnata: Abbonamento;
+  /** Vero se `segnata` l'ha scelta il titolare davanti al venditore: l'etichetta dice «La tua scelta». */
   dalVenditore: boolean;
 }) {
   const [fascia, setFascia] = useState<Abbonamento>(iniziale);
@@ -56,10 +60,12 @@ export default function ConfermaAbbonamento({
   /** Il secondo passo: il codice è partito, si aspetta che il titolare lo scriva. */
   const [fase, setFase] = useState<'scelta' | 'codice'>('scelta');
   const [codiceEmail, setCodiceEmail] = useState('');
+  /** Il gettone firmato che accompagna il codice (lib/agenzia/codice-dal-link.ts): il codice in chiaro non c'è. */
+  const [gettone, setGettone] = useState('');
   const [rimandato, setRimandato] = useState(false);
   const scelta = fasce.find((f) => f.id === fascia) ?? fasce[0];
 
-  async function chiedi(percorso: 'codice' | 'conferma', corpo: Record<string, unknown>): Promise<Risposta | null> {
+  async function chiedi(percorso: 'codice' | 'accetta', corpo: Record<string, unknown>): Promise<Risposta | null> {
     const r = await fetch(`/api/preventivo/${codice}/${percorso}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -80,6 +86,7 @@ export default function ConfermaAbbonamento({
     try {
       const r = await chiedi('codice', { email, abbonamento: fascia });
       if (r) {
+        setGettone(r.data?.gettone ?? '');
         setFase('codice');
         setRimandato(nuovo);
         setCodiceEmail('');
@@ -106,7 +113,7 @@ export default function ConfermaAbbonamento({
     setErrore(null);
     setInvio(true);
     try {
-      const r = await chiedi('conferma', { email, abbonamento: fascia, accettoCondizioni: true, codice: codiceEmail });
+      const r = await chiedi('accetta', { email, abbonamento: fascia, accettoCondizioni: true, codice: codiceEmail, gettone });
       if (r) {
         const dove = r.data?.url ?? r.data?.entra ?? null;
         if (dove) {
@@ -153,7 +160,7 @@ export default function ConfermaAbbonamento({
           inputMode="numeric"
           autoComplete="one-time-code"
           pattern="[0-9]*"
-          maxLength={10}
+          maxLength={6}
           required
           value={codiceEmail}
           onChange={(e) => setCodiceEmail(e.target.value.replace(/\D/g, ''))}
@@ -200,7 +207,7 @@ export default function ConfermaAbbonamento({
                 >
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="font-serif text-xl font-bold text-ink-900">{f.nome}</span>
-                    {f.id === iniziale && (
+                    {f.id === segnata && (
                       <span className="rounded-full bg-olive-700 px-2 py-0.5 text-[11px] font-bold text-white">{dalVenditore ? 'La tua scelta' : 'Consigliato'}</span>
                     )}
                     {attiva && <Check size={18} className="ml-auto text-primary-700" aria-hidden />}

@@ -151,7 +151,7 @@ describe('ogni fascia apre il suo preventivo, anche nella demo', () => {
     expect(r.querySelector('input[type="radio"][value="premium"]')?.hasAttribute('checked')).toBe(true);
   });
 
-  it('cambiando fascia nella stessa pagina il modulo per accettare segue la fascia letta (collaudo: soldi)', async () => {
+  it('cambiando fascia nella stessa pagina la scelta e il pulsante per confermare seguono la fascia letta (collaudo: soldi)', async () => {
     // Next, se cambia solo ?fascia, ridisegna la pagina tenendo lo stato dei componenti: qui lo stesso.
     (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
     const div = document.createElement('div');
@@ -166,17 +166,13 @@ describe('ogni fascia apre il suo preventivo, anche nella demo', () => {
       await act(async () => { root.render(base); });
       expect(div.querySelector('h1')?.textContent).toBe('Il preventivo di Ora del Gusto col Base');
       expect(spuntata()).toBe('base');
-      // L'email già scritta resta (prima, con la key, il modulo ripartiva vuoto: secondo collaudo).
-      const email = div.querySelector<HTMLInputElement>('input[type="email"]')!;
-      await act(async () => {
-        const imposta = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
-        imposta.call(email, 'titolare@oradelgusto.it');
-        email.dispatchEvent(new Event('input', { bubbles: true }));
-      });
+      // 27/11/2026 — Da qui non si accetta più: il pulsante porta alla conferma col codice, con la fascia scelta.
+      const vai = () => [...div.querySelectorAll('a')].find((a) => a.textContent?.startsWith('Conferma il'))?.getAttribute('href');
+      expect(vai()).toBe(`/preventivo/${CODICE}?fascia=base`);
       const premiumDiNuovo = await PreventivoDemo({ params: params(), searchParams: cerca({ fascia: 'premium' }) });
       await act(async () => { root.render(premiumDiNuovo); });
       expect(spuntata()).toBe('premium');
-      expect(div.querySelector<HTMLInputElement>('input[type="email"]')!.value).toBe('titolare@oradelgusto.it');
+      expect(vai()).toBe(`/preventivo/${CODICE}?fascia=premium`);
       // E scegliendo una fascia nel modulo, il preventivo sopra diventa il suo.
       const radioBase = [...div.querySelectorAll<HTMLInputElement>('input[type="radio"]')].find((i) => i.value === 'base')!;
       await act(async () => { radioBase.click(); });

@@ -8,7 +8,7 @@ import { logger } from '@/lib/logger';
  *
  * Dal collaudo della sicurezza: la conferma apre una sessione, quindi una pagina di un altro sito non deve
  * poterla far partire dal browser di qualcuno. Due regole, le stesse per le tre porte del link
- * (accetta, codice, conferma):
+ * (accetta e codice):
  *  · se il browser dice da dove arriva la richiesta (Origin), deve essere il sito stesso: quello della
  *    richiesta o l'indirizzo pubblico del sito (come /auth/confirm). «null» non passa;
  *  · il corpo deve essere dichiarato JSON: un modulo «text/plain» di un altro sito non passa nemmeno la lettura.

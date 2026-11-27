@@ -5,6 +5,7 @@ import { SERVIZI_IN_BREVE } from '@/lib/agenzia/preventivo-corto';
 import { CODICE_VALIDO } from '@/lib/agenzia/preventivo-col-codice';
 import { leggiDemoDalLink } from '@/lib/agenzia/demo-dal-link';
 import { indirizziDemo } from '@/lib/agenzia/indirizzi-demo';
+import { fasciaDaIndirizzo } from '@/lib/agenzia/indirizzi-servizi';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
 import { formatPriceFromCents } from '@/lib/format';
 import { fasciaValida } from '@/lib/agenzia/abbonamento-contanti';
@@ -34,10 +35,10 @@ export default async function ConfermaDalLink({
   searchParams,
 }: {
   params: Promise<{ codice: string }>;
-  searchParams: Promise<{ pagato?: string }>;
+  searchParams: Promise<{ pagato?: string; fascia?: string | string[] }>;
 }) {
   const { codice } = await params;
-  const { pagato } = await searchParams;
+  const { pagato, fascia } = await searchParams;
   if (!CODICE_VALIDO.test(codice)) notFound();
   const ind = indirizziDemo(codice);
   if (pagato === '0' || pagato === '1') redirect(`${ind.abbonamento}?pagato=${pagato}`);
@@ -75,7 +76,14 @@ export default async function ConfermaDalLink({
         </p>
         <p className="mt-1 text-sm text-ink-600">{descriviAttivita(p.tipoAttivita)} · {FRASE_PARTNER}</p>
       </header>
-      <ConfermaAbbonamento codice={codice} fasce={fasce} iniziale={dalVenditore ?? p.consigliato} dalVenditore={dalVenditore !== null} />
+      {/* ?fascia= arriva dal pulsante della vecchia pagina dell'abbonamento: sceglie, ma l'etichetta resta su quella del venditore. */}
+      <ConfermaAbbonamento
+        codice={codice}
+        fasce={fasce}
+        iniziale={fasciaDaIndirizzo(fascia) ?? dalVenditore ?? p.consigliato}
+        segnata={dalVenditore ?? p.consigliato}
+        dalVenditore={dalVenditore !== null}
+      />
     </Cornice>
   );
 }

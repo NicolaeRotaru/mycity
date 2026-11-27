@@ -171,6 +171,15 @@ describe('il link apre la conferma, non la demo', () => {
     expect(pulsante(r).textContent).toBe(`Confermo il ${FASCE[diversa].nome}`);
   });
 
+  it('con ?fascia= (dal pulsante della vecchia pagina della demo) è scelta quella, ma «La tua scelta» resta sul venditore', async () => {
+    const r = disegna(await ConfermaDalLink({ params: params(), searchParams: cerca({ fascia: 'premium' }) }));
+    expect(radio(r, 'premium').hasAttribute('checked')).toBe(true);
+    expect(radio(r, 'business').hasAttribute('checked')).toBe(false);
+    expect(r.querySelector('[data-fascia="business"]')?.textContent).toContain('La tua scelta');
+    expect(r.querySelector('[data-fascia="premium"]')?.textContent).not.toContain('La tua scelta');
+    expect(pulsante(r).textContent).toBe('Confermo il Premium');
+  });
+
   it('senza la scelta del venditore è segnata la consigliata, con «Consigliato»', async () => {
     stato.pc = { sellerId: 'gc-1', stato: 'aperto', fasciaScelta: null, nomeAttivita: 'Grida Caffè' };
     const p = stato.preventivo as Preventivo;
@@ -200,7 +209,7 @@ function serverFinto(conferma: { status: number; corpo: unknown }) {
   const chiamate: Array<{ url: string; corpo: Record<string, unknown> }> = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
     chiamate.push({ url, corpo: JSON.parse(String(init.body)) });
-    if (url.endsWith('/codice')) return new Response(JSON.stringify({ ok: true, data: { inviato: true } }), { status: 200 });
+    if (url.endsWith('/codice')) return new Response(JSON.stringify({ ok: true, data: { gettone: 'gettone-firmato' } }), { status: 200 });
     return new Response(JSON.stringify(conferma.corpo), { status: conferma.status });
   }));
   return chiamate;
@@ -241,7 +250,7 @@ describe('il titolare tocca un altro abbonamento, conferma col codice dell email
     await scriviCodice(r, '12 34 56');
     expect((r.querySelector('#codice-email') as HTMLInputElement).value).toBe('123456');
     await invia(r);
-    expect(chiamate[1]).toEqual({ url: `/api/preventivo/${CODICE}/conferma`, corpo: { email: 'titolare@grida.it', abbonamento: 'premium', accettoCondizioni: true, codice: '123456' } });
+    expect(chiamate[1]).toEqual({ url: `/api/preventivo/${CODICE}/accetta`, corpo: { email: 'titolare@grida.it', abbonamento: 'premium', accettoCondizioni: true, codice: '123456', gettone: 'gettone-firmato' } });
     expect(vai).toHaveBeenCalledWith('/seller/abbonamento');
   });
 

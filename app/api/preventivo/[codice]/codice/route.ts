@@ -4,8 +4,11 @@ import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { ABBONAMENTI } from '@/lib/agenzia/preventivo';
-import { CODICE_VALIDO, leggiPreventivoColCodice, mandaCodiceDalLink } from '@/lib/agenzia/preventivo-col-codice';
+import { sendEmail } from '@/lib/email/client';
+import { codiceDelPreventivoTemplate } from '@/lib/email/templates';
+import { ABBONAMENTI, FASCE } from '@/lib/agenzia/preventivo';
+import { CODICE_VALIDO, leggiPreventivoColCodice } from '@/lib/agenzia/preventivo-col-codice';
+import { creaCodice } from '@/lib/agenzia/codice-dal-link';
 import { richiestaDalSito } from '@/lib/agenzia/richiesta-dal-sito';
 
 export const runtime = 'nodejs';
@@ -13,10 +16,12 @@ export const runtime = 'nodejs';
 /**
  * IL TITOLARE CHIEDE IL CODICE PER CONFERMARE — 27/11/2026 (Nicola: «codice dall'email»).
  *
- * La pagina del link (app/preventivo/[codice]/page.tsx) manda la fascia scelta e l'email. Qui l'email va
- * sull'utente dell'attività e parte il codice (lib/agenzia/preventivo-col-codice.ts, `mandaCodiceDalLink`).
- * Il preventivo resta aperto: si accetta solo col codice giusto (../conferma). Si può chiedere di nuovo
- * («Rimanda il codice», o un'email corretta), con un tetto: 5 per indirizzo e 5 per link ogni 15 minuti.
+ * La pagina del link (app/preventivo/[codice]/page.tsx) manda la fascia scelta e l'email. Qui nasce il codice
+ * (lib/agenzia/codice-dal-link.ts) e parte per email; al browser torna solo il gettone firmato, che non
+ * contiene il codice in chiaro. NON si tocca niente: né l'utente del negozio, né il preventivo. Si accetta
+ * solo col codice giusto (../accetta). Così chi ha il link e chiede il codice con la sua email non ottiene
+ * niente sul negozio (secondo collaudo della sicurezza, 27/11), e la risposta è la stessa per qualunque email.
+ * Tetto: 5 codici per indirizzo e 5 per link ogni 15 minuti.
  */
 
 const Richiesta = z.object({
@@ -46,6 +51,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
   }
   const esito = Richiesta.safeParse(corpo);
   if (!esito.success) return ApiErrors.invalidRequest(esito.error.issues[0]?.message ?? 'Dati non validi');
+  const { email, abbonamento } = esito.data;
 
   let preventivo;
   try {
@@ -55,11 +61,19 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
     return ApiErrors.unavailable('Non riesco a leggere il preventivo in questo momento. Riprova fra poco.');
   }
   if (!preventivo) return ApiErrors.notFound('Preventivo non trovato');
+  if (preventivo.stato === 'accettato') return ApiErrors.conflict('Questo preventivo è già stato accettato: controlla la tua email per entrare.');
+  if (preventivo.stato === 'chiuso') return ApiErrors.conflict('Questo preventivo non è più valido. Scrivici e te ne prepariamo uno nuovo.');
 
-  const mandato = await mandaCodiceDalLink({ preventivo, email: esito.data.email, fascia: esito.data.abbonamento });
-  if (!mandato.ok) {
-    if (mandato.motivo === 'GUASTO') return ApiErrors.unavailable(mandato.messaggio);
-    return ApiErrors.conflict(mandato.messaggio);
+  const nuovo = creaCodice({ link: codice, email });
+  if (!nuovo) {
+    logger.error('[preventivo-codice] codice non creato: manca il segreto sul server');
+    return ApiErrors.unavailable('Non riesco a mandarti il codice in questo momento. Riprova fra poco.');
   }
-  return NextResponse.json({ ok: true, data: { inviato: true } }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
+  const posta = codiceDelPreventivoTemplate({ negozio: preventivo.nomeAttivita, codice: nuovo.codice, abbonamento: FASCE[abbonamento].nome });
+  const inviata = await sendEmail({ to: email, ...posta }).catch(() => ({ ok: false }));
+  if (!inviata.ok) {
+    logger.error('[preventivo-codice] codice non mandato', { sellerId: preventivo.sellerId });
+    return ApiErrors.unavailable('Non sono riuscito a mandarti il codice. Riprova fra un momento.');
+  }
+  return NextResponse.json({ ok: true, data: { gettone: nuovo.gettone } }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
 }

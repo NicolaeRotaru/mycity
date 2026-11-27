@@ -8,7 +8,10 @@ import { logger } from '@/lib/logger';
 import { ABBONAMENTI } from '@/lib/agenzia/preventivo';
 import { apriCassaDalLink } from '@/lib/agenzia/cassa-dal-link';
 import { pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
+import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import { accettaPreventivoColCodice, CODICE_VALIDO, leggiPreventivoColCodice } from '@/lib/agenzia/preventivo-col-codice';
+import { chiaveDelGettone, verificaCodice } from '@/lib/agenzia/codice-dal-link';
+import { sessioneDalLink, type SessioneDalLink } from '@/lib/agenzia/entra-dal-link';
 import { richiestaDalSito } from '@/lib/agenzia/richiesta-dal-sito';
 
 export const runtime = 'nodejs';
@@ -16,36 +19,48 @@ export const runtime = 'nodejs';
 /**
  * IL TITOLARE ACCETTA IL PREVENTIVO DAL LINK COL CODICE — 24/11/2026.
  *
- * Nessun accesso: la chiave è il codice del link (256 bit casuali). Il titolare manda l'email,
- * l'abbonamento scelto e il sì alle condizioni; il server accetta (lib/agenzia/preventivo-col-codice.ts)
- * e apre subito la cassa Stripe dell'abbonamento, con l'email appena data. Se la cassa non si apre,
- * l'accettazione vale lo stesso: il titolare paga più tardi dal pulsante «Paga» dello stesso link.
- * Il canone lo rilegge il server; il browser manda solo il nome della fascia.
+ * Nessun accesso: la chiave è il codice del link (256 bit casuali). Il server accetta
+ * (lib/agenzia/preventivo-col-codice.ts) e, col pagamento online acceso, apre la cassa Stripe. Il canone lo
+ * rilegge il server; il browser manda solo il nome della fascia. 26/11/2026: per ora si paga in contanti
+ * (lib/agenzia/pagamento-servizi.ts), quindi nessuna cassa e `url` null.
  *
- * 26/11/2026 — Nicola: per ora si paga in contanti, di persona (lib/agenzia/pagamento-servizi.ts).
- * Con il pagamento online spento si accetta e basta: nessuna cassa, `url` sempre null.
- *
- * 27/11/2026 — La pagina del link ora conferma col codice dell'email (app/api/preventivo/[codice]/codice e
- * /conferma). Questa porta resta per il modulo della vecchia pagina della demo, com'era; in più accetta
- * solo JSON partito dal sito stesso (collaudo della sicurezza del 27/11).
+ * 27/11/2026 — Nicola: «può toccare un altro abbonamento e confermare quello e dopo il click entra nella sua
+ * pagina venditore con l'abbonamento che ha scelto»; sui rischi trovati dai collaudi della sicurezza,
+ * «codice dall'email». Ora, nell'ordine:
+ *  1. il codice dell'email (chiesto a ../codice) deve tornare giusto col suo gettone, per quell'email e
+ *     questo link, entro 10 minuti (lib/agenzia/codice-dal-link.ts): prova che l'email è del titolare.
+ *     Sbagliato, scaduto o mancante → niente si accetta. Tentativi: 5 per gettone, 10 per link e per
+ *     indirizzo ogni 15 minuti;
+ *  2. si accetta come prima: email sull'utente del negozio (sbloccato solo ora), profilo in revisione,
+ *     pagina sbloccata nella fascia confermata, avviso a Nicola, email col link per rientrare;
+ *  3. si apre la sessione del titolare (lib/agenzia/entra-dal-link.ts) e la risposta dice `entra`: la pagina
+ *     dell'abbonamento del negozio, dove vede la fascia confermata attiva. Se in questo browser c'è già
+ *     dentro un altro account, la sua sessione non si tocca: `entra` è null e il titolare entra dall'email.
+ * Le richieste devono essere JSON partito dal sito stesso (lib/agenzia/richiesta-dal-sito.ts).
  */
 
 const Richiesta = z.object({
   email: z.string().trim().toLowerCase().max(254).email('Scrivi un’email valida'),
   abbonamento: z.enum(ABBONAMENTI, { message: 'Scegli uno dei tre abbonamenti' }),
   accettoCondizioni: z.literal(true, { message: 'Per continuare accetta le condizioni e l’informativa privacy' }),
+  codice: z.string().trim().regex(/^[0-9]{6}$/, 'Scrivi il codice di 6 cifre che ti è arrivato per email'),
+  gettone: z.string().min(10).max(2000),
 });
+
+const QUARTO_D_ORA = 15 * 60_000;
+const CODICE_SBAGLIATO = 'Il codice non è giusto. Controlla l’ultima email che ti abbiamo mandato, o chiedine un altro.';
 
 export async function POST(req: Request, ctx: { params: Promise<{ codice: string }> }): Promise<NextResponse> {
   const { codice } = await ctx.params;
   // Un codice nella forma sbagliata non tocca nemmeno il database.
   if (!CODICE_VALIDO.test(codice)) return ApiErrors.notFound('Preventivo non trovato');
-  const fuori = richiestaDalSito(req, '[preventivo-codice] accettazione');
+  const fuori = richiestaDalSito(req, '[preventivo-codice] conferma');
   if (fuori) return fuori;
 
-  const ip = getClientIp(req);
-  const rl = await rateLimitAsync({ key: `preventivo-codice:${ip}`, max: 10, windowMs: 10 * 60_000 });
-  if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
+  const perIndirizzo = await rateLimitAsync({ key: `preventivo-codice:${getClientIp(req)}`, max: 10, windowMs: QUARTO_D_ORA });
+  if (!perIndirizzo.allowed) return ApiErrors.rateLimited(perIndirizzo.retryAfterSec);
+  const perLink = await rateLimitAsync({ key: `preventivo-codice-link:${codice}`, max: 10, windowMs: QUARTO_D_ORA });
+  if (!perLink.allowed) return ApiErrors.rateLimited(perLink.retryAfterSec);
 
   let corpo: unknown;
   try {
@@ -56,7 +71,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
   }
   const esito = Richiesta.safeParse(corpo);
   if (!esito.success) return ApiErrors.invalidRequest(esito.error.issues[0]?.message ?? 'Dati non validi');
-  const { email, abbonamento } = esito.data;
+  const { email, abbonamento, codice: codiceEmail, gettone } = esito.data;
+
+  // 1) Il codice dell'email. Al sesto tentativo sullo stesso gettone serve un codice nuovo.
+  const perGettone = await rateLimitAsync({ key: `preventivo-codice-gettone:${chiaveDelGettone(gettone)}`, max: 5, windowMs: QUARTO_D_ORA });
+  if (!perGettone.allowed) return ApiErrors.invalidRequest('Hai sbagliato il codice troppe volte: chiedine un altro.');
+  const verifica = verificaCodice({ link: codice, email, codice: codiceEmail, gettone });
+  if (verifica === 'scaduto') return ApiErrors.invalidRequest('Il codice è scaduto: chiedine un altro.');
+  if (verifica !== 'giusto') return ApiErrors.invalidRequest(CODICE_SBAGLIATO);
 
   let preventivo;
   try {
@@ -67,20 +89,36 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
   }
   if (!preventivo) return ApiErrors.notFound('Preventivo non trovato');
 
-  const accettato = await accettaPreventivoColCodice({ preventivo, codice, email, fascia: abbonamento });
+  // 2-3) Si accetta, e si entra se in questo browser non c'è dentro un altro account.
+  const sessione = sessioneDalLink(req.headers.get('cookie'));
+  const puoEntrare = sessione !== null && !(await sessione.dentroUnAltro(preventivo.sellerId));
+  const accettato = await accettaPreventivoColCodice({
+    preventivo,
+    codice,
+    email,
+    fascia: abbonamento,
+    entraSubito: puoEntrare && sessione ? sessione.entra : undefined,
+  });
   if (!accettato.ok) {
     if (accettato.motivo === 'GUASTO') return ApiErrors.unavailable(accettato.messaggio);
     return ApiErrors.conflict(accettato.messaggio);
   }
+  // Non la dashboard, che a un negozio in revisione mostra solo «in attesa di approvazione» (collaudo del 27/11).
+  const base = { accessoInviato: accettato.accessoInviato, entra: accettato.entrato ? PERCORSO_ABBONAMENTO : null };
 
   if (!pagamentoOnlineAttivo() || !isStripeConfigured()) {
-    return NextResponse.json({ ok: true, data: { url: null, accessoInviato: accettato.accessoInviato } }, { status: 200 });
+    return conLaSessione({ ok: true, data: { url: null, ...base } }, sessione);
   }
   const cassa = await apriCassaDalLink({ codice, sellerId: accettato.sellerId, email, fascia: abbonamento });
   // Se la cassa non si apre, l'accettazione resta: il titolare paga dal pulsante «Paga» di questo link.
-  if (!cassa.ok) {
-    return NextResponse.json({ ok: true, data: { url: null, accessoInviato: accettato.accessoInviato } }, { status: 200 });
-  }
+  if (!cassa.ok) return conLaSessione({ ok: true, data: { url: null, ...base } }, sessione);
   const dati = (await cassa.json()) as { data?: { url?: string } };
-  return NextResponse.json({ ok: true, data: { url: dati.data?.url ?? null, accessoInviato: accettato.accessoInviato } }, { status: 200 });
+  return conLaSessione({ ok: true, data: { url: dati.data?.url ?? null, ...base } }, sessione);
+}
+
+/** La risposta col corpo e coi cookie della sessione appena aperta (anche le cancellazioni). */
+function conLaSessione(corpo: unknown, sessione: SessioneDalLink | null): NextResponse {
+  const risposta = NextResponse.json(corpo, { status: 200, headers: { 'Cache-Control': 'no-store' } });
+  for (const c of sessione?.scritti ?? []) risposta.cookies.set({ name: c.name, value: c.value, ...c.options });
+  return risposta;
 }
