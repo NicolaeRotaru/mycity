@@ -222,8 +222,8 @@ describe('cosa ricevi, già pronto dentro il servizio', () => {
     expect(r.textContent).toContain('Voglio il Premium: contattatemi');
     expect(r.textContent).toMatch(/Il primo mese 450,00\s€/);
     expect(r.textContent).toContain('I servizi li realizza SDG Agenzia, il partner di MyCity');
-    // in cima «Cosa ci guadagni»; sotto ogni piano il primo mese e il pareggio in colazioni
-    expect(r.textContent!.indexOf('Cosa ci guadagni')).toBeLessThan(r.textContent!.indexOf('Base, Business o Premium'));
+    // «Cosa ci guadagni» tolto il 27/11/2026 (Nicola); sotto ogni piano il primo mese e il pareggio in colazioni
+    expect(r.textContent).not.toContain('Cosa ci guadagni');
     expect(r.textContent).toMatch(/Il primo mese 300,00\s€/);
     expect(r.textContent).toContain('l’incasso di 7 colazioni in più');
     expect(r.textContent).toContain('disdici quando vuoi, con 30 giorni di preavviso');
