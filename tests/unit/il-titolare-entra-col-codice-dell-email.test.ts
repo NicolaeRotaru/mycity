@@ -168,7 +168,7 @@ const conferma = (c: { codice: string; gettone: string }, altro: Record<string, 
 
 beforeEach(() => {
   vi.resetModules();
-  process.env.CODICE_PREVENTIVO_SECRET = 'segreto-delle-prove-abbastanza-lungo';
+  process.env.CODICE_PREVENTIVO_SECRET = 'segreto-delle-prove-lungo-almeno-32-caratteri';
   db.preventivo = { seller_id: GC, codice: CODICE, stato: 'aperto', fascia_scelta: 'business', profiles: { store_name: 'Grida Caffè' } };
   db.posta = [];
   db.link = [];
@@ -313,6 +313,48 @@ describe('senza il codice giusto niente si accetta e il negozio non si tocca', (
     const r = await conferma(c);
     expect(r.status).toBe(400);
     expect((await r.json()).error.message).toContain('troppe volte');
+    nienteCambia();
+  });
+
+  it('un gettone con un carattere in più in fondo conta come lo stesso: il sesto tentativo è fermo (collaudo M1)', async () => {
+    const c = await chiediCodice();
+    const sbagliato = c.codice === '000000' ? '111111' : '000000';
+    for (let i = 0; i < 5; i += 1) expect((await conferma({ codice: sbagliato, gettone: `${c.gettone}${'='.repeat(i % 2)}` })).status).toBe(400);
+    const r = await conferma({ codice: c.codice, gettone: `${c.gettone}=` });
+    expect((await r.json()).error.message).toContain('troppe volte');
+    nienteCambia();
+  });
+
+  it('il gettone di un altro link non vale qui', async () => {
+    const c = await chiediCodice();
+    const { POST } = await import('@/app/api/preventivo/[codice]/accetta/route');
+    const altroLink = 'd'.repeat(64);
+    db.preventivo!.codice = altroLink;
+    const r = await POST(
+      new Request(`https://mycity.example/api/preventivo/${altroLink}/accetta`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...EMAIL, accettoCondizioni: true, ...c }),
+      }),
+      { params: Promise.resolve({ codice: altroLink }) },
+    );
+    expect(r.status).toBe(400);
+    nienteCambia();
+  });
+
+  it('un gettone già usato, dopo l accettazione, non accetta una seconda volta', async () => {
+    const c = await chiediCodice();
+    expect((await conferma(c)).status).toBe(200);
+    db.utente = [];
+    const r = await conferma(c);
+    expect(r.status).toBe(409);
+    expect(db.utente).toEqual([]);
+  });
+
+  it('un segreto troppo corto non si usa', async () => {
+    process.env.CODICE_PREVENTIVO_SECRET = 'corto';
+    vi.resetModules();
+    expect((await porta('codice', EMAIL)).status).toBe(503);
     nienteCambia();
   });
 

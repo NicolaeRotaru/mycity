@@ -30,7 +30,7 @@ export const runtime = 'nodejs';
  *  1. il codice dell'email (chiesto a ../codice) deve tornare giusto col suo gettone, per quell'email e
  *     questo link, entro 10 minuti (lib/agenzia/codice-dal-link.ts): prova che l'email è del titolare.
  *     Sbagliato, scaduto o mancante → niente si accetta. Tentativi: 5 per gettone, 10 per link e per
- *     indirizzo ogni 15 minuti;
+ *     indirizzo ogni 15 minuti, 30 per link al giorno;
  *  2. si accetta come prima: email sull'utente del negozio (sbloccato solo ora), profilo in revisione,
  *     pagina sbloccata nella fascia confermata, avviso a Nicola, email col link per rientrare;
  *  3. si apre la sessione del titolare (lib/agenzia/entra-dal-link.ts) e la risposta dice `entra`: la pagina
@@ -48,6 +48,7 @@ const Richiesta = z.object({
 });
 
 const QUARTO_D_ORA = 15 * 60_000;
+const GIORNO = 24 * 60 * 60_000;
 const CODICE_SBAGLIATO = 'Il codice non è giusto. Controlla l’ultima email che ti abbiamo mandato, o chiedine un altro.';
 
 export async function POST(req: Request, ctx: { params: Promise<{ codice: string }> }): Promise<NextResponse> {
@@ -61,6 +62,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
   if (!perIndirizzo.allowed) return ApiErrors.rateLimited(perIndirizzo.retryAfterSec);
   const perLink = await rateLimitAsync({ key: `preventivo-codice-link:${codice}`, max: 10, windowMs: QUARTO_D_ORA });
   if (!perLink.allowed) return ApiErrors.rateLimited(perLink.retryAfterSec);
+  // Un tetto anche sul giorno: chi prova a indovinare il codice si ferma dopo 30 tentativi (terzo collaudo, M2).
+  const perGiorno = await rateLimitAsync({ key: `preventivo-codice-link-giorno:${codice}`, max: 30, windowMs: GIORNO });
+  if (!perGiorno.allowed) return ApiErrors.rateLimited(perGiorno.retryAfterSec);
 
   let corpo: unknown;
   try {

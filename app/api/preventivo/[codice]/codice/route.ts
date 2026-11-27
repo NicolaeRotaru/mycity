@@ -21,7 +21,7 @@ export const runtime = 'nodejs';
  * contiene il codice in chiaro. NON si tocca niente: né l'utente del negozio, né il preventivo. Si accetta
  * solo col codice giusto (../accetta). Così chi ha il link e chiede il codice con la sua email non ottiene
  * niente sul negozio (secondo collaudo della sicurezza, 27/11), e la risposta è la stessa per qualunque email.
- * Tetto: 5 codici per indirizzo e 5 per link ogni 15 minuti.
+ * Tetto: 5 codici per indirizzo e 5 per link ogni 15 minuti, 15 per link al giorno.
  */
 
 const Richiesta = z.object({
@@ -41,6 +41,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
   if (!perIndirizzo.allowed) return ApiErrors.rateLimited(perIndirizzo.retryAfterSec);
   const perLink = await rateLimitAsync({ key: `preventivo-codice-email-link:${codice}`, max: 5, windowMs: QUARTO_D_ORA });
   if (!perLink.allowed) return ApiErrors.rateLimited(perLink.retryAfterSec);
+  // E sul giorno: al massimo 15 email di codici per link, a nome di MyCity (terzo collaudo, M3).
+  const perGiorno = await rateLimitAsync({ key: `preventivo-codice-email-link-giorno:${codice}`, max: 15, windowMs: 24 * 60 * 60_000 });
+  if (!perGiorno.allowed) return ApiErrors.rateLimited(perGiorno.retryAfterSec);
 
   let corpo: unknown;
   try {

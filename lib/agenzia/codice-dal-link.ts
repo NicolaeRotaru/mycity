@@ -22,7 +22,8 @@ export const DURATA_CODICE_MS = 10 * 60_000;
 
 function segreto(): string | null {
   const dedicato = process.env.CODICE_PREVENTIVO_SECRET;
-  if (dedicato) return dedicato;
+  // Un segreto corto renderebbe il gettone falsificabile: sotto i 32 caratteri non si usa (terzo collaudo, M5).
+  if (dedicato && dedicato.length >= 32) return dedicato;
   // Ripiego: una chiave DERIVATA da quella di servizio, mai la chiave stessa (come lib/auth/segno-recupero.ts).
   let servizio: string | undefined;
   try {
@@ -78,7 +79,18 @@ export function verificaCodice(input: { link: string; email: string; codice: str
   return 'giusto';
 }
 
-/** Una chiave corta e stabile del gettone, per contare i tentativi senza scrivere il gettone intero. */
+/**
+ * Una chiave corta e stabile del gettone, per contare i tentativi senza scrivere il gettone intero.
+ * Si conta sulla firma `t` letta dentro il gettone, non sulla stringa: un '=' o uno spazio in più cambiano la
+ * stringa ma non la firma, e azzeravano il conto (terzo collaudo della sicurezza, 27/11, minore M1).
+ */
 export function chiaveDelGettone(gettone: string): string {
-  return crypto.createHash('sha256').update(gettone).digest('base64url').slice(0, 32);
+  let base = gettone;
+  try {
+    const t = (JSON.parse(Buffer.from(gettone, 'base64url').toString('utf8')) as { t?: unknown }).t;
+    if (typeof t === 'string' && t) base = t;
+  } catch {
+    // Un gettone illeggibile si conta per com'è: la verifica lo rifiuta comunque.
+  }
+  return crypto.createHash('sha256').update(base).digest('base64url').slice(0, 32);
 }
