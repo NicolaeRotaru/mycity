@@ -479,7 +479,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
           }`}
         >
           {!collapsed && (
-            <Link href="/seller/dashboard" className="font-serif text-2xl font-extrabold leading-none tracking-tight">
+            <Link href="/seller/dashboard" prefetch={false} className="font-serif text-2xl font-extrabold leading-none tracking-tight">
               <span className="text-accent-300">My</span>
               <span className="text-white">City</span>
               <span className="ml-1.5 font-sans text-xs font-bold uppercase tracking-label text-ink-300">
@@ -513,6 +513,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
         <div className={`shrink-0 px-3 pb-1 pt-3 ${collapsed ? 'lg:px-2.5' : ''}`}>
           <Link
             href={COPILOT_HREF}
+            prefetch={false}
             title="Copilot — gestisci parlando"
             className={`flex w-full items-center gap-2.5 rounded-lg bg-gradient-to-br from-primary-600 to-secondary-600 px-3.5 py-3 text-left text-white shadow-warm hover:from-primary-700 hover:to-secondary-700 ${
               collapsed ? 'lg:justify-center lg:px-2.5' : ''
@@ -545,9 +546,13 @@ export default function SellerShell({ children }: { children: React.ReactNode })
                 const Icon = n.icon;
                 const showBadge = n.badge === 'todo' && todo > 0;
                 return (
+                  // Niente precarico: ogni pagina /seller ripassa dal controllo d'accesso del
+                  // middleware (getUser + lettura del profilo). Precaricate tutte insieme, le voci
+                  // della barra facevano due chiamate a Supabase ciascuna a ogni apertura del pannello.
                   <Link
                     key={n.href}
                     href={n.href}
+                    prefetch={false}
                     aria-current={on ? 'page' : undefined}
                     title={n.label}
                     className={`relative flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm transition-colors ${
