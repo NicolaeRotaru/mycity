@@ -83,12 +83,9 @@ describe('R02-007 · link social incollati', () => {
     });
   });
 
-  // 27/11/2026 (R04-010) — Il nome con spazi lo SCRIVE il negoziante, sopra un Facebook già salvato e
-  // sbagliato: un valore già salvato e non toccato non blocca più il resto (riparazione-r04-social-salvato-non-blocca).
   it('un nome con spazi in Facebook: errore sotto Facebook, sezione aperta, nessun salvataggio', async () => {
-    const { radice, onSubmit } = await monta({ facebook: 'Pane Quotidiano', website: 'www.panequotidiano.it' });
+    const { radice, onSubmit } = await monta({ facebook: 'Pane Quotidiano Piacenza', website: 'www.panequotidiano.it' });
     expect(sezione(radice).open).toBe(false);
-    await act(async () => { fireEvent.change(campo(radice, 'facebook'), { target: { value: 'Pane Quotidiano Piacenza' } }); });
     await invia(radice);
     expect(onSubmit).not.toHaveBeenCalled();
     const errore = radice.querySelector('#social-facebook-errore');
