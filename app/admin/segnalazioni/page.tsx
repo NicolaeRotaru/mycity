@@ -136,7 +136,8 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
   const serveMotivo = decisione !== 'in_esame';
   // R02-003 — Si può accogliere solo ciò che da qui si sa togliere: il prodotto (va in bozza) e
   // il negozio (si sospende). Recensioni e messaggi non hanno ancora un'azione di rimozione.
-  const puoTogliere = s.tipo === 'prodotto' || s.tipo === 'negozio';
+  // 27/11/2026 (R01-013) — Anche la domanda sotto un prodotto: accogliere la nasconde.
+  const puoTogliere = s.tipo === 'prodotto' || s.tipo === 'negozio' || s.tipo === 'domanda';
   const motivoValido = motivazione.trim().length >= MOTIVAZIONE_MINIMA;
 
   const decidi = useMutation({
@@ -175,6 +176,27 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
             body: JSON.stringify({ action: 'suspend', reason: motivazione.trim().slice(0, 500) }),
           });
           if (!r.ok) throw new Error('Il negozio non è stato sospeso: decisione non registrata. Riprova.');
+        }
+      }
+      if (decisione === 'accolta' && s.tipo === 'domanda') {
+        // 27/11/2026 (R01-013) — Una domanda segnalata si nascondeva solo dalla pagina del prodotto,
+        // e da qui non si poteva accogliere. Ora «Accolta» la nasconde (is_public = false: la regola
+        // qa_admin_nasconde della migrazione 364) PRIMA di registrare la decisione, come per il
+        // prodotto. Zero righe toccate: se la domanda c'è ancora non è stata nascosta, e ci si
+        // ferma; se non c'è più (cancellata da chi l'ha scritta) è già fuori e si va avanti.
+        const { data: nascoste, error: erroreDomanda } = await supabase
+          .from('product_questions')
+          .update({ is_public: false })
+          .eq('id', s.oggetto_id)
+          .select('id');
+        if (erroreDomanda) throw new Error('La domanda non è stata nascosta: decisione non registrata. Riprova.');
+        if (!nascoste || nascoste.length === 0) {
+          const { data: ancora, error: erroreLettura } = await supabase
+            .from('product_questions')
+            .select('id')
+            .eq('id', s.oggetto_id)
+            .maybeSingle();
+          if (erroreLettura || ancora) throw new Error('La domanda non è stata nascosta: decisione non registrata. Riprova.');
         }
       }
       if (decisione === 'accolta' && !puoTogliere) {
@@ -270,6 +292,8 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
                 ? 'Accolta: il prodotto esce dalla vetrina'
                 : s.tipo === 'negozio'
                 ? 'Accolta: il negozio viene sospeso'
+                : s.tipo === 'domanda'
+                ? 'Accolta: la domanda viene nascosta'
                 : 'Accolta (non disponibile: questo contenuto non si toglie da qui)'}
             </option>
             <option value="respinta">Respinta</option>
