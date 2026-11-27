@@ -224,15 +224,30 @@ async function eseguiRiordino(validi: ArticoloDaRiordinare[], impronta: string, 
   );
   // 26/11/2026 — Quanti pezzi di ogni riga entrano: mai oltre la scorta di adesso (della variante,
   // se c'è), contando quelli della stessa riga che restano nel carrello con «Aggiungi».
+  // 27/11/2026 — E quelli già messi dalle righe precedenti di questo stesso riordino: lo stesso
+  // prodotto (stessa variante) su due righe, 2+2 pezzi con scorta 3, ne metteva 4. Quando la scorta
+  // della variante non si legge vale quella del prodotto, che è di tutte le varianti insieme: allora
+  // si contano i pezzi del prodotto, di qualunque variante.
+  const giaMessiVariante = new Map<string, number>();
+  const giaMessiProdotto = new Map<string, number>();
   const quantiNe = (a: ArticoloDaRiordinare): number => {
-    const scorta = (a.variantId ? scorteVarianti.get(a.variantId) : undefined) ?? scorte.get(a.productId);
+    const scortaVariante = a.variantId ? scorteVarianti.get(a.variantId) : undefined;
+    const scorta = scortaVariante ?? scorte.get(a.productId);
     if (scorta == null) return a.quantity;
-    const gia = sostituisci
+    const stessaVariante = scortaVariante != null;
+    const nelCarrello = sostituisci
       ? 0
       : carrelloAttuale
-          .filter((c) => c.id === a.productId && (c.variantId ?? null) === (a.variantId ?? null))
+          .filter((c) => c.id === a.productId && (!stessaVariante || (c.variantId ?? null) === (a.variantId ?? null)))
           .reduce((somma, c) => somma + c.quantity, 0);
-    return Math.max(0, Math.min(a.quantity, scorta - gia));
+    const giaMessi = stessaVariante
+      ? (giaMessiVariante.get(a.variantId as string) ?? 0)
+      : (giaMessiProdotto.get(a.productId) ?? 0);
+    return Math.max(0, Math.min(a.quantity, scorta - nelCarrello - giaMessi));
+  };
+  const segnaMessi = (a: ArticoloDaRiordinare, quanti: number) => {
+    if (a.variantId) giaMessiVariante.set(a.variantId, (giaMessiVariante.get(a.variantId) ?? 0) + quanti);
+    giaMessiProdotto.set(a.productId, (giaMessiProdotto.get(a.productId) ?? 0) + quanti);
   };
   const variantiFinite = (a: ArticoloDaRiordinare) => !!a.variantId && scorteVarianti.get(a.variantId) === 0;
   // Il carrello si svuota solo se c'è qualcosa da metterci: se tutto l'ordine è finito, la
@@ -270,6 +285,7 @@ async function eseguiRiordino(validi: ArticoloDaRiordinare[], impronta: string, 
       variantId: a.variantId,
       variantLabel: a.variantLabel,
     });
+    segnaMessi(a, quanti);
     aggiunti += 1;
   }
 
