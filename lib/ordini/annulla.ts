@@ -10,7 +10,7 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { sendEmail } from '@/lib/email/client';
 import { ordineAnnullatoAlNegozioTemplate, ordineAnnullatoTemplate, refundIssuedTemplate } from '@/lib/email/templates';
 import { formatPriceFromCents } from '@/lib/format';
-import { consegnaDopoLAnnullo, type RigaRicalcolata } from '@/lib/ordini/prezzi';
+import { consegnaDopoLAnnullo, consegnaSenzaLaVeloce, type RigaRicalcolata } from '@/lib/ordini/prezzi';
 import { eConsegnaVeloce } from '@/lib/ordini/consegna-veloce';
 // 30/10/2026 — Il ricalcolo dopo un annullo legge e scrive `gross_total_cents`, che esiste solo dopo
 // la migrazione 124: senza ripiego, prima della 124 la lettura falliva intera e la regola del negozio
@@ -1055,26 +1055,45 @@ const nelCarrello = (c: RigaDelGiro[] | null, orderId: string): c is RigaDelGiro
 
 /** Il conto sul carrello letto; l'ordine che se ne va col conto di prima del segno. */
 function contoDelCarrello(ordine: RigaDelGiro, carrello: RigaDelGiro[], orderId: string) {
-  return consegnaDopoLAnnullo({
-    ordini: carrello.map((c) => {
-      const r = c.id === orderId ? ordine : c;
-      const consegna = Number(r.delivery_fee_cents ?? 0);
-      const spedizione = centesimi(r.shipping_cost);
-      const merce = lordoDi(r) - consegna - spedizione;
-      return {
-        id: r.id,
-        spesaCents: merce + centesimi(r.discount_amount),
-        merceCents: merce,
-        shippingCents: spedizione,
-        deliveryFeeCents: consegna,
-        riderFeeCents: Number(r.rider_fee_cents ?? 0),
-        giaAnnullato: r.delivery_status === 'CANCELED' && r.id !== orderId,
-      };
-    }),
+  const ordini = carrello.map((c) => {
+    const r = c.id === orderId ? ordine : c;
+    const consegna = Number(r.delivery_fee_cents ?? 0);
+    const spedizione = centesimi(r.shipping_cost);
+    const merce = lordoDi(r) - consegna - spedizione;
+    return {
+      id: r.id,
+      spesaCents: merce + centesimi(r.discount_amount),
+      merceCents: merce,
+      shippingCents: spedizione,
+      deliveryFeeCents: consegna,
+      riderFeeCents: Number(r.rider_fee_cents ?? 0),
+      giaAnnullato: r.delivery_status === 'CANCELED' && r.id !== orderId,
+    };
+  });
+  const consegnaVeloce = eConsegnaVeloce({ fascia: ordine.delivery_slot, ritiroInNegozio: false });
+  const conto = consegnaDopoLAnnullo({ ordini, annullaId: orderId, consegnaVeloce, pickupInStore: false });
+  if (conto || consegnaVeloce || !ordine.stripe_session_id?.trim()) return conto;
+
+  // 27/11/2026 (R06-016) — IL CARRELLO CARTA SPOSTATO DAL FRENO SI RICONOSCE ANCORA.
+  // Con la carta il freno della veloce (lib/ordini/veloce-non-confermata.ts) scrive solo la fascia:
+  // l'euro della veloce torna sulla carta con un rimborso, ma resta scritto in `delivery_fee_cents`.
+  // Qui la fascia nuova diceva «non veloce», il conto scritto era quello della veloce, e il carrello
+  // non si riconosceva: dopo un rifiuto i rimasti tenevano consegna e fattorino da negozio in più
+  // (1 € invece di 3), e la differenza la pagava MyCity. Si toglie l'euro (`consegnaSenzaLaVeloce`),
+  // si rifà il conto della fascia e l'euro si rimette dov'era nelle cifre scritte: è già reso a parte,
+  // quindi non si sposta su un altro ordine e non si rende due volte.
+  const senza = consegnaSenzaLaVeloce(ordini);
+  if (!senza) return null;
+  const euro = new Map(senza.righe.map((r) => [r.id, -r.deltaCents]));
+  const contoInFascia = consegnaDopoLAnnullo({
+    ordini: ordini.map((o) => ({ ...o, deliveryFeeCents: o.deliveryFeeCents - (euro.get(o.id) ?? 0) })),
     annullaId: orderId,
-    consegnaVeloce: eConsegnaVeloce({ fascia: ordine.delivery_slot, ritiroInNegozio: false }),
+    consegnaVeloce: false,
     pickupInStore: false,
   });
+  if (!contoInFascia) return null;
+  const conLEuro = <T extends { id: string; deliveryFeeCents: number }>(r: T): T => ({ ...r, deliveryFeeCents: r.deliveryFeeCents + (euro.get(r.id) ?? 0) });
+  return { ...contoInFascia, rimasti: contoInFascia.rimasti.map(conLEuro), annullato: conLEuro(contoInFascia.annullato) };
 }
 type ContoDelGiro = NonNullable<ReturnType<typeof consegnaDopoLAnnullo>>;
 
