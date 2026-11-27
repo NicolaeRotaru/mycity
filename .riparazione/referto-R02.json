@@ -1,13 +1,13 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-27 02:14",
+  "aggiornato": "2026-11-27 02:44",
   "finita": true,
-  "testa": "f14a7f0f3269f4f1c34930315806167ab3654323",
+  "testa": "22467a30ffbb5442dc23203abf8e7f280d33a155",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "f14a7f0f3269f4f1c34930315806167ab3654323",
-    "nota": "Lanciato sulla testa del codice f14a7f0f (SHA preso con git rev-parse HEAD nello stesso comando) e aspettato: typecheck verde, lint 0 errori (122 avvisi), vitest 2340 file verdi su 2342 (14315 casi), uscita reale 1. I 3 casi rossi, tutti e soli: (1) tests/unit/la-chat-mostra-la-proposta-che-il-server-applica.test.ts riga 131 «voci scritte male negli elenchi»; (2) e (3) tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts, i due casi it.each «senza la colonna (errore 42703)» e «senza la colonna (errore PGRST204)». Perché: sono prove comuni (importano file di altre sessioni dell onda), quindi per regola sono riportate alla base sul ramo e le aggiorna la regia sull integrazione. Con le modifiche scritte nelle note di R02-001 e R02-004 applicate solo nell albero e poi tolte: 17 casi su 17 verdi. Il verify vero lo rifà la regia sull integrazione con quelle modifiche dentro."
+    "testa": "22467a30ffbb5442dc23203abf8e7f280d33a155",
+    "nota": "Lanciato su 22467a30 (SHA preso con git rev-parse HEAD nello stesso comando) e aspettato: typecheck verde, lint 0 errori (122 avvisi), vitest 2339 file verdi su 2342 (14314 casi), uscita reale 1. I 4 casi rossi, tutti e soli: (1) tests/unit/la-chat-mostra-la-proposta-che-il-server-applica.test.ts riga 131 «voci scritte male negli elenchi»; (2) e (3) tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts, i due casi it.each «senza la colonna (errore 42703)» e «(errore PGRST204)»; (4) tests/unit/minori-s05-reclami-pagina.test.tsx «1823: i filtri dicono quale è attivo». Perché: sono prove comuni (usano file di altre sessioni dell onda), quindi per regola sono riportate alla base sul ramo e le aggiorna la regia all unione. Con le modifiche scritte nelle note di R02-001, R02-004 e R02-012 applicate solo nell albero e poi tolte: 17 su 17 (le prime due prove) e 8 su 8 (la terza) verdi."
   },
   "voci": [
     {
@@ -261,8 +261,7 @@
       "esito": "riparato",
       "commit": "5b198423154d74913110de66c7d486951dd0ba09",
       "file_toccati": [
-        "app/admin/disputes/page.tsx",
-        "tests/unit/minori-s05-reclami-pagina.test.tsx"
+        "app/admin/disputes/page.tsx"
       ],
       "prova_file": [
         "tests/unit/riparazione-r02-reclami-da-gestire.test.tsx"
@@ -277,7 +276,7 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il link della scheda ordine (app/admin/orders/[id]/page.tsx:265, file non di R02) porta a /admin/disputes senza parametri, cioe' al filtro di partenza, che era «Aperto» (solo status open). Il filtro di partenza ora e' «Da gestire» (open + under_review, .in('status', ...)); i filtri per singolo stato restano. Basta la pagina: il link non va cambiato.",
-      "nota": "Prova esistente modificata e dichiarata: tests/unit/minori-s05-reclami-pagina.test.tsx:92 (importa app/admin/disputes/page e legge per nome app/admin/support/page.tsx, che non e' in nessuna scheda dell'onda): expect(premuti).toEqual(['Aperto']) → expect(premuti).toEqual(['Da gestire']), perche' il filtro attivo di partenza e' cambiato apposta.",
+      "nota": "Prova comune: la applica la regia all unione (sul ramo è riportata alla base con 22467a30, rossa come atteso). tests/unit/minori-s05-reclami-pagina.test.tsx riga 92: `expect(premuti).toEqual(['Aperto']);` → `expect(premuti).toEqual(['Da gestire']);` (il filtro di partenza ora è «Da gestire», aperti + in valutazione). Diff: @@ -89,7 +89,7 @@ describe('pagina Reclami' …) - expect(premuti).toEqual(['Aperto']); + expect(premuti).toEqual(['Da gestire']);",
       "verificato_da": "revisore (sola lettura): letto page.tsx:70,88-89,269 (Da gestire = open+under_review, altri filtri invariati, chiave cache per filtro); il link della scheda ordine atterra su Da gestire; prova esistente minori-s05 non indebolita. Regge."
     },
     {
@@ -363,8 +362,8 @@
   ],
   "conto": {
     "agenti": 8,
-    "nota": "8 subagenti su 8: 4 riparatori (un lotto ciascuno, modello grande) e 4 revisori di sola lettura (2 grandi per i gravi, 2 piccoli per i minori). Nessun giro di correzione: tetto raggiunto. Spesa letta da get_session prima della chiusura: 22,09 $ (dalla regia).",
+    "nota": "8 subagenti su 8: 4 riparatori (un lotto ciascuno, modello grande) e 4 revisori di sola lettura (2 grandi per i gravi, 2 piccoli per i minori). Nessun giro di correzione: tetto raggiunto. Spesa letta con get_session alla consegna: 23,62 $.",
     "subagenti": 8
   },
-  "costo_usd": 22.09
+  "costo_usd": 23.62
 }
