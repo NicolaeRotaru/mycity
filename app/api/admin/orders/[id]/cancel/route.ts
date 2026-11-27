@@ -49,8 +49,13 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // se l'incasso non risulta confermato: la merce l'ha il cliente e non torna a
   // scaffale, e i contanti vanno chiesti al fattorino. Si gestisce con un reclamo.
   // (Su un ordine con carta consegnato l'annullo resta la strada del rimborso.)
+  // 27/11/2026 — Il reclamo lo apre solo il cliente dell'ordine (app/api/disputes/route.ts): chi
+  // amministra lo chiude in Reclami col rimborso. «Apri un reclamo» era un passo che non può fare.
   if (order.delivery_status === 'DELIVERED' && order.payment_method === 'cod') {
-    return ApiErrors.conflict('Ordine in contanti già consegnato: non si annulla. Chiedi i contanti al fattorino o apri un reclamo.');
+    return ApiErrors.conflict(
+      'Ordine in contanti già consegnato: non si annulla. Chiedi i contanti al fattorino; ' +
+      'per rimborsare il cliente, fagli aprire un reclamo dalla pagina dell’ordine e chiudilo in Reclami.',
+    );
   }
 
   // 5/11/2026 (S05) — La nota scritta dall'amministratore resta nel registro, non
@@ -75,9 +80,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     if (esito.motivo === 'CONTANTI_INCASSATI') {
       // 5/11/2026 (S05) — Niente parentesi (friendlyError le toglie) e niente passi
       // che non esistono: la strada vera è il reclamo, col bonifico fatto a mano.
+      // 27/11/2026 — Il reclamo lo apre il cliente, non chi amministra (app/api/disputes/route.ts):
+      // chiuso in Reclami col rimborso, il bonifico da fare a mano compare in Bonifici di rimborso.
       return ApiErrors.conflict(
         'Ordine già incassato in contanti dal fattorino: dal pannello non si annulla. ' +
-        'Per restituire i soldi al cliente apri un reclamo: il bonifico si fa a mano.',
+        'Per restituire i soldi, fai aprire al cliente un reclamo dalla pagina dell’ordine e chiudilo in Reclami col rimborso.',
       );
     }
     // 27/8/2026 (R131) — Il secondo annullo sovrapposto non trova righe da
