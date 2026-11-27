@@ -306,6 +306,21 @@ describe('il negozio nasce come Ora del Gusto', () => {
     expect(db.utenti.size).toBe(0);
   });
 
+  it('se la ricerca degli utenti tocca il tetto senza arrivare in fondo, non nasce un negozio alla cieca', async () => {
+    // 10 pagine da 1000 tutte piene (lib/agenzia/nuova-attivita.ts, PAGINE_UTENTI × PER_PAGINA): la ricerca non
+    // ha guardato tutti, quindi «non c'è» non è sicuro.
+    for (let i = 0; i < 10_000; i += 1) db.utenti.set(`altro-${i}`, { id: `altro-${i}`, email: `cliente${i}@esempio.it`, created_at: new Date().toISOString() });
+    expect((await chiama(BAR)).status).toBe(503);
+    expect(db.creaUtente).toHaveLength(0);
+  });
+
+  it('due primi invii insieme della stessa attività: un negozio solo, e «nuova» per uno solo', async () => {
+    const esiti = await Promise.all([chiama(BAR), chiama(BAR)]);
+    expect(esiti.map((r) => r.status).sort()).toEqual([200, 201]);
+    expect(db.utenti.size).toBe(1);
+    expect(db.link.size).toBe(1);
+  });
+
   it('non riscrive un’attività che ha già accettato', async () => {
     const a = (await (await chiama(BAR)).json()) as { id_attivita: string };
     db.profili.set(a.id_attivita, { ...db.profili.get(a.id_attivita), approval_status: 'approved', is_approved: true });
