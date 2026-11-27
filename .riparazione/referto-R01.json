@@ -1,13 +1,13 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-27 02:35",
+  "aggiornato": "2026-11-27 02:45",
   "finita": true,
-  "testa": "90686780aba965422f6193d781234d3e7b369d30",
+  "testa": "7877cd5594001b75529d1f848d5856932b03969f",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "verde",
-    "testa": "90686780aba965422f6193d781234d3e7b369d30",
-    "nota": "typecheck, lint e 2344 file di prova verdi (14323 prove, 2 saltate già sulla base). Il primo verify su 12d7d6b era rosso solo per tests/unit/la-pagina-contatti-dice-chi-c-e-dietro.test.tsx: la correzione di R01-001 è stata tolta con 9068678."
+    "esito": "rosso",
+    "testa": "7877cd5594001b75529d1f848d5856932b03969f",
+    "nota": "Su 7877cd5 typecheck e lint verdi, 2341 file di prova verdi; rossi solo i 3 casi delle prove comuni riportate alla base (la regia applica le cure all'unione, diff nelle note di R01-004, R01-005, R01-007): tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts:100 («il logo in SVG non parte nemmeno, e la frase dice cosa fare»), tests/unit/riparazione-r02-pagine-testo-grande.test.tsx:78 («/lavora-con-noi: … le righe delle posizioni si stringono»), tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts:77 («recensione accolta: da qui non si toglie, 409»). Con le prove comuni modificate, su 9068678, npm run verify era verde (2344 file)."
   },
   "voci": [
     {
@@ -139,13 +139,12 @@
       "esito": "riparato",
       "commit": "7ee0f2f46ebf91ccb5a8497ef544019816184766",
       "file_toccati": [
-        "app/lavora-con-noi/page.tsx",
-        "tests/unit/riparazione-r02-pagine-testo-grande.test.tsx"
+        "app/lavora-con-noi/page.tsx"
       ],
       "prova_file": [
         "tests/unit/riparazione-r01-lavora-senza-posti-inventati.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r01-lavora-senza-posti-inventati.test.ts tests/unit/riparazione-r02-pagine-testo-grande.test.tsx",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-lavora-senza-posti-inventati.test.ts",
       "prova_tipo": "leggera",
       "prova_eseguita": true,
       "rimessa": {
@@ -155,7 +154,7 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Ripresa la cura del 26/11 (6484d56a): elenco delle posizioni vuoto, la pagina dice «Oggi non abbiamo posizioni aperte» col collegamento alla candidatura spontanea. «Chi siamo» era già riparato sulla base (app/about/page.tsx:215-216, STATS senza numeri inventati).",
-      "nota": "Adattata la prova comune tests/unit/riparazione-r02-pagine-testo-grande.test.tsx, che importa app/lavora-con-noi/page per nome: controlla tutte le righe disegnate; a elenco vuoto controlla la riga modello nel file (flex-1 min-w-[min(200px,100%)], niente min-w-[200px], Candidati con max-w-full) e ogni collegamento alla candidatura spontanea. Le altre pagine non cambiano; verde anche con la pagina della base. Pubblicare posizioni vere resta una scelta di Nicola (basta aggiungerle a JOBS).",
+      "nota": "Adattata la prova comune tests/unit/riparazione-r02-pagine-testo-grande.test.tsx, che importa app/lavora-con-noi/page per nome: controlla tutte le righe disegnate; a elenco vuoto controlla la riga modello nel file (flex-1 min-w-[min(200px,100%)], niente min-w-[200px], Candidati con max-w-full) e ogni collegamento alla candidatura spontanea. Le altre pagine non cambiano; verde anche con la pagina della base. Pubblicare posizioni vere resta una scelta di Nicola (basta aggiungerle a JOBS). — PROVA COMUNE: la applica la regia all'unione. Riportata alla base nel ramo; diff da applicare (git diff 2ba05a74 → la cura): \ndiff --git a/tests/unit/riparazione-r02-pagine-testo-grande.test.tsx b/tests/unit/riparazione-r02-pagine-testo-grande.test.tsx\nindex 5eae33c..c58ec77 100644\n--- a/tests/unit/riparazione-r02-pagine-testo-grande.test.tsx\n+++ b/tests/unit/riparazione-r02-pagine-testo-grande.test.tsx\n@@ -4,6 +4,8 @@\n import { describe, it, expect, vi } from 'vitest';\n import { createElement } from 'react';\n import { renderToStaticMarkup } from 'react-dom/server';\n+import { readFileSync } from 'node:fs';\n+import { join } from 'node:path';\n \n /**\n  * R02-005 (onda 9, giro 2) — COL TESTO AL 200% LE PAGINE PUBBLICHE NON SCORRONO PIÙ DI LATO.\n@@ -69,13 +71,30 @@ describe('R02-005 · col testo al 200% le pagine pubbliche non scorrono di lato'\n     const didascalia = Array.from(d.querySelectorAll('span.block')).find((s) => classi(s).includes('text-sm'))!;\n     expect(classi(didascalia.parentElement)).toContain('min-w-0');\n     expect(classi(didascalia.parentElement)).toContain('[overflow-wrap:anywhere]');\n-    const spontanea = Array.from(d.querySelectorAll('a')).find((a) => a.textContent?.includes('candidatura spontanea'));\n-    expect(classi(spontanea)).toContain('max-w-full');\n-    expect(classi(spontanea)).toContain('[overflow-wrap:anywhere]');\n-    const colonna = Array.from(d.querySelectorAll('li div')).find((x) => classi(x).includes('flex-1'));\n-    expect(classi(colonna).join(' '), 'la colonna del titolo non deve chiedere 200 px fissi').not.toContain('min-w-[200px]');\n-    const candidati = Array.from(d.querySelectorAll('li a')).find((a) => a.textContent?.includes('Candidati'));\n-    expect(classi(candidati)).toContain('max-w-full');\n+    // 27/11/2026 — Ogni collegamento alla candidatura spontanea (il pulsante in fondo e, a elenco vuoto,\n+    // quello sotto «Posizioni aperte»), non solo il primo trovato.\n+    const spontanee = Array.from(d.querySelectorAll('a')).filter((a) => a.textContent?.includes('candidatura spontanea'));\n+    expect(spontanee.length).toBeGreaterThanOrEqual(1);\n+    for (const spontanea of spontanee) {\n+      expect(classi(spontanea)).toContain('max-w-full');\n+      expect(classi(spontanea)).toContain('[overflow-wrap:anywhere]');\n+    }\n+    // 27/11/2026 — Le quattro posizioni erano inventate: oggi l'elenco è vuoto. Le righe disegnate si\n+    // controllano tutte; la riga del modello si controlla anche nel file, così resta controllata per\n+    // quando Nicola aggiunge una posizione vera.\n+    const righe = Array.from(d.querySelectorAll('#posizioni li'));\n+    for (const riga of righe) {\n+      const colonna = Array.from(riga.querySelectorAll('div')).find((x) => classi(x).includes('flex-1'));\n+      expect(classi(colonna).join(' '), 'la colonna del titolo non deve chiedere 200 px fissi').not.toContain('min-w-[200px]');\n+      const candidati = Array.from(riga.querySelectorAll('a')).find((a) => a.textContent?.includes('Candidati'));\n+      expect(classi(candidati)).toContain('max-w-full');\n+    }\n+    const modello = readFileSync(join(process.cwd(), 'app', 'lavora-con-noi', 'page.tsx'), 'utf8');\n+    const riga = modello.slice(modello.indexOf('{JOBS.map('), modello.indexOf('Candidati <ArrowRight'));\n+    expect(riga, 'la riga delle posizioni deve esserci nel file').toContain('<li');\n+    expect(riga).toMatch(/className=\"flex-1 min-w-\\[min\\(200px,100%\\)\\]\"/);\n+    expect(riga, 'la colonna del titolo non deve chiedere 200 px fissi').not.toContain('min-w-[200px]');\n+    expect(riga).toMatch(/href=\\{job\\.mailto\\}\\s*className=\"[^\"]*max-w-full/);\n   });\n \n   it('/help: i tre riquadri di contatto possono stringersi e il testo va a capo', () => {",
       "verificato_da": "revisore B (sonnet): regge; prova comune confrontata prima/dopo, non indebolita; about sulla base senza flotta né numeri inventati"
     },
     {
@@ -195,8 +194,7 @@
       "commit": "d310a4f1e2f4511689ab26d519e179261fd157d2",
       "file_toccati": [
         "lib/storage/carica-immagine.ts",
-        "lib/storage/casella-di-caricamento.ts",
-        "tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts"
+        "lib/storage/casella-di-caricamento.ts"
       ],
       "prova_file": [
         "tests/unit/riparazione-r01-formati-senza-heic.test.ts"
@@ -230,7 +228,7 @@
           "modifica": "(facoltativo, nessun effetto visibile) passare `{ postiLiberi, accetta: ACCETTA }` ad avvisoPerGliScartati e togliere il `.replace(tipiScrittiPerUmani(), …)` di avvisoDelSito"
         }
       ],
-      "nota": "Modificata la prova esistente tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts perché importa lib/storage/carica-immagine per nome: solo l'attesa sulla frase della porta (riga ~103), ora /usa una foto JPG, PNG, WEBP, GIF o AVIF\\./.",
+      "nota": "Modificata la prova esistente tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts perché importa lib/storage/carica-immagine per nome: solo l'attesa sulla frase della porta (riga ~103), ora /usa una foto JPG, PNG, WEBP, GIF o AVIF\\./. — PROVA COMUNE: la applica la regia all'unione. Riportata alla base nel ramo; diff da applicare (git diff 2ba05a74 → la cura): \ndiff --git a/tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts b/tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts\nindex ea1098a..1687a6c 100644\n--- a/tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts\n+++ b/tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts\n@@ -96,8 +96,10 @@ describe('② la porta rifiuta prima di spedire quello che il deposito rifiutere\n     const svg = new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' }) as never;\n     await expect(\n       caricaImmagine(d.client, { file: svg, userId: UID, cartella: 'logos' }),\n-      // S06 (1605): la frase elenca tutti i formati che la porta accetta, non tre su sette.\n-    ).rejects.toThrow(/JPG, PNG, WEBP, GIF, AVIF, HEIC o HEIF/);\n+      // S06 (1605): la frase elenca i formati che la porta accetta, non tre su sette.\n+      // 27/11/2026: tolti HEIC e HEIF, che le caselle delle foto pubbliche non offrono piu'\n+      // (la porta li accetta ancora: vedi `formatiDaProporre` in lib/storage/carica-immagine.ts).\n+    ).rejects.toThrow(/usa una foto JPG, PNG, WEBP, GIF o AVIF\\./);\n     expect(\n       d.chiamate,\n       'il file partiva, saliva, e veniva respinto alla fine: il negoziante aspettava per niente',",
       "verificato_da": "non smentita: il revisore C è stato fermato a metà dalla regia per il tetto di spesa; la guarda il collaudo indipendente"
     },
     {
@@ -239,14 +237,12 @@
       "esito": "scelta_di_nicola",
       "commit": "a9584e191e5b8a0f5dc118511636d1847bc5a8db",
       "file_toccati": [
-        "app/api/segnalazioni/route.ts",
-        "tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts"
+        "app/api/segnalazioni/route.ts"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r01-recensione-accolta.test.ts",
-        "tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts"
+        "tests/unit/riparazione-r01-recensione-accolta.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r01-recensione-accolta.test.ts tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts --reporter=dot",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-recensione-accolta.test.ts --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
@@ -257,7 +253,7 @@
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Ripresa la cura del 26/11 (daecd9af): il PATCH manda «rimosso» per una recensione solo quando non c'è più né in reviews né in store_reviews; resta 409 se è ancora pubblicata o se la lettura cade. Adattata la prova comune riparazione-r02-segnalazione-esito-solo-se-tolto, che importa per nome app/api/segnalazioni/route.ts: pretende il 409 solo per la recensione ancora pubblicata e in più controlla che non parta nessun esito.",
       "domanda": "Accogliere una recensione segnalata come falsa vuol dire cancellarla (sparisce anche dalla media dei voti) o nasconderla (oggi non c'è un campo per farlo)?",
-      "nota": "Il codice non lo decide: nessuna regola RLS lascia allo staff cancellare reviews/store_reviews e non c'è una colonna per nasconderle. Domanda: accogliere una recensione falsa = cancellarla o nasconderla? In app/admin/segnalazioni/page.tsx «Accolta» resta spenta per le recensioni finché Nicola non sceglie.",
+      "nota": "Il codice non lo decide: nessuna regola RLS lascia allo staff cancellare reviews/store_reviews e non c'è una colonna per nasconderle. Domanda: accogliere una recensione falsa = cancellarla o nasconderla? In app/admin/segnalazioni/page.tsx «Accolta» resta spenta per le recensioni finché Nicola non sceglie. — PROVA COMUNE: la applica la regia all'unione. Riportata alla base nel ramo; diff da applicare (git diff 2ba05a74 → la cura): \ndiff --git a/tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts b/tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts\nindex c60c2f8..df95029 100644\n--- a/tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts\n+++ b/tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts\n@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';\n  * segnalazione «accolta» («il contenuto è stato rimosso») se il contenuto è ancora online.\n  */\n \n-const db: { segnalazione: Record<string, unknown> | null; prodotto: Record<string, unknown> | null; negozio: Record<string, unknown> | null; cade: string | null } = {\n-  segnalazione: null, prodotto: null, negozio: null, cade: null,\n+const db: { segnalazione: Record<string, unknown> | null; prodotto: Record<string, unknown> | null; negozio: Record<string, unknown> | null; recensione?: Record<string, unknown> | null; cade: string | null } = {\n+  segnalazione: null, prodotto: null, negozio: null, recensione: null, cade: null,\n };\n const comunicate: string[] = [];\n \n@@ -32,7 +32,7 @@ vi.mock('@/lib/supabase/server', () => ({\n       q.maybeSingle = async () => (db.cade === t\n         ? { data: null, error: { message: 'rete caduta' } }\n         : {\n-            data: t === 'segnalazioni' ? db.segnalazione : t === 'products' ? db.prodotto : t === 'profiles' ? db.negozio : null,\n+            data: t === 'segnalazioni' ? db.segnalazione : t === 'products' ? db.prodotto : t === 'profiles' ? db.negozio : t === 'reviews' ? (db.recensione ?? null) : null,\n             error: null,\n           });\n       return q;\n@@ -49,7 +49,7 @@ const chiama = () =>\n   }));\n \n describe('R02-003 · l esito «rimosso» parte solo se il contenuto è davvero fuori', () => {\n-  beforeEach(() => { comunicate.length = 0; db.prodotto = null; db.negozio = null; db.cade = null; });\n+  beforeEach(() => { comunicate.length = 0; db.prodotto = null; db.negozio = null; db.recensione = null; db.cade = null; });\n \n   it('prodotto accolto ma ancora in vetrina: 409, niente esito', async () => {\n     db.segnalazione = { stato: 'accolta', tipo: 'prodotto', oggetto_id: 'p-1' };\n@@ -72,9 +72,13 @@ describe('R02-003 · l esito «rimosso» parte solo se il contenuto è davvero f\n     expect(comunicate).toEqual([]);\n   });\n \n-  it('recensione accolta: da qui non si toglie, 409', async () => {\n+  // 27/11/2026 (R01-007) — Prima: «recensione accolta: da qui non si toglie, 409» per qualunque\n+  // recensione. Ora il 409 resta solo finché la recensione è pubblicata (riparazione-r01-recensione-accolta).\n+  it('recensione accolta ma ancora pubblicata: 409', async () => {\n     db.segnalazione = { stato: 'accolta', tipo: 'recensione', oggetto_id: 'r-1' };\n+    db.recensione = { id: 'r-1' };\n     expect((await chiama()).status).toBe(409);\n+    expect(comunicate).toEqual([]);\n   });\n \n   it('respinta: l esito parte senza controlli', async () => {",
       "cosa_resta": "Dopo la scelta. Se si cancella: app/api/admin/segnalazioni/accogli/route.ts:39 accetta anche tipo 'recensione' e fa DELETE col client di servizio su reviews poi store_reviews per id, con writeAudit; poi la pagina del pannello la chiama come fa per il prodotto. Se si nasconde serve una migrazione: ALTER TABLE public.reviews ADD COLUMN nascosta_at timestamptz; ALTER TABLE public.store_reviews ADD COLUMN nascosta_at timestamptz; e le due regole di lettura pubbliche (129/709) con AND nascosta_at IS NULL; poi il controllo nella rotta guarda nascosta_at.",
       "serve_file_altrui": [
         {
