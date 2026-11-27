@@ -8,9 +8,8 @@ import { CODICE_VALIDO } from '@/lib/agenzia/preventivo-col-codice';
 import { PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagamento-servizi';
 import { leggiDemoDalLink } from '@/lib/agenzia/demo-dal-link';
 import { indirizziDemo } from '@/lib/agenzia/indirizzi-demo';
-import { fasciaDaIndirizzo, hrefFascia } from '@/lib/agenzia/indirizzi-servizi';
+import { fasciaDaIndirizzo, hrefFascia, PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
-import { PAGINA_ATTESA_NEGOZIO } from '@/lib/auth/decisione-portiere';
 import AbbonamentiInBreve from '@/components/seller/AbbonamentiInBreve';
 import AnalisiAziendale from '@/components/seller/AnalisiAziendale';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
@@ -84,7 +83,7 @@ export default async function PreventivoDalLink({
             Controlliamo i dati del negozio e poi va online.
           </p>
           {/* 27/11/2026 — Chi ha confermato da questo telefono è già dentro: il pulsante lo riporta alla sua pagina. */}
-          <Link href={PAGINA_ATTESA_NEGOZIO} className="mt-3 inline-flex rounded-lg bg-primary-700 px-4 py-2 text-sm font-bold text-white hover:bg-primary-800">
+          <Link href={PERCORSO_ABBONAMENTO} className="mt-3 inline-flex rounded-lg bg-primary-700 px-4 py-2 text-sm font-bold text-white hover:bg-primary-800">
             Entra nella tua pagina
           </Link>
         </div>

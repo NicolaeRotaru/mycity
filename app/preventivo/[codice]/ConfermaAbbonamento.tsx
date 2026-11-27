@@ -12,7 +12,8 @@ import { FRASE_CONTANTI, PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagament
  * Nicola: il titolare vede i tre abbonamenti, trova segnato quello detto al venditore, può toccarne un
  * altro e confermare quello; dopo il clic entra nella sua pagina con l'abbonamento scelto. Il testo delle
  * fasce lo prepara il server (`fasce`): qui solo la scelta, l'email, il sì alle condizioni e l'invio.
- * Il server risponde con `entra` quando ha aperto la sessione del titolare: il browser ci va dritto.
+ * Il server risponde con `entra` (la pagina dell'abbonamento del negozio) quando ha aperto la sessione del
+ * titolare: il browser ci va dritto.
  * Senza `entra` (sessione non aperta, o un altro account già dentro in questo browser) resta la strada
  * di prima: il link per entrare arriva all'email.
  */

@@ -157,6 +157,17 @@ describe('il link apre la conferma, non la demo', () => {
     expect(r.querySelector('[data-fascia="business"]')?.textContent).toMatch(/Il primo mese 250,00\s€(?! al mese)/);
   });
 
+  it('vale la fascia del venditore anche quando non è la consigliata (collaudo: la prova deve vederlo)', async () => {
+    const p = stato.preventivo as Preventivo;
+    const diversa = ABBONAMENTI.find((f) => f !== p.consigliato)!;
+    stato.pc = { sellerId: 'gc-1', stato: 'aperto', fasciaScelta: diversa, nomeAttivita: 'Grida Caffè' };
+    const r = disegna(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    expect(radio(r, diversa).hasAttribute('checked')).toBe(true);
+    expect(radio(r, p.consigliato).hasAttribute('checked')).toBe(false);
+    expect(r.querySelector(`[data-fascia="${diversa}"]`)?.textContent).toContain('La tua scelta');
+    expect(pulsante(r).textContent).toBe(`Confermo il ${FASCE[diversa].nome}`);
+  });
+
   it('senza la scelta del venditore è segnata la consigliata, con «Consigliato»', async () => {
     stato.pc = { sellerId: 'gc-1', stato: 'aperto', fasciaScelta: null, nomeAttivita: 'Grida Caffè' };
     const p = stato.preventivo as Preventivo;
@@ -186,7 +197,7 @@ describe('il titolare tocca un altro abbonamento e conferma quello', () => {
     const chiamate: Array<{ url: string; corpo: Record<string, unknown> }> = [];
     vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
       chiamate.push({ url, corpo: JSON.parse(String(init.body)) });
-      return new Response(JSON.stringify({ ok: true, data: { url: null, entra: '/seller/dashboard', accessoInviato: true } }), { status: 200 });
+      return new Response(JSON.stringify({ ok: true, data: { url: null, entra: '/seller/abbonamento', accessoInviato: true } }), { status: 200 });
     }));
     const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
     expect(pulsante(r).textContent).toBe('Confermo il Business');
@@ -200,7 +211,7 @@ describe('il titolare tocca un altro abbonamento e conferma quello', () => {
     await premi(r.querySelector('input[type="checkbox"]') as HTMLInputElement);
     await invia(r);
     expect(chiamate).toEqual([{ url: `/api/preventivo/${CODICE}/accetta`, corpo: { email: 'titolare@grida.it', abbonamento: 'premium', accettoCondizioni: true } }]);
-    expect(vai).toHaveBeenCalledWith('/seller/dashboard');
+    expect(vai).toHaveBeenCalledWith('/seller/abbonamento');
   });
 
   it('senza la spunta delle condizioni non parte niente, e lo dice', async () => {

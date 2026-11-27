@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *
  * La conferma dal link (app/api/preventivo/[codice]/accetta) ora apre anche la sessione del titolare.
  * Casi (dato → atteso):
- *  · browser vuoto, gettone buono → risposta con `entra: /seller/dashboard` e i cookie della sessione;
+ *  · browser vuoto, gettone buono → risposta con `entra: /seller/abbonamento` e i cookie della sessione;
  *    il gettone passato alla sessione è quello creato per lei, e il link dell'email nasce DOPO, così resta buono;
  *  · la pagina si sblocca nella fascia che il titolare ha confermato (anche se il venditore ne aveva un'altra);
  *  · nel browser c'è già dentro un altro account (Nicola che prova il link) → la sua sessione non si tocca,
@@ -141,7 +141,7 @@ describe('dopo la conferma il titolare entra subito nella sua pagina', () => {
     const r = await conferma(BUONO);
     expect(r.status).toBe(200);
     const corpo = await r.json();
-    expect(corpo).toEqual({ ok: true, data: { url: null, accessoInviato: true, entra: '/seller/dashboard' } });
+    expect(corpo).toEqual({ ok: true, data: { url: null, accessoInviato: true, entra: '/seller/abbonamento' } });
     expect(r.headers.get('set-cookie') ?? '').toContain('sb-test-auth-token=base64-sessione');
     expect(r.headers.get('cache-control')).toBe('no-store');
     // Il gettone della sessione è il primo, creato per lei; il link dell'email nasce dopo e parte dopo.

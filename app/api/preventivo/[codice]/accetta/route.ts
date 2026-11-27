@@ -10,7 +10,7 @@ import { apriCassaDalLink } from '@/lib/agenzia/cassa-dal-link';
 import { pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
 import { accettaPreventivoColCodice, CODICE_VALIDO, leggiPreventivoColCodice } from '@/lib/agenzia/preventivo-col-codice';
 import { sessioneDalLink, type SessioneDalLink } from '@/lib/agenzia/entra-dal-link';
-import { PAGINA_ATTESA_NEGOZIO } from '@/lib/auth/decisione-portiere';
+import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import { env } from '@/lib/env';
 
 export const runtime = 'nodejs';
@@ -29,7 +29,7 @@ export const runtime = 'nodejs';
  *
  * 27/11/2026 — Nicola: «dopo il click entra nella sua pagina venditore con l'abbonamento che ha scelto».
  * La risposta apre anche la sessione del titolare (lib/agenzia/entra-dal-link.ts) e dice `entra`: la pagina
- * del negozio dove il browser va subito. Se in questo browser c'è già dentro un altro account, o la sessione
+ * del negozio (/seller/abbonamento) dove il browser va subito. Se in questo browser c'è già dentro un altro account, o la sessione
  * non si apre, `entra` è null e il titolare entra dall'email, come prima. Ora che la risposta apre una
  * sessione, la richiesta deve partire dal sito stesso.
  */
@@ -96,7 +96,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
     if (accettato.motivo === 'GUASTO') return ApiErrors.unavailable(accettato.messaggio);
     return ApiErrors.conflict(accettato.messaggio);
   }
-  const entra = accettato.entrato ? PAGINA_ATTESA_NEGOZIO : null;
+  // La pagina dell'abbonamento del negozio, dove vede la fascia scelta attiva: la stessa del link dell'email.
+  // Non la dashboard, che a un negozio in revisione mostra solo «in attesa di approvazione» (collaudo del 27/11).
+  const entra = accettato.entrato ? PERCORSO_ABBONAMENTO : null;
   const base = { accessoInviato: accettato.accessoInviato, entra };
 
   if (!pagamentoOnlineAttivo() || !isStripeConfigured()) {

@@ -57,13 +57,15 @@ export default function AccettaDalLink({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, abbonamento: fascia, accettoCondizioni: true }),
       });
-      const corpo = (await r.json().catch(() => null)) as { ok?: boolean; data?: { url?: string | null; accessoInviato?: boolean }; error?: { message?: string } } | null;
+      const corpo = (await r.json().catch(() => null)) as { ok?: boolean; data?: { url?: string | null; entra?: string | null; accessoInviato?: boolean }; error?: { message?: string } } | null;
       if (!r.ok || !corpo?.ok) {
         setErrore(corpo?.error?.message ?? 'Non sono riuscito a inviare. Riprova fra un momento.');
         return;
       }
-      if (corpo.data?.url) {
-        window.location.assign(corpo.data.url);
+      // 27/11/2026 — Il server apre anche la sessione del titolare (`entra`): anche da qui si va dritti nella sua pagina.
+      const dove = corpo.data?.url ?? corpo.data?.entra ?? null;
+      if (dove) {
+        window.location.assign(dove);
         return;
       }
       setFatto({ accessoInviato: corpo.data?.accessoInviato === true });
