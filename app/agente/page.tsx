@@ -150,7 +150,7 @@ export default function PaginaAgente() {
           {errore && <p className={c('errore')} role="alert">{errore}</p>}
           {/* 27/11/2026 — Le attività che hanno confermato: la pagina «Adesso tocca a SDG» si riapre da qui. */}
           {confermate.length > 0 && fase === 'pronto' && (
-            <div className={c('ultime')} aria-label="Hanno confermato"><span className={c('nota')}>Hanno confermato:</span>{confermate.map((x) => <Link key={x.lavoro} href={`/agente/tocca-a-sdg?lavoro=${x.lavoro}`}>✓ {x.nome}</Link>)}</div>
+            <div className={c('ultime')} role="group" aria-label="Hanno confermato"><span className={c('nota')}>Hanno confermato:</span>{confermate.map((x) => <Link key={x.lavoro} href={`/agente/tocca-a-sdg?lavoro=${x.lavoro}`}><span aria-hidden="true">✓ </span>{x.nome}</Link>)}</div>
           )}
           {ultime.length > 0 && fase === 'pronto' && (
             <div className={c('ultime')} aria-label="Le tue ultime schede"><span className={c('nota')}>Le tue ultime schede:</span>{ultime.map((u) => <button type="button" key={u.lavoro} onClick={() => riapri(u.lavoro)}>{u.nome}</button>)}</div>

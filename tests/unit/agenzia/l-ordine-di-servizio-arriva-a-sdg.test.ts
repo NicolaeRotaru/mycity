@@ -76,8 +76,8 @@ function preparaDb() {
   db.tabelle.preventivi_con_codice = [{
     seller_id: SELLER, codice: CODICE, stato: 'aperto', fascia_scelta: 'business', creato_il: '2026-11-27T10:00:00Z',
     accettato_il: null, condizioni_accettate_il: null, lavoro: LAVORO, agente_email: 'agente@esempio.it',
-    // Giovedì 3 dicembre alle 10:00 di Roma (09:00 UTC in inverno): la scrive la conferma (migrazione 999b).
-    visita_il: '2026-12-03T09:00:00.000Z',
+    // La visita la scrive la conferma del titolare (migrazione 999b), nella stessa scrittura dell'«accettato».
+    visita_il: null,
   }];
   // Lo sblocco in contanti fatto al «Sì» dell'agente (migrazione 999): è il primo abbonamento, il primo mese è a metà.
   db.tabelle.abbonamenti_servizi = [{ id: 'abb-1', seller_id: SELLER, fascia: 'business', canone_centesimi: 50000, stato: 'active', origine: 'contanti' }];
@@ -85,9 +85,11 @@ function preparaDb() {
   return db;
 }
 
-async function accetta(fascia: 'base' | 'business' | 'premium' = 'business') {
+const VISITA = '2026-12-03T09:00:00.000Z';
+/** `visita: null` = il titolare non ha scelto il giorno. */
+async function accetta(fascia: 'base' | 'business' | 'premium' = 'business', visita: string | null = VISITA) {
   const preventivo = await leggiPreventivoColCodice(CODICE);
-  return accettaPreventivoColCodice({ preventivo: preventivo!, codice: CODICE, email: 'titolare@esempio.it', fascia });
+  return accettaPreventivoColCodice({ preventivo: preventivo!, codice: CODICE, email: 'titolare@esempio.it', fascia, visita: visita ?? undefined });
 }
 
 beforeEach(() => {
@@ -102,11 +104,11 @@ beforeEach(() => {
 describe('① il preventivo accettato fa nascere UN ordine per SDG', () => {
   it('alla conferma del titolare nasce l ordine; una seconda conferma non fa un doppione', async () => {
     const preventivo = await leggiPreventivoColCodice(CODICE);
-    const prima = await accettaPreventivoColCodice({ preventivo: preventivo!, codice: CODICE, email: 'titolare@esempio.it', fascia: 'business' });
+    const prima = await accettaPreventivoColCodice({ preventivo: preventivo!, codice: CODICE, email: 'titolare@esempio.it', fascia: 'business', visita: VISITA });
     expect(prima.ok).toBe(true);
     expect(ordini()).toHaveLength(1);
     // Il doppio invio: la pagina aveva letto il preventivo ancora aperto e preme di nuovo.
-    const seconda = await accettaPreventivoColCodice({ preventivo: preventivo!, codice: CODICE, email: 'titolare@esempio.it', fascia: 'premium' });
+    const seconda = await accettaPreventivoColCodice({ preventivo: preventivo!, codice: CODICE, email: 'titolare@esempio.it', fascia: 'premium', visita: VISITA });
     expect(seconda.ok).toBe(false);
     // E anche chiamata a mano, due volte, l'ordine resta uno e resta Business.
     expect(await creaOrdineSdg({ sellerId: SELLER, codice: CODICE, fascia: 'premium' })).toEqual({ ok: true, nuovo: false, id: null });
@@ -156,9 +158,16 @@ describe('② l ordine porta fascia, canone, attività, agente e visita', () => 
     await aspetta();
   });
 
-  it('senza la data (999b non applicata, o il titolare non l ha scelta) l ordine dice «da fissare col titolare»', async () => {
+  it('con la 999b non ancora applicata l ordine ha lo stesso il giorno scelto dal titolare', async () => {
     stato.db.colonneMancanti = { preventivi_con_codice: ['visita_il'] };
-    await accetta();
+    expect((await accetta()).ok).toBe(true);
+    expect(ordini()[0].visita_il).toBe(VISITA);
+    expect(stato.avvisi.find((a) => a.titolo.startsWith('Ordine'))?.testo).toContain('Visita: giovedì 3 dicembre alle 10:00.');
+    await aspetta();
+  });
+
+  it('se il titolare non ha scelto la data l ordine dice «da fissare col titolare»', async () => {
+    await accetta('business', null);
     expect(ordini()[0].visita_il).toBeNull();
     expect(fraseVisita(null)).toBe('Visita: da fissare col titolare');
     expect(fraseVisita(undefined)).toBe('Visita: da fissare col titolare');

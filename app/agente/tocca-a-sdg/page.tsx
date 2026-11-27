@@ -68,7 +68,7 @@ function Contenuto({ a }: { a: AttivitaDopoIlSi }) {
       <section className={c('riquadro')} role="status">
         <h2>{a.nome} non ha ancora confermato</h2>
         <p>Quando il titolare conferma l’abbonamento dal link, qui trovi tutto quello che fa SDG da lì in poi.</p>
-        {a.link && <p className={c('nota')}>Il link da mandargli: <span style={{ wordBreak: 'break-all' }}>{a.link}</span></p>}
+        {a.link && <p className={c('nota')}>Il link da mandargli: <span className={c('link')}>{a.link}</span></p>}
       </section>
     );
   }
@@ -104,7 +104,7 @@ function Contenuto({ a }: { a: AttivitaDopoIlSi }) {
       )}
       <section className={c('riquadro')}>
         <h2>E tu?</h2>
-        <p>Non devi fare altro: il sito non manda niente al titolare da solo. Se ti chiede cosa succede adesso, la risposta è in questa pagina.</p>
+        <p>Non devi fare altro. Se il titolare ti chiede cosa succede adesso, la risposta è in questa pagina.</p>
       </section>
     </>
   );

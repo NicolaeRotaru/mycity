@@ -127,7 +127,8 @@ function SchedaOrdine({ o, chiedendo, chiediPiano }: { o: Ordine; chiedendo: boo
             <div><dt className="inline font-semibold text-ink-900">Prima di pubblicare: </dt><dd className="inline text-ink-700">{piano.intestazione.primaDiPubblicare}</dd></div>
           </dl>
         )}
-        <div className="mt-4 overflow-x-auto rounded-xl border border-ink-100">
+        {/* La tabella scorre di lato nel suo riquadro, non la pagina: da tastiera ci si entra col Tab e si scorre con le frecce. */}
+        <div className="mt-4 overflow-x-auto rounded-xl border border-ink-100" tabIndex={0} role="region" aria-label={`Piano editoriale di ${o.nome_attivita}, scorre di lato`}>
           <table className="w-full min-w-[56rem] border-collapse text-left text-sm">
             <thead className="bg-ink-50 text-ink-900">
               <tr>{['Data', 'Ora', 'Tipo', 'Tema', 'Stato', 'Didascalia proposta', 'Cosa riprendere', 'In città'].map((t) => <th key={t} scope="col" className="px-3 py-2 font-semibold">{t}</th>)}</tr>

@@ -32,18 +32,18 @@ export function passiDiSdg(d: {
   const piano = !d.pianoNellOrdine
     ? 'L’ordine di SDG non si legge da qui: avvisa Nicola, che lo controlla.'
     : d.pianoNellOrdine.origine === 'ad'
-      ? 'È già nell’ordine di SDG, nella versione completa preparata dall’AD: SDG lo controlla e lo porta al titolare per il suo sì.'
-      : 'È già nell’ordine di SDG nella prima versione; la versione completa, con gli eventi della città, la prepara l’AD. Niente esce senza il sì del titolare.';
+      ? 'È già nell’ordine di SDG, nella versione completa preparata dall’AD.'
+      : 'È già nell’ordine di SDG nella prima versione; la versione completa, con gli eventi della città, il sito la chiede all’AD.';
   return [
     {
       titolo: 'La visita del team creativo',
       testo: d.visitaIl
-        ? `${visita.replace(/^Visita: /, 'Il team creativo di SDG passa da ' + d.nome + ': ')}. Conosce il locale, raccoglie quello che serve e fa le prime riprese.`
+        ? `Il team creativo di SDG passa da ${d.nome} nel giorno scelto dal titolare (${visita.replace(/^Visita: /, '')}): conosce il locale, raccoglie quello che serve e fa le prime riprese.`
         : `Il team creativo di SDG passa da ${d.nome} per conoscere il locale e fare le prime riprese. La data è da fissare col titolare.`,
     },
-    { titolo: 'Le prime foto e i primi video', testo: `Si parte dalla visita. Nel ${f.nome}, come dice il listino: «${dalListino(d.fascia, 'foto_video')}»`, perLui: su.foto_video ?? null },
+    { titolo: 'Le prime foto e i primi video', testo: `Si parte dalla visita. Con l’abbonamento ${f.nome}: «${dalListino(d.fascia, 'foto_video')}»`, perLui: su.foto_video ?? null },
     { titolo: 'Il piano editoriale del primo mese', testo: `${f.inPratica.piano}. ${piano}`, perLui: su.social ?? null },
-    { titolo: 'Il sito', testo: `SDG prepara la bozza del sito. Nel ${f.nome}, come dice il listino: «${dalListino(d.fascia, 'sito_web')}»`, perLui: su.sito_web ?? null },
+    { titolo: 'Il sito', testo: `SDG prepara la bozza del sito. Con l’abbonamento ${f.nome}: «${dalListino(d.fascia, 'sito_web')}»`, perLui: su.sito_web ?? null },
     {
       titolo: 'I contanti, al primo servizio',
       testo: d.primoMeseCentesimi
