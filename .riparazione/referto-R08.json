@@ -1,0 +1,210 @@
+{
+  "sessione": "R08",
+  "aggiornato": "2026-11-27 03:15",
+  "finita": true,
+  "testa": "3d8fd427a2ee9aaedeb4ec62e314b641aa19f605",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "3d8fd427a2ee9aaedeb4ec62e314b641aa19f605",
+    "nota": "typecheck, lint e vitest: 2335 file passati, 1 saltato (c'era già sulla base); 14284 prove passate, 2 saltate. Prima del verify i tre commit sono stati ricostruiti con cherry-pick sulla base (tolti quelli smentiti) e la prova rimessa rilanciata su ognuno, uscita 0."
+  },
+  "voci": [
+    {
+      "id": "R08-001",
+      "chiave": "api-backend|l'annullo dal sito, il rifiuto del negozio e il cliente assente rispondono 500 senza riga nel registro quando l'annullo fallisce",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: lotto 2 (modello piccolo) non partito, perché la spesa era al 69% del limite (13,84 $ su 20 $) dopo il lotto 1 e la sua smentita. Da riassegnare. Nota del piano: il rifiuto del negozio e il cliente assente stanno in rotte non di R08."
+    },
+    {
+      "id": "R08-002",
+      "chiave": "api-backend|la pagina d'errore dice «abbiamo registrato il problema», ma un errore nel telefono del cliente non lo registra nessuno",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: lotto 2 non partito, spesa al 69% del limite (13,84 $ su 20 $) dopo il lotto 1. Da riassegnare."
+    },
+    {
+      "id": "R08-003",
+      "chiave": "api-backend|la cancellazione di un account può disiscrivere dalla newsletter un'altra persona con un'email simile",
+      "esito": "riparato",
+      "commit": "59a0cbfdafb208c5f2510ce42cc71a20409ec4b9",
+      "file_toccati": [
+        "lib/account/cancellazione.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-newsletter-email-esatta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-newsletter-email-esatta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 59a0cbfdafb208c5f2510ce42cc71a20409ec4b9^ --file lib/account/cancellazione.ts --prove tests/unit/riparazione-r08-newsletter-email-esatta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "togliDallaNewsletter neutralizza _ e % (con \\) prima dell'ilike, e il confronto resta senza maiuscole. Un'email con * o \\ non può stare nella lista (vincolo newsletter_subscribers_email_format): lì si esce senza cancellare.",
+      "verificato_da": "revisore generico (modello grande): catturato l'URL vero di supabase-js (email=ilike.Mario%5C_Rossi%2Bnews%40x.it); _ % + si disiscrivono ancora, confronto esatto senza maiuscole; * e \\ vietati dal vincolo di formato (migrazioni 020 e 109); prova rimessa regge. ILIKE non provato su un Postgres vero (non c'è un Postgres locale)"
+    },
+    {
+      "id": "R08-004",
+      "chiave": "api-backend|la guardia della cancellazione dice un importo gonfiato su una giornata di cassa riaperta",
+      "esito": "non_fatto",
+      "insieme_a": [
+        "R08-005"
+      ],
+      "nota": "Lavorata e tolta dal ramo prima del push: la smentita del revisore ha trovato che, contando solo gli ordini AWAITING_REMITTANCE sulla giornata riaperta, un ordine incassato e poi rimborsato per intero (REFUNDED, contanti ancora in tasca al fattorino, che app/admin/cod-remittance/page.tsx con la regola R29-011 chiede ancora) portava la giornata a 0 e la guardia rispondeva «libera», dove prima bloccava: il verso pericoloso. In più la lettura degli ordini non aveva filtro di data né paginazione (tetto di 1000 righe). Un giro di correzione più una nuova smentita non stavano nel limite di spesa (13,84 $ su 20 $ a fine lotto 1). Il diff tolto è in R08, nel blocco note della sessione (cartella tolti/), e la cura giusta è descritta qui. Cura giusta: sulla giornata riaperta sommare gli ordini cod DELIVERED AWAITING_REMITTANCE più i REFUNDED con incasso registrato di quel giorno (eccesso nel dubbio), con la lettura ristretta al fattorino e all'intervallo del giorno di Piacenza; se la lettura cade, il registro come oggi. La frase fissata da chi-aspetta-la-cancellazione-sa-perche-aspetta non cambia."
+    },
+    {
+      "id": "R08-005",
+      "chiave": "api-backend|una giornata di cassa riaperta dichiara come «non ancora versati» anche i contanti già versati quel giorno",
+      "esito": "non_fatto",
+      "insieme_a": [
+        "R08-004"
+      ],
+      "nota": "Stessa cura e stessa sorte della voce insieme (una sola riga, contantiAncoraDaVersare): tolta dal ramo dopo la smentita, perché la cifra presa solo dagli AWAITING_REMITTANCE perdeva i rimborsati con i contanti ancora in mano e lasciava andare la cancellazione. La cura giusta è scritta sulla voce insieme."
+    },
+    {
+      "id": "R08-006",
+      "chiave": "api-backend|un fattorino che incassa contanti dopo aver versato nello stesso giorno può avere contanti nuovi invisibili alla guardia della cancellazione",
+      "esito": "non_fatto",
+      "nota": "Lavorata e tolta dal ramo prima del push: la smentita del revisore ha trovato che la riapertura della giornata (remitted_at: null in aggiornaQuadratura) saltava i REFUNDED e rompeva app/admin/cod-remittance/page.tsx:100-106 e :161, che usa remitted_at come ora dell'ultima rimessa: su una giornata riaperta un ordine rimborsato già versato tornava fra i contanti da chiedere. In più riquadra-casse rifà solo ieri e oggi. Un giro di correzione più una nuova smentita non stavano nel limite di spesa (13,84 $ su 20 $ a fine lotto 1). Il diff tolto è in R08, nel blocco note della sessione (cartella tolti/), e la cura giusta è descritta qui. Cura suggerita, senza toccare il significato di remitted_at: la guardia della cancellazione (lib/account/cancellazione.ts) legge anche, direttamente dagli ordini, i contanti del fattorino ancora in mano (cod DELIVERED AWAITING_REMITTANCE con incasso registrato, più i REFUNDED con incasso dopo l'ultima rimessa), qualunque sia lo stato della riga di cod_reconciliations."
+    },
+    {
+      "id": "R08-007",
+      "chiave": "api-backend|la pulizia delle casse abbandonate chiude la rivendicazione anche se il codice non è tornato",
+      "esito": "serve_file_altrui",
+      "commit": "d7815efaf6c148549321770dd4b1c9edcbb36268",
+      "file_toccati": [
+        "lib/ordini/riserve-abbandonate.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-codice-non-tornato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-codice-non-tornato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d7815efaf6c148549321770dd4b1c9edcbb36268^ --file lib/ordini/riserve-abbandonate.ts --prove tests/unit/riparazione-r08-codice-non-tornato.test.ts --json"
+      },
+      "cosa_ho_fatto": "Pezzo nel mio file, già nel commit: liberaRiserveAbbandonate restituisce anche codiceNonTornato, cioè i tentativi liberati il cui release_coupon è caduto (tipo esportato RiserveLiberateConCodici). Restano in liberati apposta, perché la merce è tornata e la cassa con la carta rilegge le scorte. Da solo non cambia niente: le rivendicazioni le chiudono i due chiamanti, che non sono miei.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "Nel blocco della chiusura delle rivendicazioni dopo liberaRiserveAbbandonate (circa righe 863-883), prima di leggere pending_checkouts: const daChiudere = riserveLiberate.liberati.filter((id) => !(riserveLiberate.codiceNonTornato ?? []).includes(id)); poi usare daChiudere al posto di riserveLiberate.liberati, sia nella condizione (daChiudere.length > 0) sia in .in('id', ...). Il ?? [] serve perché le prove delle rotte fingono il resoconto senza il campo."
+        },
+        {
+          "file": "app/api/stripe/checkout/route.ts",
+          "modifica": "Circa riga 312: dare a pulizia e pulisci il tipo Promise<RiserveLiberateConCodici> (import type { RiserveLiberateConCodici } from '@/lib/ordini/riserve-abbandonate'). Nel blocco della chiusura delle rivendicazioni (circa righe 722-741) lo stesso filtro daChiudere, per la condizione e per .in('id', ...). La rilettura delle scorte (circa riga 744) resta su riserveLiberate.liberati.length > 0."
+        }
+      ],
+      "verificato_da": "R08 capo squadra: diff letto, solo additivo (un campo in più nel resoconto, nessun chiamante cambia comportamento); prova rimessa rilanciata sul commit ricostruito, uscita 0"
+    },
+    {
+      "id": "R08-008",
+      "chiave": "api-backend|la rotta delle cancellazioni copia una stringa privata della libreria degli avvisi",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: lotto 2 non partito, spesa al 69% del limite dopo il lotto 1. Da riassegnare. Indizio del 26/11 (R14): la funzione c'è già in lib/privacy/avvisi-a-chi-aspetta.ts, manca farla usare alla rotta del giro notturno (app/api/cron/process-deletions/route.ts), che non è di R08: probabile serve_file_altrui."
+    },
+    {
+      "id": "R08-009",
+      "chiave": "api-backend|l'invio subito delle notifiche push prende le righe guardando solo pushed_at, e può correre col giro del cron",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: lotto 2 non partito, spesa al 69% del limite dopo il lotto 1. Da riassegnare. Indizio del 26/11: nessuna migrazione, basta la scrittura condizionata già usata in lib/push/subito.ts."
+    },
+    {
+      "id": "R08-010",
+      "chiave": "architettura|le schede degli agenti restano in n8n dopo la cancellazione dell'account",
+      "esito": "non_codice",
+      "nota": "Prima serve Nicola in n8n: nel flusso 14c (webhook venditori-scheda) un'azione «archivia» che riceve {azione:'archivia', email}, toglie l'email dalle righe di «Schede per il venditore» senza cancellarle e risponde {ok:true, archiviate:<quante>}. Una chiamata scritta oggi è stata tolta dal ramo dopo la smentita, perché con l'azione che non esiste (o senza il segreto, adCollegato() falso) fermava la cancellazione di OGNI agente dopo il ② e lo Stripe: account vivo ma mezzo svuotato, notte rossa, CANCELLAZIONE_NON_ESEGUITA dopo 9 giorni e termine di legge (art. 12.3) superato. Quando l'azione c'è: la chiamata (bloccante come Stripe) va in cancellaAccount PRIMA del ②, con una prova di contratto sul nodo n8n vero; e lo scarico dei dati (app/api/account/export/route.ts, non di R08) deve aggiungere schede_agente: await elencoSchede(email in minuscolo) da lib/agenti/n8n.ts."
+    },
+    {
+      "id": "R08-011",
+      "chiave": "architettura|se il registro degli invii non si legge, l'allarme dice «non partita, non è un intoppo di una notte» anche alla prima notte e per un'email forse arrivata",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: lotto 2 non partito, spesa al 69% del limite dopo il lotto 1. Da riassegnare."
+    },
+    {
+      "id": "R08-012",
+      "chiave": "privacy-legale|il buono regalo manda a stripe nome, email e messaggio privato del destinatario, e lì non si cancellano mai",
+      "esito": "parziale",
+      "cosa_resta": "Già nella base (5/11): descrizione generica sulla ricevuta e chiave anti-doppione con un'impronta al posto dell'email (route.ts:80 e :117-122). Resta da togliere nome, email e messaggio dai metadati di Stripe (route.ts:85-92). Servono una tabella nuova (migrazione, vietata in quest'onda) e una modifica al webhook, che non è mio: per questo nessun commit, perché cambiare solo la rotta romperebbe la consegna del codice quando la vendita si riaccende. SQL (migrations/1070_buono_regalo_in_attesa.sql): CREATE TABLE IF NOT EXISTS public.gift_card_in_attesa (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), buyer_id uuid REFERENCES auth.users(id) ON DELETE SET NULL, amount_cents integer NOT NULL CHECK (amount_cents > 0), recipient_name text CHECK (recipient_name IS NULL OR length(recipient_name) <= 120), recipient_email text CHECK (recipient_email IS NULL OR length(recipient_email) <= 200), message text CHECK (message IS NULL OR length(message) <= 500), created_at timestamptz NOT NULL DEFAULT now()); CREATE INDEX IF NOT EXISTS gift_card_in_attesa_buyer_idx ON public.gift_card_in_attesa (buyer_id); ALTER TABLE public.gift_card_in_attesa ENABLE ROW LEVEL SECURITY; REVOKE ALL ON public.gift_card_in_attesa FROM PUBLIC, anon, authenticated; GRANT ALL ON public.gift_card_in_attesa TO service_role; NOTIFY pgrst, 'reload schema'; (da aggiungere anche all'elenco dei permessi della 425, se la sua guardia lo chiede). Dopo la migrazione, tutto insieme: (1) app/api/gift-cards/checkout/route.ts (mio): prima di Stripe inserire la riga col client di servizio e mandare nei metadati solo kind, buyer_id, amount_cents e attesa_id; chiave di riserva giftcard_${user.id}_${attesa.id}. (2) lib/account/cancellazione.ts (mio): in TABELLE_CON_DATI_PERSONALI {tabella:'gift_card_in_attesa', colonna:'buyer_id', azzera:{recipient_name:null, recipient_email:null, message:null}, sopravvive:true}. (3) e (4): i due file altrui elencati. Se qualche sessione di pagamento esiste già (la vendita è spenta, forse nessuna), si svuota con stripe.checkout.sessions.update(id, {metadata:{recipient_name:'',recipient_email:'',message:''}}). Tutto prima di riaccendere BUONI_REGALO_IN_VENDITA (lib/funzioni-al-lancio.ts:46).",
+      "serve_file_altrui": [
+        {
+          "file": "lib/stripe/webhook/giftcard.ts",
+          "modifica": "In handleGiftCardPurchase (righe 90-95): se metadata.attesa_id c'è, leggere recipient_name, recipient_email e message da gift_card_in_attesa con quell'id (se la lettura cade: throw, così Stripe riprova); se manca, ripiego sui metadati vecchi. Creata la riga in gift_cards, cancellare la riga in attesa."
+        },
+        {
+          "file": "lib/privacy/potature-ritenzione.ts",
+          "modifica": "Aggiungere una potatura { cosa: 'gift_card_in_attesa', fai: (admin) => esigi(admin.from('gift_card_in_attesa').delete().lt('created_at', <adesso meno 2 giorni>)) }: sono i tentativi di pagamento mai conclusi."
+        }
+      ]
+    },
+    {
+      "id": "R08-013",
+      "chiave": "privacy-legale|la cancellazione dell'account non ripulisce le segnalazioni fatte da quell'account",
+      "esito": "riparato",
+      "commit": "3d8fd427a2ee9aaedeb4ec62e314b641aa19f605",
+      "file_toccati": [
+        "lib/account/cancellazione.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-segnalazioni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-segnalazioni.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3d8fd427a2ee9aaedeb4ec62e314b641aa19f605^ --file lib/account/cancellazione.ts --prove tests/unit/riparazione-r08-segnalazioni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Aggiunta segnalazioni (colonna segnalante_id, ON DELETE SET NULL, sopravvive: true) a TABELLE_CON_DATI_PERSONALI: prima di deleteUser azzera email_contatto e dettaglio, gli stessi due campi che la potatura toglie dopo la decisione. Una pulizia fallita ferma la cancellazione come per le altre tabelle.",
+      "verificato_da": "revisore generico (modello grande): tabella e colonne esistono (migrazione 126), service_role ha UPDATE (425:338), solo un trigger BEFORE INSERT; la pulizia gira prima di deleteUser e una pulizia fallita ferma la cancellazione; comunicaEsito e la pagina admin reggono i null; prova rimessa regge"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "La quadratura notturna rifà solo ieri e oggi: una rimessa parziale confermata su un giorno più vecchio non si riapre mai",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/cron/riquadra-casse/route.ts:37",
+      "descrizione": "riquadra-casse ricalcola solo due giorni: contanti di un giorno più vecchio incassati dopo una rimessa confermata non tornano mai nel conto della giornata."
+    },
+    {
+      "titolo": "Se l'amministratore che ha confermato una rimessa viene cancellato, la giornata riaperta torna alla cifra gonfiata del registro",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "migrations/097_cod_remittance.sql:43",
+      "descrizione": "remitted_by va a NULL con ON DELETE SET NULL: una giornata riaperta non si distingue più da una mai versata, e la guardia somma tutto l'incassato (eccesso, verso sicuro)."
+    },
+    {
+      "titolo": "Lo scarico dei dati personali non contiene le schede dell'agente tenute in n8n",
+      "dimensione": "privacy-legale",
+      "severita": "minore",
+      "file": "app/api/account/export/route.ts",
+      "descrizione": "L'export non include le schede che n8n tiene per l'email dell'agente (art. 15/20); si leggono già con elencoSchede di lib/agenti/n8n.ts."
+    },
+    {
+      "titolo": "Le schede in n8n sono legate all'email di accesso del momento: cambiata l'email, quelle vecchie non si raggiungono più",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "lib/agenti/rotta.ts:15",
+      "descrizione": "Se l'agente cambia email, le schede sotto l'indirizzo vecchio non le raggiunge né l'elenco né un futuro «archivia»."
+    }
+  ],
+  "domande_per_nicola": [
+    "R08-013: la cancellazione azzera email e testo anche delle segnalazioni non ancora decise, quindi l'amministratore perde il testo prima di decidere (la potatura lo toglie solo 12 mesi dopo la decisione). Va bene così, o le non decise tengono il testo fino alla decisione?",
+    "R08-010: aggiungi in n8n (flusso 14c, webhook venditori-scheda) l'azione «archivia»? Senza, la cancellazione non può togliere le schede degli agenti.",
+    "R08-012: la tabella gift_card_in_attesa (SQL nel referto) entra nell'onda delle migrazioni? Va fatta, col webhook, prima di riaccendere BUONI_REGALO_IN_VENDITA."
+  ],
+  "conto": {
+    "agenti": 2,
+    "subagenti": 2,
+    "costo_usd": 13.84,
+    "nota": "Spesa letta con get_session: 13,84 $ a fine lotto 1 (riparatore + revisore, modello grande). Lotto 2 non aperto (soglia del 70% = 14 $). Tolti dal ramo prima del push i tre commit smentiti (R08-004/005, R08-006, R08-010). costo_usd è l’ultima lettura di get_session prima della consegna; il contatore non si era più aggiornato dalle 01:56 UTC, quindi la spesa vera è un po’ più alta (il verify e il referto non ci sono ancora)."
+  },
+  "costo_usd": 13.84
+}
