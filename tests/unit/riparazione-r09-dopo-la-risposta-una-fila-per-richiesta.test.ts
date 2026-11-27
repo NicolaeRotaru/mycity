@@ -4,16 +4,16 @@
  * della prima (altrimenti, in una raffica, l'ultima può arrivare al tetto di durata prima del suo turno).
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { AsyncResource } from 'node:async_hooks';
 
 const stato = vi.hoisted(() => ({
-  richiesta: {} as object,
   registrati: [] as Array<() => unknown>,
 }));
 
+/** Una richiesta = un flusso asincrono suo: ciò che la prima chiamata apre non è visibile alle altre richieste. */
+const comeRichiesta = (fn: () => void) => new AsyncResource('richiesta-finta').runInAsyncScope(fn);
+
 vi.mock('next/server', () => ({ after: (fn: () => unknown) => void stato.registrati.push(fn) }));
-vi.mock('next/dist/server/app-render/work-async-storage.external', () => ({
-  workAsyncStorage: { getStore: () => stato.richiesta },
-}));
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
@@ -28,14 +28,14 @@ describe('R09-008 — una fila per richiesta', () => {
     vi.useFakeTimers();
     const diario: string[] = [];
 
-    stato.richiesta = {}; // richiesta A: un lavoro lento da 8 s
-    dopoLaRisposta(async () => {
+    // richiesta A: un lavoro lento da 8 s
+    comeRichiesta(() => dopoLaRisposta(async () => {
       await new Promise((r) => setTimeout(r, 8_000));
       diario.push('A finito');
-    }, 'lavoro lento di A');
+    }, 'lavoro lento di A'));
 
-    stato.richiesta = {}; // richiesta B
-    dopoLaRisposta(async () => { diario.push('B parte'); }, 'email di B');
+    // richiesta B
+    comeRichiesta(() => dopoLaRisposta(async () => { diario.push('B parte'); }, 'email di B'));
 
     void Promise.all(stato.registrati.splice(0).map((fn) => fn()));
     await vi.advanceTimersByTimeAsync(0);
@@ -48,9 +48,10 @@ describe('R09-008 — una fila per richiesta', () => {
   it('dentro la stessa richiesta restano in fila, uno alla volta', async () => {
     vi.useFakeTimers();
     const diario: string[] = [];
-    stato.richiesta = {};
-    dopoLaRisposta(async () => { await new Promise((r) => setTimeout(r, 100)); diario.push('1'); }, 'uno');
-    dopoLaRisposta(async () => { diario.push('2'); }, 'due');
+    comeRichiesta(() => {
+      dopoLaRisposta(async () => { await new Promise((r) => setTimeout(r, 100)); diario.push('1'); }, 'uno');
+      dopoLaRisposta(async () => { diario.push('2'); }, 'due');
+    });
     void Promise.all(stato.registrati.splice(0).map((fn) => fn()));
     await vi.advanceTimersByTimeAsync(0);
     expect(diario).toEqual([]);

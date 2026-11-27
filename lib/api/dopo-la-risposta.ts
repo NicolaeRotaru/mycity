@@ -1,5 +1,5 @@
 import { after } from 'next/server';
-import { workAsyncStorage } from 'next/dist/server/app-render/work-async-storage.external';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { logger } from '@/lib/logger';
 
 /**
@@ -38,20 +38,23 @@ import { logger } from '@/lib/logger';
  * R09-008 — UNA FILA PER RICHIESTA, NON UNA PER TUTTO IL SERVER. La fila era una variabile del modulo:
  * con più richieste servite dallo stesso processo (Fluid compute) le email di una raffica di ordini
  * si mettevano in coda dietro quelle delle altre, e la richiesta con gli ultimi lavori poteva arrivare
- * al suo tetto di durata prima del suo turno. Ora ogni richiesta ha la sua fila, legata allo stato
- * della richiesta di Next (`workAsyncStorage`); fuori da una richiesta (script, prove) resta una fila sola.
+ * al suo tetto di durata prima del suo turno. Ora ogni richiesta ha la sua fila, legata al suo flusso
+ * asincrono con un `AsyncLocalStorage` di Node: la prima chiamata della richiesta apre la sua chiave
+ * (`enterWith`) e le chiamate seguenti, nello stesso flusso, la ritrovano. Prima la chiave era lo stato
+ * interno di Next (`next/dist/...work-async-storage`), un file che Next può spostare a ogni versione.
+ * Fuori da una richiesta (script, prove) ogni flusso ha la sua fila, come ogni richiesta.
  */
 const TETTO_DEL_TURNO_MS = 10_000;
-const SENZA_RICHIESTA = {};
+const flussoDellaRichiesta = new AsyncLocalStorage<object>();
 const file = new WeakMap<object, Promise<void>>();
 
-/** La chiave della fila: lo stato della richiesta in corso, o una chiave unica fuori da una richiesta. */
+/** La chiave della fila: quella del flusso in corso; se il flusso non ne ha ancora una, la apre. */
 function chiaveDellaRichiesta(): object {
-  try {
-    return workAsyncStorage.getStore() ?? SENZA_RICHIESTA;
-  } catch {
-    return SENZA_RICHIESTA;
-  }
+  const chiave = flussoDellaRichiesta.getStore();
+  if (chiave) return chiave;
+  const nuova = {};
+  flussoDellaRichiesta.enterWith(nuova);
+  return nuova;
 }
 
 /**
