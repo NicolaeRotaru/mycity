@@ -10,11 +10,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  */
 
 const db = vi.hoisted(() => ({
-  utenti: new Map<string, { id: string; email: string }>(),
+  utenti: new Map<string, { id: string; email: string; banned_until?: string; created_at: string }>(),
   profili: new Map<string, Record<string, unknown>>(),
   link: new Map<string, { seller_id: string; codice: string }>(),
   creaUtente: [] as Array<Record<string, unknown>>,
   ultimoId: 0,
+  rompiProfilo: 0,
+  /** Quanti minuti fa nascono gli utenti creati adesso (per simulare un'iscrizione vecchia). */
+  etaMinuti: 0,
+  /** Un altro invio scrive il link un attimo prima di questo (due invii insieme). */
+  linkDaAltri: false,
+  rompiLink: 0,
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -31,11 +37,14 @@ vi.mock('@/lib/supabase/server', () => ({
           if ([...db.utenti.values()].some((u) => u.email === o.email)) return { data: { user: null }, error: { message: 'already registered' } };
           db.ultimoId += 1;
           const id = `00000000-0000-4000-8000-${String(db.ultimoId).padStart(12, '0')}`;
-          db.utenti.set(id, { id, email: o.email });
+          const creato = new Date(Date.now() - db.etaMinuti * 60_000).toISOString();
+          db.utenti.set(id, { id, email: o.email, created_at: creato, ...(o.ban_duration ? { banned_until: new Date(Date.now() + 365 * 86_400_000).toISOString() } : {}) });
           db.profili.set(id, { id, role: 'pending_approval' });
           return { data: { user: { id } }, error: null };
         },
         getUserById: async (id: string) => ({ data: { user: db.utenti.get(id) ?? null }, error: null }),
+        listUsers: async ({ page = 1, perPage = 50 }: { page?: number; perPage?: number } = {}) =>
+          ({ data: { users: [...db.utenti.values()].slice((page - 1) * perPage, page * perPage) }, error: null }),
       },
     },
     from: (tabella: string) => {
@@ -44,12 +53,26 @@ vi.mock('@/lib/supabase/server', () => ({
         select: () => q,
         limit: () => q,
         eq: (c: string, v: unknown) => { filtri[c] = v; return q; },
-        maybeSingle: async () => ({ data: tabella === 'profiles' ? db.profili.get(String(filtri.id)) ?? null : null, error: null }),
-        upsert: async (riga: Record<string, unknown>, o?: { ignoreDuplicates?: boolean }) => {
-          if (tabella === 'profiles') db.profili.set(String(riga.id), { ...db.profili.get(String(riga.id)), ...riga });
-          if (tabella === 'preventivi_con_codice' && !(o?.ignoreDuplicates && db.link.has(String(riga.seller_id))))
-            db.link.set(String(riga.seller_id), riga as { seller_id: string; codice: string });
-          return { error: null };
+        maybeSingle: async () => ({
+          data: tabella === 'profiles' ? db.profili.get(String(filtri.id)) ?? null
+            : tabella === 'preventivi_con_codice' ? db.link.get(String(filtri.seller_id)) ?? null : null,
+          error: null,
+        }),
+        upsert: (riga: Record<string, unknown>, o?: { ignoreDuplicates?: boolean }) => {
+          // Come PostgREST: l'upsert si può attendere da solo, oppure con .select() che restituisce le righe
+          // scritte davvero (con ignoreDuplicates, nessuna se la riga c'era già).
+          let esito: { error: { message: string } | null; data: unknown[] };
+          if (tabella === 'profiles' && db.rompiProfilo > 0) { db.rompiProfilo -= 1; esito = { error: { message: 'connessione persa' }, data: [] }; }
+          else if (tabella === 'profiles') { db.profili.set(String(riga.id), { ...db.profili.get(String(riga.id)), ...riga }); esito = { error: null, data: [riga] }; }
+          else if (tabella === 'preventivi_con_codice' && db.rompiLink > 0) { db.rompiLink -= 1; esito = { error: { message: 'connessione persa' }, data: [] }; }
+          else if (tabella === 'preventivi_con_codice') {
+            const scritta = !(o?.ignoreDuplicates && (db.link.has(String(riga.seller_id)) || db.linkDaAltri));
+            if (db.linkDaAltri && !db.link.has(String(riga.seller_id))) db.link.set(String(riga.seller_id), { seller_id: String(riga.seller_id), codice: 'd'.repeat(64) });
+            if (scritta) db.link.set(String(riga.seller_id), riga as { seller_id: string; codice: string });
+            esito = { error: null, data: scritta ? [{ seller_id: riga.seller_id }] : [] };
+          } else esito = { error: null, data: [] };
+          const promessa = Promise.resolve(esito);
+          return Object.assign(promessa, { select: () => promessa });
         },
         then: (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) => {
           const nome = filtri['profiles.store_name'];
@@ -72,7 +95,7 @@ const chiama = async (corpo: unknown, segreto: string | null = SEGRETO) => {
 const BAR = { tipo: 'nuova-attivita', nome: 'Bar Prova', tipo_attivita: 'bar', citta: 'Piacenza', indirizzo: 'Via Roma 1' };
 
 beforeEach(() => {
-  db.utenti.clear(); db.profili.clear(); db.link.clear(); db.creaUtente.length = 0; db.ultimoId = 0;
+  db.utenti.clear(); db.profili.clear(); db.link.clear(); db.creaUtente.length = 0; db.ultimoId = 0; db.rompiProfilo = 0; db.etaMinuti = 0; db.linkDaAltri = false; db.rompiLink = 0;
   process.env.N8N_SCHEDA_CLIENTE_SEGRETO = SEGRETO;
 });
 
@@ -135,6 +158,75 @@ describe('il negozio nasce come Ora del Gusto', () => {
     expect(b).toMatchObject({ id_attivita: a.id_attivita, nuova: false });
     expect(db.utenti.size).toBe(1);
     expect(db.link.get(a.id_attivita)!.codice).toBe(codice);
+  });
+
+  it('un iscrizione fermata a metà (utente creato, profilo no) si finisce al secondo invio, senza doppioni (collaudo del 27/11)', async () => {
+    db.rompiProfilo = 1;
+    db.etaMinuti = 10;
+    expect((await chiama(BAR)).status).toBe(503);
+    expect(db.utenti.size).toBe(1);
+    expect(db.link.size).toBe(0);
+    const r = await chiama(BAR);
+    expect(r.status).toBe(201);
+    const b = (await r.json()) as { id_attivita: string; nuova: boolean };
+    expect(b.nuova).toBe(true);
+    expect(db.utenti.size).toBe(1);
+    expect(db.profili.get(b.id_attivita)).toMatchObject({ store_name: 'Bar Prova', business_type: 'bar', is_approved: false });
+    expect(db.link.has(b.id_attivita)).toBe(true);
+    // E un terzo invio è un invio qualunque: stesso negozio, non più «nuovo».
+    expect(((await (await chiama(BAR)).json()) as { nuova: boolean }).nuova).toBe(false);
+  });
+
+  it('anche col profilo scritto e il link caduto, il secondo invio finisce l iscrizione (consiglio della sessione #345)', async () => {
+    db.rompiLink = 1;
+    expect((await chiama(BAR)).status).toBe(503);
+    expect(db.profili.size).toBe(1);
+    expect(db.link.size).toBe(0);
+    const r = await chiama(BAR);
+    expect(r.status).toBe(201);
+    const b = (await r.json()) as { id_attivita: string; nuova: boolean };
+    expect(b.nuova).toBe(true);
+    expect(db.utenti.size).toBe(1);
+    expect(db.link.has(b.id_attivita)).toBe(true);
+  });
+
+  it('i paletti del recupero (collaudo del 27/11): niente account altrui, niente omonimi, niente invii doppi', async () => {
+    // ① Un account registrato a mano con l'email di sistema (non bloccato) non diventa un negozio.
+    const { emailDiSistema } = await import('@/lib/agenzia/nuova-attivita');
+    db.utenti.set('estraneo', { id: 'estraneo', email: emailDiSistema(BAR), created_at: new Date(Date.now() - 3_600_000).toISOString() });
+    db.profili.set('estraneo', { id: 'estraneo', role: 'buyer' });
+    expect((await chiama(BAR)).status).toBe(503);
+    expect(db.profili.get('estraneo')).toEqual({ id: 'estraneo', role: 'buyer' });
+    expect(db.link.has('estraneo')).toBe(false);
+    db.utenti.clear(); db.profili.clear();
+
+    // ③ «BAR PROVA» in un'altra via ha la stessa email di «Bar Prova», già iscritto e col link: non lo riscrive.
+    db.etaMinuti = 10;
+    const a = (await (await chiama(BAR)).json()) as { id_attivita: string };
+    const r = await chiama({ ...BAR, nome: 'BAR PROVA', indirizzo: 'Via Emilia 120' });
+    expect(r.status).toBe(503);
+    expect(db.profili.get(a.id_attivita)).toMatchObject({ store_name: 'Bar Prova' });
+    expect(String(db.profili.get(a.id_attivita)!.store_address)).toContain('Via Roma 1');
+    db.utenti.clear(); db.profili.clear(); db.link.clear();
+
+    // ③ Due invii insieme sull'attività rimasta a metà: chi trova il link già scritto da un altro non è «nuova»,
+    //    quindi il flusso 16 parte una volta sola.
+    db.rompiProfilo = 1;
+    expect((await chiama(BAR)).status).toBe(503);
+    db.linkDaAltri = true;
+    const doppio = await chiama(BAR);
+    expect(doppio.status).toBe(200);
+    expect(((await doppio.json()) as { nuova: boolean }).nuova).toBe(false);
+  });
+
+  it('un profilo approvato senza link non torna «non approvato» col recupero', async () => {
+    db.etaMinuti = 10;
+    db.rompiProfilo = 1;
+    expect((await chiama(BAR)).status).toBe(503);
+    const id = [...db.utenti.keys()][0];
+    db.profili.set(id, { id, role: 'seller', is_approved: true, approval_status: 'approved' });
+    expect((await chiama(BAR)).status).toBe(409);
+    expect(db.profili.get(id)!.is_approved).toBe(true);
   });
 
   it('un secondo invio senza tipo non cancella il tipo scritto prima (collaudo del 27/11, pulsante dell agente)', async () => {
