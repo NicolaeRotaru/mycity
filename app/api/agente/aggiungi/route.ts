@@ -9,6 +9,12 @@
 //  3. partono gli stessi passi del modulo 12 (lib/agenzia/dopo-iscrizione.ts), e Nicola riceve l'avviso;
 //  4. all'agente torna il link del preventivo da mandare al titolare. Il sito non manda niente da solo.
 // Il pagamento, per ora, è in contanti (lib/agenzia/pagamento-servizi.ts).
+//
+// 27/11/2026 02:26 — Nicola: «bisogna selezionare di che abbonamento ha scelto l'imprenditore», e «in automatico
+// deve sbloccarsi la pagina del venditore in base all'abbonamento». L'agente sceglie Base, Business o Premium
+// prima del «Sì»; la scelta va sul preventivo (il link si apre su quella fascia) e la pagina del negozio si
+// sblocca subito in quella fascia, fino alla disdetta: i contanti si ritirano al primo servizio
+// (lib/agenzia/abbonamento-contanti.ts, migrazione 999).
 
 import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
@@ -23,12 +29,17 @@ import { normalizza, pulisci, unisci } from '@/lib/agenti/scheda';
 import { attivitaDallaScheda, linkDelPreventivo, nomeNonValido, stessoIndirizzo } from '@/lib/agenti/aggiungi';
 import { attivitaGiaIscritta, iscriviAttivita } from '@/lib/agenzia/nuova-attivita';
 import { avviaDopoLIscrizione } from '@/lib/agenzia/dopo-iscrizione';
+import { ABBONAMENTI, FASCE } from '@/lib/agenzia/preventivo';
+import { sbloccaInContanti, sbloccoRiuscito, segnaLaSceltaSulPreventivo } from '@/lib/agenzia/abbonamento-contanti';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const Richiesta = z.object({ lavoro: z.string().uuid('Codice del lavoro non valido.') });
+const Richiesta = z.object({
+  lavoro: z.string().uuid('Codice del lavoro non valido.'),
+  fascia: z.enum(ABBONAMENTI, { message: 'Scegli l’abbonamento che ha scelto il titolare.' }),
+});
 
 /** Un lavoro dopo la risposta. Fuori da una richiesta (le prove) `after` non c'è: si lancia e basta. */
 const dopoLaRisposta = (fn: () => Promise<void>) => {
@@ -85,17 +96,33 @@ export const POST = conAgente({ name: 'agente-aggiungi', max: 20, windowMs: 60 *
     return ApiErrors.unavailable('Non sono riuscito ad aggiungere l’attività. Riprova fra poco.');
   }
   const link = await linkDelPreventivo(admin, fatto.id);
-  logger.info('[agente-aggiungi] attività aggiunta', { id: fatto.id, nuova: fatto.nuova, conLink: Boolean(link) });
+
+  // 2-bis. L'abbonamento scelto: sul preventivo, e la pagina del negozio si sblocca in quella fascia.
+  const fascia = esito.data.fascia;
+  const segnata = await segnaLaSceltaSulPreventivo(admin, fatto.id, fascia);
+  if (!segnata) logger.warn('[agente-aggiungi] scelta non scritta sul preventivo', { id: fatto.id, fascia });
+  const sblocco = await sbloccaInContanti(admin, fatto.id, fascia);
+  if (!sbloccoRiuscito(sblocco)) logger.error('[agente-aggiungi] pagina del negozio non sbloccata', { id: fatto.id, fascia, dettaglio: sblocco.dettaglio });
+  logger.info('[agente-aggiungi] attività aggiunta', { id: fatto.id, nuova: fatto.nuova, conLink: Boolean(link), fascia, sblocco: sblocco.esito });
 
   // 3. Gli stessi passi del modulo 12, e l'avviso a Nicola (una volta per attività).
   avviaDopoLIscrizione(admin, fatto, attivita, { dalModulo12: false, dopo: dopoLaRisposta });
   let avvisato = false;
-  if (fatto.nuova) {
+  const nomeFascia = FASCE[fascia].nome;
+  const fasciaCambiata = sblocco.esito === 'cambiata';
+  if (fatto.nuova || fasciaCambiata) {
+    const pagina = sblocco.esito === 'gia-online'
+      ? `Ha già un abbonamento ${FASCE[sblocco.fascia].nome} pagato online: quello resta.`
+      : sbloccoRiuscito(sblocco)
+        ? `La sua pagina è sbloccata col ${nomeFascia}, fino alla disdetta: i contanti si ritirano al primo servizio. Se non paga, fermalo tu.`
+        : `ATTENZIONE: la sua pagina NON si è sbloccata col ${nomeFascia}: sistemalo a mano.`;
     avvisato = await notifyAdmins(
-      `${attivita.nome} ha detto sì: attività aggiunta dall'agente`,
-      `L'agente ${email} ha premuto «Aggiungi attività». Il negozio è su MyCity, nascosto e senza accesso, col suo preventivo. Il link lo trovi in Admin → Preventivi col link. Per ora si paga in contanti.`,
+      fasciaCambiata
+        ? `${attivita.nome}: l'abbonamento passa dal ${FASCE[sblocco.da].nome} al ${nomeFascia}`
+        : `${attivita.nome} ha detto sì col ${nomeFascia}: attività aggiunta dall'agente`,
+      `L'agente ${email} ha premuto «Aggiungi attività» e ha scelto il ${nomeFascia}. ${pagina} Il negozio è su MyCity, nascosto e senza accesso finché il titolare non accetta il preventivo; il link lo trovi in Admin → Preventivi col link.`,
       '/admin/preventivi',
-      { unaVoltaPer: `agente-aggiungi:${fatto.id}` },
+      { unaVoltaPer: fasciaCambiata ? `agente-aggiungi:${fatto.id}:${fascia}` : `agente-aggiungi:${fatto.id}` },
     ).then(() => true, (e: unknown) => {
       logger.warn('[agente-aggiungi] avviso a Nicola non partito', { id: fatto.id, errore: String(e) });
       return false;
@@ -104,7 +131,7 @@ export const POST = conAgente({ name: 'agente-aggiungi', max: 20, windowMs: 60 *
 
   // 4. Il link da mandare al titolare.
   return NextResponse.json(
-    { ok: true, data: { nome: attivita.nome, nuova: fatto.nuova, link, avvisato } },
+    { ok: true, data: { nome: attivita.nome, nuova: fatto.nuova, link, avvisato, fascia, sbloccata: sbloccoRiuscito(sblocco), giaOnline: sblocco.esito === 'gia-online' } },
     { status: fatto.nuova ? 201 : 200, headers: { 'Cache-Control': 'no-store' } },
   );
 });

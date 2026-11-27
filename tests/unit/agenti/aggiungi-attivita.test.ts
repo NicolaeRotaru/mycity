@@ -9,6 +9,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *  · all'agente torna il link del preventivo; Nicola riceve l'avviso una volta;
  *  · premere due volte ridà lo stesso link senza rimandare l'attività al flusso 16;
  *  · un'attività che ha già accettato il preventivo non si riscrive (409).
+ * 27/11/2026 02:26 — Nicola: l'agente sceglie l'abbonamento detto dal titolare, e la pagina del negozio si
+ * sblocca da sola in quella fascia. Senza abbonamento non si aggiunge niente (400).
  */
 
 const stato = vi.hoisted(() => ({
@@ -21,6 +23,10 @@ const stato = vi.hoisted(() => ({
   avvisi: [] as string[],
   avvisoRotto: false,
   gia: null as null | { id: string; indirizzo: string | null },
+  sblocchi: [] as { id: string; fascia: string }[],
+  scelte: [] as { id: string; fascia: string }[],
+  esitoSblocco: { esito: 'sbloccata', fascia: 'business' } as Record<string, unknown>,
+  testiAvvisi: [] as string[],
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -38,7 +44,12 @@ vi.mock('@/lib/agenzia/nuova-attivita', async (originale) => ({
 vi.mock('@/lib/agenzia/dopo-iscrizione', () => ({
   avviaDopoLIscrizione: (_a: unknown, fatto: { nuova: boolean }, _x: unknown, o: { dalModulo12: boolean }) => { if (fatto.nuova) stato.dopo.push({ dalModulo12: o.dalModulo12 }); },
 }));
-vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: async (titolo: string) => { if (stato.avvisoRotto) throw new Error('telegram giù'); stato.avvisi.push(titolo); } }));
+vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: async (titolo: string, testo: string) => { if (stato.avvisoRotto) throw new Error('telegram giù'); stato.avvisi.push(titolo); stato.testiAvvisi.push(testo); } }));
+vi.mock('@/lib/agenzia/abbonamento-contanti', () => ({
+  sbloccaInContanti: async (_a: unknown, id: string, fascia: string) => { stato.sblocchi.push({ id, fascia }); return stato.esitoSblocco; },
+  sbloccoRiuscito: (e: { esito: string }) => e.esito !== 'guasto',
+  segnaLaSceltaSulPreventivo: async (_a: unknown, id: string, fascia: string) => { stato.scelte.push({ id, fascia }); return true; },
+}));
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: stato.codice ? { codice: stato.codice } : null, error: null }) }) }) }),
@@ -49,7 +60,7 @@ const { POST } = await import('@/app/api/agente/aggiungi/route');
 const { tipoDaTesto, nomeNonValido, stessoIndirizzo } = await import('@/lib/agenti/aggiungi');
 
 const LAVORO = '11111111-2222-4333-8444-555555555555';
-const premi = (corpo: unknown = { lavoro: LAVORO }) =>
+const premi = (corpo: unknown = { lavoro: LAVORO, fascia: 'business' }) =>
   (POST as unknown as (r: Request) => Promise<Response>)(new Request('http://localhost/api/agente/aggiungi', { method: 'POST', body: JSON.stringify(corpo) }));
 
 const prima = {
@@ -71,6 +82,10 @@ beforeEach(() => {
   stato.codice = 'c'.repeat(64);
   stato.dopo = [];
   stato.avvisi = [];
+  stato.testiAvvisi = [];
+  stato.sblocchi = [];
+  stato.scelte = [];
+  stato.esitoSblocco = { esito: 'sbloccata', fascia: 'business' };
 });
 
 describe('il pulsante «Aggiungi attività»', () => {
@@ -165,6 +180,55 @@ describe('dal collaudo del 27/11', () => {
   it('due indirizzi uguali si riconoscono anche scritti diversi', () => {
     expect(stessoIndirizzo("Viale Sant'Ambrogio 6/B", "viale sant ambrogio 6b, 29121 Piacenza")).toBe(true);
     expect(stessoIndirizzo('Via Roma 1', 'Via Emilia 120')).toBe(false);
+  });
+});
+
+describe('l abbonamento scelto dal titolare sblocca la sua pagina (27/11)', () => {
+  it('senza abbonamento, o con uno che non esiste, non si aggiunge niente', async () => {
+    expect((await premi({ lavoro: LAVORO })).status).toBe(400);
+    expect((await premi({ lavoro: LAVORO, fascia: 'oro' })).status).toBe(400);
+    expect(stato.iscritte).toHaveLength(0);
+    expect(stato.sblocchi).toHaveLength(0);
+  });
+
+  it('la scelta va sul preventivo, la pagina si sblocca in quella fascia e Nicola lo legge', async () => {
+    stato.esitoSblocco = { esito: 'sbloccata', fascia: 'premium' };
+    const r = await premi({ lavoro: LAVORO, fascia: 'premium' });
+    expect(r.status).toBe(201);
+    const d = ((await r.json()) as { data: { fascia: string; sbloccata: boolean; giaOnline: boolean } }).data;
+    expect(d).toMatchObject({ fascia: 'premium', sbloccata: true, giaOnline: false });
+    expect(stato.scelte).toEqual([{ id: 'att-1', fascia: 'premium' }]);
+    expect(stato.sblocchi).toEqual([{ id: 'att-1', fascia: 'premium' }]);
+    expect(stato.avvisi[0]).toContain('Premium');
+    expect(stato.testiAvvisi[0]).toContain('sbloccata col Premium');
+    expect(stato.testiAvvisi[0]).toContain('contanti');
+  });
+
+  it('premere di nuovo con un altro abbonamento lo cambia e riavvisa; con lo stesso non riavvisa', async () => {
+    stato.esitoIscrizione = { ok: true, id: 'att-1', nuova: false, sito: null };
+    stato.esitoSblocco = { esito: 'gia-sbloccata', fascia: 'business' };
+    await premi();
+    expect(stato.avvisi).toEqual([]);
+    stato.esitoSblocco = { esito: 'cambiata', fascia: 'premium', da: 'business' };
+    const r = await premi({ lavoro: LAVORO, fascia: 'premium' });
+    expect(r.status).toBe(200);
+    expect(stato.avvisi).toHaveLength(1);
+    expect(stato.avvisi[0]).toContain('dal Business al Premium');
+  });
+
+  it('se lo sblocco non riesce, la risposta e l avviso a Nicola lo dicono', async () => {
+    stato.esitoSblocco = { esito: 'guasto', dettaglio: 'tabella giù' };
+    const r = await premi();
+    expect(r.status).toBe(201);
+    expect(((await r.json()) as { data: { sbloccata: boolean } }).data.sbloccata).toBe(false);
+    expect(stato.testiAvvisi[0]).toContain('NON si è sbloccata');
+  });
+
+  it('chi ha già un abbonamento pagato online lo tiene', async () => {
+    stato.esitoSblocco = { esito: 'gia-online', fascia: 'base' };
+    const r = await premi();
+    expect(((await r.json()) as { data: { giaOnline: boolean } }).data.giaOnline).toBe(true);
+    expect(stato.testiAvvisi[0]).toContain('pagato online');
   });
 });
 

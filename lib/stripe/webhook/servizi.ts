@@ -54,7 +54,9 @@ export async function handleServiziSubscription(session: Stripe.Checkout.Session
     .select('stripe_subscription_id')
     .eq('seller_id', sellerId)
     .in('stato', ['active', 'past_due'])
-    .neq('stripe_subscription_id', subscriptionId)
+    // 27/11/2026 — Anche un abbonamento in contanti in corso (migrazione 999, senza id Stripe) è un doppione:
+    // con un semplice «diverso da» le righe senza id non si vedevano.
+    .or(`stripe_subscription_id.is.null,stripe_subscription_id.neq.${subscriptionId}`)
     .limit(5);
   if (erroreAltri) throw new Error(`[stripe] abbonamenti dei servizi non letti: ${erroreAltri.message}`);
   const doppione = (altri ?? []).length > 0 && stato !== 'canceled';

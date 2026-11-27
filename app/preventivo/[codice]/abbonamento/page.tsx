@@ -28,6 +28,7 @@ import PagaDalLink from './PagaDalLink';
  * come quella di pane quotidiano»): questa pagina ne è la voce «Abbonamento». Ogni fascia apre il suo
  * preventivo (?fascia=business, Nicola: «in base all'azienda e all'abbonamento»): l'offerta su misura,
  * la fascia evidenziata e quella proposta per accettare sono quelle dell'indirizzo, o la consigliata.
+ * 27/11/2026 — Fra le due, la fascia che il titolare ha scelto davanti all'agente (`fascia_scelta` del preventivo aperto).
  */
 
 export const dynamic = 'force-dynamic';
@@ -60,11 +61,14 @@ export default async function PreventivoDalLink({
     // Pagato davvero lo dice la tabella degli abbonamenti (la scrive il webhook di Stripe), non l'indirizzo.
     const abbonamento = await getAdminSupabase()
       .from('abbonamenti_servizi')
-      .select('stato')
+      .select('stato, origine')
       .eq('seller_id', pc.sellerId)
       .in('stato', ['active', 'past_due'])
-      .limit(1);
-    const attivo = !abbonamento.error && (abbonamento.data ?? []).length > 0;
+      .limit(5);
+    const righe = abbonamento.error ? [] : ((abbonamento.data ?? []) as { origine?: string | null }[]);
+    const attivo = righe.length > 0;
+    // 27/11/2026 — Sbloccato in contanti (migrazione 999): attivo, ma i contanti vanno ancora ritirati.
+    const inContanti = attivo && righe.every((r) => r.origine === 'contanti');
     return (
       <Cornice>
         <div role="status" className="rounded-2xl border-2 border-olive-300 bg-olive-50 p-5">
@@ -78,10 +82,12 @@ export default async function PreventivoDalLink({
           </p>
         </div>
         {/* 26/11/2026 — Per ora si paga in contanti (lib/agenzia/pagamento-servizi.ts): niente «Paga» qui. */}
-        {!attivo && !PAGAMENTO_ONLINE_SERVIZI && (
+        {(!attivo || inContanti) && !PAGAMENTO_ONLINE_SERVIZI && (
           <div className="mt-4 rounded-2xl border-2 border-cream-300 bg-surface-0 p-5">
             <p className="text-sm text-ink-700">
-              L’abbonamento {pc.fasciaScelta ? FASCE[pc.fasciaScelta].nome : ''} si paga in contanti, di persona: ti contattiamo noi per fissare l’inizio.
+              {inContanti
+                ? `L’abbonamento ${pc.fasciaScelta ? FASCE[pc.fasciaScelta].nome : ''} si paga in contanti, di persona, al primo servizio: ti contattiamo noi per fissarlo.`
+                : `L’abbonamento ${pc.fasciaScelta ? FASCE[pc.fasciaScelta].nome : ''} si paga in contanti, di persona: ti contattiamo noi per fissare l’inizio.`}
             </p>
           </div>
         )}
@@ -100,7 +106,8 @@ export default async function PreventivoDalLink({
   }
 
   const { preventivo: p, scheda } = demo;
-  const scelta = fasciaDaIndirizzo(fascia) ?? p.consigliato;
+  // 27/11/2026 — Senza fascia nell'indirizzo vale quella scelta dal titolare davanti all'agente, poi la consigliata.
+  const scelta = fasciaDaIndirizzo(fascia) ?? pc.fasciaScelta ?? p.consigliato;
   const qui = indirizziDemo(codice).abbonamento;
 
   return (

@@ -27,6 +27,7 @@ const stato = vi.hoisted(() => ({
   casseAperte: [] as { id: string; url: string; success_url?: string; metadata: Record<string, string> }[],
   casseChiuse: [] as string[],
   altriAttivi: [] as unknown[],
+  filtriDoppione: [] as string[],
   scritture: [] as { tabella: string; tipo: string; valori: unknown; filtro?: [string, unknown] }[],
   righeServizi: [] as { seller_id: string; fascia: string }[],
   erroreLetturaServizi: null as null | { code: string; message: string },
@@ -109,6 +110,7 @@ vi.mock('@/lib/supabase/server', () => ({
       let conNeq = false;
       c.in = () => c;
       c.neq = () => { conNeq = true; return c; };
+      c.or = (f: string) => { conNeq = true; stato.filtriDoppione.push(f); return c; };
       c.limit = async () => (tabella === 'abbonamenti_servizi'
         ? (conNeq
           ? { data: stato.altriAttivi, error: null }
@@ -157,6 +159,7 @@ beforeEach(() => {
   stato.casseAperte = [];
   stato.casseChiuse = [];
   stato.altriAttivi = [];
+  stato.filtriDoppione = [];
   stato.scritture = [];
   stato.righeServizi = [];
   stato.erroreLetturaServizi = null;
@@ -310,11 +313,20 @@ describe('il webhook dell abbonamento dei servizi', () => {
 
   it('un secondo abbonamento pagato si registra ma avvisa del doppione, senza «grazie, è attivo» (collaudo)', async () => {
     stato.altriAttivi = [{ stripe_subscription_id: 'sub_primo' }];
+    stato.filtriDoppione = [];
     await servizi.handleServiziSubscription(sessione(META));
     expect(stato.scritture.some((w) => w.tabella === 'abbonamenti_servizi' && w.tipo === 'upsert')).toBe(true);
     expect(stato.avvisi[0].titolo).toMatch(/DOPPIO/);
     const campanella = stato.scritture.find((w) => w.tabella === 'notifications');
     expect((campanella?.valori as { title: string }).title).toMatch(/due abbonamenti/);
+  });
+
+  it('anche un abbonamento in contanti in corso è un doppione: il filtro vede le righe senza id Stripe (27/11)', async () => {
+    stato.altriAttivi = [{ stripe_subscription_id: null }];
+    await servizi.handleServiziSubscription(sessione(META));
+    expect(stato.filtriDoppione).toHaveLength(1);
+    expect(stato.filtriDoppione[0]).toContain('stripe_subscription_id.is.null');
+    expect(stato.avvisi[0].titolo).toMatch(/DOPPIO/);
   });
 
   it('con dati incompleti si ferma e fa riprovare Stripe; un abbonamento non attivo non manda «grazie»', async () => {

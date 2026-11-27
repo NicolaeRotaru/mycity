@@ -45,11 +45,12 @@ export interface Database {
           fascia: string;
           canone_centesimi: number;
           stripe_customer_id: string | null;
-          stripe_subscription_id: string;
+          stripe_subscription_id: string | null;
           stato: string;
           rinnovo_il: string | null;
           creato_il: string;
           aggiornato_il: string;
+          origine: string;
         };
         Insert: {
           id?: string;
@@ -57,11 +58,12 @@ export interface Database {
           fascia: string;
           canone_centesimi: number;
           stripe_customer_id?: string | null;
-          stripe_subscription_id: string;
+          stripe_subscription_id?: string | null;
           stato: string;
           rinnovo_il?: string | null;
           creato_il?: string;
           aggiornato_il?: string;
+          origine?: string;
         };
         Update: {
           id?: string;
@@ -69,11 +71,12 @@ export interface Database {
           fascia?: string;
           canone_centesimi?: number;
           stripe_customer_id?: string | null;
-          stripe_subscription_id?: string;
+          stripe_subscription_id?: string | null;
           stato?: string;
           rinnovo_il?: string | null;
           creato_il?: string;
           aggiornato_il?: string;
+          origine?: string;
         };
         Relationships: [];
       };
