@@ -1,0 +1,182 @@
+import { ArrowRight, FileText, Lock } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import CosaCeNellAnalisi from '@/components/seller/CosaCeNellAnalisi';
+import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
+import type { AnalisiCanali, RisultatoSito } from '@/lib/agenzia/analisi';
+import type { SchedaCliente } from '@/lib/agenzia/scheda-cliente';
+import SchedaGoogleUfficiale from '@/components/seller/SchedaGoogleUfficiale';
+import { FASCE, type Abbonamento } from '@/lib/agenzia/preventivo';
+import {
+  ANALISI_PER_FASCIA,
+  PARTI_RAPPORTO,
+  TITOLI_PARTI,
+  assaggio,
+  leggiRapporto,
+  placeIdDi,
+  motivoDellaParte,
+  type CosaSappiamo,
+  type PezzoParte,
+} from '@/lib/agenzia/rapporto';
+
+/**
+ * IL RAPPORTO DELL'IMPRENDITORE NELLA PAGINA «ANALISI DEL BUSINESS» — 26/11/2026.
+ *
+ * Nicola: prima di pagare il titolare vede un assaggio (3-4 numeri veri e cosa c'è nel rapporto per
+ * abbonamento); dopo il pagamento, il rapporto intero, con le parti del suo abbonamento. Ogni dato con fonte e data. Nessun dato di
+ * Google (parere legale del 26/11): la scheda Google si vede solo nel riquadro ufficiale di Google, accanto
+ * (lib/agenzia/rapporto.ts). Dove una parte non è ancora letta lo dice, e non inventa niente. Se il negozio ha
+ * pagato lo decide chi la usa (`haPagato`, dalla stessa risposta della scheda): finché non si sa, la pagina lo dice
+ * e non mostra né l'assaggio né il rapporto (revisione di mycity#336).
+ */
+
+type Props = {
+  scheda: SchedaCliente | null | undefined;
+  canali: AnalisiCanali | null | undefined;
+  sito: RisultatoSito | null | undefined;
+  /** `null` = non si sa ancora (in lettura, o lettura fallita: vedi `letturaFallita`). */
+  haPagato: boolean | null;
+  letturaFallita?: boolean;
+  /** Per dire il motivo vero quando un numero dell'assaggio manca. */
+  haSito?: boolean;
+  canaliScritti?: { instagram?: string } | null;
+  /** La fascia pagata: il rapporto mostra le parti che comprende, e dice quali no (`ANALISI_PER_FASCIA`). */
+  fascia?: Abbonamento | null;
+  /** Per le prove: l'istante con cui si controllano le date di lettura. */
+  adesso?: Date;
+};
+
+const TONO: Record<'positivo' | 'negativo' | 'misto', { parola: string; colore: string }> = {
+  positivo: { parola: 'piace', colore: 'bg-olive-100 text-olive-800' },
+  negativo: { parola: 'da migliorare', colore: 'bg-secondary-100 text-secondary-800' },
+  misto: { parola: 'pareri diversi', colore: 'bg-amber-100 text-amber-800' },
+};
+
+export default function RapportoImprenditore({ scheda, canali, sito, haPagato, letturaFallita = false, haSito = false, canaliScritti = null, fascia, adesso = new Date() }: Props) {
+  if (haPagato === null) {
+    return (
+      <Cornice titolo="Il tuo rapporto" sotto="">
+        <p className="text-sm text-ink-600" data-testid="rapporto-in-attesa">
+          {letturaFallita ? 'Non riesco a leggere il tuo rapporto in questo momento: ricarica la pagina fra poco.' : 'Sto leggendo il tuo rapporto…'}
+        </p>
+      </Cornice>
+    );
+  }
+  const sappiamo = { haSito, instagramScritto: Boolean((canaliScritti?.instagram ?? '').trim()) };
+  return haPagato ? <RapportoIntero scheda={scheda} canali={canali} sito={sito} sappiamo={sappiamo} fascia={fascia ?? null} adesso={adesso} /> : <Assaggio scheda={scheda} canali={canali} sito={sito} sappiamo={sappiamo} adesso={adesso} />;
+}
+
+function Cornice({ titolo, sotto, children }: { titolo: string; sotto: string; children: React.ReactNode }) {
+  return (
+    <section aria-labelledby="rapporto-imprenditore" className="mt-3 rounded-xl border border-primary-200 bg-cream-50 p-3 sm:p-4" data-testid="rapporto-imprenditore">
+      <h3 id="rapporto-imprenditore" className="inline-flex items-center gap-1.5 text-lg font-bold text-ink-900">
+        <FileText size={16} className="text-primary-700" aria-hidden /> {titolo}
+      </h3>
+      {sotto && <p className="mt-0.5 text-xs text-ink-500">{sotto}</p>}
+      <div className="mt-2">{children}</div>
+    </section>
+  );
+}
+
+function Assaggio({ scheda, canali, sito, sappiamo, adesso }: { scheda: Props['scheda']; canali: Props['canali']; sito: Props['sito']; sappiamo: CosaSappiamo; adesso: Date }) {
+  const numeri = assaggio({ scheda, canali, sito, ...sappiamo }, adesso);
+  return (
+    <Cornice titolo="Un assaggio del tuo rapporto" sotto="Quattro numeri veri sulla tua attività, ognuno con la sua fonte, e la tua scheda Google come la mostra Google. Il rapporto intero arriva dopo il pagamento, con le parti del tuo abbonamento.">
+      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-testid="assaggio">
+        {numeri.map((n) => (
+          <li key={n.id} data-numero={n.id} className="rounded-lg border border-cream-200 bg-white p-2">
+            <p className="text-xs text-ink-500">{n.titolo}</p>
+            {n.valore ? <p className="text-sm font-bold text-ink-900">{n.valore}</p> : <p className="text-xs text-ink-600">{n.motivo}</p>}
+            {n.fonte && <p className="mt-0.5 text-xs text-ink-500">{n.fonte}</p>}
+            {n.nota && <p className="mt-0.5 text-xs font-semibold text-amber-800">{n.nota}</p>}
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3">
+        <SchedaGoogleUfficiale placeId={placeIdDi(scheda)} />
+      </div>
+      <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-ink-700">
+        <Lock size={13} aria-hidden /> Cosa c’è nella tua analisi, in ogni abbonamento
+      </p>
+      <div className="mt-2">
+        <CosaCeNellAnalisi />
+      </div>
+      <div className="mt-3">
+        <Button href={PERCORSO_ABBONAMENTO} iconRight={ArrowRight} size="sm">Scegli l&apos;abbonamento</Button>
+      </div>
+    </Cornice>
+  );
+}
+
+function RapportoIntero({ scheda, canali, sito, sappiamo, fascia, adesso }: { scheda: Props['scheda']; canali: Props['canali']; sito: Props['sito']; sappiamo: CosaSappiamo; fascia: Abbonamento | null; adesso: Date }) {
+  const rapporto = leggiRapporto(scheda, adesso);
+  // Il motivo vero di una parte vuota, come nell'assaggio (ricontrollo di mycity#336).
+  const numeri = assaggio({ scheda, canali, sito, ...sappiamo }, adesso);
+  // Senza un abbonamento attivo (disdetto, o negozio online da prima della demo) vale il Base, come sul server:
+  // mai più parti di quelle pagate (dal collaudo del 26/11).
+  const compresa = (nome: (typeof PARTI_RAPPORTO)[number]) => ANALISI_PER_FASCIA[fascia ?? 'base'].parti[nome] !== null;
+  return (
+    <Cornice titolo="Il tuo rapporto" sotto={`Le parti della tua analisi${fascia ? ` col ${FASCE[fascia].nome}` : ''}. Ogni dato ha la sua fonte e la data in cui l’abbiamo letto.`}>
+      {!rapporto ? (
+        <p className="rounded-lg border border-dashed border-cream-300 bg-white p-3 text-sm text-ink-600">
+          Il tuo rapporto lo stiamo preparando: le parti arrivano qui man mano che le leggiamo.
+        </p>
+      ) : (
+        <ol className="space-y-2">
+          <li className="rounded-lg border border-cream-200 bg-white p-3">
+            <h4 className="text-sm font-bold text-ink-900">La tua scheda Google</h4>
+            <div className="mt-1"><SchedaGoogleUfficiale placeId={placeIdDi(scheda)} /></div>
+          </li>
+          {PARTI_RAPPORTO.map((nome, i) => {
+            const parte = rapporto[nome];
+            if (!compresa(nome)) {
+              return (
+                <li key={nome} data-parte={nome} data-esclusa className="rounded-lg border border-dashed border-cream-200 p-3">
+                  <h4 className="text-sm font-bold text-ink-400">{i + 1}. {TITOLI_PARTI[nome]}</h4>
+                  <p className="mt-1 text-xs text-ink-500">Non compresa nel {FASCE[fascia ?? 'base'].nome}.</p>
+                </li>
+              );
+            }
+            return (
+              <li key={nome} data-parte={nome} className="rounded-lg border border-cream-200 bg-white p-3">
+                <h4 className="text-sm font-bold text-ink-900">{i + 1}. {TITOLI_PARTI[nome]}</h4>
+                {nome === 'mycity' && parte === null && <p className="mt-1 text-sm text-ink-600">I numeri del tuo negozio su MyCity sono nella pagella, in questa pagina.</p>}
+                {nome !== 'mycity' && parte === null && <p className="mt-1 text-sm text-ink-600">{motivoDellaParte(nome, numeri) ?? 'Non ancora letta.'}</p>}
+                {parte === 'in_arrivo' && <p className="mt-1 text-sm text-ink-400">In arrivo: questa fonte non è ancora accesa.</p>}
+                {parte === 'da_rileggere' && <p className="mt-1 text-sm text-ink-400">Da rileggere: i dati letti sono scaduti, li leggiamo di nuovo.</p>}
+                {Array.isArray(parte) && parte.map((pz, k) => <ContenutoParte key={k} parte={pz} />)}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </Cornice>
+  );
+}
+
+function ContenutoParte({ parte }: { parte: PezzoParte }) {
+  return (
+    <div className="mt-1">
+      {parte.frasi.length > 0 && <ul className="list-disc pl-5 text-sm text-ink-700">{parte.frasi.map((f) => <li key={f}>{f}</li>)}</ul>}
+      {parte.temi.length > 0 && (
+        <ul className="mt-1 flex flex-wrap gap-1.5">
+          {parte.temi.map((t) => (
+            <li key={t.tema} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${TONO[t.tono].colore}`}>
+              {t.tema}: {TONO[t.tono].parola} ({t.quante.toLocaleString('it-IT')} recensioni)
+            </li>
+          ))}
+        </ul>
+      )}
+      {parte.voci.length > 0 && (
+        <ul className="mt-1 space-y-1">
+          {parte.voci.map((v) => (
+            <li key={`${v.titolo}-${v.dettaglio ?? ''}`} className="text-sm text-ink-700">
+              <span className="font-semibold text-ink-900">{v.titolo}</span>
+              {v.dettaglio && <> — {v.dettaglio}</>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {parte.fonte && <p className="mt-1 text-xs text-ink-500">{parte.fonte}</p>}
+    </div>
+  );
+}

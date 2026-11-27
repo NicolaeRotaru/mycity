@@ -386,7 +386,8 @@ describe('/api/agenzia/bozza-sito', () => {
           telefono: { valore: '333 1234567', stato: 'confermato', fonte: 'https://example.org' },
           orari: { valore: 'Lun–Sab 7.30–19.30', stato: 'da_confermare', fonte: 'https://example.org' },
           link_prenotazione: { valore: 'https://wa.me/393331234567', stato: 'confermato', fonte: 'https://example.org' },
-          menu_testo: { valore: 'Brioche alla crema\nCappuccino 1,50 €', stato: 'da_confermare', fonte: null },
+          // 26/11/2026 — Un campo senza fonte non si salva più (ricontrollo di sicurezza del rapporto): il menu ha la sua.
+          menu_testo: { valore: 'Brioche alla crema\nCappuccino 1,50 €', stato: 'da_confermare', fonte: 'https://example.org/menu' },
         },
       },
     }];
@@ -417,7 +418,7 @@ describe('/api/agenzia/bozza-sito', () => {
       id_attivita: NEGOZIO, aggiornata_il: '2026-11-25T10:00:00Z',
       scheda: {
         tipo: 'scheda-cliente', id_attivita: NEGOZIO,
-        campi: { orari: { valore: 'Lun–Sab 7.30–19.30', stato: 'confermato', fonte: 'https://example.org' }, menu_testo: { valore: 'Tortelli\nPisarei', stato: 'confermato', fonte: null } },
+        campi: { orari: { valore: 'Lun–Sab 7.30–19.30', stato: 'confermato', fonte: 'https://example.org' }, menu_testo: { valore: 'Tortelli\nPisarei', stato: 'confermato', fonte: 'https://example.org/menu' } },
         analisi: { punti_di_forza: ['Cucina piacentina fatta in casa'] },
       },
     }];

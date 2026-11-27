@@ -293,13 +293,33 @@ function getSupabaseHost(): string {
  * Se tocchi la riga qui sotto, controlla anche quella. Le sorveglia insieme
  * `tests/unit/nessuna-pagina-arriva-senza-javascript.test.ts`.
  */
+/**
+ * 26/11/2026 — La scheda Google col riquadro ufficiale di Google (components/seller/SchedaGoogleUfficiale.tsx,
+ * parere legale: niente dati di Google salvati, solo il riquadro dal vivo). I domini di Google si aprono SOLO se
+ * c'è la chiave del browser: senza, la politica resta quella di prima, parola per parola.
+ */
+function dominiGoogleMaps(): { script: string; connect: string; img: string; font: string; style: string } {
+  const accesa = (process.env.NEXT_PUBLIC_GOOGLE_MAPS_CHIAVE ?? '').trim().length > 0;
+  if (!accesa) return { script: '', connect: '', img: '', font: '', style: '' };
+  return {
+    script: ' https://maps.googleapis.com',
+    connect: ' https://maps.googleapis.com https://places.googleapis.com',
+    // Le foto dei luoghi del riquadro arrivano da lh3-lh6.googleusercontent.com: solo quelli, non tutto
+    // googleusercontent.com, che ospita anche contenuti degli utenti (revisione di sicurezza di mycity#336).
+    img: ' https://maps.gstatic.com https://maps.googleapis.com https://lh3.googleusercontent.com https://lh4.googleusercontent.com https://lh5.googleusercontent.com https://lh6.googleusercontent.com',
+    font: ' https://fonts.gstatic.com',
+    style: ' https://fonts.googleapis.com',
+  };
+}
+
 function buildCsp(nonce: string, isDev: boolean): string {
   const supaHost = getSupabaseHost();
+  const gm = dominiGoogleMaps();
   // In dev manteniamo unsafe-eval per webpack HMR + React fast refresh.
   // In prod usiamo nonce + strict-dynamic per la massima protezione XSS.
   const scriptSrc = isDev
-    ? `'self' 'unsafe-eval' 'unsafe-inline' https://challenges.cloudflare.com https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io`
-    : `'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io`;
+    ? `'self' 'unsafe-eval' 'unsafe-inline' https://challenges.cloudflare.com https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io${gm.script}`
+    : `'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io${gm.script}`;
 
   return [
     "default-src 'self'",
@@ -310,15 +330,15 @@ function buildCsp(nonce: string, isDev: boolean): string {
     // il foglio di stile di Leaflet e' compilato dentro il sito. Un permesso in
     // meno nella politica di sicurezza e' un posto in meno da cui puo' arrivare
     // codice, e un destinatario in meno da dichiarare nell'informativa.
-    "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' data: blob: https://${supaHost} https://placehold.co https://api.iconify.design https://images.pexels.com https://*.tile.openstreetmap.org https://*.stripe.com https://www.google-analytics.com https://*.googletagmanager.com https://*.posthog.com`,
-    "font-src 'self' data:",
+    `style-src 'self' 'unsafe-inline'${gm.style}`,
+    `img-src 'self' data: blob: https://${supaHost} https://placehold.co https://api.iconify.design https://images.pexels.com https://*.tile.openstreetmap.org https://*.stripe.com https://www.google-analytics.com https://*.googletagmanager.com https://*.posthog.com${gm.img}`,
+    `font-src 'self' data:${gm.font}`,
     // <video srcObject=MediaStream> per la fotocamera in-app, blob URL anteprime,
     // e i video MP4 self-hosted della home (Supabase Storage).
     `media-src 'self' blob: https://${supaHost}`,
     // 🟠-15: nominatim rimosso — il geocoding ora passa dal proxy server-side
     // (/api/geocode), il browser non chiama più direttamente Nominatim.
-    `connect-src 'self' https://${supaHost} wss://${supaHost} https://challenges.cloudflare.com https://api.stripe.com https://www.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io`,
+    `connect-src 'self' https://${supaHost} wss://${supaHost} https://challenges.cloudflare.com https://api.stripe.com https://www.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io${gm.connect}`,
     // youtube-nocookie + vimeo: embed del blocco "video" della vetrina (VideoSection).
     "frame-src 'self' https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://connect.stripe.com https://www.youtube-nocookie.com https://player.vimeo.com",
     "frame-ancestors 'none'",

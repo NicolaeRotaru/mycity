@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { schedaComeLaVedeIlNegozio } from '@/lib/agenzia/scheda-del-negozio';
+import { leggiAnalisiCanali } from '@/lib/agenzia/analisi';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { sullaPortaDeiDiritti } from '@/lib/privacy/porta-dei-diritti';
@@ -197,14 +199,20 @@ const scarica = withAuthRateLimit(
       .select('*')
       .or(`user_id.eq.${userId},seller_id.eq.${userId}`).order('id').range(da, a)),
     // 24/11/2026 — Gli abbonamenti dei servizi (MyCity tramite SDG), migrazione 706.
-    abbonamenti_dei_servizi: tutta((da, a) => admin.from('abbonamenti_servizi').select('*').eq('seller_id', userId).order('id').range(da, a)),
+    // 26/11/2026 — Dal più recente, come la dashboard: con due abbonamenti attivi la fascia è la stessa (scheda-del-negozio.ts).
+    abbonamenti_dei_servizi: tutta((da, a) => admin.from('abbonamenti_servizi').select('*').eq('seller_id', userId).order('creato_il', { ascending: false }).order('id').range(da, a)),
     // 24/11/2026 — La scheda del locale mandata da n8n e il preventivo col link (migrazione 708).
     // Del link non si esporta il codice: è una chiave, non un dato della persona.
-    scheda_del_locale: tutta((da, a) => admin.from('schede_clienti').select('*').eq('id_attivita', userId).order('id_attivita').range(da, a)),
+    // 26/11/2026 — La scheda esce come la vede il negozio (revisione di sicurezza di mycity#336): prima del
+    // pagamento senza il rapporto intero, dopo solo con le parti del suo abbonamento (lib/agenzia/scheda-del-negozio.ts).
+    // Si legge come le altre sezioni; le regole della dashboard si applicano sotto, con `schedaComeLaVedeIlNegozio`.
+    scheda_del_locale: tutta((da, a) => admin.from('schede_clienti').select('id_attivita, scheda, origine, ricevuta_il, aggiornata_il').eq('id_attivita', userId).order('id_attivita').range(da, a)),
     // 24/11/2026 — L'analisi del business (sito e canali) e la bozza del sito scritta dall'AD (migrazione 711).
     analisi_del_negozio: tutta((da, a) => admin.from('analisi_negozi').select('*').eq('id_attivita', userId).order('id_attivita').range(da, a)),
     bozza_del_sito: tutta((da, a) => admin.from('bozze_sito').select('*').eq('id_attivita', userId).order('id_attivita').range(da, a)),
     preventivo_col_link: tutta((da, a) => admin.from('preventivi_con_codice').select('seller_id, stato, fascia_scelta, creato_il, accettato_il, condizioni_accettate_il').eq('seller_id', userId).order('seller_id').range(da, a)),
+    // 26/11/2026 — Se la persona è un agente (migrazione 865): la sua riga, cioè email, stato e date.
+    agente: tutta((da, a) => admin.from('agenti').select('user_id, email, attivo, creato_il, sospeso_il').eq('user_id', userId).order('user_id').range(da, a)),
     tentativi_di_pagamento: tutta((da, a) => admin.from('payment_attempts').select('*').eq('user_id', userId).order('id').range(da, a)),
     casse_aperte: tutta((da, a) => admin.from('pending_checkouts').select('*').eq('buyer_id', userId).order('id').range(da, a)),
     casse_contanti: tutta((da, a) => admin.from('cod_checkout_attempts').select('*').eq('user_id', userId).order('chiave').range(da, a)),
@@ -273,6 +281,26 @@ const scarica = withAuthRateLimit(
       altre[chiave] = sezione(chiave, (await domanda) as Lettura);
     }),
   );
+
+  // 26/11/2026 — La scheda del locale esce come la vede il negozio (revisione di sicurezza di mycity#336): prima del
+  // pagamento senza il rapporto intero, dopo solo con le parti del suo abbonamento (lib/agenzia/scheda-del-negozio.ts).
+  if (Array.isArray(altre.scheda_del_locale)) {
+    const abbonamenti = (Array.isArray(altre.abbonamenti_dei_servizi) ? altre.abbonamenti_dei_servizi : []) as Array<{ fascia?: unknown; stato?: unknown }>;
+    const visibile = (profile.data as Record<string, unknown> | null)?.visibile_senza_abbonamento;
+    altre.scheda_del_locale = altre.scheda_del_locale.map((riga) => {
+      const r = riga as Record<string, unknown>;
+      return { ...r, scheda: schedaComeLaVedeIlNegozio(r.scheda, { visibileSenzaAbbonamento: visibile, abbonamenti }) };
+    });
+  }
+
+  // 26/11/2026 — L'analisi dei canali esce ripulita come nella pagina: della scheda Google letta da n8n niente voto né
+  // recensioni (parere legale; anche dalle righe salvate prima).
+  if (Array.isArray(altre.analisi_del_negozio)) {
+    altre.analisi_del_negozio = altre.analisi_del_negozio.map((riga) => {
+      const r = riga as Record<string, unknown>;
+      return 'canali' in r ? { ...r, canali: leggiAnalisiCanali(r.canali) } : r;
+    });
+  }
 
   // Il profilo: «nessuna riga» (PGRST116) vuol dire davvero che non c'è, ed è
   // un'informazione vera. Un errore diverso vuol dire che non siamo riusciti a

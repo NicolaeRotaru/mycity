@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import type { SchedaCliente } from './scheda-cliente';
+import { analisiPerChiNonHaPagato } from './rapporto';
 
 /**
  * L'ANALISI SUBITO, LA SCHEDA E LA PAGELLA DOPO L'ABBONAMENTO — 25/11/2026.
@@ -44,7 +45,9 @@ export function schedaEPagellaAperte(d: DatiSblocco): boolean {
 export function schedaPerIlSito(scheda: SchedaCliente | null | undefined, aperta: boolean): SchedaCliente | null {
   if (!scheda) return null;
   if (aperta) return scheda;
-  return { ...scheda, campi: {}, da_confermare: [] };
+  // 26/11/2026 — Il rapporto dell'imprenditore (11 parti) arriva dopo il pagamento (Nicola): prima esce solo
+  // l'assaggio (lib/agenzia/rapporto.ts).
+  return { ...scheda, campi: {}, da_confermare: [], analisi: analisiPerChiNonHaPagato(scheda.analisi) };
 }
 
 /**

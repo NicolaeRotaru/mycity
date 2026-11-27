@@ -125,7 +125,8 @@ describe('ogni fascia apre il suo preventivo', () => {
     const r = await monta(PaginaAbbonamento);
     expect(r.querySelector('h1')?.textContent).toBe('Il preventivo di Pane Quotidiano col Premium');
     expect(spuntata(r)).toBe('premium');
-    expect(r.textContent).toContain('Paga e attiva il Premium');
+    // 26/11/2026: per ora contanti (lib/agenzia/pagamento-servizi.ts): la fascia scelta è quella che si chiede.
+    expect(r.textContent).toContain('Voglio il Premium: contattatemi');
   });
 
   it('senza fascia, o con una sconosciuta, vale quella consigliata', async () => {
