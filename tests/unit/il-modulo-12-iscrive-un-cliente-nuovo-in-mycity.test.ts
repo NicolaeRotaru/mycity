@@ -20,6 +20,7 @@ const db = vi.hoisted(() => ({
   etaMinuti: 0,
   /** Un altro invio scrive il link un attimo prima di questo (due invii insieme). */
   linkDaAltri: false,
+  rompiLink: 0,
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -63,6 +64,7 @@ vi.mock('@/lib/supabase/server', () => ({
           let esito: { error: { message: string } | null; data: unknown[] };
           if (tabella === 'profiles' && db.rompiProfilo > 0) { db.rompiProfilo -= 1; esito = { error: { message: 'connessione persa' }, data: [] }; }
           else if (tabella === 'profiles') { db.profili.set(String(riga.id), { ...db.profili.get(String(riga.id)), ...riga }); esito = { error: null, data: [riga] }; }
+          else if (tabella === 'preventivi_con_codice' && db.rompiLink > 0) { db.rompiLink -= 1; esito = { error: { message: 'connessione persa' }, data: [] }; }
           else if (tabella === 'preventivi_con_codice') {
             const scritta = !(o?.ignoreDuplicates && (db.link.has(String(riga.seller_id)) || db.linkDaAltri));
             if (db.linkDaAltri && !db.link.has(String(riga.seller_id))) db.link.set(String(riga.seller_id), { seller_id: String(riga.seller_id), codice: 'd'.repeat(64) });
@@ -93,7 +95,7 @@ const chiama = async (corpo: unknown, segreto: string | null = SEGRETO) => {
 const BAR = { tipo: 'nuova-attivita', nome: 'Bar Prova', tipo_attivita: 'bar', citta: 'Piacenza', indirizzo: 'Via Roma 1' };
 
 beforeEach(() => {
-  db.utenti.clear(); db.profili.clear(); db.link.clear(); db.creaUtente.length = 0; db.ultimoId = 0; db.rompiProfilo = 0; db.etaMinuti = 0; db.linkDaAltri = false;
+  db.utenti.clear(); db.profili.clear(); db.link.clear(); db.creaUtente.length = 0; db.ultimoId = 0; db.rompiProfilo = 0; db.etaMinuti = 0; db.linkDaAltri = false; db.rompiLink = 0;
   process.env.N8N_SCHEDA_CLIENTE_SEGRETO = SEGRETO;
 });
 
@@ -173,6 +175,19 @@ describe('il negozio nasce come Ora del Gusto', () => {
     expect(db.link.has(b.id_attivita)).toBe(true);
     // E un terzo invio è un invio qualunque: stesso negozio, non più «nuovo».
     expect(((await (await chiama(BAR)).json()) as { nuova: boolean }).nuova).toBe(false);
+  });
+
+  it('anche col profilo scritto e il link caduto, il secondo invio finisce l iscrizione (consiglio della sessione #345)', async () => {
+    db.rompiLink = 1;
+    expect((await chiama(BAR)).status).toBe(503);
+    expect(db.profili.size).toBe(1);
+    expect(db.link.size).toBe(0);
+    const r = await chiama(BAR);
+    expect(r.status).toBe(201);
+    const b = (await r.json()) as { id_attivita: string; nuova: boolean };
+    expect(b.nuova).toBe(true);
+    expect(db.utenti.size).toBe(1);
+    expect(db.link.has(b.id_attivita)).toBe(true);
   });
 
   it('i paletti del recupero (collaudo del 27/11): niente account altrui, niente omonimi, niente invii doppi', async () => {
