@@ -24,7 +24,7 @@ export const ID_PRODOTTO_SDG: Record<Abbonamento, string> = {
  */
 export const FRASE_COME_SI_PRENDE = PAGAMENTO_ONLINE_SERVIZI
   ? 'Si attiva dalla pagina Abbonamento del tuo negozio, non dal carrello.'
-  : 'Non si compra dal carrello: lo chiedi dalla pagina Abbonamento del tuo negozio e, per ora, si paga in contanti, di persona.';
+  : 'Non si compra dal carrello: lo chiedi dalla pagina Abbonamento della tua attività e, per ora, si paga in contanti, di persona.';
 
 export type ProdottoSdg = { id: string; fascia: Abbonamento; nome: string; prezzoEuro: string; descrizione: string };
 

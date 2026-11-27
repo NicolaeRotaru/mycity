@@ -53,6 +53,9 @@ describe('la regola del carrello rifiuta gli abbonamenti di SDG (carta e contant
     if (!PAGAMENTO_ONLINE_SERVIZI) {
       expect(esito.scarto.messaggio).not.toContain('si attiva');
       expect(esito.scarto.messaggio).toContain('si paga in contanti, di persona');
+      // 27/11/2026, Nicola verso le 21:25: sul lato SDG si dice «la tua attività», non «il tuo negozio».
+      expect(esito.scarto.messaggio).toContain('della tua attività');
+      expect(esito.scarto.messaggio).not.toContain('tuo negozio');
     }
     expect(rispostaPerCarrelloNonVendibile(esito.scarto).status).toBe(400);
   });
@@ -181,6 +184,9 @@ describe('i tre prodotti dicono quello che dice il listino', () => {
       if (!PAGAMENTO_ONLINE_SERVIZI) {
         expect(p.descrizione).toContain('si paga in contanti, di persona');
         expect(p.descrizione).not.toContain('Si attiva dalla pagina Abbonamento');
+        // Nicola, 27/11 verso le 21:25: sul lato SDG «la tua attività», non «il tuo negozio».
+        expect(p.descrizione).toContain('dalla pagina Abbonamento della tua attività');
+        expect(p.descrizione).not.toContain('tuo negozio');
       }
     }
     // Tocca solo le descrizioni: nome e prezzo restano quelli della 999d.

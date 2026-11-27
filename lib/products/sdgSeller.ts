@@ -42,4 +42,4 @@ export function doveSiAttivaLAbbonamento(chiGuardaEUnNegozio: boolean): { href: 
  */
 export const MESSAGGIO_ABBONAMENTO_NON_IN_CARRELLO = PAGAMENTO_ONLINE_SERVIZI
   ? 'è un abbonamento ai servizi: non si compra col carrello, si attiva dalla pagina Abbonamento del tuo negozio.'
-  : 'è un abbonamento ai servizi: non si compra col carrello, lo chiedi dalla pagina Abbonamento del tuo negozio e, per ora, si paga in contanti, di persona.';
+  : 'è un abbonamento ai servizi: non si compra col carrello, lo chiedi dalla pagina Abbonamento della tua attività e, per ora, si paga in contanti, di persona.';

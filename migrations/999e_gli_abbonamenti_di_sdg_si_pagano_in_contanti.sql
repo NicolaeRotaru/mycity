@@ -36,7 +36,7 @@ Cosa comprende:
 · Vetrina: Vetrina su MyCity con ordini, consegna e ritiro in negozio.
 · Assistenza: Su WhatsApp, risposta entro 24 ore lavorative.
 
-Non si compra dal carrello: lo chiedi dalla pagina Abbonamento del tuo negozio e, per ora, si paga in contanti, di persona. Nessun vincolo di durata: disdici quando vuoi, con 30 giorni di preavviso. Il primo mese costa la metà.
+Non si compra dal carrello: lo chiedi dalla pagina Abbonamento della tua attività e, per ora, si paga in contanti, di persona. Nessun vincolo di durata: disdici quando vuoi, con 30 giorni di preavviso. Il primo mese costa la metà.
 I servizi li realizza SDG Agenzia, il partner di MyCity per foto, video, social e web.'),
     ('11111111-1111-1111-1111-5d9000000102'::uuid, 'Per crescere ogni settimana: più contenuti, più clienti che ti trovano.
 
@@ -48,7 +48,7 @@ Cosa comprende:
 · Vetrina: Vetrina su MyCity con ordini, consegna e ritiro in negozio, in evidenza nella tua categoria una settimana al mese.
 · Assistenza: Su WhatsApp, risposta entro 4 ore lavorative.
 
-Non si compra dal carrello: lo chiedi dalla pagina Abbonamento del tuo negozio e, per ora, si paga in contanti, di persona. Nessun vincolo di durata: disdici quando vuoi, con 30 giorni di preavviso. Il primo mese costa la metà.
+Non si compra dal carrello: lo chiedi dalla pagina Abbonamento della tua attività e, per ora, si paga in contanti, di persona. Nessun vincolo di durata: disdici quando vuoi, con 30 giorni di preavviso. Il primo mese costa la metà.
 I servizi li realizza SDG Agenzia, il partner di MyCity per foto, video, social e web.'),
     ('11111111-1111-1111-1111-5d9000000103'::uuid, 'Il servizio completo: foto e video ogni mese, un referente tutto tuo.
 
@@ -60,7 +60,7 @@ Cosa comprende:
 · Vetrina: Vetrina su MyCity con ordini, consegna e ritiro in negozio, in home page due settimane al mese.
 · Assistenza: Un referente tutto tuo e una visita nel locale ogni mese.
 
-Non si compra dal carrello: lo chiedi dalla pagina Abbonamento del tuo negozio e, per ora, si paga in contanti, di persona. Nessun vincolo di durata: disdici quando vuoi, con 30 giorni di preavviso. Il primo mese costa la metà.
+Non si compra dal carrello: lo chiedi dalla pagina Abbonamento della tua attività e, per ora, si paga in contanti, di persona. Nessun vincolo di durata: disdici quando vuoi, con 30 giorni di preavviso. Il primo mese costa la metà.
 I servizi li realizza SDG Agenzia, il partner di MyCity per foto, video, social e web.')
 ) AS v(id, description)
 WHERE p.id = v.id
