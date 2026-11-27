@@ -183,7 +183,14 @@ export default function TermsPage() {
             prima il compenso della consegna e versa il resto (compensoDalContante in lib/shipping.ts). */}
         <p>
           I contanti li riceve il Rider alla consegna: ne trattiene il proprio compenso per la
-          consegna e consegna il resto a MyCity. MyCity versa al
+          consegna e consegna il resto a MyCity.{' '}
+          {/* 27/11/2026 — Non diceva cosa succede quando il contante non copre il compenso (credito
+              MyCity scalato dal totale): il Rider se ne tiene solo quanto ha in mano e il resto gli
+              arriva per bonifico (compensoDalContante → residuoDovutoCents in lib/shipping.ts). */}
+          Se il contante da pagare alla consegna è meno del compenso del Rider (per esempio perché
+          l&apos;Acquirente ha usato il credito MyCity, anche fino ad azzerare il totale), il Rider
+          trattiene solo il contante che riceve e la parte di compenso che manca gliela versa MyCity
+          con un bonifico, come gli altri compensi. MyCity versa al
           Venditore quanto gli spetta, al netto della commissione di servizio, con un bonifico
           <strong> ogni lunedì</strong> per le consegne della settimana precedente.
         </p>
