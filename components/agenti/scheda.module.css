@@ -55,6 +55,8 @@
 @keyframes luce{from{background-position:200% 0}to{background-position:-200% 0}}
 .ultime{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center}
 .ultime button{font:inherit;font-size:.85rem;border:1px solid var(--riga);background:var(--carta);color:var(--inchiostro);border-radius:99px;padding:.3rem .8rem;cursor:pointer}
+/* 27/11/2026 — «Hanno confermato»: le attività confermate si riaprono come le schede, col bordo pieno. */
+.ultime a{font-size:.85rem;border:2px solid var(--oliva);background:var(--carta);color:var(--inchiostro);border-radius:99px;padding:.25rem .8rem;text-decoration:none}
 .scelta{border:2px solid var(--cotto)}
 .piede{font-size:.8rem;color:var(--tenue);border-top:1px solid var(--riga);padding-top:1rem}
 .barraAlta{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap}

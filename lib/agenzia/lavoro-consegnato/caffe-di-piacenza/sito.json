@@ -1,0 +1,88 @@
+{
+  "titolo": "Il sito del Caffè di Piacenza — versione Business",
+  "aggiornato_il": "2026-11-27T18:45:00+01:00",
+  "stato": "da_pubblicare",
+  "indirizzo": null,
+  "codice": null,
+  "pagine": [
+    {
+      "titolo": "Home",
+      "percorso": "/",
+      "cosa_contiene": "Il vostro logo, «colazioni · pasticceria · pranzi · aperitivi», le foto del cappuccino e della vetrina, l'avviso «aperto ora / chiuso» con l'ora di Piacenza, le recensioni del vostro sito, i prossimi appuntamenti in Piazza Duomo e gli orari."
+    },
+    {
+      "titolo": "Il bar",
+      "percorso": "/il-bar/",
+      "cosa_contiene": "La storia del bar e della nuova gestione dal 2021, cosa c'è da sapere, otto foto della sala, del bancone e delle vetrine."
+    },
+    {
+      "titolo": "Menu",
+      "percorso": "/menu/",
+      "cosa_contiene": "Il menu del vostro sito diviso in caffetteria, pasticceria, pranzo e salato, aperitivo e vini, coi vostri disegni a un tratto. Senza prezzi."
+    },
+    {
+      "titolo": "Dicembre",
+      "percorso": "/dicembre/",
+      "cosa_contiene": "Gli otto appuntamenti di Natale 2026 dal programma del Comune; quelli in Piazza Duomo sono segnati e quelli già passati si spengono da soli."
+    },
+    {
+      "titolo": "Contatti",
+      "percorso": "/contatti/",
+      "cosa_contiene": "Indirizzo, telefono, email, Instagram e Facebook, gli orari con il giorno di oggi in evidenza, la mappa e il pulsante «Indicazioni»."
+    }
+  ],
+  "cosa_ha_di_business": [
+    "Lo stile del vostro locale: il logo nell'alone della tazzina, i disegni a un tratto, il crema, il marrone e il color cotto del pavimento",
+    "Cinque pagine vere, ognuna col suo indirizzo, titolo e descrizione per Google",
+    "Le foto del locale: cappuccino, vetrine, sala, bancone",
+    "Dati per Google del bar: indirizzo, telefono, orari, posizione sulla mappa, Instagram e Facebook",
+    "Anteprima pronta per WhatsApp e social",
+    "Sul telefono una barra fissa con «Chiama» e «Indicazioni»",
+    "Avviso «aperto ora / chiude alle 20:00» calcolato con l'ora di Piacenza",
+    "Mappa nella pagina Contatti e collegamento alla vetrina su MyCity"
+  ],
+  "da_confermare": [
+    {
+      "voce": "Orari",
+      "perche": "lunedì-sabato 7:30-20:00 e domenica 8:30-13:00 vengono dal vostro sito di oggi; quelli delle feste arrivano"
+    },
+    {
+      "voce": "Menu e prezzi",
+      "perche": "le voci vengono dal vostro sito di oggi; i prezzi non ci sono"
+    },
+    {
+      "voce": "Foto",
+      "perche": "oggi sono quelle del vostro sito, senza persone; SDG aggiunge le foto nuove nei prossimi giorni"
+    },
+    {
+      "voce": "Recensioni",
+      "perche": "sono le quattro che pubblicate già sul vostro sito"
+    },
+    {
+      "voce": "Dominio",
+      "perche": "il sito di oggi è su sites.google.com; il dominio col nome del bar si sceglie insieme"
+    }
+  ],
+  "prossimi_passi": [
+    {
+      "cosa": "Pubblicare il sito a un indirizzo suo",
+      "chi": "SDG",
+      "colore": "giallo"
+    },
+    {
+      "cosa": "Controllare testi, orari e menu: quando dici sì togliamo la scritta «Anteprima» e lo apriamo a Google",
+      "chi": "Tu, con SDG",
+      "colore": "giallo"
+    },
+    {
+      "cosa": "Scegliere un dominio col nome del bar",
+      "chi": "Tu, con SDG",
+      "colore": "giallo"
+    }
+  ],
+  "fonti": [
+    "https://sites.google.com/view/bardipiacenza/home",
+    "https://www.tripadvisor.it/Restaurant_Review-g187805-d13484948-Reviews-Caffe_di_Piacenza-Piacenza_Province_of_Piacenza_Emilia_Romagna.html",
+    "https://wecake.it/pasticcerie/piacenza/Bar-Caffe-Di-Piacenza-8357"
+  ]
+}

@@ -215,7 +215,9 @@ describe('ogni pagina di servizio è il suo preventivo', () => {
 describe('la pagina Abbonamento serve solo a scegliere e pagare', () => {
   it('niente «Cosa manca» né anteprime dei servizi', async () => {
     const r = await monta(PaginaAbbonamento);
-    expect(r.textContent).toContain('Cosa ci guadagni');
+    // 27/11/2026 — Nicola: «togli questo pezzo "cosa ci guadagni"»: il riquadro non c’è più.
+    expect(r.textContent).not.toContain('Cosa ci guadagni');
+    expect(r.querySelector('#cosa-ci-guadagni')).toBeNull();
     expect(r.querySelectorAll('input[name="abbonamento"]')).toHaveLength(3);
     expect(r.textContent).not.toContain('Cosa manca alla tua vetrina');
     expect(r.textContent).not.toContain('I formati che ricevi');
