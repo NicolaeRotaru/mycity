@@ -36,6 +36,10 @@ vi.mock('@/lib/agenzia/pagamento-servizi', async (originale) => ({
   pagamentoOnlineAttivo: () => true,
 }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+// 27/11/2026 — L'accettazione chiede il codice dell'email (lib/agenzia/codice-dal-link.ts, Nicola: «codice
+// dall'email»): qui il codice è sempre giusto, perché queste prove guardano cosa succede DOPO. Il codice lo provano
+// tests/unit/il-titolare-entra-col-codice-dell-email.test.ts.
+vi.mock('@/lib/agenzia/codice-dal-link', () => ({ verificaCodice: () => 'giusto', chiaveDelGettone: () => 'gettone-delle-prove' }));
 vi.mock('@/lib/rate-limit', () => ({
   rateLimitAsync: vi.fn(async () => ({ allowed: true, remaining: 10, retryAfterSec: 0, limit: 10 })),
   getClientIp: () => '1.2.3.4',
@@ -109,7 +113,7 @@ async function accetta(corpo: Record<string, unknown>, codice = CODICE) {
   );
 }
 
-const BUONO = { email: 'Titolare@Example.it', abbonamento: 'business', accettoCondizioni: true };
+const BUONO = { email: 'Titolare@Example.it', abbonamento: 'business', accettoCondizioni: true, codice: '123456', gettone: 'g'.repeat(20) };
 
 beforeEach(() => {
   vi.resetModules();

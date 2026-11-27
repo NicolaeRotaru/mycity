@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CheckCircle2 } from 'lucide-react';
 import { getAdminSupabase } from '@/lib/supabase/server';
@@ -7,7 +8,7 @@ import { CODICE_VALIDO } from '@/lib/agenzia/preventivo-col-codice';
 import { PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagamento-servizi';
 import { leggiDemoDalLink } from '@/lib/agenzia/demo-dal-link';
 import { indirizziDemo } from '@/lib/agenzia/indirizzi-demo';
-import { fasciaDaIndirizzo, hrefFascia } from '@/lib/agenzia/indirizzi-servizi';
+import { fasciaDaIndirizzo, hrefFascia, PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
 import AbbonamentiInBreve from '@/components/seller/AbbonamentiInBreve';
 import AnalisiAziendale from '@/components/seller/AnalisiAziendale';
@@ -81,6 +82,10 @@ export default async function PreventivoDalLink({
             Ti abbiamo scritto all’email che ci hai dato, col link per entrare nella pagina di {pc.nomeAttivita}.
             Controlliamo i dati del negozio e poi va online.
           </p>
+          {/* 27/11/2026 — Chi ha confermato da questo telefono è già dentro: il pulsante lo riporta alla sua pagina. */}
+          <Link href={PERCORSO_ABBONAMENTO} className="mt-3 inline-flex rounded-lg bg-primary-700 px-4 py-2 text-sm font-bold text-white hover:bg-primary-800">
+            Entra nella tua pagina
+          </Link>
         </div>
         {/* 26/11/2026 — Per ora si paga in contanti (lib/agenzia/pagamento-servizi.ts): niente «Paga» qui. */}
         {(!attivo || inContanti) && !PAGAMENTO_ONLINE_SERVIZI && (

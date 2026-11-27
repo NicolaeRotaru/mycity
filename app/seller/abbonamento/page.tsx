@@ -9,6 +9,7 @@ import { AlertTriangle, Check, CheckCircle2, CreditCard, Send, TrendingUp } from
 import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
 import CosaCeNellAnalisi from '@/components/seller/CosaCeNellAnalisi';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
+import VisitaSdg from '@/components/seller/VisitaSdg';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import {
@@ -150,6 +151,8 @@ export default function PaginaAbbonamento() {
         sub={`${descriviAttivita(p.tipoAttivita)}. Cosa facciamo per te, quanto costa e come si attiva. Foto e video, sito web, gestione dei social con Google Maps e analisi del business: tutti e quattro in ogni abbonamento.`}
       />
       <p className="-mt-2 mb-4 text-sm font-semibold text-primary-700">{FRASE_PARTNER}</p>
+      {/* 27/11/2026 — Il giorno della visita di SDG scelto nel link: la prima cosa che il titolare rilegge entrando. */}
+      <VisitaSdg />
       {/* Le pagine dei servizi, per chi vuole rileggere cosa riceve prima di scegliere (collaudo del 24/11). */}
       <nav aria-label="I servizi compresi" className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <span className="text-ink-600">Cosa ricevi:</span>

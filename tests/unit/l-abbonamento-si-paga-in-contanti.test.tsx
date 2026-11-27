@@ -24,6 +24,10 @@ const stato = vi.hoisted(() => ({
   accettati: 0,
 }));
 
+// 27/11/2026 — L'accettazione chiede il codice dell'email (lib/agenzia/codice-dal-link.ts, Nicola: «codice
+// dall'email»): qui il codice è sempre giusto, perché queste prove guardano cosa succede DOPO. Il codice lo provano
+// tests/unit/il-titolare-entra-col-codice-dell-email.test.ts.
+vi.mock('@/lib/agenzia/codice-dal-link', () => ({ verificaCodice: () => 'giusto', chiaveDelGettone: () => 'gettone-delle-prove' }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@/lib/env', () => ({ env: { appUrl: () => 'https://www.mycity-marketplace.com' } }));
 vi.mock('@/lib/rate-limit', () => ({
@@ -62,7 +66,7 @@ const { apriCassaServizi } = await import('@/lib/agenzia/cassa-servizi');
 const { POST: pagaDalLink } = await import('@/app/api/preventivo/[codice]/paga/route');
 const { POST: accettaDalLink } = await import('@/app/api/preventivo/[codice]/accetta/route');
 const { POST: pagaDallaDashboard } = await import('@/app/api/seller/preventivo/paga/route');
-const { default: AccettaDalLink } = await import('@/app/preventivo/[codice]/abbonamento/AccettaDalLink');
+const { default: AccettaDalLink } = await import('@/app/preventivo/[codice]/(demo)/abbonamento/AccettaDalLink');
 
 const CODICE = 'a'.repeat(64);
 const ctx = { params: Promise.resolve({ codice: CODICE }) };
@@ -105,7 +109,7 @@ describe('il pagamento online è spento', () => {
   });
 
   it('dal link si accetta lo stesso: 200, nessun indirizzo di pagamento, nessuna cassa', async () => {
-    const r = await accettaDalLink(post(`http://localhost/api/preventivo/${CODICE}/accetta`, { email: 'titolare@esempio.it', abbonamento: 'business', accettoCondizioni: true }), ctx);
+    const r = await accettaDalLink(post(`http://localhost/api/preventivo/${CODICE}/accetta`, { email: 'titolare@esempio.it', abbonamento: 'business', accettoCondizioni: true, codice: '123456', gettone: 'g'.repeat(20) }), ctx);
     expect(r.status).toBe(200);
     const corpo = (await r.json()) as { ok: boolean; data: { url: string | null; accessoInviato: boolean } };
     expect(corpo.ok).toBe(true);
@@ -120,7 +124,7 @@ describe('il pulsante del link', () => {
   let root: Root | null = null;
   afterEach(() => { act(() => root?.unmount()); root = null; document.body.innerHTML = ''; });
 
-  it('dice «Accetto il preventivo», niente «pago», e sotto spiega che si paga in contanti', async () => {
+  it('la vecchia pagina della demo porta alla conferma col codice, niente «pago», e sotto spiega che si paga in contanti', async () => {
     (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
     const radice = document.createElement('div');
     document.body.appendChild(radice);
@@ -128,8 +132,10 @@ describe('il pulsante del link', () => {
     await act(async () => {
       root!.render(createElement(AccettaDalLink, { codice: CODICE, consigliato: 'business', prezzi: { base: 30000, business: 60000, premium: 90000 }, primoMeseScontato: true }));
     });
-    const pulsante = radice.querySelector('button[type="submit"]');
-    expect(pulsante?.textContent).toBe('Accetto il preventivo');
+    // 27/11/2026 — Da qui non si accetta più: si va alla pagina della conferma, col codice dell'email.
+    expect(radice.querySelector('button[type="submit"]')).toBeNull();
+    const vai = [...radice.querySelectorAll('a')].find((a) => a.textContent === 'Conferma il Business');
+    expect(vai?.getAttribute('href')).toBe(`/preventivo/${CODICE}?fascia=business`);
     expect(radice.textContent).not.toMatch(/pago|Accetta e attiva/i);
     expect(radice.textContent).toContain(FRASE_CONTANTI);
   });

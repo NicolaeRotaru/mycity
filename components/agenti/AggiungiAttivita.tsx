@@ -79,11 +79,11 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null }: {
           : sbloccata
             ? <p>La sua pagina è sbloccata col {nomeFascia}, fino alla disdetta. Sul marketplace la sua vetrina si vede solo dopo l’approvazione di Nicola.</p>
             : <p className={c('errore')}>La sua pagina non si è sbloccata col {nomeFascia}: dillo a Nicola.</p>}
-        <p>Il titolare entra quando accetta il preventivo dal link.{avvisato ? ' Nicola ha ricevuto l’avviso.' : ''}</p>
+        <p>Il titolare entra nella sua pagina appena conferma l’abbonamento dal link.{avvisato ? ' Nicola ha ricevuto l’avviso.' : ''}</p>
         {avvisoDovuto && !avvisato && <p className={c('errore')}>L’avviso a Nicola non è partito: diglielo tu.</p>}
         {link ? (
           <>
-            <p className={c('nota')}>Manda questo link al titolare: apre il suo preventivo e preme «Accetto il preventivo».</p>
+            <p className={c('nota')}>Manda questo link al titolare: vede i tre abbonamenti {nomeFascia ? `col ${nomeFascia}` : 'con la sua scelta'} già segnato, preme «Confermo» ed entra.</p>
             <p className={c('link')}>{link}</p>
             <button type="button" className={c('bottone')} onClick={copia}>{copiato ? 'Copiato' : 'Copia il link'}</button>
           </>

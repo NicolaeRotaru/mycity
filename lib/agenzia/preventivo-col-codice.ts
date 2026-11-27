@@ -10,6 +10,7 @@ import { campiPerIlProfilo, leggiSchedaSalvata } from '@/lib/agenzia/scheda-clie
 import { leggiSchedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
 import { pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
 import { sbloccaInContanti, sbloccoRiuscito } from '@/lib/agenzia/abbonamento-contanti';
+import { ORA_GIA_PRESA, scriviVisita } from '@/lib/agenzia/visita-sdg';
 
 /**
  * IL PREVENTIVO COL LINK COL CODICE — 24/11/2026.
@@ -35,6 +36,20 @@ import { sbloccaInContanti, sbloccoRiuscito } from '@/lib/agenzia/abbonamento-co
  * 27/11/2026 02:26 — Nicola: «in automatico deve sbloccarsi la pagina del venditore in base all'abbonamento»,
  * subito e fino alla disdetta. Con il pagamento online spento, chi accetta ha la pagina sbloccata nella fascia
  * che accetta (lib/agenzia/abbonamento-contanti.ts): se l'agente ne aveva scelta un'altra, si allinea a questa.
+ *
+ * 27/11/2026 — Nicola: «dopo il click entra nella sua pagina venditore con l'abbonamento che ha scelto», e sul
+ * rischio trovato dal collaudo della sicurezza «codice dall'email». Chi chiama (app/api/preventivo/[codice]/accetta)
+ * accetta solo dopo che il titolare ha scritto il codice giusto (lib/agenzia/codice-dal-link.ts): fino a lì
+ * l'utente del negozio resta bloccato e senza email. Con `entraSubito` chi chiama apre poi la sessione del
+ * titolare nella stessa risposta (lib/agenzia/entra-dal-link.ts): qui si crea il gettone d'accesso monouso e
+ * glielo si passa, PRIMA del link dell'email, perché un gettone nuovo dello stesso tipo può annullare quello
+ * di prima, e il link dell'email deve restare buono.
+ *
+ * 27/11/2026 verso le 17:40 — Nicola: nello stesso passo il titolare sceglie anche giorno e ora in cui il team
+ * creativo di SDG passa da lui (piano editoriale, foto e video). La scelta (`visita`, già controllata da chi
+ * chiama con lib/agenzia/visita-sdg.ts) si salva sul preventivo nella stessa scrittura che lo prende
+ * (`visita_il`, migrazione 999b): se l'ora l'ha appena presa un'altra attività, niente si accetta e il titolare
+ * ne sceglie un'altra. Senza la 999b nel database si accetta lo stesso e il giorno arriva a Nicola nell'avviso.
  */
 
 export const CODICE_VALIDO = /^[0-9a-f]{64}$/;
@@ -68,8 +83,17 @@ export async function leggiPreventivoColCodice(codice: string): Promise<Preventi
 }
 
 export type EsitoAccettazione =
-  | { ok: true; sellerId: string; accessoInviato: boolean }
-  | { ok: false; motivo: 'GIA_ACCETTATO' | 'CHIUSO' | 'EMAIL_GIA_USATA' | 'GUASTO'; messaggio: string };
+  | { ok: true; sellerId: string; accessoInviato: boolean; entrato: boolean }
+  | { ok: false; motivo: 'GIA_ACCETTATO' | 'CHIUSO' | 'EMAIL_GIA_USATA' | 'ORA_PRESA' | 'GUASTO'; messaggio: string };
+
+/**
+ * La colonna della visita non c'è ancora (migrazione 999b non applicata): PostgREST o Postgres. Solo allora si
+ * ritenta senza la visita; ogni altro errore (ora già presa, database giù) non si ritenta.
+ */
+function colonnaVisitaMancante(e: { code?: string; message?: string }): boolean {
+  if (e.code === '23505') return false;
+  return e.code === 'PGRST204' || e.code === '42703' || /visita_il/.test(e.message ?? '') && /column|colonna|schema/i.test(e.message ?? '');
+}
 
 /** Il titolare accetta dal link: email, profilo compilato, revisione, avvisi. Il pagamento lo apre chi chiama. */
 export async function accettaPreventivoColCodice(input: {
@@ -77,8 +101,12 @@ export async function accettaPreventivoColCodice(input: {
   codice: string;
   email: string;
   fascia: Abbonamento;
+  /** L'inizio della visita di SDG scelto dal titolare (ISO, già controllato da chi chiama). */
+  visita?: string;
+  /** Apre la sessione del titolare col gettone monouso; vero se è entrato. Assente: entra dall'email. */
+  entraSubito?: (gettone: string) => Promise<boolean>;
 }): Promise<EsitoAccettazione> {
-  const { preventivo, codice, email, fascia } = input;
+  const { preventivo, codice, email, fascia, visita } = input;
   if (preventivo.stato === 'accettato') {
     return { ok: false, motivo: 'GIA_ACCETTATO', messaggio: 'Questo preventivo è già stato accettato: controlla la tua email per entrare.' };
   }
@@ -89,12 +117,22 @@ export async function accettaPreventivoColCodice(input: {
   const id = preventivo.sellerId;
 
   // Il preventivo si prende per primo, e solo se è ancora aperto: due invii insieme non fanno due account.
-  const presa = await admin
-    .from('preventivi_con_codice')
-    .update({ stato: 'accettato', fascia_scelta: fascia, accettato_il: new Date().toISOString(), condizioni_accettate_il: new Date().toISOString() })
-    .eq('codice', codice)
-    .eq('stato', 'aperto')
-    .select('seller_id');
+  // Con la visita di SDG nella stessa scrittura: l'indice unico della 999b non dà la stessa ora a due attività.
+  const ora = new Date().toISOString();
+  const valori = { stato: 'accettato', fascia_scelta: fascia, accettato_il: ora, condizioni_accettate_il: ora };
+  // Anche il ritentativo senza la visita prende il preventivo solo se è ancora aperto, e conta le righe tornate.
+  const prendi = (v: Record<string, unknown>) =>
+    admin.from('preventivi_con_codice').update(v).eq('codice', codice).eq('stato', 'aperto').select('seller_id');
+  let visitaSalvata = Boolean(visita);
+  let presa = await prendi(visita ? { ...valori, visita_il: visita } : valori);
+  if (presa.error && visita && colonnaVisitaMancante(presa.error)) {
+    logger.warn('[preventivo-codice] visita non salvata: manca la migrazione 999b, va solo nell avviso', { sellerId: id });
+    visitaSalvata = false;
+    presa = await prendi(valori);
+  }
+  if (presa.error && visita && (presa.error as { code?: string }).code === '23505') {
+    return { ok: false, motivo: 'ORA_PRESA', messaggio: ORA_GIA_PRESA };
+  }
   if (presa.error) {
     logger.error('[preventivo-codice] accettazione non salvata', { sellerId: id, message: presa.error.message });
     return { ok: false, motivo: 'GUASTO', messaggio: 'Non sono riuscito a salvare la tua risposta. Riprova fra un momento.' };
@@ -108,7 +146,9 @@ export async function accettaPreventivoColCodice(input: {
   if (utente.error) {
     // Il preventivo torna aperto: il titolare può riprovare con un'altra email.
     // La scelta dell'agente (se c'era) torna com'era: il link riapre il preventivo su quella fascia.
-    await admin.from('preventivi_con_codice').update({ stato: 'aperto', fascia_scelta: preventivo.fasciaScelta, accettato_il: null, condizioni_accettate_il: null }).eq('codice', codice);
+    // Anche la visita torna libera: quell'ora la può prendere un'altra attività.
+    const indietro = { stato: 'aperto', fascia_scelta: preventivo.fasciaScelta, accettato_il: null, condizioni_accettate_il: null };
+    await admin.from('preventivi_con_codice').update(visitaSalvata ? { ...indietro, visita_il: null } : indietro).eq('codice', codice);
     const giaUsata = /already|exists|registered|email_exists/i.test(`${utente.error.message} ${(utente.error as { code?: string }).code ?? ''}`);
     logger.warn('[preventivo-codice] email non collegata', { sellerId: id, giaUsata, message: utente.error.message });
     // Stesso messaggio e stesso codice (409) nei due casi: non si deve poter scoprire da qui se un'email
@@ -145,6 +185,9 @@ export async function accettaPreventivoColCodice(input: {
     `${preventivo.nomeAttivita} ha accettato il preventivo`,
     [
       `Abbonamento ${FASCE[fascia].nome}. Email data dal titolare: ${email} — controlla col titolare che sia la sua.`,
+      ...(visita
+        ? [`Il team di SDG passa da lui ${scriviVisita(visita)} (piano editoriale, foto e video)${visitaSalvata ? '.' : ': ATTENZIONE, il giorno NON è salvato nel database (manca la migrazione 999b), segnalo a mano a SDG.'}`]
+        : ['Non ha scelto il giorno della visita di SDG: chiamalo per fissarlo.']),
       profiloCompilato
         ? 'Il negozio è in revisione, ma arriva dal preventivo: mancano i dati dell’iscrizione (IBAN, documenti). Non approvarlo prima di averli.'
         : 'ATTENZIONE: il profilo non si è aggiornato (non è in revisione): sistemalo a mano.',
@@ -161,17 +204,30 @@ export async function accettaPreventivoColCodice(input: {
     { unaVoltaPer: `preventivo-codice:${id}` },
   ).catch((e: unknown) => logger.warn('[preventivo-codice] avviso a Nicola non partito', { sellerId: id, errore: String(e) }));
 
+  // 4) Il titolare entra subito, se chi chiama lo sa fare. Se non riesce, resta l'email qui sotto.
+  let entrato = false;
+  if (input.entraSubito) {
+    try {
+      const gettone = await admin.auth.admin.generateLink({ type: 'magiclink', email });
+      const hash = (gettone.data as { properties?: { hashed_token?: string } } | null)?.properties?.hashed_token;
+      if (gettone.error || !hash) throw new Error(gettone.error?.message ?? 'gettone senza codice');
+      entrato = await input.entraSubito(hash);
+    } catch (e) {
+      logger.warn('[preventivo-codice] ingresso subito non riuscito: entra dall email', { sellerId: id, errore: String(e) });
+    }
+  }
+
   let accessoInviato = false;
   try {
     const link = await admin.auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: `${env.appUrl()}${PERCORSO_ABBONAMENTO}` } });
     const azione = (link.data as { properties?: { action_link?: string } } | null)?.properties?.action_link;
     if (link.error || !azione) throw new Error(link.error?.message ?? 'link senza indirizzo');
-    const posta = accessoDopoIlPreventivoTemplate({ negozio: preventivo.nomeAttivita, link: azione });
+    const posta = accessoDopoIlPreventivoTemplate({ negozio: preventivo.nomeAttivita, link: azione, visita: visita ? scriviVisita(visita) : null });
     const inviata = await sendEmail({ to: email, ...posta });
     accessoInviato = inviata.ok;
     if (!inviata.ok) logger.warn('[preventivo-codice] email di accesso non partita', { sellerId: id });
   } catch (e) {
     logger.error('[preventivo-codice] link di accesso non creato', { sellerId: id, errore: String(e) });
   }
-  return { ok: true, sellerId: id, accessoInviato };
+  return { ok: true, sellerId: id, accessoInviato, entrato };
 }
