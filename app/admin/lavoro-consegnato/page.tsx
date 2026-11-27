@@ -44,8 +44,8 @@ export default function LavoroDeiClienti() {
 
       {isLoading && <LoadingState />}
       {isError && (
-        <p className="mt-4 text-sm text-ink-700">
-          Non sono riuscito a leggere il lavoro dei clienti.{' '}
+        <p className="mt-4 text-sm text-ink-700" role="alert">
+          Non sono riuscito a leggere il lavoro dei clienti. Se sei uscito dall&apos;account, rientra e riprova.{' '}
           <button type="button" onClick={() => refetch()} className="font-semibold text-primary-700 underline underline-offset-2">Riprova</button>
         </p>
       )}
@@ -82,6 +82,7 @@ export default function LavoroDeiClienti() {
           </div>
 
           <div className="mt-4">
+            {parti.length === 0 && <p className="text-sm text-ink-700">Per questo negozio non c&apos;è ancora nessuna voce consegnata da mostrare.</p>}
             {parteMostrata === 'sito' && negozio.lavoro.sito && <SitoConsegnato sito={negozio.lavoro.sito} fascia={negozio.lavoro.fascia} />}
             {parteMostrata === 'social' && negozio.lavoro.social && <PianoEditorialeConsegnato social={negozio.lavoro.social} />}
             {parteMostrata === 'analisi' && negozio.lavoro.analisi && <AnalisiConsegnata analisi={negozio.lavoro.analisi} />}

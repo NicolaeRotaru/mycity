@@ -7,7 +7,7 @@ import analisiSdg from './sdg/analisi.json';
 import socialSdg from './sdg/social.json';
 
 /**
- * SOLO LATO SERVER (la rotta /api/seller/lavoro-consegnato): l'analisi di SDG è interna e non deve finire
+ * SOLO LATO SERVER (le rotte /api/seller/lavoro-consegnato e /api/admin/lavoro-consegnato): l'analisi di SDG è interna e non deve finire
  * nel bundle del browser degli altri venditori. Non importare questo file da componenti client, né dal portiere.
  */
 function leggi<T extends z.ZodTypeAny>(nome: string, negozioId: string, schema: T, grezzo: unknown): z.infer<T> | undefined {

@@ -15,7 +15,7 @@ const stato = vi.hoisted(() => ({ ruolo: 'admin' as string, erroreNomi: null as 
 
 vi.mock('@/components/ui/LoadingState', () => ({ LoadingState: () => null }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() } }));
-// Il portiere vero delle rotte admin, con un'identità finta: chi non è admin riceve 403.
+// Portiere finto delle rotte admin: chi non è admin riceve 403. Il portiere vero (withAdminAuth) lo prova middleware.test.ts.
 vi.mock('@/lib/api/middleware', async () => {
   const { ApiErrors } = await import('@/lib/api/responses');
   return {
