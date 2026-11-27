@@ -2152,6 +2152,9 @@ export interface Database {
           external_synced_at: string | null;
           external_sync_status: string;
           non_recedibile: boolean;
+          tipo: string;
+          durata_minuti: number | null;
+          dove_servizio: string | null;
         };
         Insert: {
           id?: string;
@@ -2178,6 +2181,9 @@ export interface Database {
           external_synced_at?: string | null;
           external_sync_status?: string;
           non_recedibile?: boolean;
+          tipo?: string;
+          durata_minuti?: number | null;
+          dove_servizio?: string | null;
         };
         Update: {
           id?: string;
@@ -2204,6 +2210,9 @@ export interface Database {
           external_synced_at?: string | null;
           external_sync_status?: string;
           non_recedibile?: boolean;
+          tipo?: string;
+          durata_minuti?: number | null;
+          dove_servizio?: string | null;
         };
         Relationships: [];
       };

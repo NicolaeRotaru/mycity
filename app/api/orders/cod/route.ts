@@ -35,6 +35,7 @@ import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { ordineInContantiPuoNascere } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
 import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
+import { conColonneDelServizio } from '@/lib/products/servizio';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { formatPriceFromCents } from '@/lib/format';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
@@ -917,10 +918,12 @@ export const POST = withAuthRateLimit(
     type RigaVariante = { id: string; product_id: string; label: string; stock: number };
 
     const [prodottiLetti, discountMap, variantiLette, venditoriLetti] = await Promise.all([
-      supa
-        .from('products')
-        .select('id, name, price, seller_id, stock, status, has_variants')
-        .in('id', uniqueProductIds),
+      // 27/11/2026 — Col `tipo` (999g) la cassa rifiuta un servizio. Prima della 999g la colonna
+      // non c'è: si rilegge senza, e ogni riga vale «prodotto» (lib/products/servizio.ts).
+      conColonneDelServizio(
+        () => supa.from('products').select('id, name, price, seller_id, stock, status, has_variants, tipo').in('id', uniqueProductIds),
+        () => supa.from('products').select('id, name, price, seller_id, stock, status, has_variants').in('id', uniqueProductIds),
+      ),
       // Sconti promo attivi (per prodotto): il cliente paga il prezzo scontato che
       // vede, non il prezzo pieno. Stessa fonte del badge "In promo -X%".
       fetchActiveDiscounts(supa, allProductIds),
