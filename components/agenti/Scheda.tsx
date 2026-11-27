@@ -1,9 +1,21 @@
+'use client';
+
 // La scheda a schermo: le stesse sezioni di scheda.html (cervello/scheda-cliente.mjs → paginaScheda),
 // in un ordine pensato per chi la legge in strada: prima cosa dire e cosa offrire, poi i dati e le fonti.
 // Finché l'AD non ha finito, le sezioni sue mostrano «sta scrivendo»; quelle del programma sono già piene.
+//
+// 26/11/2026 — Nicola: «crea le 3 schede dell'abbonamento in cui inserisci i benefici in base all'abbonamento,
+// e siccome la pagina diventa troppo lunga, dividile in più pagine dentro un menù a tendina», «senza togliere
+// nulla di quello che c'è». Le sezioni sono tutte quelle di prima, nello stesso ordine, divise in PAGINE; la
+// testata e il piede restano sempre in vista. La pagina nuova è «I tre abbonamenti» (`TreAbbonamenti`).
+// Poco dopo: «dentro ogni abbonamento deve esserci la personalizzazione esatta del servizio che offriamo al
+// cliente»: sotto ogni servizio c'è la riga «Per <negozio>» (lib/agenti/su-misura.ts: dall'AD, o dal programma).
 
-import { FASCE, ID_FASCE, euro } from '@/lib/agenti/fasce';
+import { useRef, useState } from 'react';
+import { canonePrimoMese } from '@/lib/agenzia/preventivo';
+import { CONDIZIONI, FASCE, ID_FASCE, PAGAMENTO, euro } from '@/lib/agenti/fasce';
 import { STATI, type Scheda as TScheda } from '@/lib/agenti/scheda';
+import { percheSuMisura, rigaSuMisura } from '@/lib/agenti/su-misura';
 import st from './scheda.module.css';
 
 /** Le classi della scheda vivono in un modulo CSS: non toccano il resto di MyCity. */
@@ -28,10 +40,87 @@ function Lista({ voci, attesa, righe }: { voci: string[]; attesa: boolean; righe
   return <ul>{voci.map((v, i) => <li key={i}>{v}</li>)}</ul>;
 }
 
+/** Le pagine della scheda, nell'ordine di lettura: il menu a tendina e «Avanti» le seguono così. */
+export const PAGINE = [
+  { id: 'breve', titolo: 'In breve: cosa ha e cosa non ha' },
+  { id: 'offerta', titolo: 'Cosa offrire' },
+  { id: 'abbonamenti', titolo: 'I tre abbonamenti' },
+  { id: 'domande', titolo: 'Domande e obiezioni' },
+  { id: 'online', titolo: 'Sito e social' },
+  { id: 'reputazione', titolo: 'Reputazione, concorrenti e potenziale' },
+  { id: 'dati', titolo: 'Dati e fonti' },
+] as const;
+export type IdPagina = (typeof PAGINE)[number]['id'];
+
+/** Le tre schede degli abbonamenti: i benefici di ognuno dal listino del sito, e sotto ogni servizio cosa faremo per questo negozio. */
+function TreAbbonamenti({ s }: { s: TScheda }) {
+  const { consigliato, perche_consigliato: perche } = s;
+  const attesa = !s.completa;
+  return (
+    <section className={c('sezione')} aria-labelledby="tre-abbonamenti"><h2 id="tre-abbonamenti">I tre abbonamenti</h2>
+      <p className={c('nota')}>Ognuno comprende tutti i servizi: cambia quanto. Sotto ogni servizio, in evidenza, c’è cosa faremo per {s.nome} con quell’abbonamento: è la parte da vendere.</p>
+      {attesa && <p className={c('nota')} role="status">Le righe «Per {s.nome}» le sta completando l’AD con quello che trova: intanto le prime le ha scritte il programma coi dati già letti.</p>}
+      <div className={c('abbonamenti')}>
+        {ID_FASCE.map((id) => {
+          const fa = FASCE[id];
+          const scelto = id === consigliato;
+          const guadagno = percheSuMisura(s, id);
+          return (
+            <div key={id} data-fascia={id} role="group" className={c(`abbonamento${scelto ? ' scelta' : ''}`)} aria-label={`Abbonamento ${fa.nome}${scelto ? ', consigliato' : ''}`}>
+              <div className={c('capo')}>
+                <h3>{fa.nome}</h3>
+                {scelto && <span className={c('chip forte')}>Consigliato dall’AD</span>}
+              </div>
+              <p className={c('prezzo')}><b>{euro(fa.centesimi)}</b> <span className={c('nota')}>al mese</span></p>
+              <p className={c('nota')}>Il primo mese {euro(canonePrimoMese(fa.centesimi) ?? fa.centesimi)}</p>
+              <p>{fa.perChi}</p>
+              {guadagno && <p className={c('guadagno')} data-su-misura="perche"><b>Cosa ci guadagna {s.nome}:</b> {guadagno}</p>}
+              <div className={c('misure')}>
+                <div className={c('misura')}><b>{fa.post}</b><span className={c('nota')}>contenuti al mese</span></div>
+                <div className={c('misura')}><b>{fa.video}</b><span className={c('nota')}>video al mese</span></div>
+              </div>
+              <ul className={c('benefici')} aria-label={`Cosa comprende il ${fa.nome}`}>
+                {fa.benefici.map((b) => {
+                  const riga = b.servizio ? rigaSuMisura(s, id, b.servizio) : null;
+                  return (
+                    <li key={b.voce} data-voce={b.voce}><span className={c('spunta')} aria-hidden="true">✓</span>
+                      <span className={c('beneficio')}>
+                        <span>{b.testo.startsWith(b.voce) ? <><b>{b.voce}</b>{b.testo.slice(b.voce.length)}</> : <><b>{b.voce}.</b> {b.testo}</>}</span>
+                        {riga && <span className={c('suMisura')} data-su-misura={riga.daChi}><b>Per {s.nome}:</b> {riga.testo}</span>}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {scelto && perche && <p className={c('perche')}><b>Perché l’AD lo consiglia:</b> {perche}</p>}
+            </div>
+          );
+        })}
+      </div>
+      <p className={c('nota')}>{CONDIZIONI}</p>
+      <p className={c('nota')}>{PAGAMENTO}</p>
+    </section>
+  );
+}
+
 export default function Scheda({ s }: { s: TScheda }) {
   const attesa = !s.completa;
   const f = s.consigliato ? FASCE[s.consigliato] : null;
   const m = s.sito.misura;
+  const [pagina, setPagina] = useState<IdPagina>('breve');
+  const menu = useRef<HTMLDivElement>(null);
+  const qui = PAGINE.findIndex((p) => p.id === pagina);
+  const prima = qui > 0 ? PAGINE[qui - 1] : null;
+  const dopo = qui < PAGINE.length - 1 ? PAGINE[qui + 1] : null;
+  // Cambiando pagina si torna al menu: chi ha letto fino in fondo e preme «Avanti» vede l'inizio della pagina nuova.
+  const vai = (id: IdPagina, sali = false) => {
+    setPagina(id);
+    if (sali) {
+      menu.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+      // Il bottone premuto può sparire (l'ultima pagina non ha «Avanti»): il fuoco va sul menu, non si perde.
+      menu.current?.querySelector('select')?.focus({ preventScroll: true });
+    }
+  };
   return (
     <article className={c('pagina')} aria-busy={attesa}>
       <header className={c('testata')}>
@@ -41,11 +130,19 @@ export default function Scheda({ s }: { s: TScheda }) {
         <p>{[s.tipo, s.indirizzo ?? s.citta].filter(Boolean).join(' · ')}</p>
         <div className={c('chips')}>
           {f ? <><span className={c('chip forte')}>Consigliato: {f.nome} · {euro(f.centesimi)} al mese</span><span className={c('chip')}>Primo mese {euro(f.centesimi / 2)}</span></>
-            : <span className={c('chip')}>{attesa ? 'L’abbonamento lo sceglie l’AD fra pochi secondi' : 'L’AD non ha scelto l’abbonamento: guarda le fasce qui sotto'}</span>}
+            : <span className={c('chip')}>{attesa ? 'L’abbonamento lo sceglie l’AD fra pochi secondi' : 'L’AD non ha scelto l’abbonamento: guarda le fasce in «I tre abbonamenti»'}</span>}
           {s.linkMaps && <a className={c('chip')} href={s.linkMaps} target="_blank" rel="noopener noreferrer">Apri la scheda Google ↗</a>}
         </div>
       </header>
 
+      <div className={c('menuPagine')} ref={menu}>
+        <label htmlFor="pagina-scheda">Parte della scheda</label>
+        <select id="pagina-scheda" className={c('tendina')} value={pagina} onChange={(e) => vai(e.target.value as IdPagina)}>
+          {PAGINE.map((p, i) => <option key={p.id} value={p.id}>{i + 1} di {PAGINE.length} · {p.titolo}</option>)}
+        </select>
+      </div>
+
+      {pagina === 'breve' && <>
       <section className={c('trenta')} aria-labelledby="t30">
         <span className={c('occhiello')} id="t30">In 30 secondi, prima di entrare</span>
         {s.in_30_secondi.length ? <ul>{s.in_30_secondi.map((v, i) => <li key={i}>{v}</li>)}</ul> : attesa ? <Scrive righe={4} /> : <p>L’AD non ha scritto il riassunto: leggi «Ha già» e «Non ha» qui sotto.</p>}
@@ -60,6 +157,9 @@ export default function Scheda({ s }: { s: TScheda }) {
         </div>
       </section>
 
+      </>}
+
+      {pagina === 'offerta' && <>
       <section className={c('sezione')}><h2>Cosa possiamo offrire, e perché</h2>
         {s.offerta.length ? <div className={c('griglia')}>{s.offerta.map((o, i) => <div className={c('riquadro')} key={i}><h3>{o.servizio}</h3><p>{o.perche}</p></div>)}</div>
           : attesa ? <div className={c('riquadro')}><Scrive /></div> : <p className={c('vuoto')}>L’AD non ha scritto le offerte.</p>}
@@ -74,7 +174,13 @@ export default function Scheda({ s }: { s: TScheda }) {
           ))}
         </div>
         <p className={c('nota')}>Primo mese a metà, nessun vincolo, disdetta con 30 giorni di preavviso. Sui prodotti venduti tramite MyCity resta il 10%; al banco niente. Oggi si paga in contanti, di persona.</p>
+        <button type="button" className={c('bottone secondario')} onClick={() => vai('abbonamenti', true)}>Apri le tre schede degli abbonamenti</button>
       </section>
+      </>}
+
+      {pagina === 'abbonamenti' && <TreAbbonamenti s={s} />}
+
+      {pagina === 'domande' && <>
 
       <section className={c('sezione')}><h2>Domande da fare al titolare</h2><div className={c('riquadro')}><Lista voci={s.domande} attesa={attesa} righe={4} /></div></section>
 
@@ -84,6 +190,9 @@ export default function Scheda({ s }: { s: TScheda }) {
       </section>
 
       <section className={c('sezione')}><h2>Attenzione</h2><div className={c('riquadro')}><Lista voci={s.attenzione} attesa={false} /></div></section>
+      </>}
+
+      {pagina === 'online' && <>
 
       <section className={c('sezione')}><h2>Sito e social di oggi</h2>
         <div className={c('riquadro')}>
@@ -106,6 +215,9 @@ export default function Scheda({ s }: { s: TScheda }) {
           ))}
           {attesa && <tr><td colSpan={4}><span className={c('nota')}>Instagram, Facebook e TikTok li sta cercando l’AD…</span></td></tr>}</tbody></table></div>
       </section>
+      </>}
+
+      {pagina === 'reputazione' && <>
 
       <section className={c('sezione')}><h2>Reputazione</h2>
         <div className={c('riquadro')}>{s.reputazione.sintesi ? <p>{s.reputazione.sintesi}</p> : attesa ? <Scrive righe={2} /> : <p className={c('vuoto')}>Nessuna recensione trovata fuori da Google: guardale sulla scheda Google.</p>}</div>
@@ -125,6 +237,9 @@ export default function Scheda({ s }: { s: TScheda }) {
       </section>
 
       <section className={c('sezione')}><h2>Potenziale</h2><div className={c('riquadro')}><Lista voci={s.potenziale} attesa={attesa} /></div></section>
+      </>}
+
+      {pagina === 'dati' && <>
 
       <section className={c('sezione')}><h2>I dati dell’attività</h2>
         <p className={c('nota')}>Ogni dato dice da dove viene e quanto è sicuro. «Da confermare» vuol dire letto in un elenco, sulla mappa o in una ricerca, non ancora visto dal titolare.</p>
@@ -140,6 +255,12 @@ export default function Scheda({ s }: { s: TScheda }) {
           {s.avvisi.length > 0 && <div className={c('riquadro')}><ul className={c('nota')}>{s.avvisi.map((a, i) => <li key={i}>{a}</li>)}</ul></div>}
         </section>
       )}
+      </>}
+
+      <nav className={c('avanti')} aria-label="Le altre parti della scheda">
+        {prima ? <button type="button" className={c('bottone secondario')} onClick={() => vai(prima.id, true)}>‹ {prima.titolo}</button> : <span />}
+        {dopo && <button type="button" className={c('bottone')} onClick={() => vai(dopo.id, true)}>Avanti: {dopo.titolo} ›</button>}
+      </nav>
       <p className={c('piede')}>Indirizzi, tipi e concorrenti: © OpenStreetMap contributors (licenza ODbL). Ricerca e giudizio: l’AD di MyCity. Nessun dato di Google viene copiato: la scheda Google si guarda dal link.</p>
     </article>
   );

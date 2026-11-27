@@ -6,7 +6,8 @@
 // Il collaudo del 26/11 ha trovato frasi vietate che passavano con altre parole e campi mai controllati:
 // adesso ogni testo dell'AD passa dagli stessi controlli (vedi `controllaTesto`).
 
-import { CONDIZIONI, PAGAMENTO, eFascia, type IdFascia } from './fasce';
+import { SERVIZI_AGENZIA, type ServizioAgenzia } from '@/lib/agenzia/preventivo';
+import { CONDIZIONI, FASCE, ID_FASCE, PAGAMENTO, eFascia, type IdFascia } from './fasce';
 import type { LettoDalLink } from './link';
 import type { DatiOsm } from './osm';
 import type { MisuraSito, LivelloSito } from './sito';
@@ -18,6 +19,12 @@ const FORZA: Record<Stato, number> = { confermato: 3, da_confermare: 2, framment
 export type Campo = { voce: string; valore: string | null; stato: Stato; fonte: string | null };
 export type Social = { canale: string; stato: 'trovato' | 'non_trovato'; livello: string | null; giudizio: string | null; fonte: string | null; origine?: 'sito' | 'mappa' | 'ad' | 'google' };
 export type Concorrente = { nome: string; tipo: string | null; distanza: number; fonte: string };
+/**
+ * Cosa faremo per QUESTO negozio con una fascia (Nicola, 26/11/2026: «dentro ogni abbonamento deve esserci la
+ * personalizzazione esatta del servizio che offriamo al cliente»): il perché, e una frase per ogni servizio.
+ * La scrive l'AD; quello che l'AD non scrive lo compone il programma (lib/agenti/su-misura.ts).
+ */
+export type SuMisura = { perche: string | null; servizi: Partial<Record<ServizioAgenzia, string>> };
 
 export type Scheda = {
   nome: string;
@@ -44,6 +51,8 @@ export type Scheda = {
   domande: string[];
   obiezioni: { obiezione: string; risposta: string }[];
   attenzione: string[];
+  /** Per ogni fascia, cosa faremo per questo negozio: dall'AD. `null` finché l'AD non ha risposto. */
+  su_misura: Partial<Record<IdFascia, SuMisura>> | null;
   fonti: { titolo: string; url: string }[];
   avvisi: string[];
   completa: boolean;
@@ -170,6 +179,7 @@ export function primaScheda({ letto, osm, misura, citta, data }: { letto: LettoD
     potenziale: [], offerta: [], domande: [],
     obiezioni: OBIEZIONI_FISSE.map(({ obiezione, risposta }) => ({ obiezione, risposta })),
     attenzione: [...ATTENZIONE_FISSE, ...(gioco ? ['Niente gioco (Sisal, scommesse, gratta e vinci) né tabacco nei contenuti proposti: in Italia la pubblicità è vietata.'] : [])],
+    su_misura: null,
     fonti: [], avvisi: [...(osm?.avvisi ?? [])],
     completa: false,
   };
@@ -211,12 +221,46 @@ export function normalizza(x: unknown): Scheda | null {
     domande: testi(s.domande),
     obiezioni: lista(s.obiezioni, (o): o is { obiezione: string; risposta: string } => !!o && typeof o === 'object' && typeof (o as { obiezione: unknown }).obiezione === 'string' && typeof (o as { risposta: unknown }).risposta === 'string'),
     attenzione: testi(s.attenzione),
+    su_misura: leggiSuMisura(s.su_misura, () => true),
     fonti: lista(s.fonti, (f): f is { titolo: string; url: string } => !!f && typeof f === 'object' && typeof (f as { titolo: unknown }).titolo === 'string' && apertaDalProgramma((f as { url: unknown }).url)),
     avvisi: testi(s.avvisi), completa: s.completa === true,
   };
 }
 
 // ———————————————————————————————— 2. la risposta dell'AD, ripulita
+
+/**
+ * Le promesse che una fascia non mantiene (le stesse del compito: «non promettere quello che la fascia non dà»).
+ * Una frase che le nomina passa solo se le mette a confronto («senza video», «i video arrivano dal Business»).
+ */
+const FUORI_FASCIA: Record<IdFascia, RegExp | null> = {
+  base: /\b(?:\d+|un|uno|una|due|tre|quattro)\s+video\b|\bvideo\s+(?:brev\w*|al\s+mese)\b|\bstorie\b|\bpiù\s+pagine\b|\breferente\b|\bvisit[ae]\b/i,
+  business: /\bstorie\b|\breferente\b|\bvisit[ae]\s+(?:nel|al|in)\s+(?:locale|negozio|bottega)\b/i,
+  premium: null,
+};
+const A_CONFRONTO = /\b(?:senza|niente|non|nessun\w*|solo\s+(?:nel|dal|col|con)|(?:nel|dal|col|con\s+il|arriv\w+\s+(?:dal|col|con\s+il))\s+(?:business|premium))\b/i;
+export function promessaFuoriFascia(id: IdFascia, t: string): boolean {
+  const r = FUORI_FASCIA[id];
+  return !!r && r.test(t) && !A_CONFRONTO.test(t);
+}
+
+/** La parte «su misura» di ogni fascia: solo testi, solo le fasce e i servizi che esistono; `passa` fa i controlli. */
+export function leggiSuMisura(v: unknown, passa: (t: string, dove: string, id: IdFascia) => boolean): Partial<Record<IdFascia, SuMisura>> | null {
+  if (!v || typeof v !== 'object') return null;
+  const tutto = v as Record<string, unknown>;
+  const fuori: Partial<Record<IdFascia, SuMisura>> = {};
+  for (const id of ID_FASCE) {
+    const x = (tutto[id] && typeof tutto[id] === 'object' ? tutto[id] : null) as Record<string, unknown> | null;
+    if (!x) continue;
+    const dove = (cosa: string) => `su misura del ${FASCE[id].nome} (${cosa})`;
+    const t = (w: unknown, cosa: string, max: number) => { const f = frase(w, max); return f && passa(f, dove(cosa), id) ? f : null; };
+    const servizi: Partial<Record<ServizioAgenzia, string>> = {};
+    for (const sv of SERVIZI_AGENZIA) { const f = t(x[sv], sv.replace('_', ' e '), 360); if (f) servizi[sv] = f; }
+    const perche = t(x.perche, 'perché', 400);
+    if (perche || Object.keys(servizi).length) fuori[id] = { perche, servizi };
+  }
+  return Object.keys(fuori).length ? fuori : null;
+}
 
 const STATI_AMMESSI = new Set<Stato>(['confermato', 'da_confermare', 'frammento', 'non_trovato']);
 const LIVELLI_SITO = new Set(['nessuno', 'semplice', 'medio', 'pregio']);
@@ -297,6 +341,11 @@ export function pulisci(grezza: unknown): RispostaPulita {
     offerta, obiezioni,
     domande: testi(r.domande, 7, 'domande'),
     attenzione: testi(r.attenzione, 5, 'attenzione'),
+    su_misura: leggiSuMisura(r.su_misura, (t, dove, id) => {
+      if (!passa(t, dove, true)) return false;
+      if (promessaFuoriFascia(id, t)) { scartati.push(`${dove}: prometteva una cosa che il ${FASCE[id].nome} non dà (video, storie, più pagine, referente o visite)`); return false; }
+      return true;
+    }),
     scartati,
   };
 }
@@ -354,6 +403,7 @@ export function unisci(prima: Scheda, adGrezzo: RispostaPulita, avvisiAd: string
   const suMisura = ad.obiezioni ?? [];
   s.obiezioni = [...suMisura, ...OBIEZIONI_FISSE.filter((f) => !suMisura.some((o) => f.chiave.test(o.obiezione))).map(({ obiezione, risposta }) => ({ obiezione, risposta }))];
   s.attenzione = [...new Set([...prima.attenzione, ...(ad.attenzione ?? [])])];
+  s.su_misura = ad.su_misura ?? null;
   const avvisiVeri = avvisiAd.map((a) => frase(a, 240)).filter((a): a is string => !!a).slice(0, 5);
   s.avvisi = [...s.avvisi, ...avvisiVeri.map((a) => `L’AD avvisa: ${a}`), ...(ad.scartati ?? []).map((x) => `Scartato: ${x}.`)];
   s.fonti = fontiDi(s);

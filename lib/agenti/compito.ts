@@ -15,6 +15,9 @@ const fasce = ID_FASCE.map((id) => {
   return `- ${id} (${f.nome}, ${euro(f.centesimi)} al mese, primo mese a metà): sito «${f.inPratica.sito}»; ${f.inPratica.piano}; foto: ${f.inPratica.foto}; analisi: ${f.inPratica.analisi}.`;
 }).join('\n');
 
+/** Cosa comprende ogni fascia, con le parole del listino del sito: la base della proposta su misura. */
+const listino = ID_FASCE.map((id) => `- ${id}: ${FASCE[id].benefici.map((b) => `${b.voce}: ${b.testo}`).join(' ')}`).join('\n');
+
 export const COMPITO = `Sei l'AD digitale di MyCity. Un venditore di SDG Agenzia (il partner di MyCity per siti, social, foto e video) è in strada davanti a un'attività e sta per entrare a proporre i nostri servizi. Gli serve la SCHEDA DEL CLIENTE: un foglio interno, solo per lui, da leggere in un minuto prima di entrare. Il titolare non la vedrà mai.
 
 FAI PRESTO: il venditore aspetta fuori dalla porta. Lancia tutte le ricerche insieme, all'inizio, al massimo 6. Apri una pagina solo se serve davvero, al massimo 2. Poi scrivi subito. Rispetta i massimi dello schema: liste corte, frasi corte.
@@ -54,6 +57,14 @@ I PALETTI, che non si rompono mai:
 - Non promettere quello che la fascia non dà: video, storie o più pagine nel Base; storie, referente o visite nel Business.
 - Oggi l'abbonamento si paga in contanti, di persona.
 
+SU MISURA, PER OGNI ABBONAMENTO (Nicola: «dentro ogni abbonamento deve esserci la personalizzazione esatta del servizio che offriamo al cliente»). In «su_misura» scrivi, per base, business e premium, cosa faremo per QUESTO negozio con quella fascia. Studia quello che hai trovato (sito e sua misura, profili, recensioni, concorrenti, cosa manca) e vendilo: ogni frase nomina una cosa vera di questo negozio e dice cosa cambia per lui. Esempio: «Il sito di oggi ha 2 pagine e non si legge dal telefono: lo rifacciamo di più pagine, col menu delle torte».
+- «perche»: in 1-2 frasi cosa ci guadagna il negozio con questa fascia, nel primo mese.
+- «foto_video», «sito_web», «social» (con la scheda Google Maps), «analisi»: una frase per servizio, al massimo 35 parole.
+- Ogni fascia dà solo quello che dice il listino qui sotto, e valgono le tabelle del sito e dei social: nel Base niente video, storie o più pagine; nel Business niente storie, referente o visite. Se nomini una cosa che la fascia non dà, mettila a confronto («i video arrivano dal Business»).
+- Se per un servizio non hai niente di vero da dire, lascia la frase vuota: la scrive il programma coi dati che ha.
+Cosa comprende ogni fascia (listino del sito):
+${listino}
+
 COME SCRIVERE: italiano semplice, frasi di al massimo 25 parole, niente sigle, ogni numero col suo metro, date vere (oggi è nei dati). «in_30_secondi»: le 3-4 cose da sapere prima di entrare. «gancio»: la frase da dire entrando, concreta, legata a una cosa vera di questo negozio (una stagione, un buco, un punto forte). «domande»: quello che non hai trovato e che il titolare sa. «obiezioni»: solo quelle tipiche di QUESTO negozio, con la risposta; prezzo, percentuale e tempo li aggiunge il programma.
 
 In «risultato» metti l'oggetto che rispetta lo schema.`;
@@ -64,7 +75,7 @@ const lista = (max: number) => ({ type: 'array', items: s, maxItems: max });
 
 export const SCHEMA = {
   type: 'object',
-  required: ['tipo', 'consigliato', 'perche_consigliato', 'in_30_secondi', 'gancio', 'campi', 'ha', 'non_ha', 'migliorare', 'reputazione', 'sito', 'social', 'potenziale', 'offerta', 'domande', 'obiezioni', 'attenzione'],
+  required: ['tipo', 'consigliato', 'perche_consigliato', 'in_30_secondi', 'gancio', 'campi', 'ha', 'non_ha', 'migliorare', 'reputazione', 'sito', 'social', 'potenziale', 'offerta', 'domande', 'obiezioni', 'attenzione', 'su_misura'],
   properties: {
     tipo: { ...s, description: 'Che attività è, in poche parole (es. «Bar e pasticceria di quartiere»)' },
     consigliato: { enum: ['base', 'business', 'premium'] },
@@ -92,6 +103,14 @@ export const SCHEMA = {
     domande: lista(6),
     obiezioni: { type: 'array', maxItems: 3, items: { type: 'object', required: ['obiezione', 'risposta'], properties: { obiezione: s, risposta: s } } },
     attenzione: lista(4),
+    su_misura: {
+      type: 'object', required: ['base', 'business', 'premium'],
+      description: 'Per ogni fascia, cosa faremo per questo negozio: il perché e una frase per servizio (vuota se non c’è niente di vero da dire)',
+      properties: Object.fromEntries(ID_FASCE.map((id) => [id, {
+        type: 'object', required: ['perche', 'foto_video', 'sito_web', 'social', 'analisi'],
+        properties: { perche: s, foto_video: s, sito_web: s, social: s, analisi: s },
+      }])),
+    },
   },
 } as const;
 
