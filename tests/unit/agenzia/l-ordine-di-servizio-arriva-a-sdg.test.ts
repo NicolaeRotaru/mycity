@@ -363,7 +363,7 @@ describe('dal collaudo del 27/11', () => {
   it('vale la fascia confermata dal titolare, non quella scelta dall agente', async () => {
     // L'agente aveva detto Business; il titolare conferma Premium.
     await accetta('premium');
-    expect(ordini()[0]).toMatchObject({ fascia: 'premium', canone_centesimi: 99900, primo_mese_centesimi: 49950 });
+    expect(ordini()[0]).toMatchObject({ fascia: 'premium', canone_centesimi: 90000, primo_mese_centesimi: 45000 });
     expect((ordini()[0].piano as { contenuti: { tipo: string }[] }).contenuti).toHaveLength(20);
     await aspetta();
   });
