@@ -1,5 +1,6 @@
 'use client';
 
+import { useServizi } from '@/components/hooks/useServizi';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Percent, ArrowRight } from 'lucide-react';
@@ -34,6 +35,9 @@ export default function PromoDeals() {
     refetchInterval: 5 * 60_000,
   });
 
+  // 27/11/2026 — Quali sono servizi (999g): niente «+» del carrello, c'è l'etichetta «Servizio».
+  const servizi = useServizi(items.map((it) => it.product_id));
+
   if (items.length === 0) return null;
 
   return (
@@ -66,6 +70,7 @@ export default function PromoDeals() {
             discountPercent={it.discount_percent}
             stock={it.stock ?? undefined}
             hasVariants={it.has_variants ?? undefined}
+            servizio={servizi.get(it.product_id) ?? null}
             // 5/11/2026 — La fila delle promo in home sta sotto la piega: le sue foto
             // non si chiedono come urgenti, per non rubare la coda a quello che si guarda.
             priority={false}

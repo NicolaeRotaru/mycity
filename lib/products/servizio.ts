@@ -113,3 +113,44 @@ export function mancanoLeColonneDelServizio(errore: unknown): boolean {
 /** Cosa legge il negoziante se prova a salvare un servizio prima che il database sia pronto. */
 export const MESSAGGIO_SERVIZI_NON_ANCORA_ATTIVI =
   'I servizi non sono ancora attivi sul sito: puoi salvarlo come prodotto, oppure riprovare tra poco.';
+
+/** I dettagli di un servizio che servono alle card. */
+export type DettagliServizio = { durata_minuti: number | null; dove_servizio: string | null };
+
+/** Quanti id per richiesta: oltre, l'indirizzo della richiesta diventa troppo lungo. */
+const ID_PER_RICHIESTA = 100;
+
+type ClientCheLeggeIServizi = {
+  from: (tabella: 'products') => {
+    select: (colonne: string) => {
+      in: (colonna: string, valori: string[]) => {
+        eq: (colonna: string, valore: string) => PromiseLike<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+};
+
+/**
+ * Quali fra questi annunci sono servizi, coi loro dettagli. Una lettura a parte, a blocchi di
+ * cento id: le griglie leggono i prodotti con colonne scritte a mano, e aggiungerci `tipo`
+ * farebbe cadere tutto prima della 999g. Se la colonna non c'è ancora la risposta è vuota:
+ * ogni annuncio resta un prodotto, ed è vero, perché senza la colonna un servizio non esiste.
+ */
+export async function leggiServizi(supa: unknown, ids: string[]): Promise<Map<string, DettagliServizio>> {
+  const mappa = new Map<string, DettagliServizio>();
+  const unici = [...new Set(ids)];
+  const client = supa as ClientCheLeggeIServizi;
+  for (let i = 0; i < unici.length; i += ID_PER_RICHIESTA) {
+    const blocco = unici.slice(i, i + ID_PER_RICHIESTA);
+    const { data, error } = await client.from('products').select('id, durata_minuti, dove_servizio').in('id', blocco).eq('tipo', 'servizio');
+    if (error) {
+      if (eSchemaIndietro(error)) return mappa; // prima della 999g: nessun servizio
+      continue;
+    }
+    if (!Array.isArray(data)) continue;
+    for (const r of data as Array<{ id: string } & Partial<DettagliServizio>>) {
+      mappa.set(r.id, { durata_minuti: r.durata_minuti ?? null, dove_servizio: r.dove_servizio ?? null });
+    }
+  }
+  return mappa;
+}

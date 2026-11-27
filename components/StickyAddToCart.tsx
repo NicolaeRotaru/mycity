@@ -76,10 +76,9 @@ const ETICHETTA_ESAURITO_CORTA = 'Esaurito';
 const ETICHETTA_ESAURITO = 'Non disponibile';
 
 export default function StickyAddToCart({ bersaglio, price, available, onAdd, note, qty, onDec, onInc, canDec, canInc, prezzoPieno, etichette }: Props) {
-  const corta = etichette?.corta ?? ETICHETTA_CORTA;
-  const intera = etichette?.intera ?? ETICHETTA_INTERA;
-  const Icona = etichette ? MessageCircle : ShoppingCart;
   const [visible, setVisible] = useState(false);
+  // 27/11/2026 — Per un servizio il nome intero è «Prenota: scrivi al negozio».
+  const ETICHETTA_INTERA_DELLA_BARRA = etichette?.intera ?? ETICHETTA_INTERA;
   const barraRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -206,12 +205,16 @@ export default function StickyAddToCart({ bersaglio, price, available, onAdd, no
               // giro del Tab e dice di non essere disponibile; chi lo preme riceve il perché da onAdd.
               aria-disabled={!available || undefined}
               // Il nome intero resta qui anche quando a schermo si legge la parola corta.
-              aria-label={available ? intera : ETICHETTA_ESAURITO}
+              aria-label={available ? ETICHETTA_INTERA_DELLA_BARRA : ETICHETTA_ESAURITO}
               className="ml-auto inline-flex shrink-0 items-center gap-2 whitespace-nowrap bg-accent-500 hover:bg-accent-600 aria-disabled:bg-cream-200 aria-disabled:text-ink-600 aria-disabled:hover:bg-cream-200 aria-disabled:cursor-not-allowed text-ink-900 px-4 sm:px-5 py-3 rounded-full font-bold text-sm transition-colors"
             >
-              <Icona size={18} strokeWidth={2.4} className="hidden sm:inline" aria-hidden />
-              <span className="sm:hidden">{available ? corta : ETICHETTA_ESAURITO_CORTA}</span>
-              <span className="hidden sm:inline">{available ? intera : ETICHETTA_ESAURITO}</span>
+              {etichette ? (
+                <MessageCircle size={18} strokeWidth={2.4} className="hidden sm:inline" aria-hidden />
+              ) : (
+                <ShoppingCart size={18} strokeWidth={2.4} className="hidden sm:inline" aria-hidden />
+              )}
+              <span className="sm:hidden">{available ? (etichette?.corta ?? ETICHETTA_CORTA) : ETICHETTA_ESAURITO_CORTA}</span>
+              <span className="hidden sm:inline">{available ? ETICHETTA_INTERA_DELLA_BARRA : ETICHETTA_ESAURITO}</span>
             </button>
           </div>
 

@@ -215,15 +215,18 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // prima della 180 la colonna non c'e', la riga arriva senza e vale la frase
   // generale (FRASE_RESO di lib/promesse-pubbliche, che nomina gli esclusi); cosi'
   // anche se la lettura cade. La frase si sceglie la', mai una copia qui.
-  const { data: rigaDelRecesso = null } = useQuery({
+  const { data: rigaDelRecesso = null, isPending: tipoInLettura } = useQuery({
     queryKey: ['product', id, 'recesso'],
+    // 27/11/2026 — Finché questa lettura non risponde non si sa se è un servizio, e il carrello
+    // aspetta: un solo nuovo tentativo, per non tenerlo spento a lungo se cade.
+    retry: 1,
     queryFn: async () => {
       const { data } = await supabase.from('products').select('*').eq('id', id).maybeSingle();
       const riga = data as { non_recedibile?: unknown; tipo?: unknown; durata_minuti?: unknown; dove_servizio?: unknown } | null;
       // 27/11/2026 — Con la stessa lettura (`*`, che regge anche prima della 999g) arriva il `tipo`:
       // senza la colonna la riga non lo porta, e l'annuncio resta un prodotto.
       return {
-        non_recedibile: riga?.non_recedibile === true,
+        non_recedibile: (data as { non_recedibile?: unknown } | null)?.non_recedibile === true,
         tipo: riga?.tipo === 'servizio' ? 'servizio' : 'prodotto',
         durata_minuti: riga?.durata_minuti ?? null,
         dove_servizio: riga?.dove_servizio ?? null,
@@ -655,7 +658,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const isOutOfStock = stock === 0 || tutteLeVariantiEsaurite;
   // 24/11/2026 — I prodotti di SDG Agenzia sono abbonamenti: niente carrello, si attivano dal preventivo.
   const eAbbonamentoSdg = eDiSdg(product.seller_id);
-  const canAdd = !eAbbonamentoSdg && !eUnServizio && !isOutOfStock && !needsVariantChoice && !combinazioneMancante && mayPurchase;
+  const canAdd = !eAbbonamentoSdg && !eUnServizio && !tipoInLettura && !isOutOfStock && !needsVariantChoice && !combinazioneMancante && mayPurchase;
 
   // 5/11/2026 — La descrizione della foto che il negozio scrive per chi non vede (`alt_text`)
   // non arrivava a nessuno: si toglieva dalla griglia «perché già usata come testo alternativo»,
@@ -739,7 +742,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
   const handleAdd = () => {
     // 27/11/2026 — Un abbonamento o un servizio non entrano nel carrello, qualunque pulsante li chiami.
-    if (eAbbonamentoSdg || eUnServizio) return;
+    if (eAbbonamentoSdg || eUnServizio || tipoInLettura) return;
     if (!mayPurchase) {
       toast.error(purchaseBlockedMessage);
       return;
@@ -794,7 +797,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   };
 
   const handleBuyNow = () => {
-    if (inPartenza || eAbbonamentoSdg || eUnServizio) return;
+    if (inPartenza) return;
+    if (eAbbonamentoSdg || eUnServizio || tipoInLettura) return;
     if (!mayPurchase) {
       toast.error(purchaseBlockedMessage);
       return;

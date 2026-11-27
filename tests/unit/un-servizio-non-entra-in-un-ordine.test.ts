@@ -10,6 +10,7 @@ import {
   dettagliDelServizio,
   eServizio,
   etichettaDurata,
+  leggiServizi,
   mancanoLeColonneDelServizio,
   MESSAGGIO_SERVIZI_NON_ANCORA_ATTIVI,
 } from '@/lib/products/servizio';
@@ -189,5 +190,41 @@ describe('il carrello del browser', () => {
     addToCart({ id: 'p-shampoo', name: 'Shampoo', price: 9, sellerId: NEGOZIO, tipo: 'prodotto' });
     expect(getCart()).toHaveLength(1);
     expect('tipo' in getCart()[0]).toBe(false);
+  });
+});
+
+describe('la lettura dei servizi per le card', () => {
+  function clientFinto(risposta: (blocco: string[]) => { data: unknown; error: unknown }) {
+    const blocchi: string[][] = [];
+    const client = {
+      from: () => ({
+        select: () => ({
+          in: (_c: string, blocco: string[]) => ({
+            eq: async () => {
+              blocchi.push(blocco);
+              return risposta(blocco);
+            },
+          }),
+        }),
+      }),
+    };
+    return { client, blocchi };
+  }
+
+  it('chiede a blocchi di cento id, e torna i servizi coi dettagli', async () => {
+    const ids = Array.from({ length: 250 }, (_, i) => `p${i}`);
+    const { client, blocchi } = clientFinto((b) => ({
+      data: b.includes('p7') ? [{ id: 'p7', durata_minuti: 45, dove_servizio: 'online' }] : [],
+      error: null,
+    }));
+    const mappa = await leggiServizi(client, ids);
+    expect(blocchi.map((b) => b.length)).toEqual([100, 100, 50]);
+    expect(mappa.get('p7')).toEqual({ durata_minuti: 45, dove_servizio: 'online' });
+    expect(mappa.size).toBe(1);
+  });
+
+  it('prima della 999g la colonna non c\'è: nessun servizio, nessun errore', async () => {
+    const { client } = clientFinto(() => ({ data: null, error: { code: '42703', message: 'column products.tipo does not exist' } }));
+    expect((await leggiServizi(client, ['p1'])).size).toBe(0);
   });
 });
