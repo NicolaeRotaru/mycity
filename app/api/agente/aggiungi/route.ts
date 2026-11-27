@@ -20,8 +20,8 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { conAgente } from '@/lib/agenti/rotta';
 import { leggiLavoro } from '@/lib/agenti/n8n';
 import { normalizza, pulisci, unisci } from '@/lib/agenti/scheda';
-import { attivitaDallaScheda, linkDelPreventivo } from '@/lib/agenti/aggiungi';
-import { iscriviAttivita } from '@/lib/agenzia/nuova-attivita';
+import { attivitaDallaScheda, linkDelPreventivo, nomeNonValido, stessoIndirizzo } from '@/lib/agenti/aggiungi';
+import { attivitaGiaIscritta, iscriviAttivita } from '@/lib/agenzia/nuova-attivita';
 import { avviaDopoLIscrizione } from '@/lib/agenzia/dopo-iscrizione';
 
 export const runtime = 'nodejs';
@@ -52,16 +52,32 @@ export const POST = conAgente({ name: 'agente-aggiungi', max: 20, windowMs: 60 *
 
   // 1. La scheda di quel lavoro, letta dal server, e solo se è dell'agente (o di Nicola).
   const r = await leggiLavoro(esito.data.lavoro);
-  if (r.stato === 'sconosciuto') return ApiErrors.notFound(r.errore ?? 'Scheda non trovata.');
+  if (r.stato === 'sconosciuto') {
+    // n8n giù o collegamento spento: non è «scheda non trovata», è «riprova» (collaudo del 27/11).
+    if (r.errore && /non risponde|non acceso|ha risposto 5\d\d/.test(r.errore)) return ApiErrors.unavailable('Non riesco a leggere la scheda in questo momento. Riprova fra poco.');
+    return ApiErrors.notFound(r.errore ?? 'Scheda non trovata.');
+  }
   if (profile?.role !== 'admin' && r.venditore !== email) return ApiErrors.notFound('Scheda non trovata.');
+  // Solo a scheda finita: prima il tipo e l'indirizzo dell'AD spesso mancano, e il negozio nascerebbe «negozio».
+  if (r.stato === 'in_corso') return ApiErrors.conflict('La scheda non è ancora completa: aspetta che finisca, poi premi di nuovo.');
   const prima = normalizza(r.prima);
   if (!prima) return ApiErrors.unavailable('La scheda di questo lavoro non si legge.');
-  const scheda = r.stato === 'pronta' ? unisci(prima, pulisci(r.risultato), r.avvisi ?? []) : prima;
+  let scheda = prima;
+  if (r.stato === 'pronta') {
+    const ad = pulisci(r.risultato);
+    scheda = unisci(prima, ad, r.avvisi ?? []);
+    if (!scheda.indirizzo && typeof ad.indirizzo === 'string' && ad.indirizzo.trim()) scheda = { ...scheda, indirizzo: ad.indirizzo.trim() };
+  }
   const attivita = attivitaDallaScheda(scheda);
-  if (!attivita) return ApiErrors.invalidRequest('Nella scheda manca il nome dell’attività: non posso aggiungerla.');
+  if (!attivita) return ApiErrors.invalidRequest(nomeNonValido(String(scheda.nome ?? '')) ?? 'I dati della scheda non bastano per aggiungere l’attività.');
 
-  // 2. L'iscrizione, come il flusso 20.
+  // 2. L'iscrizione, come il flusso 20. Un'attività è riconosciuta da nome e città: se ce n'è già una con
+  // lo stesso nome ma un altro indirizzo, è un omonimo e non si fonde (collaudo: due «Bar Sport»).
   const admin = getAdminSupabase();
+  const gia = await attivitaGiaIscritta(admin, attivita);
+  if (gia && !stessoIndirizzo(gia.indirizzo, attivita.indirizzo)) {
+    return ApiErrors.conflict(`Su MyCity c’è già un’attività «${attivita.nome}» con un altro indirizzo (${gia.indirizzo}). Per non mescolare due negozi diversi, scrivi a Nicola.`);
+  }
   const fatto = await iscriviAttivita(admin, attivita);
   if (!fatto.ok) {
     if (fatto.motivo === 'gia-con-accesso') return ApiErrors.conflict('Questa attività ha già accettato il preventivo: è già su MyCity.');
@@ -73,18 +89,22 @@ export const POST = conAgente({ name: 'agente-aggiungi', max: 20, windowMs: 60 *
 
   // 3. Gli stessi passi del modulo 12, e l'avviso a Nicola (una volta per attività).
   avviaDopoLIscrizione(admin, fatto, attivita, { dalModulo12: false, dopo: dopoLaRisposta });
+  let avvisato = false;
   if (fatto.nuova) {
-    await notifyAdmins(
+    avvisato = await notifyAdmins(
       `${attivita.nome} ha detto sì: attività aggiunta dall'agente`,
       `L'agente ${email} ha premuto «Aggiungi attività». Il negozio è su MyCity, nascosto e senza accesso, col suo preventivo. Il link lo trovi in Admin → Preventivi col link. Per ora si paga in contanti.`,
       '/admin/preventivi',
       { unaVoltaPer: `agente-aggiungi:${fatto.id}` },
-    ).catch((e: unknown) => logger.warn('[agente-aggiungi] avviso a Nicola non partito', { id: fatto.id, errore: String(e) }));
+    ).then(() => true, (e: unknown) => {
+      logger.warn('[agente-aggiungi] avviso a Nicola non partito', { id: fatto.id, errore: String(e) });
+      return false;
+    });
   }
 
   // 4. Il link da mandare al titolare.
   return NextResponse.json(
-    { ok: true, data: { nome: attivita.nome, nuova: fatto.nuova, link } },
+    { ok: true, data: { nome: attivita.nome, nuova: fatto.nuova, link, avvisato } },
     { status: fatto.nuova ? 201 : 200, headers: { 'Cache-Control': 'no-store' } },
   );
 });

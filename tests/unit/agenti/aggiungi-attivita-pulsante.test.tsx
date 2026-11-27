@@ -30,7 +30,7 @@ describe('il pulsante sotto la scheda', () => {
     const chiamate: { url: string; corpo: string }[] = [];
     vi.stubGlobal('fetch', vi.fn(async (url: string, o: { body: string }) => {
       chiamate.push({ url, corpo: o.body });
-      return new Response(JSON.stringify({ ok: true, data: { nome: 'Ora del Gusto', nuova: true, link: 'https://www.mycity-marketplace.com/preventivo/abc' } }), { status: 201 });
+      return new Response(JSON.stringify({ ok: true, data: { nome: 'Ora del Gusto', nuova: true, link: 'https://www.mycity-marketplace.com/preventivo/abc', avvisato: false } }), { status: 201 });
     }));
     const r = await monta();
     await act(async () => { bottone(r, 'Aggiungi attività').click(); });
@@ -41,6 +41,8 @@ describe('il pulsante sotto la scheda', () => {
     expect(r.textContent).toContain('Ora del Gusto è su MyCity');
     expect(r.textContent).toContain('https://www.mycity-marketplace.com/preventivo/abc');
     expect(r.textContent).toContain('contanti');
+    expect(r.textContent).toContain('L’avviso a Nicola non è partito');
+    expect(r.textContent).not.toContain('Nicola ha ricevuto l’avviso');
     expect(bottone(r, 'Copia il link')).toBeTruthy();
   });
 

@@ -20,6 +20,7 @@ export default function AggiungiAttivita({ lavoro, nome }: { lavoro: string; nom
   const [fase, setFase] = useState<Fase>('pronto');
   const [link, setLink] = useState<string | null>(null);
   const [gia, setGia] = useState(false);
+  const [avvisato, setAvvisato] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [copiato, setCopiato] = useState(false);
 
@@ -28,7 +29,7 @@ export default function AggiungiAttivita({ lavoro, nome }: { lavoro: string; nom
     setErrore(null);
     try {
       const r = await fetch('/api/agente/aggiungi', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lavoro }) });
-      const d = (await r.json().catch(() => null)) as { ok?: boolean; data?: { link?: string | null; nuova?: boolean }; error?: { message?: string } } | null;
+      const d = (await r.json().catch(() => null)) as { ok?: boolean; data?: { link?: string | null; nuova?: boolean; avvisato?: boolean }; error?: { message?: string } } | null;
       if (!r.ok || !d?.ok) {
         setErrore(d?.error?.message ?? 'Non sono riuscito ad aggiungere l’attività. Riprova fra poco.');
         setFase('errore');
@@ -36,6 +37,7 @@ export default function AggiungiAttivita({ lavoro, nome }: { lavoro: string; nom
       }
       setLink(d.data?.link ?? null);
       setGia(d.data?.nuova === false);
+      setAvvisato(d.data?.avvisato === true);
       setFase('fatto');
     } catch {
       setErrore('Non sono riuscito ad aggiungere l’attività. Controlla la connessione e riprova.');
@@ -57,7 +59,8 @@ export default function AggiungiAttivita({ lavoro, nome }: { lavoro: string; nom
     return (
       <section className={c('riquadro fatto')} role="status" aria-live="polite">
         <h2>{gia ? `${nome} era già su MyCity` : `${nome} è su MyCity`}</h2>
-        <p>È nascosta e senza accesso finché il titolare non accetta il preventivo. Nicola ha ricevuto l’avviso.</p>
+        <p>È nascosta e senza accesso finché il titolare non accetta il preventivo.{avvisato ? ' Nicola ha ricevuto l’avviso.' : ''}</p>
+        {!gia && !avvisato && <p className={c('errore')}>L’avviso a Nicola non è partito: diglielo tu.</p>}
         {link ? (
           <>
             <p className={c('nota')}>Manda questo link al titolare: apre il suo preventivo e preme «Accetto il preventivo».</p>

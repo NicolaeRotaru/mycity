@@ -19,6 +19,8 @@ const stato = vi.hoisted(() => ({
   codice: 'c'.repeat(64) as string | null,
   dopo: [] as { dalModulo12: boolean }[],
   avvisi: [] as string[],
+  avvisoRotto: false,
+  gia: null as null | { id: string; indirizzo: string | null },
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -31,11 +33,12 @@ vi.mock('@/lib/agenti/n8n', () => ({ leggiLavoro: async () => stato.lavoro ?? { 
 vi.mock('@/lib/agenzia/nuova-attivita', async (originale) => ({
   ...(await originale<typeof import('@/lib/agenzia/nuova-attivita')>()),
   iscriviAttivita: async (_admin: unknown, a: Record<string, unknown>) => { stato.iscritte.push(a); return stato.esitoIscrizione; },
+  attivitaGiaIscritta: async () => stato.gia,
 }));
 vi.mock('@/lib/agenzia/dopo-iscrizione', () => ({
   avviaDopoLIscrizione: (_a: unknown, fatto: { nuova: boolean }, _x: unknown, o: { dalModulo12: boolean }) => { if (fatto.nuova) stato.dopo.push({ dalModulo12: o.dalModulo12 }); },
 }));
-vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: async (titolo: string) => { stato.avvisi.push(titolo); } }));
+vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: async (titolo: string) => { if (stato.avvisoRotto) throw new Error('telegram giù'); stato.avvisi.push(titolo); } }));
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: stato.codice ? { codice: stato.codice } : null, error: null }) }) }) }),
@@ -43,7 +46,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const { POST } = await import('@/app/api/agente/aggiungi/route');
-const { tipoDaTesto } = await import('@/lib/agenti/aggiungi');
+const { tipoDaTesto, nomeNonValido, stessoIndirizzo } = await import('@/lib/agenti/aggiungi');
 
 const LAVORO = '11111111-2222-4333-8444-555555555555';
 const premi = (corpo: unknown = { lavoro: LAVORO }) =>
@@ -60,7 +63,9 @@ const prima = {
 
 beforeEach(() => {
   stato.agente = { email: 'agente@esempio.it', role: 'seller' };
-  stato.lavoro = { stato: 'in_corso', venditore: 'agente@esempio.it', prima };
+  stato.lavoro = { stato: 'pronta', venditore: 'agente@esempio.it', prima, risultato: {} };
+  stato.avvisoRotto = false;
+  stato.gia = null;
   stato.iscritte = [];
   stato.esitoIscrizione = { ok: true, id: 'att-1', nuova: true, sito: 'https://oradelgusto.it' };
   stato.codice = 'c'.repeat(64);
@@ -73,6 +78,7 @@ describe('il pulsante «Aggiungi attività»', () => {
     const r = await premi();
     expect(r.status).toBe(201);
     const corpo = (await r.json()) as { data: { nome: string; nuova: boolean; link: string } };
+    expect((corpo.data as { avvisato?: boolean }).avvisato).toBe(true);
     expect(corpo.data.link).toBe(`https://www.mycity-marketplace.com/preventivo/${'c'.repeat(64)}`);
     expect(stato.iscritte).toHaveLength(1);
     expect(stato.iscritte[0]).toMatchObject({ tipo: 'nuova-attivita', origine: 'agente', nome: 'Ora del Gusto', citta: 'Piacenza', tipo_attivita: 'bar', sito: 'https://oradelgusto.it' });
@@ -82,16 +88,16 @@ describe('il pulsante «Aggiungi attività»', () => {
   });
 
   it('un sito non aperto dal programma, o solo in http, non parte', async () => {
-    stato.lavoro = { stato: 'in_corso', venditore: 'agente@esempio.it', prima: { ...prima, sito: { misura: { ...prima.sito.misura, aperto: false } } } };
+    stato.lavoro = { stato: 'pronta', venditore: 'agente@esempio.it', risultato: {}, prima: { ...prima, sito: { misura: { ...prima.sito.misura, aperto: false } } } };
     await premi();
     expect(stato.iscritte[0].sito).toBeUndefined();
-    stato.lavoro = { stato: 'in_corso', venditore: 'agente@esempio.it', prima: { ...prima, sito: { misura: { ...prima.sito.misura, url: 'http://oradelgusto.it' } } } };
+    stato.lavoro = { stato: 'pronta', venditore: 'agente@esempio.it', risultato: {}, prima: { ...prima, sito: { misura: { ...prima.sito.misura, url: 'http://oradelgusto.it' } } } };
     await premi();
     expect(stato.iscritte[1].sito).toBeUndefined();
   });
 
   it('la scheda di un altro agente non si aggiunge; l admin sì', async () => {
-    stato.lavoro = { stato: 'in_corso', venditore: 'altro@esempio.it', prima };
+    stato.lavoro = { stato: 'pronta', venditore: 'altro@esempio.it', prima, risultato: {} };
     expect((await premi()).status).toBe(404);
     expect(stato.iscritte).toHaveLength(0);
     stato.agente = { email: 'nicola@esempio.it', role: 'admin' };
@@ -113,6 +119,52 @@ describe('il pulsante «Aggiungi attività»', () => {
     expect((await premi({ lavoro: 'non-un-codice' })).status).toBe(400);
     stato.lavoro = null;
     expect((await premi()).status).toBe(404);
+  });
+});
+
+describe('dal collaudo del 27/11', () => {
+  it('a scheda non finita non si aggiunge niente', async () => {
+    stato.lavoro = { stato: 'in_corso', venditore: 'agente@esempio.it', prima };
+    const r = await premi();
+    expect(r.status).toBe(409);
+    expect(stato.iscritte).toHaveLength(0);
+  });
+
+  it('un omonimo con un altro indirizzo non si fonde; lo stesso posto sì', async () => {
+    stato.gia = { id: 'att-9', indirizzo: 'Via Emilia Pavese 120, Piacenza' };
+    const r = await premi();
+    expect(r.status).toBe(409);
+    expect(((await r.json()) as { error: { message: string } }).error.message).toContain('altro indirizzo');
+    expect(stato.iscritte).toHaveLength(0);
+    stato.gia = { id: 'att-1', indirizzo: "Viale Sant'Ambrogio 6/B, 29121 Piacenza" };
+    expect((await premi()).status).toBe(201);
+  });
+
+  it('un nome con telefono, email, link o il segnaposto «Attività senza nome» non si iscrive', async () => {
+    for (const nome of ['Mario Rossi 333 1234567', 'mario.rossi@gmail.com', 'https://evil.example/x', 'Attività senza nome']) {
+      stato.lavoro = { stato: 'pronta', venditore: 'agente@esempio.it', prima: { ...prima, nome }, risultato: {} };
+      expect((await premi()).status, nome).toBe(400);
+    }
+    expect(stato.iscritte).toHaveLength(0);
+    expect(nomeNonValido('Bar Sport')).toBeNull();
+  });
+
+  it('i caratteri di controllo nel nome si tolgono', async () => {
+    stato.lavoro = { stato: 'pronta', venditore: 'agente@esempio.it', prima: { ...prima, nome: 'Ora\u0000 del\nGusto' }, risultato: {} };
+    expect((await premi()).status).toBe(201);
+    expect(stato.iscritte[0].nome).toBe('Ora del Gusto');
+  });
+
+  it('se l avviso a Nicola non parte, la risposta lo dice', async () => {
+    stato.avvisoRotto = true;
+    const r = await premi();
+    expect(r.status).toBe(201);
+    expect(((await r.json()) as { data: { avvisato: boolean } }).data.avvisato).toBe(false);
+  });
+
+  it('due indirizzi uguali si riconoscono anche scritti diversi', () => {
+    expect(stessoIndirizzo("Viale Sant'Ambrogio 6/B", "viale sant ambrogio 6b, 29121 Piacenza")).toBe(true);
+    expect(stessoIndirizzo('Via Roma 1', 'Via Emilia 120')).toBe(false);
   });
 });
 

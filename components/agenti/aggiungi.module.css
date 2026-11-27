@@ -1,6 +1,6 @@
 /* Il riquadro «Aggiungi attività» sotto la scheda (27/11/2026). I colori sono quelli della pagina dell'agente
    (le variabili --carta, --riga, --oliva… le definisce scheda.module.css sulla radice). */
-.riquadro{margin-top:1.4rem;background:var(--carta);border:1px solid var(--riga);border-radius:16px;padding:1.1rem 1.2rem;display:grid;gap:.7rem}
+.riquadro{min-width:0;overflow-wrap:anywhere;margin-top:1.4rem;background:var(--carta);border:1px solid var(--riga);border-radius:16px;padding:1.1rem 1.2rem;display:grid;gap:.7rem}
 .riquadro h2{margin:0;font-size:1.2rem}
 .riquadro p{margin:0}
 .fatto{border:2px solid var(--oliva)}

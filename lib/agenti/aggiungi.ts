@@ -25,6 +25,31 @@ export function tipoDaTesto(t: string | null | undefined): TipoAttivita | undefi
   return undefined;
 }
 
+/** Il nome che la scheda mette quando non ne trova uno (lib/agenti/scheda.ts): non è un'attività da iscrivere. */
+const SENZA_NOME = /^attivit[aà] senza nome$/i;
+
+/**
+ * Perché un nome non si può usare per iscrivere un'attività, o `null` se va bene. L'agente può anche scriverlo
+ * a mano: un numero di telefono, un'email o un indirizzo web dentro il nome sono dati di persone o spazzatura,
+ * e non vanno in vetrina (collaudo del 27/11).
+ */
+export function nomeNonValido(nome: string): string | null {
+  const n = nome.trim();
+  if (n.length < 2 || SENZA_NOME.test(n)) return 'Nella scheda manca il nome dell’attività.';
+  if (/@[a-z0-9-]+\.[a-z]{2,}/i.test(n) || /https?:\/\/|www\./i.test(n)) return 'Il nome dell’attività contiene un’email o un indirizzo web: rifai la scheda col link di Google Maps.';
+  if ((n.match(/[\d+][\d .\/-]*\d/g) ?? []).some((x) => x.replace(/\D/g, '').length >= 8)) return 'Il nome dell’attività contiene un numero di telefono: rifai la scheda col link di Google Maps.';
+  return null;
+}
+
+/** Due indirizzi sono lo stesso posto? Si confrontano lettere e numeri, senza maiuscole, spazi e punteggiatura. */
+export function stessoIndirizzo(a: string | null | undefined, b: string | null | undefined): boolean {
+  const pulito = (x: string | null | undefined) => String(x ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+  const x = pulito(a);
+  const y = pulito(b);
+  if (!x || !y) return true;
+  return x.includes(y) || y.includes(x);
+}
+
 /**
  * I dati per iscrivere l'attività, letti dalla scheda. Il sito entra solo se il programma l'ha aperto davvero
  * (misura `aperto`) e in https: un sito solo indovinato o non raggiungibile non va nei canali della vetrina.
@@ -37,13 +62,15 @@ export function attivitaDallaScheda(scheda: Scheda): NuovaAttivita | null {
   const candidato = {
     tipo: 'nuova-attivita' as const,
     origine: 'agente',
-    nome: String(scheda.nome ?? '').trim().slice(0, 80),
+    // eslint-disable-next-line no-control-regex
+    nome: String(scheda.nome ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80),
     ...(tipo ? { tipo_attivita: tipo } : {}),
     ...(scheda.tipo ? { dettaglio: scheda.tipo.trim().slice(0, 80) } : {}),
     ...(scheda.citta ? { citta: scheda.citta.trim().slice(0, 60) } : {}),
     ...(scheda.indirizzo ? { indirizzo: scheda.indirizzo.trim().slice(0, 200) } : {}),
     ...(sito ? { sito: sito.slice(0, 300) } : {}),
   };
+  if (nomeNonValido(candidato.nome)) return null;
   const esito = NuovaAttivitaInArrivo.safeParse(candidato);
   return esito.success ? esito.data : null;
 }
