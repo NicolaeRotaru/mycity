@@ -13,7 +13,7 @@ import { accettaPreventivoColCodice, CODICE_VALIDO, leggiPreventivoColCodice } f
 import { chiaveDelGettone, verificaCodice } from '@/lib/agenzia/codice-dal-link';
 import { sessioneDalLink, type SessioneDalLink } from '@/lib/agenzia/entra-dal-link';
 import { richiestaDalSito } from '@/lib/agenzia/richiesta-dal-sito';
-import { orarioDellaVisitaValido } from '@/lib/agenzia/visita-sdg';
+import { GIORNO_NON_PIU_VALIDO, orarioDellaVisitaValido } from '@/lib/agenzia/visita-sdg';
 
 export const runtime = 'nodejs';
 
@@ -86,7 +86,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
   if (!esito.success) return ApiErrors.invalidRequest(esito.error.issues[0]?.message ?? 'Dati non validi');
   const { email, abbonamento, codice: codiceEmail, gettone, visita } = esito.data;
   if (visita !== undefined && !orarioDellaVisitaValido(visita, new Date())) {
-    return ApiErrors.invalidRequest('Quel giorno non si può più scegliere: torna indietro e scegli un altro giorno per la visita.');
+    return ApiErrors.invalidRequest(GIORNO_NON_PIU_VALIDO);
   }
 
   // 1) Il codice dell'email. Al sesto tentativo sullo stesso gettone serve un codice nuovo.

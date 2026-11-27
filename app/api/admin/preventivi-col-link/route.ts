@@ -23,17 +23,21 @@ export const runtime = 'nodejs';
  */
 export const GET = withAdminAuth(async () => {
   const admin = getAdminSupabase();
-  const [link, schede, contanti] = await Promise.all([
+  const [link, schede, contanti, visite] = await Promise.all([
     admin.from('preventivi_con_codice').select('seller_id, codice, stato, fascia_scelta, creato_il, accettato_il, profiles!inner(store_name)').order('creato_il', { ascending: false }).limit(200),
     admin.from('schede_clienti').select('id_attivita, aggiornata_il').limit(1000),
     // 27/11/2026 — Gli abbonamenti in contanti in corso (migrazione 999). Senza la 999 la colonna non c'è: si va avanti senza.
     admin.from('abbonamenti_servizi').select('seller_id, fascia, stato').eq('origine', 'contanti').in('stato', ['active', 'past_due']).limit(1000),
+    // 27/11/2026 — Il giorno in cui SDG passa, scelto dal titolare nel link (migrazione 999b). Letto a parte: senza
+    // la 999b la colonna non c'è, e la lista dei preventivi deve aprirsi lo stesso (collaudo del 27/11).
+    admin.from('preventivi_con_codice').select('seller_id, visita_il').not('visita_il', 'is', null).limit(1000),
   ]);
   if (link.error) {
     logger.error('[admin] preventivi col link non letti', { message: link.error.message });
     return ApiErrors.unavailable('Non riesco a leggere i preventivi col link. Controlla che la migrazione 708 sia applicata.');
   }
   const inContanti = new Map(((contanti.error ? [] : contanti.data ?? []) as { seller_id: string; fascia: string }[]).map((c) => [c.seller_id, c.fascia]));
+  const conVisita = new Map(((visite.error ? [] : visite.data ?? []) as { seller_id: string; visita_il: string }[]).map((v) => [v.seller_id, v.visita_il]));
   const conScheda = new Map(((schede.data ?? []) as { id_attivita: string; aggiornata_il: string }[]).map((s) => [s.id_attivita, s.aggiornata_il]));
   const righe = (link.data ?? []).map((r) => {
     const riga = r as unknown as { seller_id: string; codice: string; stato: string; fascia_scelta: string | null; creato_il: string; accettato_il: string | null; profiles: { store_name: string | null } | { store_name: string | null }[] };
@@ -48,6 +52,7 @@ export const GET = withAdminAuth(async () => {
       link: `${env.appUrl()}/preventivo/${riga.codice}`,
       schedaRicevutaIl: conScheda.get(riga.seller_id) ?? null,
       sbloccatoInContanti: inContanti.get(riga.seller_id) ?? null,
+      visitaIl: conVisita.get(riga.seller_id) ?? null,
     };
   });
   return NextResponse.json({ ok: true, data: righe }, { status: 200, headers: { 'Cache-Control': 'no-store' } });

@@ -7,8 +7,11 @@
  *
  * Qui stanno i giorni e le ore che il titolare può scegliere, calcolati dal server sull'ora di Piacenza:
  *  · i giorni partono da dopodomani (a SDG serve un giorno per prepararsi) e arrivano a due settimane;
- *  · la domenica no;
- *  · quattro orari al giorno, lontani dalle ore di punta di bar e ristoranti (colazione, pranzo, aperitivo).
+ *  · la domenica no, e nemmeno le feste (nazionali, Pasquetta, Sant'Antonino patrono di Piacenza il 4/7):
+ *    il collaudo del 27/11 ha trovato l'8 dicembre nella lista, e il 25 dicembre il 20/12;
+ *  · tre orari al giorno, lontani dalle ore di punta di bar e ristoranti (colazione, pranzo, aperitivo), con
+ *    due ore fra una partenza e l'altra: la visita dura un'ora e mezza e la squadra è una, serve il tempo per
+ *    spostarsi (collaudo del 27/11: 10:00 e 11:30 erano attaccate).
  * Giorni e orari sono una scelta dell'AD, da confermare con Nicola e SDG: si cambiano in queste costanti.
  *
  * Il browser manda solo l'identificativo di un orario (l'istante in UTC, ISO); il server lo accetta solo
@@ -19,13 +22,47 @@
 export const FUSO_PIACENZA = 'Europe/Rome';
 
 /** Gli orari di inizio della visita, ora di Piacenza. */
-export const ORARI_VISITA = ['10:00', '11:30', '15:00', '16:30'] as const;
+export const ORARI_VISITA = ['10:00', '14:30', '16:30'] as const;
 /** Il primo giorno che si può scegliere, contato da oggi (2 = dopodomani). */
 export const GIORNI_DI_PREAVVISO = 2;
 /** L'ultimo giorno che si può scegliere, contato da oggi. */
 export const GIORNI_AVANTI = 14;
 /** Quanto dura la visita, detto al titolare. */
 export const DURATA_VISITA = 'circa un’ora e mezza';
+
+/** Le risposte del server sulla visita: la pagina le riconosce, torna alla scelta e toglie quell'orario. */
+export const ORA_GIA_PRESA = 'Quell’orario l’ha appena preso un’altra attività: scegli un altro giorno o un’altra ora e conferma di nuovo.';
+export const GIORNO_NON_PIU_VALIDO = 'Quel giorno non si può più scegliere: scegli un altro giorno per la visita e conferma di nuovo.';
+
+/** Le feste fisse in Italia, più Sant'Antonino (4 luglio), patrono di Piacenza: «mese-giorno». */
+const FESTE_FISSE = new Set(['1-1', '1-6', '4-25', '5-1', '6-2', '7-4', '8-15', '11-1', '12-8', '12-25', '12-26']);
+
+/** La domenica di Pasqua di quell'anno (calendario gregoriano, metodo anonimo): [mese, giorno]. */
+function pasqua(anno: number): [number, number] {
+  const a = anno % 19;
+  const b = Math.floor(anno / 100);
+  const c = anno % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mese = Math.floor((h + l - 7 * m + 114) / 31);
+  const giorno = ((h + l - 7 * m + 114) % 31) + 1;
+  return [mese, giorno];
+}
+
+/** Vero se quel giorno è festa a Piacenza (Pasquetta compresa; la domenica la toglie chi chiama). */
+export function eFesta(anno: number, mese: number, giorno: number): boolean {
+  if (FESTE_FISSE.has(`${mese}-${giorno}`)) return true;
+  const [pm, pg] = pasqua(anno);
+  const lunedi = new Date(Date.UTC(anno, pm - 1, pg + 1));
+  return lunedi.getUTCMonth() + 1 === mese && lunedi.getUTCDate() === giorno;
+}
 
 export type OrarioVisita = { id: string; ora: string; libero: boolean };
 export type GiornoVisita = { giorno: string; breve: string; lungo: string; orari: OrarioVisita[] };
@@ -98,7 +135,7 @@ export function giorniDellaVisita(adesso: Date, presi: Iterable<string> = []): G
     // Mezzogiorno di quel giorno: lontano dai cambi d'ora, per leggere data e giorno della settimana.
     const mezzogiorno = istanteAPiacenza(oggi.anno, oggi.mese, oggi.giorno + avanti, 12, 0);
     const g = partiAPiacenza(mezzogiorno);
-    if (g.settimana === 0) continue;
+    if (g.settimana === 0 || eFesta(g.anno, g.mese, g.giorno)) continue;
     const orari = ORARI_VISITA.map((ora) => {
       const [h, m] = ora.split(':').map(Number);
       const istante = istanteAPiacenza(g.anno, g.mese, g.giorno, h, m);

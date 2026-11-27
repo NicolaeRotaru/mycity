@@ -10,7 +10,7 @@ import { campiPerIlProfilo, leggiSchedaSalvata } from '@/lib/agenzia/scheda-clie
 import { leggiSchedaEPagellaAperte, schedaPerIlSito } from '@/lib/agenzia/scheda-dopo-abbonamento';
 import { pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
 import { sbloccaInContanti, sbloccoRiuscito } from '@/lib/agenzia/abbonamento-contanti';
-import { scriviVisita } from '@/lib/agenzia/visita-sdg';
+import { ORA_GIA_PRESA, scriviVisita } from '@/lib/agenzia/visita-sdg';
 
 /**
  * IL PREVENTIVO COL LINK COL CODICE — 24/11/2026.
@@ -131,7 +131,7 @@ export async function accettaPreventivoColCodice(input: {
     presa = await prendi(valori);
   }
   if (presa.error && visita && (presa.error as { code?: string }).code === '23505') {
-    return { ok: false, motivo: 'ORA_PRESA', messaggio: 'Quell’orario l’ha appena preso un’altra attività. Scegli un altro giorno o un’altra ora e conferma di nuovo.' };
+    return { ok: false, motivo: 'ORA_PRESA', messaggio: ORA_GIA_PRESA };
   }
   if (presa.error) {
     logger.error('[preventivo-codice] accettazione non salvata', { sellerId: id, message: presa.error.message });

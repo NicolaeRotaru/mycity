@@ -352,11 +352,12 @@ describe('il titolare sceglie quando passa SDG', () => {
     expect(giorni).not.toContain('2026-11-28'); // domani: troppo presto
     expect(giorni).not.toContain('2026-11-29'); // domenica
     expect(giorni).not.toContain('2026-12-06'); // domenica
+    expect(giorni).not.toContain('2026-12-08'); // l'Immacolata (collaudo del 27/11)
     expect(giorni.at(-1)).toBe('2026-12-11'); // due settimane
     expect(giornoVisita(r, '2026-11-30').hasAttribute('checked')).toBe(true);
     // Lunedì alle 10:00 l'ha già presa un'altra attività: barrata e non si tocca. Le altre ore sì.
     expect(oraVisita(r, '10:00').hasAttribute('disabled')).toBe(true);
-    expect(oraVisita(r, '11:30').hasAttribute('disabled')).toBe(false);
+    expect(oraVisita(r, '14:30').hasAttribute('disabled')).toBe(false);
     expect(r.textContent).toContain('Cosa succede dopo');
     expect(r.textContent).toContain('Ti mandiamo un codice per email: lo scrivi qui ed entri nella tua pagina, con il Business già attivo.');
     expect(r.textContent).toContain('Prepariamo i primi post e te li facciamo vedere prima di pubblicarli.');
@@ -371,20 +372,20 @@ describe('il titolare sceglie quando passa SDG', () => {
     expect(r.querySelector('[role="alert"]')?.textContent).toContain('Scegli il giorno e l’ora in cui passiamo da te');
   });
 
-  it('martedì 1/12 alle 15:00: «Cosa succede dopo» e il riepilogo dicono il giorno, e la conferma lo manda', async () => {
+  it('martedì 1/12 alle 16:30: «Cosa succede dopo» e il riepilogo dicono il giorno, e la conferma lo manda', async () => {
     const chiamate = serverFinto({ status: 200, corpo: { ok: true, data: { url: null, entra: null, accessoInviato: true } } });
     const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
     await premi(giornoVisita(r, '2026-12-01'));
     expect(r.textContent).toContain('L’ora, martedì 1 dicembre');
-    await premi(oraVisita(r, '15:00'));
-    expect(r.textContent).toContain('Martedì 1 dicembre alle 15:00. Il team di SDG passa da te');
+    await premi(oraVisita(r, '16:30'));
+    expect(r.textContent).toContain('Martedì 1 dicembre alle 16:30. Il team di SDG passa da te');
     await primoPasso(r, null);
-    expect(r.textContent).toContain('visita martedì 1 dicembre alle 15:00');
+    expect(r.textContent).toContain('visita martedì 1 dicembre alle 16:30');
     await scriviCodice(r, '123456');
     await invia(r);
-    // Le 15:00 di Piacenza, il 1° dicembre, sono le 14:00 UTC.
-    expect(chiamate[1].corpo.visita).toBe('2026-12-01T14:00:00.000Z');
-    expect(r.querySelector('[role="status"]')?.textContent).toContain('Ci vediamo martedì 1 dicembre alle 15:00.');
+    // Le 16:30 di Piacenza, il 1° dicembre, sono le 15:30 UTC.
+    expect(chiamate[1].corpo.visita).toBe('2026-12-01T15:30:00.000Z');
+    expect(r.querySelector('[role="status"]')?.textContent).toContain('Ci vediamo martedì 1 dicembre alle 16:30.');
   });
 
   it('cambiando giorno l ora scelta si azzera: non parte un ora di un altro giorno', async () => {
@@ -405,11 +406,42 @@ describe('il titolare sceglie quando passa SDG', () => {
     const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
     expect(r.querySelector('[data-giorno]')).toBeNull();
     expect(r.textContent).toContain('siamo al completo');
+    expect(r.textContent).toContain('Ti chiamiamo per fissare quando il team di SDG passa da te');
+    expect(r.textContent).not.toContain('Il giorno che scegli');
     expect(pulsante(r).textContent).toBe('Confermo il Business');
     await primoPasso(r, null);
     await scriviCodice(r, '123456');
     await invia(r);
     expect(chiamate[1].corpo).not.toHaveProperty('visita');
     expect(vai).toHaveBeenCalledWith('/seller/abbonamento');
+  });
+
+  it('l ora appena presa da un altro: si torna alla scelta, quell ora è barrata e si sceglie un altra', async () => {
+    const { ORA_GIA_PRESA } = await import('@/lib/agenzia/visita-sdg');
+    const chiamate = serverFinto({ status: 409, corpo: { ok: false, error: { message: ORA_GIA_PRESA } } });
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await primoPasso(r);
+    await scriviCodice(r, '123456');
+    await invia(r);
+    expect(chiamate[1].corpo.visita).toBe(LUNEDI_ALLE_10);
+    // Di nuovo sulla scelta, col messaggio; le 10:00 di lunedì barrate, l'email e la fascia restano.
+    expect(r.querySelector('#codice-email')).toBeNull();
+    expect(r.querySelector('[role="alert"]')?.textContent).toBe(ORA_GIA_PRESA);
+    expect(oraVisita(r, '10:00').disabled).toBe(true);
+    expect(oraVisita(r, '10:00').checked).toBe(false);
+    expect((r.querySelector('#email-titolare') as HTMLInputElement).value).toBe('titolare@grida.it');
+    await premi(oraVisita(r, '14:30'));
+    expect(oraVisita(r, '14:30').checked).toBe(true);
+  });
+
+  it('quel giorno non vale più (pagina aperta oltre la mezzanotte): si torna alla scelta e tutto quel giorno è barrato', async () => {
+    const { GIORNO_NON_PIU_VALIDO } = await import('@/lib/agenzia/visita-sdg');
+    serverFinto({ status: 400, corpo: { ok: false, error: { message: GIORNO_NON_PIU_VALIDO } } });
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await primoPasso(r);
+    await scriviCodice(r, '123456');
+    await invia(r);
+    expect(r.querySelector('[role="alert"]')?.textContent).toBe(GIORNO_NON_PIU_VALIDO);
+    for (const ora of ['10:00', '14:30', '16:30']) expect(oraVisita(r, ora).disabled, ora).toBe(true);
   });
 });

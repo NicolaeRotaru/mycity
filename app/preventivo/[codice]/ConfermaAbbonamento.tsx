@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Check } from 'lucide-react';
 import type { Abbonamento } from '@/lib/agenzia/preventivo';
 import { FRASE_CONTANTI, PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagamento-servizi';
-import { DURATA_VISITA, type GiornoVisita } from '@/lib/agenzia/visita-sdg';
+import { DURATA_VISITA, GIORNO_NON_PIU_VALIDO, ORA_GIA_PRESA, type GiornoVisita } from '@/lib/agenzia/visita-sdg';
 
 /**
  * LE TRE FASCE, IL CODICE DELL'EMAIL E L'INGRESSO — 27/11/2026 (app/preventivo/[codice]/page.tsx).
@@ -24,7 +24,8 @@ import { DURATA_VISITA, type GiornoVisita } from '@/lib/agenzia/visita-sdg';
  * di SDG passa da lui (piano editoriale, foto e video), e la pagina gli dice cosa succede dopo la conferma, con
  * parole sue. I giorni li prepara il server (`giorni`, lib/agenzia/visita-sdg.ts) senza le ore già prese; la
  * scelta va al server con la conferma (`visita`). Se non c'è nessun giorno libero si conferma lo stesso e lo
- * chiamiamo noi.
+ * chiamiamo noi. Se il server risponde che l'ora l'ha appena presa un altro, o che quel giorno non vale più (pagina
+ * rimasta aperta oltre la mezzanotte), si torna alla scelta e quell'ora (o quel giorno) si barra (collaudo del 27/11).
  */
 
 /** «Lunedì 30 novembre alle 10:00», dall'orario scelto. */
@@ -85,6 +86,8 @@ export default function ConfermaAbbonamento({
   /** Il giorno aperto (si vede subito il primo) e l'orario scelto per la visita di SDG: quello lo tocca il titolare. */
   const [giorno, setGiorno] = useState<string | null>(giorni[0]?.giorno ?? null);
   const [visita, setVisita] = useState<string | null>(null);
+  /** Gli orari che il server ha rifiutato in questa pagina: si barrano come quelli già presi. */
+  const [rifiutati, setRifiutati] = useState<ReadonlySet<string>>(new Set());
   const scelta = fasce.find((f) => f.id === fascia) ?? fasce[0];
   const aperto = giorni.find((g) => g.giorno === giorno) ?? null;
   const quando = scriviScelta(giorni, visita);
@@ -97,7 +100,16 @@ export default function ConfermaAbbonamento({
     });
     const letto = (await r.json().catch(() => null)) as Risposta | null;
     if (!r.ok || !letto?.ok) {
-      setErrore(letto?.error?.message ?? 'Non ci sono riuscito. Riprova fra un momento.');
+      const messaggio = letto?.error?.message ?? 'Non ci sono riuscito. Riprova fra un momento.';
+      setErrore(messaggio);
+      if (visita && (messaggio === ORA_GIA_PRESA || messaggio === GIORNO_NON_PIU_VALIDO)) {
+        // Quell'ora (o tutto quel giorno) non si può più scegliere: si barra e si torna alla scelta.
+        const giornata = giorni.find((g) => g.orari.some((o) => o.id === visita));
+        const via = messaggio === GIORNO_NON_PIU_VALIDO && giornata ? giornata.orari.map((o) => o.id) : [visita];
+        setRifiutati((prima) => new Set([...prima, ...via]));
+        setVisita(null);
+        setFase('scelta');
+      }
       return null;
     }
     return letto;
@@ -259,8 +271,8 @@ export default function ConfermaAbbonamento({
       <fieldset className="mx-auto mt-6 max-w-xl rounded-2xl border-2 border-cream-300 bg-surface-0 p-5" aria-describedby="visita-cosa">
         <legend className="px-1 text-lg font-bold text-ink-900">Quando passiamo da te?</legend>
         <p id="visita-cosa" className="text-sm text-ink-700">
-          Il giorno che scegli viene nella tua attività il team creativo di SDG. Con te scriviamo il piano dei contenuti
-          del primo mese, poi il fotografo e il videomaker fanno subito le prime foto e i primi video. Ci vuole {DURATA_VISITA}.
+          Il team creativo di SDG viene da te, nella tua attività. Con te scriviamo il piano dei contenuti del primo mese,
+          poi il fotografo e il videomaker fanno subito le prime foto e i primi video. Ci vuole {DURATA_VISITA}.
         </p>
         {giorni.length === 0 ? (
           <p className="mt-3 text-sm font-semibold text-ink-900">In queste due settimane siamo al completo: conferma lo stesso, ti chiamiamo noi per fissare il giorno.</p>
@@ -279,10 +291,10 @@ export default function ConfermaAbbonamento({
                       checked={attivo}
                       onChange={() => { setGiorno(g.giorno); setVisita(null); }}
                       className="peer sr-only"
-                      aria-label={g.lungo}
                     />
+                    {/* Il nome per chi usa un lettore o la voce contiene la scritta che si vede (WCAG 2.5.3). */}
                     <span className={`block rounded-lg border-2 px-3 py-2 text-sm font-semibold capitalize peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 ${attivo ? 'border-primary-700 bg-primary-50 text-ink-900' : 'border-cream-200 text-ink-700 hover:border-primary-300'}`}>
-                      {g.breve}
+                      {g.breve}<span className="sr-only">, {g.lungo}</span>
                     </span>
                   </label>
                 );
@@ -294,19 +306,20 @@ export default function ConfermaAbbonamento({
                 <div role="radiogroup" aria-labelledby="visita-ora" className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {aperto.orari.map((o) => {
                     const attiva = o.id === visita;
+                    const libero = o.libero && !rifiutati.has(o.id);
                     return (
-                      <label key={o.id} data-ora={o.ora} className={o.libero ? 'cursor-pointer' : 'cursor-not-allowed'}>
+                      <label key={o.id} data-ora={o.ora} className={libero ? 'cursor-pointer' : 'cursor-not-allowed'}>
                         <input
                           type="radio"
                           name="ora-visita"
                           value={o.id}
                           checked={attiva}
-                          disabled={!o.libero}
+                          disabled={!libero}
                           onChange={() => setVisita(o.id)}
                           className="peer sr-only"
-                          aria-label={o.libero ? `alle ${o.ora}` : `alle ${o.ora}, già presa`}
+                          aria-label={libero ? `alle ${o.ora}` : `alle ${o.ora}, già presa`}
                         />
-                        <span className={`block rounded-lg border-2 px-3 py-2 text-center text-base font-bold peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 ${!o.libero ? 'border-cream-200 text-ink-400 line-through' : attiva ? 'border-primary-700 bg-primary-50 text-ink-900' : 'border-cream-200 text-ink-800 hover:border-primary-300'}`}>
+                        <span className={`block rounded-lg border-2 px-3 py-2 text-center text-base font-bold peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 ${!libero ? 'border-cream-200 text-ink-400 line-through' : attiva ? 'border-primary-700 bg-primary-50 text-ink-900' : 'border-cream-200 text-ink-800 hover:border-primary-300'}`}>
                           {o.ora}
                         </span>
                       </label>
@@ -342,8 +355,15 @@ export default function ConfermaAbbonamento({
         <div className="mt-4 rounded-xl bg-cream-50 p-4">
           <p className="text-sm font-bold text-ink-900">Cosa succede dopo</p>
           <ol className="mt-2 space-y-2 text-sm text-ink-700">
-            <li><strong className="text-ink-900">Adesso.</strong> Ti mandiamo un codice per email: lo scrivi qui ed entri nella tua pagina, con il {scelta.nome} già attivo.</li>
-            <li><strong className="text-ink-900">{quando ?? 'Il giorno che scegli'}.</strong> Il team di SDG passa da te: piano dei contenuti, foto e video.</li>
+            <li>
+              <strong className="text-ink-900">Adesso.</strong> Ti mandiamo un codice per email: lo scrivi qui ed entri nella tua pagina
+              {PAGAMENTO_ONLINE_SERVIZI ? '.' : `, con il ${scelta.nome} già attivo.`}
+            </li>
+            {giorni.length > 0 ? (
+              <li><strong className="text-ink-900">{quando ?? 'Il giorno che scegli'}.</strong> Il team di SDG passa da te: piano dei contenuti, foto e video.</li>
+            ) : (
+              <li><strong className="text-ink-900">Nei prossimi giorni.</strong> Ti chiamiamo per fissare quando il team di SDG passa da te: piano dei contenuti, foto e video.</li>
+            )}
             <li><strong className="text-ink-900">Nei giorni dopo.</strong> Prepariamo i primi post e te li facciamo vedere prima di pubblicarli.</li>
           </ol>
         </div>

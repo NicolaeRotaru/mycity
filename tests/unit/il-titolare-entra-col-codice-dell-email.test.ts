@@ -428,7 +428,7 @@ describe('la visita di SDG scelta nel link', () => {
     for (const visita of ['2020-01-06T09:00:00.000Z', 'domani alle dieci']) {
       const r = await conferma(c, { visita });
       expect(r.status, visita).toBe(400);
-      expect((await r.json()).error.message).toContain('torna indietro e scegli un altro giorno');
+      expect((await r.json()).error.message).toContain('scegli un altro giorno per la visita');
     }
     expect(db.preventivo?.stato).toBe('aperto');
     expect(db.utente).toEqual([]);
