@@ -62,7 +62,7 @@ const { apriCassaServizi } = await import('@/lib/agenzia/cassa-servizi');
 const { POST: pagaDalLink } = await import('@/app/api/preventivo/[codice]/paga/route');
 const { POST: accettaDalLink } = await import('@/app/api/preventivo/[codice]/accetta/route');
 const { POST: pagaDallaDashboard } = await import('@/app/api/seller/preventivo/paga/route');
-const { default: AccettaDalLink } = await import('@/app/preventivo/[codice]/abbonamento/AccettaDalLink');
+const { default: AccettaDalLink } = await import('@/app/preventivo/[codice]/(demo)/abbonamento/AccettaDalLink');
 
 const CODICE = 'a'.repeat(64);
 const ctx = { params: Promise.resolve({ codice: CODICE }) };
