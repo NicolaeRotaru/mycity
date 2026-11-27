@@ -10,12 +10,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  */
 
 const db = vi.hoisted(() => ({
-  utenti: new Map<string, { id: string; email: string }>(),
+  utenti: new Map<string, { id: string; email: string; banned_until?: string; created_at: string }>(),
   profili: new Map<string, Record<string, unknown>>(),
   link: new Map<string, { seller_id: string; codice: string }>(),
   creaUtente: [] as Array<Record<string, unknown>>,
   ultimoId: 0,
   rompiProfilo: 0,
+  /** Quanti minuti fa nascono gli utenti creati adesso (per simulare un'iscrizione vecchia). */
+  etaMinuti: 0,
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -32,7 +34,8 @@ vi.mock('@/lib/supabase/server', () => ({
           if ([...db.utenti.values()].some((u) => u.email === o.email)) return { data: { user: null }, error: { message: 'already registered' } };
           db.ultimoId += 1;
           const id = `00000000-0000-4000-8000-${String(db.ultimoId).padStart(12, '0')}`;
-          db.utenti.set(id, { id, email: o.email });
+          const creato = new Date(Date.now() - db.etaMinuti * 60_000).toISOString();
+          db.utenti.set(id, { id, email: o.email, created_at: creato, ...(o.ban_duration ? { banned_until: new Date(Date.now() + 365 * 86_400_000).toISOString() } : {}) });
           db.profili.set(id, { id, role: 'pending_approval' });
           return { data: { user: { id } }, error: null };
         },
@@ -80,7 +83,7 @@ const chiama = async (corpo: unknown, segreto: string | null = SEGRETO) => {
 const BAR = { tipo: 'nuova-attivita', nome: 'Bar Prova', tipo_attivita: 'bar', citta: 'Piacenza', indirizzo: 'Via Roma 1' };
 
 beforeEach(() => {
-  db.utenti.clear(); db.profili.clear(); db.link.clear(); db.creaUtente.length = 0; db.ultimoId = 0; db.rompiProfilo = 0;
+  db.utenti.clear(); db.profili.clear(); db.link.clear(); db.creaUtente.length = 0; db.ultimoId = 0; db.rompiProfilo = 0; db.etaMinuti = 0;
   process.env.N8N_SCHEDA_CLIENTE_SEGRETO = SEGRETO;
 });
 
@@ -147,6 +150,7 @@ describe('il negozio nasce come Ora del Gusto', () => {
 
   it('un iscrizione fermata a metà (utente creato, profilo no) si finisce al secondo invio, senza doppioni (collaudo del 27/11)', async () => {
     db.rompiProfilo = 1;
+    db.etaMinuti = 10; // il primo invio è di dieci minuti fa: non è un invio ancora in corso
     expect((await chiama(BAR)).status).toBe(503);
     expect(db.utenti.size).toBe(1);
     expect(db.link.size).toBe(0);
@@ -159,6 +163,43 @@ describe('il negozio nasce come Ora del Gusto', () => {
     expect(db.link.has(b.id_attivita)).toBe(true);
     // E un terzo invio è un invio qualunque: stesso negozio, non più «nuovo».
     expect(((await (await chiama(BAR)).json()) as { nuova: boolean }).nuova).toBe(false);
+  });
+
+  it('i paletti del recupero (collaudo del 27/11): niente account altrui, niente omonimi, niente invii doppi', async () => {
+    // ① Un account registrato a mano con l'email di sistema (non bloccato) non diventa un negozio.
+    const { emailDiSistema } = await import('@/lib/agenzia/nuova-attivita');
+    db.utenti.set('estraneo', { id: 'estraneo', email: emailDiSistema(BAR), created_at: new Date(Date.now() - 3_600_000).toISOString() });
+    db.profili.set('estraneo', { id: 'estraneo', role: 'buyer' });
+    expect((await chiama(BAR)).status).toBe(503);
+    expect(db.profili.get('estraneo')).toEqual({ id: 'estraneo', role: 'buyer' });
+    expect(db.link.has('estraneo')).toBe(false);
+    db.utenti.clear(); db.profili.clear();
+
+    // ③ «BAR PROVA» in un'altra via ha la stessa email di «Bar Prova», già iscritto e col link: non lo riscrive.
+    db.etaMinuti = 10;
+    const a = (await (await chiama(BAR)).json()) as { id_attivita: string };
+    const r = await chiama({ ...BAR, nome: 'BAR PROVA', indirizzo: 'Via Emilia 120' });
+    expect(r.status).toBe(503);
+    expect(db.profili.get(a.id_attivita)).toMatchObject({ store_name: 'Bar Prova' });
+    expect(String(db.profili.get(a.id_attivita)!.store_address)).toContain('Via Roma 1');
+    db.utenti.clear(); db.profili.clear(); db.link.clear();
+
+    // ② Un utente appena creato (un altro invio ancora in corso) non si recupera: si riprova fra poco.
+    db.etaMinuti = 0;
+    db.rompiProfilo = 1;
+    expect((await chiama(BAR)).status).toBe(503);
+    expect((await chiama(BAR)).status).toBe(503);
+    expect(db.link.size).toBe(0);
+  });
+
+  it('un profilo approvato senza link non torna «non approvato» col recupero', async () => {
+    db.etaMinuti = 10;
+    db.rompiProfilo = 1;
+    expect((await chiama(BAR)).status).toBe(503);
+    const id = [...db.utenti.keys()][0];
+    db.profili.set(id, { id, role: 'seller', is_approved: true, approval_status: 'approved' });
+    expect((await chiama(BAR)).status).toBe(409);
+    expect(db.profili.get(id)!.is_approved).toBe(true);
   });
 
   it('un secondo invio senza tipo non cancella il tipo scritto prima (collaudo del 27/11, pulsante dell agente)', async () => {

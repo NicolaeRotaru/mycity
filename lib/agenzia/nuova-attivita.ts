@@ -73,29 +73,43 @@ export async function attivitaGiaIscritta(admin: SupabaseClient, a: Pick<NuovaAt
       return { id: r.seller_id, indirizzo: p?.store_address ?? null };
     }
   }
-  return null;
+  // Collaudo del 27/11: un nome scritto in un altro modo («BAR SPORT» e «Bar Sport») ha la stessa email ma non
+  // si trova dal nome. Si cerca allora dall'email, solo fra gli utenti creati dal sito (bloccati).
+  const trovato = await utenteDallEmail(admin, email);
+  if (!trovato.utente?.bloccato) return null;
+  const profilo = await admin.from('profiles').select('store_address').eq('id', trovato.utente.id).maybeSingle();
+  return { id: trovato.utente.id, indirizzo: (profilo.data as { store_address?: string | null } | null)?.store_address ?? null };
 }
 
 /** Quanti utenti si guardano al massimo cercando un'email (10 pagine da 1000): il caso è raro, il tetto c'è. */
 const PAGINE_UTENTI = 10;
 const PER_PAGINA = 1000;
 
+/** Un utente ritrovato dall'email, con quello che serve per capire se l'ha creato il sito. */
+type UtenteTrovato = { id: string; bloccato: boolean; creatoIl: number };
+
 /**
- * L'utente di sistema ritrovato dalla sua email, scorrendo gli utenti a pagine; `null` se non c'è o se la
- * lettura non riesce. 27/11/2026 (collaudo del pulsante dell'agente): serve quando un'iscrizione si è fermata
- * a metà — l'utente creato, il profilo o il link no. Prima lo si cercava solo dal profilo col link, che in
- * quel caso non c'è: l'attività restava bloccata per sempre su «Riprova fra poco».
+ * L'utente ritrovato dalla sua email, scorrendo gli utenti a pagine; `utente: null` se non c'è o se la lettura
+ * non riesce (e allora `errore` dice perché). 27/11/2026 (collaudo del pulsante dell'agente): serve quando
+ * un'iscrizione si è fermata a metà — l'utente creato, il profilo o il link no. Prima lo si cercava solo dal
+ * profilo col link, che in quel caso non c'è: l'attività restava bloccata per sempre su «Riprova fra poco».
  */
-async function utenteDallEmail(admin: SupabaseClient, email: string): Promise<string | null> {
+async function utenteDallEmail(admin: SupabaseClient, email: string): Promise<{ utente: UtenteTrovato | null; errore?: string }> {
   for (let page = 1; page <= PAGINE_UTENTI; page += 1) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: PER_PAGINA });
-    if (error || !data) return null;
-    const trovato = data.users.find((u) => (u.email ?? '').toLowerCase() === email);
-    if (trovato) return trovato.id;
-    if (data.users.length < PER_PAGINA) return null;
+    if (error || !data) return { utente: null, errore: `utenti non letti: ${error?.message ?? 'risposta vuota'}` };
+    const u = data.users.find((x) => (x.email ?? '').toLowerCase() === email);
+    if (u) {
+      const finoA = u.banned_until ? Date.parse(u.banned_until) : NaN;
+      return { utente: { id: u.id, bloccato: Number.isFinite(finoA) && finoA > Date.now(), creatoIl: Date.parse(u.created_at) || 0 } };
+    }
+    if (data.users.length < PER_PAGINA) return { utente: null, errore: 'utente esistente non ritrovato' };
   }
-  return null;
+  return { utente: null, errore: `utente non ritrovato nei primi ${PAGINE_UTENTI * PER_PAGINA}` };
 }
+
+/** Un utente creato da meno di questo è di un invio ancora in corso: non si tocca, si riprova fra poco. */
+const IN_CORSO_MS = 2 * 60_000;
 
 export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): Promise<EsitoIscrizione> {
   const email = emailDiSistema(a);
@@ -103,6 +117,7 @@ export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): 
   // 1. L'utente senza accesso (o quello già creato da un invio precedente con lo stesso nome e città).
   let id: string | null = null;
   let nuova = false;
+  let recuperata = false;
   const creato = await admin.auth.admin.createUser({
     email,
     email_confirm: true,
@@ -130,19 +145,31 @@ export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): 
     if (!id) {
       // Iscrizione fermata a metà: l'utente c'è, ma il profilo col link no. Lo si ritrova dall'email e il
       // lavoro si finisce come la prima volta: per chi chiama è un'attività che nasce adesso (flusso 16,
-      // avviso), perché la prima volta quei passi non erano partiti.
-      id = await utenteDallEmail(admin, email);
-      if (!id) return { ok: false, motivo: 'guasto', dettaglio: creato.error?.message ?? 'utente non creato' };
-      const giaColLink = await admin.from('preventivi_con_codice').select('seller_id').eq('seller_id', id).maybeSingle();
+      // avviso), perché la prima volta quei passi non erano partiti. Tre paletti (collaudo del 27/11):
+      const trovato = await utenteDallEmail(admin, email);
+      const u = trovato.utente;
+      if (!u) return { ok: false, motivo: 'guasto', dettaglio: trovato.errore ?? creato.error?.message ?? 'utente non creato' };
+      // ① solo un utente creato dal sito, cioè bloccato: nessuno si blocca da solo. Un account registrato a
+      //    mano con la stessa email non diventa mai un negozio.
+      if (!u.bloccato) return { ok: false, motivo: 'guasto', dettaglio: 'con questa email c’è un account non creato dal sito' };
+      // ② appena creato vuol dire un altro invio ancora in corso sulla stessa attività: si riprova fra poco,
+      //    così due invii insieme non fanno partire due volte il flusso 16.
+      if (Date.now() - u.creatoIl < IN_CORSO_MS) return { ok: false, motivo: 'guasto', dettaglio: 'iscrizione della stessa attività ancora in corso' };
+      // ③ col link l'iscrizione era finita: il nome diverso vuol dire un'altra attività che si scrive uguale
+      //    («BAR SPORT» e «Bar Sport») o un negozio rinominato. Come prima, non si tocca.
+      const giaColLink = await admin.from('preventivi_con_codice').select('seller_id').eq('seller_id', u.id).maybeSingle();
       if (giaColLink.error) return { ok: false, motivo: 'guasto', dettaglio: giaColLink.error.message };
-      nuova = !giaColLink.data;
+      if (giaColLink.data) return { ok: false, motivo: 'guasto', dettaglio: 'stessa email di un’attività già iscritta con un altro nome' };
+      id = u.id;
+      nuova = true;
+      recuperata = true;
     }
   }
 
   // 2. Il profilo: venditore non approvato, fuori vetrina, coi dati pubblici dell'attività.
   const profilo = await admin.from('profiles').select('id, approval_status, is_approved').eq('id', id).maybeSingle();
   const p = profilo.data as { approval_status?: string | null; is_approved?: boolean } | null;
-  if (p && !nuova && (p.is_approved || (p.approval_status && p.approval_status !== 'pending'))) {
+  if (p && (!nuova || recuperata) && (p.is_approved || (p.approval_status && p.approval_status !== 'pending'))) {
     // Il titolare ha già accettato o è stato approvato: il modulo non riscrive più niente.
     return { ok: false, motivo: 'gia-con-accesso' };
   }
