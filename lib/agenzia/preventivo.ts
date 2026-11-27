@@ -14,7 +14,7 @@
  * Google Maps»).
  *
  * Dal 24/11/2026 non si vendono più uno per uno: Nicola, «l'abbonamento comprende tutti i
- * servizi ma in modi diversi» — tre fasce, Base 300 €, Business 500 €, Premium 999 € al mese,
+ * servizi ma in modi diversi» — tre fasce, Base 300 €, Business 600 €, Premium 900 € al mese,
  * solo canone e niente percentuale sul venduto. Ogni fascia comprende tutti e tre i
  * servizi più la vetrina; cambia quanto (`FASCE`).
  *
@@ -146,7 +146,7 @@ export const FASCE: Record<Abbonamento, Fascia> = {
   },
   business: {
     nome: 'Business',
-    prezzoMese: 50_000,
+    prezzoMese: 60_000,
     perChi: 'Per crescere ogni settimana: più contenuti, più clienti che ti trovano.',
     servizi: {
       foto_video: 'Foto all’avvio e una nuova sessione ogni tre mesi, più un video al mese.',
@@ -159,7 +159,7 @@ export const FASCE: Record<Abbonamento, Fascia> = {
   },
   premium: {
     nome: 'Premium',
-    prezzoMese: 99_900,
+    prezzoMese: 90_000,
     perChi: 'Il servizio completo: foto e video ogni mese, un referente tutto tuo.',
     servizi: {
       foto_video: 'Una sessione di foto e video ogni mese.',
@@ -458,7 +458,7 @@ export function numeroPreventivo(idAttivita: string, giorno: string): string {
  */
 export const CONDIZIONI = {
   preavvisoGiorni: 30,
-  /** Il primo mese costa la metà: Base 150 €, Business 250 €, Premium 499,50 €. */
+  /** Il primo mese costa la metà: Base 150 €, Business 300 €, Premium 450 €. */
   primoMeseFrazione: 0.5,
 } as const;
 

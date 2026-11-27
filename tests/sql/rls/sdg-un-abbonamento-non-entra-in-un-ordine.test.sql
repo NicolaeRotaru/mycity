@@ -47,8 +47,8 @@ BEGIN
 
   SELECT count(*) INTO n FROM public.products
    WHERE seller_id = '11111111-1111-1111-1111-5d9000000001' AND status = 'available'
-     AND ((name LIKE 'Abbonamento Base%' AND price = 300) OR (name LIKE 'Abbonamento Business%' AND price = 500)
-       OR (name LIKE 'Abbonamento Premium%' AND price = 999));
+     AND ((name LIKE 'Abbonamento Base%' AND price = 300) OR (name LIKE 'Abbonamento Business%' AND price = 600)
+       OR (name LIKE 'Abbonamento Premium%' AND price = 900));
   INSERT INTO esiti VALUES ('i tre abbonamenti sono in vetrina al prezzo del listino', n = 3, n || ' prodotti');
 
   BEGIN

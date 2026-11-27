@@ -19,7 +19,7 @@ export default function AnalisiConsegnata({ analisi }: { analisi: Analisi }) {
             {analisi.numeri_chiave.map((n) => (
               <li key={n.voce} className="rounded-xl border border-cream-200 p-3">
                 <p className="text-lg font-bold text-ink-900">{n.valore}</p>
-                <p>{n.voce}</p>
+                <p>{n.voce}{n.da_confermare && <span className="ml-2 rounded-full bg-cream-200 px-2 py-0.5 text-[11px] font-bold text-ink-800">da confermare</span>}</p>
                 {n.fonte && <p className="mt-1 text-xs"><LinkEsterno href={n.fonte}>Fonte</LinkEsterno></p>}
               </li>
             ))}

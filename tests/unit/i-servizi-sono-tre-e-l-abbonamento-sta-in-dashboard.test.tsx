@@ -252,7 +252,7 @@ describe('il riquadro «Abbonamento» in dashboard', () => {
     expect(q.textContent).toContain('La tua vetrina non è ancora visibile sul marketplace');
     for (const nome of ['Base', 'Business', 'Premium']) expect(q.textContent).toContain(nome);
     expect(q.textContent).toMatch(/300,00\s€ al mese/);
-    expect(q.textContent).toMatch(/Il primo mese 250,00\s€/);
+    expect(q.textContent).toMatch(/Il primo mese 300,00\s€/);
     expect(q.textContent).toContain('Consigliato');
     expect(q.querySelector('a[href="/seller/abbonamento"]')?.textContent).toMatch(/Scegli l.abbonamento/);
     expect(q.querySelector('a[href="/seller/servizi/foto-video"]')?.textContent).toContain('La copertina ha 1 foto del locale');

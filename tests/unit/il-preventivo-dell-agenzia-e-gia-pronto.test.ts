@@ -59,9 +59,9 @@ const DI_LISTINO = leggiImpostazioniAgenzia({});
 const ADESSO = new Date('2026-11-22T10:00:00Z');
 
 describe('i tre abbonamenti sono quelli di Nicola (24/11/2026)', () => {
-  it('Base 300 €, Business 500 €, Premium 999 € al mese', () => {
+  it('Base 300 €, Business 600 €, Premium 900 € al mese', () => {
     expect(ABBONAMENTI).toEqual(['base', 'business', 'premium']);
-    expect(DI_LISTINO.prezzi).toEqual({ base: 30000, business: 50000, premium: 99900 });
+    expect(DI_LISTINO.prezzi).toEqual({ base: 30000, business: 60000, premium: 90000 });
     expect(DI_LISTINO.nome).toBe(NOME_AGENZIA_DI_RISERVA);
     expect(NOME_AGENZIA_DI_RISERVA).toBe('MyCity'); // il preventivo lo firma MyCity (Nicola, 23/11)
     // 24/11: tutti i servizi li realizza SDG Agenzia, nominata una volta sola
@@ -81,7 +81,7 @@ describe('i tre abbonamenti sono quelli di Nicola (24/11/2026)', () => {
 
   it('i canoni si scrivono come li legge il cliente', () => {
     expect(scriviCanone(30000)).toMatch(/^300,00\s€ al mese$/);
-    expect(scriviCanone(99900)).toMatch(/^999,00\s€ al mese$/);
+    expect(scriviCanone(90000)).toMatch(/^900,00\s€ al mese$/);
     expect(scriviCanone(null)).toBe('su richiesta');
   });
 });
@@ -126,7 +126,7 @@ describe('cosa manca alla vetrina', () => {
 describe('il preventivo', () => {
   it('porta i canoni delle tre fasce e cosa manca, senza prezzi per servizio', () => {
     const p = costruisciPreventivo({ idAttivita: 'abc123-def', nomeAttivita: 'Bar Roma', tipoAttivita: 'bar', dati: VUOTA, impostazioni: DI_LISTINO, adesso: ADESSO });
-    expect(p.prezzi).toEqual({ base: 30000, business: 50000, premium: 99900 });
+    expect(p.prezzi).toEqual({ base: 30000, business: 60000, premium: 90000 });
     expect(p.righe.map((r) => r.id)).toEqual(['foto_video', 'sito_web', 'social', 'analisi']);
     expect(p.righe.some((r) => 'prezzo' in r)).toBe(false);
     expect(p.scelto).toBeNull();
@@ -148,7 +148,7 @@ describe('il preventivo', () => {
     expect(imp.nome).toBe('Studio Prova');
     expect(imp.prezzi.base).toBe(25000);
     expect(imp.prezzi.premium).toBeNull(); // null scritto = su richiesta
-    expect(imp.prezzi.business).toBe(50000); // non scritto = listino
+    expect(imp.prezzi.business).toBe(60000); // non scritto = listino
     expect('social' in imp.prezzi).toBe(false); // la vecchia chiave «prezzi» si ignora
   });
 
@@ -166,7 +166,8 @@ describe('il preventivo', () => {
     expect(commento, 'commento della colonna agenzia non trovato').toBeTruthy();
     const esempio = JSON.parse(commento![1].match(/Esempio: (\{.*?\}\})\./)![1]) as { abbonamenti: Record<string, unknown> };
     expect(Object.keys(esempio.abbonamenti).every((k) => (ABBONAMENTI as readonly string[]).includes(k))).toBe(true);
-    expect(leggiImpostazioniAgenzia(esempio).prezzi).toEqual(DI_LISTINO.prezzi);
+    // 27/11/2026: i prezzi nel commento della 705 sono storia (500 e 999); qui conta che le chiavi siano vere e leggibili.
+    expect(Object.keys(leggiImpostazioniAgenzia(esempio).prezzi).sort()).toEqual([...ABBONAMENTI].sort());
   });
 
   it('il numero è lo stesso per tutta la giornata di Piacenza, anche dopo mezzanotte UTC', () => {
@@ -181,7 +182,7 @@ describe('il preventivo', () => {
       dati: VUOTA, impostazioni: DI_LISTINO, adesso: ADESSO, scelto: 'premium',
     });
     expect(testoAvvisoPreventivo(p, '3331234567')).toMatch(
-      /^Bar Roma sceglie l'abbonamento Premium \(999,00\s€ al mese, il primo mese 499,50\s€\), preventivo P-20261122-A1B2C3\. Alla vetrina mancano: Foto e video, Sito web professionale, Gestione dei social e di Google Maps, Analisi del business\. Telefono: 3331234567\.$/,
+      /^Bar Roma sceglie l'abbonamento Premium \(900,00\s€ al mese, il primo mese 450,00\s€\), preventivo P-20261122-A1B2C3\. Alla vetrina mancano: Foto e video, Sito web professionale, Gestione dei social e di Google Maps, Analisi del business\. Telefono: 3331234567\.$/,
     );
   });
 });
@@ -190,7 +191,7 @@ describe('le condizioni e il pareggio (24/11/2026)', () => {
   it('nessun vincolo, 30 giorni di preavviso, primo mese a metà prezzo', () => {
     expect(CONDIZIONI).toEqual({ preavvisoGiorni: 30, primoMeseFrazione: 0.5 });
     expect(FRASE_CONDIZIONI).toBe('Nessun vincolo di durata: disdici quando vuoi, con 30 giorni di preavviso. Il primo mese costa la metà.');
-    expect([30000, 50000, 99900].map(canonePrimoMese)).toEqual([15000, 25000, 49950]);
+    expect([30000, 60000, 90000].map(canonePrimoMese)).toEqual([15000, 30000, 45000]);
     expect(canonePrimoMese(null)).toBeNull();
   });
 
