@@ -1,13 +1,13 @@
 {
   "sessione": "R12",
-  "aggiornato": "2026-11-27 02:05",
+  "aggiornato": "2026-11-27 02:15",
   "finita": true,
-  "testa": "bb34512454098c01e7050443b48952d3bdb9e772",
+  "testa": "0fdbeb46dddda11c4ecee8364f454ab9da566ac8",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "bb34512454098c01e7050443b48952d3bdb9e772",
-    "nota": "typecheck pulito, lint 0 errori (122 avvisi già nella base), vitest 2337 file passati e 1 saltato, 14323 prove passate e 2 saltate; SHA preso con git rev-parse HEAD nello stesso comando"
+    "testa": "0fdbeb46dddda11c4ecee8364f454ab9da566ac8",
+    "nota": "typecheck pulito, lint 0 errori (122 avvisi già nella base), vitest 2337 file passati e 1 saltato, 14323 prove passate e 2 saltate; SHA preso con git rev-parse HEAD nello stesso comando, prima e dopo il verify"
   },
   "voci": [
     {
@@ -224,7 +224,7 @@
       "esito": "riparato",
       "commit": "3760f417",
       "file_toccati": [
-        "tests/unit/aiuti/finto-r12-prezzo-pagato.ts",
+        "tests/unit/aiuti/riparazione-r12-finto-prezzo-pagato.ts",
         "tests/unit/riparazione-r12-taglio-sul-massimo.test.ts"
       ],
       "prova_file": [
@@ -244,10 +244,11 @@
       "serve_file_altrui": [
         {
           "file": "tests/unit/aiuti/finto-postgrest.ts",
-          "modifica": "alle righe 126-129 il ramo `else if (f.tipo === 'or')` applica sempre il filtro della giacenza: va sostituito con `{ const parti = spezza(f.espressione).map(condizione); righe = righe.filter((r) => parti.some((c) => c(r))); }`, copiando le funzioni spezza e condizione da tests/unit/aiuti/finto-r12-prezzo-pagato.ts:16-41 (is.null, gt, gte, lte, in, not.in). Così anche le prove vecchie col massimo controllano l'or del prezzo."
+          "modifica": "alle righe 126-129 il ramo `else if (f.tipo === 'or')` applica sempre il filtro della giacenza: va sostituito con `{ const parti = spezza(f.espressione).map(condizione); righe = righe.filter((r) => parti.some((c) => c(r))); }`, copiando le funzioni spezza e condizione da tests/unit/aiuti/riparazione-r12-finto-prezzo-pagato.ts:16-41 (is.null, gt, gte, lte, in, not.in). Così anche le prove vecchie col massimo controllano l'or del prezzo."
         }
       ],
-      "verificato_da": "revisore (rev2): script dei mutanti scritto e lanciato dal revisore, esce 0 (base verde; M1 4/4, M2 2/4, M3 2/4 rosse); il finto non è permissivo (una condizione sconosciuta lancia); nota: un lt letterale diventa rosso solo perché il finto non ha .lt"
+      "verificato_da": "revisore (rev2): script dei mutanti scritto e lanciato dal revisore, esce 0 (base verde; M1 4/4, M2 2/4, M3 2/4 rosse); il finto non è permissivo (una condizione sconosciuta lancia); nota: un lt letterale diventa rosso solo perché il finto non ha .lt",
+      "nota": "L’aiutante nuovo è stato rinominato da tests/unit/aiuti/finto-r12-prezzo-pagato.ts a tests/unit/aiuti/riparazione-r12-finto-prezzo-pagato.ts nel commit 0fdbeb46dddda11c4ecee8364f454ab9da566ac8 (R12-varie), perché porti il nome della sessione; le tre prove che lo importano sono state aggiornate e restano verdi (9/9)."
     },
     {
       "id": "R12-006",
@@ -304,7 +305,7 @@
       "titolo": "il finto della prova del taglio sul massimo non conosce lt: un mutante lte→lt diventa rosso per un TypeError, non per il comportamento",
       "dimensione": "qa-flussi",
       "severita": "minore",
-      "file": "tests/unit/aiuti/finto-r12-prezzo-pagato.ts:16-41",
+      "file": "tests/unit/aiuti/riparazione-r12-finto-prezzo-pagato.ts:16-41",
       "descrizione": "Aggiungere lt (metodo e condizione dentro or) al finto, così un taglio stretto sbagliato cade sul risultato."
     },
     {
