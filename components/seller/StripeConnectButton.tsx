@@ -82,7 +82,10 @@ export default function StripeConnectButton() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message ?? data?.error ?? 'Errore aggiornamento stato');
       await queryClient.invalidateQueries({ queryKey: queryKeys.seller.stripeStatus });
-      if (data?.charges_enabled && data?.payouts_enabled) {
+      // 27/11/2026 — La stessa regola del resto del riquadro (stripePronto: conto collegato e
+      // versamenti attivi), non piu' «incassi E versamenti»: con gli incassi ancora in verifica il
+      // riquadro diceva «Pagamenti attivi» e il messaggio di conferma «mancano verifiche».
+      if (stripePronto({ stripe_account_id: status?.stripe_account_id, stripe_payouts_enabled: data?.payouts_enabled })) {
         toast.success('Pagamenti attivati!');
       } else if (Array.isArray(data?.currently_due) && data.currently_due.length > 0) {
         toast('Mancano ancora verifiche su Stripe: completa l\'onboarding.', { icon: <AlertTriangle size={16} /> });
