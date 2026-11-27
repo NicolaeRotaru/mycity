@@ -14,14 +14,17 @@ import { creaFintoDatabase } from './aiuti/finto-database-dei-rimborsi';
 
 const stato = vi.hoisted(() => ({
   db: null as unknown as FintoDatabase,
-  resend: 'rifiuta' as 'rifiuta' | 'spedisce',
+  resend: 'rifiuta' as 'rifiuta' | 'spedisce' | 'appeso',
   spedite: [] as Array<Record<string, unknown>>,
+  appesi: 0,
 }));
 
 vi.mock('resend', () => ({
   Resend: class {
     emails = {
       send: async (payload: Record<string, unknown>) => {
+        // Giro 2 — Resend che non risponde mai: scatta il tetto dei dieci secondi.
+        if (stato.resend === 'appeso') { stato.appesi++; return new Promise(() => {}); }
         if (stato.resend === 'rifiuta') {
           return { data: null, error: { name: 'daily_quota_exceeded', message: 'You have reached your daily email quota' } };
         }
@@ -92,6 +95,7 @@ beforeEach(() => {
   vi.setSystemTime(ADESSO);
   stato.resend = 'rifiuta';
   stato.spedite.length = 0;
+  stato.appesi = 0;
   giro.presa = [];
   giro.segni.length = 0;
   stato.db = creaFintoDatabase({ profiles: [{ id: 'nicola', role: 'admin' }], notifications: [], email_queue: [] });
@@ -191,5 +195,35 @@ describe('R03-002 — un rifiuto di Resend non perde l email', () => {
     const dati = alCliente[0].metadata as Record<string, unknown>;
     expect(typeof dati.html).toBe('string');
     expect(String(dati.replyTo ?? ''), 'la risposta con l IBAN deve arrivare alla casella dei contatti').toContain('@');
+  });
+});
+
+describe('R03-002 (giro 2) — niente doppioni, niente annulli muti', () => {
+  it('Resend non risponde e passa il tetto dei 10 secondi: esito ignoto, il messaggio NON entra in coda', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout'] });
+    vi.setSystemTime(ADESSO);
+    stato.resend = 'appeso';
+    const sendEmail = await posta();
+    const invio = sendEmail({ ...MESSAGGIO, rimandaA: 'negozio-1' });
+    await vi.waitFor(() => expect(stato.appesi).toBe(1));
+    await vi.advanceTimersByTimeAsync(11_000);
+    const esito = await invio;
+    expect(esito.ok).toBe(false);
+    expect('error' in esito && esito.error).toBe('invio email oltre i 10 secondi');
+    expect(stato.appesi, 'dopo il timeout non si ritenta').toBe(1);
+    expect(inCoda(), 'dopo un timeout Resend puo averla gia spedita: in coda sarebbe un doppione').toHaveLength(0);
+  });
+
+  it('una riga posta_rimandata presa senza metadata si annulla scrivendo il motivo e lo dice nel registro', async () => {
+    giro.presa = [{ id: 'q9', user_id: 'negozio-1', template: 'posta_rimandata', attempts: 0 }];
+    stato.resend = 'spedisce';
+    const { POST } = await import('@/app/api/cron/send-emails/route');
+    const { logger } = await import('@/lib/logger');
+    await (POST as unknown as (req: Request) => Promise<Response>)(new Request('http://localhost/api/cron/send-emails', { method: 'POST' }));
+    expect(stato.spedite).toHaveLength(0);
+    const segno = giro.segni.find((s) => s.id === 'q9' && typeof s.cancelled_at === 'string');
+    expect(segno, 'la riga senza messaggio non e stata annullata').toBeTruthy();
+    expect(String(segno?.last_error ?? ''), 'annullata senza motivo: nessuno sa che un email e andata persa').toMatch(/posta rimandata/);
+    expect(vi.mocked(logger.error).mock.calls.some(([m]) => String(m).includes('posta rimandata annullata'))).toBe(true);
   });
 });

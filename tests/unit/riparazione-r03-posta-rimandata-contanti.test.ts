@@ -167,3 +167,16 @@ describe('R03-002 — contanti: «Nuovo ordine» rifiutata, la coda la rimanda',
     expect((riga.metadata as Record<string, unknown>).subject).toBe('Nuovo ordine');
   });
 });
+
+describe('R03-002 (giro 2) — contanti: la conferma al cliente rifiutata entra in coda per il suo account', () => {
+  it('una riga per ordine, con user_id del compratore', async () => {
+    const { POST } = await import('@/app/api/orders/cod/route');
+    const res = await (POST as unknown as (req: never) => Promise<Response>)(richiesta());
+    expect(res.status).toBe(200);
+    await vi.waitFor(() => expect(stato.coda.filter((r) => r.user_id === 'cliente-1')).toHaveLength(2), { timeout: 3000 });
+    const riga = stato.coda.find((r) => r.user_id === 'cliente-1');
+    expect(riga?.template).toBe('posta_rimandata');
+    expect((riga?.metadata as Record<string, unknown>).subject).toBe('Ordine confermato');
+  });
+});
+

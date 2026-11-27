@@ -183,6 +183,8 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   };
   const opzioni = input.idempotencyKey ? conChiaveDiIdempotenza(resend, input.idempotencyKey) : undefined;
   let lastErr = 'unknown';
+  // R03-002 — Dopo il tetto dei dieci secondi l'esito è ignoto: Resend può averla già spedita.
+  let esitoIgnoto = false;
   for (let attempt = 0; attempt < 2; attempt++) {
     /**
      * 5/11/2026 — SI RITENTA SOLO QUANDO RESEND HA DETTO «NON L'HO PRESA».
@@ -224,13 +226,17 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     } catch (err) {
       lastErr = err instanceof Error ? err.message : 'unknown';
       // Il nostro tetto dei dieci secondi: la richiesta può essere arrivata, non si rimanda.
-      ritentabile = !(err instanceof Error && err.message === TIMEOUT_INVIO);
+      esitoIgnoto = err instanceof Error && err.message === TIMEOUT_INVIO;
+      ritentabile = !esitoIgnoto;
     }
     if (!ritentabile) break;
     if (attempt === 0) await new Promise((r) => setTimeout(r, 300)); // breve backoff
   }
   logger.error('[email] invio fallito dopo retry', { message: lastErr });
-  if (input.rimandaA && tipo === 'transazionale') await rimettiInCoda(input, input.rimandaA, lastErr);
+  // R03-002 (giro 2) — In coda solo un rifiuto certo o una rete caduta prima dell'invio. Dopo un
+  // timeout no: il giro la rispedirebbe con una chiave nuova, e la stessa email arriverebbe due volte.
+  if (input.rimandaA && tipo === 'transazionale' && !esitoIgnoto) await rimettiInCoda(input, input.rimandaA, lastErr);
+  else if (input.rimandaA && esitoIgnoto) logger.warn('[email] esito ignoto dopo il timeout: non si rimette in coda', { subject: input.subject });
   return { ok: false, error: lastErr };
 }
 

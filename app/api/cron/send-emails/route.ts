@@ -466,7 +466,15 @@ async function processBatch(
     });
     if (!messaggio) {
       skipped++;
-      await annullaRiga(supa, row.id);
+      if (rimandata) {
+        // R03-002 (giro 2) — Una riga rimandata senza oggetto o corpo (metadata non letto: un
+        // claim_pending_emails vecchio, senza la colonna) si annulla, ma dicendolo: era un'email persa.
+        const motivo = 'posta rimandata senza oggetto o corpo nella riga (metadata non letto: claim_pending_emails senza la colonna?)';
+        logger.error('[cron] posta rimandata annullata: la riga non porta il messaggio', { id: row.id, userId: row.user_id, motivo });
+        await annullaRiga(supa, row.id, motivo);
+      } else {
+        await annullaRiga(supa, row.id);
+      }
       continue;
     }
     // Benvenuto, tutorial e i due messaggi d'ordine partono sempre: sono

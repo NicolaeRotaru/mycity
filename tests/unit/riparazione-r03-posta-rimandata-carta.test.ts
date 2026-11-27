@@ -116,3 +116,25 @@ describe('R03-002 — carta: «Nuovo ordine» rifiutata, la coda la rimanda', ()
     expect((riga.metadata as Record<string, unknown>).html).toBe('<p>hai un ordine</p>');
   });
 });
+
+describe('R03-002 (giro 2) — carta: la conferma al cliente rifiutata entra in coda per il suo account', () => {
+  it('l indirizzo e quello dell account (customer_email del checkout): una riga per ordine, user_id del compratore', async () => {
+    const conAccount = { ...(sessione as object), customer_email: 'cliente@test.it' } as never;
+    await handleCheckoutCompleted(conAccount);
+    for (const lavoro of dopoLaRisposta) await lavoro();
+    expect(stato.tentati).toContain('cliente@test.it');
+    const alCliente = stato.coda.filter((r) => r.user_id === 'buyer-1');
+    expect(alCliente, 'la conferma rifiutata al cliente non e entrata in coda').toHaveLength(2);
+    expect(alCliente[0].template).toBe('posta_rimandata');
+    expect((alCliente[0].metadata as Record<string, unknown>).subject).toBe('Ordine confermato');
+  });
+
+  it('controprova: la conferma va a un indirizzo diverso da quello dell account, niente coda per il cliente', async () => {
+    const altroIndirizzo = { ...(sessione as object), customer_email: 'account@test.it' } as never;
+    await handleCheckoutCompleted(altroIndirizzo);
+    for (const lavoro of dopoLaRisposta) await lavoro();
+    expect(stato.tentati).toContain('cliente@test.it');
+    expect(stato.coda.filter((r) => r.user_id === 'buyer-1')).toHaveLength(0);
+  });
+});
+

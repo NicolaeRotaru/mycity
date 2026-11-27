@@ -1998,7 +1998,8 @@ export const POST = withAuthRateLimit(
               paymentMethod: 'cod',
             });
             // R24 — avviso di servizio: senza il tasto «annulla l'iscrizione».
-            const esito = await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+            // R03-002 — emailCliente è l'indirizzo dell'account (user.email): se Resend la rifiuta, la coda la rimanda.
+            const esito = await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale', rimandaA: user.id });
             await avvisaSeLaPostaNonParte('conferma dell ordine al cliente', { orderId: c.orderId }, esito);
             await avvisaSeLaPostaESpenta(c.orderId, esito);
           } catch (e) {
