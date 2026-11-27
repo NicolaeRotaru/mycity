@@ -125,6 +125,7 @@ export function fraseDelTermine(termine: Date | null, adesso: Date): string {
  *    senza email (account cancellato), come riconoscere il cliente vero;
  *  · la causale fissa, una per reso o reclamo;
  *  · il giorno della richiesta e il termine dei 14 giorni, o che il termine non si sa;
+ *  · se il termine è già passato o mancano 3 giorni o meno, quanto manca (o da quanto è passato);
  *  · dove si segna «Fatto» (e «Respinto dalla banca»).
  * Nessun IBAN.
  */
@@ -141,6 +142,8 @@ export function avvisoDelBonificoDaFare(a: {
   resoChiestoIl?: string | null;
   /** La casella dove arrivano le risposte dei clienti. */
   casella?: string;
+  /** Adesso (di default l'orologio): per dire se il termine è già passato o vicino. */
+  adesso?: Date;
 }): { titolo: string; testo: string; link: string } {
   const ordine = numeroDellOrdine(a.ordineId);
   const casella = a.casella ?? indirizzoContatto('info');
@@ -175,6 +178,11 @@ export function avvisoDelBonificoDaFare(a: {
         ? `Il reclamo è stato aperto il ${data(chiesto)}: contiamo ${GIORNI_PER_RIMBORSARE} giorni da lì, quindi il termine è il ${data(termine)}.`
         : `Il reso è stato chiesto il ${data(chiesto)}: la legge dà ${GIORNI_PER_RIMBORSARE} giorni da lì, quindi il termine è il ${data(termine)}.`,
     );
+    // 27/11/2026 — Un reso rimborsato quando il pacco torna indietro arriva spesso a ridosso dei 14
+    // giorni, o dopo: l'avviso diceva solo la data, e un termine già passato non lo segnava nessuno.
+    const adesso = a.adesso ?? new Date();
+    const urgenza = urgenzaDelTermine(termine, adesso).tipo;
+    if (urgenza === 'passato' || urgenza === 'vicino') frasi.push(fraseDelTermine(termine, adesso));
   } else {
     frasi.push(`Il termine non lo sappiamo: manca il giorno da cui contare i ${GIORNI_PER_RIMBORSARE} giorni. Pagalo appena hai l'IBAN.`);
   }
