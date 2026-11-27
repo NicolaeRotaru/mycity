@@ -91,6 +91,13 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   if (error) return ApiErrors.internal(error.message);
 
   const rows = ((sani ?? []) as Row[]).filter((r) => isStale(r.external_synced_at)).slice(0, BATCH);
+  // 27/11/2026 — IL PERMESSO DI RIPROVARE SI CONSUMA SOLO QUANDO IL PRODOTTO SI ELABORA.
+  // Prima i falliti consumavano il permesso delle sei ore gia' qui, in selezione: se poi il
+  // giro li lasciava fuori (tempo finito, modello mancante) restavano fermi altre sei ore
+  // senza essere stati ritentati. Adesso qui sono solo candidati in coda dopo i sani; il
+  // permesso si chiede nel giro, subito prima della chiamata.
+  const coda: Row[] = [...rows];
+  const daFalliti = new Set<string>();
   if (rows.length < BATCH) {
     const { data: falliti } = await supa
       .from('products')
@@ -100,24 +107,29 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
       .order('external_synced_at', { ascending: true, nullsFirst: true })
       .limit(BATCH * 3);
     for (const r of (falliti ?? []) as Row[]) {
-      if (rows.length >= BATCH) break;
       if (!isStale(r.external_synced_at)) continue;
-      if (await ritentoDopoErroreConsentito(r.id)) rows.push(r);
+      coda.push(r);
+      daFalliti.add(r.id);
     }
   }
 
   let checked = 0, alerts = 0, errors = 0;
   let modelloNonTrovato = false;
   let rimasti = 0;
+  let presi = 0; // posti del giro usati: i sani, e i falliti che hanno avuto il permesso
   const now = new Date().toISOString();
 
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
+  for (let i = 0; i < coda.length && presi < BATCH; i++) {
+    const r = coda[i];
     // R03-003 — niente chiamata nuova se non c'e' il tempo di finirla.
     if (Date.now() - inizioGiro + TEMPO_TENTATIVO_AI_MS > DURATA_GIRO_MS - MARGINE_GIRO_MS) {
-      rimasti = rows.length - i;
+      rimasti = Math.min(coda.length - i, BATCH - presi);
       break;
     }
+    if (daFalliti.has(r.id)) {
+      if (!(await ritentoDopoErroreConsentito(r.id))) continue;
+    }
+    presi += 1;
     const prev = r.external_data;
     const query = prev?.source_title || r.name || '';
     if (!query) continue;
@@ -160,7 +172,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
         logger.error('[ai] il fornitore non trova il modello: controllare AI_MODELLO_SMART', { feature: err.feature, productId: r.id });
         // R03-002 — Il modello manca per tutti: il giro si ferma qui. Nessun prodotto, questo
         // compreso, finisce segnato 'error' (dietro il freno di sei ore) per un guasto non suo.
-        rimasti = rows.length - i - 1;
+        rimasti = Math.min(coda.length - i - 1, BATCH - presi);
         break;
       } else {
         logger.warn('external-price-alerts: check failed', { productId: r.id });
@@ -173,7 +185,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
 
   return NextResponse.json({
     ok: true,
-    candidates: rows.length,
+    candidates: presi + rimasti,
     checked,
     alerts,
     errors,
