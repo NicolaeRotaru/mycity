@@ -53,6 +53,31 @@ async function scriviConRipiego(valori: Record<string, unknown>, id: string) {
   return admin.from('orders').update(senzaCampi(valori, ['payout_tentativo'])).eq('id', id);
 }
 
+/**
+ * 27/11/2026 — IL BONIFICO GIÀ FATTO SI CERCA SU STRIPE, NON SOLO CON LA CHIAVE.
+ *
+ * La chiave anti-doppione di Stripe vale 24 ore, ma Stripe ripete l'evento per 3 giorni: se la
+ * scrittura dopo il bonifico continua a fallire oltre le 24 ore, la ripetizione con la stessa
+ * chiave faceva un secondo bonifico. Prima di crearlo si guarda l'elenco dei bonifici del gruppo
+ * (come `bonificoGiaFatto` in lib/stripe/payout.ts): una restituzione di questa contestazione per
+ * questo ordine c'è già, si riusa. Se l'elenco non si legge resta la chiave, come prima.
+ */
+async function restituzioneGiaFatta(gruppo: string, disputeId: string, ordineId: string): Promise<{ id: string } | null> {
+  try {
+    const esistenti = await getStripe().transfers.list({ transfer_group: gruppo, limit: 100 });
+    const trovato = (esistenti.data ?? []).find(
+      (t) =>
+        t.metadata?.kind === 'dispute_won_restore' &&
+        t.metadata?.dispute_id === disputeId &&
+        t.metadata?.order_id === ordineId,
+    );
+    return trovato ? { id: trovato.id } : null;
+  } catch (e) {
+    logger.warn('[stripe] contestazione parziale vinta: elenco dei bonifici non consultabile, resta la chiave', { orderId: ordineId, e });
+    return null;
+  }
+}
+
 export async function restituisciLeQuoteParziali(dispute: Stripe.Dispute, orders: RigaContestata[]): Promise<void> {
   const admin = getAdminSupabase();
   const parzialiDaRestituire = orders.filter(
@@ -77,14 +102,15 @@ export async function restituisciLeQuoteParziali(dispute: Stripe.Dispute, orders
     // QA del 12/11 — un rifiuto di Stripe qui non deve fermare il resto della vittoria (fattorino,
     // avviso agli amministratori): si dice a chi gestisce, e il promemoria resta per rifarlo.
     let bonifico: { id: string };
+    const gruppo = riga.stripe_transfer_group ?? `order_${o.id}`;
     try {
-      bonifico = await getStripe().transfers.create(
+      bonifico = (await restituzioneGiaFatta(gruppo, dispute.id, o.id)) ?? await getStripe().transfers.create(
       {
         amount: quota,
         currency: 'eur',
         destination: conto,
         ...(riga.stripe_charge_id ? { source_transaction: riga.stripe_charge_id } : {}),
-        transfer_group: riga.stripe_transfer_group ?? `order_${o.id}`,
+        transfer_group: gruppo,
         metadata: { order_id: o.id, seller_id: riga.seller_id ?? '', kind: 'dispute_won_restore', dispute_id: dispute.id,
           // Mai un numero puro: il controllo «bonifico gia' fatto» di payout.ts confronta i tentativi.
           tentativo: `restituzione_${tentativo}` },
