@@ -6,10 +6,13 @@ import {
   getAttributesForCategory,
 } from '@/lib/category-attributes';
 import {
+  MAX_DESCRIZIONE_PRODOTTO,
   chiaveCampo,
   eCampoDichiarativo,
   prezzoAiFuoriBanda,
   separaCampiDichiarativi,
+  tagDelPatch,
+  testoDelPatch,
   voceComeTesto,
   type AiProductPatch,
   type CategoryRow,
@@ -693,16 +696,28 @@ export const ETICHETTE_STATO: Record<string, string> = {
  *     vaso della categoria Casa, la cui scheda il campo Origine non lo ha.
  *     Adesso la riga guarda la categoria con cui il prodotto restera' dopo la
  *     proposta.
+ *  3. 27/11/2026 — «Descrizione aggiornata» e «Tag →» con la sola lista nuova:
+ *     il negoziante applicava una descrizione che non aveva letto, e i tag
+ *     attuali sparivano senza che la scheda li nominasse. Adesso la scheda
+ *     porta il testo nuovo intero, come lo salva il server, e i tag tolti.
+ *     Il testo nella risposta della chat sta nella bolla del modello; questo,
+ *     calcolato dalla proposta, il modello non lo puo' smentire.
  */
 export function righeDellaProposta(
   patch: AiProductPatch,
-  prodotto: { price: number | null; categorySlug: string | null; attributes?: Record<string, unknown> | null },
+  prodotto: {
+    price: number | null;
+    categorySlug: string | null;
+    attributes?: Record<string, unknown> | null;
+    tags?: readonly unknown[] | null;
+  },
 ): string[] {
   const out: string[] = [];
   const eur = (n: number) => formatPrice(n);
   const testo = (v: unknown): v is string => typeof v === 'string';
   if (testo(patch.name)) out.push(`Nome → "${patch.name}"`);
-  if (testo(patch.description)) out.push('Descrizione aggiornata');
+  const descrizione = testoDelPatch(patch.description, MAX_DESCRIZIONE_PRODOTTO);
+  if (descrizione) out.push(`Descrizione nuova, al posto di quella attuale: «${descrizione}»`);
   if (typeof patch.price === 'number') {
     out.push(`Prezzo: ${prodotto.price != null ? eur(prodotto.price) : '—'} → ${eur(patch.price)}`);
   }
@@ -721,7 +736,17 @@ export function righeDellaProposta(
     const sotto = testo(patch.subcategory_name) && patch.subcategory_name ? ` / ${patch.subcategory_name}` : '';
     out.push(`Categoria → ${patch.category_slug}${sotto}`);
   }
-  if (Array.isArray(patch.tags)) out.push(`Tag → ${patch.tags.map(voceComeTesto).join(', ') || '(nessuno)'}`);
+  if (Array.isArray(patch.tags)) {
+    out.push(`Tag → ${patch.tags.map(voceComeTesto).join(', ') || '(nessuno)'}`);
+    // Il server sostituisce la lista intera (`resolveAiPatch`): i tag attuali che non ci sono più si nominano.
+    const restano = tagDelPatch(patch.tags.map(voceComeTesto));
+    const tolti = (Array.isArray(prodotto.tags) ? prodotto.tags : []).filter((t): t is string => {
+      if (typeof t !== 'string') return false;
+      const chiave = tagDelPatch([t])[0];
+      return chiave !== undefined && !restano.includes(chiave);
+    });
+    if (tolti.length) out.push(`Tag tolti dal prodotto: ${tolti.join(', ')}`);
+  }
 
   // R41 — Allergeni, ingredienti e le altre dichiarazioni di un alimento non
   // si cambiano da qui: la card lo dice invece di prometterlo, e rimanda alla
