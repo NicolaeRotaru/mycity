@@ -115,6 +115,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
 
   let checked = 0, alerts = 0, errors = 0;
   let modelloNonTrovato = false;
+  let fermoPerSpesa = false;
   let rimasti = 0;
   let presi = 0; // posti del giro usati: i sani, e i falliti che hanno avuto il permesso
   const now = new Date().toISOString();
@@ -163,6 +164,15 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
         alerts += 1;
       }
     } catch (err) {
+      // 27/11/2026 — Budget AI finito o spesa di oggi non leggibile: vale per tutti e non e'
+      // colpa del prodotto. Il giro si ferma qui e nessun prodotto, questo compreso, finisce
+      // segnato 'error' (dietro il freno di sei ore anche quando il budget torna).
+      if (err instanceof AiCallError && (err.motivo === 'tetto_spesa' || err.motivo === 'spesa_sconosciuta')) {
+        fermoPerSpesa = true;
+        logger.warn('external-price-alerts: giro fermo per la spesa AI', { motivo: err.motivo, productId: r.id });
+        rimasti = Math.min(coda.length - i, BATCH - presi + 1);
+        break;
+      }
       errors += 1;
       // 17/11/2026 (R03-007) — Un 404 del fornitore AI vuol dire «il modello configurato
       // non c'e' (piu')», non «questo prodotto non si aggiorna»: si dice per quello che e',
@@ -191,6 +201,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     errors,
     ...(rimasti > 0 ? { rimasti } : {}),
     ...(modelloNonTrovato ? { errore: 'Il fornitore AI non trova il modello: controllare AI_MODELLO_SMART.' } : {}),
+    ...(fermoPerSpesa ? { fermo: 'Budget AI finito o spesa di oggi non leggibile: il giro riprende al prossimo.' } : {}),
   });
 });
 
