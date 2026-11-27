@@ -101,6 +101,38 @@ async function giriNellaFascia(
   }
 }
 
+/**
+ * 27/11/2026 — I RIFIUTI DELLA FASCIA, UNA REGOLA SOLA PER LA RICHIESTA NUOVA E PER LA PAGINA GIÀ APERTA.
+ *
+ * La fascia passata (o a meno di un'ora), il negozio chiuso in quella fascia e il tetto dei giri.
+ * Il riuso della pagina di Stripe usciva prima di questi controlli: alle 12:30, con «Oggi ·
+ * 11:00–13:00», restituiva la pagina vecchia (e il webhook al pagamento rimborsava) mentre una
+ * richiesta nuova prendeva 409. Adesso tutte e due le strade chiedono qui, prima della pulizia.
+ */
+async function rifiutoDellaFascia(
+  admin: ReturnType<typeof getAdminSupabase>,
+  body: { deliverySlot?: string | null; pickupInStore: boolean },
+  negozi: readonly { nome?: string | null; orari?: unknown }[],
+  clienteId: string,
+): Promise<string | null> {
+  if (body.pickupInStore) return null;
+  const rifiutata = motivoFasciaRifiutata(body.deliverySlot, negozi);
+  if (rifiutata) return rifiutata;
+  // 26/11/2026 — Al massimo `ORDINI_PER_FASCIA` giri per fascia (fatto `consegna.capienza`): al sesto
+  // 409. La veloce non è una fascia, e il ritiro non chiede un giro. Sta prima della pulizia, come
+  // gli altri rifiuti: un tentativo respinto non chiude le altre casse. Un conteggio non riuscito
+  // non ferma il pagamento: il tetto è morbido (il negozio accetta ogni ordine e può rifiutare
+  // quelli in più), e una lettura caduta non deve spegnere la carta; resta scritto.
+  const fascia = body.deliverySlot;
+  if (!fascia || eConsegnaVeloce({ fascia, ritiroInNegozio: false })) return null;
+  const giri = await giriNellaFascia(admin, fascia, clienteId, new Date());
+  if (giri === null) {
+    logger.warn('[stripe] giri della fascia non contati: il tetto non è stato controllato', { userId: clienteId });
+    return null;
+  }
+  return !giri.mio && giri.altri + 1 > ORDINI_PER_FASCIA ? MOTIVO_FASCIA_PIENA : null;
+}
+
 const ItemSchema = z.object({
   productId: z.string().uuid(),
   quantity: z.number().int().positive().max(99),
@@ -400,6 +432,20 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       });
       if (!veloceOra.possibile) return ApiErrors.conflict(veloceOra.perche);
     }
+    // 27/11/2026 — Anche la fascia e il tetto, prima della pulizia: la pagina vecchia non scavalca
+    // il 409 che prenderebbe una richiesta nuova. Senza i negozi letti si guarda almeno l'orologio.
+    const fasciaNoAlRiuso = await rifiutoDellaFascia(
+      admin,
+      body,
+      venditoriLetti.error || !venditoriLetti.data
+        ? []
+        : venditoriLetti.data.map((s) => ({
+            nome: (s as { store_name?: string | null }).store_name ?? null,
+            orari: (s as { store_hours?: unknown }).store_hours,
+          })),
+      user.id,
+    );
+    if (fasciaNoAlRiuso) return ApiErrors.conflict(fasciaNoAlRiuso);
 
     let sessioneRiletta: SessioneRiletta = null;
     try {
@@ -584,24 +630,14 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // carta e coi contanti prendeva un 409, e senza orari del negozio passava anche una fascia
   // finita. Adesso è la regola unica di lib/quando-arriva.ts, la stessa dei contanti: stesso 409,
   // stesso messaggio.
-  if (!body.pickupInStore) {
-    const rifiutata = motivoFasciaRifiutata(
-      body.deliverySlot,
-      (sellers ?? []).map((s) => ({ nome: s.store_name, orari: (s as { store_hours?: unknown }).store_hours })),
-    );
-    if (rifiutata) return ApiErrors.conflict(rifiutata);
-  }
-
-  // 26/11/2026 — Al massimo `ORDINI_PER_FASCIA` giri per fascia (fatto `consegna.capienza`): al sesto
-  // 409. La veloce non è una fascia, e il ritiro non chiede un giro. Sta prima della pulizia, come
-  // gli altri rifiuti: un tentativo respinto non chiude le altre casse. Un conteggio non riuscito
-  // non ferma il pagamento: il tetto è morbido (il negozio accetta ogni ordine e può rifiutare
-  // quelli in più), e una lettura caduta non deve spegnere la carta; resta scritto.
-  if (!body.pickupInStore && !consegnaVeloce && body.deliverySlot) {
-    const giri = await giriNellaFascia(admin, body.deliverySlot, user.id, new Date());
-    if (giri === null) logger.warn('[stripe] giri della fascia non contati: il tetto non è stato controllato', { userId: user.id });
-    else if (!giri.mio && giri.altri + 1 > ORDINI_PER_FASCIA) return ApiErrors.conflict(MOTIVO_FASCIA_PIENA);
-  }
+  // 26/11/2026 — E il tetto dei giri per fascia: la regola sta in `rifiutoDellaFascia`.
+  const fasciaNo = await rifiutoDellaFascia(
+    admin,
+    body,
+    (sellers ?? []).map((s) => ({ nome: s.store_name, orari: (s as { store_hours?: unknown }).store_hours })),
+    user.id,
+  );
+  if (fasciaNo) return ApiErrors.conflict(fasciaNo);
 
   // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso, un
   // fattorino approvato e online. La stessa decisione della cassa e dei contanti (`veloceSiPuo`).
