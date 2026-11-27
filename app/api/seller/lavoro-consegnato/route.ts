@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 
 /**
  * IL LAVORO PREMIUM GIÀ CONSEGNATO — 27/11/2026.
- * Per ora esiste solo per SDG Agenzia (cliente Premium di se stessa). Un venditore vede solo il SUO:
+ * Esiste per i negozi del registro (SDG Agenzia, Premium di se stessa; il Caffè di Piacenza, Business). Un venditore vede solo il SUO:
  * l'id viene dall'accesso, mai dalla richiesta. Per tutti gli altri `null` e la pagina resta il preventivo.
  */
 export const GET = withSellerAnchePendingRateLimit({ name: 'seller-lavoro-consegnato', max: 30, windowMs: 60_000 }, async ({ user }) => {

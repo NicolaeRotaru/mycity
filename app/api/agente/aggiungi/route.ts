@@ -26,7 +26,7 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { conAgente } from '@/lib/agenti/rotta';
 import { leggiLavoro } from '@/lib/agenti/n8n';
 import { normalizza, pulisci, unisci } from '@/lib/agenti/scheda';
-import { attivitaDallaScheda, linkDelPreventivo, nomeNonValido, stessoIndirizzo } from '@/lib/agenti/aggiungi';
+import { attivitaDallaScheda, linkDelPreventivo, nomeNonValido, segnaChiHaPortatoIlCliente, stessoIndirizzo } from '@/lib/agenti/aggiungi';
 import { attivitaGiaIscritta, iscriviAttivita } from '@/lib/agenzia/nuova-attivita';
 import { avviaDopoLIscrizione } from '@/lib/agenzia/dopo-iscrizione';
 import { ABBONAMENTI, FASCE } from '@/lib/agenzia/preventivo';
@@ -101,6 +101,9 @@ export const POST = conAgente({ name: 'agente-aggiungi', max: 20, windowMs: 60 *
   const fascia = esito.data.fascia;
   const segnata = await segnaLaSceltaSulPreventivo(admin, fatto.id, fascia);
   if (!segnata) logger.warn('[agente-aggiungi] scelta non scritta sul preventivo', { id: fatto.id, fascia });
+  // 27/11/2026 — Chi l'ha portato (999c): la pagina dell'agente sa quando il titolare conferma, l'ordine di SDG dice l'agente.
+  const portato = await segnaChiHaPortatoIlCliente(admin, fatto.id, { lavoro: esito.data.lavoro, agenteEmail: email });
+  if (!portato) logger.warn('[agente-aggiungi] agente non scritto sul preventivo: controlla la migrazione 999c', { id: fatto.id });
   const sblocco = await sbloccaInContanti(admin, fatto.id, fascia);
   if (!sbloccoRiuscito(sblocco)) logger.error('[agente-aggiungi] pagina del negozio non sbloccata', { id: fatto.id, fascia, dettaglio: sblocco.dettaglio });
   logger.info('[agente-aggiungi] attività aggiunta', { id: fatto.id, nuova: fatto.nuova, conLink: Boolean(link), fascia, sblocco: sblocco.esito });

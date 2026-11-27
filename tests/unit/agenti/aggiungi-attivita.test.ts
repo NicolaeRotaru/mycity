@@ -27,6 +27,7 @@ const stato = vi.hoisted(() => ({
   scelte: [] as { id: string; fascia: string }[],
   esitoSblocco: { esito: 'sbloccata', fascia: 'business' } as Record<string, unknown>,
   testiAvvisi: [] as string[],
+  portati: [] as { valori: Record<string, unknown>; filtri: Record<string, unknown> }[],
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -52,7 +53,15 @@ vi.mock('@/lib/agenzia/abbonamento-contanti', () => ({
 }));
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: stato.codice ? { codice: stato.codice } : null, error: null }) }) }) }),
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: stato.codice ? { codice: stato.codice } : null, error: null }) }) }),
+      // 27/11/2026 — Chi ha portato il cliente (999c): si registra cosa si scrive sul preventivo, e con quali filtri.
+      update: (valori: Record<string, unknown>) => {
+        const filtri: Record<string, unknown> = {};
+        const catena = { eq: (k: string, v: unknown) => { filtri[k] = v; return catena; }, then: (ok: (x: { error: null }) => void) => { stato.portati.push({ valori, filtri }); ok({ error: null }); } };
+        return catena;
+      },
+    }),
   }),
 }));
 
@@ -86,6 +95,7 @@ beforeEach(() => {
   stato.sblocchi = [];
   stato.scelte = [];
   stato.esitoSblocco = { esito: 'sbloccata', fascia: 'business' };
+  stato.portati = [];
 });
 
 describe('il pulsante «Aggiungi attività»', () => {
@@ -255,5 +265,19 @@ describe('il tipo libero della scheda nei sei tipi del sito', () => {
     expect(tipoDaTesto('Palestra di arrampicata')).toBe('servizi');
     expect(tipoDaTesto('Qualcosa di strano')).toBeUndefined();
     expect(tipoDaTesto(null)).toBeUndefined();
+  });
+});
+
+describe('chi ha portato il cliente resta scritto sul preventivo (27/11, migrazione 999c)', () => {
+  it('al «Sì, aggiungi» la scheda e l email dell agente vanno sul preventivo ancora aperto', async () => {
+    expect((await premi()).status).toBe(201);
+    expect(stato.portati).toEqual([{ valori: { lavoro: LAVORO, agente_email: 'agente@esempio.it' }, filtri: { seller_id: 'att-1', stato: 'aperto' } }]);
+  });
+
+  it('se la scrittura non riesce (999c non applicata) l agente ha il suo link lo stesso', async () => {
+    const { segnaChiHaPortatoIlCliente } = await import('@/lib/agenti/aggiungi');
+    const rotto = { from: () => ({ update: () => { throw new Error('column "lavoro" does not exist'); } }) } as unknown as Parameters<typeof segnaChiHaPortatoIlCliente>[0];
+    expect(await segnaChiHaPortatoIlCliente(rotto, 'att-1', { lavoro: LAVORO, agenteEmail: 'agente@esempio.it' })).toBe(false);
+    expect(await segnaChiHaPortatoIlCliente(rotto, 'att-1', { lavoro: 'non-un-codice', agenteEmail: 'agente@esempio.it' })).toBe(false);
   });
 });
