@@ -1,13 +1,13 @@
 import type { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { SDG_SELLER_ID } from '@/lib/products/sdgSeller';
-import { AnalisiSchema, SitoSchema, SocialSchema, type LavoroConsegnato } from './tipi';
+import { AnalisiSchema, SitoSchema, SocialSchema, type LavoroConsegnato, type Sito } from './tipi';
 import { CAFFE_DI_PIACENZA_ID, SITI_PER_NEGOZIO } from './siti';
 import analisiSdg from './sdg/analisi.json';
 import socialSdg from './sdg/social.json';
 
 /**
- * SOLO LATO SERVER (la rotta /api/seller/lavoro-consegnato): l'analisi di SDG è interna e non deve finire
+ * SOLO LATO SERVER (le rotte /api/seller/lavoro-consegnato e /api/admin/lavoro-consegnato): l'analisi di SDG è interna e non deve finire
  * nel bundle del browser degli altri venditori. Non importare questo file da componenti client, né dal portiere.
  */
 function leggi<T extends z.ZodTypeAny>(nome: string, negozioId: string, schema: T, grezzo: unknown): z.infer<T> | undefined {
@@ -41,3 +41,23 @@ export function lavoroConsegnatoDi(negozioId: string): LavoroConsegnato | null {
     analisi: leggi('analisi', id, AnalisiSchema, voce.analisi),
   };
 }
+
+/**
+ * 27/11/2026 — I negozi che hanno un lavoro consegnato, per la pagina Admin «Lavoro dei clienti»
+ * (Nicola: «dammi modo di accedere all'account Caffè di Piacenza» → «vederlo da Admin», in sola lettura).
+ */
+export function negoziConLavoroConsegnato(): string[] {
+  return [...REGISTRO.keys()];
+}
+
+/**
+ * 27/11/2026 — Solo il sito del negozio, per la pagina del link del preventivo (Nicola: «mettilo nel momento in
+ * cui l'imprenditore ha cliccato sul link che gli ha inviato il venditore»). Quella pagina è aperta a chi ha il
+ * link: qui non passano mai il piano social né l'analisi. Passa la fascia del sito (versione Business, Premium…),
+ * perché la pagina dica con quale abbonamento quel sito va online (collaudo del 27/11).
+ */
+export function sitoConsegnatoDi(negozioId: string): { sito: Sito; fascia: LavoroConsegnato['fascia'] } | null {
+  const lavoro = lavoroConsegnatoDi(negozioId);
+  return lavoro?.sito ? { sito: lavoro.sito, fascia: lavoro.fascia } : null;
+}
+

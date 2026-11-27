@@ -58,6 +58,9 @@ export const SitoSchema = z.object({
   stato: z.enum(['da_pubblicare', 'online']),
   indirizzo: httpsONull,
   codice: httpsONull,
+  // 27/11/2026 — Un'immagine della home, servita dal sito MyCity stesso (cartella public/lavoro-consegnato/):
+  // si vede anche prima che il sito sia online, per esempio nella pagina del link del preventivo.
+  anteprima: z.string().regex(/^\/lavoro-consegnato\/[a-z0-9-]+\/[a-z0-9-]+\.(jpg|png|webp)$/, "l'anteprima è un'immagine in public/lavoro-consegnato/<negozio>/").nullish(),
   pagine: z.array(z.object({ titolo: testo, percorso: testo, cosa_contiene: testo })).default([]),
   cosa_ha_di_premium: elenco,
   // 27/11/2026 — Il sito del Caffè di Piacenza è Business: la stessa lista, col nome della sua fascia.
@@ -74,3 +77,6 @@ export type LavoroConsegnato = {
   social?: Social;
   analisi?: Analisi;
 };
+
+/** 27/11/2026 — Una riga della pagina Admin «Lavoro dei clienti». */
+export type NegozioConLavoro = { negozioId: string; nome: string; lavoro: LavoroConsegnato };
