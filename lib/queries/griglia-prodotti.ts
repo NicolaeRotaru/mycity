@@ -398,8 +398,13 @@ export async function leggiProdottiDellaGriglia(
     // R21-003 — Il ripiego: la colonna non c'è (migrazione 911 non applicata) o il database ha superato
     // il tempo (57014) → la lettura di prima.
     if (!pagato || !prezzoPagatoNonVa(errore)) throw errore;
-    segnaSenzaPrezzoPagato(supabase);
+    // 27/11/2026 — Un 57014 può venire dal carico del database e non da `prezzo_pagato`: allora
+    // anche la lettura sul prezzo pieno cade, e il prezzo pagato non si spegne per cinque minuti.
+    // Si spegne solo se la lettura sul prezzo pieno riesce (o se la colonna manca davvero).
+    const tempoScaduto = !mancaPrezzoPagato(errore);
+    if (!tempoScaduto) segnaSenzaPrezzoPagato(supabase);
     const pagina = await leggiLaGriglia(supabase, d, false);
+    if (tempoScaduto) segnaSenzaPrezzoPagato(supabase);
     if (primaPagina) ricordaModo(supabase, chiave, false);
     return pagina;
   }
@@ -611,6 +616,8 @@ export async function contaProdottiDellaGriglia(
   // negozio si aggancia con `!inner` alla vista pubblica, NOMINANDO il vincolo (fra products e la
   // vista ci sono due strade: senza nome PostgREST risponde 300). Se l'aggancio non va si conta com'era (`senzaAggancio`) invece di non dare nessun numero.
   let senzaAggancio = false;
+  /** Un 57014 su `prezzo_pagato`: si spegne per cinque minuti solo se il conto sul prezzo pieno riesce. */
+  let tempoScaduto = false;
   const conta = (blocco?: string[]) => {
     const colonne = senzaAggancio ? 'id' : 'id, negozio:seller_public_profiles!products_seller_id_fkey!inner(id)';
     // R21-003 — Guardando `prezzo_pagato` si conta con una GET senza righe (limit 0) invece che con una HEAD:
@@ -637,7 +644,8 @@ export async function contaProdottiDellaGriglia(
       // cambia il prezzo su cui si conta: il numero sopra la griglia deve tornare con la lista.
       if (pagato && prezzoPagatoNonVa(error)) {
         pagato = false;
-        segnaSenzaPrezzoPagato(supabase);
+        if (mancaPrezzoPagato(error)) segnaSenzaPrezzoPagato(supabase);
+        else tempoScaduto = true;
         scontatiSotto = await scontatiSenzaPagato();
       } else if (!senzaAggancio) {
         // Su una HEAD postgrest-js non dà il codice dell'errore (solo `message: ""`): il ripiego
@@ -649,5 +657,6 @@ export async function contaProdottiDellaGriglia(
     if (error || count == null) return null;
     totale += count;
   }
+  if (tempoScaduto) segnaSenzaPrezzoPagato(supabase);
   return totale;
 }
