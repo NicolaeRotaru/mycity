@@ -1,6 +1,6 @@
 {
  "sessione": "R06",
- "aggiornato": "2026-11-27 02:40",
+ "aggiornato": "2026-11-27 02:42",
  "finita": true,
  "testa": "d7006a5d36145c885e7e437a268dae25dde1eea0",
  "verifica": {
@@ -330,7 +330,7 @@
   },
   {
    "riservato": true,
-   "titolo": "Falla di sicurezza da chiudere (approvazione dei fattorini): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+   "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
    "dimensione": "sicurezza",
    "severita": "grave",
    "file": "(nel referto privato)"
@@ -356,6 +356,8 @@
  ],
  "conto": {
   "agenti": 6,
-  "nota": "6 subagenti: 4 riparatori (L1, L2, L3+L4, L5 fermato per spesa) e 2 revisori (V1 sui gravi, modello grande; V2 sui minori, modello piccolo per la spesa). L6 non lavorato per spesa."
- }
+  "nota": "6 subagenti: 4 riparatori (L1, L2, L3+L4, L5 fermato per spesa) e 2 revisori (V1 sui gravi, modello grande; V2 sui minori, modello piccolo per la spesa). L6 non lavorato per spesa.",
+  "subagenti": 6
+ },
+ "costo_usd": 21.44
 }
