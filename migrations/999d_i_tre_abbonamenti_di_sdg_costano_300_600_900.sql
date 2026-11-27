@@ -1,4 +1,4 @@
--- 999b — I tre abbonamenti di SDG costano 300, 600 e 900 € al mese (27/11/2026).
+-- 999d — I tre abbonamenti di SDG costano 300, 600 e 900 € al mese (27/11/2026).
 --
 -- Nicola, 27/11/2026 (verso le 17:10 e le 17:45): gli abbonamenti costano Base 300 €, Business 600 € e
 -- Premium 900 € al mese, e li offre MyCity tramite SDG. Il primo mese costa la metà (150, 300, 450 €).
@@ -8,10 +8,17 @@
 --
 -- COSA FA. Riscrive nome, prezzo e descrizione dei tre prodotti. Stato e scorte restano come sono.
 -- Nessuna tabella nuova, nessun permesso nuovo, nessun dato di persone.
+-- EFFETTO DA SAPERE: il cambio di prezzo fa scattare il trigger `trg_product_price_drop`, che manda una notifica
+-- «Prezzo abbassato» a chi ha il Premium (999 → 900 €) tra i preferiti. Il 27/11/2026 alle 18:30, letto in sola
+-- lettura, i preferiti sui tre prodotti di SDG erano 0: prima di applicare si riconta
+--   select count(*) from public.favorites where product_id::text like '11111111-1111-1111-1111-5d90000001%';
+-- I due abbonamenti in contanti già attivi (tabella abbonamenti_servizi, canone 50000) NON li tocca: è una scelta
+-- di Nicola se restano al prezzo con cui sono stati venduti.
 --
--- NUMERO. «999b» e non «1000»: le migrazioni si applicano in ordine di byte (LC_ALL=C sort) e
+-- NUMERO. «999d» e non «1000»: le migrazioni si applicano in ordine di byte (LC_ALL=C sort) e
 -- «1000_» finirebbe prima di «101_»; lo script «Migrazioni a mano» accetta solo tre cifre più una lettera.
--- «999b_» viene dopo «999_», come «108b_» dopo «108_».
+-- «999d_» viene dopo «999_». La 999b (il giorno della visita di SDG, mycity#351) e la 999c (l'ordine a SDG)
+-- sono di altre sessioni: questa non dipende da loro e loro non dipendono da questa.
 --
 -- SI PUÒ RIESEGUIRE: è un UPDATE che scrive gli stessi valori ogni volta. Se i prodotti non ci sono,
 -- non trova righe e non fa niente.
