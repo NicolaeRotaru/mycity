@@ -6,6 +6,7 @@ import { CODICE_VALIDO } from '@/lib/agenzia/preventivo-col-codice';
 import { leggiDemoDalLink } from '@/lib/agenzia/demo-dal-link';
 import { indirizziDemo } from '@/lib/agenzia/indirizzi-demo';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
+import { formatPriceFromCents } from '@/lib/format';
 import { fasciaValida } from '@/lib/agenzia/abbonamento-contanti';
 import ConfermaAbbonamento, { type FasciaDaConfermare } from './ConfermaAbbonamento';
 
@@ -49,14 +50,18 @@ export default async function ConfermaDalLink({
   const p = demo.preventivo;
   // Una fascia scritta male nel database non rompe la pagina: vale la consigliata.
   const dalVenditore = fasciaValida(demo.pc.fasciaScelta) ? demo.pc.fasciaScelta : null;
-  const fasce: FasciaDaConfermare[] = ABBONAMENTI.map((f) => ({
-    id: f,
-    nome: FASCE[f].nome,
-    canone: scriviCanone(p.prezzi[f]),
-    primoMese: p.primoMeseScontato && p.prezzi[f] ? scriviCanone(canonePrimoMese(p.prezzi[f])) : null,
-    perChi: FASCE[f].perChi,
-    servizi: SERVIZI_AGENZIA.map((s) => ({ titolo: LISTINO[s].titolo, testo: SERVIZI_IN_BREVE[f][s] })),
-  }));
+  const fasce: FasciaDaConfermare[] = ABBONAMENTI.map((f) => {
+    const primo = p.primoMeseScontato ? canonePrimoMese(p.prezzi[f]) : null;
+    return {
+      id: f,
+      nome: FASCE[f].nome,
+      canone: scriviCanone(p.prezzi[f]),
+      // «Il primo mese 150,00 €», senza un secondo «al mese» (come la dashboard della demo).
+      primoMese: primo !== null ? formatPriceFromCents(primo) : null,
+      perChi: FASCE[f].perChi,
+      servizi: SERVIZI_AGENZIA.map((s) => ({ titolo: LISTINO[s].titolo, testo: SERVIZI_IN_BREVE[f][s] })),
+    };
+  });
 
   return (
     <Cornice>
