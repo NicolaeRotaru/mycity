@@ -378,10 +378,12 @@ export default function AdminPayoutsPage() {
         ...((data ?? []) as unknown as PayoutOrder[]).slice(0, TETTO_PAYOUT).filter((o) => !idPagabili.has(o.id) && !pagabile(o)),
       ];
       const giaLetti = new Set(righe.map((o) => o.id));
+      // R05-001 — un ritiro da regolare (CASH_IN_STORE senza payout_at) sta anche fra i chiusi: rimasto fuori
+      // dalla finestra dei pagabili non rientra da qui, fuori finestra e senza il controllo di resi e reclami.
       const righeChiuse = [
         ...((daStorni.data ?? []) as unknown as PayoutOrder[]).slice(0, TETTO_PAYOUT),
         ...((daChiusi.data ?? []) as unknown as PayoutOrder[]).slice(0, TETTO_PAYOUT),
-      ].filter((o) => !giaLetti.has(o.id) && (giaLetti.add(o.id), true));
+      ].filter((o) => !pagabile(o) && !giaLetti.has(o.id) && (giaLetti.add(o.id), true));
       const totaleChiusi = Math.max(typeof daChiusi.count === 'number' ? daChiusi.count : 0, daChiusi.data?.length ?? 0);
       // Collaudo K04 — resi e reclami aperti si leggono dalle loro tabelle, come fanno il giro e la
       // funzione 916: senza, un contante con un reso aperto entrava nei «Da versare», la funzione lo saltava
