@@ -1,0 +1,13 @@
+/* La pagina «Adesso tocca a SDG» (27/11/2026). I colori sono quelli della pagina dell'agente
+   (le variabili --carta, --riga, --oliva… le definisce scheda.module.css sulla radice). */
+.riquadro{min-width:0;overflow-wrap:anywhere;margin-top:1.1rem;background:var(--carta);border:1px solid var(--riga);border-radius:16px;padding:1rem 1.2rem;display:grid;gap:.55rem}
+.riquadro h2{margin:0;font-size:1.1rem}
+.riquadro p{margin:0}
+.visita{border:2px solid var(--oliva);font-weight:700;font-size:1.05rem}
+.passi{list-style:none;margin:1.1rem 0 0;padding:0;display:grid;gap:.8rem;counter-reset:passo}
+.passo{counter-increment:passo;position:relative;background:var(--carta);border:1px solid var(--riga);border-radius:16px;padding:1rem 1.2rem 1rem 3.2rem;display:grid;gap:.4rem;min-width:0;overflow-wrap:anywhere}
+.passo::before{content:counter(passo);position:absolute;left:1rem;top:1rem;width:1.6rem;height:1.6rem;border-radius:999px;background:var(--oliva);color:#fff;display:grid;place-items:center;font-weight:700;font-size:.9rem}
+.passo h2{margin:0;font-size:1.05rem}
+.passo p{margin:0}
+.perLui{border-left:3px solid var(--oliva);padding-left:.6rem}
+.torna{display:inline-block;margin-top:1.2rem;font-weight:700}

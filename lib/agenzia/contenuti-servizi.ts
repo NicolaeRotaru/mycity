@@ -241,6 +241,15 @@ function conIDatiDelLocale(
   return null;
 }
 
+/**
+ * 27/11/2026 — Il contenuto numero `i` (da 0 a 11) della stessa rotazione, cucito sul locale se c'è la scheda.
+ * Lo usa il piano del primo mese dell'ordine di SDG (lib/agenzia/piano-del-primo-mese.ts), che ha le sue date
+ * e le quantità della fascia: così il preventivo e l'ordine parlano con gli stessi esempi.
+ */
+export function contenutoDellaRotazione(i: number, nome: string, tipo: TipoAttivita, mese: number, scheda?: SchedaCliente | null): Omit<PostDelPiano, 'data'> {
+  return postNumero(i, nome.trim() || 'noi', tipo, Number.isInteger(mese) && mese >= 0 && mese <= 11 ? mese : 0, scheda);
+}
+
 /** Il piano del mese del preventivo: 3 post a settimana dal primo del mese, fino a 12 post. */
 export function pianoEditoriale(nome: string, tipo: TipoAttivita, giorno: string, scheda?: SchedaCliente | null): PianoEditoriale {
   const [anno, mese] = giorno.split('-').map(Number);

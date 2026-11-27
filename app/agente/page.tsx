@@ -5,6 +5,7 @@
 // quando l'AD ha finito (flussi n8n 14 e 14b con «Chiedi all'AD»). Le schede restano legate al suo account.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import Scheda from '@/components/agenti/Scheda';
 import AggiungiAttivita from '@/components/agenti/AggiungiAttivita';
 import st from '@/components/agenti/scheda.module.css';
@@ -12,6 +13,8 @@ import type { Scheda as TScheda } from '@/lib/agenti/scheda';
 
 type Fase = 'pronto' | 'leggo' | 'cerca' | 'fatto' | 'errore';
 type Ultima = { lavoro: string; nome: string; stato?: string; iniziato?: number | null };
+/** 27/11/2026 — Un'attività che il titolare ha già confermato: si riapre «Adesso tocca a SDG». */
+type Confermata = { lavoro: string; nome: string };
 type Risposta<T> = { ok?: boolean; data?: T; error?: { message?: string } } | null;
 
 const OGNI_MS = 3000;
@@ -24,13 +27,17 @@ async function leggi<T>(r: Response): Promise<Risposta<T>> {
 }
 
 /** Le mie ultime schede e chi sono (le schede stanno nella tabella n8n, legate al mio account). */
-async function chiediLeMie(): Promise<{ email: string | null; schede: Ultima[] }> {
+async function chiediLeMie(): Promise<{ email: string | null; schede: Ultima[]; confermate: Confermata[] }> {
   try {
     const r = await fetch('/api/agente/schede', { cache: 'no-store' });
-    if (r.status === 401) { location.href = ALL_ACCESSO; return { email: null, schede: [] }; }
-    const d = await leggi<{ email: string; schede: Ultima[] }>(r);
-    return { email: d?.data?.email ?? null, schede: Array.isArray(d?.data?.schede) ? d.data.schede.slice(0, 8) : [] };
-  } catch { return { email: null, schede: [] }; }
+    if (r.status === 401) { location.href = ALL_ACCESSO; return { email: null, schede: [], confermate: [] }; }
+    const d = await leggi<{ email: string; schede: Ultima[]; confermate?: Confermata[] }>(r);
+    return {
+      email: d?.data?.email ?? null,
+      schede: Array.isArray(d?.data?.schede) ? d.data.schede.slice(0, 8) : [],
+      confermate: Array.isArray(d?.data?.confermate) ? d.data.confermate.slice(0, 8) : [],
+    };
+  } catch { return { email: null, schede: [], confermate: [] }; }
 }
 
 export default function PaginaAgente() {
@@ -41,6 +48,7 @@ export default function PaginaAgente() {
   const [lavoro, setLavoro] = useState<string | null>(null);
   const [secondi, setSecondi] = useState(0);
   const [ultime, setUltime] = useState<Ultima[]>([]);
+  const [confermate, setConfermate] = useState<Confermata[]>([]);
   const [email, setEmail] = useState<string | null>(null);
   const inizio = useRef(0);
   const giro = useRef(0);
@@ -79,7 +87,7 @@ export default function PaginaAgente() {
   }, [segui]);
 
   useEffect(() => {
-    chiediLeMie().then((x) => { setUltime(x.schede); setEmail(x.email); });
+    chiediLeMie().then((x) => { setUltime(x.schede); setEmail(x.email); setConfermate(x.confermate); });
     const id = new URLSearchParams(location.search).get('lavoro');
     if (id && /^[0-9a-f-]{36}$/i.test(id)) riapri(id);
   }, [riapri]);
@@ -140,6 +148,10 @@ export default function PaginaAgente() {
           </div>
           <p className={c('nota')}>Su Google Maps: apri l’attività → «Condividi» → «Copia link». Va bene anche scrivere il nome e la città.</p>
           {errore && <p className={c('errore')} role="alert">{errore}</p>}
+          {/* 27/11/2026 — Le attività che hanno confermato: la pagina «Adesso tocca a SDG» si riapre da qui. */}
+          {confermate.length > 0 && fase === 'pronto' && (
+            <div className={c('ultime')} aria-label="Hanno confermato"><span className={c('nota')}>Hanno confermato:</span>{confermate.map((x) => <Link key={x.lavoro} href={`/agente/tocca-a-sdg?lavoro=${x.lavoro}`}>✓ {x.nome}</Link>)}</div>
+          )}
           {ultime.length > 0 && fase === 'pronto' && (
             <div className={c('ultime')} aria-label="Le tue ultime schede"><span className={c('nota')}>Le tue ultime schede:</span>{ultime.map((u) => <button type="button" key={u.lavoro} onClick={() => riapri(u.lavoro)}>{u.nome}</button>)}</div>
           )}

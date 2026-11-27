@@ -211,6 +211,9 @@ const scarica = withAuthRateLimit(
     analisi_del_negozio: tutta((da, a) => admin.from('analisi_negozi').select('*').eq('id_attivita', userId).order('id_attivita').range(da, a)),
     bozza_del_sito: tutta((da, a) => admin.from('bozze_sito').select('*').eq('id_attivita', userId).order('id_attivita').range(da, a)),
     preventivo_col_link: tutta((da, a) => admin.from('preventivi_con_codice').select('seller_id, stato, fascia_scelta, creato_il, accettato_il, condizioni_accettate_il').eq('seller_id', userId).order('seller_id').range(da, a)),
+    // 27/11/2026 — L'ordine di servizio per SDG (migrazione 999c): abbonamento, canone, visita e date. Senza l'email
+    // dell'agente (è di un'altra persona) e senza il piano editoriale (è il lavoro di SDG, non un dato della persona).
+    ordine_di_servizio_sdg: tutta((da, a) => admin.from('ordini_sdg').select('seller_id, nome_attivita, fascia, canone_centesimi, primo_mese_centesimi, visita_il, accettato_il, creato_il').eq('seller_id', userId).order('seller_id').range(da, a)),
     // 26/11/2026 — Se la persona è un agente (migrazione 865): la sua riga, cioè email, stato e date.
     agente: tutta((da, a) => admin.from('agenti').select('user_id, email, attivo, creato_il, sospeso_il').eq('user_id', userId).order('user_id').range(da, a)),
     tentativi_di_pagamento: tutta((da, a) => admin.from('payment_attempts').select('*').eq('user_id', userId).order('id').range(da, a)),
