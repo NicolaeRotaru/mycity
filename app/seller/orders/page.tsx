@@ -21,6 +21,8 @@ import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
 import { LETTURA_ORDINI_DEL_NEGOZIO, rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
+import { useProfile } from '@/components/hooks/useProfile';
+import { eDiSdg } from '@/lib/products/sdgSeller';
 
 /**
  * 30/10/2026 (ondata 24) — Gli orari del negozio, letti insieme all'ordine (`seller:profiles(store_hours)`):
@@ -81,6 +83,25 @@ const STATUS_FILTERS: { label: string; statuses: OrderStatus[] }[] = [
   { label: 'In consegna', statuses: ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] },
   { label: 'Completati',  statuses: ['DELIVERED', 'CANCELED'] },
 ];
+
+/**
+ * 28/11/2026 — UN LINK VECCHIO A «ORDINI» PORTAVA SDG AGENZIA SU «NESSUN ORDINE».
+ *
+ * Gli ordini di SDG sono ordini di servizio (tabella `ordini_sdg`) e stanno in /seller/ordini-sdg:
+ * qui ci sono solo gli ordini dei prodotti, che SDG non ha. Questa pagina chi è l'utente lo sa solo
+ * nel browser, quindi niente redirect dal server: per l'account di SDG c'è un riquadro in cima che
+ * porta agli ordini di servizio. Gli altri negozi non lo vedono.
+ */
+function RiquadroOrdiniDiServizio() {
+  return (
+    <div role="note" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-ink-800">
+      <span>I tuoi ordini sono ordini di servizio: non arrivano qui.</span>
+      <Link href="/seller/ordini-sdg" className="font-semibold text-primary-700 underline">
+        Vai agli ordini di servizio
+      </Link>
+    </div>
+  );
+}
 
 function isCod(method: string | null | undefined): boolean {
   const m = (method ?? '').toLowerCase();
@@ -153,18 +174,24 @@ export default function SellerOrdersPage() {
   const adesso = useOraCheCorre();
   const lettoAlle = new Date(Math.max(adesso, queryOrders.dataUpdatedAt || 0, queryOrders.errorUpdatedAt || 0));
 
+  const { profile } = useProfile();
+  const riquadroSdg = eDiSdg(profile?.id) ? <RiquadroOrdiniDiServizio /> : null;
+
   const vistaqueryOrders = vistaDaQuery(queryOrders, { quanti: orders.length });
-  if (vistaqueryOrders.mostraScheletro) return <LoadingState />;
+  if (vistaqueryOrders.mostraScheletro) return <>{riquadroSdg}<LoadingState /></>;
   // Un errore copre la pagina solo se non c'è niente da mostrare: allo sblocco del
   // telefono, con la rete che si riaggancia, gli ordini già letti restano a schermo.
   const aggiornamentoCaduto = vistaqueryOrders.mostraErrore && orders.length > 0;
   if (vistaqueryOrders.mostraErrore && !aggiornamentoCaduto) {
     return (
-      <ErrorState
-        title="Non sono riuscito a leggere i tuoi ordini"
-        description="La lettura non è riuscita, quindi non so quali ordini hai. Non vuol dire che non ne hai: riprova fra un momento."
-        onRetry={() => queryOrders.refetch()}
-      />
+      <>
+        {riquadroSdg}
+        <ErrorState
+          title="Non sono riuscito a leggere i tuoi ordini"
+          description="La lettura non è riuscita, quindi non so quali ordini hai. Non vuol dire che non ne hai: riprova fra un momento."
+          onRetry={() => queryOrders.refetch()}
+        />
+      </>
     );
   }
 
@@ -175,6 +202,7 @@ export default function SellerOrdersPage() {
 
   return (
     <div>
+      {riquadroSdg}
       <SellerPageTitle
         eyebrow="Operativo"
         title="Ordini ricevuti"
