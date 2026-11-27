@@ -607,7 +607,14 @@ export async function togliDallaNewsletter(admin: Admin, userId: string): Promis
     }
     const emailUtente = utenteAuth?.user?.email ?? null;
     if (!emailUtente) return null;
-    const { error } = await admin.from('newsletter_subscribers').delete().ilike('email', emailUtente);
+    // 27/11/2026 (R08-003) — L'INDIRIZZO È UN INDIRIZZO, NON UN MODELLO. `ilike` legge `_` e `%` come
+    // jolly (e PostgREST legge `*` come `%`): chi cancellava mario_rossi@x.it disiscriveva anche
+    // mario.rossi@x.it. Si confronta senza maiuscole ma lettera per lettera: `\`, `%` e `_` si
+    // neutralizzano. Un indirizzo con `*` o `\` nella lista non può esserci (newsletter_subscribers_email_format,
+    // migrations/109), e `*` non si può neutralizzare: lì non c'è niente da togliere.
+    if (/[*\\]/.test(emailUtente)) return null;
+    const soloQuesta = emailUtente.replace(/[%_]/g, (jolly) => `\\${jolly}`);
+    const { error } = await admin.from('newsletter_subscribers').delete().ilike('email', soloQuesta);
     if (error) {
       logger.warn('[cancellazione] newsletter non ripulita', { userId, err: error.message });
       return nonRiuscita(error.message);
