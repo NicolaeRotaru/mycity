@@ -306,6 +306,18 @@ export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
     perche: 'nome, cellulare, indirizzo di casa, coordinate della porta e note per il fattorino',
   },
   {
+    // 27/11/2026 (R08-013) — Le segnalazioni di contenuti (DSA). migrations/126:
+    // segnalazioni.segnalante_id -> auth.users ON DELETE SET NULL: la riga resta (serve a dire cosa
+    // è stato segnalato e com'è finita), e restavano con lei l'email di contatto e il testo scritto
+    // da chi se n'è andato. Si azzerano gli stessi due campi che la potatura toglie dopo la decisione
+    // (lib/privacy/potature-ritenzione.ts): tipo, oggetto, motivo ed esito restano.
+    tabella: 'segnalazioni',
+    colonna: 'segnalante_id',
+    azzera: { email_contatto: null, dettaglio: null },
+    sopravvive: true,
+    perche: 'l\'email di contatto e il testo delle segnalazioni fatte dall\'account',
+  },
+  {
     // 26/11/2026 — Gli agenti entrati dal link d'invito (migrations/865). La chiave è
     // agenti.user_id -> auth.users ON DELETE CASCADE: la riga se ne va con la persona.
     // Si ripulisce lo stesso prima, come le altre: l'email non resta neanche un istante.
