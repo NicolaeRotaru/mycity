@@ -57,7 +57,7 @@ export default function PaginaDelServizio() {
   const haPagato: boolean | null = schedaEAbbonamento ? schedaEAbbonamento.aperta : null;
   // 24/11/2026 — La bozza del sito scritta dall'AD, se c'è: la pagina «Sito web» mostra quella.
   const { data: bozzaAd } = useQuery({ queryKey: CHIAVE_BOZZA_AD, queryFn: leggiBozzaDellAd, enabled: id === 'sito_web' });
-  // 27/11/2026 — Chi ha già il lavoro Premium consegnato (oggi solo SDG) vede quello, non il preventivo.
+  // 27/11/2026 — Chi ha già il lavoro consegnato (SDG col Premium, il Caffè di Piacenza col sito Business) vede quello, non il preventivo.
   // Se la lettura fallisce (`lavoroInErrore`) resta la pagina di sempre: mai una pagina vuota.
   const { data: lavoro, isLoading: lavoroInLettura } = useQuery({ queryKey: CHIAVE_LAVORO_CONSEGNATO, queryFn: leggiLavoroConsegnato, retry: false });
   const parte = parteDaMostrare(id, lavoro);
@@ -76,7 +76,7 @@ export default function PaginaDelServizio() {
         <LoadingState />
       ) : parte && lavoro ? (
         <>
-          {parte === 'sito' && lavoro.sito && <SitoConsegnato sito={lavoro.sito} />}
+          {parte === 'sito' && lavoro.sito && <SitoConsegnato sito={lavoro.sito} fascia={lavoro.fascia} />}
           {parte === 'social' && lavoro.social && <PianoEditorialeConsegnato social={lavoro.social} />}
           {parte === 'analisi' && lavoro.analisi && <AnalisiConsegnata analisi={lavoro.analisi} />}
         </>
