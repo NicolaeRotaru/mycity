@@ -1,7 +1,7 @@
 import type { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { SDG_SELLER_ID } from '@/lib/products/sdgSeller';
-import { AnalisiSchema, SitoSchema, SocialSchema, type LavoroConsegnato } from './tipi';
+import { AnalisiSchema, SitoSchema, SocialSchema, type LavoroConsegnato, type Sito } from './tipi';
 import { CAFFE_DI_PIACENZA_ID, SITI_PER_NEGOZIO } from './siti';
 import analisiSdg from './sdg/analisi.json';
 import socialSdg from './sdg/social.json';
@@ -49,3 +49,13 @@ export function lavoroConsegnatoDi(negozioId: string): LavoroConsegnato | null {
 export function negoziConLavoroConsegnato(): string[] {
   return [...REGISTRO.keys()];
 }
+
+/**
+ * 27/11/2026 — Solo il sito del negozio, per la pagina del link del preventivo (Nicola: «mettilo nel momento in
+ * cui l'imprenditore ha cliccato sul link che gli ha inviato il venditore»). Quella pagina è aperta a chi ha il
+ * link: qui non passano mai il piano social né l'analisi.
+ */
+export function sitoConsegnatoDi(negozioId: string): Sito | null {
+  return lavoroConsegnatoDi(negozioId)?.sito ?? null;
+}
+

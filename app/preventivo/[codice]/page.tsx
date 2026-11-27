@@ -13,6 +13,8 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { giorniDellaVisita } from '@/lib/agenzia/visita-sdg';
 import ConfermaAbbonamento, { type FasciaDaConfermare } from './ConfermaAbbonamento';
+import SitoPronto from '@/components/seller/lavoro-consegnato/SitoPronto';
+import { sitoConsegnatoDi } from '@/lib/agenzia/lavoro-consegnato/registro';
 
 /**
  * LA CONFERMA DELL'ABBONAMENTO DAL LINK — 27/11/2026.
@@ -71,6 +73,7 @@ export default async function ConfermaDalLink({
   if (demo.tipo === 'guasto') return <Cornice><p className="text-ink-700">{demo.messaggio}</p></Cornice>;
 
   const p = demo.preventivo;
+  const sito = sitoConsegnatoDi(demo.pc.sellerId);
   // Una fascia scritta male nel database non rompe la pagina: vale la consigliata.
   const dalVenditore = fasciaValida(demo.pc.fasciaScelta) ? demo.pc.fasciaScelta : null;
   const fasce: FasciaDaConfermare[] = ABBONAMENTI.map((f) => {
@@ -98,6 +101,8 @@ export default async function ConfermaDalLink({
         </p>
         <p className="mt-1 text-sm text-ink-600">{descriviAttivita(p.tipoAttivita)} · {FRASE_PARTNER}</p>
       </header>
+      {/* 27/11/2026 — Nicola: il sito già fatto per lui si vede appena il titolare apre il link del venditore. Solo il sito. */}
+      {sito && <SitoPronto sito={sito} attivita={p.attivita} />}
       {/* ?fascia= arriva dal pulsante della vecchia pagina dell'abbonamento: sceglie, ma l'etichetta resta su quella del venditore. */}
       <ConfermaAbbonamento
         codice={codice}
