@@ -273,16 +273,16 @@ export async function annullaERimborsa(
    * ancora quel codice. In quel caso non si restituisce niente: lo fara'
    * l'ultimo ordine del carrello che se ne va.
    *
-   * LIMITE DICHIARATO, e vale solo per i contanti: questo controllo guarda solo
-   * il carrello della carta (la sessione di pagamento). 21/11/2026 (R04-007) —
-   * Non perché il carrello in contanti non si possa trovare: si ritrova dalla
-   * riga del tentativo di cassa (`cod_checkout_attempts.order_ids`, letta per
-   * cliente, con l'indice), come fa la consegna del carrello più sotto
-   * (`ordiniDelCarrello`). Sulle righe dell'ordine però non c'è una chiave del
-   * carrello, e senza quella riga il carrello non si ritrova. Qui coi contanti
-   * si restituisce come prima — meglio un uso regalato che un cliente che perde
-   * il buono senza aver comprato. La chiusura completa vuole una colonna
-   * «carrello» sugli ordini: e' una migrazione, quindi si firma a parte.
+   * Il carrello della carta è la sessione di pagamento. 27/11/2026 (R06-010) —
+   * Quello in contanti si ritrova dalla riga del tentativo di cassa
+   * (`cod_checkout_attempts.order_ids`, letta per cliente, con l'indice), come fa
+   * la consegna del carrello più sotto (`ordiniDelCarrello`): prima qui coi
+   * contanti non si guardava, e un codice monouso tornava libero mentre l'altro
+   * negozio dello stesso carrello lo teneva. LIMITE DICHIARATO: sulle righe
+   * dell'ordine non c'è una chiave del carrello, e senza quella riga il carrello
+   * non si ritrova: allora si restituisce come prima — meglio un uso regalato che
+   * un cliente che perde il buono senza aver comprato. La chiusura completa vuole
+   * una colonna «carrello» sugli ordini: e' una migrazione, quindi si firma a parte.
    */
   // 5/11/2026 — La restituzione del codice sta fuori (`restituisciIlCodiceDellOrdine`, più sotto in
   // questo file): la usa anche il giro degli ordini scaduti, che prima chiamava release_coupon col
@@ -1396,16 +1396,16 @@ export async function ricalcolaLaConsegnaDelGiro(admin: SupabaseClient, orderId:
 /** Il codice sconto dell'ordine torna disponibile, una volta sola e solo se nessun altro ordine del carrello lo tiene. */
 async function tieneIlCodice(
   admin: SupabaseClient,
-  order: { id: string; stripe_session_id?: string | null },
+  order: { id: string; user_id?: string | null; stripe_session_id?: string | null },
   codice: string,
 ): Promise<boolean> {
   const carrello = order.stripe_session_id?.trim();
-  if (!carrello) return false;
   try {
-    const { data, error } = await admin
-      .from('orders')
-      .select('id')
-      .eq('stripe_session_id', carrello)
+    // R06-010 — Coi contanti il carrello è la riga del tentativo di cassa; senza la riga, come prima.
+    const fratelli = carrello ? null : await fratelliInContanti(admin, order);
+    if (!carrello && !fratelli) return false;
+    const domanda = admin.from('orders').select('id');
+    const { data, error } = await (carrello ? domanda.eq('stripe_session_id', carrello) : domanda.in('id', fratelli ?? []))
       .eq('coupon_code', codice)
       .neq('id', order.id)
       .neq('delivery_status', 'CANCELED')
@@ -1423,9 +1423,33 @@ async function tieneIlCodice(
   }
 }
 
+/**
+ * R06-010 — Gli altri ordini del carrello in contanti, dalla riga del tentativo di cassa
+ * (`cod_checkout_attempts.order_ids`, come `ordiniDelCarrello`). null se la riga non c'è o non si legge.
+ */
+async function fratelliInContanti(admin: SupabaseClient, order: { id: string; user_id?: string | null }): Promise<string[] | null> {
+  if (!order.user_id) return null;
+  const { data, error } = await admin
+    .from('cod_checkout_attempts')
+    .select('order_ids')
+    .eq('user_id', order.user_id)
+    .contains('order_ids', JSON.stringify([{ id: order.id }]))
+    .limit(1);
+  if (error) {
+    logger.warn('[annullaERimborsa] carrello in contanti non letto: il codice torna come prima', { orderId: order.id, err: error.message });
+    return null;
+  }
+  if (!Array.isArray(data) || data.length === 0) return null;
+  const elenco = (data[0] as { order_ids: unknown }).order_ids;
+  const ids = Array.isArray(elenco)
+    ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter((id) => !!id && id !== order.id)
+    : [];
+  return ids.length > 0 ? ids : null;
+}
+
 export async function restituisciIlCodiceDellOrdine(
   admin: SupabaseClient,
-  order: { id: string; coupon_code?: string | null; stripe_session_id?: string | null },
+  order: { id: string; user_id?: string | null; coupon_code?: string | null; stripe_session_id?: string | null },
 ): Promise<void> {
   const unAltroOrdineDelCarrelloTieneIlCodice = (codice: string) => tieneIlCodice(admin, order, codice);
   const codice = order.coupon_code?.trim();
