@@ -10,6 +10,14 @@
 // testata e il piede restano sempre in vista. La pagina nuova è «I tre abbonamenti» (`TreAbbonamenti`).
 // Poco dopo: «dentro ogni abbonamento deve esserci la personalizzazione esatta del servizio che offriamo al
 // cliente»: sotto ogni servizio c'è la riga «Per <negozio>» (lib/agenti/su-misura.ts: dall'AD, o dal programma).
+//
+// 27/11/2026 — Nicola: «inserisci cosa possiamo offrire e perché dentro la scheda cosa ha e non ha», «elimina le 3
+// schede abbonamento». La sezione «Cosa possiamo offrire, e perché» sta ora nella prima pagina, sotto «Cosa ha, cosa
+// non ha»: la pagina «Cosa offrire» non c'è più. Tolti i tre riquadri riassuntivi Base/Business/Premium che stavano
+// sotto le offerte; il bottone porta sempre alla pagina «I tre abbonamenti», che resta com'era.
+// Subito dopo: «migliora il menu, in questo modo è scomodo». La tendina tagliava il titolo («Reputazione,
+// concorrenti e…») e chiedeva due tocchi per cambiare parte: ora le parti sono sei bottoni corti, tutti in vista,
+// e quella aperta è piena. Il titolo lungo resta nei bottoni «Avanti» e «indietro» in fondo alla pagina.
 
 import { useRef, useState } from 'react';
 import { canonePrimoMese } from '@/lib/agenzia/preventivo';
@@ -40,15 +48,14 @@ function Lista({ voci, attesa, righe }: { voci: string[]; attesa: boolean; righe
   return <ul>{voci.map((v, i) => <li key={i}>{v}</li>)}</ul>;
 }
 
-/** Le pagine della scheda, nell'ordine di lettura: il menu a tendina e «Avanti» le seguono così. */
+/** Le pagine della scheda, nell'ordine di lettura: il menu (col nome corto) e «Avanti» (col titolo) le seguono così. */
 export const PAGINE = [
-  { id: 'breve', titolo: 'In breve: cosa ha e cosa non ha' },
-  { id: 'offerta', titolo: 'Cosa offrire' },
-  { id: 'abbonamenti', titolo: 'I tre abbonamenti' },
-  { id: 'domande', titolo: 'Domande e obiezioni' },
-  { id: 'online', titolo: 'Sito e social' },
-  { id: 'reputazione', titolo: 'Reputazione, concorrenti e potenziale' },
-  { id: 'dati', titolo: 'Dati e fonti' },
+  { id: 'breve', corto: 'In breve', titolo: 'In breve: cosa ha e cosa non ha' },
+  { id: 'abbonamenti', corto: 'Abbonamenti', titolo: 'I tre abbonamenti' },
+  { id: 'domande', corto: 'Domande', titolo: 'Domande e obiezioni' },
+  { id: 'online', corto: 'Sito e social', titolo: 'Sito e social' },
+  { id: 'reputazione', corto: 'Reputazione', titolo: 'Reputazione, concorrenti e potenziale' },
+  { id: 'dati', corto: 'Dati e fonti', titolo: 'Dati e fonti' },
 ] as const;
 export type IdPagina = (typeof PAGINE)[number]['id'];
 
@@ -108,7 +115,7 @@ export default function Scheda({ s }: { s: TScheda }) {
   const f = s.consigliato ? FASCE[s.consigliato] : null;
   const m = s.sito.misura;
   const [pagina, setPagina] = useState<IdPagina>('breve');
-  const menu = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLElement>(null);
   const qui = PAGINE.findIndex((p) => p.id === pagina);
   const prima = qui > 0 ? PAGINE[qui - 1] : null;
   const dopo = qui < PAGINE.length - 1 ? PAGINE[qui + 1] : null;
@@ -117,8 +124,8 @@ export default function Scheda({ s }: { s: TScheda }) {
     setPagina(id);
     if (sali) {
       menu.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
-      // Il bottone premuto può sparire (l'ultima pagina non ha «Avanti»): il fuoco va sul menu, non si perde.
-      menu.current?.querySelector('select')?.focus({ preventScroll: true });
+      // Il bottone premuto può sparire (l'ultima pagina non ha «Avanti»): il fuoco va sulla voce del menu, non si perde.
+      menu.current?.querySelector<HTMLButtonElement>(`[data-pagina="${id}"]`)?.focus({ preventScroll: true });
     }
   };
   return (
@@ -135,12 +142,16 @@ export default function Scheda({ s }: { s: TScheda }) {
         </div>
       </header>
 
-      <div className={c('menuPagine')} ref={menu}>
-        <label htmlFor="pagina-scheda">Parte della scheda</label>
-        <select id="pagina-scheda" className={c('tendina')} value={pagina} onChange={(e) => vai(e.target.value as IdPagina)}>
-          {PAGINE.map((p, i) => <option key={p.id} value={p.id}>{i + 1} di {PAGINE.length} · {p.titolo}</option>)}
-        </select>
-      </div>
+      <nav className={c('menuPagine')} ref={menu} aria-label="Parti della scheda">
+        <span className={c('occhiello')}>Parte della scheda · {qui + 1} di {PAGINE.length}</span>
+        <div className={c('vociMenu')}>
+          {PAGINE.map((p) => {
+            const aperta = p.id === pagina;
+            return <button key={p.id} type="button" data-pagina={p.id} aria-current={aperta ? 'page' : undefined} title={p.titolo}
+              className={c(`voceMenu${aperta ? ' aperta' : ''}`)} onClick={() => vai(p.id)}>{p.corto}</button>;
+          })}
+        </div>
+      </nav>
 
       {pagina === 'breve' && <>
       <section className={c('trenta')} aria-labelledby="t30">
@@ -157,22 +168,10 @@ export default function Scheda({ s }: { s: TScheda }) {
         </div>
       </section>
 
-      </>}
-
-      {pagina === 'offerta' && <>
       <section className={c('sezione')}><h2>Cosa possiamo offrire, e perché</h2>
         {s.offerta.length ? <div className={c('griglia')}>{s.offerta.map((o, i) => <div className={c('riquadro')} key={i}><h3>{o.servizio}</h3><p>{o.perche}</p></div>)}</div>
           : attesa ? <div className={c('riquadro')}><Scrive /></div> : <p className={c('vuoto')}>L’AD non ha scritto le offerte.</p>}
         {s.perche_consigliato && <p className={c('nota')}><b>Perché il {f?.nome ?? 'consigliato'}:</b> {s.perche_consigliato}</p>}
-        <div className={c('fasce')}>
-          {ID_FASCE.map((id) => (
-            <div key={id} className={c(`fascia${id === s.consigliato ? ' scelta' : ''}`)}>
-              <span className={c('occhiello')}>{FASCE[id].nome}{id === s.consigliato ? ' · consigliato' : ''}</span>
-              <b>{euro(FASCE[id].centesimi)} <span className={c('nota')}>al mese</span></b>
-              <span className={c('nota')}>{FASCE[id].inPratica.piano}. Sito: {FASCE[id].inPratica.sito.toLowerCase()}.</span>
-            </div>
-          ))}
-        </div>
         <p className={c('nota')}>Primo mese a metà, nessun vincolo, disdetta con 30 giorni di preavviso. Sui prodotti venduti tramite MyCity resta il 10%; al banco niente. Oggi si paga in contanti, di persona.</p>
         <button type="button" className={c('bottone secondario')} onClick={() => vai('abbonamenti', true)}>Apri le tre schede degli abbonamenti</button>
       </section>
