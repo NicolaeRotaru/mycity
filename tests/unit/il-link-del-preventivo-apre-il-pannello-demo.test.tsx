@@ -16,6 +16,9 @@
  *  · il ritorno da Stripe (?pagato=1) e il preventivo accettato → la pagina dell'abbonamento;
  *  · codice sbagliato, preventivo chiuso o inesistente, servizio sconosciuto → «non trovato».
  *
+ * 27/11/2026 — Il link non apre più la demo: apre la conferma dell'abbonamento (Nicola). Le pagine della
+ * demo restano nel gruppo `(demo)`, col loro guscio: qui si provano ancora quelle.
+ *
  * Le pagine sono quelle vere, disegnate come le disegna il server. Finti solo la lettura del
  * preventivo col codice, il calcolo del preventivo (la vetrina di una gastronomia vera nei dati) e
  * il database.
@@ -66,10 +69,10 @@ vi.mock('@/lib/supabase/server', () => {
 });
 
 import { FASCE, ABBONAMENTI, costruisciPreventivo, leggiImpostazioniAgenzia, type Preventivo } from '@/lib/agenzia/preventivo';
-import LayoutDemo from '@/app/preventivo/[codice]/layout';
-import DashboardDemo from '@/app/preventivo/[codice]/page';
-import ServizioDemo from '@/app/preventivo/[codice]/servizi/[servizio]/page';
-import PreventivoDemo from '@/app/preventivo/[codice]/abbonamento/page';
+import LayoutDemo from '@/app/preventivo/[codice]/(demo)/layout';
+import ConfermaDalLink from '@/app/preventivo/[codice]/page';
+import ServizioDemo from '@/app/preventivo/[codice]/(demo)/servizi/[servizio]/page';
+import PreventivoDemo from '@/app/preventivo/[codice]/(demo)/abbonamento/page';
 
 /** Una gastronomia senza logo, con una foto e senza sito: come le attività che ricevono il link. */
 const vetrina = (): Preventivo => costruisciPreventivo({
@@ -101,25 +104,13 @@ beforeEach(() => {
   stato.sostituzioni = [];
 });
 
-describe('il link col codice apre la dashboard della demo', () => {
-  it('nome, tre fasce che aprono il loro preventivo, il pulsante sulla consigliata, i quattro servizi', async () => {
-    const p = stato.preventivo as Preventivo;
-    const r = disegna(await DashboardDemo({ params: params(), searchParams: cerca() }));
-    expect(r.querySelector('h1')?.textContent).toBe('Ora del Gusto');
-    expect(r.textContent).toContain('In demo');
-    for (const f of ABBONAMENTI) {
-      const a = r.querySelector(`a[href="/preventivo/${CODICE}/abbonamento?fascia=${f}"][aria-label^="Il preventivo col ${FASCE[f].nome}"]`);
-      expect(a, f).not.toBeNull();
-    }
-    const pulsante = [...r.querySelectorAll('a')].find((a) => /Scegli l.abbonamento/.test(a.textContent ?? ''));
-    expect(pulsante?.getAttribute('href')).toBe(`/preventivo/${CODICE}/abbonamento?fascia=${p.consigliato}`);
-    for (const slug of ['foto-video', 'sito-web', 'social', 'analisi']) {
-      expect(r.querySelector(`a[href="/preventivo/${CODICE}/servizi/${slug}"]`), slug).not.toBeNull();
-    }
-    // Il perché vero, letto dalla vetrina: una sola foto, nessun sito.
-    expect(r.querySelector(`a[href="/preventivo/${CODICE}/servizi/sito-web"]`)?.textContent).toContain('non ha ancora un sito');
-    // Nessun indirizzo dell'area del negozio: il titolare non ha l'accesso.
-    expect(r.querySelector('a[href^="/seller"]')).toBeNull();
+describe('il guscio della demo (le pagine restano, il link non ci porta più: 27/11/2026)', () => {
+  it('il link col codice apre la conferma dell abbonamento, non la dashboard della demo', async () => {
+    // Il dettaglio della conferma sta in tests/unit/il-link-apre-la-conferma-dell-abbonamento.test.tsx.
+    const r = disegna(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    expect(r.querySelector('h1')?.textContent).toBe('Ora del Gusto, ecco il tuo abbonamento');
+    expect(r.textContent).not.toContain('In demo');
+    expect(r.querySelector(`a[href^="/preventivo/${CODICE}/"]`)).toBeNull();
   });
 
   it('il guscio è il pannello del negozio: menu, voci chiuse col lucchetto, la fascia della demo', async () => {
@@ -160,7 +151,7 @@ describe('ogni fascia apre il suo preventivo, anche nella demo', () => {
     expect(r.querySelector('input[type="radio"][value="premium"]')?.hasAttribute('checked')).toBe(true);
   });
 
-  it('cambiando fascia nella stessa pagina il modulo per accettare segue la fascia letta (collaudo: soldi)', async () => {
+  it('cambiando fascia nella stessa pagina la scelta e il pulsante per confermare seguono la fascia letta (collaudo: soldi)', async () => {
     // Next, se cambia solo ?fascia, ridisegna la pagina tenendo lo stato dei componenti: qui lo stesso.
     (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
     const div = document.createElement('div');
@@ -175,17 +166,13 @@ describe('ogni fascia apre il suo preventivo, anche nella demo', () => {
       await act(async () => { root.render(base); });
       expect(div.querySelector('h1')?.textContent).toBe('Il preventivo di Ora del Gusto col Base');
       expect(spuntata()).toBe('base');
-      // L'email già scritta resta (prima, con la key, il modulo ripartiva vuoto: secondo collaudo).
-      const email = div.querySelector<HTMLInputElement>('input[type="email"]')!;
-      await act(async () => {
-        const imposta = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
-        imposta.call(email, 'titolare@oradelgusto.it');
-        email.dispatchEvent(new Event('input', { bubbles: true }));
-      });
+      // 27/11/2026 — Da qui non si accetta più: il pulsante porta alla conferma col codice, con la fascia scelta.
+      const vai = () => [...div.querySelectorAll('a')].find((a) => a.textContent?.startsWith('Conferma il'))?.getAttribute('href');
+      expect(vai()).toBe(`/preventivo/${CODICE}?fascia=base`);
       const premiumDiNuovo = await PreventivoDemo({ params: params(), searchParams: cerca({ fascia: 'premium' }) });
       await act(async () => { root.render(premiumDiNuovo); });
       expect(spuntata()).toBe('premium');
-      expect(div.querySelector<HTMLInputElement>('input[type="email"]')!.value).toBe('titolare@oradelgusto.it');
+      expect(vai()).toBe(`/preventivo/${CODICE}?fascia=premium`);
       // E scegliendo una fascia nel modulo, il preventivo sopra diventa il suo.
       const radioBase = [...div.querySelectorAll<HTMLInputElement>('input[type="radio"]')].find((i) => i.value === 'base')!;
       await act(async () => { radioBase.click(); });
@@ -243,31 +230,31 @@ describe('le pagine dei servizi della demo', () => {
 
 describe('dove porta il link negli altri casi', () => {
   it('il ritorno dal pagamento va alla pagina dell abbonamento, con lo stesso esito', async () => {
-    expect(await errore(DashboardDemo({ params: params(), searchParams: cerca({ pagato: '1' }) })))
+    expect(await errore(ConfermaDalLink({ params: params(), searchParams: cerca({ pagato: '1' }) })))
       .toBe(`NEXT_REDIRECT /preventivo/${CODICE}/abbonamento?pagato=1`);
-    expect(await errore(DashboardDemo({ params: params(), searchParams: cerca({ pagato: '0' }) })))
+    expect(await errore(ConfermaDalLink({ params: params(), searchParams: cerca({ pagato: '0' }) })))
       .toBe(`NEXT_REDIRECT /preventivo/${CODICE}/abbonamento?pagato=0`);
   });
 
   it('un preventivo già accettato va alla pagina dell abbonamento, che dice cosa succede ora', async () => {
     stato.pc = { sellerId: 'og-1', stato: 'accettato', fasciaScelta: 'business', nomeAttivita: 'Ora del Gusto' };
-    expect(await errore(DashboardDemo({ params: params(), searchParams: cerca() }))).toBe(`NEXT_REDIRECT /preventivo/${CODICE}/abbonamento`);
+    expect(await errore(ConfermaDalLink({ params: params(), searchParams: cerca() }))).toBe(`NEXT_REDIRECT /preventivo/${CODICE}/abbonamento`);
     const r = disegna(await PreventivoDemo({ params: params(), searchParams: cerca() }));
     expect(r.textContent).toContain('Hai accettato il preventivo');
   });
 
   it('codice sbagliato, preventivo chiuso o inesistente: non trovato', async () => {
-    expect(await errore(DashboardDemo({ params: params('corto'), searchParams: cerca() }))).toBe('NEXT_NOT_FOUND');
+    expect(await errore(ConfermaDalLink({ params: params('corto'), searchParams: cerca() }))).toBe('NEXT_NOT_FOUND');
     expect(await errore(LayoutDemo({ params: params('corto'), children: null }))).toBe('NEXT_NOT_FOUND');
     stato.pc = null;
-    expect(await errore(DashboardDemo({ params: params(), searchParams: cerca() }))).toBe('NEXT_NOT_FOUND');
+    expect(await errore(ConfermaDalLink({ params: params(), searchParams: cerca() }))).toBe('NEXT_NOT_FOUND');
     stato.pc = { sellerId: 'og-1', stato: 'chiuso', fasciaScelta: null, nomeAttivita: 'Ora del Gusto' };
     expect(await errore(LayoutDemo({ params: params(), children: null }))).toBe('NEXT_NOT_FOUND');
   });
 
   it('se la lettura cade lo dice, senza inventare', async () => {
     stato.pc = undefined;
-    const r = disegna(await DashboardDemo({ params: params(), searchParams: cerca() }));
+    const r = disegna(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
     expect(r.textContent).toContain('Non riesco a leggere il preventivo');
   });
 });

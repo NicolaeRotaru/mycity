@@ -37,12 +37,12 @@ vi.mock('@/lib/agenzia/demo-dal-link', () => ({
   },
 }));
 vi.mock('@/components/seller/AnteprimaServizio', () => ({ default: () => null }));
-vi.mock('@/app/preventivo/[codice]/abbonamento/AccettaDalLink', () => ({ default: () => <button type="button">Accetto</button> }));
-vi.mock('@/app/preventivo/[codice]/abbonamento/PagaDalLink', () => ({ default: () => null }));
+vi.mock('@/app/preventivo/[codice]/(demo)/abbonamento/AccettaDalLink', () => ({ default: () => <button type="button">Accetto</button> }));
+vi.mock('@/app/preventivo/[codice]/(demo)/abbonamento/PagaDalLink', () => ({ default: () => null }));
 
 describe('il preventivo dal link, montato', () => {
   it('nessun testo intero di FASCE; i prezzi, la fascia consigliata e le righe corte ci sono', async () => {
-    const { default: Pagina } = await import('@/app/preventivo/[codice]/abbonamento/page');
+    const { default: Pagina } = await import('@/app/preventivo/[codice]/(demo)/abbonamento/page');
     const el = await Pagina({ params: Promise.resolve({ codice: 'a'.repeat(64) }), searchParams: Promise.resolve({}) });
     const html = renderToStaticMarkup(el);
     const testo = html.replace(/<[^>]+>/g, ' ').replace(/&#x27;|&#39;/g, '’').replace(/\s+/g, ' ');
