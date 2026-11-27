@@ -59,7 +59,21 @@ const CATEGORIE_DEPERIBILI = new Set([
 ]);
 type CategoriaPerIlRecesso = { id: string; slug: string; parent_id: string | null };
 
-function segnaIDeperibili<P extends { category_id?: unknown }>(prodotti: P[], categorie: CategoriaPerIlRecesso[]): P[] {
+/**
+ * 27/11/2026 — UN FRESCO DA FRIGORIFERO È FRESCO ANCHE FUORI DALLE CATEGORIE DEI FRESCHI.
+ * Il campo «Conservazione» del modulo alimentari (lib/category-attributes.ts) ha la voce
+ * «Frigorifero»: è il negozio stesso a dire che il prodotto va tenuto in frigo, cioè che si
+ * deteriora in fretta. Una mozzarella salvata sulla sola radice «Alimentari», senza
+ * sottocategoria e senza spunta, accettava il ripensamento. Vale solo la voce esatta: «Freezer»
+ * (surgelati) e «Luogo fresco e asciutto» non sono «freschi» nel fatto `legale.recesso-esclusi`.
+ */
+function daFrigorifero(attributi: unknown): boolean {
+  if (!attributi || typeof attributi !== 'object') return false;
+  const c = (attributi as Record<string, unknown>).conservazione;
+  return typeof c === 'string' && c.trim().toLowerCase() === 'frigorifero';
+}
+
+function segnaIDeperibili<P extends { category_id?: unknown; attributes?: unknown }>(prodotti: P[], categorie: CategoriaPerIlRecesso[]): P[] {
   const perId = new Map(categorie.map((c) => [c.id, c]));
   const deperibile = (id: unknown): boolean => {
     let cur = typeof id === 'string' ? perId.get(id) : undefined;
@@ -69,8 +83,83 @@ function segnaIDeperibili<P extends { category_id?: unknown }>(prodotti: P[], ca
     }
     return false;
   };
-  return prodotti.map((p) => (deperibile(p.category_id) ? { ...p, non_recedibile: true } : p));
+  return prodotti.map((p) => (deperibile(p.category_id) || daFrigorifero(p.attributes) ? { ...p, non_recedibile: true } : p));
 }
+
+type ClientDelCliente = Awaited<ReturnType<typeof getServerSupabase>>;
+type EsitoDelRipensamento = { rifiuto: string | null; nota: string | null } | { errore: NextResponse };
+
+/**
+ * «Cambio idea» su quest'ordine (o su questa sua riga) si puo' chiedere?
+ * La stessa lettura per l'invio (POST) e per la pagina che decide se offrire il motivo (GET):
+ * le righe col client del cliente, i prodotti e le categorie col servizio (un pane tolto dalla
+ * vetrina dopo l'ordine resta pane). Se una lettura non riesce non si decide al buio.
+ */
+async function esitoDelRipensamento(supa: ClientDelCliente, orderId: string, orderItemId?: string): Promise<EsitoDelRipensamento> {
+  let domandaRighe = supa.from('order_items').select('product_id, product_name').eq('order_id', orderId);
+  if (orderItemId) domandaRighe = domandaRighe.eq('id', orderItemId);
+  const { data: righe, error: rErr } = await domandaRighe;
+  if (rErr) {
+    logger.error(rErr, { context: 'returns-recesso-righe' });
+    return { errore: ApiErrors.internal('Non riesco a verificare i prodotti dell\'ordine: riprova fra poco.') };
+  }
+  const righeOrdine = (righe ?? []) as RigaPerIlRecesso[];
+  const ids = [
+    ...new Set(righeOrdine.map((r) => r.product_id).filter((x): x is string => typeof x === 'string')),
+  ];
+  if (ids.length === 0) return { rifiuto: null, nota: null };
+  const { data: prodotti, error: pErr } = await getAdminSupabase()
+    .from('products')
+    .select('*')
+    .in('id', ids);
+  if (pErr) {
+    logger.error(pErr, { context: 'returns-recesso-prodotti' });
+    return { errore: ApiErrors.internal('Non riesco a verificare se i prodotti sono esclusi dal recesso: riprova fra poco.') };
+  }
+  const elenco = (prodotti ?? []) as Array<ProdottoPerIlRecesso & { id?: string; category_id?: unknown; attributes?: unknown }>;
+  let categorie: CategoriaPerIlRecesso[] = [];
+  if (elenco.some((p) => typeof p.category_id === 'string')) {
+    const { data, error: cErr } = await getAdminSupabase().from('categories').select('id, slug, parent_id');
+    if (cErr) {
+      logger.error(cErr, { context: 'returns-recesso-categorie' });
+      return { errore: ApiErrors.internal('Non riesco a verificare se i prodotti sono esclusi dal recesso: riprova fra poco.') };
+    }
+    categorie = (data ?? []) as CategoriaPerIlRecesso[];
+  }
+  // Un prodotto per riga: quella col prodotto tolto dal catalogo conta come recedibile.
+  const perRiga = prodottiDelleRighe(righeOrdine, segnaIDeperibili(elenco, categorie));
+  return {
+    rifiuto: rifiutoDelRecesso(MOTIVO_RIPENSAMENTO, perRiga),
+    nota: notaDegliEsclusi(MOTIVO_RIPENSAMENTO, perRiga),
+  };
+}
+
+const DomandaDellaPagina = z.object({ orderId: z.string().uuid(), orderItemId: z.string().uuid().optional() });
+
+/**
+ * 27/11/2026 — LA PAGINA DEL RESO CHIEDE QUI SE OFFRIRE «HO CAMBIATO IDEA».
+ * La pagina lo chiedeva a /api/returns/ripensamento, che guardava solo la spunta del negozio:
+ * su un pane non spuntato (Panificio) il motivo restava proposto e il rifiuto arrivava solo
+ * all'invio, da qui. Ora risponde la stessa funzione che decide l'invio, anche per la sola
+ * riga scelta (ordine misto: il pane si', il miele no). Solo lettura: GET resta aperto anche
+ * al cliente sospeso, come il reso.
+ */
+export const GET = withAuthRateLimit({ name: 'returns-create-ripensamento', max: 60, windowMs: 60 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
+  const url = new URL(req.url);
+  const parsed = DomandaDellaPagina.safeParse({
+    orderId: url.searchParams.get('orderId'),
+    orderItemId: url.searchParams.get('orderItemId') || undefined,
+  });
+  if (!parsed.success) return ApiErrors.invalidRequest('Ordine non valido');
+  const supa = await getServerSupabase();
+  const { data: order, error: oErr } = await supa.from('orders').select('id, user_id').eq('id', parsed.data.orderId).maybeSingle();
+  if (oErr) return ApiErrors.internal('Non riesco a leggere l\'ordine: riprova fra poco.');
+  if (!order) return ApiErrors.notFound('Ordine non trovato');
+  if (order.user_id !== user.id) return ApiErrors.forbidden();
+  const esito = await esitoDelRipensamento(supa, parsed.data.orderId, parsed.data.orderItemId);
+  if ('errore' in esito) return esito.errore;
+  return NextResponse.json({ ok: true, rifiuto: esito.rifiuto });
+});
 
 /**
  * Apre una richiesta di reso. Vincoli:
@@ -164,41 +253,10 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
   // Ordine misto (torta esclusa + miele): il reso nasce, e la nota dice al negozio cosa non rimborsare.
   let notaRecesso: string | null = null;
   if (body.reason === MOTIVO_RIPENSAMENTO) {
-    let domandaRighe = supa.from('order_items').select('product_id, product_name').eq('order_id', body.orderId);
-    if (body.orderItemId) domandaRighe = domandaRighe.eq('id', body.orderItemId);
-    const { data: righe, error: rErr } = await domandaRighe;
-    if (rErr) {
-      logger.error(rErr, { context: 'returns-recesso-righe' });
-      return ApiErrors.internal('Non riesco a verificare i prodotti dell\'ordine: riprova fra poco.');
-    }
-    const righeOrdine = (righe ?? []) as RigaPerIlRecesso[];
-    const ids = [
-      ...new Set(righeOrdine.map((r) => r.product_id).filter((x): x is string => typeof x === 'string')),
-    ];
-    if (ids.length > 0) {
-      const { data: prodotti, error: pErr } = await getAdminSupabase()
-        .from('products')
-        .select('*')
-        .in('id', ids);
-      if (pErr) {
-        logger.error(pErr, { context: 'returns-recesso-prodotti' });
-        return ApiErrors.internal('Non riesco a verificare se i prodotti sono esclusi dal recesso: riprova fra poco.');
-      }
-      let elenco = (prodotti ?? []) as Array<ProdottoPerIlRecesso & { id?: string; category_id?: unknown }>;
-      if (elenco.some((p) => typeof p.category_id === 'string')) {
-        const { data: categorie, error: cErr } = await getAdminSupabase().from('categories').select('id, slug, parent_id');
-        if (cErr) {
-          logger.error(cErr, { context: 'returns-recesso-categorie' });
-          return ApiErrors.internal('Non riesco a verificare se i prodotti sono esclusi dal recesso: riprova fra poco.');
-        }
-        elenco = segnaIDeperibili(elenco, (categorie ?? []) as CategoriaPerIlRecesso[]);
-      }
-      // Un prodotto per riga: quella col prodotto tolto dal catalogo conta come recedibile.
-      const perRiga = prodottiDelleRighe(righeOrdine, elenco);
-      const rifiuto = rifiutoDelRecesso(body.reason, perRiga);
-      if (rifiuto) return ApiErrors.invalidRequest(rifiuto);
-      notaRecesso = notaDegliEsclusi(body.reason, perRiga);
-    }
+    const esito = await esitoDelRipensamento(supa, body.orderId, body.orderItemId);
+    if ('errore' in esito) return esito.errore;
+    if (esito.rifiuto) return ApiErrors.invalidRequest(esito.rifiuto);
+    notaRecesso = esito.nota;
   }
 
   const { data: existing } = await supa
