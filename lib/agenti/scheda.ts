@@ -6,7 +6,8 @@
 // Il collaudo del 26/11 ha trovato frasi vietate che passavano con altre parole e campi mai controllati:
 // adesso ogni testo dell'AD passa dagli stessi controlli (vedi `controllaTesto`).
 
-import { CONDIZIONI, PAGAMENTO, eFascia, type IdFascia } from './fasce';
+import { SERVIZI_AGENZIA, type ServizioAgenzia } from '@/lib/agenzia/preventivo';
+import { CONDIZIONI, FASCE, ID_FASCE, PAGAMENTO, eFascia, type IdFascia } from './fasce';
 import type { LettoDalLink } from './link';
 import type { DatiOsm } from './osm';
 import type { MisuraSito, LivelloSito } from './sito';
@@ -18,6 +19,12 @@ const FORZA: Record<Stato, number> = { confermato: 3, da_confermare: 2, framment
 export type Campo = { voce: string; valore: string | null; stato: Stato; fonte: string | null };
 export type Social = { canale: string; stato: 'trovato' | 'non_trovato'; livello: string | null; giudizio: string | null; fonte: string | null; origine?: 'sito' | 'mappa' | 'ad' | 'google' };
 export type Concorrente = { nome: string; tipo: string | null; distanza: number; fonte: string };
+/**
+ * Cosa faremo per QUESTO negozio con una fascia (Nicola, 26/11/2026: «dentro ogni abbonamento deve esserci la
+ * personalizzazione esatta del servizio che offriamo al cliente»): il perché, e una frase per ogni servizio.
+ * La scrive l'AD; quello che l'AD non scrive lo compone il programma (lib/agenti/su-misura.ts).
+ */
+export type SuMisura = { perche: string | null; servizi: Partial<Record<ServizioAgenzia, string>> };
 
 export type Scheda = {
   nome: string;
@@ -44,6 +51,8 @@ export type Scheda = {
   domande: string[];
   obiezioni: { obiezione: string; risposta: string }[];
   attenzione: string[];
+  /** Per ogni fascia, cosa faremo per questo negozio: dall'AD. `null` finché l'AD non ha risposto. */
+  su_misura: Partial<Record<IdFascia, SuMisura>> | null;
   fonti: { titolo: string; url: string }[];
   avvisi: string[];
   completa: boolean;
@@ -170,6 +179,7 @@ export function primaScheda({ letto, osm, misura, citta, data }: { letto: LettoD
     potenziale: [], offerta: [], domande: [],
     obiezioni: OBIEZIONI_FISSE.map(({ obiezione, risposta }) => ({ obiezione, risposta })),
     attenzione: [...ATTENZIONE_FISSE, ...(gioco ? ['Niente gioco (Sisal, scommesse, gratta e vinci) né tabacco nei contenuti proposti: in Italia la pubblicità è vietata.'] : [])],
+    su_misura: null,
     fonti: [], avvisi: [...(osm?.avvisi ?? [])],
     completa: false,
   };
@@ -211,12 +221,92 @@ export function normalizza(x: unknown): Scheda | null {
     domande: testi(s.domande),
     obiezioni: lista(s.obiezioni, (o): o is { obiezione: string; risposta: string } => !!o && typeof o === 'object' && typeof (o as { obiezione: unknown }).obiezione === 'string' && typeof (o as { risposta: unknown }).risposta === 'string'),
     attenzione: testi(s.attenzione),
+    su_misura: leggiSuMisura(s.su_misura, () => true),
     fonti: lista(s.fonti, (f): f is { titolo: string; url: string } => !!f && typeof f === 'object' && typeof (f as { titolo: unknown }).titolo === 'string' && apertaDalProgramma((f as { url: unknown }).url)),
     avvisi: testi(s.avvisi), completa: s.completa === true,
   };
 }
 
 // ———————————————————————————————— 2. la risposta dell'AD, ripulita
+
+/**
+ * Le promesse che una fascia non mantiene (il compito: «non promettere quello che la fascia non dà»), frase per frase.
+ * Il collaudo del 27/11 ha trovato il primo controllo bucato: bastava un «non» in un punto qualsiasi della frase.
+ * Adesso la negazione conta solo nelle 5 parole prima della promessa («niente video»); una frase che nomina una
+ * fascia più alta («i video arrivano dal Business») o descrive com'è il negozio oggi («oggi pubblica due video»)
+ * non promette; i numeri di post e video si confrontano col listino della fascia.
+ */
+const NUMERI: Record<string, number> = { zero: 0, un: 1, uno: 1, una: 1, due: 2, tre: 3, quattro: 4, cinque: 5, sei: 6, sette: 7, otto: 8, nove: 9, dieci: 10, undici: 11, dodici: 12, quindici: 15, venti: 20, trenta: 30 };
+const numero = (w: string | undefined): number | undefined => (w === undefined ? undefined : /^\d+$/.test(w) ? Number(w) : NUMERI[w]);
+const NEGAZIONE = new Set(['senza', 'niente', 'non', 'nessun', 'nessuno', 'nessuna', 'né']);
+const SOPRA: Record<IdFascia, RegExp | null> = {
+  base: /\b(?:dal|col|nel|con\s+il|al|il|del|un|il\s+piano)\s+(?:business|premium)\b/i,
+  business: /\b(?:dal|col|nel|con\s+il|al|il|del|un)\s+premium\b/i,
+  premium: null,
+};
+const DI = new Set(['del', 'della', 'dei', 'delle', 'degli', 'di', 'dello']);
+export function promessaFuoriFascia(id: IdFascia, t: string): boolean {
+  const sopra = SOPRA[id];
+  if (!sopra) return false;
+  const f = FASCE[id];
+  for (const pezzo of t.split(/[.;:!?]+/)) {
+    if (!pezzo.trim()) continue;
+    if (/\boggi\b/i.test(pezzo) && !/\bda\s+oggi\b/i.test(pezzo)) continue; // descrive com'è oggi
+    if (sopra.test(pezzo)) continue; // la mette a confronto con una fascia più alta
+    const w = pezzo.toLowerCase().split(/\s+/).map((x) => x.replace(/[^\p{L}\d]/gu, '')).filter(Boolean);
+    const negata = (i: number) => w.slice(Math.max(0, i - 5), i).some((x) => NEGAZIONE.has(x));
+    const fuori = (i: number) => !negata(i);
+    for (let i = 0; i < w.length; i++) {
+      const x = w[i];
+      const quanti = numero(w[i - 1]);
+      if ((x === 'video' || x === 'reel' || x === 'reels') && fuori(i)) {
+        if (f.video === 0 && quanti !== 0) return true;
+        if (quanti !== undefined && quanti > f.video) return true;
+      }
+      if ((x === 'post' || x === 'contenuti') && quanti !== undefined && quanti > f.post && fuori(i)) return true;
+      if ((x === 'storie' || x === 'stories' || x === 'story') && fuori(i)) {
+        const racconto = DI.has(w[i + 1] ?? '') && !/^(?:instagram|facebook|tiktok)$/.test(w[i + 2] ?? '');
+        if (!racconto) return true;
+      }
+      if (x === 'referente' && fuori(i)) return true;
+      if (x === 'persona' && /^(?:dedicata|tutta)$/.test(w[i + 1] ?? '') && fuori(i)) return true;
+      if (x === 'visita' && /^(?:una|la|nostra)$/.test(w[i - 1] ?? '') && fuori(i)) return true;
+      if (x === 'trovarvi' && fuori(i)) return true;
+      if (/^pass(?:a|iamo|eremo)$/.test(x) && /^(?:in|da)$/.test(w[i + 1] ?? '') && /^(?:voi|negozio|bottega|locale|pasticceria|forno|bar|laboratorio)$/.test(w[i + 2] ?? '') && fuori(i)) return true;
+      if ((x === 'incontro' || x === 'incontri') && fuori(i)) return true;
+      if (id === 'base') {
+        if (x === 'pagine' && (w[i - 1] === 'più' || (numero(w[i - 1]) ?? 0) >= 2) && fuori(i)) return true;
+        if (/^(?:risposte|rispondiamo|risponderemo)$/.test(x) && w.slice(i + 1, i + 4).includes('recensioni') && fuori(i)) return true;
+      }
+    }
+    const diAnalisi = /\b(?:analisi|rapporto|concorrent\w*)\b/i.test(pezzo);
+    if (diAnalisi && id === 'base' && /\bogni\s+(?:mese|settimana)\b|\bsettimanal\w*|\bmensil\w*/i.test(pezzo)) return true;
+    if (diAnalisi && id === 'business' && /\bogni\s+settimana\b|\bsettimanal\w*/i.test(pezzo)) return true;
+  }
+  return false;
+}
+
+const NOMI_SERVIZI: Record<ServizioAgenzia, string> = { foto_video: 'foto e video', sito_web: 'sito', social: 'social e Google', analisi: 'analisi' };
+
+/** La parte «su misura» di ogni fascia: solo testi, solo le fasce e i servizi che esistono; `passa` fa i controlli. */
+export function leggiSuMisura(v: unknown, passa: (t: string, dove: string, id: IdFascia) => boolean): Partial<Record<IdFascia, SuMisura>> | null {
+  if (!v || typeof v !== 'object') return null;
+  const tutto = v as Record<string, unknown>;
+  const fuori: Partial<Record<IdFascia, SuMisura>> = {};
+  for (const id of ID_FASCE) {
+    const x = (tutto[id] && typeof tutto[id] === 'object' ? tutto[id] : null) as Record<string, unknown> | null;
+    if (!x) continue;
+    const dove = (cosa: string) => `su misura del ${FASCE[id].nome} (${cosa})`;
+    const t = (w: unknown, cosa: string, max: number) => { const f = frase(w, max); return f && passa(f, dove(cosa), id) ? f : null; };
+    const servizi: Partial<Record<ServizioAgenzia, string>> = {};
+    // La forma della risposta dell'AD (`x.foto_video`) e quella della scheda già unita (`x.servizi.foto_video`).
+    const dentro = (x.servizi && typeof x.servizi === 'object' ? x.servizi : {}) as Record<string, unknown>;
+    for (const sv of SERVIZI_AGENZIA) { const f = t(x[sv] ?? dentro[sv], NOMI_SERVIZI[sv], 360); if (f) servizi[sv] = f; }
+    const perche = t(x.perche, 'perché', 400);
+    if (perche || Object.keys(servizi).length) fuori[id] = { perche, servizi };
+  }
+  return Object.keys(fuori).length ? fuori : null;
+}
 
 const STATI_AMMESSI = new Set<Stato>(['confermato', 'da_confermare', 'frammento', 'non_trovato']);
 const LIVELLI_SITO = new Set(['nessuno', 'semplice', 'medio', 'pregio']);
@@ -297,6 +387,11 @@ export function pulisci(grezza: unknown): RispostaPulita {
     offerta, obiezioni,
     domande: testi(r.domande, 7, 'domande'),
     attenzione: testi(r.attenzione, 5, 'attenzione'),
+    su_misura: leggiSuMisura(r.su_misura, (t, dove, id) => {
+      if (!passa(t, dove, true)) return false;
+      if (promessaFuoriFascia(id, t)) { scartati.push(`${dove}: prometteva una cosa che il ${FASCE[id].nome} non dà (video, storie, più pagine, referente o visite)`); return false; }
+      return true;
+    }),
     scartati,
   };
 }
@@ -354,6 +449,7 @@ export function unisci(prima: Scheda, adGrezzo: RispostaPulita, avvisiAd: string
   const suMisura = ad.obiezioni ?? [];
   s.obiezioni = [...suMisura, ...OBIEZIONI_FISSE.filter((f) => !suMisura.some((o) => f.chiave.test(o.obiezione))).map(({ obiezione, risposta }) => ({ obiezione, risposta }))];
   s.attenzione = [...new Set([...prima.attenzione, ...(ad.attenzione ?? [])])];
+  s.su_misura = ad.su_misura ?? null;
   const avvisiVeri = avvisiAd.map((a) => frase(a, 240)).filter((a): a is string => !!a).slice(0, 5);
   s.avvisi = [...s.avvisi, ...avvisiVeri.map((a) => `L’AD avvisa: ${a}`), ...(ad.scartati ?? []).map((x) => `Scartato: ${x}.`)];
   s.fonti = fontiDi(s);
