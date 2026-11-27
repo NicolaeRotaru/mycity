@@ -34,7 +34,12 @@ function bancaDati(tabelle: Record<string, Riga[]>, dopoLaLettura?: () => void) 
   const scritture: Array<{ tavola: string; valori: Riga }> = [];
   const db = {
     // R08-008: la salva_varianti finta esegue il carico vero su questa banca dati (il ripiego PGRST202 ha la sua prova).
-    rpc(nome: string, carico: never) { return salvaVariantiFinta(this as never)(nome, carico); },
+    // 27/11/2026 — La funzione che salva prodotto e varianti in una transazione non c'è in questo
+    // finto, come in un database senza la migrazione: la rotta torna ai due passi che la prova guarda.
+    rpc(nome: string, carico: never) {
+      if (nome === 'salva_prodotto_e_varianti') return Promise.resolve({ data: null, error: { code: 'PGRST202', message: `Could not find the function public.${nome} in the schema cache` } });
+      return salvaVariantiFinta(this as never)(nome, carico);
+    },
     from(tavola: string) {
       const righe = () => tabelle[tavola] ?? [];
       return {
