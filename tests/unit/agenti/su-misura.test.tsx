@@ -12,7 +12,7 @@ import { createRoot } from 'react-dom/client';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import Scheda from '@/components/agenti/Scheda';
-import { primaScheda, pulisci, unisci, promessaFuoriFascia, negaIlDieciPerCento } from '@/lib/agenti/scheda';
+import { primaScheda, pulisci, unisci, normalizza, promessaFuoriFascia, negaIlDieciPerCento } from '@/lib/agenti/scheda';
 import { rigaSuMisura, percheSuMisura } from '@/lib/agenti/su-misura';
 import { COMPITO, SCHEMA } from '@/lib/agenti/compito';
 import { FASCE as LISTINO, SERVIZI_AGENZIA, ABBONAMENTI } from '@/lib/agenzia/preventivo';
@@ -86,10 +86,10 @@ test('il programma scrive il sito su misura con la misura vera, e segue la tabel
   const medio = prima(misura({ stima: 'medio', pagine: 6 }));
   expect(rigaSuMisura(medio, 'base', 'sito_web').testo).toMatch(/si tiene.*dal Business/);
   const pregio = prima(misura({ stima: 'pregio', pagine: 12, https: true, telefonino: true, anno: 2026 }));
-  expect(rigaSuMisura(pregio, 'business', 'sito_web').testo).toMatch(/già curato: nel Business si tiene/);
+  expect(rigaSuMisura(pregio, 'business', 'sito_web').testo).toMatch(/È curato: nel Business si tiene/);
   expect(rigaSuMisura(pregio, 'business', 'sito_web').testo).not.toMatch(/2026|non è/);
   // Sito non visto: si chiede, e vale «medio».
-  expect(rigaSuMisura(prima(), 'base', 'sito_web').testo).toMatch(/non l’abbiamo visto: chiedi/);
+  expect(rigaSuMisura(prima(), 'base', 'sito_web').testo).toMatch(/non l’abbiamo aperto: chiedi se c’è e com’è. Se c’è, nel Base si tiene/);
 });
 
 test('l’analisi su misura nomina i concorrenti veri, dal più vicino: uno nel Base, 3 nel Business, 5 nel Premium', () => {
@@ -189,4 +189,116 @@ test('le frasi fisse di prima ci sono ancora, ognuna nella sua pagina', () => {
   const { radice: r2 } = disegna(prima());
   scegli(r2, 'online');
   expect(r2.textContent).toContain('Instagram, Facebook e TikTok li sta cercando l’AD…');
+});
+
+// ———————————————— Il secondo collaudo del 27/11: 2 gravi e 8 minori, ognuno con la sua prova.
+
+/** I 28 casi del collaudatore: 18 promesse fuori fascia che passavano, 10 frasi giuste che venivano scartate. */
+const FUORI = [
+  ['base', 'Nel Base 2 video al mese del pane, non dovete fare niente voi.'],
+  ['base', 'Le storie su Instagram ogni giorno, senza che dobbiate pensarci.'],
+  ['base', 'Con il Base i video della pasta fresca su Instagram, ogni settimana.'],
+  ['base', 'Giriamo i reel del forno appena sfornato.'],
+  ['base', 'Le stories di Instagram ogni mattina con il pane del giorno.'],
+  ['base', 'Il sito diventa di tre pagine: chi siamo, menu e contatti.'],
+  ['base', 'Un sito di 5 pagine col menu delle torte.'],
+  ['base', 'Più pagine sul sito, non solo la home.'],
+  ['base', 'Un video del laboratorio all’avvio, nessun costo in più.'],
+  ['base', 'Ogni mese l’analisi dei 3 forni vicini e un incontro per leggerla insieme.'],
+  ['base', '20 post al mese e le risposte alle recensioni scritte da noi.'],
+  ['business', 'Una persona dedicata tutta per voi, che passa in negozio ogni mese.'],
+  ['business', 'Una visita nella vostra bottega ogni mese per le foto.'],
+  ['business', 'Le stories ogni giorno con le novità.'],
+  ['business', 'Le storie ogni giorno, non solo i post.'],
+  ['business', 'Un referente che non vi lascia mai soli.'],
+  ['business', '4 video brevi al mese e l’analisi ogni settimana.'],
+  ['business', 'Veniamo a trovarvi ogni mese in pasticceria.'],
+];
+const GIUSTE = [
+  ['base', 'Oggi il sito ha più pagine ma è lento: nel Base si tiene e si collega alla vetrina.'],
+  ['base', 'Oggi pubblica due video al mese su Instagram: nel Base pensiamo alle foto e ai post.'],
+  ['base', 'Le storie del forno, aperto dal 1950, diventano i primi post.'],
+  ['base', 'Il sito di oggi ha poche visite: lo rifacciamo in una pagina, collegata alla vetrina.'],
+  ['base', 'Una pagina col suo nome, con gli orari delle visite oculistiche.'],
+  ['base', 'Oggi sul profilo ci sono 0 video: partiamo dalle foto dei prodotti.'],
+  ['business', 'Oggi pubblica le storie ogni giorno: aggiungiamo 12 post e 2 video brevi al mese.'],
+  ['business', 'Con la vetrina in evidenza, più visite al negozio il sabato mattina.'],
+  ['business', 'Le visite nel locale crescono con il sito di più pagine e il menu.'],
+  ['business', 'Raccontiamo le storie dei clienti affezionati nei 12 post al mese.'],
+  ['base', 'Nel Base niente video, storie o più pagine: quelli arrivano dal Business.'],
+  ['premium', 'Le storie ogni giorno, 4 video brevi e una visita nel locale ogni mese.'],
+];
+test('grave 2: il controllo delle promesse non si aggira con un «non» e non scarta le frasi giuste', () => {
+  for (const [id, t] of FUORI) expect(promessaFuoriFascia(id, t), `${id}: ${t}`).toBe(true);
+  for (const [id, t] of GIUSTE) expect(promessaFuoriFascia(id, t), `${id}: ${t}`).toBe(false);
+});
+
+test('grave 1: «medio» senza aver aperto il sito non diventa un fatto; con la misura vale la stima del programma', () => {
+  // L'AD scrive «medio» perché non sa (il compito glielo chiede): niente «Secondo l'AD è curato».
+  const nonSa = unisci(prima(), pulisci({ sito: { livello: 'medio', giudizio: 'Non so se c’è.', fonte: null } }));
+  for (const id of ABBONAMENTI) {
+    expect(rigaSuMisura(nonSa, id, 'sito_web').testo).toMatch(/non l’abbiamo aperto: chiedi/);
+    expect(rigaSuMisura(nonSa, id, 'sito_web').testo).not.toMatch(/Secondo l’AD/);
+  }
+  // L'AD l'ha guardato davvero (fonte https) e dice «semplice»: vale il suo giudizio.
+  const visto = unisci(prima(), pulisci({ sito: { livello: 'semplice', giudizio: 'Una pagina fatta in casa.', fonte: 'https://www.fornorossi.it/' } }));
+  expect(rigaSuMisura(visto, 'base', 'sito_web').testo).toMatch(/Secondo l’AD il sito di oggi è semplice.*rifacciamo: una pagina/);
+  // Il sito misurato DOPO la risposta dell'AD (app/api/agente/stato): «medio» dell'AD non copre la stima «semplice».
+  const dopo = unisci(prima(), pulisci({ sito: { livello: 'medio', giudizio: 'Forse c’è.', fonte: null } }));
+  dopo.sito.misura = misura({ stima: 'semplice', pagine: 1, piattaforma: 'Jimdo', anno: 2016 });
+  expect(rigaSuMisura(dopo, 'base', 'sito_web').testo).toMatch(/1 pagina.*2016.*rifacciamo/);
+  // «nessuno» dell'AD con un sito misurato dopo: vale la misura (qui un sito medio di 5 pagine, che nel Base si tiene).
+  const nessuno = unisci(prima(), pulisci({ sito: { livello: 'nessuno', giudizio: 'Non c’è.', fonte: null } }));
+  nessuno.sito.misura = misura({ stima: 'medio', pagine: 5, https: true, telefonino: true, anno: 2026 });
+  expect(rigaSuMisura(nessuno, 'base', 'sito_web').testo).toMatch(/5 pagine\. Nel Base si tiene/);
+  // Di pregio coi difetti: nel Business si tiene e i difetti si sistemano col Premium; il Premium non promette di rifarlo.
+  const pregio = unisci(prima(misura({ stima: 'medio' })), pulisci({ sito: { livello: 'pregio', giudizio: 'Bello.', fonte: 'https://www.fornorossi.it/' } }));
+  expect(rigaSuMisura(pregio, 'business', 'sito_web').testo).toMatch(/difetti di oggi si sistemano col Premium/);
+  expect(rigaSuMisura(pregio, 'premium', 'sito_web').testo).toMatch(/lo aggiorniamo noi ogni mese/);
+  expect(rigaSuMisura(pregio, 'premium', 'sito_web').testo).not.toMatch(/rif/);
+});
+
+test('minore 3: la tabella dei social vale anche per il programma (profilo forte, profilo attivo, chi risponde già)', () => {
+  const forte = unisci(prima(), pulisci({ social: [{ canale: 'Instagram', stato: 'trovato', livello: 'forte', post_al_mese: 25, video: true, fonte: 'https://www.instagram.com/fornorossi', giudizio: 'Molto vivo, risponde sempre alle recensioni' }] }));
+  expect(rigaSuMisura(forte, 'base', 'social').testo).toMatch(/solo col Premium/);
+  expect(rigaSuMisura(forte, 'base', 'social').testo).not.toMatch(/8 post/);
+  expect(rigaSuMisura(forte, 'business', 'social').testo).not.toMatch(/risposte alle recensioni le scriviamo/);
+  expect(rigaSuMisura(forte, 'premium', 'social').testo).toMatch(/aggiungiamo a quello che fa già le storie/);
+  const attivo = unisci(prima(), pulisci({ social: [{ canale: 'Facebook', stato: 'trovato', livello: 'attivo', post_al_mese: 10, video: true, fonte: 'https://www.facebook.com/fornorossi', giudizio: 'Curato' }] }));
+  expect(rigaSuMisura(attivo, 'base', 'social').testo).toMatch(/circa 10 post al mese: il Base non ne fa di più, la gestione conviene col Business/);
+  expect(rigaSuMisura(attivo, 'business', 'social').testo).toMatch(/12 post al mese/);
+});
+
+test('minore 6: un profilo della mappa libera è «da controllare», e «partendo da zero» non c’è più', () => {
+  const o = osm(); o.luogo.instagram = 'https://www.instagram.com/fornorossi';
+  const s = prima(null, o);
+  const r = rigaSuMisura(s, 'base', 'social').testo;
+  expect(r).toMatch(/sulla mappa libera c’è un profilo Instagram, da controllare/i);
+  expect(r).not.toMatch(/Oggi ha un profilo/);
+  for (const id of ABBONAMENTI) expect(rigaSuMisura(unisci(prima(), pulisci({ social: [{ canale: 'Instagram', stato: 'non_trovato', fonte: null }] })), id, 'social').testo).not.toMatch(/da zero/);
+});
+
+test('minore 7: il doppione del negozio sulla mappa non è un concorrente, e i nomi lunghi si accorciano', () => {
+  const lungo = 'Antica Pasticceria e Panetteria Artigianale della Famiglia Bianchi dal 1890';
+  const s = prima(null, osm([{ nome: 'Forno Rossi', tipo: 'Panetteria', distanza: 4, fonte: 'https://www.openstreetmap.org/node/8' }, { nome: lungo, tipo: 'Panetteria', distanza: 90, fonte: 'https://www.openstreetmap.org/node/7' }]));
+  const r = rigaSuMisura(s, 'base', 'analisi').testo;
+  expect(r).not.toMatch(/Forno Rossi/);
+  expect(r).toMatch(/la più vicina è Antica Pasticceria e Panetteria Artigia… a 90 metri/);
+});
+
+test('minore 4: il «perché» e le proposte su misura passano anche dai paletti su 10% e gioco', () => {
+  const r = pulisci({ su_misura: {
+    base: { perche: 'Con noi nessuna percentuale sul venduto.', foto_video: '', sito_web: '', social: '', analisi: '' },
+    premium: { perche: 'Più clienti.', foto_video: '', sito_web: '', social: 'Post sul Superenalotto ogni settimana.', analisi: '' },
+  } });
+  expect(r.su_misura?.base?.perche ?? null).toBeNull();
+  expect(r.su_misura.premium.servizi.social).toBeUndefined();
+  expect(r.scartati.some((x) => /su misura del Premium \(social e Google\)/.test(x))).toBe(true);
+});
+
+test('minore 9: una scheda già unita che ripassa da normalizza tiene le righe dell’AD', () => {
+  const s = unisci(prima(), pulisci({ su_misura: { business: { perche: 'Più clienti la mattina.', foto_video: 'Un video al mese della prima infornata.', sito_web: '', social: '', analisi: '' } } }));
+  const n = normalizza(JSON.parse(JSON.stringify(s)));
+  expect(n.su_misura.business.servizi.foto_video).toBe('Un video al mese della prima infornata.');
+  expect(n.su_misura.business.perche).toBe('Più clienti la mattina.');
 });

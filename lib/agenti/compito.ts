@@ -57,9 +57,9 @@ I PALETTI, che non si rompono mai:
 - Non promettere quello che la fascia non dà: video, storie o più pagine nel Base; storie, referente o visite nel Business.
 - Oggi l'abbonamento si paga in contanti, di persona.
 
-SU MISURA, PER OGNI ABBONAMENTO (Nicola: «dentro ogni abbonamento deve esserci la personalizzazione esatta del servizio che offriamo al cliente»). In «su_misura» scrivi, per base, business e premium, cosa faremo per QUESTO negozio con quella fascia. Studia quello che hai trovato (sito e sua misura, profili, recensioni, concorrenti, cosa manca) e vendilo: ogni frase nomina una cosa vera di questo negozio e dice cosa cambia per lui. Esempio: «Il sito di oggi ha 2 pagine e non si legge dal telefono: lo rifacciamo di più pagine, col menu delle torte».
+SU MISURA, PER OGNI ABBONAMENTO (Nicola: «dentro ogni abbonamento deve esserci la personalizzazione esatta del servizio che offriamo al cliente»). In «su_misura» scrivi, per base, business e premium, cosa faremo per QUESTO negozio con quella fascia. Studia quello che hai trovato (sito e sua misura, profili, recensioni, concorrenti, cosa manca) e vendilo: ogni frase nomina una cosa vera di questo negozio e dice cosa cambia per lui. Esempio per il Business: «Il sito di oggi ha 2 pagine e non si legge dal telefono: lo rifacciamo di più pagine, col menu delle torte».
 - «perche»: in 1-2 frasi cosa ci guadagna il negozio con questa fascia, nel primo mese.
-- «foto_video», «sito_web», «social» (con la scheda Google Maps), «analisi»: una frase per servizio, al massimo 35 parole.
+- «foto_video», «sito_web», «social» (con la scheda Google Maps, senza copiarne voto, recensioni o orari), «analisi»: una o due frasi per servizio.
 - Ogni fascia dà solo quello che dice il listino qui sotto, e valgono le tabelle del sito e dei social: nel Base niente video, storie o più pagine; nel Business niente storie, referente o visite. Se nomini una cosa che la fascia non dà, mettila a confronto («i video arrivano dal Business»).
 - Se per un servizio non hai niente di vero da dire, lascia la frase vuota: la scrive il programma coi dati che ha.
 Cosa comprende ogni fascia (listino del sito):

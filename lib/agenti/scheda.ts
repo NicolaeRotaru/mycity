@@ -230,19 +230,63 @@ export function normalizza(x: unknown): Scheda | null {
 // ———————————————————————————————— 2. la risposta dell'AD, ripulita
 
 /**
- * Le promesse che una fascia non mantiene (le stesse del compito: «non promettere quello che la fascia non dà»).
- * Una frase che le nomina passa solo se le mette a confronto («senza video», «i video arrivano dal Business»).
+ * Le promesse che una fascia non mantiene (il compito: «non promettere quello che la fascia non dà»), frase per frase.
+ * Il collaudo del 27/11 ha trovato il primo controllo bucato: bastava un «non» in un punto qualsiasi della frase.
+ * Adesso la negazione conta solo nelle 5 parole prima della promessa («niente video»); una frase che nomina una
+ * fascia più alta («i video arrivano dal Business») o descrive com'è il negozio oggi («oggi pubblica due video»)
+ * non promette; i numeri di post e video si confrontano col listino della fascia.
  */
-const FUORI_FASCIA: Record<IdFascia, RegExp | null> = {
-  base: /\b(?:\d+|un|uno|una|due|tre|quattro)\s+video\b|\bvideo\s+(?:brev\w*|al\s+mese)\b|\bstorie\b|\bpiù\s+pagine\b|\breferente\b|\bvisit[ae]\b/i,
-  business: /\bstorie\b|\breferente\b|\bvisit[ae]\s+(?:nel|al|in)\s+(?:locale|negozio|bottega)\b/i,
+const NUMERI: Record<string, number> = { zero: 0, un: 1, uno: 1, una: 1, due: 2, tre: 3, quattro: 4, cinque: 5, sei: 6, sette: 7, otto: 8, nove: 9, dieci: 10, undici: 11, dodici: 12, quindici: 15, venti: 20, trenta: 30 };
+const numero = (w: string | undefined): number | undefined => (w === undefined ? undefined : /^\d+$/.test(w) ? Number(w) : NUMERI[w]);
+const NEGAZIONE = new Set(['senza', 'niente', 'non', 'nessun', 'nessuno', 'nessuna', 'né']);
+const SOPRA: Record<IdFascia, RegExp | null> = {
+  base: /\b(?:dal|col|nel|con\s+il|al|il|del|un|il\s+piano)\s+(?:business|premium)\b/i,
+  business: /\b(?:dal|col|nel|con\s+il|al|il|del|un)\s+premium\b/i,
   premium: null,
 };
-const A_CONFRONTO = /\b(?:senza|niente|non|nessun\w*|solo\s+(?:nel|dal|col|con)|(?:nel|dal|col|con\s+il|arriv\w+\s+(?:dal|col|con\s+il))\s+(?:business|premium))\b/i;
+const DI = new Set(['del', 'della', 'dei', 'delle', 'degli', 'di', 'dello']);
 export function promessaFuoriFascia(id: IdFascia, t: string): boolean {
-  const r = FUORI_FASCIA[id];
-  return !!r && r.test(t) && !A_CONFRONTO.test(t);
+  const sopra = SOPRA[id];
+  if (!sopra) return false;
+  const f = FASCE[id];
+  for (const pezzo of t.split(/[.;:!?]+/)) {
+    if (!pezzo.trim()) continue;
+    if (/\boggi\b/i.test(pezzo) && !/\bda\s+oggi\b/i.test(pezzo)) continue; // descrive com'è oggi
+    if (sopra.test(pezzo)) continue; // la mette a confronto con una fascia più alta
+    const w = pezzo.toLowerCase().split(/\s+/).map((x) => x.replace(/[^\p{L}\d]/gu, '')).filter(Boolean);
+    const negata = (i: number) => w.slice(Math.max(0, i - 5), i).some((x) => NEGAZIONE.has(x));
+    const fuori = (i: number) => !negata(i);
+    for (let i = 0; i < w.length; i++) {
+      const x = w[i];
+      const quanti = numero(w[i - 1]);
+      if ((x === 'video' || x === 'reel' || x === 'reels') && fuori(i)) {
+        if (f.video === 0 && quanti !== 0) return true;
+        if (quanti !== undefined && quanti > f.video) return true;
+      }
+      if ((x === 'post' || x === 'contenuti') && quanti !== undefined && quanti > f.post && fuori(i)) return true;
+      if ((x === 'storie' || x === 'stories' || x === 'story') && fuori(i)) {
+        const racconto = DI.has(w[i + 1] ?? '') && !/^(?:instagram|facebook|tiktok)$/.test(w[i + 2] ?? '');
+        if (!racconto) return true;
+      }
+      if (x === 'referente' && fuori(i)) return true;
+      if (x === 'persona' && /^(?:dedicata|tutta)$/.test(w[i + 1] ?? '') && fuori(i)) return true;
+      if (x === 'visita' && /^(?:una|la|nostra)$/.test(w[i - 1] ?? '') && fuori(i)) return true;
+      if (x === 'trovarvi' && fuori(i)) return true;
+      if (/^pass(?:a|iamo|eremo)$/.test(x) && /^(?:in|da)$/.test(w[i + 1] ?? '') && /^(?:voi|negozio|bottega|locale|pasticceria|forno|bar|laboratorio)$/.test(w[i + 2] ?? '') && fuori(i)) return true;
+      if ((x === 'incontro' || x === 'incontri') && fuori(i)) return true;
+      if (id === 'base') {
+        if (x === 'pagine' && (w[i - 1] === 'più' || (numero(w[i - 1]) ?? 0) >= 2) && fuori(i)) return true;
+        if (/^(?:risposte|rispondiamo|risponderemo)$/.test(x) && w.slice(i + 1, i + 4).includes('recensioni') && fuori(i)) return true;
+      }
+    }
+    const diAnalisi = /\b(?:analisi|rapporto|concorrent\w*)\b/i.test(pezzo);
+    if (diAnalisi && id === 'base' && /\bogni\s+(?:mese|settimana)\b|\bsettimanal\w*|\bmensil\w*/i.test(pezzo)) return true;
+    if (diAnalisi && id === 'business' && /\bogni\s+settimana\b|\bsettimanal\w*/i.test(pezzo)) return true;
+  }
+  return false;
 }
+
+const NOMI_SERVIZI: Record<ServizioAgenzia, string> = { foto_video: 'foto e video', sito_web: 'sito', social: 'social e Google', analisi: 'analisi' };
 
 /** La parte «su misura» di ogni fascia: solo testi, solo le fasce e i servizi che esistono; `passa` fa i controlli. */
 export function leggiSuMisura(v: unknown, passa: (t: string, dove: string, id: IdFascia) => boolean): Partial<Record<IdFascia, SuMisura>> | null {
@@ -255,7 +299,9 @@ export function leggiSuMisura(v: unknown, passa: (t: string, dove: string, id: I
     const dove = (cosa: string) => `su misura del ${FASCE[id].nome} (${cosa})`;
     const t = (w: unknown, cosa: string, max: number) => { const f = frase(w, max); return f && passa(f, dove(cosa), id) ? f : null; };
     const servizi: Partial<Record<ServizioAgenzia, string>> = {};
-    for (const sv of SERVIZI_AGENZIA) { const f = t(x[sv], sv.replace('_', ' e '), 360); if (f) servizi[sv] = f; }
+    // La forma della risposta dell'AD (`x.foto_video`) e quella della scheda già unita (`x.servizi.foto_video`).
+    const dentro = (x.servizi && typeof x.servizi === 'object' ? x.servizi : {}) as Record<string, unknown>;
+    for (const sv of SERVIZI_AGENZIA) { const f = t(x[sv] ?? dentro[sv], NOMI_SERVIZI[sv], 360); if (f) servizi[sv] = f; }
     const perche = t(x.perche, 'perché', 400);
     if (perche || Object.keys(servizi).length) fuori[id] = { perche, servizi };
   }
