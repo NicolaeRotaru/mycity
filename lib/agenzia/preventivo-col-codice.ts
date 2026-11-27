@@ -96,6 +96,34 @@ function colonnaVisitaMancante(e: { code?: string; message?: string }): boolean 
   return e.code === 'PGRST204' || e.code === '42703' || /visita_il/.test(e.message ?? '') && /column|colonna|schema/i.test(e.message ?? '');
 }
 
+/** Cosa legge il titolare quando la sua email ha già un altro account su MyCity. */
+export const EMAIL_DI_UN_ALTRO_ACCOUNT =
+  'Questa email ha già un account su MyCity, per esempio da cliente, e non può essere anche quella della tua attività. Tocca «ho sbagliato email» e scrivine un’altra: ti mandiamo un codice nuovo. Se vuoi usare proprio questa, scrivici e la sistemiamo noi.';
+
+/** Quanti utenti si guardano al massimo (10 pagine da 1000): si cerca solo dopo un errore, il tetto c'è. */
+const PAGINE_UTENTI = 10;
+const PER_PAGINA = 1000;
+
+/**
+ * L'email è già di un utente diverso dal negozio? `null` se non si sa (lettura non riuscita o tetto toccato):
+ * allora resta il messaggio prudente di sempre. Ci si ferma sulla pagina vuota, non su quella corta.
+ */
+async function emailDiUnAltroUtente(admin: ReturnType<typeof getAdminSupabase>, email: string, sellerId: string): Promise<boolean | null> {
+  const cercata = email.trim().toLowerCase();
+  try {
+    for (let page = 1; page <= PAGINE_UTENTI; page += 1) {
+      const { data, error } = await admin.auth.admin.listUsers({ page, perPage: PER_PAGINA });
+      if (error || !data) return null;
+      if (data.users.some((u) => u.id !== sellerId && (u.email ?? '').toLowerCase() === cercata)) return true;
+      if (data.users.length === 0) return false;
+    }
+  } catch (e) {
+    // Una risposta illeggibile non deve far cadere la conferma con un 500: resta il messaggio prudente (collaudo).
+    logger.warn('[preventivo-codice] utenti non letti cercando l email', { sellerId, errore: String(e) });
+  }
+  return null;
+}
+
 /** Il titolare accetta dal link: email, profilo compilato, revisione, avvisi. Il pagamento lo apre chi chiama. */
 export async function accettaPreventivoColCodice(input: {
   preventivo: PreventivoColCodice;
@@ -149,14 +177,39 @@ export async function accettaPreventivoColCodice(input: {
     // La scelta dell'agente (se c'era) torna com'era: il link riapre il preventivo su quella fascia.
     // Anche la visita torna libera: quell'ora la può prendere un'altra attività.
     const indietro = { stato: 'aperto', fascia_scelta: preventivo.fasciaScelta, accettato_il: null, condizioni_accettate_il: null };
-    await admin.from('preventivi_con_codice').update(visitaSalvata ? { ...indietro, visita_il: null } : indietro).eq('codice', codice);
-    const giaUsata = /already|exists|registered|email_exists/i.test(`${utente.error.message} ${(utente.error as { code?: string }).code ?? ''}`);
+    const riapertura = await admin.from('preventivi_con_codice').update(visitaSalvata ? { ...indietro, visita_il: null } : indietro).eq('codice', codice);
+    const riaperto = !riapertura.error;
+    if (!riaperto) logger.error('[preventivo-codice] preventivo non riaperto dopo l email non collegata', { sellerId: id, message: riapertura.error?.message });
+    // 27/11/2026 23:34 — Nicola, su Luna Rossa: codice giusto, e la pagina diceva solo «non sono riuscito a
+    // collegare questa email». L'email aveva già un account da cliente. Supabase non lo dice col suo codice:
+    // risponde 500 «Error updating user» (dentro, il doppione sull'indice unico delle email), quindi la parola
+    // nel messaggio non basta e si guarda negli utenti se l'email è già di un altro.
+    const giaUsata =
+      /already|exists|registered|email_exists/i.test(`${utente.error.message} ${(utente.error as { code?: string }).code ?? ''}`) ||
+      (await emailDiUnAltroUtente(admin, email, id)) === true;
     logger.warn('[preventivo-codice] email non collegata', { sellerId: id, giaUsata, message: utente.error.message });
-    // Stesso messaggio e stesso codice (409) nei due casi: non si deve poter scoprire da qui se un'email
-    // è già su MyCity (collaudi del 24/11). Il log, che legge solo chi gestisce il sito, li distingue.
-    return giaUsata
-      ? { ok: false, motivo: 'EMAIL_GIA_USATA', messaggio: 'Non sono riuscito a collegare questa email. Prova con un’altra, oppure scrivici e lo sistemiamo noi.' }
-      : { ok: false, motivo: 'EMAIL_GIA_USATA', messaggio: 'Non sono riuscito a collegare questa email. Prova con un’altra, oppure scrivici e lo sistemiamo noi.' };
+    if (giaUsata) {
+      // Qui si arriva solo col codice dell'email giusto (app/api/preventivo/[codice]/accetta): chi legge questo
+      // messaggio ha dimostrato che la casella è sua, quindi dirgli che quell'email ha già un account non svela
+      // niente a un estraneo. Il messaggio uguale per tutti dei collaudi del 24/11 valeva prima del codice.
+      await notifyAdmins(
+        `${preventivo.nomeAttivita} non è riuscito ad accettare il preventivo`,
+        `Il titolare ha scritto il codice giusto, ma la sua email (${email}) ha già un account su MyCity, per esempio da cliente. ${
+          riaperto
+            ? "Il preventivo è ancora aperto: chiamalo, può confermare con un'altra email."
+            : 'ATTENZIONE: il preventivo NON è tornato aperto (risulta accettato ma senza email): riaprilo a mano, poi chiamalo.'
+        }`,
+        '/admin/preventivi',
+        { unaVoltaPer: `preventivo-email-usata:${id}` },
+      ).catch((e: unknown) => logger.warn('[preventivo-codice] avviso email già usata non partito', { sellerId: id, errore: String(e) }));
+      // Se il preventivo non si è riaperto, un codice nuovo non partirebbe (risulta già accettato): solo «scrivici».
+      return {
+        ok: false,
+        motivo: 'EMAIL_GIA_USATA',
+        messaggio: riaperto ? EMAIL_DI_UN_ALTRO_ACCOUNT : 'Questa email ha già un account su MyCity, per esempio da cliente. Scrivici e la sistemiamo noi.',
+      };
+    }
+    return { ok: false, motivo: 'EMAIL_GIA_USATA', messaggio: 'Non sono riuscito a collegare questa email. Prova con un’altra, oppure scrivici e lo sistemiamo noi.' };
   }
 
   // 2) Il profilo coi soli dati confermati della scheda di n8n, e in revisione.
