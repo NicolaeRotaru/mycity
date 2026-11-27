@@ -14,6 +14,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
+import { acceptSenzaHeic, avvisoFotoHeic, senzaHeic } from '@/lib/immagini/heic-in-jpeg';
 import { recessoAperto, ultimoGiornoDelRecesso } from '@/lib/ordini/termine-del-recesso';
 import { MOTIVO_RIPENSAMENTO } from '@/lib/ordini/recesso';
 import { nomeDellaRigaOrdine, type RigaOrdine } from '@/lib/ordini/riga-ordine';
@@ -174,9 +175,16 @@ export default function NewReturnPage() {
     }
   }
 
-  async function uploadPhoto(file: File) {
+  async function uploadPhoto(scelta: File) {
     setUploading(true);
     try {
+      // Una foto HEIC salvata com'e' su Chrome e Android (anche dal negozio che valuta il reso)
+      // resta un riquadro rotto: qui diventa JPEG, o non parte (`lib/immagini/heic-in-jpeg.ts`).
+      const file = await senzaHeic(scelta);
+      if (!file) {
+        toast.error(avvisoFotoHeic());
+        return;
+      }
       // Il percorso lo costruisce la porta unica: la regola del secchio pubblico pretende che il
       // primo livello sia l'identita' di chi carica, e da qui quel livello non si vede piu'.
       const { data: { user } } = await supabase.auth.getUser();
@@ -500,7 +508,7 @@ export default function NewReturnPage() {
                    rotto scattata con l'iPhone non la vedeva nemmeno comparire nella finestra di
                    scelta: il file c'era, il campo lo nascondeva. La lista arriva dalla stessa
                    regola che poi rifiuta il file. */
-                accept={attributoAccept()}
+                accept={acceptSenzaHeic(attributoAccept())}
                 className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

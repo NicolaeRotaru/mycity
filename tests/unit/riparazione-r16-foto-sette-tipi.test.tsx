@@ -122,12 +122,15 @@ describe('R16-013 — le caselle delle foto accettano quello che il magazzino ac
       expect(stato.errori.at(-1) ?? '').toMatch(/AVIF/);
     });
 
-    it(`${nome}: un HEIC col tipo vuoto parte col tipo giusto`, async () => {
+    // 27/11/2026 (R04-002) — Prima pretendeva che l'HEIC partisse così com'era («image/heic»): salvato
+    // così, su Chrome e Android resta un riquadro rotto. Adesso diventa JPEG dove il browser lo sa
+    // leggere (riparazione-r04-foto-heic-altre-caselle.test.tsx); qui, senza decodifica, non parte.
+    it(`${nome}: un HEIC col tipo vuoto non arriva al deposito così com'è`, async () => {
       const [C, props] = await carica();
       const o = await disegna(C, props);
       await act(async () => { await o.onDrop?.([new File(['x'], 'IMG_0001.HEIC', { type: '' })]); });
-      expect(stato.caricati, 'controprova: il file è partito').toHaveLength(1);
-      expect(stato.caricati[0].type, 'il deposito riceverebbe application/octet-stream e lo rifiuterebbe').toBe('image/heic');
+      expect(stato.caricati, 'un HEIC salvato così com\'è non si vede su Chrome e Android').toHaveLength(0);
+      expect(stato.errori.at(-1) ?? '', 'chi carica non sa perché la foto non è partita').toMatch(/HEIC/);
     });
   }
 });
