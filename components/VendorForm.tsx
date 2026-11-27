@@ -319,8 +319,11 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
         // regole di oggi lo rifiuterebbero (un sito salvato con «ftp://»): per il controllo si lascia vuoto,
         // poi si rimette com'era. Un valore NUOVO sbagliato resta rifiutato come prima.
         // Solo il sito: per i social con nome (Instagram, Facebook, TikTok) un valore salvato e rifiutato resta fermo come prima.
+        // R04-009 — Si confronta la forma corretta di tutti e due: dopo il primo «Salva» il campo mostra il
+        // valore già corretto («https://…») e non è più uguale, lettera per lettera, a quello salvato.
+        const salvatiCorretti = (normalizzaSocials(defaultValues?.storeCustomization?.socials) ?? {}) as Record<string, string | undefined>;
         const nonToccati = Object.keys(sociali).filter(
-          (k) => k === 'website' && !!salvati[k] && ((custom.socials as Record<string, string | undefined> | undefined)?.[k] ?? '') === salvati[k],
+          (k) => k === 'website' && !!salvati[k] && ((corretta.socials as Record<string, string | undefined> | undefined)?.[k] ?? '') === salvatiCorretti[k],
         );
         const conISocialDiPrima: StoreCustomization = {
           ...corretta,
