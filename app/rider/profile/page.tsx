@@ -5,6 +5,7 @@ import CambiaAccount from '@/components/account/CambiaAccount';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import { esciEVaiAllAccesso } from '@/lib/auth/uscita';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -152,9 +153,7 @@ export default function RiderProfilePage() {
   });
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/sign-in');
-    router.refresh();
+    await esciEVaiAllAccesso(router);
   };
 
   if (isLoading) return <LoadingState />;
