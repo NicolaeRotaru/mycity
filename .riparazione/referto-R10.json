@@ -1,19 +1,19 @@
 {
   "sessione": "R10",
-  "aggiornato": "2026-11-27 02:05",
-  "finita": false,
-  "testa": "169ce728478d69dc9e41cac765dcb9e25945aeff",
+  "aggiornato": "2026-11-27 02:17",
+  "finita": true,
+  "testa": "9ff70b0fef51212f1b065d0c717d5b56d702ee66",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "non_lanciato",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "9ff70b0fef51212f1b065d0c717d5b56d702ee66",
+    "nota": "typecheck + lint + 2339 file di prove verdi (1 saltato), 14311 prove, su 9ff70b0f (ultimo commit di codice, dopo il ritiro della voce R10-013)."
   },
   "voci": [
     {
       "id": "R10-004",
       "chiave": "frontend-ux|con uno sconto frazionario sotto lo 0,5% il bollino della scheda prodotto mostra «-0%»",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "6ff07118696f053dccb7c0bbbe40fd26343b82c8",
       "file_toccati": [
         "components/ProductCard.tsx",
@@ -30,8 +30,20 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6ff07118696f053dccb7c0bbbe40fd26343b82c8^ --file components/ProductCard.tsx --prove tests/unit/riparazione-r10-bollino-sconto.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il bollino e la dicitura «scontato del N per cento» del link compaiono solo se la percentuale arrotondata è maggiore di 0 (showBadge = showStrike && badgePct > 0); prezzo scontato e barrato restano. Prova: scheda montata con sconto 0,3% senza «-0%», con 20% ancora «-20%»."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il bollino e la dicitura «scontato del N per cento» del link compaiono solo se la percentuale arrotondata è maggiore di 0 (showBadge = showStrike && badgePct > 0); prezzo scontato e barrato restano. Prova: scheda montata con sconto 0,3% senza «-0%», con 20% ancora «-20%».",
+      "cosa_resta": "Nella scheda prodotto (ProductCard.tsx:73) il prezzo barrato resta quando lo scontato arrotondato al centesimo è uguale al prezzo (1,00 € con 0,3%: barrato 1,00 e prezzo 1,00): la cura giusta è mostrare il barrato solo se lo scontato in centesimi è minore del prezzo. Non fatta per il limite di spesa. Lo stesso «-0%» esce in due file altrui (vedi serve_file_altrui).",
+      "serve_file_altrui": [
+        {
+          "file": "components/ActivePromoBadge.tsx",
+          "modifica": "Riga 61: «In promo -{appliedPct}%» con appliedPct arrotondato a 0 per uno sconto sotto lo 0,5% → non mostrare la percentuale (o il badge) quando appliedPct <= 0."
+        },
+        {
+          "file": "app/product/[id]/page.tsx",
+          "modifica": "Righe 597 e 895 (comparePct): con un prezzo barrato appena sopra il prezzo (100,2 contro 100) esce «-0%» → mostrare il bollino solo se comparePct > 0."
+        }
+      ],
+      "verificato_da": "collaudo A (subagente generico, sonnet): prova e prova rimessa verdi; trovato il «-0%» ancora in ActivePromoBadge e nella pagina prodotto, e il barrato uguale al prezzo in ProductCard:73 → parziale"
     },
     {
       "id": "R10-007",
@@ -54,7 +66,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d76aeffbeca365abf719dfa8e9e4235bf51579c3^ --file components/seller/SellerShell.tsx --prove tests/unit/riparazione-r10-campanello-newsletter.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Conteggio e tendina del campanello (SellerShell:140/184) escludevano solo 'promo'; ora leggono notif_promos e notif_newsletter ed escludono le categorie spente (se la preferenza non si legge escludono promo e newsletter). Prova: pannello montato con database finto, una newsletter con newsletter spenta non accende il pallino."
+      "cosa_ho_fatto": "Conteggio e tendina del campanello (SellerShell:140/184) escludevano solo 'promo'; ora leggono notif_promos e notif_newsletter ed escludono le categorie spente (se la preferenza non si legge escludono promo e newsletter). Prova: pannello montato con database finto, una newsletter con newsletter spenta non accende il pallino.",
+      "verificato_da": "collaudo A (subagente generico, sonnet): prova e prova rimessa verdi, 673 prove sui file toccati verdi; vincolo 'newsletter' e notif_newsletter NOT NULL default false controllati → regge"
     },
     {
       "id": "R10-001",
@@ -182,7 +195,8 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "La base del 26/11 aveva già portato sulla scala ProductCard, SellerShell, rider/earnings, search e AdminSidebar. Restava un gradino esatto nei miei file: app/orders/page.tsx:392 text-[10px] → text-2xs. Prova leggera: nei file di R10 nessun text-[Npx] con gradino esatto.",
-      "cosa_resta": "222 text-[Npx] in app e components. Nei file di R10 ne restano 2 senza gradino: app/orders/[id]/page.tsx:806 (11px), app/orders/page.tsx:326 (sm:text-[32px]). 220 in file altrui (68×13px, 68×11px, 25×10px che hanno il gradino text-2xs, 9×15px, 7×17px, 6×26px, 4×22px, 4×12px, 4×12.5px, 5×14px, 3×18px, 2×24px, 1×30px…). Comando: grep -rnoE \"text-\\[[0-9.]+px\\]\" app components --include=*.tsx. I valori senza gradino chiedono la scelta di Nicola (domande_per_nicola)."
+      "cosa_resta": "222 text-[Npx] in app e components. Nei file di R10 ne restano 2 senza gradino: app/orders/[id]/page.tsx:806 (11px), app/orders/page.tsx:326 (sm:text-[32px]). 220 in file altrui (68×13px, 68×11px, 25×10px che hanno il gradino text-2xs, 9×15px, 7×17px, 6×26px, 4×22px, 4×12px, 4×12.5px, 5×14px, 3×18px, 2×24px, 1×30px…). Comando: grep -rnoE \"text-\\[[0-9.]+px\\]\" app components --include=*.tsx. I valori senza gradino chiedono la scelta di Nicola (domande_per_nicola).",
+      "verificato_da": "collaudo A (subagente generico, sonnet): text-2xs esiste (0.625rem, tailwind.config.ts:158, globals.css:22), prova e rimessa verdi; restano 25 text-[10px] in file altrui → regge come parziale dichiarato"
     },
     {
       "id": "R10-002",
@@ -209,7 +223,8 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Stesso commit della voce gemella (insieme_a). I quattro file della voce (SellerShell, rider/earnings, search, AdminSidebar) non hanno più text-[Npx]: era già nella base del 26/11.",
-      "cosa_resta": "Come la voce gemella: 222 text-[Npx], 2 nei file di R10 senza gradino, 220 in file altrui. Comando: grep -rnoE \"text-\\[[0-9.]+px\\]\" app components --include=*.tsx"
+      "cosa_resta": "Come la voce gemella: 222 text-[Npx], 2 nei file di R10 senza gradino, 220 in file altrui. Comando: grep -rnoE \"text-\\[[0-9.]+px\\]\" app components --include=*.tsx",
+      "verificato_da": "collaudo A (subagente generico, sonnet): text-2xs esiste (0.625rem, tailwind.config.ts:158, globals.css:22), prova e rimessa verdi; restano 25 text-[10px] in file altrui → regge come parziale dichiarato"
     },
     {
       "id": "R10-003",
@@ -232,7 +247,7 @@
     {
       "id": "R10-005",
       "chiave": "performance|nel pannello del negozio ogni link della barra laterale, precaricato, fa ripassare il controllo d'accesso con due chiamate a supabase",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "3a63a1d4e6fd2b7b60f823ca01770ebe5de81a28",
       "file_toccati": [
         "components/seller/SellerShell.tsx",
@@ -249,9 +264,17 @@
         "uscita": 0,
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3a63a1d4^ --file components/seller/SellerShell.tsx --prove tests/unit/riparazione-r10-barra-senza-precarico.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Middleware non toccato (decisione della regista). prefetch={false} sulle voci della barra laterale del negozio, sul marchio e sul Copilot: il precarico non parte né in vista né al passaggio del mouse, quindi il controllo d'accesso gira solo al clic. Prova: guscio vero montato con next/link finto che registra prefetch.",
-      "nota": "I link di MenuAccount (components/seller/MenuAccount.tsx:129,144,153, file altrui) compaiono solo dopo il clic che apre il menu."
+      "nota": "I link di MenuAccount (components/seller/MenuAccount.tsx:129,144,153, file altrui) compaiono solo dopo il clic che apre il menu.",
+      "cosa_resta": "Le voci della barra laterale e il marchio non si precaricano più. Restano col precarico le sotto-voci della barra in components/seller/MenuAccount.tsx:129 (/seller/abbonamento) e :144 (/seller/profile), che partono quando si apre il menu (file altrui, vedi serve_file_altrui). Fuori dalla barra laterale, nello stesso guscio, fanno ancora ripassare il middleware «Pubblica prodotto» (SellerShell.tsx:636-642, barra in alto, su ogni pagina), l'avatar verso /seller/profile (:673) e i link della tendina notifiche (:322, :354): non sono nominati dalla voce e li ho lasciati.",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/MenuAccount.tsx",
+          "modifica": "Aggiungere prefetch={false} ai Link delle righe 129 (/seller/abbonamento), 144 (/seller/profile) e 153."
+        }
+      ],
+      "verificato_da": "collaudo B (subagente generico, modello grande): prova, prova rimessa e 188 prove su SellerShell/MenuAccount verdi; middleware.ts invariato; letto next/link 15.5.29 (prefetch={false} ferma in vista, hover e tocco); restano le sotto-voci di MenuAccount → parziale"
     },
     {
       "id": "R10-008",
@@ -275,13 +298,14 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Il logger oscurava già email e telefoni comuni; passavano in chiaro «0523/123456», «(0523) 123456», «tel:+39…», «%20333…». Allargata la regola dei telefoni in lib/logger.ts; date con barra, percorsi, ore e porte restano leggibili. Verdi le 636 prove che nominano lib/logger.",
-      "cosa_resta": "Gli errori che non passano dal logger arrivano a Sentry in chiaro (onRequestError instrumentation.ts:26-29, app/**/error.tsx e app/global-error.tsx, unhandledrejection di lib/analytics/sentry.tsx:68, edge): ripulisciEvento non tocca exception.values; si chiude con la modifica in serve_file_altrui. Resta anche l'email codificata in un indirizzo («mario%40x.it»), non curata per non mettere una regola lenta sui testi lunghi.",
+      "cosa_resta": "Gli errori che non passano dal logger arrivano a Sentry in chiaro (onRequestError instrumentation.ts:26-29, app/**/error.tsx e app/global-error.tsx, unhandledrejection di lib/analytics/sentry.tsx:68, edge): ripulisciEvento non tocca exception.values; si chiude con la modifica in serve_file_altrui. Resta anche l'email codificata in un indirizzo («mario%40x.it»), non curata per non mettere una regola lenta sui testi lunghi. Il collaudo ha trovato anche: falsi positivi nuovi portati dal commit (con il prefisso `[A-Za-z]:` di lib/logger.ts:73 si oscurano campi chiave:valore come «order_id:3331234567», «sku:0012345678», e «305/1000000», «03/1234567»); falsi positivi già presenti («350000000», «Content-Length: 312345678», coordinate lunghe); falsi negativi («0523 / 123456», «333  1234567», «%2B39…», «tel%3A%2B39…», numeri stranieri +41/+44, cifre a tutta larghezza); email che passano («mario%40x.it», «\"mario\"@x.it», «mario@localhost», «mario＠x.it»).",
       "serve_file_altrui": [
         {
           "file": "lib/analytics/sentry-config.ts",
           "modifica": "Aggiungere `import { testoSenzaRecapiti } from './filmato-senza-dati-personali';`. In `ripulisciEvento`, subito prima di `return event;`: `if (Array.isArray(event.exception?.values)) { for (const ex of event.exception.values) { if (typeof ex?.value === 'string') ex.value = testoSenzaRecapiti(ex.value); } } if (typeof event.message === 'string') event.message = testoSenzaRecapiti(event.message); if (typeof event.logentry?.message === 'string') event.logentry.message = testoSenzaRecapiti(event.logentry.message);`. È il beforeSend di sentry.server.config.ts:36-44, sentry.edge.config.ts:29-31 e del browser (opzioniSentry): instrumentation.ts, gli error.tsx e lib/analytics/sentry.tsx non vanno toccati."
         }
-      ]
+      ],
+      "verificato_da": "collaudo B (subagente generico, modello grande): prova, prova rimessa e 636 file di prove su lib/logger verdi; sonda con 45 falsi positivi e 46 falsi negativi possibili; regola dei telefoni lineare (<7 ms su 100k caratteri) → parziale come dichiarato"
     },
     {
       "id": "R10-009",
@@ -304,7 +328,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ead37e60^ --file lib/queries/precarico.ts --prove tests/unit/riparazione-r10-sconto-nel-precarico.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "precaricaProdotto legge anche lo sconto attivo (product_active_discount, Number(data) || 0, come il browser), in parallelo alla scheda, e riempie queryKeys.products.activeDiscount(id), la chiave di scheda e ActivePromoBadge. Solo se la scheda è arrivata e la lettura è riuscita: una lettura caduta non diventa «nessuno sconto»."
+      "cosa_ho_fatto": "precaricaProdotto legge anche lo sconto attivo (product_active_discount, Number(data) || 0, come il browser), in parallelo alla scheda, e riempie queryKeys.products.activeDiscount(id), la chiave di scheda e ActivePromoBadge. Solo se la scheda è arrivata e la lettura è riuscita: una lettura caduta non diventa «nessuno sconto».",
+      "verificato_da": "collaudo B (subagente generico, modello grande): prova, prova rimessa, 15 prove del precarico e 41 su scheda e sconto verdi; chiave ['product-active-discount', id] e Number(data) || 0 uguali al browser; lettura caduta e prodotto non visibile non riempiono niente; lettura in parallelo → regge"
     },
     {
       "id": "R10-012",
@@ -327,31 +352,15 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 79111053^ --file app/admin/products/[id]/edit/page.tsx --prove tests/unit/riparazione-r10-admin-categorie-senza-rete.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il modulo aspetta le categorie anche in caricamento; se la lettura è ferma senza rete o caduta e l'elenco non è in memoria, la pagina mostra «Non riesco a leggere le categorie» con Riprova (stesso schema della pagina del negozio). Prova: pagina vera con React Query senza rete (onlineManager) e ritorno della rete."
+      "cosa_ho_fatto": "Il modulo aspetta le categorie anche in caricamento; se la lettura è ferma senza rete o caduta e l'elenco non è in memoria, la pagina mostra «Non riesco a leggere le categorie» con Riprova (stesso schema della pagina del negozio). Prova: pagina vera con React Query senza rete (onlineManager) e ritorno della rete.",
+      "verificato_da": "collaudo A (subagente generico, sonnet): categorie non lette o senza rete danno l'avviso con Riprova; elenco vuoto legittimo, categorie in memoria e ritorno della rete aprono il modulo; dopo il ritiro della voce gemella le 8 prove della pagina sono verdi → regge"
     },
     {
       "id": "R10-013",
       "chiave": "stati-ui|nella pagina di amministrazione del prodotto, quando torna la rete, il caricamento prende il posto del modulo e le modifiche si perdono; senza rete il modulo si apre con 0 taglie",
-      "esito": "riparato",
-      "commit": "169ce728478d69dc9e41cac765dcb9e25945aeff",
-      "file_toccati": [
-        "app/admin/products/[id]/edit/page.tsx",
-        "tests/unit/riparazione-r10-admin-modulo-al-ritorno-della-rete.test.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r10-admin-modulo-al-ritorno-della-rete.test.tsx"
-      ],
-      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r10-admin-modulo-al-ritorno-della-rete.test.tsx",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 169ce728^ --file app/admin/products/[id]/edit/page.tsx --prove tests/unit/riparazione-r10-admin-modulo-al-ritorno-della-rete.test.tsx --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Ripartito dalla base. Una volta aperto, il modulo resta montato per quel prodotto (caricamento e avvisi non lo sostituiscono, salvo prodotto sparito). Senza rete e taglie non in memoria: «Senza rete… taglie» con Riprova invece di 0 taglie. Caso accanto: senza rete e senza prodotto in memoria non dice più «Prodotto non trovato» ma «Senza rete» con Riprova. 4 casi rossi alla base, le 7 prove esistenti della pagina verdi.",
-      "nota": "In linea il modulo aspetta ancora la rilettura (regola del 31/10). Diversamente dalla pagina del negozio, il Salva non è bloccato finché la rilettura non riesce (fuori dalla voce)."
+      "esito": "non_fatto",
+      "nota": "La cura 169ce728 (il modulo resta montato al ritorno della rete; senza rete «Senza rete… taglie» invece di 0 taglie) è stata ritirata con 9ff70b0f: il collaudo ha trovato «rompe_altro». Una volta aperto il modulo, page.tsx:174 non guardava più error ed erroreVarianti: dopo un 409 (:118-125) con rilettura caduta il modulo ripartiva con scorta e taglie vecchie dicendo «ho riletto il prodotto», mentre prima compariva la pagina «Errore» con Riprova. Una cura nuova deve tenere il modulo montato ma mostrare l'errore della rilettura dopo un 409 (e non dire «ho riletto»). Non rifatta per il limite di spesa (70% superato). Torna il comportamento della base; resta la cura di R10-012 nello stesso file.",
+      "verificato_da": "collaudo A (subagente generico, sonnet): rompe_altro, il messaggio falso dopo un 409 con rilettura caduta"
     },
     {
       "id": "R10-006",
@@ -395,6 +404,27 @@
       "severita": "minore",
       "file": "components/CartCrossDeviceSync.tsx:149",
       "descrizione": "Con un carrello da ospite più recente del cloud e nessun allineamento, i due carrelli pieni non si fondono; al primo cambio locale scriviSulCloud scrive (allineato.cloud === 0) e sovrascrive il cloud."
+    },
+    {
+      "titolo": "nella modifica prodotto dell'amministratore il Salva non aspetta che la rilettura riesca, a differenza della pagina del negozio",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/admin/products/[id]/edit/page.tsx",
+      "descrizione": "Visto dal lotto 2 lavorando la voce del ritorno della rete: senza rete, con prodotto e taglie in memoria, il modulo si apre dalla copia in memoria e il Salva resta attivo; una scorta cambiata nel frattempo la ferma il 409 della PATCH."
+    },
+    {
+      "titolo": "la scheda prodotto legge lo sconto attivo due volte sul server",
+      "dimensione": "performance",
+      "severita": "minore",
+      "file": "lib/queries/precarico.ts:129",
+      "descrizione": "Il precarico legge product_active_discount e il layout legge product_active_discounts per i dati strutturati (app/product/[id]/layout.tsx:179): riusarne una risparmia una chiamata a Supabase per visita."
+    },
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (altro): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "sicurezza",
+      "severita": "minore",
+      "file": "(nel referto privato)"
     }
   ],
   "domande_per_nicola": [
@@ -403,7 +433,9 @@
     "Carrello fra due dispositivi: con la chiave vecchia (solo un numero) una riga tolta altrove può tornare una volta. Va bene così? L'alternativa è una pulizia una tantum, che però può far perdere un prodotto aggiunto da poco."
   ],
   "conto": {
-    "agenti": 2,
-    "nota": ""
-  }
+    "agenti": 4,
+    "nota": "2 riparatori (lotto 1 sonnet, lotto 2 modello grande) + 2 collaudatori (A sonnet, B modello grande). Nessun giro di correzione: spesa oltre il 70% del limite (14,43 $ a fine collaudo A).",
+    "subagenti": 4
+  },
+  "costo_usd": 15.55
 }
