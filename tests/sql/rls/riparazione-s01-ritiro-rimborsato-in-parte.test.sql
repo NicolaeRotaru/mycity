@@ -7,15 +7,18 @@
 --
 -- Il negozio tiene in cassa tutto il contante del ritiro; il rimborso parziale al cliente lo fa
 -- MyCity, e la quota del negozio resta scritta in seller_payout_reversed_cents. Quando si segna il
--- bonifico, quel ritiro entra con la commissione più la quota stornata (al massimo il netto del
--- negozio), e la cifra si toglie dai contanti come la commissione.
+-- bonifico, quel ritiro entra con la commissione e, a parte, col recupero del rimborso (la quota
+-- stornata, al massimo il netto del negozio). Dai contanti si toglie prima il recupero, poi la
+-- commissione; in fattura va solo la commissione non trattenuta, mai il recupero.
 --
 -- COSA CONTROLLA, con i numeri veri:
 --   ① Forno Rossi: contanti 18,00 €; ritiro da 20 € con commissione 2,00 €, rimborso parziale di
---     5 € con 4,50 € di quota del negozio → il negozio deve 6,50 €, il bonifico è 11,50 €. La cifra
---     di prima (16,00 €, senza la quota) è rifiutata; quella giusta passa e resta scritta;
---   ② Bottega Bianchi: quota stornata 25,00 € su un netto di 18,00 € → si conta 18,00 € (LEAST),
---     il negozio deve 20,00 €: compensazione da 0 €, 20,00 € in fattura;
+--     5 € con 4,50 € di quota del negozio → commissione 2,00 €, recupero 4,50 €, trattenuti 6,50 €,
+--     il bonifico è 11,50 €, niente in fattura. La cifra di prima (16,00 €, senza il recupero) è
+--     rifiutata; quella giusta passa e resta scritta;
+--   ② Bottega Bianchi: quota stornata 25,00 € su un netto di 18,00 € → recupero 18,00 € (LEAST).
+--     Senza contanti: compensazione da 0 €, in fattura solo la commissione (2,00 €), il recupero
+--     resta da recuperare;
 --   ③ un ritiro rimborsato per intero, e uno rimborsato in parte con un reso aperto: rifiutati.
 --
 -- Senza la 999i ① e ② sono ROSSI. Tutto in transazione, ROLLBACK.
@@ -124,25 +127,29 @@ RESET ROLE;
 
 -- Quello che resta scritto.
 INSERT INTO esiti
-SELECT '1c il bonifico del forno: commissione 6,50 €, trattenuta 6,50 €, versati 11,50 €, niente in fattura',
-       count(*) = 1 AND bool_and(b.commissione_cents = 650 AND b.trattenuta_cents = 650 AND b.importo_cents = 1150
+SELECT '1c il bonifico del forno: commissione 2,00 €, recupero 4,50 €, trattenuti 6,50 €, versati 11,50 €, niente in fattura',
+       count(*) = 1 AND bool_and(b.commissione_cents = 200 AND b.recupero_cents = 450 AND b.recupero_trattenuto_cents = 450
+                                 AND b.trattenuta_cents = 650 AND b.importo_cents = 1150
                                  AND b.in_fattura_cents = 0 AND b.riferimento = 'CRO-FORNO-1'),
-       coalesce(string_agg(format('commissione %s · trattenuta %s · importo %s · in fattura %s · %s',
-                b.commissione_cents, b.trattenuta_cents, b.importo_cents, b.in_fattura_cents, b.riferimento), ', '), '(nessuno)')
+       coalesce(string_agg(format('commissione %s · recupero %s (trattenuto %s) · trattenuta %s · importo %s · in fattura %s · %s',
+                b.commissione_cents, b.recupero_cents, b.recupero_trattenuto_cents, b.trattenuta_cents, b.importo_cents,
+                b.in_fattura_cents, b.riferimento), ', '), '(nessuno)')
   FROM private.bonifici_manuali b WHERE b.seller_id = 'e2510000-0000-0000-0000-00000000000a';
 INSERT INTO esiti
-SELECT '1d il ritiro del forno è regolato per 6,50 € e resta CASH_IN_STORE; i contanti sono PAID_MANUALLY',
-       (SELECT l.cents FROM private.bonifici_manuali_ordini l WHERE l.order_id = 'e2510000-1111-0000-0000-0000000000f2') = 650
+SELECT '1d il ritiro del forno: commissione 2,00 € e recupero 4,50 €, resta CASH_IN_STORE; i contanti sono PAID_MANUALLY',
+       (SELECT l.cents = 200 AND l.recupero_cents = 450 FROM private.bonifici_manuali_ordini l WHERE l.order_id = 'e2510000-1111-0000-0000-0000000000f2')
          AND (SELECT o.payout_at IS NOT NULL AND o.payout_status = 'CASH_IN_STORE' FROM public.orders o WHERE o.id = 'e2510000-1111-0000-0000-0000000000f2')
          AND (SELECT o.payout_status = 'PAID_MANUALLY' FROM public.orders o WHERE o.id = 'e2510000-1111-0000-0000-0000000000f1'),
-       (SELECT format('ritiro %s centesimi, %s', l.cents, o.payout_status)
+       (SELECT format('ritiro %s + recupero %s centesimi, %s', l.cents, l.recupero_cents, o.payout_status)
           FROM private.bonifici_manuali_ordini l JOIN public.orders o ON o.id = l.order_id
          WHERE l.order_id = 'e2510000-1111-0000-0000-0000000000f2');
 INSERT INTO esiti
-SELECT '2b la compensazione della bottega: 20,00 € dovuti, 20,00 € in fattura',
-       count(*) = 1 AND bool_and(b.commissione_cents = 2000 AND b.importo_cents = 0 AND b.in_fattura_cents = 2000 AND b.riferimento IS NULL)
-         AND (SELECT l.cents FROM private.bonifici_manuali_ordini l WHERE l.order_id = 'e2510000-1111-0000-0000-0000000000b1') = 2000,
-       coalesce(string_agg(format('commissione %s · importo %s · in fattura %s', b.commissione_cents, b.importo_cents, b.in_fattura_cents), ', '), '(nessuno)')
+SELECT '2b la compensazione della bottega: recupero 18,00 € (non 25,00 €), in fattura solo i 2,00 € di commissione',
+       count(*) = 1 AND bool_and(b.commissione_cents = 200 AND b.recupero_cents = 1800 AND b.recupero_trattenuto_cents = 0
+                                 AND b.importo_cents = 0 AND b.in_fattura_cents = 200 AND b.riferimento IS NULL)
+         AND (SELECT l.cents = 200 AND l.recupero_cents = 0 FROM private.bonifici_manuali_ordini l WHERE l.order_id = 'e2510000-1111-0000-0000-0000000000b1'),
+       coalesce(string_agg(format('commissione %s · recupero %s (trattenuto %s) · importo %s · in fattura %s',
+                b.commissione_cents, b.recupero_cents, b.recupero_trattenuto_cents, b.importo_cents, b.in_fattura_cents), ', '), '(nessuno)')
   FROM private.bonifici_manuali b WHERE b.seller_id = 'e2510000-0000-0000-0000-00000000000d';
 INSERT INTO esiti
 SELECT '3c i ritiri rifiutati restano da regolare',

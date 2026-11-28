@@ -66,14 +66,19 @@ function payoutBadge(o: OrderRow): { label: string; cls: string } {
       case 'AWAITING_REMITTANCE':
         return { label: 'Attesa cassa fattorino', cls: 'bg-accent-100 text-accent-800' };
       case 'CASH_IN_STORE': // R11-005 — ritiro pagato al banco: nessun bonifico
-        return { label: 'Incassato al banco', cls: 'bg-cream-200 text-ink-700' };
+        return (o.seller_payout_reversed_cents ?? 0) > 0
+          ? { label: 'Incassato al banco · recupero del rimborso', cls: 'bg-cream-200 text-ink-700' }
+          : { label: 'Incassato al banco', cls: 'bg-cream-200 text-ink-700' };
       case 'HELD':
       case 'PROCESSING':
         return { label: 'In liquidazione', cls: 'bg-accent-100 text-accent-800' };
       case 'REVERSED':
         return { label: 'Stornato', cls: 'bg-secondary-100 text-secondary-700' };
       case 'REFUNDED':
-        return { label: 'Rimborsato', cls: 'bg-secondary-100 text-secondary-700' };
+        // Il ritiro al banco rimborsato: il contante è rimasto al negozio e torna a MyCity col recupero.
+        return o.pickup_in_store
+          ? { label: 'Rimborsato · recupero del rimborso', cls: 'bg-secondary-100 text-secondary-700' }
+          : { label: 'Rimborsato', cls: 'bg-secondary-100 text-secondary-700' };
       default:
         return { label: 'Contanti', cls: 'bg-cream-200 text-ink-700' };
     }
@@ -348,6 +353,14 @@ export default function SellerEarningsPage() {
               Incassati da te al banco (ritiro in negozio): <strong>{formatPrice(contanti.incassatoAlBancoCents / 100)}</strong>
               {' '}· nessun bonifico per questi: su questi ritiri la commissione MyCity è di{' '}
               <strong>{formatPrice(contanti.commissioneDovutaCents / 100)}</strong>, e te la chiediamo noi.
+            </p>
+          )}
+          {/* Il recupero del rimborso: i rimborsi dei ritiri li fa MyCity, il contante è rimasto a te. */}
+          {contanti.recuperoRimborsiCents > 0 && (
+            <p className="mt-1 text-xs text-olive-700">
+              Recupero dei rimborsi sui ritiri al banco: <strong>{formatPrice(contanti.recuperoRimborsiCents / 100)}</strong>
+              {' '}· è la tua quota dei rimborsi che MyCity ha fatto ai clienti, sul contante rimasto a te: non è una
+              commissione e non va in fattura. La togliamo dal bonifico del lunedì o te la chiediamo noi.
             </p>
           )}
         </Card>

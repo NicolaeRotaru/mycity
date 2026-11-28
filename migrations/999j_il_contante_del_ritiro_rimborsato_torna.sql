@@ -8,11 +8,13 @@
 --  1. public.segna_bonifico_manuale (com'è nella 999i): fra i ritiri da regolare entra anche quello
 --     rimborsato per intero, cioè payout_status = 'REFUNDED' con pickup_in_store, consegnato, in
 --     contanti, senza payout_at, col reclamo assente o chiuso (RESOLVED o LOST) e senza resi o
---     contestazioni aperti. La cifra è quella della 999i: commissione più quota stornata (al massimo
---     il netto), meno il credito MyCity usato dal cliente = il contante che il negozio ha in cassa.
---  2. public.contanti_da_recuperare (com'è nella 916): elenca anche i ritiri già regolati col
---     bonifico e rimborsati dopo. Da recuperare = commissione + quota stornata (al massimo il netto)
---     − quanto è già stato regolato.
+--     contestazioni aperti. I conti sono quelli della 999i: commissione (in fattura per il resto) e
+--     recupero del rimborso (quota stornata, al massimo il netto; non in fattura). Commissione più
+--     recupero meno il credito MyCity usato dal cliente = il contante che il negozio ha in cassa.
+--  2. public.contanti_da_recuperare (com'è nella 916): elenca anche i ritiri al banco con un recupero
+--     del rimborso non ancora trattenuto: quello che il bonifico non ha coperto, e i rimborsi arrivati
+--     dopo il bonifico. Da recuperare = quota stornata (al massimo il netto) − recupero già trattenuto
+--     (bonifici_manuali_ordini.recupero_cents).
 -- Tabelle, vincoli e le altre funzioni non cambiano.
 --
 -- Prova: tests/sql/rls/riparazione-s01-ritiro-rimborsato-per-intero.test.sql.
@@ -45,6 +47,8 @@ DECLARE
   v_ok_ritiri int;
   v_contanti_cents bigint;
   v_commissione_cents bigint;
+  v_recupero_cents bigint;
+  v_recupero_trattenuto bigint;
   v_credito_cents bigint;
   v_trattenuta bigint;
   v_importo bigint;
@@ -124,18 +128,18 @@ BEGIN
                       WHERE d.order_id = o.id AND d.status IN ('open', 'under_review'));
 
   -- I ritiri pagati al banco ancora da regolare: gli stessi cancelli dei contanti (reso, reclamo,
-  -- contestazione aperti). Col rimborso il ritiro si regola: il negozio deve a MyCity la commissione
-  -- più la sua quota del rimborso (seller_payout_reversed_cents, mai oltre il suo netto), perché il
-  -- contante l'ha tenuto lui e il cliente l'ha rimborsato MyCity. Il ritiro rimborsato per intero ha
-  -- payout_status = 'REFUNDED' (lo scrive il rimborso): si riconosce da pickup_in_store, e il suo
-  -- reclamo può essere chiuso a favore del cliente (LOST).
-  -- Per ogni ritiro MyCity deve al negozio il credito usato dal cliente meno quella cifra.
+  -- contestazione aperti). Il ritiro rimborsato per intero ha payout_status = 'REFUNDED' (lo scrive il
+  -- rimborso): si riconosce da pickup_in_store, e il suo reclamo può essere chiuso a favore del
+  -- cliente (LOST). Col rimborso, parziale o pieno, il ritiro si regola: il negozio deve
+  -- a MyCity la commissione e, a parte, il recupero del rimborso (la sua quota, seller_payout_reversed_cents,
+  -- mai oltre il suo netto), perché il contante l'ha tenuto lui e il cliente l'ha rimborsato MyCity.
+  -- Per ogni ritiro MyCity deve al negozio il credito usato dal cliente.
   SELECT count(*),
-         coalesce(sum(GREATEST(0, coalesce(o.application_fee_cents, 0))
-                      + LEAST(GREATEST(0, coalesce(o.seller_payout_reversed_cents, 0)),
-                              GREATEST(0, coalesce(o.seller_payout_cents, 0)))), 0),
+         coalesce(sum(GREATEST(0, coalesce(o.application_fee_cents, 0))), 0),
+         coalesce(sum(LEAST(GREATEST(0, coalesce(o.seller_payout_reversed_cents, 0)),
+                            GREATEST(0, coalesce(o.seller_payout_cents, 0)))), 0),
          coalesce(sum(GREATEST(0, coalesce(o.wallet_applied_cents, 0))), 0)
-    INTO v_ok_ritiri, v_commissione_cents, v_credito_cents
+    INTO v_ok_ritiri, v_commissione_cents, v_recupero_cents, v_credito_cents
     FROM public.orders o
    WHERE o.id = ANY (v_ritiri)
      AND o.seller_id = p_seller
@@ -162,13 +166,16 @@ BEGIN
       (cardinality(v_contanti) - v_ok_contanti) + (cardinality(v_ritiri) - v_ok_ritiri)
       USING ERRCODE = 'P0001';
   END IF;
-  IF v_contanti_cents + v_credito_cents > 2147483647 OR v_commissione_cents > 2147483647 THEN
+  IF v_contanti_cents + v_credito_cents > 2147483647 OR v_commissione_cents + v_recupero_cents > 2147483647 THEN
     RAISE EXCEPTION 'bonifico fatto: cifra fuori misura' USING ERRCODE = '22003';
   END IF;
 
-  v_trattenuta := LEAST(v_contanti_cents + v_credito_cents, v_commissione_cents);
+  -- Dal bonifico si toglie prima il recupero del rimborso, poi la commissione. Il resto della
+  -- commissione va in fattura; il resto del recupero no (si legge fra le quote da recuperare).
+  v_trattenuta := LEAST(v_contanti_cents + v_credito_cents, v_commissione_cents + v_recupero_cents);
+  v_recupero_trattenuto := LEAST(v_contanti_cents + v_credito_cents, v_recupero_cents);
   v_importo := v_contanti_cents + v_credito_cents - v_trattenuta;
-  v_in_fattura := v_commissione_cents - v_trattenuta;
+  v_in_fattura := v_commissione_cents - (v_trattenuta - v_recupero_trattenuto);
 
   IF p_importo_cents IS NOT NULL AND p_importo_cents <> v_importo THEN
     RAISE EXCEPTION 'BONIFICO_CAMBIATO: la cifra da versare è % centesimi, non %', v_importo, p_importo_cents
@@ -186,20 +193,29 @@ BEGIN
 
   INSERT INTO private.bonifici_manuali (
     seller_id, fatto_il, fatto_da, riferimento,
-    contanti_cents, commissione_cents, credito_cents, trattenuta_cents, importo_cents, in_fattura_cents
+    contanti_cents, commissione_cents, credito_cents, trattenuta_cents, importo_cents, in_fattura_cents,
+    recupero_cents, recupero_trattenuto_cents
   ) VALUES (
     p_seller, v_adesso, v_chi, v_rif,
-    v_contanti_cents::int, v_commissione_cents::int, v_credito_cents::int, v_trattenuta::int, v_importo::int, v_in_fattura::int
+    v_contanti_cents::int, v_commissione_cents::int, v_credito_cents::int, v_trattenuta::int, v_importo::int, v_in_fattura::int,
+    v_recupero_cents::int, v_recupero_trattenuto::int
   ) RETURNING id INTO v_id;
 
-  INSERT INTO private.bonifici_manuali_ordini (order_id, bonifico_id, tipo, cents)
-  SELECT o.id, v_id, 'contanti', GREATEST(0, coalesce(o.seller_payout_cents, 0) - coalesce(o.seller_payout_reversed_cents, 0))
+  -- Il recupero trattenuto si divide fra i ritiri in ordine di id: ognuno prende la sua quota finché
+  -- il trattenuto basta.
+  INSERT INTO private.bonifici_manuali_ordini (order_id, bonifico_id, tipo, cents, recupero_cents)
+  SELECT o.id, v_id, 'contanti', GREATEST(0, coalesce(o.seller_payout_cents, 0) - coalesce(o.seller_payout_reversed_cents, 0)), 0
     FROM public.orders o WHERE o.id = ANY (v_contanti)
   UNION ALL
-  SELECT o.id, v_id, 'ritiro', GREATEST(0, coalesce(o.application_fee_cents, 0))
-                              + LEAST(GREATEST(0, coalesce(o.seller_payout_reversed_cents, 0)),
-                                      GREATEST(0, coalesce(o.seller_payout_cents, 0)))
-    FROM public.orders o WHERE o.id = ANY (v_ritiri);
+  SELECT r.id, v_id, 'ritiro', r.commissione,
+         GREATEST(0, LEAST(r.recupero, v_recupero_trattenuto - (r.cumulato - r.recupero)))::int
+    FROM (SELECT o.id,
+                 GREATEST(0, coalesce(o.application_fee_cents, 0)) AS commissione,
+                 LEAST(GREATEST(0, coalesce(o.seller_payout_reversed_cents, 0)),
+                       GREATEST(0, coalesce(o.seller_payout_cents, 0)))::bigint AS recupero,
+                 sum(LEAST(GREATEST(0, coalesce(o.seller_payout_reversed_cents, 0)),
+                           GREATEST(0, coalesce(o.seller_payout_cents, 0)))::bigint) OVER (ORDER BY o.id) AS cumulato
+            FROM public.orders o WHERE o.id = ANY (v_ritiri)) r;
 
   UPDATE public.orders
      SET payout_status = 'PAID_MANUALLY',
@@ -218,6 +234,8 @@ BEGIN
     'credito_cents', v_credito_cents,
     'importo_cents', v_importo,
     'trattenuta_cents', v_trattenuta,
+    'recupero_cents', v_recupero_cents,
+    'recupero_trattenuto_cents', v_recupero_trattenuto,
     'in_fattura_cents', v_in_fattura
   ));
 
@@ -231,7 +249,7 @@ REVOKE EXECUTE ON FUNCTION public.segna_bonifico_manuale(uuid, uuid[], text, uui
 GRANT EXECUTE ON FUNCTION public.segna_bonifico_manuale(uuid, uuid[], text, uuid[], integer) TO authenticated;
 
 COMMENT ON FUNCTION public.segna_bonifico_manuale(uuid, uuid[], text, uuid[], integer) IS
-  'Bonifico fatto a mano a un negozio: contanti HELD → PAID_MANUALLY con payout_at e riferimento, commissione dei ritiri al banco (più la quota del negozio nei rimborsi) trattenuta, resto in fattura. Tutto o niente, idempotente sul secondo clic. Solo amministratori (migrazioni 916, 999i e 999j).';
+  'Bonifico fatto a mano a un negozio: contanti HELD → PAID_MANUALLY con payout_at e riferimento, commissione dei ritiri al banco e recupero dei rimborsi trattenuti (il recupero non va in fattura), resto della commissione in fattura. Tutto o niente, idempotente sul secondo clic. Solo amministratori (migrazioni 916, 999i e 999j).';
 
 CREATE OR REPLACE FUNCTION public.contanti_da_recuperare()
 RETURNS TABLE (
@@ -264,12 +282,12 @@ BEGIN
                    ELSE GREATEST(0, coalesce(o.seller_payout_cents, 0) - coalesce(o.seller_payout_reversed_cents, 0))
                  END)
                ELSE
-                 -- Ritiro al banco: quanto il negozio deve adesso (commissione più quota stornata, al
-                 -- massimo il netto) meno quanto è già stato regolato col bonifico.
-                 GREATEST(0, GREATEST(0, coalesce(o.application_fee_cents, 0))
-                             + LEAST(GREATEST(0, coalesce(o.seller_payout_reversed_cents, 0)),
-                                     GREATEST(0, coalesce(o.seller_payout_cents, 0)))
-                             - l.cents)
+                 -- Ritiro al banco: il recupero del rimborso dovuto adesso (quota stornata, al massimo
+                 -- il netto) meno quanto se n'è già trattenuto col bonifico. La commissione no: quella
+                 -- è trattenuta o in fattura.
+                 GREATEST(0, LEAST(GREATEST(0, coalesce(o.seller_payout_reversed_cents, 0)),
+                                   GREATEST(0, coalesce(o.seller_payout_cents, 0)))
+                             - l.recupero_cents)
                END::int AS da_recuperare
           FROM private.bonifici_manuali_ordini l
           JOIN private.bonifici_manuali b ON b.id = l.bonifico_id

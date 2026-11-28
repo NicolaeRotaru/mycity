@@ -123,7 +123,7 @@ const nomeDelMese = (mese: string) => new Date(`${mese}-15T12:00:00Z`).toLocaleD
 function ritiroDaRegolare(o: PayoutOrder): boolean {
   if (o.payment_method !== 'cod' || o.payout_at || o.pratica_aperta === true) return false;
   // Gli stessi cancelli dei contanti (916, 999i, 999j): con un reso, un reclamo o una contestazione
-  // aperti il ritiro aspetta. Col rimborso si regola (vedi `dovutoDalRitiro`).
+  // aperti il ritiro aspetta. Col rimborso si regola (vedi `recuperoDelRitiro`).
   if (o.dispute_status && o.dispute_status !== 'WON') return false;
   if (o.payout_status === 'CASH_IN_STORE') {
     return (!o.internal_dispute_status || o.internal_dispute_status === 'RESOLVED') && o.payment_status !== 'REFUNDED';
@@ -140,14 +140,15 @@ function ritiroRimborsatoPerIntero(o: PayoutOrder): boolean {
   return o.payment_method === 'cod' && o.payout_status === 'REFUNDED' && o.pickup_in_store === true;
 }
 
+const centesimiInteri = (v: unknown) => Math.max(0, Math.round(Number(v) || 0));
+
 /**
- * Quanto il negozio deve a MyCity su un ritiro al banco: la commissione più la sua quota dei rimborsi
- * già scritta sull'ordine (`seller_payout_reversed_cents`, mai oltre il suo netto). Il contante l'ha
- * tenuto il negozio, il rimborso al cliente l'ha fatto MyCity. Lo stesso conto della 999i.
+ * Il recupero del rimborso su un ritiro al banco: la quota del negozio nei rimborsi già scritta
+ * sull'ordine (`seller_payout_reversed_cents`, mai oltre il suo netto). Il contante l'ha tenuto il
+ * negozio, il rimborso al cliente l'ha fatto MyCity. Non è commissione e non va in fattura (999i).
  */
-function dovutoDalRitiro(o: PayoutOrder): number {
-  const centesimi = (v: unknown) => Math.max(0, Math.round(Number(v) || 0));
-  return centesimi(o.application_fee_cents) + Math.min(centesimi(o.seller_payout_reversed_cents), centesimi(o.seller_payout_cents));
+function recuperoDelRitiro(o: PayoutOrder): number {
+  return Math.min(centesimiInteri(o.seller_payout_reversed_cents), centesimiInteri(o.seller_payout_cents));
 }
 
 type ContoDelLunedi = {
@@ -155,34 +156,57 @@ type ContoDelLunedi = {
   ritiri: PayoutOrder[];
   contantiCents: number;
   creditoCents: number;
+  /** La commissione dei ritiri: la sola fee. Quella non trattenuta va in fattura. */
   commissioneCents: number;
+  /** Il recupero dei rimborsi dei ritiri: si trattiene per primo, mai in fattura. */
+  recuperoCents: number;
+  recuperoTrattenutoCents: number;
+  /** Il recupero che il bonifico non copre: resta fra le quote da recuperare. */
+  recuperoDaRiprendereCents: number;
+  commissioneTrattenutaCents: number;
   trattenutaCents: number;
   importoCents: number;
   inFatturaCents: number;
 };
 
 /**
- * Contanti più credito MyCity dei ritiri meno commissione dei ritiri, in centesimi interi e mai sotto
- * zero: il resto va in fattura. Su un ritiro il negozio ha incassato in cassa il lordo meno il credito
- * usato dal cliente, quindi MyCity gli deve «credito − commissione» (lo stesso conto della 916).
- * La «commissione» di un ritiro rimborsato in parte comprende la quota del negozio nel rimborso
- * (`dovutoDalRitiro`, 999i).
+ * Contanti più credito MyCity dei ritiri, meno prima il recupero dei rimborsi e poi la commissione dei
+ * ritiri, in centesimi interi e mai sotto zero. La commissione non trattenuta va in fattura; il
+ * recupero non trattenuto no: resta da recuperare. Su un ritiro il negozio ha incassato in cassa il
+ * lordo meno il credito usato dal cliente. Lo stesso conto di segna_bonifico_manuale (916, 999i).
  */
 function conto(contanti: PayoutOrder[], ritiri: PayoutOrder[]): ContoDelLunedi {
   const contantiCents = contanti.reduce((s, o) => s + netto(o), 0);
-  const creditoCents = ritiri.reduce((s, o) => s + Math.max(0, Math.round(Number(o.wallet_applied_cents) || 0)), 0);
-  const commissioneCents = ritiri.reduce((s, o) => s + dovutoDalRitiro(o), 0);
-  const trattenutaCents = Math.min(contantiCents + creditoCents, commissioneCents);
+  const creditoCents = ritiri.reduce((s, o) => s + centesimiInteri(o.wallet_applied_cents), 0);
+  const commissioneCents = ritiri.reduce((s, o) => s + centesimiInteri(o.application_fee_cents), 0);
+  const recuperoCents = ritiri.reduce((s, o) => s + recuperoDelRitiro(o), 0);
+  const disponibile = contantiCents + creditoCents;
+  const trattenutaCents = Math.min(disponibile, commissioneCents + recuperoCents);
+  const recuperoTrattenutoCents = Math.min(disponibile, recuperoCents);
+  const commissioneTrattenutaCents = trattenutaCents - recuperoTrattenutoCents;
   return {
     contanti,
     ritiri,
     contantiCents,
     creditoCents,
     commissioneCents,
+    recuperoCents,
+    recuperoTrattenutoCents,
+    recuperoDaRiprendereCents: recuperoCents - recuperoTrattenutoCents,
+    commissioneTrattenutaCents,
     trattenutaCents,
-    importoCents: contantiCents + creditoCents - trattenutaCents,
-    inFatturaCents: commissioneCents - trattenutaCents,
+    importoCents: disponibile - trattenutaCents,
+    inFatturaCents: commissioneCents - commissioneTrattenutaCents,
   };
+}
+
+/** «meno X di recupero dei rimborsi e Y di commissione dei ritiri al banco», per quello che c'è. */
+function trattenuteDette(c: ContoDelLunedi): string {
+  const pezzi = [
+    c.recuperoTrattenutoCents > 0 ? `${formatPrice(c.recuperoTrattenutoCents / 100)} di recupero dei rimborsi` : '',
+    c.commissioneTrattenutaCents > 0 ? `${formatPrice(c.commissioneTrattenutaCents / 100)} di commissione` : '',
+  ].filter(Boolean);
+  return pezzi.length > 0 ? `${pezzi.join(' e ')} dei ritiri al banco` : '';
 }
 
 /** Il bonifico del lunedì: contanti e ritiri consegnati entro la domenica scorsa (arretrati compresi). */
@@ -284,17 +308,22 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto, parziale = fa
     let riferimento: string | null = null;
     if (totale > 0) {
       const credito = c.creditoCents > 0 ? ` più ${formatPrice(c.creditoCents / 100)} di credito MyCity dei ritiri al banco` : '';
-      const commissione = c.trattenutaCents > 0 || c.creditoCents > 0 ? ` (contanti ${formatPrice(c.contantiCents / 100)}${credito}${c.trattenutaCents > 0 ? ` meno ${formatPrice(c.trattenutaCents / 100)} di commissione dei ritiri al banco` : ''})` : '';
+      const commissione = c.trattenutaCents > 0 || c.creditoCents > 0 ? ` (contanti ${formatPrice(c.contantiCents / 100)}${credito}${c.trattenutaCents > 0 ? ` meno ${trattenuteDette(c)}` : ''})` : '';
+      const daRiprendere = c.recuperoDaRiprendereCents > 0 ? `\n${formatPrice(c.recuperoDaRiprendereCents / 100)} di recupero dei rimborsi non entrano: restano da recuperare dal negozio.` : '';
       const parte = parziale ? `\nÈ solo una parte di quanto devi a ${storeName}: l’elenco è tagliato a ${TETTO_PAYOUT} ordini. Dopo il bonifico ricarica la pagina per il resto.` : '';
       const scritto = window.prompt(
-        `Bonifico a ${storeName}: ${formatPrice(totale / 100)}${commissione} per ${daSegnare.length} ordini in contanti.${parte}\nScrivi il riferimento del bonifico (CRO/TRN o data):`,
+        `Bonifico a ${storeName}: ${formatPrice(totale / 100)}${commissione} per ${daSegnare.length} ordini in contanti.${daRiprendere}${parte}\nScrivi il riferimento del bonifico (CRO/TRN o data):`,
       );
       if (!scritto || scritto.trim().length < 3) return;
       riferimento = scritto.trim();
     } else {
-      // Commissione ≥ contanti: nessun bonifico da fare, quindi nessun riferimento da chiedere.
+      // Commissione e recupero ≥ contanti: nessun bonifico da fare, quindi nessun riferimento da chiedere.
+      const dovuto = [
+        c.recuperoCents > 0 ? `il recupero dei rimborsi (${formatPrice(c.recuperoCents / 100)})` : '',
+        c.commissioneCents > 0 ? `la commissione (${formatPrice(c.commissioneCents / 100)})` : '',
+      ].filter(Boolean).join(' e ');
       const ok = window.confirm(
-        `Nessun bonifico da fare a ${storeName}: la commissione dei ritiri al banco (${formatPrice(c.commissioneCents / 100)}) copre i contanti${c.creditoCents > 0 ? ' e il credito MyCity dei ritiri' : ''} (${formatPrice((c.contantiCents + c.creditoCents) / 100)}).\nSegno la compensazione?${c.inFatturaCents > 0 ? ` ${formatPrice(c.inFatturaCents / 100)} di commissione vanno nella fattura del mese.` : ''}`,
+        `Nessun bonifico da fare a ${storeName}: ${dovuto} dei ritiri al banco coprono i contanti${c.creditoCents > 0 ? ' e il credito MyCity dei ritiri' : ''} (${formatPrice((c.contantiCents + c.creditoCents) / 100)}).\nSegno la compensazione?${c.inFatturaCents > 0 ? ` ${formatPrice(c.inFatturaCents / 100)} di commissione vanno nella fattura del mese.` : ''}${c.recuperoDaRiprendereCents > 0 ? ` ${formatPrice(c.recuperoDaRiprendereCents / 100)} di recupero dei rimborsi restano da recuperare dal negozio (non vanno in fattura).` : ''}`,
       );
       if (!ok) return;
     }
@@ -329,8 +358,8 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto, parziale = fa
       n === daSegnare.length
         ? totale > 0
           ? `Segnati ${n} ordini come pagati.`
-          : c.inFatturaCents > 0
-            ? `Compensazione segnata: ${formatPrice(c.inFatturaCents / 100)} di commissione vanno nella fattura del mese.`
+          : c.inFatturaCents > 0 || c.recuperoDaRiprendereCents > 0
+            ? `Compensazione segnata.${c.inFatturaCents > 0 ? ` ${formatPrice(c.inFatturaCents / 100)} di commissione vanno nella fattura del mese.` : ''}${c.recuperoDaRiprendereCents > 0 ? ` ${formatPrice(c.recuperoDaRiprendereCents / 100)} di recupero dei rimborsi restano da recuperare dal negozio.` : ''}`
             : 'Compensazione segnata.'
         : `Attenzione: segnati ${n} ordini su ${daSegnare.length}. Gli altri nel frattempo hanno un reso, un reclamo o una contestazione e restano da versare: controlla il bonifico fatto.`,
     );
@@ -680,8 +709,9 @@ export default function AdminPayoutsPage() {
           )}
           Contanti: il lunedì versi tu, con un bonifico, quanto c&apos;è scritto in «Da versare lunedì»
           (consegne dal {fmtGiorno(settimana.dal)} al {fmtGiorno(settimana.al)} e arretrati), poi premi «Bonifico fatto».
-          Gli importi sono già al netto degli storni e della commissione dei ritiri pagati al banco: se la commissione
-          supera i contanti, il resto va nella fattura del mese.
+          Gli importi sono già al netto degli storni, del recupero dei rimborsi e della commissione dei ritiri pagati
+          al banco: se non bastano i contanti, il resto della commissione va nella fattura del mese e il resto del
+          recupero resta da recuperare dal negozio (il recupero non va mai in fattura).
         </p>
       </div>
 
@@ -715,12 +745,18 @@ export default function AdminPayoutsPage() {
                     <p className="text-xs text-ink-500">
                       contanti {formatPrice(g.lunedi.contantiCents / 100)}
                       {g.lunedi.creditoCents > 0 && ` + ${formatPrice(g.lunedi.creditoCents / 100)} di credito MyCity dei ritiri al banco`}
-                      {g.lunedi.trattenutaCents > 0 && ` − ${formatPrice(g.lunedi.trattenutaCents / 100)} di commissione dei ritiri al banco`}
+                      {g.lunedi.recuperoTrattenutoCents > 0 && ` − ${formatPrice(g.lunedi.recuperoTrattenutoCents / 100)} di recupero dei rimborsi dei ritiri al banco`}
+                      {g.lunedi.commissioneTrattenutaCents > 0 && ` − ${formatPrice(g.lunedi.commissioneTrattenutaCents / 100)} di commissione dei ritiri al banco`}
                     </p>
                   )}
                   {g.lunedi.inFatturaCents > 0 && (
                     <p className="text-xs text-secondary-700">
                       {formatPrice(g.lunedi.inFatturaCents / 100)} di commissione non entrano nel bonifico: vanno nella fattura del mese
+                    </p>
+                  )}
+                  {g.lunedi.recuperoDaRiprendereCents > 0 && (
+                    <p className="text-xs text-secondary-700">
+                      {formatPrice(g.lunedi.recuperoDaRiprendereCents / 100)} di recupero dei rimborsi non entrano nel bonifico: restano da recuperare dal negozio (non vanno in fattura)
                     </p>
                   )}
                   {g.settimanaCents > 0 && (

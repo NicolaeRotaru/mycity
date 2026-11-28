@@ -234,6 +234,43 @@ describe('R22-003 — dopo il bonifico a mano: quote da recuperare, ritiri fermi
     expect([...(stato.chiamate[0] as { p_order_ids: string[] }).p_order_ids].sort()).toEqual(['c1', 'c2']);
   });
 
+  // 28/11/2026 (999i, giro di correzione) — Il recupero del rimborso non è commissione: in fattura va solo
+  // la commissione, il recupero si trattiene per primo e quello che non entra resta da recuperare.
+  it('commissione e recupero del rimborso restano separati: in fattura solo la commissione', async () => {
+    stato.ordini = [
+      contante('c1', 1800, '2026-11-18'),
+      // Ritiro da 20 €: commissione 2,00 €, recupero 4,50 €.
+      ritiro('r4', 200, '2026-11-19', { payment_status: 'PARTIALLY_REFUNDED', seller_payout_reversed_cents: 450 }),
+    ];
+    const host = await apri();
+    const blocco = bloccoDi(host, 'Pane Quotidiano');
+    expect(daVersareLunedi(blocco)).toMatch(/11,50/);
+    const testo = blocco.textContent ?? '';
+    expect(testo).toMatch(/4,50\s*€ di recupero dei rimborsi/);
+    expect(testo).toMatch(/2,00\s*€ di commissione dei ritiri al banco/);
+    expect(testo, 'il recupero è chiamato commissione').not.toMatch(/6,50\s*€ di commissione/);
+  });
+
+  it('se i contanti non bastano: 2,00 € di commissione in fattura e 1,50 € di recupero da recuperare, mai in fattura', async () => {
+    stato.ordini = [
+      contante('c1', 300, '2026-11-18'),
+      ritiro('r4', 200, '2026-11-19', { payment_status: 'PARTIALLY_REFUNDED', seller_payout_reversed_cents: 450 }),
+    ];
+    const host = await apri();
+    const blocco = bloccoDi(host, 'Pane Quotidiano');
+    const testo = blocco.textContent ?? '';
+    expect(testo).toMatch(/2,00\s*€ di commissione non entrano nel bonifico: vanno nella fattura del mese/);
+    expect(testo).toMatch(/1,50\s*€ di recupero dei rimborsi non entrano nel bonifico: restano da recuperare/);
+    const conferma = vi.fn((_t: string) => true);
+    vi.stubGlobal('confirm', conferma);
+    await premi(tastoIn(blocco)!);
+    const domanda = String(conferma.mock.calls[0]?.[0] ?? '');
+    expect(domanda).toMatch(/2,00\s*€ di commissione vanno nella fattura del mese/);
+    expect(domanda).toMatch(/1,50\s*€ di recupero dei rimborsi restano da recuperare/);
+    expect(domanda, 'il recupero finisce in fattura').not.toMatch(/(3,50|6,50)\s*€ di commissione/);
+    expect(stato.chiamate[0]).toMatchObject({ n: 'segna_bonifico_manuale', p_ritiri: ['r4'], p_importo_cents: 0 });
+  });
+
   it('il secondo clic con un altro CRO: la pagina dice il CRO già scritto', async () => {
     stato.ordini = [contante('c1', 1800, '2026-11-18')];
     stato.risposta = { message: 'BONIFICO_GIA_SEGNATO: questo bonifico è già scritto col riferimento CRO-PRIMO e 1800 centesimi' };

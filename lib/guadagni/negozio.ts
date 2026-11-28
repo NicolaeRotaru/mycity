@@ -166,6 +166,12 @@ export type RiepilogoContanti = {
   incassatoAlBancoCents: number;
   /** R11-005 — La commissione MyCity su quei ritiri: la deve il negozio, si scala dal bonifico del lunedi'. */
   commissioneDovutaCents: number;
+  /**
+   * Il recupero dei rimborsi su quei ritiri: la quota del negozio nei rimborsi che MyCity ha fatto al
+   * cliente (al massimo il suo netto). Il contante l'ha tenuto il negozio: lo restituisce. Non è
+   * commissione e non va in fattura.
+   */
+  recuperoRimborsiCents: number;
 };
 
 /**
@@ -192,6 +198,10 @@ export function riepilogoContanti(ordini: OrdineNegozio[], consegnato: (o: Ordin
   return {
     incassatoAlBancoCents: alBanco.reduce((s, o) => s + Math.round(Number(o.total_price || 0) * 100), 0),
     commissioneDovutaCents: alBanco.reduce((s, o) => s + (o.application_fee_cents ?? 0), 0),
+    recuperoRimborsiCents: alBanco.reduce(
+      (s, o) => s + Math.max(0, Math.min(o.seller_payout_reversed_cents ?? 0, o.seller_payout_cents ?? 0)),
+      0,
+    ),
     incassatoDalFattorinoCents: contanti.reduce((s, o) => s + Math.round(Number(o.total_price || 0) * 100), 0),
     nettoAlNegozioCents: contanti.reduce((s, o) => s + nettoDopoStorni(o), 0),
     giaVersatoCents: contanti
@@ -221,6 +231,8 @@ export type OrdineDelPannello = {
   payout_status: string | null;
   seller_payout_cents: number | null;
   seller_payout_reversed_cents?: number | null;
+  /** Ritiro in negozio: col rimborso pieno l'ordine è REFUNDED, ma il contante l'ha incassato il negozio. */
+  pickup_in_store?: boolean | null;
   delivered_at?: string | null;
   dispute_status?: string | null;
   internal_dispute_status?: string | null;
@@ -262,13 +274,18 @@ export function gruppoDelPannello(o: OrdineDelPannello): { gruppo: GruppoDelPann
     case 'FAILED':
       return { gruppo: 'in_sospeso', etichetta: 'Verifica IBAN' };
     case 'CASH_IN_STORE':
-      return { gruppo: 'fuori', etichetta: 'Incassato al banco' };
+      return (o.seller_payout_reversed_cents ?? 0) > 0
+        ? { gruppo: 'fuori', etichetta: 'Incassato al banco · recupero del rimborso' }
+        : { gruppo: 'fuori', etichetta: 'Incassato al banco' };
     case 'REVERSAL_FAILED':
       return { gruppo: 'fuori', etichetta: 'Storno non riuscito' };
     case 'REVERSED':
       return { gruppo: 'fuori', etichetta: 'Stornato' };
     case 'REFUNDED':
-      return { gruppo: 'fuori', etichetta: 'Rimborsato' };
+      // Il ritiro al banco rimborsato: il contante resta al negozio e torna a MyCity col recupero.
+      return contanti && o.pickup_in_store === true
+        ? { gruppo: 'fuori', etichetta: 'Rimborsato · recupero del rimborso' }
+        : { gruppo: 'fuori', etichetta: 'Rimborsato' };
     default:
       // Consegnato con la carta, netto calcolato, il giro non l'ha ancora preso.
       return contanti ? { gruppo: 'in_sospeso', etichetta: 'In sospeso' } : { gruppo: 'in_sospeso', etichetta: 'In attesa del giro' };

@@ -7,21 +7,22 @@
 --
 -- Sul ritiro al banco il negozio tiene in cassa il contante; il rimborso al cliente lo fa MyCity.
 -- Col rimborso pieno refundOrder porta l'ordine a payout_status = 'REFUNDED' e scrive tutta la quota
--- del negozio in seller_payout_reversed_cents. Il negozio deve allora a MyCity la commissione più la
--- quota stornata (al massimo il netto) meno il credito MyCity usato dal cliente, cioè il contante che
--- ha in cassa. Se il ritiro era già stato regolato, quello che manca si legge fra le quote da
--- recuperare.
+-- del negozio in seller_payout_reversed_cents. Il negozio deve allora a MyCity la commissione e il
+-- recupero del rimborso (la quota stornata, al massimo il netto), meno il credito MyCity usato dal
+-- cliente: cioè il contante che ha in cassa. La commissione non trattenuta va in fattura; il recupero
+-- non trattenuto, o arrivato dopo il bonifico, si legge fra le quote da recuperare.
 --
 -- COSA CONTROLLA, con ordini da 20 € (commissione 2,00 €, netto 18,00 €):
 --   ① Forno Verdi: due contanti da 18,00 € e un ritiro rimborsato per intero (reclamo chiuso LOST)
---     → il negozio deve 20,00 €, il bonifico è 36,00 € − 20,00 € = 16,00 €;
+--     → commissione 2,00 € e recupero 18,00 €, il bonifico è 36,00 € − 20,00 € = 16,00 €;
 --   ② Bottega Neri: ritiro rimborsato per intero pagato con 5,00 € di credito MyCity → in cassa ha
---     15,00 €: compensazione da 0 €, 15,00 € in fattura;
+--     15,00 €: compensazione da 0 € (5,00 € di recupero trattenuti dal credito), in fattura solo i
+--     2,00 € di commissione, 13,00 € di recupero fra le quote da recuperare;
 --   ③ un contante (non ritiro) rimborsato per intero e un ritiro rimborsato con un reso aperto:
 --     rifiutati;
 --   ④ Drogheria Gialli: due ritiri regolati (2,00 € ciascuno), poi uno rimborsato per intero e uno in
 --     parte (4,50 € di quota del negozio) → fra le quote da recuperare 18,00 € e 4,50 €; un ritiro
---     regolato senza rimborsi dopo non compare.
+--     regolato senza rimborsi dopo, o col recupero già trattenuto tutto, non compare.
 --
 -- Senza la 999j ①, ② e ④ sono ROSSI. Tutto in transazione, ROLLBACK.
 -- =============================================================================
@@ -159,20 +160,24 @@ RESET ROLE;
 
 -- Quello che resta scritto.
 INSERT INTO esiti
-SELECT '1b il bonifico del forno: dovuti 20,00 €, trattenuti 20,00 €, versati 16,00 €',
-       count(*) = 1 AND bool_and(b.commissione_cents = 2000 AND b.trattenuta_cents = 2000 AND b.importo_cents = 1600
+SELECT '1b il bonifico del forno: commissione 2,00 €, recupero 18,00 €, trattenuti 20,00 €, versati 16,00 €',
+       count(*) = 1 AND bool_and(b.commissione_cents = 200 AND b.recupero_cents = 1800 AND b.recupero_trattenuto_cents = 1800
+                                 AND b.trattenuta_cents = 2000 AND b.importo_cents = 1600
                                  AND b.in_fattura_cents = 0 AND b.riferimento = 'CRO-VERDI-1')
-         AND (SELECT l.cents FROM private.bonifici_manuali_ordini l WHERE l.order_id = 'e2520000-1111-0000-0000-0000000000f3') = 2000
+         AND (SELECT l.cents = 200 AND l.recupero_cents = 1800 FROM private.bonifici_manuali_ordini l WHERE l.order_id = 'e2520000-1111-0000-0000-0000000000f3')
          AND (SELECT o.payout_at IS NOT NULL FROM public.orders o WHERE o.id = 'e2520000-1111-0000-0000-0000000000f3'),
-       coalesce(string_agg(format('commissione %s · trattenuta %s · importo %s · in fattura %s',
-                b.commissione_cents, b.trattenuta_cents, b.importo_cents, b.in_fattura_cents), ', '), '(nessuno)')
+       coalesce(string_agg(format('commissione %s · recupero %s (trattenuto %s) · trattenuta %s · importo %s · in fattura %s',
+                b.commissione_cents, b.recupero_cents, b.recupero_trattenuto_cents, b.trattenuta_cents, b.importo_cents,
+                b.in_fattura_cents), ', '), '(nessuno)')
   FROM private.bonifici_manuali b WHERE b.seller_id = 'e2520000-0000-0000-0000-00000000000a';
 INSERT INTO esiti
-SELECT '2b la compensazione della bottega: 15,00 € in fattura, il contante che ha in cassa',
-       count(*) = 1 AND bool_and(b.commissione_cents = 2000 AND b.credito_cents = 500 AND b.trattenuta_cents = 500
-                                 AND b.importo_cents = 0 AND b.in_fattura_cents = 1500),
-       coalesce(string_agg(format('commissione %s · credito %s · trattenuta %s · importo %s · in fattura %s',
-                b.commissione_cents, b.credito_cents, b.trattenuta_cents, b.importo_cents, b.in_fattura_cents), ', '), '(nessuno)')
+SELECT '2b la compensazione della bottega: in fattura 2,00 € di commissione, 5,00 € di recupero trattenuti dal credito',
+       count(*) = 1 AND bool_and(b.commissione_cents = 200 AND b.credito_cents = 500 AND b.recupero_cents = 1800
+                                 AND b.recupero_trattenuto_cents = 500 AND b.trattenuta_cents = 500
+                                 AND b.importo_cents = 0 AND b.in_fattura_cents = 200),
+       coalesce(string_agg(format('commissione %s · credito %s · recupero %s (trattenuto %s) · trattenuta %s · importo %s · in fattura %s',
+                b.commissione_cents, b.credito_cents, b.recupero_cents, b.recupero_trattenuto_cents, b.trattenuta_cents,
+                b.importo_cents, b.in_fattura_cents), ', '), '(nessuno)')
   FROM private.bonifici_manuali b WHERE b.seller_id = 'e2520000-0000-0000-0000-00000000000d';
 INSERT INTO esiti
 SELECT '3c i due rifiutati restano da regolare',
@@ -181,14 +186,15 @@ SELECT '3c i due rifiutati restano da regolare',
        (SELECT count(*) FROM public.orders o
          WHERE o.id IN ('e2520000-1111-0000-0000-0000000000b2', 'e2520000-1111-0000-0000-0000000000b3') AND o.payout_at IS NULL) || ' su 2 ancora aperti';
 INSERT INTO esiti
-SELECT '4b da recuperare dalla drogheria: 18,00 € del ritiro rimborsato per intero e 4,50 € di quello in parte',
+SELECT '4b da recuperare: 18,00 € e 4,50 € dalla drogheria, 13,00 € dalla bottega (il recupero che il credito non copriva)',
        (SELECT d.da_recuperare_cents FROM da_recuperare d WHERE d.order_id = 'e2520000-1111-0000-0000-0000000000e1') = 1800
-         AND (SELECT d.da_recuperare_cents FROM da_recuperare d WHERE d.order_id = 'e2520000-1111-0000-0000-0000000000e2') = 450,
+         AND (SELECT d.da_recuperare_cents FROM da_recuperare d WHERE d.order_id = 'e2520000-1111-0000-0000-0000000000e2') = 450
+         AND (SELECT d.da_recuperare_cents FROM da_recuperare d WHERE d.order_id = 'e2520000-1111-0000-0000-0000000000b1') = 1300,
        coalesce((SELECT string_agg(format('%s → %s', right(d.order_id::text, 2), d.da_recuperare_cents), ', ' ORDER BY d.order_id) FROM da_recuperare d), '(nessuna riga)');
 INSERT INTO esiti
-SELECT '4c un ritiro regolato senza rimborsi dopo, o regolato già col rimborso dentro, non compare',
+SELECT '4c un ritiro regolato senza rimborsi dopo, o col recupero già trattenuto tutto, non compare',
        NOT EXISTS (SELECT 1 FROM da_recuperare d
-                    WHERE d.order_id IN ('e2520000-1111-0000-0000-0000000000e3', 'e2520000-1111-0000-0000-0000000000f3', 'e2520000-1111-0000-0000-0000000000b1')),
+                    WHERE d.order_id IN ('e2520000-1111-0000-0000-0000000000e3', 'e2520000-1111-0000-0000-0000000000f3')),
        coalesce((SELECT string_agg(right(d.order_id::text, 2), ', ') FROM da_recuperare d), '(nessuna riga)');
 
 -- ── Verdetto ──────────────────────────────────────────────────────────────

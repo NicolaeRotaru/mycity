@@ -23,7 +23,7 @@
 --   ③ il secondo clic uguale risponde come il primo; con un altro CRO o un'altra cifra
 --     risponde BONIFICO_GIA_SEGNATO col CRO già scritto, e il bonifico resta quello;
 --   ④ il ritiro rimborsato in parte (commissione 2,00 €, quota stornata 4,50 €) si regola da
---     solo: compensazione da 0 €, 6,50 € in fattura.
+--     solo: compensazione da 0 €, in fattura i 2,00 € di commissione; i 4,50 € di recupero no.
 --
 -- Senza la correzione della 916 questa prova è ROSSA, e senza la 999i è rosso ④. Tutto in
 -- transazione, ROLLBACK.
@@ -146,13 +146,14 @@ INSERT INTO esiti SELECT 'un ritiro rimborsato in parte si regola con commission
 RESET request.jwt.claims;
 RESET ROLE;
 INSERT INTO esiti
-SELECT 'la compensazione del ritiro rimborsato in parte scrive 6,50 € in fattura',
+SELECT 'la compensazione del ritiro rimborsato in parte: 2,00 € in fattura, 4,50 € di recupero fuori dalla fattura',
        count(*) = 1
-         AND coalesce(bool_and(b.commissione_cents = 650 AND b.trattenuta_cents = 0 AND b.importo_cents = 0
-                               AND b.in_fattura_cents = 650 AND b.riferimento IS NULL AND l.cents = 650), false)
+         AND coalesce(bool_and(b.commissione_cents = 200 AND b.recupero_cents = 450 AND b.recupero_trattenuto_cents = 0
+                               AND b.trattenuta_cents = 0 AND b.importo_cents = 0 AND b.in_fattura_cents = 200
+                               AND b.riferimento IS NULL AND l.cents = 200 AND l.recupero_cents = 0), false)
          AND (SELECT o.payout_at IS NOT NULL FROM public.orders o WHERE o.id = 'e2210000-1111-0000-0000-0000000000a4'),
-       coalesce(string_agg(format('commissione %s · trattenuta %s · importo %s · in fattura %s',
-                b.commissione_cents, b.trattenuta_cents, b.importo_cents, b.in_fattura_cents), ', '), '(nessun bonifico)')
+       coalesce(string_agg(format('commissione %s · recupero %s · trattenuta %s · importo %s · in fattura %s',
+                b.commissione_cents, b.recupero_cents, b.trattenuta_cents, b.importo_cents, b.in_fattura_cents), ', '), '(nessun bonifico)')
   FROM private.bonifici_manuali b
   JOIN private.bonifici_manuali_ordini l ON l.bonifico_id = b.id
  WHERE l.order_id = 'e2210000-1111-0000-0000-0000000000a4';
