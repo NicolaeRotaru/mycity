@@ -388,6 +388,11 @@ export type Preventivo = {
    */
   offerta?: OffertaSuMisura;
   /**
+   * 28/11/2026 — Il giorno in cui l'attività si è iscritta a MyCity («AAAA-MM-GG»): non cambia mai.
+   * La usa la firma dell'armonia nascosta (lib/armonia) per la bozza del sito. La aggiunge chi legge dal database.
+   */
+  nascitaAttivita?: string | null;
+  /**
    * 25/11/2026 — L'analisi del business dell'attività, come l'AD analizza MyCity come azienda (Nicola): la
    * parte specifica del servizio «Analisi del business» (lib/agenzia/analisi.ts, `analisiAziendale`).
    */

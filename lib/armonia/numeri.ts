@@ -23,6 +23,13 @@ export const CARATTERI = [0, 1, 2, 3].map((k) => Math.round(16 * PHI ** k)) as r
 /** La colonna di lettura più larga: 987 px, numero di Fibonacci. */
 export const LARGHEZZA_MASSIMA = 987;
 
+/**
+ * I rapporti dei canoni storici, che sono rapporti tra numeri interi presi dalla musica, non la sezione
+ * aurea: le sette stanze di Palladio (cerchio, quadrato, √2, 4:3, 3:2, 5:3, 2:1) e le consonanze di
+ * Alberti. Coincidono coi formati di oggi per foto e video: 1:1, 4:3, 3:2, 16:9.
+ */
+export const RAPPORTI_ARMONICI = { unisono: 1, quarta: 4 / 3, quinta: 3 / 2, sestaMaggiore: 5 / 3, ottava: 2, radiceDiDue: Math.SQRT2 } as const;
+
 /** Testo e foto divisi in sezione aurea, in percento. */
 export const COLONNE_AUREE = { grande: 100 / PHI, piccola: 100 - 100 / PHI } as const;
 
@@ -76,7 +83,11 @@ export type Numerologia = {
   numero: number;
 };
 
-/** La numerologia pitagorica di un nome. «SDG Agenzia» = 48 → 12 → 3; «MyCity» = 32 → 5. */
+/**
+ * La numerologia «pitagorica» di un nome. «SDG Agenzia» = 48 → 12 → 3; «MyCity» = 32 → 5.
+ * Metodo dichiarato: si sommano tutte le lettere, poi si riducono le cifre fermandosi su 11, 22, 33.
+ * La tabella è moderna (Balliett, primi del Novecento), non di Pitagora.
+ */
 export function numerologia(nome: string): Numerologia {
   const lettere = lettereDi(nome);
   const valori = [...lettere].map(valoreLettera);

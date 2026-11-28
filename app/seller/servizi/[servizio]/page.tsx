@@ -132,7 +132,7 @@ export default function PaginaDelServizio() {
           business (24/11) è la sua analisi vera, coi canali da scrivere. */}
       {p && id === 'analisi' && <AnalisiDelBusiness scheda={scheda} fascia={p.attivo?.fascia ?? null} haPagato={haPagato} letturaFallita={!schedaInLettura && schedaNonLetta} />}
       {p && !giaAPosto && id !== 'analisi' && (
-        <AnteprimaServizio id={id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} scheda={scheda} bozzaAd={bozzaAd} />
+        <AnteprimaServizio id={id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} nascita={p.nascitaAttivita} scheda={scheda} bozzaAd={bozzaAd} />
       )}
 
       {p && (

@@ -1,17 +1,20 @@
 /**
  * ARMONIA NASCOSTA — la magia (Nicola, 28/11/2026: «deve esserci magia»).
  *
- * I quadrati magici dei pianeti, quelli di Cornelio Agrippa (1531): ogni riga, colonna e diagonale
- * dà la stessa somma. Nel sito decidono l'ordine in cui le schede si accendono, e il sigillo
- * dell'intenzione si traccia sul quadrato di Saturno, come nella tradizione. Chi guarda vede solo
+ * I quadrati magici dei pianeti di Cornelio Agrippa (De occulta philosophia, libro II, 1533), cella per
+ * cella come nelle edizioni moderne (ricerca del 28/11, docs/ricerca di ad-mycity): ogni riga, colonna e
+ * diagonale dà la stessa somma. Nel sito decidono l'ordine in cui le schede si accendono, e il sigillo
+ * dell'intenzione si traccia sul quadrato di Saturno, che è anche il Lo Shu cinese. Chi guarda vede solo
  * schede che compaiono una dopo l'altra e un segno sottile.
  *
- * Il quadrato del Sole (6×6) somma 666 in tutto: non si usa mai. Il Sole prende quello di Giove.
+ * Il quadrato del Sole (6×6) somma 666 in tutto: non si usa mai. Il Sole prende quello di Giove, che è
+ * anche il quadrato di Dürer (Melencolia I, 1514) capovolto. I nomi degli spiriti e delle intelligenze
+ * che Agrippa lega ai quadrati sono esclusi: qui ci sono solo i numeri.
  */
 import type { Pianeta } from './cielo';
-import { lettereDi, valoreLettera } from './numeri';
+import { ammessoVicino, lettereDi, valoreLettera } from './numeri';
 
-/** Saturno, 3×3: il Lo Shu della tradizione cinese, lo stesso di Agrippa. Somma 15. */
+/** Saturno, 3×3: lo stesso del Lo Shu cinese. Somma 15. */
 const SATURNO = [
   [4, 9, 2],
   [3, 5, 7],
@@ -32,42 +35,48 @@ const MARTE = [
   [10, 18, 1, 14, 22],
   [23, 6, 19, 2, 15],
 ];
-
-/** Quadrato magico di ordine dispari col metodo siamese (de La Loubère). */
-function dispari(n: number): number[][] {
-  const q = Array.from({ length: n }, () => Array<number>(n).fill(0));
-  let r = 0;
-  let c = Math.floor(n / 2);
-  for (let k = 1; k <= n * n; k++) {
-    q[r][c] = k;
-    const nr = (r - 1 + n) % n;
-    const nc = (c + 1) % n;
-    if (q[nr][nc]) r = (r + 1) % n;
-    else { r = nr; c = nc; }
-  }
-  return q;
-}
-
-/** Quadrato magico di ordine multiplo di 4. */
-function doppiamentePari(n: number): number[][] {
-  return Array.from({ length: n }, (_, i) =>
-    Array.from({ length: n }, (_, j) => {
-      const v = i * n + j + 1;
-      const a = i % 4;
-      const b = j % 4;
-      return a === b || a + b === 3 ? n * n + 1 - v : v;
-    }),
-  );
-}
+/** Venere, 7×7. Somma 175. */
+const VENERE = [
+  [22, 47, 16, 41, 10, 35, 4],
+  [5, 23, 48, 17, 42, 11, 29],
+  [30, 6, 24, 49, 18, 36, 12],
+  [13, 31, 7, 25, 43, 19, 37],
+  [38, 14, 32, 1, 26, 44, 20],
+  [21, 39, 8, 33, 2, 27, 45],
+  [46, 15, 40, 9, 34, 3, 28],
+];
+/** Mercurio, 8×8. Somma 260. */
+const MERCURIO = [
+  [8, 58, 59, 5, 4, 62, 63, 1],
+  [49, 15, 14, 52, 53, 11, 10, 56],
+  [41, 23, 22, 44, 45, 19, 18, 48],
+  [32, 34, 35, 29, 28, 38, 39, 25],
+  [40, 26, 27, 37, 36, 30, 31, 33],
+  [17, 47, 46, 20, 21, 43, 42, 24],
+  [9, 55, 54, 12, 13, 51, 50, 16],
+  [64, 2, 3, 61, 60, 6, 7, 57],
+];
+/** Luna, 9×9. Somma 369. */
+const LUNA = [
+  [37, 78, 29, 70, 21, 62, 13, 54, 5],
+  [6, 38, 79, 30, 71, 22, 63, 14, 46],
+  [47, 7, 39, 80, 31, 72, 23, 55, 15],
+  [16, 48, 8, 40, 81, 32, 64, 24, 56],
+  [57, 17, 49, 9, 41, 73, 33, 65, 25],
+  [26, 58, 18, 50, 1, 42, 74, 34, 66],
+  [67, 27, 59, 10, 51, 2, 43, 75, 35],
+  [36, 68, 19, 60, 11, 52, 3, 44, 76],
+  [77, 28, 69, 20, 61, 12, 53, 4, 45],
+];
 
 const QUADRATI: Readonly<Record<Pianeta, number[][]>> = {
   Saturno: SATURNO,
   Giove: GIOVE,
   Marte: MARTE,
   Sole: GIOVE, // il 6×6 del Sole somma 666: escluso
-  Venere: dispari(7),
-  Mercurio: doppiamentePari(8),
-  Luna: dispari(9),
+  Venere: VENERE,
+  Mercurio: MERCURIO,
+  Luna: LUNA,
 };
 
 export const quadratoDi = (pianeta: Pianeta): number[][] => QUADRATI[pianeta].map((riga) => [...riga]);
@@ -83,6 +92,14 @@ export function eMagico(q: number[][]): boolean {
   if (q.some((r) => r.length !== n || somma(r) !== s)) return false;
   for (let j = 0; j < n; j++) if (somma(q.map((r) => r[j])) !== s) return false;
   return somma(q.map((r, i) => r[i])) === s && somma(q.map((r, i) => r[n - 1 - i])) === s;
+}
+
+/**
+ * I ritardi in millisecondi con cui si accendono `quanti` elementi: il rango del quadrato per 89 ms
+ * (numero di Fibonacci). Mai un numero vietato: per esempio 666 non può uscire.
+ */
+export function ritardiDiAccensione(pianeta: Pianeta, quanti: number, passo = 89): number[] {
+  return ordineDiAccensione(pianeta, quanti).map((r) => (r === 0 ? 0 : ammessoVicino(r * passo)));
 }
 
 /**

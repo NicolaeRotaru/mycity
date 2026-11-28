@@ -12,7 +12,7 @@ import {
   schedaGoogle,
   type FormatoMedia,
 } from '@/lib/agenzia/contenuti-servizi';
-import { firmaDi, ordineDiAccensione, tokenCss } from '@/lib/armonia';
+import { firmaDi, ritardiDiAccensione, tokenCss } from '@/lib/armonia';
 import TramaNascosta from '@/components/armonia/TramaNascosta';
 import LunaDiOggi from '@/components/armonia/LunaDiOggi';
 import SigilloNascosto from '@/components/armonia/SigilloNascosto';
@@ -29,10 +29,14 @@ import SigilloNascosto from '@/components/armonia/SigilloNascosto';
  * `scheda`: la scheda del locale mandata da n8n (24/11/2026). Senza, la bozza e il piano restano generici.
  * `bozzaAd`: la bozza del sito scritta dall'AD (24/11/2026). Se c'è, i testi del sito sono i suoi.
  */
-type Props = { id: ServizioAgenzia; nome: string; tipo: TipoAttivita; giorno: string; scheda?: SchedaCliente | null; bozzaAd?: BozzaSitoAd | null };
+/**
+ * `nascita`: il giorno in cui l'attività si è iscritta a MyCity (28/11/2026). Fa nascere la firma dell'armonia
+ * nascosta della bozza del sito; non è `giorno`, che è «oggi» e cambierebbe la bozza da un giorno all'altro.
+ */
+type Props = { id: ServizioAgenzia; nome: string; tipo: TipoAttivita; giorno: string; nascita?: string | null; scheda?: SchedaCliente | null; bozzaAd?: BozzaSitoAd | null };
 
-export default function AnteprimaServizio({ id, nome, tipo, giorno, scheda, bozzaAd }: Props) {
-  if (id === 'sito_web') return <BozzaDelSito nome={nome} tipo={tipo} giorno={giorno} scheda={scheda} bozzaAd={bozzaAd} />;
+export default function AnteprimaServizio({ id, nome, tipo, giorno, nascita, scheda, bozzaAd }: Props) {
+  if (id === 'sito_web') return <BozzaDelSito nome={nome} tipo={tipo} nascita={nascita ?? null} scheda={scheda} bozzaAd={bozzaAd} />;
   if (id === 'analisi') return <CosaContieneLAnalisi />;
   if (id === 'social') {
     return (
@@ -61,16 +65,16 @@ function DaConfermare({ testo = 'da confermare' }: { testo?: string }) {
   return <span className="ml-1 rounded bg-amber-100 px-1 py-px text-[10px] font-semibold text-amber-800">{testo}</span>;
 }
 
-function BozzaDelSito({ nome, tipo, giorno, scheda, bozzaAd }: { nome: string; tipo: TipoAttivita; giorno: string; scheda?: SchedaCliente | null; bozzaAd?: BozzaSitoAd | null }) {
+function BozzaDelSito({ nome, tipo, nascita, scheda, bozzaAd }: { nome: string; tipo: TipoAttivita; nascita: string | null; scheda?: SchedaCliente | null; bozzaAd?: BozzaSitoAd | null }) {
   const fattaCoiDati = bozzaSito(nome, tipo, scheda);
   // La bozza dell'AD prende il posto dei testi; indirizzo, nome e pulsante restano quelli calcolati.
   const b = bozzaAd
     ? { ...fattaCoiDati, sottotitolo: bozzaAd.sottotitolo ?? fattaCoiDati.sottotitolo, sezioni: sezioniDellaBozza(bozzaAd) }
     : fattaCoiDati;
-  // ARMONIA NASCOSTA (Nicola, 28/11/2026): ogni sito nasce dalla firma della sua attività. La data è
-  // il giorno del preventivo finché non conosciamo quella d'apertura. Vedi lib/armonia e la skill «armonia».
-  const firma = firmaDi({ nome: b.nome, data: giorno });
-  const accensione = ordineDiAccensione(firma.pianeta, b.sezioni.length);
+  // ARMONIA NASCOSTA (Nicola, 28/11/2026): ogni sito nasce dalla firma della sua attività. La data è il
+  // giorno d'iscrizione a MyCity, che non cambia mai; senza, Mercurio. Vedi lib/armonia e la skill «armonia».
+  const firma = firmaDi({ nome: b.nome, data: nascita });
+  const ritardi = ritardiDiAccensione(firma.pianeta, b.sezioni.length);
   return (
     <Riquadro
       icona={Globe}
@@ -100,7 +104,7 @@ function BozzaDelSito({ nome, tipo, giorno, scheda, bozzaAd }: { nome: string; t
         {/* Le sezioni in sezione aurea (1,618 a 1) e accese nell'ordine del quadrato magico del pianeta. */}
         <div className="grid gap-px bg-cream-200 sm:grid-cols-[1.618fr_1fr]">
           {b.sezioni.map((s, i) => (
-            <div key={s.titolo} className="armonia-entra bg-white p-3" style={{ animationDelay: `${(accensione[i] ?? i) * 111}ms` }}>
+            <div key={s.titolo} className="armonia-entra bg-white p-3" style={{ animationDelay: `${ritardi[i] ?? 0}ms` }}>
               <p className="text-xs font-bold text-ink-900">{s.titolo}{s.daConfermare && <DaConfermare testo={bozzaAd ? 'da confermare dal titolare' : undefined} />}</p>
               <p className="mt-0.5 text-xs text-ink-600">{s.testo}</p>
             </div>

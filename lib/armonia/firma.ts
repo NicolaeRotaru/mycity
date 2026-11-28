@@ -5,14 +5,16 @@
  * secondario, la forma, i tempi, il motivo di sfondo e il sigillo. È sempre la stessa per lo stesso
  * nome e la stessa data, e due attività diverse hanno quasi sempre firme diverse.
  *
- * La data: quella di apertura se la conosciamo, altrimenti il giorno del preventivo (il giorno in cui
- * l'attività è arrivata da noi). Senza nessuna data si usa Mercurio, il dio del commercio e dei
- * viaggiatori: è la scelta ragionata per un mercato che consegna.
+ * La data: quella di apertura se la conosciamo, altrimenti il giorno in cui l'attività si è iscritta a
+ * MyCity (non cambia mai: mai «oggi», o la bozza cambierebbe faccia ogni giorno). Senza nessuna data si
+ * usa Mercurio, il dio del commercio e dei viaggiatori: è la scelta ragionata per un mercato che consegna.
+ * Il numero è quello della tabella detta pitagorica (A=1 … I=9), che in realtà è moderna (scuola di
+ * L. Dow Balliett, primi del Novecento): lo dichiariamo, e non lo spacciamo per antico.
  *
  * Il colore principale del marchio NON lo decide la firma: la firma dà solo il secondo tono.
  */
 import { numerologia, ammessoVicino, seme as semeDi } from './numeri';
-import { ELEMENTI, PIANETI, SEGNI, elementoCinese, segnoDi, type Elemento, type ElementoCinese, type Pianeta, type Segno } from './cielo';
+import { ELEMENTI, PIANETI, SEGNI, elementoCinese, giornoAPiacenza, segnoDi, type Elemento, type ElementoCinese, type Pianeta, type Segno } from './cielo';
 import { motivoPerFirma } from './simboli';
 import { sigillo } from './quadrati';
 import type { Motivo } from './forme';
@@ -62,10 +64,8 @@ export type Firma = {
 /** Una data «AAAA-MM-GG» o un Date, portata a mezzogiorno UTC. Null se non è una data. */
 function dataDi(d?: string | Date | null): Date | null {
   if (!d) return null;
-  if (d instanceof Date) {
-    if (Number.isNaN(d.getTime())) return null;
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12));
-  }
+  // Un Date è un istante: conta il giorno che era a Piacenza in quell'istante, non quello in UTC.
+  if (d instanceof Date) return Number.isNaN(d.getTime()) ? null : dataDi(giornoAPiacenza(d));
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
   if (!m) return null;
   const t = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12));

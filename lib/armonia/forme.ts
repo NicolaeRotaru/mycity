@@ -1,12 +1,15 @@
 /**
  * ARMONIA NASCOSTA — le forme (Nicola, 28/11/2026).
  *
- * Tracciati SVG costruiti col compasso: geometria sacra del Mediterraneo, motivi giapponesi,
- * islamici e cinesi, la rosa a sedici settori degli aruspici etruschi di Piacenza. Si disegnano
- * quasi trasparenti, dietro al contenuto, e sembrano solo una trama.
+ * Tracciati SVG costruiti col compasso: geometria del Mediterraneo, il quincunx dei pavimenti
+ * cosmateschi, motivi giapponesi, la rosa a sedici settori degli aruspici etruschi di Piacenza.
+ * Si disegnano quasi trasparenti, nei margini, e sembrano solo una trama.
  *
- * Volutamente qui NON c'è un generatore di stelle a cinque o sei punte: il pentagramma e la stella
- * di David non si possono disegnare con questa libreria (vedi `simboli.ts`, VIETATI).
+ * Regola della ricerca del 28/11: un motivo di un'altra cultura entra solo come rete che continua
+ * oltre i bordi, mai come figura sola. Per questo non c'è un generatore di stelle (cinque, sei o otto
+ * punte): il pentagramma, la stella di David e la stella a otto punte isolata, che nel Corano segna le
+ * sezioni, non si possono disegnare con questa libreria. L'asanoha forma rosette a sei punte: resta
+ * disponibile solo se lo si chiede apposta, la firma non lo sceglie mai da sola (vedi `simboli.ts`).
  */
 import { PHI } from './numeri';
 
@@ -178,22 +181,38 @@ function seigaiha(w: number, h: number, p: number): string {
   return d;
 }
 
-/** Le stelle a otto punte delle piastrelle islamiche: due quadrati incrociati, ripetuti come trama. */
-function stelleOtto(w: number, h: number, p: number): string {
+/** Linee sottili inclinate di 30 gradi, come il vento: l'elemento aria. */
+function linee(w: number, h: number, p: number): string {
   let d = '';
-  const passo = p * 1.618;
-  const r = passo * 0.36;
-  for (let y = passo / 2; y < h + passo; y += passo) for (let x = passo / 2; x < w + passo; x += passo)
-    d += poligono(x, y, r, 4, 0) + poligono(x, y, r, 4, Math.PI / 4);
+  const dx = h / Math.tan(Math.PI / 6);
+  for (let x = -dx; x < w + p; x += p * 0.8) d += `M${n(x)} ${n(h)}L${n(x + dx)} 0`;
+  return d;
+}
+
+/**
+ * Il quincunx dei pavimenti cosmateschi (marmi romani e medievali, XII-XIII secolo): un cerchio al
+ * centro e quattro negli angoli di un quadrato. Decorazione pura, di casa nelle chiese italiane.
+ */
+function quincunx(w: number, h: number, p: number): string {
+  let d = '';
+  const lato = p * 2.618;
+  for (let y = 0; y < h + lato; y += lato) for (let x = 0; x < w + lato; x += lato) {
+    d += `M${n(x)} ${n(y)}h${n(lato)}v${n(lato)}h${n(-lato)}Z`;
+    d += cerchio(x + lato / 2, y + lato / 2, lato * 0.3);
+    for (const [cx, cy] of [[x, y], [x + lato, y], [x, y + lato], [x + lato, y + lato]]) d += cerchio(cx, cy, lato * 0.12);
+  }
   return d;
 }
 
 export type Motivo =
   | 'fiore-della-vita' | 'seme-della-vita' | 'rosa-etrusca' | 'cerchi'
-  | 'triangoli' | 'quadrati' | 'onde' | 'esagoni' | 'asanoha' | 'seigaiha' | 'stelle-otto';
+  | 'triangoli' | 'quadrati' | 'onde' | 'esagoni' | 'asanoha' | 'seigaiha' | 'linee' | 'quincunx';
 
 /** Il tracciato di un motivo dentro un riquadro w×h. `passo` è la misura del modulo, `seme` sposta il centro. */
 export function trama(motivo: Motivo, w: number, h: number, passo = 34, seme = 0): string {
+  // Un passo zero o negativo farebbe girare i cicli per sempre (collaudo del 28/11): minimo 4.
+  passo = Math.max(4, Number.isFinite(passo) ? passo : 34);
+  if (!(w > 0) || !(h > 0)) return '';
   const [cx, cy] = puntoAureo(w, h, seme);
   const m = Math.min(w, h);
   switch (motivo) {
@@ -207,6 +226,7 @@ export function trama(motivo: Motivo, w: number, h: number, passo = 34, seme = 0
     case 'esagoni': return esagoni(w, h, passo);
     case 'asanoha': return asanoha(w, h, passo);
     case 'seigaiha': return seigaiha(w, h, passo);
-    case 'stelle-otto': return stelleOtto(w, h, passo);
+    case 'linee': return linee(w, h, passo);
+    case 'quincunx': return quincunx(w, h, passo);
   }
 }

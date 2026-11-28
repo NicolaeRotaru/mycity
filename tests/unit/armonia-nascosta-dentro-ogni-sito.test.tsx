@@ -3,8 +3,11 @@
  * Queste prove dicono che i calcoli sono quelli della tradizione, che i vietati non escono mai,
  * e che dentro la bozza del sito e nel piè di pagina la trama è muta e non copre il testo.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   CARATTERI,
   FIRMA_MYCITY,
@@ -21,6 +24,9 @@ import {
   ordineDiAccensione,
   poligono,
   quadratoDi,
+  prossimaLuna,
+  ritardiDiAccensione,
+  motivoPerFirma,
   segnoDi,
   sigillo,
   spiraleAurea,
@@ -32,6 +38,17 @@ import {
 import TramaNascosta from '@/components/armonia/TramaNascosta';
 import LunaDiOggi from '@/components/armonia/LunaDiOggi';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
+
+// Per rendere il piè di pagina, come in minori-s08-piede.test.tsx.
+vi.mock('@tanstack/react-query', () => ({ useQuery: () => ({ data: undefined, isLoading: false, isError: false }) }));
+vi.mock('@/lib/supabase/client', () => ({ supabase: {} }));
+vi.mock('next/navigation', () => ({ usePathname: () => '/' }));
+vi.mock('@/components/hooks/useProfile', () => ({ useProfile: () => ({ isSeller: false, isRider: false, isAuthenticated: false }) }));
+vi.mock('@/components/hooks/useBranding', async () => {
+  const { defaultBranding } = await import('@/lib/site-branding');
+  return { useBranding: () => defaultBranding() };
+});
+vi.mock('@/components/NewsletterForm', () => ({ default: () => null }));
 
 const giorno = (s: string) => new Date(`${s}T12:00:00Z`);
 
@@ -61,10 +78,21 @@ describe('i numeri', () => {
     for (let numero = 1; numero <= 9; numero++) {
       for (const e of Object.values(ELEMENTI)) expect(numeroAmmesso(ammessoVicino(numero * 111 * e.fattoreTempo))).toBe(true);
     }
+    // «F» vale 6, senza data è aria (fattore 1): 6 × 111 = 666, che la firma deve scavalcare.
+    expect(firmaDi({ nome: 'F' }).durata).toBe(667);
   });
 });
 
 describe('il cielo', () => {
+  it('il segno viene dal Sole vero, non da una tabella fissa: gli ingressi cambiano ogni anno', () => {
+    // Ariete 2028 entra il 20/03 alle 03:11 di Roma: a mezzogiorno è già Ariete (una tabella fissa direbbe Pesci).
+    expect(segnoDi(giorno('2028-03-20'))).toBe('Ariete');
+    expect(segnoDi(giorno('2024-03-20'))).toBe('Ariete');
+    // Toro 2024 entra il 19/04 alle 15:56: a mezzogiorno del 19 è ancora Ariete.
+    expect(segnoDi(giorno('2024-04-19'))).toBe('Ariete');
+    expect(segnoDi(giorno('2024-04-20'))).toBe('Toro');
+  });
+
   it('trova il segno ai confini', () => {
     expect(segnoDi(giorno('2026-03-20'))).toBe('Pesci');
     expect(segnoDi(giorno('2026-03-21'))).toBe('Ariete');
@@ -74,15 +102,28 @@ describe('il cielo', () => {
     expect(segnoDi(giorno('2026-11-28'))).toBe('Sagittario');
   });
 
-  it("dà l'elemento cinese dell'anno, che comincia il 4 febbraio", () => {
+  it("dà l'elemento cinese dell'anno, che comincia al lichun (Sole a 315°)", () => {
     expect(elementoCinese(giorno('2026-11-28'))).toBe('fuoco');
-    expect(elementoCinese(giorno('2026-02-03'))).toBe('legno');
+    expect(elementoCinese(giorno('2026-02-03'))).toBe('legno'); // lichun 2026: 3/2 alle 20:54 di Roma
+    expect(elementoCinese(giorno('2026-02-04'))).toBe('fuoco');
+    // lichun 2024: 4/2 alle 16:27 di Pechino, cioè le 9:27 di Roma: a mezzogiorno del 4 è già il 2024.
+    expect(elementoCinese(giorno('2024-02-03'))).toBe('acqua');
+    expect(elementoCinese(giorno('2024-02-04'))).toBe('legno');
   });
 
   it('la luna è nuova durante un\'eclissi di sole e piena durante un\'eclissi di luna', () => {
     const nuova = faseLuna(Date.UTC(2024, 3, 8, 18, 21)); // eclissi totale di sole, 8 aprile 2024
-    expect(Math.min(nuova, 1 - nuova)).toBeLessThan(0.03);
-    expect(Math.abs(faseLuna(Date.UTC(2024, 8, 18, 2, 34)) - 0.5)).toBeLessThan(0.03); // eclissi di luna, 18 settembre 2024
+    expect(Math.min(nuova, 1 - nuova)).toBeLessThan(0.005);
+    expect(Math.abs(faseLuna(Date.UTC(2024, 8, 18, 2, 34)) - 0.5)).toBeLessThan(0.005); // eclissi di luna, 18 settembre 2024
+  });
+
+  it('la luna vera sta entro poche ore dalle fasi di Meeus, dove il mese medio sbagliava di 13 ore', () => {
+    const nuova = faseLuna(Date.UTC(2026, 9, 10, 15, 50)); // novilunio 10/10/2026 17:50 di Roma
+    expect(Math.min(nuova, 1 - nuova)).toBeLessThan(0.005);
+    const t = prossimaLuna(0, Date.UTC(2026, 9, 1)).getTime();
+    expect(Math.abs(t - Date.UTC(2026, 9, 10, 15, 50))).toBeLessThan(3_600_000);
+    const piena = prossimaLuna(0.5, Date.UTC(2026, 10, 20)).getTime(); // plenilunio 24/11/2026 15:53 di Roma
+    expect(Math.abs(piena - Date.UTC(2026, 10, 24, 14, 53))).toBeLessThan(3_600_000);
   });
 });
 
@@ -93,6 +134,25 @@ describe('la magia', () => {
     for (const p of pianeti) expect(eMagico(quadratoDi(p))).toBe(true);
     expect(pianeti.some((p) => quadratoDi(p).length === 6)).toBe(false);
     expect(quadratoDi('Saturno')).toEqual([[4, 9, 2], [3, 5, 7], [8, 1, 6]]);
+    // I quadrati di Agrippa, non quadrati qualunque dello stesso ordine.
+    expect(quadratoDi('Venere')[0]).toEqual([22, 47, 16, 41, 10, 35, 4]);
+    expect(quadratoDi('Mercurio')[0]).toEqual([8, 58, 59, 5, 4, 62, 63, 1]);
+    expect(quadratoDi('Luna')[0]).toEqual([37, 78, 29, 70, 21, 62, 13, 54, 5]);
+  });
+
+  it('i ritardi di accensione non cadono mai su un numero vietato (666 compreso)', () => {
+    for (const p of pianeti) for (const r of ritardiDiAccensione(p, 100)) expect(numeroAmmesso(r)).toBe(true);
+    expect(ritardiDiAccensione('Saturno', 3)).toEqual([89, 178, 0]);
+    // Col vecchio passo di 111 ms il sesto rango dava 666: la guardia lo deve scavalcare.
+    for (const p of pianeti) expect(ritardiDiAccensione(p, 20, 111)).not.toContain(666);
+  });
+
+  it('con «riduci movimento» il respiro e le entrate si spengono del tutto, ritardo compreso', () => {
+    const css = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
+    const blocco = /@media \(prefers-reduced-motion: reduce\) \{\s*([^{}]*)\{ animation: none !important; \}\s*\}/g;
+    const selettori = [...css.matchAll(blocco)].map((m) => m[1]).join(',');
+    expect(selettori).toContain('.armonia-respiro');
+    expect(selettori).toContain('.armonia-entra');
   });
 
   it("l'ordine di accensione è una permutazione e segue il quadrato", () => {
@@ -124,6 +184,21 @@ describe('le forme e i vietati', () => {
     expect(motivoAmmesso('croce celtica')).toBe(false);
   });
 
+  it('la firma non sceglie mai da sola motivi che formano stelle', () => {
+    expect(Object.keys(MOTIVI)).not.toContain('stelle-otto');
+    for (const e of Object.keys(ELEMENTI) as Array<keyof typeof ELEMENTI>) {
+      for (let n = 1; n <= 9; n++) expect(motivoPerFirma(e, n)).not.toBe('asanoha');
+    }
+    expect(motivoAmmesso('sayagata')).toBe(false);
+    expect(motivoAmmesso('stella a otto punte')).toBe(false);
+  });
+
+  it('con un passo zero o negativo la trama finisce lo stesso', () => {
+    expect(typeof trama('triangoli', 100, 100, 0)).toBe('string');
+    expect(typeof trama('onde', 100, 100, -5)).toBe('string');
+    expect(trama('cerchi', 0, 0)).toBe('');
+  });
+
   it('ogni trama si disegna, senza numeri rotti', () => {
     for (const m of Object.keys(MOTIVI) as Motivo[]) {
       const d = trama(m, 610, 377, 34, 7);
@@ -153,16 +228,31 @@ describe('la firma', () => {
 
   it('MyCity fa 5, e i token CSS ci sono', () => {
     expect(FIRMA_MYCITY.numero).toBe(5);
-    expect(tokenCss(FIRMA_MYCITY)).toMatchObject({ '--armonia-durata': `${FIRMA_MYCITY.durata}ms` });
+    expect(FIRMA_MYCITY.durata).toBe(555);
+    expect(tokenCss(FIRMA_MYCITY)).toMatchObject({ '--armonia-durata': '555ms' });
+  });
+
+  it('un Date si legge col giorno di Piacenza, non con quello in UTC', () => {
+    // 21/3/2026 alle 00:30 a Roma è ancora il 20/3 alle 23:30 in UTC.
+    const f = firmaDi({ nome: 'Pane Quotidiano', data: new Date(Date.UTC(2026, 2, 20, 23, 30)) });
+    expect(f.segno).toBe('Ariete');
   });
 });
 
 describe('dentro i siti', () => {
-  it('la trama è muta per i lettori di schermo e non supera mai l\'8% di opacità', () => {
+  it('la trama è muta per i lettori di schermo, non supera mai l\'8% e sta nei margini', () => {
     const html = renderToStaticMarkup(<TramaNascosta firma={FIRMA_MYCITY} opacita={0.5} />);
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain('opacity:0.08');
+    expect(html).toContain('mask-image:radial-gradient(ellipse at center, transparent 38%');
     expect(html.replace(/<[^>]+>/g, '')).toBe('');
+  });
+
+  it('nel piè di pagina la trama sta dietro al testo e fuori dal contenitore che spazia le righe', async () => {
+    const { default: Footer } = await import('@/components/Footer');
+    const html = renderToStaticMarkup(createElement(Footer));
+    // isolate crea il livello, -z-10 manda la trama sotto al testo ma sopra lo sfondo, space-y non la tocca.
+    expect(html).toMatch(/class="relative isolate overflow-hidden[^"]*"><svg[^>]*class="[^"]*-z-10[^"]*"[\s\S]*?<\/svg><div class="py-5[^"]*space-y-1/);
   });
 
   it('sul server la luna non disegna una fase (la pagina può restare in cache)', () => {
@@ -171,9 +261,15 @@ describe('dentro i siti', () => {
     expect(html).not.toContain('<path');
   });
 
+  it('la bozza del sito non cambia faccia da un giorno all\'altro: nasce dal giorno d\'iscrizione', () => {
+    const ieri = renderToStaticMarkup(<AnteprimaServizio id="sito_web" nome="Pane Quotidiano" tipo="bar" giorno="2026-11-21" nascita="2026-10-02" />);
+    const oggi = renderToStaticMarkup(<AnteprimaServizio id="sito_web" nome="Pane Quotidiano" tipo="bar" giorno="2026-11-22" nascita="2026-10-02" />);
+    expect(oggi).toBe(ieri);
+  });
+
   it('la bozza del sito del cliente nasce dalla sua firma, con le sezioni in sezione aurea', () => {
-    const html = renderToStaticMarkup(<AnteprimaServizio id="sito_web" nome="Ora del Gusto" tipo="bar" giorno="2026-12-01" />);
-    const f = firmaDi({ nome: 'Ora del Gusto', data: '2026-12-01' });
+    const html = renderToStaticMarkup(<AnteprimaServizio id="sito_web" nome="Ora del Gusto" tipo="bar" giorno="2026-12-01" nascita="2026-11-20" />);
+    const f = firmaDi({ nome: 'Ora del Gusto', data: '2026-11-20' });
     expect(html).toContain(`data-armonia-numero="${f.numero}"`);
     expect(html).toContain(`--armonia-durata:${f.durata}ms`);
     expect(html).toContain('sm:grid-cols-[1.618fr_1fr]');

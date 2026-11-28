@@ -655,9 +655,14 @@ select.border-cream-300 {
   --armonia-max: 987px;
   --armonia-curva: cubic-bezier(0.382, 0, 0.618, 1);
 }
-/* Sei respiri al minuto: la trama di sfondo si allarga e si stringe appena. */
+/* Un respiro solo all'arrivo, 4,8 secondi: sotto i 5 secondi non serve un comando per fermarlo (WCAG 2.2.2). */
 @keyframes armonia-respiro { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.018); } }
-.armonia-respiro { transform-origin: 50% 50%; animation: armonia-respiro 10s var(--armonia-curva) infinite; }
+.armonia-respiro { transform-origin: 50% 50%; animation: armonia-respiro 4.8s var(--armonia-curva) 1; }
 /* Le schede entrano nell'ordine del quadrato magico del pianeta: partono già visibili, mai da zero. */
 @keyframes armonia-entra { from { opacity: 0.4; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 .armonia-entra { animation: armonia-entra var(--armonia-durata, 333ms) var(--armonia-curva) both; }
+/* Chi ha chiesto meno movimento: niente respiro e niente entrate. La regola globale azzera la durata
+   ma non il ritardo scritto sulla scheda, che la lasciava sbiadita per un attimo (collaudo del 28/11). */
+@media (prefers-reduced-motion: reduce) {
+  .armonia-respiro, .armonia-entra { animation: none !important; }
+}
