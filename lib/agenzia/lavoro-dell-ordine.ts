@@ -7,7 +7,7 @@ import type { BozzaSitoOrdine } from './sito-dell-ordine-ad';
 import type { AnalisiAvvioOrdine } from './analisi-dell-ordine-ad';
 import { leggiServiziScelti, servizioScelto, type ServizioAgenzia } from './servizi-scelti';
 import { percorsoDelSito } from './sito-finito/indirizzo';
-import { indirizzoPubblico } from '@/lib/env';
+import { env } from '@/lib/env';
 
 /**
  * IL LAVORO DELL'ORDINE, VISTO DAL TITOLARE — 28/11/2026.
@@ -86,7 +86,7 @@ export async function lavoroDallOrdine(sellerId: string): Promise<LavoroDellOrdi
       // Collaudo 28/11/2026 — Le «note» del piano e della bozza sono righe dell'AD per il team (cosa preparare alla
       // visita, cosa manca): restano a SDG, al titolare non si mandano nemmeno nella risposta.
       piano: { stato: perIlTitolare(r.piano_completo_stato, true), piano: r.piano ? { ...r.piano, note: [] } : r.piano },
-      sito: { stato: perIlTitolare(r.sito_stato, sitoPronto), bozza: sitoPronto && r.sito ? { ...r.sito, note: [] } : null, indirizzo: percorso ? `${indirizzoPubblico().url}${percorso}` : null },
+      sito: { stato: perIlTitolare(r.sito_stato, sitoPronto), bozza: sitoPronto && r.sito ? { ...r.sito, note: [] } : null, indirizzo: percorso ? `${env.appUrl()}${percorso}` : null },
       analisi: { stato: perIlTitolare(r.analisi_stato, analisiPronta), analisi: analisiPronta ? (r.analisi ?? null) : null },
     };
   } catch (e) {

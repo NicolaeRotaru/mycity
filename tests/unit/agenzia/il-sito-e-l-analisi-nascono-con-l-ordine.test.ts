@@ -316,6 +316,8 @@ describe('④ il titolare vede solo il suo lavoro', () => {
     const mio = await lavoroDallOrdine(SELLER);
     expect(mio?.nomeAttivita).toBe('Caffè di Prova');
     expect(mio?.sito.stato).toBe('pronto');
+    // 28/11 14:10 — il sito pronto è online: il titolare riceve l'indirizzo intero, col dominio del marketplace.
+    expect(mio?.sito.indirizzo).toMatch(/^https:\/\/www\.mycity-marketplace\.com\/sito\/caffe-di-prova-[0-9a-f]{8}$/);
     const testo = JSON.stringify(mio);
     expect(testo).toContain('MIO');
     expect(testo).not.toMatch(/ALTRUI|Bar Altrui|agente@esempio\.it|altro@esempio\.it|lavoro_sito|sito_errore/);
