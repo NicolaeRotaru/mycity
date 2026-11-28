@@ -27,6 +27,11 @@ export const AnalisiSchema = z.object({
   presenza_online_sdg: z.array(z.object({ canale: testo, stato: testo, indirizzo: httpsONull, nota: testo.nullish() })).default([]),
   raccomandazioni: z.array(z.object({ priorita: z.number(), cosa: testo, perche: testo, quando: testo.nullish(), costo: testo.nullish() })).default([]),
   fonti: z.array(https).default([]),
+  // 28/11/2026 — Lo standard per ogni cliente (lib/agenzia/analisi-standard.ts): il titolo della presenza online (per SDG
+  // resta «La presenza online di SDG»), cosa comprende l'abbonamento, le cose da confermare alla visita.
+  titolo_presenza: testo.nullish(),
+  compreso: z.object({ titolo: testo, voci: elenco }).nullish(),
+  da_confermare: elenco,
 });
 export type Analisi = z.infer<typeof AnalisiSchema>;
 
@@ -37,6 +42,9 @@ export const SocialSchema = z.object({
   aggiornato_il: testo,
   obiettivo: testo,
   a_chi_parliamo: testo,
+  // 28/11/2026 — Lo standard per ogni cliente (lib/agenzia/social-standard.ts): canali e tono del piano dell'AD,
+  // il titolo della parte «oltre il calendario» (per SDG resta «Extra Premium»), l'evento in città con la sua fonte.
+  tono: testo.nullish(),
   canali: z.array(z.object({ nome: testo, account: testo.nullish(), ruolo: testo, da_aprire: z.boolean().default(false) })).default([]),
   pilastri: z.array(z.object({ nome: testo, percentuale: z.number(), descrizione: testo })).default([]),
   quantita: z.array(z.object({ voce: testo, quanti: z.number() })).default([]),
@@ -45,7 +53,11 @@ export const SocialSchema = z.object({
     ora: z.string().regex(/^\d{2}:\d{2}$/),
     canale: testo, formato: testo, pilastro: testo, titolo: testo, testo,
     strato, stato: testo.default('da_approvare'),
+    in_citta: testo.nullish(), fonte_evento: httpsONull,
   })).default([]),
+  titolo_extra: testo.nullish(),
+  // 28/11/2026 — Da dove partiamo: quello che l'analisi del cliente ha visto sui suoi social (lib/agenzia/social-standard.ts).
+  da_dove_partiamo: elenco,
   extra_premium: z.array(z.object({ voce: testo, cosa: testo, costo_fuori_canone: testo.nullish() })).default([]),
   misure: z.array(z.object({ kpi: testo, obiettivo: testo, come_si_misura: testo })).default([]),
   regole: elenco,

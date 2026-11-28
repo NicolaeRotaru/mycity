@@ -3,7 +3,11 @@ import type { LavoroDellOrdine } from '@/lib/agenzia/lavoro-dell-ordine';
 import type { ParteConsegnata } from '@/lib/agenzia/lavoro-consegnato/quale-parte';
 import { STANDARD } from '@/lib/agenzia/sito-finito/standard';
 import { paginePubbliche, pagineDelSito } from '@/lib/agenzia/sito-finito/costruisci';
-import { Elenco, LinkEsterno, SCHEDA, Sezione, giornoCorto } from './comuni';
+import { socialDalPiano } from '@/lib/agenzia/social-standard';
+import { analisiDallOrdine } from '@/lib/agenzia/analisi-standard';
+import { Elenco, LinkEsterno, SCHEDA, Sezione } from './comuni';
+import PianoEditorialeConsegnato from './PianoEditorialeConsegnato';
+import AnalisiConsegnata from './AnalisiConsegnata';
 
 /**
  * IL LAVORO NATO CON L'ORDINE, NELLA ZONA «SERVIZI» DEL TITOLARE — 28/11/2026.
@@ -15,14 +19,6 @@ import { Elenco, LinkEsterno, SCHEDA, Sezione, giornoCorto } from './comuni';
  * informazioni che servono per completarlo. Quello che non è ancora pronto dice «in preparazione»: mai un errore
  * tecnico, mai una pagina vuota.
  */
-
-const nomeDelSito = (f: string) => {
-  try {
-    return new URL(f).hostname;
-  } catch {
-    return 'fonte';
-  }
-};
 
 export const SCRITTA_BOZZA = 'Bozza, la confermiamo insieme alla visita';
 export const SCRITTA_ONLINE = 'Il tuo sito è online';
@@ -126,57 +122,29 @@ function IlTuoSito({ ordine }: { ordine: LavoroDellOrdine }) {
   );
 }
 
+/**
+ * 28/11/2026 — Il piano del cliente nella forma standard, quella della Gestione social di SDG (Nicola: «usala come
+ * standard, personalizzata in base al cliente e all'abbonamento»). La forma la calcola lib/agenzia/social-standard.ts
+ * dal piano dell'ordine e dai dati del cliente; la disegna la stessa pagina del piano di SDG.
+ */
 function PianoDellOrdine({ ordine }: { ordine: LavoroDellOrdine }) {
   const p = ordine.piano.piano;
-  return (
-    <>
-      <section className={`mb-4 ${SCHEDA}`} aria-labelledby="piano-ordine">
-        <h2 id="piano-ordine" className="text-xl font-bold text-ink-900">Il piano editoriale, {p?.periodo?.titolo ?? 'primo mese'}</h2>
-        <p className="mt-1 text-sm text-ink-600">{ordine.piano.stato === 'pronto' ? 'Versione completa' : `Prima versione. Quella completa: ${attesa(ordine.piano.stato).toLowerCase()}`} · {p?.contenuti?.length ?? 0} contenuti</p>
-        {p?.intestazione && (
-          <dl className="mt-3 grid gap-1 text-sm text-ink-700">
-            <div><dt className="inline font-semibold text-ink-900">Canali e tono: </dt><dd className="inline">{p.intestazione.canaliETono}</dd></div>
-            <div><dt className="inline font-semibold text-ink-900">Prima di pubblicare: </dt><dd className="inline">{p.intestazione.primaDiPubblicare}</dd></div>
-          </dl>
-        )}
-      </section>
-      <ul className="space-y-3">
-        {(p?.contenuti ?? []).map((c, i) => (
-          <li key={`${c.data}-${i}`} className={SCHEDA}>
-            <p className="text-sm font-semibold text-ink-900">{giornoCorto(c.data)} · {c.ora} · {c.tipo}</p>
-            <p className="mt-1 font-semibold text-ink-900">{c.tema}</p>
-            <p className="mt-1 text-sm text-ink-700">{c.didascalia}</p>
-          </li>
-        ))}
-      </ul>
-    </>
-  );
+  // L’analisi del cliente, quando è pronta, cuce anche il piano: «Da dove partiamo» (Nicola, 28/11).
+  const social = socialDalPiano(p, { nome: ordine.nomeAttivita, fascia: ordine.fascia, ...(ordine.perLoStandard ?? {}), analisi: ordine.analisi.analisi });
+  const avviso = ordine.piano.stato === 'pronto'
+    ? 'Versione completa, scritta per la tua attività.'
+    : `Prima versione, con gli esempi per il tuo tipo di attività. Quella completa: ${attesa(ordine.piano.stato).toLowerCase()}`;
+  // L’intestazione (la fascia, «bozza») la mette già la pagina del lavoro dell’ordine, sopra.
+  return <PianoEditorialeConsegnato social={social} intestazione={null} avviso={avviso} />;
 }
 
+/**
+ * 28/11/2026 — L'analisi del cliente nella forma standard, quella dell'analisi di mercato di SDG (Nicola: «usala come
+ * standard per tutti, personalizzata in base all'abbonamento e al cliente»). La forma la calcola
+ * lib/agenzia/analisi-standard.ts; la disegna la stessa pagina dell'analisi di SDG.
+ */
 function AnalisiDellOrdine({ ordine }: { ordine: LavoroDellOrdine }) {
   const a = ordine.analisi.analisi!;
-  return (
-    <>
-      <Sezione id="analisi-sintesi" titolo="In breve">
-        <p className="mb-2 text-ink-600">{a.ritmo} Questo è il rapporto dell’avvio, fatto coi soli dati pubblici.</p>
-        <Elenco voci={a.sintesi} />
-      </Sezione>
-      {a.parti.map((p) => (
-        <Sezione key={p.parte} id={`analisi-${p.parte}`} titolo={p.titolo}>
-          <Elenco voci={p.frasi} />
-          {p.fonti.length > 0 && (
-            <p className="mt-2 text-xs text-ink-600">Fonti: {p.fonti.map((f, i) => <span key={f}>{i > 0 ? ' · ' : ''}<LinkEsterno href={f}>{nomeDelSito(f)}</LinkEsterno></span>)}</p>
-          )}
-        </Sezione>
-      ))}
-      <Sezione id="analisi-mosse" titolo="Le prime mosse, nei primi 30 giorni">
-        <Elenco voci={a.primeMosse.map((m) => `${m.cosa} — ${m.perche}`)} />
-      </Sezione>
-      {a.daConfermare.length > 0 && (
-        <Sezione id="analisi-da-confermare" titolo="Da confermare alla visita">
-          <Elenco voci={a.daConfermare} />
-        </Sezione>
-      )}
-    </>
-  );
+  const analisi = analisiDallOrdine(a, { nome: ordine.nomeAttivita, fascia: ordine.fascia, canaliTrovati: ordine.perLoStandard?.canaliTrovati, sito: ordine.perLoStandard?.sito });
+  return <AnalisiConsegnata analisi={analisi} intestazione={null} avviso={`${a.ritmo} Questo è il rapporto dell’avvio, fatto coi soli dati pubblici.`} />;
 }

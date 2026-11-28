@@ -310,6 +310,7 @@ export async function chiediIlPianoCompleto(ordineId: string): Promise<EsitoRich
       fascia: o.fascia,
       piano: o.piano,
       scheda: dallaSchedaDellAgente(scheda, o.fascia),
+      tipoAttivita: o.dati_attivita?.tipo ?? null,
     });
     const prima = { nome: o.nome_attivita, lavoro: 'piano-editoriale', fascia: o.fascia, periodo: o.piano.periodo };
     const partito = await avviaLavoro(lavoroPiano, VENDITORE_DEI_PIANI, `Piano · ${o.nome_attivita}`.slice(0, 120), prima, { flusso: FLUSSO, compito: COMPITO_PIANO, schema: SCHEMA_PIANO, dati });

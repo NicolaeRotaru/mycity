@@ -5,6 +5,8 @@ import type { Abbonamento } from './preventivo';
 import { TIPI_CONTENUTO, type ContenutoDelPiano, type PianoDelMese } from './piano-del-primo-mese';
 import { fraseMostrabile } from './rapporto';
 import { haUnNomeDiPersona } from './nomi-di-persona';
+import { PILASTRI, pilastriPerIlTipo } from './social-standard';
+import type { TipoAttivita } from './tipi-attivita';
 
 /**
  * IL PIANO COMPLETO, CHIESTO ALL'AD — 27/11/2026.
@@ -35,6 +37,8 @@ export const COMPITO_PIANO = `Sei l'AD digitale di MyCity. SDG Agenzia (il partn
 IL FORMATO è quello del piano del Caffè di Piacenza, dicembre 2026: in testa cliente, abbonamento, canali e tono, hashtag fissi, cosa confermare prima di pubblicare; poi una riga per ogni contenuto con data, ora, tipo (Post, Carosello, Reel), tema, didascalia proposta, cosa riprendere, evento in città.
 Esempio di una riga del Caffè: data 2026-12-05, ora 09:00, tipo Reel, tema «Sabato di mercato in Piazza Duomo», didascalia «Il sabato mattina Piazza Duomo si riempie di banchi e di voci. Il giro al mercato comincia (e finisce) con un caffè da noi. #Piacenza #CaffèDiPiacenza #PiazzaDuomo», cosa riprendere «Video verticale di 15-20 secondi, 5 clip da 3 secondi: banchi del mercato, gente che passa, porta del bar, cappuccino servito. Niente volti riconoscibili in primo piano», in città «Mercato del sabato mattina».
 
+LO STANDARD è il piano social di SDG Agenzia (Nicola, 28/11/2026: «usalo come standard, personalizzato in base al cliente e all'abbonamento»): ogni contenuto appartiene a un «pilastro», scelto fra i cinque di «dati.pilastri» e scritto col nome esatto. Distribuisci i contenuti fra tutti e cinque, cuciti su QUESTO locale: il titolare vedrà quanta parte del mese va a ogni pilastro.
+
 COSA HAI, in «dati»: il locale (nome, tipo, città, indirizzo), l'abbonamento con le QUANTITÀ, il PERIODO, quello che hai già scritto nella scheda per il venditore (cosa ha, cosa manca, reputazione, social, cosa faremo con questa fascia), e il piano di partenza del sito. Usali: non rifare la scheda.
 
 LE QUANTITÀ SONO UN CONTRATTO: esattamente «contenuti» contenuti fra Post, Carosello e Reel, di cui esattamente «video» Reel. Non di più e non di meno: è quello che il titolare ha comprato. Nel Base nessun video. Le storie solo se «storie» è vero, con tipo «Storia», e non contano nei contenuti.
@@ -52,6 +56,7 @@ LE REGOLE, che non si rompono mai:
 - Una proposta nuova (un menu, un evento, un buono) solo come idea: «se il titolare dice sì».
 - Niente dati personali del titolare o dei clienti: solo i recapiti pubblici del locale.
 - Gli hashtag fissi chiudono ogni didascalia.
+- Nessuna frequenza per la scheda Google né altre promesse oltre «dati.abbonamento»: quello che la fascia dà lo dice il listino.
 
 COME SCRIVERE: italiano semplice, frasi di al massimo 25 parole, il tono del locale. Didascalie di al massimo 400 caratteri. In «prima_di_pubblicare» le cose da confermare col titolare. In «note» al massimo 4 righe per il team (cosa preparare alla visita, cosa manca).
 
@@ -79,6 +84,7 @@ export const SCHEMA_PIANO = {
           ora: { ...s, description: 'HH:MM' },
           tipo: { enum: [...TIPI_CONTENUTO] },
           tema: s, didascalia: s, cosa_riprendere: s, in_citta: sn, fonte_evento: sn,
+          pilastro: { ...s, description: 'il nome esatto di uno dei pilastri in dati.pilastri' },
         },
       },
     },
@@ -108,6 +114,8 @@ export function dallaSchedaDellAgente(scheda: Scheda | null, fascia: Abbonamento
 /** I dati per l'AD. Il piano di partenza resta fuori se il lavoro supererebbe il tetto della routine. */
 export function datiPerIlPianoCompleto(input: {
   nome: string; tipo: string; citta: string; indirizzo: string | null; fascia: Abbonamento; piano: PianoDelMese; scheda: ReturnType<typeof dallaSchedaDellAgente>;
+  /** 28/11/2026 — Il tipo dell'elenco (bar, ristorante…), per i pilastri dello standard; `tipo` può essere il testo della scheda. */
+  tipoAttivita?: TipoAttivita | null;
 }) {
   const f = FASCE[input.fascia];
   const dati = {
@@ -115,6 +123,7 @@ export function datiPerIlPianoCompleto(input: {
     abbonamento: { fascia: input.fascia, nome: f.nome, in_pratica: f.inPratica.piano, contenuti: f.post, video: f.video, storie: input.fascia === 'premium' },
     periodo: { dal: input.piano.periodo.dal, al: input.piano.periodo.al },
     hashtag_proposti: input.piano.intestazione.hashtag,
+    pilastri: pilastriPerIlTipo(input.tipoAttivita ?? 'altro'),
     dalla_scheda_del_venditore: input.scheda,
     piano_di_partenza: input.piano.contenuti.map((c) => ({ data: c.data, ora: c.ora, tipo: c.tipo, tema: c.tema, didascalia: c.didascalia })),
   };
@@ -129,7 +138,12 @@ export function datiPerIlPianoCompleto(input: {
 
 const senzaControllo = (t: string) => t.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
 const testo = (max: number) => z.string().transform(senzaControllo).pipe(z.string().min(1).max(max));
-const giorno = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+// Collaudo 28/11/2026: un giorno vero, non solo nella forma. «2026-11-99» passava il confronto col periodo (si confronta
+// come testo) e faceva crollare la pagina del titolare; «2026-11-31» si mostrava come «1 dicembre».
+const giorno = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((g) => {
+  const d = new Date(`${g}T12:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === g;
+}, 'giorno che non esiste');
 const ora = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const fonte = z.string().max(600).regex(/^https:\/\/[^\s"'<>]+$/);
 
@@ -144,6 +158,9 @@ const RispostaDellAd = z.object({
     cosa_riprendere: testo(600),
     in_citta: z.union([testo(300), z.null()]),
     fonte_evento: z.union([fonte, z.null()]),
+    // Collaudo 28/11/2026: il pilastro è facoltativo e serve solo a disegnare. Un valore storto (numero, testo lungo)
+    // non deve far scartare il piano intero: si legge come testo, e se non è uno dei cinque si scarta solo lui.
+    pilastro: z.unknown().optional().transform((v) => (typeof v === 'string' ? v.trim().slice(0, 80) : null)),
   })).min(1).max(40),
   note: z.array(testo(300)).max(4),
 });
@@ -199,6 +216,8 @@ export function pianoDallaRisposta(grezza: unknown, partenza: PianoDelMese, fasc
       data: c.data, ora: c.ora, tipo: c.tipo, tema: c.tema, stato: 'Idea' as const,
       didascalia: c.didascalia, cosaRiprendere: c.cosa_riprendere,
       inCitta: c.fonte_evento ? c.in_citta : null, fonteEvento: c.in_citta ? c.fonte_evento : null,
+      // Solo uno dei cinque pilastri dello standard: un nome diverso si scarta, e il pilastro si ricava dal tema.
+      pilastro: PILASTRI.find((p) => p.toLowerCase() === (c.pilastro ?? '').toLowerCase()) ?? null,
     }));
   return {
     ok: true,

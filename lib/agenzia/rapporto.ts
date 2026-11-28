@@ -747,7 +747,7 @@ export function fonteDiGoogle(indirizzo: string): boolean {
     return /google|tripadvisor|goo\.gl/i.test(indirizzo);
   }
 }
-const HOST_GOOGLE = /(^|\.)(google\.[a-z.]{2,6}|googleapis\.com|googleusercontent\.com|gstatic\.com|ggpht\.com|goo\.gl|g\.page|g\.co|share\.google|tripadvisor\.[a-z.]{2,6})$/;
+const HOST_GOOGLE = /(^|\.)(google\.[a-z.]{2,6}|googleapis\.com|googleusercontent\.com|gstatic\.com|ggpht\.com|goo\.gl|g\.page|g\.co|share\.google|goo\.gle|[a-z0-9-]+\.google|tripadvisor\.[a-z.]{2,6})$/;
 
 const PLACE_ID = /^[A-Za-z0-9_-]{10,300}$/;
 const LOCATION_ID = /^\d{1,20}$/;

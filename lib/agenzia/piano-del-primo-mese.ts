@@ -38,6 +38,8 @@ export type ContenutoDelPiano = {
   /** L'evento in città quel giorno, con la sua fonte: solo nel piano dell'AD. */
   inCitta: string | null;
   fonteEvento?: string | null;
+  /** 28/11/2026 — Il pilastro dello standard SDG scelto dall'AD (lib/agenzia/social-standard.ts); senza, si ricava dal tema. */
+  pilastro?: string | null;
 };
 
 export type PianoDelMese = {
