@@ -159,7 +159,7 @@ describe('④ la pagina del titolare', () => {
     piano: { stato, piano: piano(fascia) },
     sito: { stato: 'lo_stiamo_preparando', bozza: null, indirizzo: null },
     analisi: { stato: 'lo_stiamo_preparando', analisi: null },
-    perLoStandard: { tipo: 'bar', citta: 'Piacenza', canaliTrovati: null, suMisura: null },
+    perLoStandard: { tipo: 'bar', citta: 'Piacenza', canaliTrovati: null, suMisura: null, sito: null },
   });
 
   it('il Premium del cliente ha le parti del piano di SDG, con la sua fascia e «bozza»', async () => {
@@ -190,10 +190,10 @@ describe('④ la pagina del titolare', () => {
       tipo: 'bar', citta: 'Piacenza', notaAgente: 'chiamare dopo le 18, è diffidente', dettaglio: 'bar tabacchi',
       dallaScheda: { social: [{ canale: 'Instagram', fonte: 'javascript:alert(1)' }, { canale: 'Facebook', fonte: 'https://facebook.com/x' }], servizi: { social: 'Tre post a settimana.', sito_web: 'altro' }, perche: 'interno' },
     });
-    expect(d).toEqual({ tipo: 'bar', citta: 'Piacenza', canaliTrovati: [{ canale: 'Instagram', fonte: null }, { canale: 'Facebook', fonte: 'https://facebook.com/x' }], suMisura: 'Tre post a settimana.' });
+    expect(d).toEqual({ tipo: 'bar', citta: 'Piacenza', canaliTrovati: [{ canale: 'Instagram', fonte: null }, { canale: 'Facebook', fonte: 'https://facebook.com/x' }], suMisura: 'Tre post a settimana.', sito: null });
     expect(JSON.stringify(d)).not.toMatch(/diffidente|tabacchi|interno/);
     expect(datiDelClientePerIlPiano({ tipo: 'casinò' }).tipo).toBeNull();
-    expect(datiDelClientePerIlPiano(null)).toEqual({ tipo: null, citta: null, canaliTrovati: null, suMisura: null });
+    expect(datiDelClientePerIlPiano(null)).toEqual({ tipo: null, citta: null, canaliTrovati: null, suMisura: null, sito: null });
   });
 });
 

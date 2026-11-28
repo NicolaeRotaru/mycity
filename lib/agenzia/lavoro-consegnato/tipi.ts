@@ -27,6 +27,11 @@ export const AnalisiSchema = z.object({
   presenza_online_sdg: z.array(z.object({ canale: testo, stato: testo, indirizzo: httpsONull, nota: testo.nullish() })).default([]),
   raccomandazioni: z.array(z.object({ priorita: z.number(), cosa: testo, perche: testo, quando: testo.nullish(), costo: testo.nullish() })).default([]),
   fonti: z.array(https).default([]),
+  // 28/11/2026 — Lo standard per ogni cliente (lib/agenzia/analisi-standard.ts): il titolo della presenza online (per SDG
+  // resta «La presenza online di SDG»), cosa comprende l'abbonamento, le cose da confermare alla visita.
+  titolo_presenza: testo.nullish(),
+  compreso: z.object({ titolo: testo, voci: elenco }).nullish(),
+  da_confermare: elenco,
 });
 export type Analisi = z.infer<typeof AnalisiSchema>;
 
@@ -51,6 +56,8 @@ export const SocialSchema = z.object({
     in_citta: testo.nullish(), fonte_evento: httpsONull,
   })).default([]),
   titolo_extra: testo.nullish(),
+  // 28/11/2026 — Da dove partiamo: quello che l'analisi del cliente ha visto sui suoi social (lib/agenzia/social-standard.ts).
+  da_dove_partiamo: elenco,
   extra_premium: z.array(z.object({ voce: testo, cosa: testo, costo_fuori_canone: testo.nullish() })).default([]),
   misure: z.array(z.object({ kpi: testo, obiettivo: testo, come_si_misura: testo })).default([]),
   regole: elenco,

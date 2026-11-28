@@ -3,6 +3,8 @@ import { FASCE as LISTINO, type Abbonamento } from './preventivo';
 import type { TipoAttivita } from './tipi-attivita';
 import type { ContenutoDelPiano, PianoDelMese } from './piano-del-primo-mese';
 import type { Social } from './lavoro-consegnato/tipi';
+import type { AnalisiAvvioOrdine } from './analisi-dell-ordine-ad';
+import { daDovePartiamoSuiSocial } from './analisi-standard';
 
 /**
  * LO STANDARD DELLA GESTIONE SOCIAL — 28/11/2026.
@@ -74,6 +76,8 @@ export type DatiPerLoStandard = {
   canaliTrovati?: { canale: string; fonte: string | null }[] | null;
   /** La frase che l'AD ha scritto per il servizio social di QUESTO cliente nella sua fascia (è nel suo preventivo). */
   suMisura?: string | null;
+  /** 28/11/2026 — L'analisi del cliente all'avvio, quando è pronta: cosa ha visto sui suoi social e sui concorrenti. */
+  analisi?: Pick<AnalisiAvvioOrdine, 'parti'> | null;
 };
 
 const OBIETTIVO: Record<TipoAttivita, (nome: string, citta: string) => string> = {
@@ -246,6 +250,7 @@ export function socialDalPiano(piano: PianoDelMese | null | undefined, d: DatiPe
     quantita,
     calendario,
     titolo_extra: `Compreso nel ${f.nome}, oltre il calendario`,
+    da_dove_partiamo: daDovePartiamoSuiSocial(d.analisi),
     extra_premium: [
       { voce: `Il ${f.nome}`, cosa: LISTINO[fascia].servizi.social, costo_fuori_canone: null },
       ...(fascia !== 'base' ? [{ voce: 'Le risposte alle recensioni', cosa: 'Le scriviamo noi, con il tono della tua attività: niente recensioni comprate o scambiate con sconti.', costo_fuori_canone: null }] : []),

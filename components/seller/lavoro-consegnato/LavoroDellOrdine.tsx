@@ -4,8 +4,10 @@ import type { ParteConsegnata } from '@/lib/agenzia/lavoro-consegnato/quale-part
 import { PAGINE_PER_FASCIA } from '@/lib/agenzia/sito-dell-ordine-ad';
 import { paginePubbliche } from '@/lib/agenzia/sito-finito/costruisci';
 import { socialDalPiano } from '@/lib/agenzia/social-standard';
+import { analisiDallOrdine } from '@/lib/agenzia/analisi-standard';
 import { Elenco, LinkEsterno, SCHEDA, Sezione } from './comuni';
 import PianoEditorialeConsegnato from './PianoEditorialeConsegnato';
+import AnalisiConsegnata from './AnalisiConsegnata';
 
 /**
  * IL LAVORO NATO CON L'ORDINE, NELLA ZONA «SERVIZI» DEL TITOLARE — 28/11/2026.
@@ -125,7 +127,8 @@ function IlTuoSito({ ordine }: { ordine: LavoroDellOrdine }) {
  */
 function PianoDellOrdine({ ordine }: { ordine: LavoroDellOrdine }) {
   const p = ordine.piano.piano;
-  const social = socialDalPiano(p, { nome: ordine.nomeAttivita, fascia: ordine.fascia, ...(ordine.perLoStandard ?? {}) });
+  // L’analisi del cliente, quando è pronta, cuce anche il piano: «Da dove partiamo» (Nicola, 28/11).
+  const social = socialDalPiano(p, { nome: ordine.nomeAttivita, fascia: ordine.fascia, ...(ordine.perLoStandard ?? {}), analisi: ordine.analisi.analisi });
   const avviso = ordine.piano.stato === 'pronto'
     ? 'Versione completa, scritta per la tua attività.'
     : `Prima versione, con gli esempi per il tuo tipo di attività. Quella completa: ${attesa(ordine.piano.stato).toLowerCase()}`;
@@ -133,30 +136,13 @@ function PianoDellOrdine({ ordine }: { ordine: LavoroDellOrdine }) {
   return <PianoEditorialeConsegnato social={social} intestazione={null} avviso={avviso} />;
 }
 
+/**
+ * 28/11/2026 — L'analisi del cliente nella forma standard, quella dell'analisi di mercato di SDG (Nicola: «usala come
+ * standard per tutti, personalizzata in base all'abbonamento e al cliente»). La forma la calcola
+ * lib/agenzia/analisi-standard.ts; la disegna la stessa pagina dell'analisi di SDG.
+ */
 function AnalisiDellOrdine({ ordine }: { ordine: LavoroDellOrdine }) {
   const a = ordine.analisi.analisi!;
-  return (
-    <>
-      <Sezione id="analisi-sintesi" titolo="In breve">
-        <p className="mb-2 text-ink-600">{a.ritmo} Questo è il rapporto dell’avvio, fatto coi soli dati pubblici.</p>
-        <Elenco voci={a.sintesi} />
-      </Sezione>
-      {a.parti.map((p) => (
-        <Sezione key={p.parte} id={`analisi-${p.parte}`} titolo={p.titolo}>
-          <Elenco voci={p.frasi} />
-          {p.fonti.length > 0 && (
-            <p className="mt-2 text-xs text-ink-600">Fonti: {p.fonti.map((f, i) => <span key={f}>{i > 0 ? ' · ' : ''}<LinkEsterno href={f}>{nomeDelSito(f)}</LinkEsterno></span>)}</p>
-          )}
-        </Sezione>
-      ))}
-      <Sezione id="analisi-mosse" titolo="Le prime mosse, nei primi 30 giorni">
-        <Elenco voci={a.primeMosse.map((m) => `${m.cosa} — ${m.perche}`)} />
-      </Sezione>
-      {a.daConfermare.length > 0 && (
-        <Sezione id="analisi-da-confermare" titolo="Da confermare alla visita">
-          <Elenco voci={a.daConfermare} />
-        </Sezione>
-      )}
-    </>
-  );
+  const analisi = analisiDallOrdine(a, { nome: ordine.nomeAttivita, fascia: ordine.fascia, canaliTrovati: ordine.perLoStandard?.canaliTrovati, sito: ordine.perLoStandard?.sito });
+  return <AnalisiConsegnata analisi={analisi} intestazione={null} avviso={`${a.ritmo} Questo è il rapporto dell’avvio, fatto coi soli dati pubblici.`} />;
 }

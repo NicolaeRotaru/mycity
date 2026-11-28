@@ -55,6 +55,13 @@ export default function PianoEditorialeConsegnato({ social, intestazione, avviso
         {social.tono && <p className="mt-f1"><b>Canali e tono.</b> {social.tono}</p>}
       </Sezione>
 
+      {social.da_dove_partiamo.length > 0 && (
+        <Sezione id="piano-partenza" titolo="Da dove partiamo">
+          <p className="mb-f1 text-ink-600">Dall’analisi della tua attività: è il punto da cui cresce il piano.</p>
+          <Elenco voci={social.da_dove_partiamo} />
+        </Sezione>
+      )}
+
       {social.canali.length > 0 && (
         <Sezione id="piano-canali" titolo="I canali">
           <ul className="space-y-2">

@@ -48,7 +48,7 @@ export type LavoroDellOrdine = {
   /**
    * 28/11/2026 — Quello che serve allo standard della Gestione social (lib/agenzia/social-standard.ts) per cucire il
    * piano sul cliente: tipo, città, i profili pubblici trovati dall'analisi e la frase su misura del suo preventivo.
-   * Solo questi quattro: la nota dell'agente e il resto di dati_attivita restano a SDG.
+   * Solo questi (e il sito trovato, per l'analisi standard): la nota dell'agente e il resto di dati_attivita restano a SDG.
    */
   perLoStandard?: DatiDelClientePerIlPiano;
 };
@@ -58,12 +58,14 @@ export type DatiDelClientePerIlPiano = {
   citta: string | null;
   canaliTrovati: { canale: string; fonte: string | null }[] | null;
   suMisura: string | null;
+  /** Il sito trovato dall'analisi della scheda (per la presenza online dell'analisi standard). */
+  sito: string | null;
 };
 
 /** I quattro dati per lo standard, letti da dati_attivita con le stesse misure con cui li scrive l'ordine. */
 export function datiDelClientePerIlPiano(dati: unknown): DatiDelClientePerIlPiano {
   const d = (dati && typeof dati === 'object' ? dati : {}) as { tipo?: unknown; citta?: unknown; dallaScheda?: unknown };
-  const scheda = (d.dallaScheda && typeof d.dallaScheda === 'object' ? d.dallaScheda : null) as { social?: unknown; servizi?: unknown } | null;
+  const scheda = (d.dallaScheda && typeof d.dallaScheda === 'object' ? d.dallaScheda : null) as { social?: unknown; servizi?: unknown; sito?: unknown } | null;
   const testo = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
   const canali = scheda && Array.isArray(scheda.social)
     ? scheda.social
@@ -77,6 +79,7 @@ export function datiDelClientePerIlPiano(dati: unknown): DatiDelClientePerIlPian
     citta: testo(d.citta, 60),
     canaliTrovati: canali,
     suMisura: testo(servizi?.social, 360),
+    sito: typeof scheda?.sito === 'string' && /^https?:\/\/[^\s"'<>]+$/.test(scheda.sito) ? scheda.sito.slice(0, 300) : null,
   };
 }
 

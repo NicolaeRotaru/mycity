@@ -35,6 +35,13 @@ LE REGOLE LEGALI, che non si rompono mai:
 - MAI prezzi, telefoni, email, indirizzi web dentro le frasi: gli indirizzi stanno solo in «fonti».
 - Mai superlativi che non si possono provare. Niente gioco né tabacco.
 
+LO STANDARD è l'analisi di mercato che SDG Agenzia ha fatto per se stessa (Nicola, 28/11/2026: «molto molto bella, usala come standard per tutti, personalizzata in base all'abbonamento e al cliente»). Oltre alle parti scrivi:
+- «swot»: forze, debolezze, opportunità e minacce di QUESTO locale, da 1 a 4 frasi ciascuna, prese da quello che hai trovato.
+- «concorrenti»: fino a «dati.abbonamento.concorrenti_al_massimo» attività vere e vicine (o che vendono le stesse cose sul web): il nome dell'attività, cosa fanno, da 1 a 3 punti forti e da 1 a 3 punti deboli, e la fonte https della loro pagina (mai Google o TripAdvisor). Mai prezzi, mai nomi di persone.
+- «clienti_tipo»: da 2 a 4 tipi di cliente del locale («chi lavora in zona e passa a pranzo»), col loro bisogno e perché scelgono questo locale. Mai nomi di persone.
+- «numeri_chiave»: fino a 4 numeri pubblici sulla zona o sul mercato (abitanti, attività simili vicine, un dato del comune), ognuno con la sua fonte https. Mai voti, stelle, recensioni o prezzi. Senza una fonte vera, nessun numero.
+- per ogni prima mossa, «quando»: la settimana dei primi 30 giorni («settimana 1»).
+
 COME SCRIVERE: italiano semplice, frasi di al massimo 25 parole, da 10 a 300 caratteri. «sintesi»: 2-4 frasi. «prime_mosse»: da 3 a 5 cose concrete per i primi 30 giorni, con il perché. «da_confermare»: al massimo 6 cose da chiedere al titolare.
 
 In «risultato» metti l'oggetto che rispetta lo schema.`;
@@ -54,10 +61,21 @@ export const SCHEMA_ANALISI = {
         properties: { parte: { enum: [...PARTI_RAPPORTO] }, frasi: { type: 'array', minItems: 1, maxItems: 5, items: s }, fonti: { type: 'array', maxItems: 5, items: s } },
       },
     },
-    prime_mosse: { type: 'array', minItems: 3, maxItems: 5, items: { type: 'object', required: ['cosa', 'perche'], properties: { cosa: s, perche: s } } },
+    prime_mosse: { type: 'array', minItems: 3, maxItems: 5, items: { type: 'object', required: ['cosa', 'perche'], properties: { cosa: s, perche: s, quando: s } } },
     da_confermare: { type: 'array', maxItems: 6, items: s },
+    // 28/11/2026 — Lo standard di SDG (lib/agenzia/analisi-standard.ts). Facoltativi: un'analisi senza resta valida.
+    swot: { type: 'object', properties: { forze: { type: 'array', maxItems: 4, items: s }, debolezze: { type: 'array', maxItems: 4, items: s }, opportunita: { type: 'array', maxItems: 4, items: s }, minacce: { type: 'array', maxItems: 4, items: s } } },
+    concorrenti: {
+      type: 'array', maxItems: 8,
+      items: { type: 'object', required: ['nome', 'cosa_fanno', 'punti_forti', 'punti_deboli'], properties: { nome: s, cosa_fanno: s, punti_forti: { type: 'array', maxItems: 3, items: s }, punti_deboli: { type: 'array', maxItems: 3, items: s }, fonte: s } },
+    },
+    clienti_tipo: { type: 'array', maxItems: 4, items: { type: 'object', required: ['nome', 'bisogno'], properties: { nome: s, bisogno: s, perche: s } } },
+    numeri_chiave: { type: 'array', maxItems: 4, items: { type: 'object', required: ['voce', 'valore', 'fonte'], properties: { voce: s, valore: s, fonte: s } } },
   },
 } as const;
+
+/** Quanti concorrenti per fascia: i vicini nel Base, i 3 principali sul web in più nel Business, fino a 5 nel Premium. */
+export const CONCORRENTI_PER_FASCIA: Record<Abbonamento, number> = { base: 3, business: 5, premium: 8 };
 
 /** Le parti che la fascia comprende, con «come» quando c'è, per dirle all'AD. */
 export const partiDaScrivere = (fascia: Abbonamento): ParteRapporto[] => partiDellaFascia(fascia).incluse.map((r) => r.parte);
@@ -72,6 +90,7 @@ export function datiPerLAnalisi(input: { nome: string; tipo: string; citta: stri
       fascia: input.fascia, nome: f.nome, analisi: f.inPratica.analisi,
       quando: 'all’avvio: questo è il primo rapporto',
       parti: partiDellaFascia(input.fascia).incluse.map((r) => ({ parte: r.parte, titolo: r.titolo, come: r.come })),
+      concorrenti_al_massimo: CONCORRENTI_PER_FASCIA[input.fascia],
     },
     dalla_scheda_del_venditore: input.scheda,
   };
@@ -90,8 +109,13 @@ export type AnalisiAvvioOrdine = {
   ritmo: string;
   sintesi: string[];
   parti: ParteDellAnalisi[];
-  primeMosse: { cosa: string; perche: string }[];
+  primeMosse: { cosa: string; perche: string; quando?: string | null }[];
   daConfermare: string[];
+  /** 28/11/2026 — I pezzi dello standard di SDG: possono mancare (analisi di prima, o l'AD non li ha scritti). */
+  swot?: { forze: string[]; debolezze: string[]; opportunita: string[]; minacce: string[] };
+  concorrenti?: { nome: string; cosaFanno: string; puntiForti: string[]; puntiDeboli: string[]; fonte: string | null }[];
+  clientiTipo?: { nome: string; bisogno: string; perche: string | null }[];
+  numeriChiave?: { voce: string; valore: string; fonte: string }[];
 };
 
 const corto = (t: string) => t.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -101,9 +125,57 @@ const fonte = z.string().max(500).regex(/^https:\/\/[^\s"'<>]+$/);
 const RispostaAnalisi = z.object({
   sintesi: z.array(frase).min(1).max(4),
   parti: z.array(z.object({ parte: z.enum(PARTI_RAPPORTO), frasi: z.array(frase).min(1).max(5), fonti: z.array(fonte).max(5) })).min(1).max(PARTI_RAPPORTO.length),
-  prime_mosse: z.array(z.object({ cosa: frase, perche: frase })).min(3).max(5),
+  prime_mosse: z.array(z.object({ cosa: frase, perche: frase, quando: z.string().transform(corto).pipe(z.string().min(1).max(40)).nullish().catch(null) })).min(3).max(5),
   da_confermare: z.array(frase).max(6),
+  // I pezzi dello standard si leggono a parte (pezziDelloStandard): una voce sbagliata si toglie, non fa scartare l'analisi.
+  swot: z.unknown().optional(),
+  concorrenti: z.unknown().optional(),
+  clienti_tipo: z.unknown().optional(),
+  numeri_chiave: z.unknown().optional(),
 });
+
+const lista = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const ogg = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+const fonteBuona = (v: unknown): string | null => (typeof v === 'string' && v.length <= 500 && /^https:\/\/[^\s"'<>]+$/.test(v) && !fonteDiGoogle(v) ? v : null);
+/** Un numero chiave non è mai un voto, una recensione o un prezzo (le regole legali del 26/11). */
+const NUMERO_VIETATO = /recension|stell|\bvot[oi]\b|★|€|\beur[oi]?\b|\$/i;
+
+/**
+ * I pezzi dello standard di SDG, ognuno controllato con le stesse regole delle frasi: quello che non le rispetta si
+ * toglie e basta. Il nome di un concorrente è il nome di un'attività (Nicola, 26/11: i concorrenti si nominano): passa
+ * le regole su prezzi, contatti e indirizzi, non quella sui nomi di persona, che scambierebbe «Bar da Mario» per una persona.
+ */
+function pezziDelloStandard(r: z.infer<typeof RispostaAnalisi>, fascia: Abbonamento, va: (t: string) => boolean) {
+  const testo = (v: unknown, min = 10, max = 300): string | null => {
+    const t = typeof v === 'string' ? corto(v) : '';
+    return t.length >= min && t.length <= max && va(t) ? t : null;
+  };
+  const frasi = (v: unknown, quante: number) => lista(v).map((x) => testo(x)).filter((x): x is string => !!x).slice(0, quante);
+  const sw = ogg(r.swot);
+  const swot = { forze: frasi(sw.forze, 4), debolezze: frasi(sw.debolezze, 4), opportunita: frasi(sw.opportunita, 4), minacce: frasi(sw.minacce, 4) };
+  const concorrenti = lista(r.concorrenti).map((x) => {
+    const c = ogg(x);
+    const nome = typeof c.nome === 'string' ? corto(c.nome) : '';
+    const cosaFanno = testo(c.cosa_fanno);
+    if (nome.length < 2 || nome.length > 80 || !fraseMostrabile(nome, 2, 80) || !cosaFanno) return null;
+    return { nome, cosaFanno, puntiForti: frasi(c.punti_forti, 3), puntiDeboli: frasi(c.punti_deboli, 3), fonte: fonteBuona(c.fonte) };
+  }).filter((x): x is NonNullable<typeof x> => !!x).slice(0, CONCORRENTI_PER_FASCIA[fascia]);
+  const clientiTipo = lista(r.clienti_tipo).map((x) => {
+    const c = ogg(x);
+    const nome = testo(c.nome, 3, 80);
+    const bisogno = testo(c.bisogno);
+    return nome && bisogno ? { nome, bisogno, perche: testo(c.perche) } : null;
+  }).filter((x): x is NonNullable<typeof x> => !!x).slice(0, 4);
+  const numeriChiave = lista(r.numeri_chiave).map((x) => {
+    const n = ogg(x);
+    const voce = testo(n.voce, 3, 120);
+    const valore = typeof n.valore === 'string' ? corto(n.valore) : '';
+    const fonte = fonteBuona(n.fonte);
+    if (!voce || !fonte || !valore || valore.length > 40 || NUMERO_VIETATO.test(`${voce} ${valore}`) || !fraseMostrabile(valore, 1, 40)) return null;
+    return { voce, valore, fonte };
+  }).filter((x): x is NonNullable<typeof x> => !!x).slice(0, 4);
+  return { swot, concorrenti, clientiTipo, numeriChiave };
+}
 
 export type EsitoAnalisi = { ok: true; analisi: AnalisiAvvioOrdine } | { ok: false; motivo: string };
 
@@ -141,8 +213,9 @@ export function analisiDallaRisposta(grezza: unknown, fascia: Abbonamento, nomeL
       ritmo: ANALISI_PER_FASCIA[fascia].ritmo,
       sintesi: r.sintesi,
       parti: [...r.parti].sort((a, b) => (ordine.get(a.parte) ?? 0) - (ordine.get(b.parte) ?? 0)).map((p) => ({ parte: p.parte, titolo: TITOLI_PARTI[p.parte], frasi: p.frasi, fonti: p.fonti })),
-      primeMosse: r.prime_mosse,
+      primeMosse: r.prime_mosse.map((m) => ({ cosa: m.cosa, perche: m.perche, quando: m.quando && fraseMostrabile(m.quando, 1, 40) && !haUnNomeDiPersona(m.quando) ? m.quando : null })),
       daConfermare: r.da_confermare,
+      ...pezziDelloStandard(r, fascia, (t) => !!fraseMostrabile(senzaNome(t), 1, 10_000) && !haUnNomeDiPersona(senzaNome(t))),
     },
   };
 }
