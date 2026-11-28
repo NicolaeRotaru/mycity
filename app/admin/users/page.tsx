@@ -66,6 +66,12 @@ type Profile = {
 };
 
 /** Miglior etichetta identificativa per un utente. */
+/** 28/11/2026 (R04-016) — Nella scheda il trattino vuol dire «nessuna email»: se non è arrivata, si dice. */
+function emailDaMostrare(p: Profile): string {
+  if (p.email) return p.email;
+  return p.email_non_letta ? 'non arrivata: ricarica la pagina' : '—';
+}
+
 function displayName(p: Profile): string {
   return (
     p.store_name ||
@@ -189,10 +195,6 @@ async function leggiContattiAuthOppureNull(): Promise<RigaAuth[] | null> {
   return null;
 }
 
-async function leggiContattiAuth(): Promise<RigaAuth[]> {
-  return (await leggiContattiAuthOppureNull()) ?? [];
-}
-
 /**
  * 26/11/2026 (R08-003) — LA RICERCA NON SI PORTA PIÙ A CASA TUTTE LE EMAIL.
  *
@@ -202,13 +204,21 @@ async function leggiContattiAuth(): Promise<RigaAuth[]> {
  * i contatti che corrispondono, più quelli dei profili già trovati per nome, perché anche quelle
  * righe mostrino l'email. Finché la 940 non è applicata la funzione con questi argomenti non c'è
  * (PGRST202) e si torna alla lettura di prima.
+ *
+ * 28/11/2026 (R04-016) — `null` = le email non sono arrivate. Prima tornava un elenco vuoto: i
+ * risultati della ricerca uscivano senza email e senza la riga che lo dice, che c'era solo
+ * nell'elenco dei più recenti.
  */
-async function cercaContattiAuth(termine: string, idsGiaTrovati: readonly string[]): Promise<RigaAuth[]> {
+async function cercaContattiAuth(termine: string, idsGiaTrovati: readonly string[]): Promise<RigaAuth[] | null> {
   const { data, error } = await supabase.rpc('admin_list_user_emails', { p_termine: termine, p_ids: [...idsGiaTrovati] });
   if (!error && Array.isArray(data)) return data as RigaAuth[];
-  if ((error as { code?: string } | null)?.code === 'PGRST202') return leggiContattiAuth();
-  return [];
+  if ((error as { code?: string } | null)?.code === 'PGRST202') return leggiContattiAuthOppureNull();
+  logger.warn('admin/users: email della ricerca non lette', { code: (error as { code?: string } | null)?.code });
+  return null;
 }
+
+/** Le righe senza email perché la lettura delle email non è riuscita, non perché non ce l'hanno. */
+const senzaEmailLette = (righe: Profile[]): Profile[] => righe.map((p) => ({ ...p, email_non_letta: true }));
 
 /** Attacca a ogni profilo i contatti letti da auth.users. */
 function conContattiAuth(base: Profile[], righeAuth: readonly RigaAuth[]): Profile[] {
@@ -251,7 +261,7 @@ function AdminUsersPageInner() {
       // 26/11/2026 (R08-006) — Se le email non arrivano le righe restano senza email, come prima,
       // ma ognuna lo sa: sotto i filtri compare una riga che lo dice (`emailNonLette`).
       const contatti = await leggiContattiAuthOppureNull();
-      return contatti === null ? base.map((p) => ({ ...p, email_non_letta: true })) : conContattiAuth(base, contatti);
+      return contatti === null ? senzaEmailLette(base) : conContattiAuth(base, contatti);
     },
   });
 
@@ -307,7 +317,7 @@ function AdminUsersPageInner() {
       );
 
       const contatti = await cercaContattiAuth(termine, perTesto.map((p) => p.id));
-      const idsPerContatto = idsDaContattiAuth(contatti, termine);
+      const idsPerContatto = idsDaContattiAuth(contatti ?? [], termine);
 
       // Chi combacia solo per email o telefono: si prende per identificativo, a
       // blocchi, perche' un elenco lungo di id non ci sta in un indirizzo (#93).
@@ -327,7 +337,8 @@ function AdminUsersPageInner() {
         ),
       );
 
-      const righe = conContattiAuth(unisciPerId(perTesto, perContatto), contatti);
+      const unite = unisciPerId(perTesto, perContatto);
+      const righe = contatti === null ? senzaEmailLette(unite) : conContattiAuth(unite, contatti);
       return { righe, troncato: righe.length >= TETTO_RISULTATI_RICERCA };
     },
   });
@@ -602,7 +613,17 @@ function AdminUsersPageInner() {
     if (esportando) return; // due clic non fanno due file
     setEsportando(true);
     try {
-      const contatti = await leggiContattiAuth();
+      /**
+       * 28/11/2026 (R04-016) — UN FILE SENZA EMAIL NON ESCE COME SE FOSSE GIUSTO.
+       * Se le email non arrivavano il file usciva lo stesso, con la colonna «Email» vuota per tutti
+       * e «Esportati N utenti»: chi lo usa per scrivere agli iscritti crede che non ne abbiano una.
+       * Ora si ferma e lo dice. Per il risultato di una ricerca le email sono già nelle righe.
+       */
+      const contatti = ricerca ? [] : await leggiContattiAuthOppureNull();
+      if (contatti === null || (ricerca && filtered.some((p) => p.email_non_letta === true))) {
+        toast.error('Le email degli utenti non sono arrivate: il file uscirebbe senza email. Riprova fra poco.');
+        return;
+      }
       const perId = new Map(contatti.map((c) => [c.id, c]));
       const raccolta = ricerca
         ? raccoltaDallaRicerca(filtered, ricerca.troncato)
@@ -735,7 +756,8 @@ function AdminUsersPageInner() {
           <AlertTriangle size={16} strokeWidth={2.2} className="text-accent-600 shrink-0 mt-0.5" aria-hidden />
           <span>
             Le email degli utenti non sono arrivate: in questo elenco mancano anche a chi ce l&apos;ha, quindi una
-            riga senza email non vuol dire che quell&apos;utente non ne abbia una. Ricarica la pagina fra poco.
+            riga senza email non vuol dire che quell&apos;utente non ne abbia una.
+            {ricerca ? ' E la ricerca non ha potuto guardare fra le email e i telefoni degli iscritti.' : ''} Ricarica la pagina fra poco.
           </span>
         </p>
       )}
@@ -1051,7 +1073,7 @@ function EditUserModal({
         <div className="bg-cream-50 border border-cream-200 rounded-lg p-3 text-xs space-y-1">
           <div className="flex justify-between gap-2">
             <span className="text-ink-500">Email</span>
-            <span className="text-ink-900 font-medium break-all text-right">{profile.email ?? '—'}</span>
+            <span className="text-ink-900 font-medium break-all text-right">{emailDaMostrare(profile)}</span>
           </div>
           <div className="flex justify-between gap-2">
             <span className="text-ink-500">Email verificata</span>
@@ -1206,7 +1228,7 @@ function DetailPanel({
           <DetailRow label="Nome e cognome">
             {[profile.legal_first_name, profile.legal_last_name].filter(Boolean).join(' ') || 'non ancora inseriti'}
           </DetailRow>
-          <DetailRow label="Email">{profile.email ?? '—'}</DetailRow>
+          <DetailRow label="Email">{emailDaMostrare(profile)}</DetailRow>
           <DetailRow label="Codice fiscale">
             <code>{datoIdentita(datiIdentita, 'legal_fiscal_code')}</code>
           </DetailRow>
@@ -1320,7 +1342,7 @@ function PannelloFattorino({
           <DetailRow label="Codice fiscale">
             <code>{datoIdentita(datiIdentita, 'legal_fiscal_code')}</code>
           </DetailRow>
-          <DetailRow label="Email">{profile.email ?? '—'}</DetailRow>
+          <DetailRow label="Email">{emailDaMostrare(profile)}</DetailRow>
           <DetailRow label="Telefono">{profile.phone ?? profile.auth_phone ?? '—'}</DetailRow>
           <DetailRow label="Veicolo">
             {inArrivo ? '…' : etichettaVeicolo(documentiRider?.veicolo?.tipo)}
