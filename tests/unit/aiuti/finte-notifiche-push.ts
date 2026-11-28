@@ -33,7 +33,8 @@ export function tabellaNotifiche(
     );
     if (op === 'update') {
       for (const r of scelte) Object.assign(r, valori);
-      return { data: scelte.map((r) => ({ id: r.id })), error: null };
+      // Le righe scritte, intere: il giro ne legge l'id, l'invio subito (lib/push/subito.ts) tutto.
+      return { data: scelte.map((r) => ({ ...r })), error: null };
     }
     return { data: scelte.slice(0, tetto).map((r) => ({ ...r })), error: null };
   };
