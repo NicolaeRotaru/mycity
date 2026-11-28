@@ -24,6 +24,8 @@ import { canonePrimoMese } from '@/lib/agenzia/preventivo';
 import { CONDIZIONI, FASCE, ID_FASCE, PAGAMENTO, euro } from '@/lib/agenti/fasce';
 import { STATI, type Scheda as TScheda } from '@/lib/agenti/scheda';
 import { percheSuMisura, rigaSuMisura } from '@/lib/agenti/su-misura';
+import GoogleInDiretta from './GoogleInDiretta';
+import { schedaGoogleCollegata } from '@/components/seller/SchedaGoogleUfficiale';
 import st from './scheda.module.css';
 
 /** Le classi della scheda vivono in un modulo CSS: non toccano il resto di MyCity. */
@@ -159,6 +161,9 @@ export default function Scheda({ s }: { s: TScheda }) {
         {s.in_30_secondi.length ? <ul>{s.in_30_secondi.map((v, i) => <li key={i}>{v}</li>)}</ul> : attesa ? <Scrive righe={4} /> : <p>L’AD non ha scritto il riassunto: leggi «Ha già» e «Non ha» qui sotto.</p>}
         {s.gancio ? <p><b>Il gancio per aprire:</b> {s.gancio}</p> : attesa ? null : null}
       </section>
+
+      {/* 28/11: chiuso, spostato, voto e orari li sa solo Google: riquadro ufficiale in diretta, spento senza chiave. */}
+      {schedaGoogleCollegata() && <div className={c('sezione')}><GoogleInDiretta nome={s.nome} indirizzo={s.indirizzo} citta={s.citta} /></div>}
 
       <section className={c('sezione')}><h2>Cosa ha, cosa non ha, cosa va migliorato</h2>
         <div className={c('colonne')}>
