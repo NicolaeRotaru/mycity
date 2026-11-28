@@ -11,6 +11,7 @@ import { FASCE, type AbbonamentoAttivo } from '@/lib/agenzia/preventivo';
  * Questa è la regola di cosa si scrive sotto il nome, in un posto solo, così il menu e il Profilo
  * dicono la stessa cosa:
  *  · abbonamento pagato        → «Piano Business»;
+ *  · abbonamento incluso       → «Piano Premium · incluso» (SDG, 28/11/2026: non paga);
  *  · pagamento non riuscito    → «Piano Business», con l'avviso «pagamento da sistemare»;
  *  · nessun abbonamento        → «Nessun abbonamento», e la voce invita a sceglierlo;
  *  · lettura in corso o caduta → «Venditore», come prima: non si dice «nessun abbonamento» a chi
@@ -39,6 +40,8 @@ export function etichettaPiano(
     return { testo: 'Nessun abbonamento', avviso: null, tono: 'nessuno', voce: 'Scegli il tuo abbonamento' };
   }
   const piano = `Piano ${FASCE[attivo.fascia].nome}`;
+  // 28/11/2026 — SDG ha il Premium per regola e non lo paga (lib/agenzia/abbonamento-di-sdg.ts).
+  if (attivo.incluso) return { testo: `${piano} · incluso`, avviso: null, tono: 'attivo', voce: 'Il tuo abbonamento' };
   if (attivo.stato === 'past_due') {
     return { testo: piano, avviso: 'Pagamento da sistemare', tono: 'da_sistemare', voce: 'Il tuo abbonamento' };
   }

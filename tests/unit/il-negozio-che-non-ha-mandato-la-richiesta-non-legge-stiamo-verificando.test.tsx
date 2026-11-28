@@ -35,8 +35,11 @@ let lettura: { data: StatoRichiesta; isLoading: boolean; isError: boolean } = {
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }), usePathname: () => '/seller/dashboard' }));
 vi.mock('@/lib/supabase/client', () => ({ supabase: {} }));
+// 28/11/2026 — Anche le pagine d'attesa stanno nel guscio, col menu ridotto: il menu si legge da `data-menu`.
 vi.mock('@/components/seller/SellerShell', () => ({
-  default: ({ children }: { children: React.ReactNode }) => <div data-prova="cruscotto">{children}</div>,
+  default: ({ children, menu }: { children: React.ReactNode; menu?: string }) => (
+    <div data-prova="cruscotto" data-menu={menu ?? 'completo'}>{children}</div>
+  ),
 }));
 vi.mock('@/components/seller/SubscriptionBanner', () => ({ SubscriptionBanner: () => null }));
 vi.mock('@/components/hooks/useProfile', () => ({
@@ -71,6 +74,8 @@ describe('la dashboard del negozio non approvato dice la verità sulla richiesta
     expect(html, 'promettiamo una verifica su una richiesta che non esiste').not.toContain('Stiamo verificando i dati');
     expect(html).toContain('href="/sell"');
     expect(html).toContain('Invia la richiesta');
+    // 28/11/2026 — Dentro il guscio, col solo riquadro dell'account (Nicola: «in tutti i profili dei venditori»).
+    expect(html).toContain('data-menu="solo_account"');
   });
 
   it('forma vera di produzione (useProfile senza i campi della richiesta), mai mandata: niente «stiamo verificando»', () => {
@@ -86,7 +91,9 @@ describe('la dashboard del negozio non approvato dice la verità sulla richiesta
       isLoading: false,
       isError: false,
     };
-    expect(disegna()).toContain('Stiamo verificando i dati');
+    const html = disegna();
+    expect(html).toContain('Stiamo verificando i dati');
+    expect(html).toContain('data-menu="in_verifica"');
   });
 
   it('richiesta rifiutata, useProfile senza approval_status: vede il rifiuto col motivo, non l attesa', () => {
@@ -130,7 +137,9 @@ describe('la dashboard del negozio sospeso', () => {
     lettura = { data: { approval_status: 'suspended', approval_requested_at: '2026-10-01T10:00:00Z' }, isLoading: false, isError: false };
     const html = disegna();
     expect(html).toContain('Negozio temporaneamente sospeso');
-    expect(html).not.toContain('data-prova="cruscotto"');
+    // Il guscio c'è (28/11/2026: il riquadro dell'account in fondo), ma senza le voci per vendere.
+    expect(html).not.toContain('data-menu="completo"');
+    expect(html).toContain('data-menu="solo_account"');
     expect(html).not.toContain('Stiamo verificando i dati');
   });
 });

@@ -5,14 +5,16 @@ import type { StatoPianoCompleto } from './ordine-sdg';
 import type { PianoDelMese } from './piano-del-primo-mese';
 import type { BozzaSitoOrdine } from './sito-dell-ordine-ad';
 import type { AnalisiAvvioOrdine } from './analisi-dell-ordine-ad';
-import { leggiServiziScelti, type ServizioAgenzia } from './servizi-scelti';
+import { leggiServiziScelti, servizioScelto, type ServizioAgenzia } from './servizi-scelti';
+import { percorsoDelSito } from './sito-finito/indirizzo';
+import { env } from '@/lib/env';
 
 /**
  * IL LAVORO DELL'ORDINE, VISTO DAL TITOLARE — 28/11/2026.
  *
  * SOLO LATO SERVER (la rotta /api/seller/lavoro-consegnato). Il titolare vede nella zona «Servizi» quello che è nato
- * con il suo ordine: la bozza del sito, il piano editoriale, l'analisi all'avvio. Tutto come bozza, «la confermiamo
- * insieme alla visita».
+ * con il suo ordine: il sito (online dal 28/11, rotta app/sito), il piano editoriale, l'analisi all'avvio. Piano e
+ * analisi restano bozze, «le confermiamo insieme alla visita».
  *
  * La tabella ordini_sdg dal browser il titolare non la legge (RLS della 999c): qui legge il server, con la chiave di
  * servizio, e SOLO la riga del negozio che è entrato (`sellerId` viene dall'accesso, mai dalla richiesta). Escono
@@ -36,7 +38,11 @@ export type LavoroDellOrdine = {
   servizi: ServizioAgenzia[] | null;
   nomeAttivita: string;
   piano: { stato: StatoPerIlTitolare; piano: PianoDelMese };
-  sito: { stato: StatoPerIlTitolare; bozza: BozzaSitoOrdine | null };
+  /**
+   * 28/11/2026 (Nicola, 14:10: «deve essere già su Vercel») — `indirizzo` è il sito online, intero
+   * («https://www.mycity-marketplace.com/sito/raquel-cafe-ffb27af9»): c'è appena il sito è pronto ed è fra i servizi scelti.
+   */
+  sito: { stato: StatoPerIlTitolare; bozza: BozzaSitoOrdine | null; indirizzo: string | null };
   analisi: { stato: StatoPerIlTitolare; analisi: AnalisiAvvioOrdine | null };
 };
 
@@ -70,15 +76,17 @@ export async function lavoroDallOrdine(sellerId: string): Promise<LavoroDellOrdi
     if (String(r.seller_id).toLowerCase() !== id) return null;
     const sitoPronto = r.sito_stato === 'pronto' && !!r.sito;
     const analisiPronta = r.analisi_stato === 'pronto' && !!r.analisi;
+    const servizi = leggiServiziScelti(r.dati_attivita?.servizi, null).servizi;
+    const percorso = sitoPronto && servizioScelto(servizi, 'sito_web') ? percorsoDelSito(id, r.nome_attivita) : null;
     return {
       fascia: r.fascia,
       // Solo l'elenco dei servizi: la nota dell'agente e il resto di dati_attivita restano a SDG.
-      servizi: leggiServiziScelti(r.dati_attivita?.servizi, null).servizi,
+      servizi,
       nomeAttivita: r.nome_attivita,
       // Collaudo 28/11/2026 — Le «note» del piano e della bozza sono righe dell'AD per il team (cosa preparare alla
       // visita, cosa manca): restano a SDG, al titolare non si mandano nemmeno nella risposta.
       piano: { stato: perIlTitolare(r.piano_completo_stato, true), piano: r.piano ? { ...r.piano, note: [] } : r.piano },
-      sito: { stato: perIlTitolare(r.sito_stato, sitoPronto), bozza: sitoPronto && r.sito ? { ...r.sito, note: [] } : null },
+      sito: { stato: perIlTitolare(r.sito_stato, sitoPronto), bozza: sitoPronto && r.sito ? { ...r.sito, note: [] } : null, indirizzo: percorso ? `${env.appUrl()}${percorso}` : null },
       analisi: { stato: perIlTitolare(r.analisi_stato, analisiPronta), analisi: analisiPronta ? (r.analisi ?? null) : null },
     };
   } catch (e) {
