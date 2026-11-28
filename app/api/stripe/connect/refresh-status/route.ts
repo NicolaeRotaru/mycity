@@ -5,6 +5,7 @@ import { applyConnectAccountStatus } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { contoSconosciutoAStripe, eChiaveDiProva, FRASE_CONTO_SCONOSCIUTO_ALLA_CHIAVE_DI_PROVA } from '@/lib/stripe/conto-di-prova';
 
 export const runtime = 'nodejs';
 
@@ -60,6 +61,13 @@ export const POST = withAuthRateLimit({ name: 'stripe-connect-refresh', max: 20,
       { status: 200 },
     );
   } catch (err) {
+    // 28/11/2026 (onda 2, R05-009) — Con la chiave di prova il conto vero del profilo non esiste per
+    // Stripe: «Aggiorna stato» rispondeva 500 «Errore Stripe», e la persona non sapeva perché. È lo
+    // stesso caso del freno del collegamento (lib/stripe/conto-di-prova.ts): la stessa frase.
+    if (contoSconosciutoAStripe(err) && eChiaveDiProva()) {
+      logger.warn('[stripe] connect refresh-status: conto del profilo sconosciuto alla chiave di prova', { userId: user.id });
+      return ApiErrors.conflict(FRASE_CONTO_SCONOSCIUTO_ALLA_CHIAVE_DI_PROVA);
+    }
     logger.error('[stripe] connect refresh-status failed', err);
     return ApiErrors.internal('Errore Stripe');
   }
