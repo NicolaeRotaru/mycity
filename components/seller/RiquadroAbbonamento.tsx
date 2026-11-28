@@ -59,7 +59,12 @@ export default function RiquadroAbbonamento({ posizione }: { posizione: 'cima' |
   if (stato.tipo === 'attivo') {
     return (
       <Cornice tono="verde" compatto>
-        <Titolo icona={BadgeCheck}>Il tuo abbonamento {FASCE[stato.fascia].nome} è attivo, lo realizza {REALIZZATI_DA}</Titolo>
+        <Titolo icona={BadgeCheck}>
+          {/* 28/11/2026 — SDG ha il Premium incluso: non lo paga e non lo realizza per sé stesso. */}
+          {p.attivo?.incluso
+            ? `Il tuo abbonamento ${FASCE[stato.fascia].nome} è attivo ed è incluso: non paghi niente`
+            : `Il tuo abbonamento ${FASCE[stato.fascia].nome} è attivo, lo realizza ${REALIZZATI_DA}`}
+        </Titolo>
         {servizi}
         <Link href={PERCORSO_ABBONAMENTO} className="mt-3 inline-block text-sm font-semibold text-primary-700 underline underline-offset-2">
           Vedi il tuo abbonamento

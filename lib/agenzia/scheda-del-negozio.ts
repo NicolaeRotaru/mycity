@@ -4,6 +4,7 @@ import { leggiSchedaSalvata, type SchedaCliente } from './scheda-cliente';
 import { leggiSchedaEPagellaAperte, schedaEPagellaAperte, schedaPerIlSito, statoCheApre } from './scheda-dopo-abbonamento';
 import { analisiPerLaFascia } from './rapporto';
 import { ABBONAMENTI, type Abbonamento } from './preventivo';
+import { abbonamentoIncluso } from './abbonamento-di-sdg';
 
 /**
  * LA SCHEDA COME LA VEDE IL NEGOZIO — una strada sola (26/11/2026, revisione di sicurezza di mycity#336).
@@ -45,7 +46,9 @@ export async function schedaPerIlNegozio(admin: SupabaseClient, idAttivita: stri
   ]);
   if (letta.error) logger.warn('[scheda-del-negozio] scheda non letta', { idAttivita, message: letta.error.message });
   const intera = letta.error ? null : schedaPerIlSito(leggiSchedaSalvata((letta.data as { scheda?: unknown } | null)?.scheda), aperta);
-  const fascia = abbonamenti.error ? null : fasciaAttiva(abbonamenti.data as Array<{ fascia?: unknown; stato?: unknown }> | null);
+  // 28/11/2026 — SDG ha il Premium incluso senza righe in tabella (lib/agenzia/abbonamento-di-sdg.ts): dal collaudo.
+  const fascia = abbonamentoIncluso(idAttivita)?.fascia
+    ?? (abbonamenti.error ? null : fasciaAttiva(abbonamenti.data as Array<{ fascia?: unknown; stato?: unknown }> | null));
   const scheda = intera && aperta ? { ...intera, analisi: analisiPerLaFascia(intera.analisi, fascia) } : intera;
   return { scheda, aperta, fascia, errore: letta.error ? letta.error.message : null };
 }

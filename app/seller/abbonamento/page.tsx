@@ -173,7 +173,9 @@ export default function PaginaAbbonamento() {
             </p>
           )}
           <p className="text-sm text-ink-700 mt-1">
-            {p.attivo.stato === 'active'
+            {p.attivo.incluso
+              ? 'È incluso: non paghi niente, e non c’è un abbonamento da scegliere.'
+              : p.attivo.stato === 'active'
               ? `Lo realizza ${REALIZZATI_DA}: ti contattiamo per fissare l’incontro nel locale. Per cambiarlo o disdirlo scrivici.`
               : 'Scrivici dall’Aiuto: sistemiamo insieme il pagamento.'}
           </p>

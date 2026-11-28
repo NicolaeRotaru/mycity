@@ -156,6 +156,39 @@ export default {
       fontSize: {
         // Step micro mancante dalla ramp Tailwind (design --text-2xs).
         '2xs': '0.625rem',
+        // ARMONIA NASCOSTA (Nicola, 28/11/2026): la scala che cresce di 1,618 (16, 26, 42, 68 px).
+        // È la linea per ogni lavoro nuovo sul marketplace: chi tocca un titolo usa questi passi.
+        'aurea-0': '1rem',
+        'aurea-1': '1.625rem',
+        'aurea-2': '2.625rem',
+        'aurea-3': '4.25rem',
+      },
+      // ARMONIA NASCOSTA: gli spazi di Fibonacci (8, 13, 21, 34, 55, 89 px) → p-f3, gap-f2, mt-f4…
+      // Additivi: non cambiano nessuna classe che c'è già. Skill «armonia» di ad-mycity.
+      spacing: {
+        f1: '0.5rem',
+        f2: '0.8125rem',
+        f3: '1.3125rem',
+        f4: '2.125rem',
+        f5: '3.4375rem',
+        f6: '5.5625rem',
+      },
+      maxWidth: {
+        aurea: '61.6875rem', // 987 px, numero di Fibonacci
+      },
+      gridTemplateColumns: {
+        // Testo e foto in sezione aurea: 1,618 a 1, e il contrario.
+        aurea: 'minmax(0, 1.618fr) minmax(0, 1fr)',
+        'aurea-inversa': 'minmax(0, 1fr) minmax(0, 1.618fr)',
+      },
+      aspectRatio: {
+        // Il rettangolo aureo e i rapporti di Alberti e Palladio, che sono anche i formati di foto e video.
+        aurea: '1.618 / 1',
+        quinta: '3 / 2',
+        quarta: '4 / 3',
+      },
+      transitionTimingFunction: {
+        armonia: 'cubic-bezier(0.382, 0, 0.618, 1)',
       },
       letterSpacing: {
         // Tracking editoriale del design (additivi, nessun override).

@@ -31,6 +31,7 @@ import {
   PAGINA_ATTESA_NEGOZIO,
 } from '@/lib/auth/decisione-portiere';
 import { indirizzoDopoIlPreventivo } from '@/lib/agenzia/indirizzi-servizi';
+import { rimandoAlDominioVero } from '@/lib/dominio-unico';
 import {
   chiediConTettoSuScritturaDiSessione,
   creaRaccoglitoreCookie,
@@ -425,6 +426,12 @@ function generateNonce(): string {
 }
 
 export async function middleware(req: NextRequest) {
+  // 28/11/2026 — Chi apre l'indirizzo vecchio di Vercel finisce sul dominio
+  // vero, prima di tutto il resto: un sito, un indirizzo, una sessione.
+  // Perché e cosa resta fuori: `lib/dominio-unico.ts`.
+  const dominioVero = rimandoAlDominioVero(req);
+  if (dominioVero) return NextResponse.redirect(dominioVero, 308);
+
   const { pathname } = req.nextUrl;
 
   // CSP nonce: genera per ogni request, propaga via x-nonce header.

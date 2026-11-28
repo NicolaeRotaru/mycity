@@ -16,6 +16,7 @@ import { analisiAziendale, leggiAnalisiCanali, leggiRisultatoSito, sitoInParole,
 import { leggiGiudizioSito, offertaSuMisura } from '@/lib/agenzia/offerta-su-misura';
 import { conLAnalisi, schedaEPagellaAperte, schedaPerIlSito, statoCheApre } from '@/lib/agenzia/scheda-dopo-abbonamento';
 import { primoMeseAncoraScontato } from '@/lib/agenzia/abbonamento-contanti';
+import { abbonamentoIncluso } from '@/lib/agenzia/abbonamento-di-sdg';
 
 /**
  * IL PREVENTIVO LETTO DAL DATABASE — una funzione sola per la dashboard (/api/seller/preventivo) e
@@ -151,7 +152,8 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
       : leggiImpostazioniAgenzia(impostazioni.data?.agenzia),
     adesso: new Date(),
     scelto,
-    attivo: abbonamentoAttivo(abbonamento),
+    // 28/11/2026 — SDG ha il Premium per regola, senza pagarlo (Nicola): prima della tabella.
+    attivo: abbonamentoIncluso(idAttivita) ?? abbonamentoAttivo(abbonamento),
     // Chi ha già avuto un abbonamento dei servizi non ha più il primo mese a metà (lo rifiuta anche la cassa).
     // 27/11/2026 — Quello in contanti in corso, sbloccato al «Sì» dell'agente, è il primo: lo sconto resta.
     primoMeseScontato: abbonamento.error ? true : primoMeseAncoraScontato((abbonamento.data as { stato?: string | null; origine?: string | null }[] | null) ?? []),
