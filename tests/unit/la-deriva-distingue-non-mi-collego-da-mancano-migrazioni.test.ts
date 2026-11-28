@@ -48,7 +48,9 @@ beforeAll(() => {
   // o risponde alla SELECT con le righe scelte dalla prova.
   writeFileSync(
     fintoPg,
-    `class Client {
+    `import { EventEmitter } from 'node:events';
+// Come il Client vero di pg, e' un EventEmitter.
+class Client extends EventEmitter {
   async connect() {
     const finto = process.env.FINTO_ERRORE_DI_RETE;
     if (finto) {

@@ -204,8 +204,10 @@ describe('lo script delle migrazioni, con il tetto del rilascio automatico', LEN
     expect(r.applicate).toEqual([]);
     expect(r.stderr).toContain('«Session pooler»');
     expect(r.stderr).toContain('IPv6');
-    // L'errore vero di psql resta visibile, sopra il consiglio.
-    expect(r.stderr).toContain('Network is unreachable');
+    // Di psql esce il codice generico, non il testo con macchina e indirizzo.
+    expect(r.stderr).toContain("Codice dell'errore: RETE_IRRAGGIUNGIBILE");
+    expect(r.stderr).not.toContain('Network is unreachable');
+    expect(r.stderr).not.toContain('2a05:d012::1');
   });
 
   it('se la password e\' sbagliata dice «password», non manda a cambiare riga per la rete', () => {
@@ -215,7 +217,8 @@ describe('lo script delle migrazioni, con il tetto del rilascio automatico', LEN
     const r = lanciaLoScript(ultime(3), { FINTO_PSQL_PASSWORD_SBAGLIATA: '1' });
     expect(r.uscita).not.toBe(0);
     expect(r.applicate).toEqual([]);
-    expect(r.stderr).toContain('password authentication failed');
+    expect(r.stderr).toContain("Codice dell'errore: ACCESSO_RIFIUTATO");
+    expect(r.stderr).not.toContain('password authentication failed');
     expect(r.stderr).toContain('rifiuta utente o password');
     expect(r.stderr).not.toContain('IPv6');
     expect(r.stderr).not.toContain('deve essere la riga');
@@ -237,7 +240,8 @@ describe('lo script delle migrazioni non ripete la password nell\'errore di psql
     expect(r.uscita).not.toBe(0);
     expect(r.applicate).toEqual([]);
     expect(r.stderr).not.toContain('Segreto9');
-    expect(r.stderr).toContain('could not translate host name');
+    expect(r.stderr).toContain("Codice dell'errore: NOME_NON_TROVATO");
+    expect(r.stderr).not.toContain('could not translate host name');
     expect(r.stderr).toContain('non si trova');
   });
 
@@ -248,7 +252,8 @@ describe('lo script delle migrazioni non ripete la password nell\'errore di psql
     });
     expect(r.uscita).not.toBe(0);
     expect(r.stderr).not.toContain('Segreto9');
-    expect(r.stderr).toContain('invalid percent-encoded token');
+    expect(r.stderr).toContain("Codice dell'errore: RIGA_ILLEGGIBILE");
+    expect(r.stderr).not.toContain('invalid percent-encoded token');
     expect(r.stderr).toContain('%40');
   });
 

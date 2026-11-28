@@ -40,14 +40,16 @@ beforeAll(() => {
   const fintoPg = join(scena, 'finto-pg.mjs');
   writeFileSync(
     fintoPg,
-    `function guasto(dove) {
+    `import { EventEmitter } from 'node:events';
+function guasto(dove) {
   const g = JSON.parse(process.env.FINTO_GUASTO ?? '{}');
   if (g.dove !== dove) return;
   const e = new Error(g.message);
   if (g.code) e.code = g.code;
   throw e;
 }
-class Client {
+// Come il Client vero di pg, e' un EventEmitter.
+class Client extends EventEmitter {
   async connect() { guasto('collegamento'); }
   async query(sql) {
     guasto(String(sql).includes('WITH ruoli') ? 'permessi' : 'registro');

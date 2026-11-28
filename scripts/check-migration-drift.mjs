@@ -20,6 +20,8 @@
  *   - non si collega         -> exit 1 (USCITA.NON_HO_CONTROLLATO), con il perche'
  *                               e cosa cambiare (da GitHub Actions: la riga del
  *                               «Session pooler»)
+ *   - collegamento caduto    -> exit 1 (USCITA.NON_HO_CONTROLLATO), una riga col tipo
+ *                               di indirizzo e il codice
  *   - drift rilevato         -> exit 2 (USCITA.DERIVA) con l'elenco dei file non applicati
  *   - tutto applicato        -> exit 0 (USCITA.ALLINEATO)
  *
@@ -121,13 +123,45 @@ const NOME_NON_TROVATO = new Set(['ENOTFOUND', 'EAI_AGAIN', 'EAI_NONAME']);
 
 /**
  * Nel log va solo il codice dell'errore, mai il suo messaggio: un codice di Node (ECONNREFUSED…) o uno
- * SQLSTATE di Postgres (28P01…). Tutto il resto diventa «senza codice».
+ * SQLSTATE di Postgres (28P01…), oppure una delle etichette generiche qui sotto. Tutto il resto
+ * diventa «senza codice».
  */
 const CODICE_STAMPABILE = /^(?:E[A-Z0-9_]{2,30}|[0-9A-Z]{5})$/;
 
+/** Le etichette che prendono il posto del codice quando l'errore non ne ha uno stampabile. */
+const ETICHETTE_GENERICHE = new Set(['TLS', 'TIMEOUT', 'CONNESSIONE_CHIUSA']);
+
+/** I codici di Node per i certificati e il TLS: nel log diventano tutti «TLS». */
+const CODICI_TLS = new Set([
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+  'CERT_HAS_EXPIRED',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+]);
+
 export function codiciDaStampare(codici) {
-  const buoni = [...new Set(codici.map((c) => String(c ?? '')).filter((c) => CODICE_STAMPABILE.test(c)))];
+  const buoni = [
+    ...new Set(codici.map((c) => String(c ?? '')).filter((c) => CODICE_STAMPABILE.test(c) || ETICHETTE_GENERICHE.has(c))),
+  ];
   return buoni.length > 0 ? buoni.join(', ') : 'senza codice';
+}
+
+/**
+ * Il codice da stampare per un errore: il suo, se e' stampabile; altrimenti un'etichetta generica
+ * (TLS, TIMEOUT, CONNESSIONE_CHIUSA) scelta dal genere del codice o del messaggio. Il messaggio si
+ * legge solo per scegliere l'etichetta: nel log va l'etichetta.
+ */
+export function codiceOEtichetta(errore) {
+  const codice = String(errore?.code ?? '');
+  const messaggio = String(errore?.message ?? '');
+  if (CODICI_TLS.has(codice)) return 'TLS';
+  if (CODICE_STAMPABILE.test(codice)) return codice;
+  if (/CERT|SSL|TLS/.test(codice) || /certificat|\bssl\b|\btls\b/i.test(messaggio)) return 'TLS';
+  if (/timeout|timed out/i.test(messaggio)) return 'TIMEOUT';
+  if (/connection terminated/i.test(messaggio)) return 'CONNESSIONE_CHIUSA';
+  return codice;
 }
 
 /**
@@ -169,7 +203,7 @@ export function spiegaIlCollegamentoFallito(errore, url) {
 
   const righe = [
     `❌ check-migration-drift: non riesco a collegarmi al database (${tipoDiIndirizzo(letta, macchina)}).`,
-    `   Codice dell'errore: ${codiciDaStampare(codici)}`,
+    `   Codice dell'errore: ${codiciDaStampare(errori.map(codiceOEtichetta))}`,
   ];
 
   if (!letta) {
@@ -226,8 +260,8 @@ export function spiegaIlCollegamentoFallito(errore, url) {
     );
   } else if (sessionPooler) {
     righe.push(
-      '   L\'indirizzo e\' gia\' quello del pooler. Se l\'errore parla di utente o «tenant»: l\'utente e\' postgres.<progetto>',
-      '   (nel pooler porta dietro il codice del progetto, non e\' solo «postgres»). Altrimenti controlla porta (5432) e password.',
+      '   L\'indirizzo e\' gia\' quello del pooler. Controlla l\'utente: nel pooler e\' postgres.<progetto> (porta dietro',
+      '   il codice del progetto, non e\' solo «postgres»). Poi la porta (5432) e la password.',
     );
   } else if (irraggiungibile) {
     righe.push('   Perche\': da qui la rete non arriva a quell\'indirizzo.');
@@ -429,11 +463,11 @@ export function confrontaIPermessi(delDatabase, attesi) {
 
 /**
  * 5/11/2026 — Le righe da stampare quando il collegamento riesce ma il registro delle migrazioni non
- * si legge. Funzione pura. Mai l'oggetto d'errore intero: solo codice e messaggio.
+ * si legge. Funzione pura. Mai l'oggetto d'errore intero: solo il codice (o l'etichetta generica).
  */
 export function spiegaIlRegistroIlleggibile(errore) {
   const codice = String(errore?.code ?? '');
-  const righe = [`❌ check-migration-drift: collegato al database, ma non riesco a leggere il registro delle migrazioni (${codiciDaStampare([codice])}).`];
+  const righe = [`❌ check-migration-drift: collegato al database, ma non riesco a leggere il registro delle migrazioni (${codiciDaStampare([codiceOEtichetta(errore)])}).`];
   if (codice === '42P01' || codice === '3F000') {
     righe.push('   Perche\': questo database non ha il registro delle migrazioni di Supabase (supabase_migrations.schema_migrations). SUPABASE_DB_URL punta al database giusto?');
   } else if (codice === '42501') {
@@ -460,6 +494,19 @@ function repoMigrationNames() {
         impronta: crypto.createHash('md5').update(contenuto).digest('hex'),
       };
     });
+}
+
+/**
+ * Un esito di guasto solo per lancio: il primo che arriva si stampa, gli altri no. Serve quando lo
+ * stesso guasto arriva da due strade (la domanda in corso che fallisce e l'evento 'error' del client).
+ * Restituisce false se un esito era gia' stato stampato.
+ */
+let esitoStampato = false;
+function stampaLEsito(righe) {
+  if (esitoStampato) return false;
+  esitoStampato = true;
+  for (const riga of righe) console.error(riga);
+  return true;
 }
 
 async function main() {
@@ -492,13 +539,23 @@ async function main() {
   let client;
   try {
     client = new pg.default.Client({ connectionString: DB_URL });
+    // Il guasto del collegamento fuori da una domanda (il server chiude la sessione, la rete cade
+    // mentre il client aspetta) arriva come evento 'error' del client: una riga col tipo di
+    // indirizzo e il codice, e uscita 1. Se un altro esito e' gia' stato stampato, resta quello.
+    client.on('error', (err) => {
+      const { letta, macchina } = partiDellIndirizzo(DB_URL);
+      const riga =
+        `❌ check-migration-drift: il collegamento al database si e' interrotto (${tipoDiIndirizzo(letta, macchina)}). ` +
+        `Codice dell'errore: ${codiciDaStampare(erroriDentro(err).map(codiceOEtichetta))}`;
+      if (stampaLEsito([riga])) process.exit(USCITA.NON_HO_CONTROLLATO);
+    });
     await client.connect();
   } catch (err) {
     // R53 — Prima qui usciva la traccia nuda di Node («connect ENETUNREACH
     // 2a05:…:5432») e nient'altro: 52 mattine rosse su 52 senza che il
     // messaggio dicesse cosa cambiare. Adesso si dice dove non si arriva e
     // perche', senza mai stampare la password.
-    for (const riga of spiegaIlCollegamentoFallito(err, DB_URL)) console.error(riga);
+    stampaLEsito(spiegaIlCollegamentoFallito(err, DB_URL));
     process.exit(USCITA.NON_HO_CONTROLLATO);
   }
   let applicate;
@@ -518,7 +575,7 @@ async function main() {
     }));
   } catch (err) {
     // 5/11/2026 — Collegati, ma il registro non si legge: si dice cosa fare, non la traccia nuda.
-    for (const riga of spiegaIlRegistroIlleggibile(err)) console.error(riga);
+    stampaLEsito(spiegaIlRegistroIlleggibile(err));
     await client.end().catch(() => {});
     process.exit(USCITA.NON_HO_CONTROLLATO);
   }
@@ -527,7 +584,7 @@ async function main() {
       const res = await client.query(DOMANDA_DEI_PERMESSI);
       permessi = res.rows.map((r) => ({ tipo: r.tipo, oggetto: r.oggetto, ruolo: r.ruolo, permesso: r.permesso }));
     } catch (err) {
-      console.error(`❌ check-migration-drift: collegato, ma non riesco a leggere i permessi (${codiciDaStampare([err?.code])}).`);
+      stampaLEsito([`❌ check-migration-drift: collegato, ma non riesco a leggere i permessi (${codiciDaStampare([codiceOEtichetta(err)])}).`]);
       await client.end().catch(() => {});
       process.exit(USCITA.NON_HO_CONTROLLATO);
     }
@@ -578,7 +635,7 @@ function lanciatoDaRigaDiComando() {
 if (lanciatoDaRigaDiComando()) {
   main().catch((err) => {
     // Solo il codice dell'errore, come negli altri esiti: il messaggio resta fuori dal log.
-    console.error(`❌ check-migration-drift: errore inatteso (${codiciDaStampare([err?.code])}).`);
+    stampaLEsito([`❌ check-migration-drift: errore inatteso (${codiciDaStampare([codiceOEtichetta(err)])}).`]);
     process.exit(1);
   });
 }

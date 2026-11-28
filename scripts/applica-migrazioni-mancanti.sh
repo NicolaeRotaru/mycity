@@ -50,38 +50,82 @@ MIG="${CARTELLA_MIGRAZIONI:-$ROOT/migrations}"
 #
 # Il consiglio dipende da quello che psql ha detto davvero (collaudo del
 # 15/10): mandare al Session pooler chi ha solo sbagliato la password lo fa
-# girare a vuoto. L'errore di psql si stampa sempre sopra il consiglio, ma
-# SENZA la password (secondo collaudo del 15/10): con una riga scritta male
-# psql la ripete, intera o a pezzi — «invalid percent-encoded token:
-# "Pa%ZZSegreto9"», «could not translate host name "Segreto9@…"» — e GitHub
-# nei log nasconde solo il segreto intero, non i suoi pezzi. Era cosi' anche
-# prima; il controllo della deriva la oscurava gia', questo script no.
+# girare a vuoto. Il testo di psql si legge per scegliere il consiglio e il
+# codice, ma non si stampa: nel log vanno solo il tipo di indirizzo (pooler,
+# connessione diretta, questa macchina, indirizzo di Supabase) e un codice
+# generico. Mai la macchina, la porta, l'utente o il testo di psql.
 #
-# senza_password: toglie dal testo la password della riga (tutto quello che
-# sta fra il primo «:» dopo «://» e l'ultima «@») e ogni suo pezzo di almeno
-# quattro caratteri, spezzandola dove la riga si spezza (@ : / ? #), e
-# qualunque «://utente:segreto@» rimasto.
-senza_password() {
-  local testo="$1" resto credenziali segreto decodificato pezzo
-  local -a pezzi=() altri=()
-  resto="${DB#*://}"
-  if [ "$resto" != "$DB" ] && [[ "$resto" == *@* ]]; then
-    credenziali="${resto%@*}"
-    if [[ "$credenziali" == *:* ]]; then
-      segreto="${credenziali#*:}"
-      # Anche la forma decodificata (p%40ss → p@ss), se psql la ripetesse cosi'.
-      decodificato="$(printf '%b' "${segreto//%/\\x}" 2>/dev/null || true)"
-      # `read -a` spezza senza espandere * e ? come nomi di file.
-      IFS='@:/?#' read -r -a pezzi <<< "$segreto" || true
-      IFS='@:/?#' read -r -a altri <<< "$decodificato" || true
-      for pezzo in "$segreto" "$decodificato" ${pezzi[@]+"${pezzi[@]}"} ${altri[@]+"${altri[@]}"}; do
-        if [ "${#pezzo}" -ge 4 ]; then
-          testo="${testo//"$pezzo"/***}"
-        fi
-      done
-    fi
+# tipo_di_indirizzo: il tipo dell'indirizzo in SUPABASE_DB_URL, detto a parole
+# (gli stessi nomi del controllo della deriva).
+tipo_di_indirizzo() {
+  local resto="${DB#*://}" macchina
+  if [ "$resto" = "$DB" ]; then
+    printf '%s' "l'indirizzo in SUPABASE_DB_URL"
+    return
   fi
-  printf '%s' "$testo" | sed -E 's#://[^@[:space:]]*@#://***@#g'
+  resto="${resto##*@}"
+  resto="${resto%%[/?#]*}"
+  if [[ "$resto" == \[* ]]; then
+    macchina="${resto#\[}"
+    macchina="${macchina%%\]*}"
+  else
+    macchina="${resto%%:*}"
+  fi
+  macchina="$(printf '%s' "$macchina" | tr '[:upper:]' '[:lower:]')"
+  if [ -z "$macchina" ] || [ "$macchina" = "localhost" ] || [ "$macchina" = "::1" ] || [[ "$macchina" == 127.* ]]; then
+    printf '%s' 'database su questa stessa macchina'
+  elif [[ "$macchina" =~ ^db\.[^.]+\.supabase\.co$ ]]; then
+    printf '%s' 'connessione diretta di Supabase'
+  elif [[ "$macchina" =~ \.pooler\.supabase\.com$ ]]; then
+    printf '%s' 'pooler di Supabase'
+  elif [[ "$macchina" =~ \.supabase\.(co|com)$ ]]; then
+    printf '%s' 'indirizzo di Supabase'
+  else
+    printf '%s' "l'indirizzo in SUPABASE_DB_URL"
+  fi
+}
+
+# codice_del_collegamento: un codice generico per il testo d'errore di psql
+# sul collegamento. Del testo si guarda solo il genere.
+codice_del_collegamento() {
+  case "$1" in
+    *"password authentication failed"*|*"no password supplied"*|*"Tenant or user not found"*|*"no pg_hba.conf entry"*)
+      echo "ACCESSO_RIFIUTATO" ;;
+    *"Network is unreachable"*|*"Cannot assign requested address"*|*"Address family not supported"*|*"No route to host"*)
+      echo "RETE_IRRAGGIUNGIBILE" ;;
+    *"could not translate host name"*)
+      echo "NOME_NON_TROVATO" ;;
+    *"invalid percent-encoded token"*|*"invalid URI query parameter"*|*"invalid integer value"*|*"missing \"=\" after"*)
+      echo "RIGA_ILLEGGIBILE" ;;
+    *"Connection refused"*)
+      echo "CONNESSIONE_RIFIUTATA" ;;
+    *SSL*|*certificate*)
+      echo "TLS" ;;
+    *"timeout expired"*|*"timed out"*)
+      echo "TIMEOUT" ;;
+    *"server closed the connection unexpectedly"*|*"connection to server was lost"*|*"terminating connection"*)
+      echo "CONNESSIONE_CHIUSA" ;;
+    *)
+      echo "senza codice" ;;
+  esac
+}
+
+# psql_col_guasto_generico: psql con gli stessi argomenti, la stessa uscita e
+# lo stesso output. Il suo standard error passa com'e' (errori SQL dei file,
+# avvisi), tranne quando psql esce 2 (il collegamento non c'e' o si e'
+# interrotto): allora al posto del testo di psql esce una riga col tipo di
+# indirizzo e il codice generico.
+psql_col_guasto_generico() {
+  local errori uscita=0
+  errori="$(mktemp)"
+  psql "$@" 2> "$errori" || uscita=$?
+  if [ "$uscita" -eq 2 ]; then
+    echo "✗ il collegamento al database si e' interrotto ($(tipo_di_indirizzo)). Codice dell'errore: $(codice_del_collegamento "$(cat "$errori")")" >&2
+  else
+    cat "$errori" >&2
+  fi
+  rm -f "$errori"
+  return "$uscita"
 }
 
 if ! ERRORE_COLLEGAMENTO="$(psql "$DB" -q -v ON_ERROR_STOP=1 2>&1 >/dev/null <<'SQL'
@@ -93,8 +137,8 @@ CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
 );
 SQL
 )"; then
-  [ -n "$ERRORE_COLLEGAMENTO" ] && printf '%s\n' "$(senza_password "$ERRORE_COLLEGAMENTO")" >&2
-  echo "✗ non riesco a collegarmi al database: nessuna migrazione applicata." >&2
+  echo "✗ non riesco a collegarmi al database ($(tipo_di_indirizzo)): nessuna migrazione applicata." >&2
+  echo "  Codice dell'errore: $(codice_del_collegamento "$ERRORE_COLLEGAMENTO")" >&2
   # Prima la password: se il server l'ha rifiutata, la rete ci e' arrivata —
   # anche sulla connessione diretta, da un computer che l'IPv6 ce l'ha.
   case "$ERRORE_COLLEGAMENTO" in
@@ -120,7 +164,7 @@ SQL
       *"invalid percent-encoded token"*|*"invalid URI query parameter"*|*"invalid integer value"*|*"missing \"=\" after"*)
         echo "  La riga in SUPABASE_DB_URL non si legge. Di solito e' la password: se contiene # / ? @ : % vanno scritti codificati (# → %23, / → %2F, ? → %3F, @ → %40, : → %3A, % → %25)." >&2 ;;
       *)
-        echo "  Il motivo e' nell'errore di psql qui sopra." >&2 ;;
+        echo "  Controlla l'indirizzo, la porta e la password scritti in SUPABASE_DB_URL." >&2 ;;
     esac
   fi
   exit 1
@@ -171,9 +215,9 @@ PRIMA_MIGRAZIONE="$(basename "$(ls "$MIG"/*.sql | LC_ALL=C sort | head -1)")"
 PRIMA_VERSIONE="${PRIMA_MIGRAZIONE%%_*}"
 PRIMA_NOME="${PRIMA_MIGRAZIONE#*_}"; PRIMA_NOME="${PRIMA_NOME%.sql}"
 
-righe_registro="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
+righe_registro="$(psql_col_guasto_generico "$DB" -X -A -t -v ON_ERROR_STOP=1 \
   -c "SELECT count(*) FROM supabase_migrations.schema_migrations")"
-conosce_la_prima="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
+conosce_la_prima="$(psql_col_guasto_generico "$DB" -X -A -t -v ON_ERROR_STOP=1 \
   -c "SELECT 1 FROM supabase_migrations.schema_migrations
        WHERE version = '$PRIMA_VERSIONE' OR name = '$PRIMA_NOME' LIMIT 1")"
 
@@ -232,7 +276,7 @@ for f in $(ls "$MIG"/*.sql | LC_ALL=C sort); do
   versione="${name%%_*}"
   descrizione="${name#*_}"; descrizione="${descrizione%.sql}"
 
-  gia="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
+  gia="$(psql_col_guasto_generico "$DB" -X -A -t -v ON_ERROR_STOP=1 \
     -c "SELECT 1 FROM supabase_migrations.schema_migrations
          WHERE version = '$versione'
             OR (name = '$descrizione' AND version NOT IN ($PREFISSI_DEL_DEPOSITO)) LIMIT 1")"
@@ -305,7 +349,7 @@ for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
   # Si richiede al registro anche qui, file per file come prima: se un file
   # appena applicato avesse registrato anche questo (stesso nome, numero
   # diverso), lo si salta invece di riapplicarlo.
-  gia="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
+  gia="$(psql_col_guasto_generico "$DB" -X -A -t -v ON_ERROR_STOP=1 \
     -c "SELECT 1 FROM supabase_migrations.schema_migrations
          WHERE version = '$versione'
             OR (name = '$descrizione' AND version NOT IN ($PREFISSI_DEL_DEPOSITO)) LIMIT 1")"
@@ -356,7 +400,7 @@ for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
   # R02-004 — Applicazione e registrazione stanno in UN solo psql (una connessione, la stessa
   # transazione del file): se la registrazione cade, anche l'applicazione torna indietro, e al
   # rilascio dopo non si riapplica una migrazione gia' fatta ma mai registrata.
-  psql "$DB" -q -v ON_ERROR_STOP=1 --single-transaction -f "$f" \
+  psql_col_guasto_generico "$DB" -q -v ON_ERROR_STOP=1 --single-transaction -f "$f" \
     -c "INSERT INTO supabase_migrations.schema_migrations (version, name, statements)
         VALUES ('$versione', '$descrizione', ARRAY['-- md5:$impronta'])
         ON CONFLICT (version) DO NOTHING"

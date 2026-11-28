@@ -21,8 +21,10 @@ const SCRIPT = readFileSync(join(process.cwd(), 'scripts', 'check-migration-drif
 
 const PG_FINTO = `
 const fs = require('node:fs');
-class Client {
-  constructor() {}
+const { EventEmitter } = require('node:events');
+// Come il Client vero di pg, e' un EventEmitter.
+class Client extends EventEmitter {
+  constructor() { super(); }
   async connect() {}
   async end() {}
   async query(sql) {
