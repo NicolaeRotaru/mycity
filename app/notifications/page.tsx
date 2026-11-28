@@ -15,6 +15,8 @@ import { friendlyError } from '@/lib/errors';
 import { categorieDiNotificheSpente, useNotificationsCount } from '@/components/hooks/useNotificationsCount';
 import { useUtente } from '@/components/hooks/useUtente';
 import { toneFor, formatDate } from '@/lib/notifiche-aspetto';
+import { useProfile } from '@/components/hooks/useProfile';
+import { indirizzoDellaNotifica } from '@/lib/notifiche/indirizzo-per-chi-apre';
 
 type Notification = {
   id: string;
@@ -57,6 +59,8 @@ export default function NotificationsPage() {
   const nonLetteDelCampanello = useNotificationsCount();
   // R01-varie — Di chi è l'elenco: sta nella chiave, e la domanda parte quando lo si sa.
   const { userId, caricamento: utenteInLettura } = useUtente();
+  // 28/11/2026 — L'admin che apre una notifica non finisce nel pannello di un negozio (lib/notifiche/indirizzo-per-chi-apre.ts).
+  const { isAdmin } = useProfile();
 
   // R10-012 — L'ultimo elenco letto davvero. Il segnaposto di «Carica altre» vale solo mentre la
   // lettura è in corso: se cade, la domanda nuova non ha dati suoi, e l'errore prendeva tutta la
@@ -329,7 +333,7 @@ export default function NotificationsPage() {
             return (
               <li key={n.id}>
                 {n.link ? (
-                  <Link href={n.link} className="block" onClick={() => { if (!n.is_read) segnaLetta(n.id); }}>
+                  <Link href={indirizzoDellaNotifica(n.link, { isAdmin })} className="block" onClick={() => { if (!n.is_read) segnaLetta(n.id); }}>
                     {inner}
                   </Link>
                 ) : (

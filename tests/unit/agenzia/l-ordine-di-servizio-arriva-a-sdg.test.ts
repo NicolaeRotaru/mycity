@@ -118,7 +118,9 @@ describe('① il preventivo accettato fa nascere UN ordine per SDG', () => {
     expect(ordini()).toHaveLength(1);
     expect(ordini()[0].fascia).toBe('business');
     expect(stato.avvisi.filter((a) => a.titolo.startsWith('Ordine di servizio per SDG'))).toHaveLength(1);
-    expect(stato.avvisi.find((a) => a.titolo.startsWith('Ordine di servizio'))?.link).toBe('/seller/ordini-sdg');
+    // 28/11/2026 — L'avviso va solo agli amministratori: apre la pagina dell'admin, non il pannello del negozio
+    // (Nicola, 15:45: «mi manda nella versione venditore»).
+    expect(stato.avvisi.find((a) => a.titolo.startsWith('Ordine di servizio'))?.link).toBe('/admin/ordini-sdg');
     await aspetta();
   });
 

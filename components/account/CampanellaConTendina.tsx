@@ -8,6 +8,8 @@ import { supabase } from '@/lib/supabase/client';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { queryKeys } from '@/lib/queries/keys';
 import { toneFor, formatDate } from '@/lib/notifiche-aspetto';
+import { useProfile } from '@/components/hooks/useProfile';
+import { indirizzoDellaNotifica } from '@/lib/notifiche/indirizzo-per-chi-apre';
 
 /**
  * LA CAMPANELLA CON LA TENDINA DELLE ULTIME NOTIFICHE — 28/11/2026.
@@ -134,6 +136,8 @@ function NotifPopover({
   const elencoRef = useRef<HTMLUListElement>(null);
   const qc = useQueryClient();
   const { data: ultime, isLoading, isError, refetch } = useUltimeNotifiche(userId);
+  // 28/11/2026 — L'admin che apre una notifica non finisce nel pannello di un negozio (lib/notifiche/indirizzo-per-chi-apre.ts).
+  const { isAdmin } = useProfile();
   // Il pannello esiste solo da aperto: il montaggio e' l'apertura, e lo
   // smontaggio riporta il fuoco sul campanello.
   // È una tendina, non un foglio a tutto schermo: la pagina sotto continua a scorrere.
@@ -232,7 +236,7 @@ function NotifPopover({
                 <li key={n.id}>
                   {n.link ? (
                     <Link
-                      href={n.link}
+                      href={indirizzoDellaNotifica(n.link, { isAdmin })}
                       className="block hover:bg-cream-50"
                       onClick={() => {
                         if (!n.is_read) segnaLetta(n.id);

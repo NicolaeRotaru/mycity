@@ -88,14 +88,22 @@ async function apri(ordine: Ordine) {
   return { s, avviso, client: () => client! };
 }
 
-/** Il numero sul chip «Notifiche» del menu account del telefono (MobileAccountNav); null se il chip non ne mostra. */
+/**
+ * Il numero delle notifiche nel menu account del telefono; null se non ne mostra.
+ * 28/11/2026 — La striscia di pillole del telefono è diventata un menu (components/ui/MenuSezioni.tsx): il numero di
+ * ogni voce si legge nel pannello che si apre dal riquadro «Il tuo account». Se è chiuso lo si apre; la domanda resta
+ * la stessa: quante non lette dice la voce «Notifiche» a chi guarda adesso.
+ */
 function numeroSulChip(radice: HTMLElement): string | null {
-  // Il menu del telefono: quello fuori dalla colonna laterale (anche la colonna ha un menu account).
-  const menu = Array.from(radice.querySelectorAll('nav[aria-label="Menu account"]')).find((n) => !n.closest('aside'));
-  const voce = Array.from(menu?.querySelectorAll('a') ?? []).find((a) => a.getAttribute('href') === '/notifications');
+  const pulsante = Array.from(radice.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="dialog"]'))
+    .find((b) => !b.closest('aside') && (b.textContent ?? '').includes('Il tuo account'));
+  if (!pulsante) throw new Error('nel menu account del telefono manca il riquadro «Il tuo account»');
+  if (pulsante.getAttribute('aria-expanded') !== 'true') act(() => { pulsante.click(); });
+  const pannello = radice.querySelector('[role="dialog"][aria-label="Menu account"]');
+  const voce = Array.from(pannello?.querySelectorAll('a') ?? []).find((a) => a.getAttribute('href') === '/notifications');
   if (!voce) throw new Error('nel menu account manca la voce «Notifiche»');
-  const numero = Array.from(voce.querySelectorAll('span[aria-label]')).find((x) => /non lett[ae]$/.test(x.getAttribute('aria-label') ?? ''));
-  return numero ? (numero.textContent ?? '').trim() : null;
+  const numero = /,\s*(\d+\+?) da leggere/.exec(voce.textContent ?? '');
+  return numero ? numero[1] : null;
 }
 
 beforeEach(() => {

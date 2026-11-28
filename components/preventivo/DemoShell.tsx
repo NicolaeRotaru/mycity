@@ -12,6 +12,7 @@ import { FASCE, SERVIZI_AGENZIA, SLUG_SERVIZIO, type Abbonamento } from '@/lib/a
 import { ETICHETTE_SERVIZI } from '@/components/seller/servizi-nel-menu';
 import { hrefFascia } from '@/lib/agenzia/indirizzi-servizi';
 import { indirizziDemo } from '@/lib/agenzia/indirizzi-demo';
+import MenuSezioni, { type GruppoDelMenu } from '@/components/ui/MenuSezioni';
 
 /**
  * IL PANNELLO DEMO DEL LINK COL CODICE — 25/11/2026.
@@ -86,6 +87,22 @@ export default function DemoShell({
     );
   };
 
+  // Sul telefono le stesse voci del menu di sinistra, nello stesso ordine, più l'abbonamento.
+  const CHIUSA = 'si accende quando attivi l’abbonamento';
+  const gruppiDelTelefono: GruppoDelMenu[] = [
+    { titolo: 'Gestione', voci: [
+      { href: ind.dashboard, icon: LayoutDashboard, label: 'Dashboard' },
+      { href: `${ind.dashboard}#ordini`, icon: Receipt, label: 'Ordini', chiusa: CHIUSA },
+      { href: `${ind.dashboard}#prodotti`, icon: Package, label: 'Prodotti', chiusa: CHIUSA },
+    ] },
+    { titolo: 'Servizi', voci: servizi },
+    ...CHIUSE.map((g) => ({
+      titolo: g.gruppo,
+      voci: g.voci.map((v) => ({ href: `${ind.dashboard}#${v.label.toLowerCase()}`, icon: v.icon, label: v.label, chiusa: CHIUSA })),
+    })),
+    { titolo: 'Il tuo negozio', voci: [{ href: ind.abbonamento, icon: Sparkles, label: 'Abbonamento' }] },
+  ];
+
   return (
     <div className="min-h-screen bg-cream-100" data-testid="pannello-demo">
       {/* La fascia in cima dice subito che è una demo, come «Modalità acquisto» nel pannello vero. */}
@@ -155,22 +172,30 @@ export default function DemoShell({
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* MENU — sul telefono una riga che scorre, sotto la fascia della demo */}
-          <nav aria-label="Pannello" className="flex gap-1 overflow-x-auto border-b border-cream-300 bg-ink-900 px-3 py-2 lg:hidden">
-            {[{ href: ind.dashboard, icon: LayoutDashboard, label: 'Dashboard' }, ...servizi, { href: ind.abbonamento, icon: Sparkles, label: 'Abbonamento' }].map((v) => {
-              const on = attiva(v.href);
-              return (
-                <Link
-                  key={v.href}
-                  href={v.href}
-                  aria-current={on ? 'page' : undefined}
-                  className={`shrink-0 rounded-md px-3 py-2 text-sm ${on ? 'bg-primary-700 font-bold text-white' : 'font-medium text-white/80'}`}
-                >
-                  {v.label}
-                </Link>
-              );
-            })}
-          </nav>
+          {/* MENU — sul telefono un riquadro che apre il pannello delle voci (28/11/2026: era una riga che
+              scorreva di lato, la stessa che Nicola ha trovato brutta nell'area account). Le voci chiuse si
+              vedono col lucchetto, come a sinistra sul computer. */}
+          <div className="border-b border-cream-300 bg-cream-50 px-4 py-f2 lg:hidden">
+            <MenuSezioni
+              etichetta="Pannello"
+              sopratitolo={`Pannello demo · ${nome}`}
+              gruppi={gruppiDelTelefono}
+              attiva={attiva}
+              testa={(
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-300 text-sm font-extrabold text-ink-900" aria-hidden>
+                    {iniziali}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-serif text-[15px] font-bold text-ink-900">{nome}</span>
+                    <span className="block text-xs text-ink-500">
+                      {consigliato ? `Demo · consigliato ${FASCE[consigliato].nome}` : 'Demo'}
+                    </span>
+                  </span>
+                </div>
+              )}
+            />
+          </div>
           {/* Un solo «contenuto principale»: il <main> lo mette già il guscio del sito (app/layout.tsx). */}
           <div className="w-full max-w-[1100px] flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-7">{children}</div>
         </div>

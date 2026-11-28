@@ -44,10 +44,13 @@ describe('i miei resi', () => {
     s.smonta();
   });
 
-  it('nel menu dell account (barra e striscia) «Resi» porta ai resi chiesti, non alle regole', () => {
+  it('nel menu dell account (barra e menu del telefono) «Resi» porta ai resi chiesti, non alle regole', () => {
+    // 28/11/2026 — Le voci stanno in un posto solo (components/account/voci-account.ts) e le leggono tutte e due le viste.
+    const voci = readFileSync(path.resolve(__dirname, '../..', 'components/account/voci-account.ts'), 'utf8');
+    expect(voci).toContain("{ href: '/profile/returns', icon: RotateCcw, label: 'Resi' }");
     for (const f of ['components/account/AccountSidebar.tsx', 'components/account/AccountShell.tsx']) {
       const src = readFileSync(path.resolve(__dirname, '../..', f), 'utf8');
-      expect(src, f).toContain("{ href: '/profile/returns', icon: RotateCcw, label: 'Resi' }");
+      expect(src, f).toContain('VOCI_ACCOUNT');
     }
   });
 });

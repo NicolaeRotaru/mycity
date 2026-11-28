@@ -235,7 +235,9 @@ async function creaOrdine({ sellerId, codice, fascia, visitaIl, servizi: conferm
       notaAgente ? `Nota dell’agente: «${notaAgente}».` : '',
       `L’AD prepara: ${lavoriDaChiedere(servizi).map((l) => NOME_DEL_LAVORO[l]).join(', ') || 'niente (solo foto e video, li fa la squadra alla visita)'}.`,
     ].filter(Boolean).join(' '),
-    '/seller/ordini-sdg',
+    // 28/11/2026 — Era /seller/ordini-sdg: l'avviso va solo agli amministratori, e quel link apriva il pannello
+    // del negozio (Nicola, 15:45: «mi manda nella versione venditore»). La stessa pagina sta dentro l'admin.
+    '/admin/ordini-sdg',
     { unaVoltaPer: `ordine-sdg:${sellerId}` },
   ).catch((e: unknown) => logger.warn('[ordine-sdg] avviso a Nicola non partito', { sellerId, errore: String(e) }));
 

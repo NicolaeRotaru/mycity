@@ -4,23 +4,14 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import {
-  User, Package, MapPin, Heart, Bell, Sparkles,
-  Gift, UserPlus, Settings, Trophy, LogOut,
-  MessageCircle, RotateCcw,
-  type LucideIcon,
-} from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { esciEVaiAllAccesso } from '@/lib/auth/uscita';
 import { logoNegozio } from '@/lib/image-url';
 import { useProfile } from '@/components/hooks/useProfile';
 import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
 import { useMessagesUnread } from '@/components/hooks/useMessagesUnread';
-
-/** Chiave del badge "non letto" per agganciare il conteggio alla voce nav. */
-type NavBadge = 'notifications' | 'messages';
-type NavItem = { href: string; icon: LucideIcon; label: string; badge?: NavBadge };
-type NavGroup = { group: string; items: NavItem[] };
+import { VOCI_ACCOUNT, voceAccountAttiva, type ContoVoce } from '@/components/account/voci-account';
 
 /**
  * Sidebar account acquirente — card identità (avatar + nome + "Cliente dal <anno>")
@@ -28,36 +19,10 @@ type NavGroup = { group: string; items: NavItem[] };
  * vive SOTTO la global Navbar (questa è un'area buyer, non un'app dedicata come
  * seller/admin/rider). Logout via supabase.auth.signOut + router, come
  * SellerShell / AdminSidebar.
+ *
+ * 28/11/2026 — Le voci stanno in components/account/voci-account.ts: le legge anche il menu del
+ * telefono (AccountShell), così le due viste non vanno più fuori sincrono.
  */
-const NAV: NavGroup[] = [
-  { group: 'Account', items: [
-    { href: '/profile', icon: User, label: 'Profilo' },
-    { href: '/orders', icon: Package, label: 'Ordini' },
-    { href: '/profile/returns', icon: RotateCcw, label: 'Resi' },
-    { href: '/profile/addresses', icon: MapPin, label: 'Indirizzi' },
-  ] },
-  { group: 'Attività', items: [
-    { href: '/favorites', icon: Heart, label: 'Preferiti' },
-    { href: '/messages', icon: MessageCircle, label: 'Messaggi', badge: 'messages' },
-    { href: '/notifications', icon: Bell, label: 'Notifiche', badge: 'notifications' },
-  ] },
-  { group: 'Premi', items: [
-    { href: '/profile/loyalty', icon: Sparkles, label: 'Punti' },
-    { href: '/profile/referral', icon: UserPlus, label: 'Inviti' },
-    { href: '/profile/gift-cards', icon: Gift, label: 'Gift card' },
-    { href: '/profile/achievements', icon: Trophy, label: 'Obiettivi' },
-  ] },
-  { group: 'Preferenze', items: [
-    { href: '/profile/settings', icon: Settings, label: 'Impostazioni' },
-  ] },
-];
-
-function isActive(pathname: string, href: string): boolean {
-  // /profile è attivo solo sulla pagina esatta (le sottopagine hanno la loro voce).
-  if (href === '/profile') return pathname === '/profile';
-  return pathname === href || pathname.startsWith(href + '/');
-}
-
 function getInitials(name: string): string {
   return (
     name.trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase() || 'U'
@@ -79,25 +44,55 @@ function useMemberSince() {
   return data ?? null;
 }
 
-export default function AccountSidebar() {
-  const pathname = usePathname() ?? '';
-  const router = useRouter();
+/**
+ * Chi sei: foto (o iniziali), nome e «Cliente dal <anno>». 28/11/2026 — esce dalla barra laterale perché
+ * la usa anche il menu del telefono, in cima al pannello (AccountShell).
+ */
+export function IdentitaAccount() {
   const { profile, userEmail } = useProfile();
   const since = useMemberSince();
-  const notifCount = useNotificationsCount();
-  const messagesUnread = useMessagesUnread();
-
-  // Conteggio "non letto" per la pill accanto alla voce nav (0 = nessuna pill).
-  const badgeCount = (badge?: NavBadge): number => {
-    if (badge === 'notifications') return notifCount;
-    if (badge === 'messages') return messagesUnread;
-    return 0;
-  };
-
   const name = profile?.full_name || profile?.email || userEmail || 'Il mio account';
   const email = profile?.email || userEmail || '';
   const logo = profile?.store_logo || null;
   const initials = getInitials(name);
+  return (
+    <div className="flex items-center gap-3">
+      {logo ? (
+        <img
+          src={logoNegozio(logo, 48)}
+          alt=""
+          className="h-12 w-12 shrink-0 rounded-full bg-white object-contain"
+        />
+      ) : (
+        <span
+          aria-hidden
+          className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-[17px] font-bold text-white"
+        >
+          {initials}
+        </span>
+      )}
+      <div className="min-w-0">
+        <p className="truncate font-serif text-[15px] font-bold text-ink-900">{name}</p>
+        <p className="truncate text-xs text-ink-500">
+          {since ? `Cliente dal ${since}` : email}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function AccountSidebar() {
+  const pathname = usePathname() ?? '';
+  const router = useRouter();
+  const notifCount = useNotificationsCount();
+  const messagesUnread = useMessagesUnread();
+
+  // Conteggio "non letto" per la pill accanto alla voce nav (0 = nessuna pill).
+  const badgeCount = (badge?: ContoVoce): number => {
+    if (badge === 'notifications') return notifCount;
+    if (badge === 'messages') return messagesUnread;
+    return 0;
+  };
 
   const [signingOut, setSigningOut] = useState(false);
   const handleSignOut = async () => {
@@ -110,40 +105,19 @@ export default function AccountSidebar() {
     <nav aria-label="Menu account" className="flex flex-col gap-3">
       {/* Card identità */}
       <div className="rounded-xl border border-cream-300 bg-white p-4">
-        <div className="flex items-center gap-3">
-          {logo ? (
-            <img
-              src={logoNegozio(logo, 48)}
-              alt=""
-              className="h-12 w-12 shrink-0 rounded-full bg-white object-contain"
-            />
-          ) : (
-            <span
-              aria-hidden
-              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-[17px] font-bold text-white"
-            >
-              {initials}
-            </span>
-          )}
-          <div className="min-w-0">
-            <p className="truncate font-serif text-[15px] font-bold text-ink-900">{name}</p>
-            <p className="truncate text-xs text-ink-500">
-              {since ? `Cliente dal ${since}` : email}
-            </p>
-          </div>
-        </div>
+        <IdentitaAccount />
       </div>
 
       {/* Nav raggruppata */}
       <div className="flex flex-col gap-2">
-        {NAV.map((sec) => (
+        {VOCI_ACCOUNT.map((sec) => (
           <div key={sec.group}>
             <p className="mb-1 px-3 text-2xs font-bold uppercase tracking-label text-ink-400">
               {sec.group}
             </p>
             <ul className="flex flex-col gap-0.5">
               {sec.items.map((n) => {
-                const on = isActive(pathname, n.href);
+                const on = voceAccountAttiva(pathname, n.href);
                 const Icon = n.icon;
                 const count = badgeCount(n.badge);
                 return (

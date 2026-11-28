@@ -1,102 +1,69 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import {
-  User, Package, MapPin, Heart, Bell, Sparkles,
-  Gift, UserPlus, Settings, Trophy,
-  MessageCircle, RotateCcw,
-  type LucideIcon,
-} from 'lucide-react';
-import AccountSidebar from '@/components/account/AccountSidebar';
+import { useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { LogOut } from 'lucide-react';
+import AccountSidebar, { IdentitaAccount } from '@/components/account/AccountSidebar';
+import MenuSezioni, { type GruppoDelMenu } from '@/components/ui/MenuSezioni';
+import { VOCI_ACCOUNT, voceAccountAttiva, type ContoVoce } from '@/components/account/voci-account';
+import { esciEVaiAllAccesso } from '@/lib/auth/uscita';
 import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
 import { useMessagesUnread } from '@/components/hooks/useMessagesUnread';
 
 /**
  * Account shell acquirente — layout responsive 2 colonne: aside sticky ~260px
  * (AccountSidebar) + colonna contenuto. Vive SOTTO la global Navbar (è
- * content-level, non un'app dedicata). Su mobile l'aside si comprime in una nav
- * orizzontale scrollabile in cima, sopra il contenuto.
+ * content-level, non un'app dedicata).
+ *
+ * 28/11/2026 — SUL TELEFONO LE VOCI ERANO UNA RIGA DI PILLOLE CHE SCORREVA DI LATO.
+ * Nicola, dal telefono, sulla pagina Profilo: se ne vedevano tre e mezza, le altre otto stavano fuori
+ * dallo schermo, «l'estetica in questo modo qua è veramente molto brutta… mettile in forma di menu».
+ * Ora in cima c'è un riquadro che dice dove sei e apre un pannello con tutte le voci, nei gruppi della
+ * barra laterale (components/ui/MenuSezioni.tsx). La vede chiunque apra l'area account: il cliente,
+ * l'admin, il venditore in modalità acquisto.
  */
 
-/** Chiave del badge "non letto" per agganciare il conteggio alla voce nav. */
-type NavBadge = 'notifications' | 'messages';
-type NavItem = { href: string; icon: LucideIcon; label: string; badge?: NavBadge };
-
-// Stesse rotte della sidebar, in forma piatta per la striscia mobile.
-const MOBILE_NAV: NavItem[] = [
-  { href: '/profile', icon: User, label: 'Profilo' },
-  { href: '/orders', icon: Package, label: 'Ordini' },
-  { href: '/profile/returns', icon: RotateCcw, label: 'Resi' },
-  { href: '/profile/addresses', icon: MapPin, label: 'Indirizzi' },
-  { href: '/favorites', icon: Heart, label: 'Preferiti' },
-  { href: '/messages', icon: MessageCircle, label: 'Messaggi', badge: 'messages' },
-  { href: '/notifications', icon: Bell, label: 'Notifiche', badge: 'notifications' },
-  { href: '/profile/loyalty', icon: Sparkles, label: 'Punti' },
-  { href: '/profile/referral', icon: UserPlus, label: 'Inviti' },
-  { href: '/profile/gift-cards', icon: Gift, label: 'Gift card' },
-  { href: '/profile/achievements', icon: Trophy, label: 'Obiettivi' },
-  { href: '/profile/settings', icon: Settings, label: 'Impostazioni' },
-];
-
-function isActive(pathname: string, href: string): boolean {
-  if (href === '/profile') return pathname === '/profile';
-  return pathname === href || pathname.startsWith(href + '/');
-}
-
-function MobileAccountNav() {
+function MenuAccountTelefono() {
   const pathname = usePathname() ?? '';
+  const router = useRouter();
   const notifCount = useNotificationsCount();
   const messagesUnread = useMessagesUnread();
+  const [uscendo, setUscendo] = useState(false);
 
-  const badgeCount = (badge?: NavBadge): number => {
-    if (badge === 'notifications') return notifCount;
-    if (badge === 'messages') return messagesUnread;
-    return 0;
-  };
+  const conto = (badge?: ContoVoce): number =>
+    badge === 'notifications' ? notifCount : badge === 'messages' ? messagesUnread : 0;
+
+  const gruppi: GruppoDelMenu[] = VOCI_ACCOUNT.map((g) => ({
+    titolo: g.group,
+    voci: g.items.map((v) => ({ href: v.href, icon: v.icon, label: v.label, conto: conto(v.badge) })),
+  }));
 
   return (
-    <nav
-      aria-label="Menu account"
-      className="-mx-4 mb-4 overflow-x-auto px-4 lg:hidden"
-    >
-      <ul className="flex w-max gap-2">
-        {MOBILE_NAV.map((n) => {
-          const on = isActive(pathname, n.href);
-          const Icon = n.icon;
-          const count = badgeCount(n.badge);
-          return (
-            <li key={n.href}>
-              <Link
-                href={n.href}
-                aria-current={on ? 'page' : undefined}
-                className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 ${
-                  on
-                    ? 'border-primary-200 bg-primary-50 font-bold text-primary-800'
-                    : 'border-cream-300 bg-white font-medium text-ink-700 hover:bg-cream-50'
-                }`}
-              >
-                <Icon
-                  size={16}
-                  strokeWidth={2.2}
-                  className={on ? 'text-primary-700' : 'text-ink-500'}
-                  aria-hidden
-                />
-                {n.label}
-                {count > 0 && (
-                  <span
-                    className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-secondary-600 px-1.5 text-[11px] font-bold leading-none text-white"
-                    aria-label={`${count} non lett${count === 1 ? 'a' : 'e'}`}
-                  >
-                    {count > 99 ? '99+' : count}
-                  </span>
-                )}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <MenuSezioni
+      className="mb-f3 lg:hidden"
+      etichetta="Menu account"
+      sopratitolo="Il tuo account"
+      gruppi={gruppi}
+      attiva={(href) => voceAccountAttiva(pathname, href)}
+      testa={<IdentitaAccount />}
+      piede={(chiudi) => (
+        <button
+          type="button"
+          disabled={uscendo}
+          onClick={async () => {
+            if (uscendo) return;
+            // Come nel pannello «Tu»: prima si chiude, poi si esce (l'uscita naviga dopo, a modo suo).
+            chiudi();
+            setUscendo(true);
+            await esciEVaiAllAccesso(router);
+          }}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-surface-0 px-f2 py-f2 text-[15px] font-semibold text-secondary-700 shadow-warm-sm ring-1 ring-cream-200 transition-colors duration-[222ms] ease-armonia hover:bg-secondary-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 disabled:opacity-60"
+        >
+          <LogOut size={18} strokeWidth={2.2} aria-hidden />
+          Esci
+        </button>
+      )}
+    />
   );
 }
 
@@ -114,8 +81,8 @@ export default function AccountShell({ children }: { children: React.ReactNode }
           <AccountSidebar />
         </aside>
 
-        {/* Nav orizzontale mobile */}
-        <MobileAccountNav />
+        {/* Menu del telefono: un riquadro che apre il pannello delle voci */}
+        <MenuAccountTelefono />
 
         {/* Contenuto */}
         <div className="min-w-0">{children}</div>

@@ -14,7 +14,8 @@ describe('pagina notifiche', () => {
   });
 
   it('430 — aprire una notifica non letta la segna letta', () => {
-    expect(src).toMatch(/<Link href=\{n\.link\} className="block" onClick=\{\(\) => \{ if \(!n\.is_read\) segnaLetta\(n\.id\); \}\}>/);
+    // 28/11/2026 — Il link passa da indirizzoDellaNotifica: l'admin non finisce nel pannello di un negozio.
+    expect(src).toMatch(/<Link href=\{indirizzoDellaNotifica\(n\.link, \{ isAdmin \}\)\} className="block" onClick=\{\(\) => \{ if \(!n\.is_read\) segnaLetta\(n\.id\); \}\}>/);
     expect(src).toMatch(/\.update\(\{ is_read: true \}\)\s*\.eq\('id', id\)/);
   });
 });
