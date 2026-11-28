@@ -74,8 +74,11 @@ export const SCHEMA_ANALISI = {
   },
 } as const;
 
-/** Quanti concorrenti per fascia: i vicini nel Base, i 3 principali sul web in più nel Business, fino a 5 nel Premium. */
-export const CONCORRENTI_PER_FASCIA: Record<Abbonamento, number> = { base: 3, business: 5, premium: 8 };
+/**
+ * Quanti concorrenti per fascia, dal listino: 3 vicini nel Base; nel Business in più «i tuoi 3 concorrenti principali sui
+ * social e sul web» (3 + 3); nel Premium «fino a 5 concorrenti sui social e sul web» (3 + 5).
+ */
+export const CONCORRENTI_PER_FASCIA: Record<Abbonamento, number> = { base: 3, business: 6, premium: 8 };
 
 /** Le parti che la fascia comprende, con «come» quando c'è, per dirle all'AD. */
 export const partiDaScrivere = (fascia: Abbonamento): ParteRapporto[] => partiDellaFascia(fascia).incluse.map((r) => r.parte);
@@ -137,8 +140,14 @@ const RispostaAnalisi = z.object({
 const lista = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const ogg = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const fonteBuona = (v: unknown): string | null => (typeof v === 'string' && v.length <= 500 && /^https:\/\/[^\s"'<>]+$/.test(v) && !fonteDiGoogle(v) ? v : null);
-/** Un numero chiave non è mai un voto, una recensione o un prezzo (le regole legali del 26/11). */
-const NUMERO_VIETATO = /recension|stell|\bvot[oi]\b|★|€|\beur[oi]?\b|\$/i;
+/** Un numero chiave non è mai un voto, una recensione o un prezzo (le regole legali del 26/11), coi loro sinonimi. */
+const NUMERO_VIETATO = /recension|stell|\bvot[oi]\b|★|€|\beur[oi]?\b|\$|opinion|giudiz|valutaz|punteggi|gradiment|\/\s*(5|10)\b/i;
+/**
+ * Collaudo 28/11/2026: un voto detto senza la parola «Google» («4,5 stelle fra i clienti», «4/5», «230 opinioni»)
+ * passava il controllo comune delle frasi. Nei pezzi dello standard si toglie: costa al massimo una frase (anche una
+ * data come «31/5»), mai l'analisi intera.
+ */
+const VOTO_LARGO = /\d\s*([.,]\s*\d)?\s*stell[ae]\b|[★☆⭐]|\b\d{1,2}([.,]\d)?\s*\/\s*(5|10)\b|\d+\s*(opinion|giudiz|valutaz|punteggi|recension)/i;
 
 /**
  * I pezzi dello standard di SDG, ognuno controllato con le stesse regole delle frasi: quello che non le rispetta si
@@ -148,7 +157,7 @@ const NUMERO_VIETATO = /recension|stell|\bvot[oi]\b|★|€|\beur[oi]?\b|\$/i;
 function pezziDelloStandard(r: z.infer<typeof RispostaAnalisi>, fascia: Abbonamento, va: (t: string) => boolean) {
   const testo = (v: unknown, min = 10, max = 300): string | null => {
     const t = typeof v === 'string' ? corto(v) : '';
-    return t.length >= min && t.length <= max && va(t) ? t : null;
+    return t.length >= min && t.length <= max && va(t) && !VOTO_LARGO.test(t) ? t : null;
   };
   const frasi = (v: unknown, quante: number) => lista(v).map((x) => testo(x)).filter((x): x is string => !!x).slice(0, quante);
   const sw = ogg(r.swot);
@@ -157,9 +166,12 @@ function pezziDelloStandard(r: z.infer<typeof RispostaAnalisi>, fascia: Abboname
     const c = ogg(x);
     const nome = typeof c.nome === 'string' ? corto(c.nome) : '';
     const cosaFanno = testo(c.cosa_fanno);
-    if (nome.length < 2 || nome.length > 80 || !fraseMostrabile(nome, 2, 80) || !cosaFanno) return null;
+    if (nome.length < 2 || nome.length > 80 || !fraseMostrabile(nome, 2, 80) || VOTO_LARGO.test(nome) || /\b[1-5]\s*\/\s*5\b/.test(nome) || !cosaFanno) return null;
     return { nome, cosaFanno, puntiForti: frasi(c.punti_forti, 3), puntiDeboli: frasi(c.punti_deboli, 3), fonte: fonteBuona(c.fonte) };
-  }).filter((x): x is NonNullable<typeof x> => !!x).slice(0, CONCORRENTI_PER_FASCIA[fascia]);
+  }).filter((x): x is NonNullable<typeof x> => !!x)
+    // Un concorrente scritto due volte si tiene una volta sola.
+    .filter((c, i, tutti) => tutti.findIndex((x) => x.nome.toLowerCase() === c.nome.toLowerCase()) === i)
+    .slice(0, CONCORRENTI_PER_FASCIA[fascia]);
   const clientiTipo = lista(r.clienti_tipo).map((x) => {
     const c = ogg(x);
     const nome = testo(c.nome, 3, 80);
@@ -171,7 +183,7 @@ function pezziDelloStandard(r: z.infer<typeof RispostaAnalisi>, fascia: Abboname
     const voce = testo(n.voce, 3, 120);
     const valore = typeof n.valore === 'string' ? corto(n.valore) : '';
     const fonte = fonteBuona(n.fonte);
-    if (!voce || !fonte || !valore || valore.length > 40 || NUMERO_VIETATO.test(`${voce} ${valore}`) || !fraseMostrabile(valore, 1, 40)) return null;
+    if (!voce || !fonte || !valore || valore.length > 40 || NUMERO_VIETATO.test(`${voce} ${valore}`) || !fraseMostrabile(valore, 1, 40) || haUnNomeDiPersona(valore)) return null;
     return { voce, valore, fonte };
   }).filter((x): x is NonNullable<typeof x> => !!x).slice(0, 4);
   return { swot, concorrenti, clientiTipo, numeriChiave };
@@ -213,7 +225,7 @@ export function analisiDallaRisposta(grezza: unknown, fascia: Abbonamento, nomeL
       ritmo: ANALISI_PER_FASCIA[fascia].ritmo,
       sintesi: r.sintesi,
       parti: [...r.parti].sort((a, b) => (ordine.get(a.parte) ?? 0) - (ordine.get(b.parte) ?? 0)).map((p) => ({ parte: p.parte, titolo: TITOLI_PARTI[p.parte], frasi: p.frasi, fonti: p.fonti })),
-      primeMosse: r.prime_mosse.map((m) => ({ cosa: m.cosa, perche: m.perche, quando: m.quando && fraseMostrabile(m.quando, 1, 40) && !haUnNomeDiPersona(m.quando) ? m.quando : null })),
+      primeMosse: r.prime_mosse.map((m) => ({ cosa: m.cosa, perche: m.perche, quando: m.quando && fraseMostrabile(m.quando, 1, 40) && !haUnNomeDiPersona(m.quando) && !VOTO_LARGO.test(m.quando) ? m.quando : null })),
       daConfermare: r.da_confermare,
       ...pezziDelloStandard(r, fascia, (t) => !!fraseMostrabile(senzaNome(t), 1, 10_000) && !haUnNomeDiPersona(senzaNome(t))),
     },

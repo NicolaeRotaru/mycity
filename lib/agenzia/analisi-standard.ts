@@ -1,6 +1,6 @@
 import { FASCE } from '@/lib/agenti/fasce';
 import type { Abbonamento } from './preventivo';
-import { ANALISI_PER_FASCIA } from './rapporto';
+import { ANALISI_PER_FASCIA, fonteDiGoogle } from './rapporto';
 import type { AnalisiAvvioOrdine } from './analisi-dell-ordine-ad';
 import type { Analisi } from './lavoro-consegnato/tipi';
 import { canaleE } from './social-standard';
@@ -38,7 +38,9 @@ const CANALI = ['Instagram', 'Facebook', 'Scheda Google'] as const;
 /** La presenza online: quello che l'analisi ha trovato. Mai «non c'è»: un profilo non visto si verifica alla visita. */
 function presenza(d: DatiPerLAnalisiStandard): Analisi['presenza_online_sdg'] {
   const trovati = d.canaliTrovati ?? [];
-  const sito = (d.sito ?? '').trim();
+  // Una pagina di Google o TripAdvisor registrata come «sito» non è il sito del locale (collaudo 28/11).
+  const letto = (d.sito ?? '').trim();
+  const sito = letto && !fonteDiGoogle(letto) ? letto : '';
   return [
     { canale: 'Sito web', stato: sito ? 'trovato' : 'da verificare alla visita', indirizzo: https(sito), nota: null },
     ...CANALI.map((nome) => {
@@ -88,7 +90,8 @@ export function analisiDallOrdine(avvio: AnalisiAvvioOrdine | null | undefined, 
     raccomandazioni: (a?.primeMosse ?? []).map((m, i) => ({ priorita: i + 1, cosa: m.cosa, perche: m.perche, quando: m.quando ?? null, costo: null })),
     fonti,
     titolo_presenza: 'La tua presenza online',
-    compreso: { titolo: `Compreso nel ${f.nome}`, voci: [piano.ritmo, ...piano.inPiu, ...piano.nonComprende] },
+    // Collaudo 28/11: sotto «Compreso nel …» solo quello che la fascia comprende; il resto si dice per quello che è.
+    compreso: { titolo: `Compreso nel ${f.nome}`, voci: [piano.ritmo, ...piano.inPiu, ...piano.nonComprende.map((v) => `Non compreso: ${v}`)] },
     da_confermare: a?.daConfermare ?? [],
   };
 }
@@ -101,5 +104,6 @@ export function analisiDallOrdine(avvio: AnalisiAvvioOrdine | null | undefined, 
 export function daDovePartiamoSuiSocial(avvio: Pick<AnalisiAvvioOrdine, 'parti'> | null | undefined): string[] {
   const parti = Array.isArray(avvio?.parti) ? avvio!.parti : [];
   const di = (chiave: string) => parti.find((p) => p.parte === chiave)?.frasi ?? [];
-  return [...di('social'), ...di('concorrenti_web')].slice(0, 6);
+  // La frase di riempimento dell'AD («Lo leggiamo insieme alla prima visita.») non dice da dove partiamo.
+  return [...di('social'), ...di('concorrenti_web')].filter((f) => !/^lo leggiamo insieme/i.test(f.trim())).slice(0, 6);
 }

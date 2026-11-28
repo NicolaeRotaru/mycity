@@ -90,8 +90,39 @@ describe('① i pezzi dello standard, con le regole legali di sempre', () => {
     expect(a.numeriChiave).toEqual(PEZZI.numeri_chiave);
   });
 
-  it.each([['base', 3], ['business', 5], ['premium', 6]] as const)('%s: al massimo i concorrenti della fascia', (fascia, quanti) => {
-    expect(avvio(fascia).concorrenti?.length).toBe(Math.min(quanti, CONCORRENTI_PER_FASCIA[fascia]));
+  it.each([['base', 3], ['business', 6], ['premium', 8]] as const)('%s: al massimo %i concorrenti (3 vicini, più quelli sul web del listino)', (fascia, quanti) => {
+    const dieci = Array.from({ length: 10 }, (_, i) => concorrente(i + 1));
+    expect(CONCORRENTI_PER_FASCIA[fascia]).toBe(quanti);
+    expect(avvio(fascia, { ...PEZZI, concorrenti: [...dieci, concorrente(1)] }).concorrenti?.length).toBe(quanti);
+  });
+
+  it('collaudo 28/11: un voto detto senza «Google», coi suoi sinonimi, non arriva mai a schermo', () => {
+    const voti = ['Il locale ha una media di 4,5 stelle fra i clienti.', 'I clienti gli danno 5 stelle quasi sempre.', 'Il giudizio dei clienti è ★★★★★ da mesi.', 'I clienti lo votano 4/5 in media da un anno.', 'Il servizio prende 9/10 dai clienti abituali.', 'Ha raccolto 230 opinioni dei clienti in un anno.'];
+    const a = avvio('premium', {
+      ...PEZZI,
+      swot: { ...PEZZI.swot, forze: [...PEZZI.swot.forze, ...voti.slice(0, 3)], minacce: [...PEZZI.swot.minacce, ...voti.slice(3)] },
+      concorrenti: [concorrente(1, { nome: 'Bar Roma 4,5 stelle' }), concorrente(2, { nome: 'Bar Roma 4/5' }), concorrente(3, { punti_forti: [voti[0]] })],
+      clienti_tipo: [{ nome: 'Chi lavora in zona', bisogno: voti[5], perche: null }, ...PEZZI.clienti_tipo],
+      numeri_chiave: [
+        ...PEZZI.numeri_chiave,
+        { voce: 'Giudizio medio', valore: '4/5', fonte: 'https://www.esempio.it/' },
+        { voce: 'Media della zona', valore: '9/10', fonte: 'https://www.esempio.it/' },
+        { voce: 'Opinioni dei clienti', valore: '230', fonte: 'https://www.esempio.it/' },
+        { voce: 'Chi guida il comune', valore: 'Mario Rossi', fonte: 'https://www.esempio.it/' },
+      ],
+    });
+    const tutto = JSON.stringify(a);
+    for (const v of voti) expect(tutto, v).not.toContain(v);
+    expect(a.concorrenti?.map((c) => c.nome)).toEqual(['Pasticceria Esempio 3']);
+    expect(a.concorrenti?.[0].puntiForti).toEqual([]);
+    expect(a.clientiTipo?.map((c) => c.nome)).toEqual(['Chi lavora in zona']);
+    expect(a.clientiTipo?.[0].bisogno).toBe(PEZZI.clienti_tipo[0].bisogno);
+    expect(a.numeriChiave).toEqual(PEZZI.numeri_chiave);
+  });
+
+  it('collaudo 28/11: una fonte goo.gle o su un dominio .google non entra', () => {
+    const a = avvio('business', { ...PEZZI, concorrenti: [concorrente(1, { fonte: 'https://goo.gle/abc' }), concorrente(2, { fonte: 'https://maps.example.google/x' })] });
+    expect(a.concorrenti?.map((c) => c.fonte)).toEqual([null, null]);
   });
 
   it('il compito chiede lo standard, i dati dicono quanti concorrenti, e la richiesta sta nel tetto del flusso 14', () => {
@@ -113,6 +144,9 @@ describe('② la forma di SDG, misurata sull’abbonamento e sul cliente', () =>
     expect(letta.success, letta.success ? '' : JSON.stringify(letta.error.issues.slice(0, 3))).toBe(true);
     expect(a.mercato.length).toBe(partiDaScrivere(fascia).length);
     expect(a.compreso?.voci[0]).toBe(ANALISI_PER_FASCIA[fascia].ritmo);
+    // Collaudo 28/11: quello che la fascia non comprende si dice per quello che è.
+    for (const v of ANALISI_PER_FASCIA[fascia].nonComprende) expect(a.compreso?.voci).toContain(`Non compreso: ${v}`);
+    expect(a.compreso?.voci.filter((v) => /ci sono nel/.test(v)).every((v) => v.startsWith('Non compreso: '))).toBe(true);
     expect(a.prezzi).toEqual([]);
     expect(a.raccomandazioni.map((r) => r.priorita)).toEqual([1, 2, 3]);
     expect(a.raccomandazioni[0].quando).toBe('settimana 1');
@@ -122,6 +156,11 @@ describe('② la forma di SDG, misurata sull’abbonamento e sul cliente', () =>
     expect(presenza['Sito web'].stato).toBe('da verificare alla visita');
     expect(JSON.stringify(a.presenza_online_sdg)).not.toMatch(/non c'è|non ha|assente/i);
     expect(a.fonti).toContain('https://statistica.comune.piacenza.it/quartieri');
+  });
+
+  it('collaudo 28/11: una pagina di TripAdvisor registrata come sito non diventa «Sito web: trovato»', () => {
+    const a = analisiDallOrdine(avvio('base'), { nome: 'X', fascia: 'base', sito: 'https://www.tripadvisor.it/Restaurant_Review-x' });
+    expect(a.presenza_online_sdg.find((p) => p.canale === 'Sito web')).toMatchObject({ stato: 'da verificare alla visita', indirizzo: null });
   });
 
   it('il Base non comprende i concorrenti sul web né le ricerche: non ci sono neanche nella pagina', () => {
@@ -178,6 +217,8 @@ describe('③ e ④ le pagine del titolare', () => {
   it('l’analisi pronta cuce il piano social: «Da dove partiamo» con quello che ha visto sui social', async () => {
     const a = avvio('premium');
     expect(daDovePartiamoSuiSocial(a)).toContain('Il profilo Instagram pubblica poco e senza video.');
+    // La frase di riempimento della parte «concorrenti sul web» non entra (collaudo 28/11).
+    expect(daDovePartiamoSuiSocial(a)).not.toContain('Lo leggiamo insieme alla prima visita.');
     const conAnalisi = await monta(createElement(LavoroDellOrdineDelTitolare, { parte: 'social', ordine: ordine('premium', a) }));
     expect(conAnalisi.textContent).toContain('Da dove partiamo');
     expect(conAnalisi.textContent).toContain('Il profilo Instagram pubblica poco e senza video.');

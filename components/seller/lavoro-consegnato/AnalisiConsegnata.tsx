@@ -31,8 +31,8 @@ export default function AnalisiConsegnata({ analisi, intestazione, avviso }: Pro
       {analisi.numeri_chiave.length > 0 && (
         <Sezione id="an-numeri" titolo="I numeri chiave">
           <ul className="grid gap-2 sm:grid-cols-2">
-            {analisi.numeri_chiave.map((n) => (
-              <li key={n.voce} className="rounded-xl border border-cream-200 p-3">
+            {analisi.numeri_chiave.map((n, i) => (
+              <li key={`${i}-${n.voce}`} className="rounded-xl border border-cream-200 p-3">
                 <p className="text-lg font-bold text-ink-900">{n.valore}</p>
                 <p>{n.voce}{n.da_confermare && <span className="ml-2 rounded-full bg-cream-200 px-2 py-0.5 text-[11px] font-bold text-ink-800">da confermare</span>}</p>
                 {n.fonte && <p className="mt-1 text-xs"><LinkEsterno href={n.fonte}>Fonte</LinkEsterno></p>}
@@ -59,8 +59,8 @@ export default function AnalisiConsegnata({ analisi, intestazione, avviso }: Pro
       {analisi.concorrenti.length > 0 && (
         <Sezione id="an-concorrenti" titolo="I concorrenti">
           <ul className="space-y-3">
-            {analisi.concorrenti.map((c) => (
-              <li key={c.nome} className="rounded-xl border border-cream-200 p-3">
+            {analisi.concorrenti.map((c, i) => (
+              <li key={`${i}-${c.nome}`} className="rounded-xl border border-cream-200 p-3">
                 <p className="font-semibold text-ink-900">{c.nome}{c.tipo && <span className="font-normal text-ink-500"> · {c.tipo}</span>}</p>
                 <p className="mt-1">{c.cosa_fanno}</p>
                 {c.prezzo_indicativo && <p className="mt-1"><b>Prezzo:</b> {c.prezzo_indicativo}</p>}
@@ -90,8 +90,8 @@ export default function AnalisiConsegnata({ analisi, intestazione, avviso }: Pro
       {analisi.clienti_tipo.length > 0 && (
         <Sezione id="an-clienti" titolo="I clienti tipo">
           <ul className="space-y-2">
-            {analisi.clienti_tipo.map((c) => (
-              <li key={c.nome} className="rounded-xl border border-cream-200 p-3">
+            {analisi.clienti_tipo.map((c, i) => (
+              <li key={`${i}-${c.nome}`} className="rounded-xl border border-cream-200 p-3">
                 <p className="font-semibold text-ink-900">{c.nome}{c.abbonamento_adatto && <span className="ml-2 rounded-full bg-cream-100 px-2 py-0.5 text-[11px] font-bold">{NOME_FASCIA[c.abbonamento_adatto]}</span>}</p>
                 <p className="mt-1">{c.bisogno}</p>
                 {c.perche && <p className="mt-1 text-ink-600">{c.perche}</p>}
