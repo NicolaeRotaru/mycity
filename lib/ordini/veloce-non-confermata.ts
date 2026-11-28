@@ -11,6 +11,7 @@ import { MINUTI_PER_CONFERMARE_LA_VELOCE, scadenzaAccettazione, scadenzaLeggibil
 import { ETICHETTA_ADESSO, fasceAncoraPossibili, fasceDiDomaniPossibili, fasciaFuoriTempo } from '@/lib/quando-arriva';
 import { romeNow } from '@/lib/store-hours';
 import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
+import { chiaveDelCarrelloInContanti } from '@/lib/ordini/chiave-del-carrello';
 
 /**
  * 30/10/2026 — IL SECONDO FRENO DELLA VELOCE (carta #220 approvata il 29/10; la variante B,
@@ -208,19 +209,32 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<
       .limit(1);
     if (errT) throw new Error(`carrello dell'ordine ${o.id} non letto: ${errT.message}`);
     if (!Array.isArray(tentativi) || tentativi.length === 0) {
-      // 26/11/2026 (R09-013) — Senza la riga l'ordine si tratta da solo, ma non in silenzio.
-      await segnalaIlCarrelloSenzaRiga(admin, o);
-      return null;
+      // 28/11/2026 (R09-007, onda 2) — Senza la riga, la chiave del carrello scritta con l'ordine
+      // (migrazione onda2_E1_2, lib/ordini/chiave-del-carrello.ts): stesso cliente e stessa chiave sono
+      // lo stesso carrello, con certezza, e il freno lo sposta intero come con la riga.
+      const chiave = o.user_id ? await chiaveDelCarrelloInContanti(admin, o.id, 'veloce-non-confermata') : null;
+      if (chiave) {
+        const { data, error } = await leggi('carrello-chiave', (c) =>
+          admin.from('orders').select(c).eq('user_id', o.user_id).eq('cod_cart_key', chiave));
+        if (error) throw new Error(`carrello dell'ordine ${o.id} non letto: ${error.message}`);
+        if (!Array.isArray(data) || data.length < 2) return null;
+        righe = data as unknown as RigaVeloce[];
+      } else {
+        // 26/11/2026 (R09-013) — Senza la riga (e senza la chiave) l'ordine si tratta da solo, ma non in silenzio.
+        await segnalaIlCarrelloSenzaRiga(admin, o);
+        return null;
+      }
+    } else {
+      const elenco = (tentativi[0] as { order_ids: unknown }).order_ids;
+      const ids = Array.isArray(elenco)
+        ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
+        : [];
+      if (ids.length < 2) return null;
+      const { data, error } = await leggi('carrello', (c) => admin.from('orders').select(c).in('id', ids));
+      if (error) throw new Error(`carrello dell'ordine ${o.id} non letto: ${error.message}`);
+      if (!Array.isArray(data)) return null;
+      righe = data as unknown as RigaVeloce[];
     }
-    const elenco = (tentativi[0] as { order_ids: unknown }).order_ids;
-    const ids = Array.isArray(elenco)
-      ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
-      : [];
-    if (ids.length < 2) return null;
-    const { data, error } = await leggi('carrello', (c) => admin.from('orders').select(c).in('id', ids));
-    if (error) throw new Error(`carrello dell'ordine ${o.id} non letto: ${error.message}`);
-    if (!Array.isArray(data)) return null;
-    righe = data as unknown as RigaVeloce[];
   }
   if (!righe.some((r) => r.id === o.id)) return null;
   return righe.sort((x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id));
