@@ -51,6 +51,14 @@ UPDATE public.products p
    AND p.status IS DISTINCT FROM 'available'
    AND p.tolto_dallo_staff_at IS NULL;
 
+-- Collaudo dell'onda 2 — IL RIFORNIMENTO LO RIMETTEVA IN VENDITA. trg_auto_republish (BEFORE UPDATE OF
+-- stock) porta a 'available' un prodotto 'out_of_stock' o 'sold_out' quando la giacenza passa da 0 a più
+-- di 0, e una scrittura che nomina solo `stock` non svegliava questo grilletto: il negozio scriveva
+-- «esaurito, giacenza 0» (permesso) e poi «giacenza 5», e il prodotto tolto tornava in vetrina. Ora il
+-- grilletto guarda anche `stock` e, su un prodotto col segno che sta per essere ripubblicato dal
+-- rifornimento, lo rimette in bozza (lo stato in cui l'ha messo lo staff): trg_auto_republish, che
+-- viene dopo in ordine di nome («prodotto_…» < «trg_…»), non lo ripubblica e non avvisa chi lo aveva
+-- fra i preferiti. La giacenza nuova si scrive lo stesso.
 CREATE OR REPLACE FUNCTION public.prodotto_tolto_lo_rimette_lo_staff()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -58,11 +66,16 @@ SECURITY INVOKER
 SET search_path = public
 AS $$
 BEGIN
-  IF NEW.tolto_dallo_staff_at IS DISTINCT FROM OLD.tolto_dallo_staff_at
-     AND current_user NOT IN ('service_role', 'postgres', 'supabase_admin')
-     AND NOT public.is_admin() THEN
-    RAISE EXCEPTION 'Solo lo staff di MyCity toglie o rimette in vendita un prodotto dopo una segnalazione.'
-      USING ERRCODE = '42501';
+  IF NEW.tolto_dallo_staff_at IS DISTINCT FROM OLD.tolto_dallo_staff_at THEN
+    IF current_user NOT IN ('service_role', 'postgres', 'supabase_admin') AND NOT public.is_admin() THEN
+      RAISE EXCEPTION 'Solo lo staff di MyCity toglie o rimette in vendita un prodotto dopo una segnalazione.'
+        USING ERRCODE = '42501';
+    END IF;
+  END IF;
+  IF NEW.tolto_dallo_staff_at IS NOT NULL
+     AND NEW.status IN ('out_of_stock', 'sold_out')
+     AND OLD.stock IS NOT DISTINCT FROM 0 AND coalesce(NEW.stock, 0) > 0 THEN
+    NEW.status := 'draft';
   END IF;
   IF NEW.tolto_dallo_staff_at IS NOT NULL AND NEW.status = 'available' THEN
     RAISE EXCEPTION 'Questo prodotto è stato tolto dalla vetrina dopo una segnalazione accolta: può rimetterlo in vendita solo lo staff di MyCity.'
@@ -76,8 +89,10 @@ $$;
 REVOKE ALL ON FUNCTION public.prodotto_tolto_lo_rimette_lo_staff() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS prodotto_tolto_lo_rimette_lo_staff ON public.products;
+-- Anche `stock` (collaudo): il rifornimento è la strada di trg_auto_republish. Il nome resta questo:
+-- deve venire prima di trg_auto_republish.
 CREATE TRIGGER prodotto_tolto_lo_rimette_lo_staff
-  BEFORE UPDATE OF status, tolto_dallo_staff_at ON public.products
+  BEFORE UPDATE OF status, tolto_dallo_staff_at, stock ON public.products
   FOR EACH ROW EXECUTE FUNCTION public.prodotto_tolto_lo_rimette_lo_staff();
 
 COMMIT;
