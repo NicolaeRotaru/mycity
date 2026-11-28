@@ -142,6 +142,9 @@ export const useQueryClient = () => ({
     });
   },
   getQueryData: () => undefined,
+  // 28/11/2026 (R09-008) — Le sezioni della home chiedono se il negozio è già in memoria
+  // (lib/queries/vetrina-con-memoria.ts): nel finto la memoria è vuota, e si legge come prima.
+  getQueryState: () => undefined,
   cancelQueries: async (filtro) => {
     if (Array.isArray(globalThis.__CACHE_SCRITTA__)) globalThis.__CACHE_SCRITTA__.push(['annulla', filtro?.queryKey]);
   },

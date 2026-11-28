@@ -26,6 +26,8 @@ vi.mock('@tanstack/react-query', () => ({
       product: { id: 'p1', name: 'Pane', description: null, images: null, profiles: { id: 's1', store_name: 'Forno' } },
     },
   }),
+  // R09-008 — Le sezioni della home leggono i negozi dalla cache della pagina: una cache vuota.
+  useQueryClient: () => ({ getQueryState: () => undefined, getQueryData: () => undefined, setQueryData: () => undefined }),
 }));
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;

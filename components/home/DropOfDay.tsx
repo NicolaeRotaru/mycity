@@ -4,7 +4,8 @@ import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { lettoreNegoziConMemoria } from '@/lib/queries/vetrina-con-memoria';
 import { Flame, Clock, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
@@ -66,6 +67,9 @@ function endOfTodayIso() {
  */
 export default function DropOfDay() {
   const today = giornoPiacenza();
+  // R09-008 — I negozi passano dalla memoria condivisa con le altre sezioni della home
+  // (lib/queries/vetrina-con-memoria.ts): chi arriva dopo non rifà il giro di rete.
+  const leggiNegozi = lettoreNegoziConMemoria(useQueryClient(), supabase);
   const { data: drop, isLoading } = useQuery({
     queryKey: queryKeys.home.dailyDrop(today),
     queryFn: async (): Promise<Drop | null> => {
@@ -88,7 +92,7 @@ export default function DropOfDay() {
       // tabella mostra a ognuno solo la propria riga, e il drop avrebbe perso
       // «da [negozio]». Un drop di un negozio che la vista non restituisce
       // (non approvato, sospeso, senza insegna) non si mostra.
-      const [prodotto] = await conNegozioApprovato(supabase, [letto.product], 'id, store_name');
+      const [prodotto] = await conNegozioApprovato(supabase, [letto.product], 'id, store_name', leggiNegozi);
       if (!prodotto) return null;
       return { ...letto, product: prodotto };
     },

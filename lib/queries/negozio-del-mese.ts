@@ -1,6 +1,7 @@
 import {
   fetchSellerPublicMap,
   negozioApprovato,
+  type LettoreNegozi,
   type LettoreVista,
 } from '@/lib/queries/seller-public-profiles';
 
@@ -32,7 +33,11 @@ export type NegozioDelMese = {
 type RigaDelMese = Omit<NegozioDelMese, 'seller'> & { seller_id: string | null };
 
 /** La scelta del mese (`mese` = primo giorno del mese, fuso di Piacenza), o `null`. */
-export async function leggiNegozioDelMese(supa: LettoreVista, mese: string): Promise<NegozioDelMese | null> {
+export async function leggiNegozioDelMese(
+  supa: LettoreVista,
+  mese: string,
+  leggiNegozi?: LettoreNegozi,
+): Promise<NegozioDelMese | null> {
   const { data, error } = await supa
     .from('shop_of_month')
     .select('id, cover_image_url, headline, story, discount_code, discount_percent, month, seller_id')
@@ -44,7 +49,11 @@ export async function leggiNegozioDelMese(supa: LettoreVista, mese: string): Pro
   const riga = (data ?? null) as RigaDelMese | null;
   if (!riga) return null;
 
-  const negozi = await fetchSellerPublicMap(supa, [riga.seller_id], 'id, store_name, store_logo');
+  // R09-008 — Dalla home passa il lettore con la memoria condivisa con le altre sezioni.
+  const negozi = await (leggiNegozi ?? ((ids, colonne) => fetchSellerPublicMap(supa, ids, colonne)))(
+    [riga.seller_id],
+    'id, store_name, store_logo',
+  );
   const negozio = riga.seller_id ? negozi.get(riga.seller_id) : undefined;
   const { seller_id: _sellerId, ...scelta } = riga;
   return {
