@@ -99,6 +99,13 @@ const COOLDOWN_HOURS = 6;
 // R33-002 — L'attesa degli avvisi `unaVoltaAlGiorno` (il reclamo fermo): un giorno pieno.
 const ATTESA_DI_UN_GIORNO_ORE = 24;
 
+/**
+ * R06-001 (onda 2) — Gli ordini accettati e mai pronti si leggono a pagine da cinquanta, fino a venti
+ * pagine (mille accettati): la fascia si confronta qui, non in SQL, e i primi cinquanta non bastano.
+ */
+const PAGINA_ACCETTATI = 50;
+const PAGINE_ACCETTATI = 20;
+
 export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
@@ -374,14 +381,33 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   //     accettati e si decide qui. I più RECENTI per primi (come il punto 3): finché niente li fa
   //     scadere, gli accettati dimenticati da giorni hanno già suonato e non devono tenere il posto
   //     a quello fermo da poco.
-  const { data: accettatiFermi, error: err_accettatiFermi } = await admin
-    .from('orders')
-    .select('id, created_at, accepted_at, delivery_slot, profiles!orders_seller_id_fkey(store_name)')
-    .eq('delivery_status', 'ACCEPTED')
-    .order('accepted_at', { ascending: false, nullsFirst: false })
-    .limit(50);
+  //     28/11/2026 (onda 2, R06-001) — A PAGINE, NON I PRIMI CINQUANTA. La lettura prendeva solo i
+  //     50 accettati più recenti: con più di 50 accettati ancora nei tempi (i «Domani» presi la sera,
+  //     accettati dopo) quelli con la fascia già finita, accettati prima, restavano fuori e non
+  //     suonavano mai. Ora si scorrono le pagine (sempre dai più recenti, con l'id a spareggio) fino
+  //     all'ultima o a PAGINE_ACCETTATI pagine, e decide la fascia riga per riga.
+  const leggiAccettati = (da: number) => {
+    const q = admin
+      .from('orders')
+      .select('id, created_at, accepted_at, delivery_slot, profiles!orders_seller_id_fkey(store_name)')
+      .eq('delivery_status', 'ACCEPTED')
+      .order('accepted_at', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: true });
+    return da === 0 ? q.limit(PAGINA_ACCETTATI) : q.range(da, da + PAGINA_ACCETTATI - 1);
+  };
+  const accettatiFermi: NonNullable<Awaited<ReturnType<typeof leggiAccettati>>['data']> = [];
+  let err_accettatiFermi = false;
+  for (let pagina = 0; pagina < PAGINE_ACCETTATI; pagina++) {
+    const { data: righe, error } = await leggiAccettati(pagina * PAGINA_ACCETTATI);
+    if (error) {
+      err_accettatiFermi = true;
+      break;
+    }
+    accettatiFermi.push(...(righe ?? []));
+    if ((righe ?? []).length < PAGINA_ACCETTATI) break;
+  }
   if (err_accettatiFermi) controlliSaltati.push('ordini accettati e mai pronti');
-  for (const o of accettatiFermi ?? []) {
+  for (const o of accettatiFermi) {
     const r = o as { id: string; created_at: string; accepted_at?: string | null; delivery_slot?: string | null; profiles?: { store_name?: string } | null };
     const fine = fineDellaFascia(r);
     const daQuando = new Date(r.accepted_at ?? r.created_at).getTime();
