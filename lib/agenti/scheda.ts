@@ -464,7 +464,8 @@ export function unisci(prima: Scheda, adGrezzo: RispostaPulita, avvisiAd: string
     if (i < 0) s.social.splice(google < 0 ? s.social.length : google, 0, p);
     // Il profilo del sito o quello copiato dal venditore resta suo: l'AD aggiunge solo il giudizio.
     else if (p.stato === 'trovato') {
-      const tieni = s.social[i].origine === 'sito' || s.social[i].origine === 'venditore';
+      // Anche quello della mappa libera (collaudo del 28/11): un profilo dell'AD non lo scavalca.
+      const tieni = s.social[i].origine === 'sito' || s.social[i].origine === 'venditore' || s.social[i].origine === 'mappa';
       s.social[i] = { ...p, fonte: tieni ? s.social[i].fonte : p.fonte ?? s.social[i].fonte, origine: tieni ? s.social[i].origine : 'ad' };
     }
     // «non trovato» dall'AD non cancella un profilo che il programma ha visto.

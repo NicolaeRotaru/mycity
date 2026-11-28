@@ -251,7 +251,9 @@ export function indirizzoNellaPagina(testoPagina: string, indirizzo: string | nu
   // Fra la via e il civico può stare solo un numero romano («Emanuele II 120») o «n.»: due parole qualsiasi facevano
   // passare «Via Roma 45 int. 10» o «20 settembre dalle 12» (collaudo del 28/11).
   const testo = slug(testoPagina);
-  return nostro.parole.some((p) => new RegExp(`(^| )${p}( [ivxl]{1,6})?( n| nr| numero)? ${nostro.civico}([abc]| [abc])?( |$)`).test(testo));
+  // Il numero romano è uno vero (II, XXIII), non «il»: «Piazza Duomo il 23 dicembre» non è un indirizzo (collaudo).
+  const romano = '(?=[ivxl])(?:xl|l?x{0,3})(?:ix|iv|v?i{0,3})';
+  return nostro.parole.some((p) => new RegExp(`(^| )${p}( ${romano})?( n| nr| numero| civico)? ${nostro.civico}([abc]| [abc])?( |$)`).test(testo));
 }
 
 /** Il testo che si legge in una pagina: senza tag, script e indirizzi dei collegamenti (un link a un profilo non è il nome). */

@@ -130,7 +130,7 @@ export async function confermaQuelloCheHaTrovatoLAd(
         if (!fonte) continue;
         const ora = s.social.find((p) => p.canale === canale);
         if (ora && ora.stato === 'trovato' && ora.origine !== 'ad' && ora.origine !== 'pagine') continue;
-        mettiProfilo(s, { canale, stato: 'trovato', livello: ora?.livello ?? 'da vedere', giudizio: 'Il sito dell’attività porta a questo profilo.', fonte, origine: 'sito' });
+        mettiProfilo(s, { canale, stato: 'trovato', livello: ora?.livello ?? 'da vedere', giudizio: soloNome ? 'Il sito trovato dal nome porta a questo profilo: da controllare, come il sito.' : 'Il sito dell’attività porta a questo profilo.', fonte, origine: 'sito' });
       }
     }
   }

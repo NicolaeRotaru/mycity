@@ -165,6 +165,26 @@ describe('il sito indovinato', () => {
     expect(sitoDaConfermare({ sito: { misura: m('indirizzo') } })).toBeNull();
   });
 
+  it('«il» non è un numero romano: «Piazza Duomo il 23 dicembre» non è il nostro indirizzo; «civico 23» sì', () => {
+    const ind = 'Piazza Duomo, 23, 29121 Piacenza PC';
+    expect(indirizzoNellaPagina('Vi aspettiamo in Piazza Duomo il 23 dicembre', ind)).toBe(false);
+    expect(indirizzoNellaPagina('Piacenza-Roma il 10 maggio', 'Via Roma, 10, Piacenza')).toBe(false);
+    expect(indirizzoNellaPagina('Piazza Duomo civico 23, Piacenza', ind)).toBe(true);
+    expect(indirizzoNellaPagina('Corso Vittorio Emanuele II 120', 'Corso Vittorio Emanuele II, 120, Piacenza')).toBe(true);
+  });
+
+  it('un profilo dell’AD non scavalca quello della mappa libera; quello del sito solo-nome dice «da controllare»', async () => {
+    const osm = { lat: 45, lon: 9, indirizzo: null, luogo: { nome: 'Raquel Cafè', tipo: 'cafe', telefono: null, sito: null, orari: null, instagram: 'https://www.instagram.com/raquel_cafe23/', facebook: null, fonte: 'https://www.openstreetmap.org/node/1' }, concorrenti: [], concorrentiContati: 0, raggio: 300, avvisi: [] };
+    const p = primaScheda({ letto, osm, misura: null, citta: 'Piacenza', data: 'x' });
+    const s = unisci(p, pulisci({ social: [{ canale: 'Instagram', stato: 'trovato', fonte: 'https://www.instagram.com/altro_bar/', livello: 'attivo' }] }));
+    expect(s.social.find((x) => x.canale === 'Instagram')).toMatchObject({ fonte: 'https://www.instagram.com/raquel_cafe23/', origine: 'mappa' });
+    expect(instagramPerIlFlusso(s)).toBe('raquel_cafe23');
+    rete.pagine['https://www.raquelcafe.it/'] = '<title>Raquel Caffè</title><body>Piacenza <a href="https://www.facebook.com/RaquelCafe">FB</a></body>';
+    const q = unisci(primaScheda({ letto, osm: null, misura: null, citta: 'Piacenza', data: 'x' }), pulisci({ sito: { url: 'https://www.raquelcafe.it/', livello: 'medio', giudizio: 'x', fonte: null } }));
+    await confermaQuelloCheHaTrovatoLAd(q, { sitoUrl: 'https://www.raquelcafe.it/', pagine: [] });
+    expect(q.social.find((x) => x.canale === 'Facebook')?.giudizio).toMatch(/da controllare/);
+  });
+
   it('un numero romano in fondo al nome della via non è la parola che conta («Via Papa Giovanni XXIII»)', () => {
     expect(indirizzoNellaPagina('Via Papa Giovanni 4, Piacenza', 'Via Papa Giovanni XXIII, 4, 29121 Piacenza PC')).toBe(true);
   });
