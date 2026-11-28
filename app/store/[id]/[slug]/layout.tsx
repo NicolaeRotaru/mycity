@@ -3,7 +3,17 @@ import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 import { normalizeSite, pageBySlug } from '@/lib/store-site';
 import { notFound } from 'next/navigation';
 
-export const revalidate = 300;
+/**
+ * 28/11/2026 (R04-013) — NESSUNA CACHE DICHIARATA CHE NON C'È.
+ * Qui c'era `revalidate = 300`, ma `dynamic = 'force-dynamic'` in app/layout.tsx (la parola
+ * d'ordine degli script, vedi lì) costruisce ogni pagina a ogni visita: la cache dichiarata non
+ * contava, e chi leggeva credeva che la pagina su misura del negozio arrivasse da una copia. E il giorno in cui quella riga
+ * verrà tolta, una copia di 300 secondi mostrerebbe il contenuto di cinque minuti prima (oggi vince già lo 0 della vetrina sopra). Con 0 la dichiarazione dice il
+ * vero oggi e regge domani, come la vetrina (app/store/[id]/layout.tsx, R10-004). Una cache vera
+ * delle letture, come quella della home (unstable_cache), è una scelta di Nicola: quanto vecchio
+ * può essere la pagina su misura del negozio che il cliente vede.
+ */
+export const revalidate = 0;
 
 type StoreMeta = {
   id: string;

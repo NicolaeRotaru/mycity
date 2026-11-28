@@ -7,7 +7,17 @@ import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { logger } from '@/lib/logger';
 import { notFound } from 'next/navigation';
 
-export const revalidate = 600;
+/**
+ * 28/11/2026 (R04-013) — NESSUNA CACHE DICHIARATA CHE NON C'È.
+ * Qui c'era `revalidate = 600`, ma `dynamic = 'force-dynamic'` in app/layout.tsx (la parola
+ * d'ordine degli script, vedi lì) costruisce ogni pagina a ogni visita: la cache dichiarata non
+ * contava, e chi leggeva credeva che la pagina della categoria arrivasse da una copia. E il giorno in cui quella riga
+ * verrà tolta, una copia di 600 secondi mostrerebbe prodotti e prezzi di dieci minuti prima, e una categoria appena creata ancora «non trovata». Con 0 la dichiarazione dice il
+ * vero oggi e regge domani, come la vetrina (app/store/[id]/layout.tsx, R10-004). Una cache vera
+ * delle letture, come quella della home (unstable_cache), è una scelta di Nicola: quanto vecchio
+ * può essere la pagina della categoria che il cliente vede.
+ */
+export const revalidate = 0;
 
 const CATEGORY_LONG_DESC: Record<string, string> = {
   // 3/9/2026 — Prometteva «o ritiro in negozio», che alla cassa non c'e': la frase nasce
