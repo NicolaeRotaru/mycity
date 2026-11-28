@@ -4,8 +4,14 @@ import type { NextResponse } from 'next/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { getAnthropic, estimateCostEur, segnalaModelloRitirato, type ModelId } from '@/lib/ai/client';
-import { aggiungiSpesaCents, spesaDiOggiCents, statoContoCondiviso, ultimaSpesaNotaCents } from '@/lib/ai/tettoSpesa';
-import { decidiSpesaAi, leggiCopieAttese } from '@/lib/ai/decisioneTettoSpesa';
+import {
+  aggiungiSpesaCents,
+  prenotaSpesaNelContoCondiviso,
+  spesaDiOggiCents,
+  statoContoCondiviso,
+  ultimaSpesaNotaCents,
+} from '@/lib/ai/tettoSpesa';
+import { decidiSpesaAi, euroInCents, leggiCopieAttese } from '@/lib/ai/decisioneTettoSpesa';
 
 /**
  * Esecuzione centralizzata di `messages.create`.
@@ -265,6 +271,28 @@ export async function controllaTettoSpesaAi(feature: string, stimaCents: number 
   // PRIMA di leggere lo speso (prenotaInVoloCondiviso, qui sopra).
   const condivisa = await prenotaInVoloCondiviso(stima);
   const letti = await spesaDiOggiCents();
+  // 28/11/2026 (R02-002, onda 2) — In rete la stima entra nel conto condiviso
+  // PRIMA della chiamata, con un passo solo che controlla il tetto e scrive: le
+  // copie si vedono l'una con l'altra anche senza Upstash, e se la scrittura non
+  // riesce non si parte. Senza la funzione nel database si resta qui sotto, come prima.
+  if (Number.isFinite(letti)) {
+    const nelConto = await prenotaSpesaNelContoCondiviso(stima, euroInCents(limitEur));
+    if (nelConto.esito === 'prenotata') {
+      // La prenotazione nel conto vale per tutte le copie: quella in Upstash non serve piu'.
+      await condivisa?.libera();
+      return nelConto.restituisci;
+    }
+    if (nelConto.esito === 'guasto') {
+      logger.warn('ai_spesa_sconosciuta', { feature, limitEur, contoCondiviso: true, prenotazione: 'non riuscita' });
+      await condivisa?.libera();
+      throw AiCallError.perSpesaSconosciuta(feature);
+    }
+    if (nelConto.esito === 'tetto') {
+      logger.warn('ai_budget_exceeded', { feature, spentEur: letti / 100, limitEur, motivo: 'tetto_superato', contoCondiviso: true });
+      await condivisa?.libera();
+      throw AiCallError.perTettoSpesa(feature);
+    }
+  }
   // R04-017 (revisione) — Una lettura vecchia non abbassa lo speso: vale il
   // piu' alto fra quello letto e l'ultimo totale noto a questa copia.
   const giaSpesiCents = Math.max(letti, ultimaSpesaNotaCents());
