@@ -163,6 +163,12 @@ export function ripulisciEvento(event: any): any {
   if (Array.isArray(event.breadcrumbs)) {
     for (const briciola of event.breadcrumbs) {
       if (typeof briciola?.message === 'string') briciola.message = testoSenzaRecapiti(briciola.message);
+      // R10-008 (collaudo) — La briciola della console porta anche gli argomenti com'erano
+      // (`data.arguments`, integrazione console dell'SDK): il messaggio qui sopra è la loro copia
+      // unita e oscurata, quindi gli argomenti grezzi non partono.
+      if (briciola?.data && typeof briciola.data === 'object' && 'arguments' in briciola.data) {
+        delete briciola.data.arguments;
+      }
     }
   }
   return event;
