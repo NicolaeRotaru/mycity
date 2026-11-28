@@ -1,6 +1,7 @@
 import { leggiSitoDelCliente } from '@/lib/agenzia/sito-finito/leggi';
-import { paginaDelSito } from '@/lib/agenzia/sito-finito/costruisci';
+import { paginaDelSito, pagineDelSito } from '@/lib/agenzia/sito-finito/costruisci';
 import { DOMINIO_MYCITY } from '@/lib/contatti-pubblici';
+import { PERCORSI_DI_PRIMA } from '@/lib/agenzia/sito-finito/standard';
 
 /**
  * IL SITO DEL CLIENTE, ONLINE — 28/11/2026.
@@ -32,6 +33,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ indirizz
   const percorso = pagina?.length ? `/${pagina[0].toLowerCase()}` : '/';
 
   const sito = await leggiSitoDelCliente(indirizzo);
+  // Le pagine del primo sito (28/11 mattina) hanno cambiato nome: «/chi-siamo» porta a «/il-locale».
+  // Collaudo 28/11: sul Base «/il-locale» e «/contatti» non esistono (è una pagina sola): lì si va alla home, ai contatti.
+  const nuovo = PERCORSI_DI_PRIMA[percorso];
+  if (nuovo && sito.stato === 'online') {
+    const { sellerId: _s, vetrinaAperta: _v, ...d } = sito.dati;
+    const esiste = pagineDelSito({ ...d, vetrina: null }).some((p) => p.percorso === nuovo);
+    const dove = esiste ? `${d.base}${nuovo}` : `${d.base}${nuovo === '/contatti' ? '#contatti' : ''}`;
+    return Response.redirect(new URL(dove, req.url), 308);
+  }
   if (sito.stato === 'nessuno') return nonTrovato();
   if (sito.stato === 'altrove') {
     const dove = new URL(`${sito.percorso}${percorso === '/' ? '' : percorso}`, req.url);

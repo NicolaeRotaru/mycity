@@ -3,6 +3,9 @@ import { logger } from '@/lib/logger';
 import { env } from '@/lib/env';
 import { giornoAPiacenza } from '@/lib/armonia';
 import { accentHex, normalizeCustomization, socialLinks } from '@/lib/store-customization';
+import type { Abbonamento } from '@/lib/agenzia/preventivo';
+import type { PianoDelMese } from '@/lib/agenzia/piano-del-primo-mese';
+import { STANDARD } from './standard';
 import { leggiServiziScelti, servizioScelto } from '@/lib/agenzia/servizi-scelti';
 import type { BozzaSitoOrdine } from '@/lib/agenzia/sito-dell-ordine-ad';
 import { fotoDalNegozio, type DatiSitoFinito } from './costruisci';
@@ -23,7 +26,7 @@ export type SitoDelCliente =
   | { stato: 'altrove'; percorso: string }
   | { stato: 'nessuno' };
 
-type RigaOrdine = { seller_id: string; nome_attivita: string; dati_attivita: { servizi?: unknown; citta?: string | null } | null; sito: BozzaSitoOrdine | null };
+type RigaOrdine = { seller_id: string; nome_attivita: string; fascia: Abbonamento | null; dati_attivita: { servizi?: unknown; citta?: string | null } | null; sito: BozzaSitoOrdine | null; piano: PianoDelMese | null; piano_origine: string | null };
 type RigaProfilo = {
   id: string;
   store_phone: string | null;
@@ -49,6 +52,20 @@ function dalNostroArchivio(u: string | null): string | null {
   }
 }
 
+/**
+ * Gli appuntamenti in città del mese, dal piano editoriale completo dell'AD: solo quelli con la loro fonte (l'AD li ha
+ * letti sul sito del Comune o di chi li organizza), uno per giorno, nell'ordine.
+ */
+export function eventiDelPiano(piano: PianoDelMese | null, origine: string | null): { data: string; testo: string }[] {
+  if (origine !== 'ad' || !piano || !Array.isArray(piano.contenuti)) return [];
+  const visti = new Set<string>();
+  return piano.contenuti
+    .filter((c) => typeof c.inCitta === 'string' && c.inCitta.trim() && typeof c.fonteEvento === 'string' && /^https:\/\//.test(c.fonteEvento) && /^\d{4}-\d{2}-\d{2}$/.test(c.data))
+    .filter((c) => (visti.has(c.data) ? false : (visti.add(c.data), true)))
+    .sort((a, b) => a.data.localeCompare(b.data))
+    .map((c) => ({ data: c.data, testo: String(c.inCitta).slice(0, 160) }));
+}
+
 export async function leggiSitoDelCliente(pezzo: string): Promise<SitoDelCliente> {
   const letto = leggiIndirizzo(pezzo);
   if (!letto) return { stato: 'nessuno' };
@@ -57,7 +74,7 @@ export async function leggiSitoDelCliente(pezzo: string): Promise<SitoDelCliente
     const { da, a } = intervalloDelPrefisso(letto.prefisso);
     const ordini = await admin
       .from('ordini_sdg')
-      .select('seller_id, nome_attivita, dati_attivita, sito')
+      .select('seller_id, nome_attivita, fascia, dati_attivita, sito, piano, piano_origine')
       .gte('seller_id', da)
       .lte('seller_id', a)
       .eq('sito_stato', 'pronto')
@@ -99,10 +116,14 @@ export async function leggiSitoDelCliente(pezzo: string): Promise<SitoDelCliente
         // Solo immagini dal nostro Supabase: è l'unica casa di immagini che la politica di sicurezza del sito lascia passare.
         logo: dalNostroArchivio(prof.store_logo),
         foto: fotoDalNegozio(prof.store_media).filter((f) => dalNostroArchivio(f) !== null),
-        colore: accentHex(pers),
+        // Il colore del marchio solo se il negozio l'ha scelto: altrimenti comanda la tavolozza del sito.
+        colore: pers.theme?.accent ? accentHex(pers) : null,
         // La firma nasce dal giorno d'iscrizione a MyCity, che non cambia (skill «armonia», regola 8).
         nascita: prof.created_at ? giornoAPiacenza(new Date(prof.created_at)) : null,
         pagine: o.sito.pagine,
+        fascia: o.fascia && o.fascia in STANDARD ? o.fascia : (o.sito.fascia ?? 'base'),
+        contenuto: o.sito.contenuto ?? null,
+        eventi: eventiDelPiano(o.piano, o.piano_origine),
         base: giusto,
       },
     };
