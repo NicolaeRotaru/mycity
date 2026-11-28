@@ -55,7 +55,7 @@ describe('R06-013 · carrello con la carta e il credito MyCity scaduto tutto nel
     ordini[0].wallet_applied_cents = 400;
     db = finto({ orders: ordini });
     const chiamateRpc: Array<{ nome: string; args: Record<string, unknown> }> = [];
-    db.rpc = async (nome: string, args?: Record<string, unknown>) => (chiamateRpc.push({ nome, args: args ?? {} }), { data: null, error: null });
+    db.rpc = (async (nome: string, args?: Record<string, unknown>) => (chiamateRpc.push({ nome, args: args ?? {} }), { data: null, error: null })) as never;
 
     await giro();
 
@@ -75,8 +75,8 @@ describe('R06-013 · carrello con la carta e il credito MyCity scaduto tutto nel
     const ordini = carrello(['pane', 'frutta'], [1500, 1200], 'card', { creati: [SCADUTO, SCADUTO_DOPO] });
     ordini[0].wallet_applied_cents = 400;
     db = finto({ orders: ordini });
-    db.rpc = async (nome: string) =>
-      nome === 'wallet_credit' ? { data: null, error: { message: 'timeout' } } : { data: null, error: null };
+    db.rpc = (async (nome: string) =>
+      nome === 'wallet_credit' ? { data: null, error: { message: 'timeout' } } : { data: null, error: null }) as never;
 
     await giro();
 
