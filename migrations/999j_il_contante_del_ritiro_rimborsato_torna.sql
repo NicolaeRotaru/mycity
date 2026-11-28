@@ -15,12 +15,20 @@
 --     del rimborso non ancora trattenuto: quello che il bonifico non ha coperto, e i rimborsi arrivati
 --     dopo il bonifico. Da recuperare = quota stornata (al massimo il netto) − recupero già trattenuto
 --     (bonifici_manuali_ordini.recupero_cents).
--- Tabelle, vincoli e le altre funzioni non cambiano.
+--  3. private.quote_dei_rimborsi e public.togli_quota_del_rimborso(ordine, chiave, centesimi): la
+--     quota del negozio di un rimborso si toglie una volta sola per chiave. La funzione scrive la
+--     chiave e somma la quota a seller_payout_reversed_cents (mai oltre il netto) nella stessa
+--     transazione; con una chiave già scritta risponde 0 e non tocca niente. La usa refundOrder
+--     (lib/stripe/payout.ts) per i rimborsi dei contanti con la chiave, anche quando li riprende.
+--     Solo service_role.
+-- Le altre tabelle, i vincoli e le altre funzioni non cambiano.
 --
--- Prova: tests/sql/rls/riparazione-s01-ritiro-rimborsato-per-intero.test.sql.
+-- Prove: tests/sql/rls/riparazione-s01-ritiro-rimborsato-per-intero.test.sql e
+-- tests/sql/rls/riparazione-s01-quota-del-rimborso-una-volta.test.sql.
 -- Si può rieseguire. NON si applica a mano: lo decide Nicola, dopo la 999i.
 -- REVERSIBILE: rieseguire la 999i (segna_bonifico_manuale) e la sezione 5 della 916
--- (contanti_da_recuperare).
+-- (contanti_da_recuperare); DROP FUNCTION public.togli_quota_del_rimborso(uuid, text, integer) e
+-- DROP TABLE private.quote_dei_rimborsi (refundOrder torna alla scrittura di prima).
 
 BEGIN;
 
@@ -306,6 +314,76 @@ GRANT EXECUTE ON FUNCTION public.contanti_da_recuperare() TO authenticated;
 
 COMMENT ON FUNCTION public.contanti_da_recuperare() IS
   'Contanti versati a mano e poi rimborsati al cliente, e ritiri al banco regolati e poi rimborsati: quanto va ripreso dal negozio, ordine per ordine. Solo amministratori (migrazioni 916 e 999j).';
+
+-- 3) La quota del negozio di un rimborso, una volta per chiave ---------------------------------------
+CREATE SCHEMA IF NOT EXISTS private;
+
+CREATE TABLE IF NOT EXISTS private.quote_dei_rimborsi (
+  order_id  uuid        NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  chiave    text        NOT NULL CHECK (char_length(chiave) BETWEEN 1 AND 200),
+  centesimi integer     NOT NULL CHECK (centesimi >= 0),
+  tolta_il  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (order_id, chiave)
+);
+ALTER TABLE private.quote_dei_rimborsi ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON private.quote_dei_rimborsi FROM PUBLIC, anon, authenticated;
+
+COMMENT ON TABLE private.quote_dei_rimborsi IS
+  'Le quote del negozio tolte per ogni rimborso con la chiave (togli_quota_del_rimborso): una chiave, una quota sola (migrazione 999j).';
+
+CREATE OR REPLACE FUNCTION public.togli_quota_del_rimborso(p_order_id uuid, p_chiave text, p_centesimi integer)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_netto int;
+  v_prima int;
+  v_dopo int;
+  v_scrittura_prima text;
+BEGIN
+  IF p_order_id IS NULL OR p_chiave IS NULL OR btrim(p_chiave) = '' OR char_length(p_chiave) > 200
+     OR p_centesimi IS NULL OR p_centesimi < 0 THEN
+    RAISE EXCEPTION 'togli_quota_del_rimborso: argomenti non validi' USING ERRCODE = '22023';
+  END IF;
+
+  -- La riga dell'ordine si blocca: due chiamate insieme si mettono in fila.
+  SELECT coalesce(o.seller_payout_cents, 0), coalesce(o.seller_payout_reversed_cents, 0)
+    INTO v_netto, v_prima
+    FROM public.orders o
+   WHERE o.id = p_order_id
+   FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'togli_quota_del_rimborso: ordine inesistente' USING ERRCODE = 'P0002';
+  END IF;
+
+  INSERT INTO private.quote_dei_rimborsi (order_id, chiave, centesimi)
+  VALUES (p_order_id, p_chiave, 0)
+  ON CONFLICT (order_id, chiave) DO NOTHING;
+  IF NOT FOUND THEN
+    -- Questa chiave ha già tolto la sua quota.
+    RETURN 0;
+  END IF;
+
+  v_dopo := GREATEST(v_prima, LEAST(v_prima + p_centesimi, v_netto));
+
+  v_scrittura_prima := current_setting('mycity.allow_order_write', true);
+  PERFORM set_config('mycity.allow_order_write', '1', true);
+  UPDATE public.orders SET seller_payout_reversed_cents = v_dopo WHERE id = p_order_id;
+  PERFORM set_config('mycity.allow_order_write', coalesce(v_scrittura_prima, ''), true);
+
+  UPDATE private.quote_dei_rimborsi SET centesimi = v_dopo - v_prima
+   WHERE order_id = p_order_id AND chiave = p_chiave;
+  RETURN v_dopo - v_prima;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.togli_quota_del_rimborso(uuid, text, integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.togli_quota_del_rimborso(uuid, text, integer) TO service_role;
+
+COMMENT ON FUNCTION public.togli_quota_del_rimborso(uuid, text, integer) IS
+  'Toglie la quota del negozio di un rimborso (seller_payout_reversed_cents, mai oltre il netto) una volta sola per chiave; con una chiave già usata risponde 0. Solo service_role (migrazione 999j).';
 
 NOTIFY pgrst, 'reload schema';
 

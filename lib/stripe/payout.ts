@@ -1182,6 +1182,11 @@ async function addebitaQuotaVenditoreSeNonPagato(
   order: { id: string; payout_status?: string | null; seller_payout_cents?: number | null; seller_payout_reversed_cents?: number | null },
   sellerShare: number,
   giaStornato: number,
+  /**
+   * La chiave del rimborso: con la chiave la quota si toglie una volta sola (`togliLaQuotaUnaVolta`).
+   * Senza, o finché la funzione del database non c'è, si scrive come prima.
+   */
+  chiaveDellaQuota: string | null = null,
 ): Promise<number> {
   if (giaStornato !== 0 || sellerShare <= 0 || order.payout_status === 'TRANSFERRED') return giaStornato;
   // 13/11/2026 (R17-024) — Il bonifico è già uscito e uno storno di prima non è riuscito: il giro non lo
@@ -1200,6 +1205,11 @@ async function addebitaQuotaVenditoreSeNonPagato(
    * 16,20 e il negozio perdeva 4,05 €. Adesso la scrittura passa solo se la
    * quota è ancora quella letta; se no si rilegge e si somma a quella nuova.
    */
+  if (chiaveDellaQuota) {
+    const tolta = await togliLaQuotaUnaVolta(admin, order.id, chiaveDellaQuota, sellerShare);
+    if (typeof tolta === 'number') return tolta;
+    if (tolta === 'errore') return giaStornato;
+  }
   const nettoVenditore = order.seller_payout_cents ?? 0;
   let letto: number | null = order.seller_payout_reversed_cents ?? null;
   for (let tentativo = 0; tentativo < TENTATIVI_SU_UN_ORDINE_CHE_CAMBIA; tentativo++) {
@@ -1233,6 +1243,124 @@ async function addebitaQuotaVenditoreSeNonPagato(
   }
   logger.error('[refundOrder] quota venditore non addebitata: l ordine cambia a ogni tentativo', { orderId: order.id });
   return giaStornato;
+}
+
+/** La funzione del database non c'è ancora (migrazione non applicata): 42883 da Postgres, PGRST202 da PostgREST. */
+function funzioneMancante(e: { code?: string } | null | undefined): boolean {
+  return e?.code === '42883' || e?.code === 'PGRST202';
+}
+
+/**
+ * LA QUOTA DEL NEGOZIO DI UN RIMBORSO SI TOGLIE UNA VOLTA SOLA PER CHIAVE.
+ *
+ * `togli_quota_del_rimborso` (migrazione 999j) scrive la chiave del rimborso e la quota nella stessa
+ * transazione: una seconda chiamata con la stessa chiave, anche da una ripresa, risponde 0 e non
+ * tocca niente. Restituisce i centesimi tolti; 'non-disponibile' se la funzione non c'è ancora (o
+ * non risponde un numero); 'errore' se ha risposto con un altro errore.
+ */
+async function togliLaQuotaUnaVolta(
+  admin: ReturnType<typeof getAdminSupabase>,
+  orderId: string,
+  chiave: string,
+  centesimi: number,
+): Promise<number | 'non-disponibile' | 'errore'> {
+  const { data, error } = await admin.rpc('togli_quota_del_rimborso', {
+    p_order_id: orderId,
+    p_chiave: chiave,
+    p_centesimi: Math.max(0, Math.round(centesimi)),
+  });
+  if (error) {
+    if (funzioneMancante(error as { code?: string })) return 'non-disponibile';
+    logger.error('[refundOrder] quota venditore non tolta', { orderId, chiave, message: (error as { message?: string }).message });
+    return 'errore';
+  }
+  const tolta = Array.isArray(data) ? data[0] : data;
+  return typeof tolta === 'number' && Number.isFinite(tolta) ? tolta : 'non-disponibile';
+}
+
+/**
+ * La quota del negozio in un rimborso: quella dichiarata da chi chiama; col rimborso pieno tutto
+ * quello che al negozio resta (salvo uno storno di prima non riuscito); altrimenti la proporzione sul
+ * lordo, mai oltre il suo netto.
+ */
+function quotaDelNegozioNelRimborso(
+  order: { payout_status?: string | null; seller_payout_cents?: number | null; seller_payout_reversed_cents?: number | null },
+  p: { importoCents: number; lordoCents: number; pieno: boolean; quotaDichiarata?: number | null },
+): number {
+  const sellerNet = order.seller_payout_cents ?? 0;
+  const restaAlNegozio = Math.max(0, sellerNet - Number(order.seller_payout_reversed_cents ?? 0));
+  if (typeof p.quotaDichiarata === 'number' && Number.isFinite(p.quotaDichiarata)) {
+    return Math.max(0, Math.min(Math.round(p.quotaDichiarata), p.importoCents, sellerNet));
+  }
+  if (p.pieno && order.payout_status !== 'REVERSAL_FAILED') return restaAlNegozio;
+  return p.lordoCents > 0 ? Math.min(Math.round((p.importoCents * sellerNet) / p.lordoCents), sellerNet) : 0;
+}
+
+/**
+ * LA RIPRESA DI UN BONIFICO DI RIMBORSO GIÀ ANNUNCIATO COMPLETA QUOTA E STATO.
+ *
+ * Il tentativo di prima ha scritto il segno del bonifico con lo stato del pagamento, l'avviso e il
+ * credito, e si è fermato prima della quota del negozio o dello stato del bonifico al negozio. La
+ * ripresa con la stessa chiave non rifà i soldi (sono già usciti) né le email: toglie la quota una
+ * volta sola (`togliLaQuotaUnaVolta`) e, col rimborso pieno, scrive REFUNDED sul
+ * bonifico al negozio come il percorso normale. Un bonifico al negozio già partito su Stripe
+ * (TRANSFERRED) non si storna da qui: lo storno ha la sua chiave sul totale, e lo si dice a chi
+ * amministra.
+ * Restituisce i centesimi tolti al negozio da questa chiamata.
+ */
+async function completaQuotaEStatoDellaRipresa(
+  admin: ReturnType<typeof getAdminSupabase>,
+  order: {
+    id: string;
+    payout_status?: string | null;
+    seller_payout_cents?: number | null;
+    seller_payout_reversed_cents?: number | null;
+    refunded_amount_cents?: number | null;
+  },
+  p: { chiave: string; importoCents: number; lordoCents: number; quotaDichiarata?: number | null },
+): Promise<number> {
+  const rimborsato = Number(order.refunded_amount_cents ?? 0);
+  const pieno = rimborsato >= p.lordoCents;
+  const daControllareAMano = async (perche: string) => {
+    try {
+      await notifyAdmins(
+        '⚠️ Rimborso ripreso: quota del negozio da controllare',
+        `Il rimborso sull'ordine #${order.id.slice(0, 8)} è stato ripreso dopo un'interruzione: ${perche}`,
+        '/admin/orders',
+        { unaVoltaPer: `ripresa-quota:${order.id}:${p.chiave}` },
+      );
+    } catch (e) {
+      logger.error('[refundOrder] avviso della quota da controllare non inviato', { orderId: order.id, e });
+    }
+  };
+  if (order.payout_status === 'TRANSFERRED') {
+    await daControllareAMano(
+      "il bonifico al negozio era già partito: guarda su Stripe (Connect → il bonifico dell'ordine → Storni) se la quota del negozio è rientrata.",
+    );
+    return 0;
+  }
+  const quota = quotaDelNegozioNelRimborso(order, {
+    importoCents: p.importoCents,
+    lordoCents: p.lordoCents,
+    pieno,
+    quotaDichiarata: p.quotaDichiarata,
+  });
+  // Solo con la funzione che toglie la quota una volta: senza, una ripresa potrebbe toglierla due volte.
+  const esito = quota > 0 && order.payout_status !== 'REVERSAL_FAILED' ? await togliLaQuotaUnaVolta(admin, order.id, p.chiave, quota) : 0;
+  if (typeof esito !== 'number') {
+    await daControllareAMano(
+      `la quota del negozio (${formatPriceFromCents(quota)}) non si è potuta togliere in modo sicuro: controlla seller_payout_reversed_cents sull'ordine.`,
+    );
+  }
+  const tolta = typeof esito === 'number' ? esito : 0;
+  if (quota > 0 && order.payout_status === 'HELD') await avvisaDellaQuotaDaTrattenere(admin, order.id, quota, p.chiave);
+  if (pieno && order.payout_status !== 'REVERSAL_FAILED' && order.payout_status !== 'REFUNDED') {
+    const { error } = await scriviLoStatoDelRimborso(admin, order.id, { payout_status: 'REFUNDED' }, rimborsato, p.lordoCents);
+    if (error) {
+      logger.error('[refundOrder] ripresa: stato del bonifico al negozio non scritto', { orderId: order.id, message: error.message });
+    }
+  }
+  return tolta;
 }
 
 /**
@@ -2123,9 +2251,17 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // lancia qui, e non resta niente da togliere: l'avviso del tentativo di prima resta suo.
   const manca = bonificoDiPrima ? await cosaMancaAlBonifico(opts.idempotencyKey as string, ripartoVero.creditoCents) : null;
   if (bonificoDiPrima && manca === 'niente') {
+    // Soldi, avviso e credito ci sono: si completano la quota del negozio e lo stato del bonifico al
+    // negozio, che il tentativo di prima può non aver scritto.
+    const reversedCents = await completaQuotaEStatoDellaRipresa(admin, order, {
+      chiave: opts.idempotencyKey as string,
+      importoCents: safeAmountCents,
+      lordoCents: grossCents,
+      quotaDichiarata: opts.quotaNegozioCents,
+    });
     return {
       refundId: bonificoDiPrima.segno,
-      reversedCents: 0,
+      reversedCents,
       pieno: Number(order.refunded_amount_cents ?? 0) >= grossCents,
       modo,
       importoCents: safeAmountCents,
@@ -2453,9 +2589,16 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // questa: il resto (la quota del negozio, le email) lo fa lei. Farlo anche qui toglierebbe al
   // negozio la sua quota due volte.
   if (manca === 'avviso' && !avvisoDaTogliere) {
+    // Quota (una volta per chiave) e stato: se l'altra ripresa li ha già scritti, qui non cambia niente.
+    const reversedCents = await completaQuotaEStatoDellaRipresa(admin, order, {
+      chiave,
+      importoCents: safeAmountCents,
+      lordoCents: grossCents,
+      quotaDichiarata: opts.quotaNegozioCents,
+    });
     return {
       refundId,
-      reversedCents: 0,
+      reversedCents,
       pieno: isFull,
       modo,
       importoCents: safeAmountCents,
@@ -2484,15 +2627,12 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // rimborsato tutto. Adesso il rimborso che porta l'ordine al lordo pieno prende quello che al negozio
   // resta (13,50 €). Con un recupero caduto (REVERSAL_FAILED) quello che resta non si sa (lo recupera
   // una persona): lì resta la proporzione.
-  const restaAlNegozio = Math.max(0, sellerNet - Number(order.seller_payout_reversed_cents ?? 0));
-  const sellerShare =
-    typeof quotaDichiarata === 'number' && Number.isFinite(quotaDichiarata)
-      ? Math.max(0, Math.min(Math.round(quotaDichiarata), safeAmountCents, sellerNet))
-      : isFull && order.payout_status !== 'REVERSAL_FAILED'
-        ? restaAlNegozio
-        : grossCents > 0
-          ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet)
-          : 0;
+  const sellerShare = quotaDelNegozioNelRimborso(order, {
+    importoCents: safeAmountCents,
+    lordoCents: grossCents,
+    pieno: isFull,
+    quotaDichiarata,
+  });
 
   let stornatoAlNegozio = 0;
   let recuperoNonRiuscito: string | null = null;
@@ -2507,7 +2647,14 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // 21/8/2026 — Se il bonifico al negozio non e' ancora partito, la sua quota
   // si scala da quello che gli verra' versato (vedi la funzione): una sola
   // copia per tutti i modi di pagare.
-  const reversedCents = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, stornatoAlNegozio);
+  // Sui contanti con la chiave la quota si toglie una volta per chiave: una ripresa non la ritoglie.
+  const reversedCents = await addebitaQuotaVenditoreSeNonPagato(
+    admin,
+    order,
+    sellerShare,
+    stornatoAlNegozio,
+    tipo === 'contanti' && opts.idempotencyKey ? chiave : null,
+  );
   // 13/11/2026 (R17-024) — IL BONIFICO E' USCITO E UNO STORNO DI PRIMA NON E' RIUSCITO: SI DICE, A MANO.
   // Lo storno qui sopra parte solo su TRANSFERRED e la quota non scende dal bonifico (già partito): senza
   // questo avviso i soldi restavano al negozio e nessuno lo sapeva. Col rimborso pieno la cifra è tutto
