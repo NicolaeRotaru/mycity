@@ -12,6 +12,7 @@ import { lavoriFermi, type CronHeartbeat } from '@/lib/cron-health';
 import { env } from '@/lib/env';
 import { dominioDeiContatti, mittenteFuoriDominio } from '@/lib/contatti-pubblici';
 import { allarmiTettoSpesaAiPerIlCron } from '@/lib/ai/tettoSpesa';
+import { allarmiDeiBonifici, type RigaDelBonifico } from '@/lib/rimborsi/bonifici-da-fare';
 import {
   sorvegliaCancellazioni,
   type GiornataDiCassa,
@@ -852,6 +853,36 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   } catch (e) {
     logger.error('[operational-alerts] allarme del tetto di spesa AI non letto', { motivo: e instanceof Error ? e.message : String(e) });
     controlliSaltati.push('tetto di spesa AI');
+  }
+
+  /**
+   * 16) Onda 2 (R05-004) — I BONIFICI DI RIMBORSO AL CLIENTE VICINI AI 14 GIORNI, O OLTRE.
+   *
+   * La pagina /admin/bonifici-rimborso li mette in evidenza, ma solo a chi la apre: qui il sorvegliante
+   * avvisa a 3 giorni o meno dal termine e a termine passato, una volta al giorno finché il bonifico non
+   * è «Fatto» (lib/rimborsi/bonifici-da-fare.ts, `allarmiDeiBonifici`). Per i resi il termine parte dalla
+   * richiesta, per i reclami dalla data che dice PARTENZA_DEL_TERMINE_DEI_RECLAMI (migrazione onda2_E1_1;
+   * senza, il reclamo ha il termine sconosciuto e resta solo in evidenza sulla pagina).
+   * La lettura è della migrazione 910: finché non è applicata la funzione non c'è (PGRST202 / 42883) e il
+   * controllo tace, come prima, senza far risultare incompleto ogni giro. Ogni altro errore è un controllo saltato.
+   */
+  try {
+    const { data, error } = await admin.rpc('admin_bonifici_rimborso');
+    if (error) {
+      const codice = (error as { code?: string }).code;
+      if (codice === 'PGRST202' || codice === '42883') {
+        logger.warn('[operational-alerts] bonifici di rimborso: migrazione 910 non ancora applicata, controllo spento');
+      } else {
+        throw new Error(error.message);
+      }
+    } else if (!Array.isArray(data)) {
+      throw new Error('bonifici di rimborso: esito non previsto');
+    } else {
+      alerts.push(...allarmiDeiBonifici(data as RigaDelBonifico[], new Date()));
+    }
+  } catch (e) {
+    logger.error('[operational-alerts] bonifici di rimborso non letti', { motivo: e instanceof Error ? e.message : String(e) });
+    controlliSaltati.push('bonifici di rimborso');
   }
 
   /**

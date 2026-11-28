@@ -155,7 +155,8 @@ describe('contanti incassati: il rimborso esce, e col bonifico', () => {
     expect(creditoDi(finto.db, 'cliente'), 'R71: i contanti non tornano come credito').toBe(0);
     const avvisi = notificheConTitolo(finto.db, 'Bonifico di rimborso da fare');
     expect(avvisi).toHaveLength(1);
-    expect(avvisi[0].link).toBe('/admin/orders');
+    // R05-004 (onda 2) — Il link porta dove si segna «Fatto», come dice il testo.
+    expect(avvisi[0].link).toBe('/admin/bonifici-rimborso');
     expect(String(avvisi[0].body)).toContain(`Bonifico di ${formatPriceFromCents(2400)}`);
     expect(String(avvisi[0].body)).toContain('«Rimborso MyCity ordine #O1 reclamo D1»');
   });
