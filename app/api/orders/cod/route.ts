@@ -14,8 +14,9 @@ import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { romeNow } from '@/lib/store-hours';
-import { finestraDellaFascia, motivoFasciaRifiutata } from '@/lib/quando-arriva';
-import { fasciaAlGiornoDellOrdine, giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
+import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
+// R09-009 — La fascia riportata al giorno della richiesta: una copia sola, condivisa con la carta.
+import { fasciaDelGiornoDellaRichiesta } from '@/lib/ordini/fascia-leggibile';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
@@ -49,28 +50,6 @@ import { MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI, sopraIlTettoDeiContanti } from '@/l
 // chiuso»: il messaggio giusto c'era, e si perdeva nella forma sbagliata.
 
 export const runtime = 'nodejs';
-
-/**
- * 22/11/2026 — LA FASCIA DETTA DAL GIORNO IN CUI ARRIVA LA RICHIESTA.
- *
- * L'etichetta conta il giorno da quando la cassa l'ha disegnata; la rotta la contava dal suo
- * orologio. Lunedì alle 23:59 «Domani · 9:00–11:00» è martedì: arrivata alle 00:01, la rotta la
- * giudicava (e la scriveva) per mercoledì. La cassa manda anche il giorno della fascia
- * (`delivery_date`): se cade un giorno prima di quello che dice l'etichetta letta adesso, la
- * mezzanotte è passata in viaggio, e l'etichetta si riporta a oggi con la regola della carta pagata
- * dopo mezzanotte (`fasciaAlGiornoDellOrdine`): «Domani» di ieri è «Oggi», una fascia di ieri è
- * passata (`null`). Uno scarto di più giorni è l'orologio del telefono sbagliato, non la
- * mezzanotte: non sposta niente, si giudica come prima.
- */
-function fasciaDelGiornoDellaRichiesta(fascia: string, giornoDellaFascia: string, adesso: Date): string | null {
-  const finestra = finestraDellaFascia(fascia);
-  const oggi = giornoDiPiacenza(adesso);
-  if (!finestra || !oggi || !/^\d{4}-\d{2}-\d{2}$/.test(giornoDellaFascia)) return fascia;
-  const giorniDaOggi = Math.round((Date.parse(giornoDellaFascia) - Date.parse(oggi)) / 86_400_000);
-  if (giorniDaOggi !== (finestra.giorno === 'domani' ? 0 : -1)) return fascia;
-  // Ieri a mezzogiorno (UTC): un istante del giorno in cui la cassa ha proposto la fascia.
-  return fasciaAlGiornoDellOrdine(fascia, Date.parse(oggi) - 12 * 3_600_000, adesso);
-}
 
 const ItemSchema = z.object({
   productId: z.string().uuid(),
