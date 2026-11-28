@@ -54,6 +54,7 @@ function tabella(nome: string) {
   let filtroUtenti: string[] | null = null;
   let unSoloUtente: string | null = null;
   let inAggiornamento = false;
+  let aggiornate: string[] = [];
   const b: Record<string, unknown> = {
     select: () => b,
     is: () => b,
@@ -63,12 +64,14 @@ function tabella(nome: string) {
     update: () => { inAggiornamento = true; return b; },
     limit: () => Promise.resolve({ data: inSospeso, error: null }),
     in: (_c: string, valori: string[]) => {
-      if (inAggiornamento) return Promise.resolve({ error: null });
+      // R03-016 — Il giro prende le notifiche (update…in…is…select) e ridà le non partite (update…in…eq).
+      if (inAggiornamento) { aggiornate = valori; return b; }
       filtroUtenti = valori;
       return b;
     },
-    eq: (_c: string, v: string) => { unSoloUtente = v; return b; },
+    eq: (_c: string, v: string) => { if (!inAggiornamento) unSoloUtente = v; return b; },
     then: (risolvi: (v: unknown) => unknown) => {
+      if (inAggiornamento) return Promise.resolve({ data: aggiornate.map((id) => ({ id })), error: null }).then(risolvi);
       const righe = iscrizioni.filter(
         (i) =>
           (filtroUtenti === null || filtroUtenti.includes(i.user_id)) &&

@@ -178,6 +178,9 @@ export async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
   if (buyerEmail) {
     const t = giftCardBuyerTemplate({ code, amountEuro, recipientName });
     await avvisaSeLaPostaNonParte('email del buono regalo a chi l ha comprato', { sessionId: session.id },
-      await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text, tags: [{ name: 'template', value: 'gift_card_buyer' }] }));
+      // 28/11/2026 (R03-002) — Se non parte la rimanda la coda, solo all'indirizzo dell'account di chi l'ha comprato
+      // (customer_email = user.email al checkout). Il destinatario può non avere un account: per lui resta l'avviso.
+      await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text, tags: [{ name: 'template', value: 'gift_card_buyer' }],
+        rimandaA: buyerId && buyerEmail.toLowerCase() === session.customer_email?.toLowerCase() ? buyerId : null }));
   }
 }
