@@ -5,6 +5,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
+import { liberaIClientiDi } from '@/lib/agenti/clienti';
 import { creaInvito, statoInvito, GIORNI_DI_SERIE, type Agente, type Invito } from '@/lib/agenti/inviti';
 
 export const runtime = 'nodejs';
@@ -86,5 +87,10 @@ export const PATCH = withAdminAuth(async ({ req }) => {
   }
   // Nessuna riga toccata: prima rispondeva «fatto» lo stesso, e Admin mostrava salvata una modifica mai avvenuta.
   if (!data?.length) return ApiErrors.conflict(m.azione === 'ritira' ? 'Questo link era già ritirato, o non esiste più.' : 'Questo agente non si trova.');
+  // 28/11/2026 — Chi viene sospeso lascia liberi i suoi clienti sulla mappa (migrazione 999i). Se la tabella non c'è
+  // ancora, la sospensione vale lo stesso: si annota e basta.
+  if (m.azione === 'sospendi') {
+    try { await liberaIClientiDi(admin, m.userId); } catch (e) { logger.warn('[admin] clienti dell agente sospeso non liberati', { message: String(e) }); }
+  }
   return NextResponse.json({ ok: true }, { headers: nessunaCache });
 });

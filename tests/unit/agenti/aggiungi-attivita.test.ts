@@ -67,6 +67,7 @@ vi.mock('@/lib/supabase/server', () => ({
 
 const { POST } = await import('@/app/api/agente/aggiungi/route');
 const { tipoDaTesto, nomeNonValido, stessoIndirizzo } = await import('@/lib/agenti/aggiungi');
+const { accorciaDettaglio } = await import('@/lib/agenzia/nuova-attivita');
 
 const LAVORO = '11111111-2222-4333-8444-555555555555';
 // 28/11/2026 — Il «Sì» porta anche quali servizi gli servono: almeno uno.
@@ -255,6 +256,33 @@ describe('l abbonamento scelto dal titolare sblocca la sua pagina (27/11)', () =
     const r = await premi();
     expect(((await r.json()) as { data: { giaOnline: boolean } }).data.giaOnline).toBe(true);
     expect(stato.testiAvvisi[0]).toContain('pagato online');
+  });
+});
+
+// 28/11/2026 03:13 — Nicola, dalla pagina dell'agente: «Non sono riuscito ad aggiungere l'attività. Riprova fra
+// poco.» La scheda dell'AD descriveva il tipo con più di 60 caratteri, il database ne accetta 60: falliva sempre.
+describe('un tipo descritto lungo non ferma il «Sì, aggiungi» (28/11)', () => {
+  it('il tipo arriva all iscrizione già sotto i 60 caratteri, tagliato fra due parole', async () => {
+    const tipo = 'Bar, caffetteria, pasticceria e gelateria artigianale con laboratorio di produzione propria';
+    stato.lavoro = { stato: 'pronta', venditore: 'agente@esempio.it', prima: { ...prima, tipo }, risultato: {} };
+    expect((await premi()).status).toBe(201);
+    const dettaglio = String(stato.iscritte[0].dettaglio);
+    expect(dettaglio.length).toBeLessThanOrEqual(60);
+    expect(tipo.startsWith(dettaglio)).toBe(true);
+    expect(dettaglio).not.toMatch(/[\s,]$|\s(e|con|di)$/);
+    // Il tipo del sito si capisce dalla descrizione intera, non da quella accorciata.
+    expect(stato.iscritte[0].tipo_attivita).toBe('bar');
+  });
+
+  it('accorciaDettaglio: corto resta uguale, lungo senza spazi si taglia a 60, un emoji non si spezza', () => {
+    expect(accorciaDettaglio('Panificio')).toBe('Panificio');
+    expect(accorciaDettaglio('   ')).toBeUndefined();
+    expect(accorciaDettaglio(null)).toBeUndefined();
+    expect(accorciaDettaglio('x'.repeat(90))).toBe('x'.repeat(60));
+    const conEmoji = `${'a'.repeat(59)}🍰🍰`;
+    const corto = accorciaDettaglio(conEmoji)!;
+    expect(Array.from(corto).length).toBe(60);
+    expect(corto.endsWith('🍰')).toBe(true);
   });
 });
 

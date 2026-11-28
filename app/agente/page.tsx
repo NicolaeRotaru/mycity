@@ -134,6 +134,8 @@ export default function PaginaAgente() {
             <span className={c('marchio')}><b>MyCity</b> · Agenti</span>
             {email && <span className={c('nota')}>{email}</span>}
           </div>
+          {/* 28/11/2026 — La mappa dei clienti da visitare (flusso n8n 16, migrazione 999i). */}
+          <Link href="/agente/clienti" className={c('bottone secondario')}>Clienti da visitare: mappa e lista</Link>
           <h1>Scheda del cliente</h1>
           <p className={c('nota')}>Incolla il link di Google Maps dell’attività in cui stai per entrare e premi «Analizza». La prima parte arriva in pochi secondi, la scheda intera in circa un minuto.</p>
         </div>

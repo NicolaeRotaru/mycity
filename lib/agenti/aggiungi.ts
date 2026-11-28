@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '@/lib/env';
-import { NuovaAttivitaInArrivo, type NuovaAttivita } from '@/lib/agenzia/nuova-attivita';
+import { accorciaDettaglio, NuovaAttivitaInArrivo, type NuovaAttivita } from '@/lib/agenzia/nuova-attivita';
 import type { TipoAttivita } from '@/lib/agenzia/tipi-attivita';
 import type { Scheda } from '@/lib/agenti/scheda';
 import type { ServiziScelti } from '@/lib/agenzia/servizi-scelti';
@@ -60,12 +60,14 @@ export function attivitaDallaScheda(scheda: Scheda): NuovaAttivita | null {
   const misura = scheda.sito?.misura;
   const sito = misura?.aperto && /^https:\/\//i.test(misura.url) ? misura.url : undefined;
   const tipo = tipoDaTesto(scheda.tipo);
+  const dettaglio = accorciaDettaglio(scheda.tipo);
   const candidato = {
     tipo: 'nuova-attivita' as const,
     origine: 'agente',
     nome: String(scheda.nome ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80),
     ...(tipo ? { tipo_attivita: tipo } : {}),
-    ...(scheda.tipo ? { dettaglio: scheda.tipo.trim().slice(0, 80) } : {}),
+    // 28/11/2026 — Il tipo descritto entra già alla misura del database (60 caratteri), tagliato fra due parole.
+    ...(dettaglio ? { dettaglio } : {}),
     ...(scheda.citta ? { citta: scheda.citta.trim().slice(0, 60) } : {}),
     ...(scheda.indirizzo ? { indirizzo: scheda.indirizzo.trim().slice(0, 200) } : {}),
     ...(sito ? { sito: sito.slice(0, 300) } : {}),

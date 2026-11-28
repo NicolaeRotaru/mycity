@@ -34,8 +34,9 @@ export function supabaseFinto(db: DbFinto) {
     from(tabella: string) {
       const filtri: ((r: Riga) => boolean)[] = [];
       let colonne = '*';
-      let ordine: { k: string; asc: boolean } | null = null;
+      const ordini: { k: string; asc: boolean }[] = [];
       let limite: number | null = null;
+      let inizio = 0;
       let azione: { tipo: 'select' } | { tipo: 'update'; valori: Riga } | { tipo: 'upsert'; righe: Riga[]; ignora: boolean; su: string } = { tipo: 'select' };
       let restituisci = false;
 
@@ -60,8 +61,10 @@ export function supabaseFinto(db: DbFinto) {
           const m = mancante(colonne);
           if (m) return { data: null, error: { message: m } };
           let r = righe().filter((x) => filtri.every((f) => f(x)));
-          if (ordine) { const { k, asc } = ordine; r = [...r].sort((a, b) => (String(a[k] ?? '') < String(b[k] ?? '') ? -1 : 1) * (asc ? 1 : -1)); }
-          if (limite !== null) r = r.slice(0, limite);
+          // Più order() uno dopo l'altro, come PostgREST: il secondo decide solo a parità del primo.
+          const confronta = (a: Riga, b: Riga, k: string) => (typeof a[k] === 'number' && typeof b[k] === 'number' ? (a[k] as number) - (b[k] as number) : String(a[k] ?? '') < String(b[k] ?? '') ? -1 : String(a[k] ?? '') > String(b[k] ?? '') ? 1 : 0);
+          if (ordini.length) r = [...r].sort((a, b) => { for (const { k, asc } of ordini) { const d = confronta(a, b, k); if (d) return asc ? d : -d; } return 0; });
+          if (limite !== null) r = r.slice(inizio, limite);
           return { data: r.map(proietta), error: null };
         }
         if (azione.tipo === 'update') {
@@ -98,8 +101,11 @@ export function supabaseFinto(db: DbFinto) {
         insert(r: Riga | Riga[]) { azione = { tipo: 'upsert', righe: Array.isArray(r) ? r : [r], ignora: false, su: 'id' }; return q; },
         eq(k: string, v: unknown) { filtri.push((r) => r[k] === v); return q; },
         in(k: string, v: unknown[]) { filtri.push((r) => v.includes(r[k])); return q; },
+        // 28/11/2026 — Per la mappa dei clienti: «is null» (prendere solo un cliente libero) e le pagine (range).
+        is(k: string, v: unknown) { filtri.push((r) => (v === null ? r[k] === null || r[k] === undefined : r[k] === v)); return q; },
+        range(da: number, a: number) { limite = a + 1; inizio = da; return q; },
         not(k: string, op: string, v: unknown) { if (op === 'is' && v === null) filtri.push((r) => r[k] !== null && r[k] !== undefined); return q; },
-        order(k: string, o: { ascending?: boolean } = {}) { ordine = { k, asc: o.ascending !== false }; return q; },
+        order(k: string, o: { ascending?: boolean } = {}) { ordini.push({ k, asc: o.ascending !== false }); return q; },
         limit(n: number) { limite = n; return q; },
         async maybeSingle() {
           const e = esegui();
