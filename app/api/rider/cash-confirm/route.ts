@@ -280,7 +280,7 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   if (Math.abs(delta) > MISMATCH_TOLERANCE_CENTS) {
     await avvisaGliAmministratori(admin, {
       title: '⚠️ Incasso COD non quadra',
-      body: `Rider ${user.id.slice(0, 8)} · ordine ${body.orderId.slice(0, 8)}: incassati €${(body.cashCollectedCents / 100).toFixed(2)}, attesi €${(expectedCents / 100).toFixed(2)} (Δ €${(delta / 100).toFixed(2)}).`,
+      body: `Rider ${user.id.slice(0, 8)} · ordine ${body.orderId.slice(0, 8)}: incassati ${formatPriceFromCents(body.cashCollectedCents)}, attesi ${formatPriceFromCents(expectedCents)} (Δ ${formatPriceFromCents(delta)}).`,
       link: '/admin/orders',
     }, { riderId: user.id, orderId: body.orderId, delta });
   }

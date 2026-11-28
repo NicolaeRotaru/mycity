@@ -292,7 +292,7 @@ function SearchInner() {
       <div className="py-3">
         <div className="flex justify-between items-center mb-1.5">
           <span className="text-xs font-semibold text-ink-500 uppercase tracking-label">{t('price')}</span>
-          <span className="font-bold text-primary-700 text-xs">€{minPrezzoInCorso} – €{maxPrezzoInCorso}{maxPrezzoInCorso >= 500 ? '+' : ''}</span>
+          <span className="font-bold text-primary-700 text-xs">{minPrezzoInCorso} € – {maxPrezzoInCorso}{maxPrezzoInCorso >= 500 ? '+' : ''} €</span>
         </div>
         <input
           type="range"

@@ -324,7 +324,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     }
     if (!giaSullaCarta && importoRimborso > residuoCent) {
       return ApiErrors.invalidRequest(
-        `Il rimborso non può superare quello che resta dell ordine: al massimo ${(residuoCent / 100).toFixed(2)} €.`,
+        `Il rimborso non può superare quello che resta dell ordine: al massimo ${formatPriceFromCents(residuoCent)}.`,
       );
     }
     /**

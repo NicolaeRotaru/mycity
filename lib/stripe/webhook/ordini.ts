@@ -7,6 +7,7 @@
  */
 import type Stripe from 'stripe';
 import { getStripe, computeOrderSplit } from '@/lib/stripe/client';
+import { formatPriceFromCents } from '@/lib/format';
 import { marcaCarrelloRecuperato } from '@/lib/carrelli-abbandonati';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
@@ -188,7 +189,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     });
     await notifyAdmins(
       '⚠️ Incasso diverso dal preventivo',
-      `Sul carrello ${pendingCheckoutId} Stripe ha incassato €${(incassatoCents / 100).toFixed(2)} ma il preventivo era €${(attesoCents / 100).toFixed(2)}. Nessun ordine creato: va guardato a mano.`,
+      `Sul carrello ${pendingCheckoutId} Stripe ha incassato ${formatPriceFromCents(incassatoCents)} ma il preventivo era ${formatPriceFromCents(attesoCents)}. Nessun ordine creato: va guardato a mano.`,
       '/admin/orders',
     );
     // 22/8/2026 — UNO SCARTO DETERMINISTICO NON SI RITENTA: SI CHIUDE.

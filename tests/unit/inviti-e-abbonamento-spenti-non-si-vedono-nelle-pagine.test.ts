@@ -93,7 +93,7 @@ describe('inviti spenti al lancio', () => {
     await aspettaChe(() => /non sono ancora attivi/i.test(testoVisibile(s.radice)));
     const testo = testoVisibile(s.radice);
     expect(testo).toMatch(/inviti non sono ancora attivi/i);
-    expect(testo).not.toMatch(/ricevi €5/i);
+    expect(testo).not.toMatch(/ricevi (?:€\s?5|5\s?€)/i);
     expect(s.radice.innerHTML).not.toMatch(/sign-up\?ref=/);
   });
 });

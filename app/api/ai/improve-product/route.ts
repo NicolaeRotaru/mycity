@@ -10,6 +10,7 @@ import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { regolaConsegnaPerAi, sellerEconomics } from '@/lib/products/economics';
+import { formatPrice } from '@/lib/format';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 import { filtroSullaScheda } from '@/lib/ai/schedaSicura';
 import { PROPRIETA_EDITORIALI } from '@/lib/ai/patchSchema';
@@ -314,7 +315,7 @@ ${attrLines || '- (nessuno)'}
 Economia del prezzo (per ragionare sul netto venditore):
 - Commissione marketplace: ${feePct}% trattenuta da MyCity sull'incassato del venditore.
 - Consegna (R04-021): ${regolaConsegnaPerAi()}.
-${currentPrice ? `- Sul prezzo attuale di €${econ.price.toFixed(2)} il venditore incassa circa €${econ.netToSeller.toFixed(2)} (commissione €${econ.commission.toFixed(2)}).` : '- Prezzo attuale non impostato: proponilo tu in base al mercato.'}
+${currentPrice ? `- Sul prezzo attuale di ${formatPrice(econ.price)} il venditore incassa circa ${formatPrice(econ.netToSeller)} (commissione ${formatPrice(econ.commission)}).` : '- Prezzo attuale non impostato: proponilo tu in base al mercato.'}
 
 Migliora la scheda e chiama "improve_product".`;
 

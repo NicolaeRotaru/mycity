@@ -138,7 +138,7 @@ describe('il recesso tornato in negozio si rimborsa per intero', () => {
     stato.reso = reso('RECEIVED', 'CHANGED_MIND');
     const res = await avanza({ stato: 'REFUNDED', refundAmountCents: 1 });
     expect(res.status).toBe(409);
-    expect(JSON.stringify(await res.json())).toMatch(/30\.00/);
+    expect(JSON.stringify(await res.json())).toMatch(/30,00/);
     expect(rimborsato()).toBe(false);
     expect(rimborsi.chiesti).toEqual([]);
   });

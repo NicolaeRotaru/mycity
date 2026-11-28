@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { formatPrice } from '@/lib/format';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -306,7 +307,7 @@ function UrlImportPanel() {
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-ink-900">{imported.name || 'Prodotto importato'}</p>
               {imported.suggested_price != null && (
-                <p className="mt-0.5 font-serif text-lg font-bold text-ink-900">€{imported.suggested_price}</p>
+                <p className="mt-0.5 font-serif text-lg font-bold text-ink-900">{formatPrice(imported.suggested_price)}</p>
               )}
               {imported.description && (
                 <p className="mt-1 line-clamp-3 text-sm leading-snug text-ink-500">{imported.description}</p>

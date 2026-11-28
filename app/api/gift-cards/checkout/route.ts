@@ -75,9 +75,9 @@ export const POST = withAuthRateLimit(
                 currency: 'eur',
                 unit_amount: amountCents,
                 product_data: {
-                  name: `Gift Card MyCity €${body.amountEuro}`,
+                  name: `Gift Card MyCity ${body.amountEuro} €`,
                   // 5/11/2026 — Il nome del destinatario non va sulla ricevuta di Stripe.
-                  description: `Buono regalo MyCity €${body.amountEuro}`,
+                  description: `Buono regalo MyCity ${body.amountEuro} €`,
                 },
               },
             },

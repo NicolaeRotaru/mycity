@@ -1,4 +1,5 @@
 import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
+import { formatPriceFromCents } from '@/lib/format';
 import { fraseAttesaBonifico } from '@/lib/stripe/tempi-bonifico';
 import { ABBONAMENTO_NEGOZI_ACCESO, CARTA_ACCESA } from '@/lib/funzioni-al-lancio';
 
@@ -92,7 +93,7 @@ export const COMMISSIONE_DEL_PERCENTO = `${siPronunciaConVocale(COMMISSIONE_PERC
  * cambia anche quello che il negozio legge (prima i posti erano sei, e uno era l'addebito).
  */
 export const ABBONAMENTO_CENTESIMI_MESE = 5000;
-export const PREZZO_ABBONAMENTO_MESE = `€${ABBONAMENTO_CENTESIMI_MESE / 100}`;
+export const PREZZO_ABBONAMENTO_MESE = formatPriceFromCents(ABBONAMENTO_CENTESIMI_MESE);
 
 /**
  * Come si scrive l'IVA sulla commissione (fatto pricing.commissione: «IVA inclusa», la

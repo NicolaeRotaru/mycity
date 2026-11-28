@@ -4,6 +4,7 @@ import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api
 import { NextResponse } from 'next/server';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { REGOLA_PREZZO_AI } from '@/lib/ai/regole-copilot';
+import { formatPrice } from '@/lib/format';
 import type Anthropic from '@anthropic-ai/sdk';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { withSellerAuth } from '@/lib/api/middleware';
@@ -445,7 +446,7 @@ ${attrLines || '- (nessuno)'}`;
       const snap = snapshot(p, categories);
       blocks.push({
         type: 'text',
-        text: `Catalogo · id=${snap.id} · ${snap.name} · ${snap.price != null ? `€${snap.price}` : 's.p.'} · ${snap.status} · ${snap.categoryName ?? '—'}`,
+        text: `Catalogo · id=${snap.id} · ${snap.name} · ${snap.price != null ? formatPrice(snap.price) : 's.p.'} · ${snap.status} · ${snap.categoryName ?? '—'}`,
       });
       // Anche le foto che arrivano dal catalogo passano dal filtro: sono
       // scritte dal venditore, e un indirizzo si puo' incollare da qualunque
@@ -456,7 +457,7 @@ ${attrLines || '- (nessuno)'}`;
     const list = products
       .map((p) => {
         const snap = snapshot(p, categories);
-        return `- id=${snap.id} · ${snap.name} · ${snap.price != null ? `€${snap.price}` : 's.p.'} · ${snap.status} · ${snap.categoryName ?? '—'}`;
+        return `- id=${snap.id} · ${snap.name} · ${snap.price != null ? formatPrice(snap.price) : 's.p.'} · ${snap.status} · ${snap.categoryName ?? '—'}`;
       })
       .join('\n');
     blocks.push({

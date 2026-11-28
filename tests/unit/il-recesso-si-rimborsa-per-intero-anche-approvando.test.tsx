@@ -131,7 +131,7 @@ describe('«Approva reso» con l\'importo: il recesso si rimborsa per intero', (
     stato.reso = reso('CHANGED_MIND');
     const res = await decide({ decision: 'APPROVED', refundAmountCents: 1 });
     expect(res.status).toBe(409);
-    expect(JSON.stringify(await res.json())).toMatch(/30\.00/);
+    expect(JSON.stringify(await res.json())).toMatch(/30,00/);
     expect(rimborsi.chiesti).toEqual([]);
     expect(stato.scritture).toEqual([]);
   });

@@ -1,4 +1,5 @@
 // lib/products/aiPatch.ts
+import { formatPrice } from '@/lib/format';
 import {
   getAttributesForCategory,
   findLabelForKey,
@@ -598,7 +599,7 @@ export function prezzoAiFuoriBanda(
 /** Il motivo, scritto come lo legge il negoziante. */
 export function motivoPrezzoRifiutato(proposto: number, attuale: number | string | null | undefined): string {
   const partenza = Number(attuale ?? 0);
-  return `prezzo NON applicato (${partenza.toFixed(2)} → ${proposto.toFixed(2)} €: oltre il ${Math.round(
+  return `prezzo NON applicato (${formatPrice(partenza)} → ${formatPrice(proposto)}: oltre il ${Math.round(
     BANDA_PREZZO_AI * 100,
   )}%, va deciso a mano)`;
 }

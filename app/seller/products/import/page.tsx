@@ -144,7 +144,7 @@ function CaricamentoDaFile() {
       if (!row.name || row.name.length < 2) row.errors.push('Nome troppo corto');
       if (row.name.length > 200) row.errors.push('Nome troppo lungo (max 200)');
       if (!Number.isFinite(row.price) || row.price <= 0) row.errors.push('Prezzo non valido');
-      if (row.price > 10000) row.errors.push('Prezzo eccessivo (max €10.000)');
+      if (row.price > 10000) row.errors.push('Prezzo eccessivo (max 10.000 €)');
       if (quantita === null) {
         row.errors.push(`Quantità non valida («${get('stock')}»): scrivi un numero intero senza punti né virgole, per esempio 12`);
       }

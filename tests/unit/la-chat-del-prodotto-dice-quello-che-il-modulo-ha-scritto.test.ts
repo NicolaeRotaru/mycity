@@ -117,7 +117,7 @@ describe('la frase della chat dopo un suggerimento', () => {
     const msg = messaggioDellaChatDopoIlPatch('Ho tolto gli allergeni e messo il prezzo a 0,35 €.', esito);
     expect(msg.testo).not.toContain('Ho tolto');
     expect(msg.nonScritto).toEqual([
-      'prezzo NON applicato (3.50 → 0.35 €: oltre il 30%, va deciso a mano)',
+      'prezzo NON applicato (3,50\u00a0€ → 0,35\u00a0€: oltre il 30%, va deciso a mano)',
       'Allergeni NON tolto: lo decidi tu nella scheda del prodotto',
     ]);
   });
