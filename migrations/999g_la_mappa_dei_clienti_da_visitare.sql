@@ -7,6 +7,7 @@
 -- posizione. Gli agenti le vedono in /agente/clienti: un puntino per attività sulla mappa, e la lista ordinabile.
 -- Un agente tocca «Ci vado io» e il cliente diventa suo (gli altri lo vedono preso); lo può lasciare; dopo la
 -- visita segna lo stato con una parola: visitata, si, no, iscritta. Nessuno assegna niente a mano.
+-- «esclusa» (Nicola, 28/11 alle 02:45): riga tolta, non visitata. Non si mostra agli agenti e non conta come visitata.
 --
 -- UNA SOLA FONTE DI VERITÀ PER LO STATO: questa tabella. Il flusso 16 la rilegge il lunedì (GET della stessa porta)
 -- per sapere chi è già proposto, preso o visitato, e per il conto del messaggio. La tabella n8n «Attività da
@@ -55,7 +56,7 @@ CREATE TABLE IF NOT EXISTS public.clienti_da_visitare (
   creato_il     timestamptz NOT NULL DEFAULT now(),
   prenotata_da  uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   prenotata_il  timestamptz,
-  stato         text NOT NULL DEFAULT 'da_visitare' CHECK (stato IN ('da_visitare', 'visitata', 'si', 'no', 'iscritta')),
+  stato         text NOT NULL DEFAULT 'da_visitare' CHECK (stato IN ('da_visitare', 'visitata', 'si', 'no', 'iscritta', 'esclusa')),
   stato_da      uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   stato_il      timestamptz
 );

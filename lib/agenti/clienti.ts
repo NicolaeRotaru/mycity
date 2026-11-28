@@ -18,9 +18,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * Mai messaggi automatici alle attività: il primo contatto lo fa una persona (art. 130 Codice privacy).
  */
 
-export const STATI = ['da_visitare', 'visitata', 'si', 'no', 'iscritta'] as const;
+// «esclusa» (Nicola, 28/11 alle 02:45): riga tolta, non visitata. Non è da contattare: non si mostra agli agenti e
+// non conta come visitata. Arriva dalla tabella n8n o la mette l'admin; un agente non la sceglie.
+export const STATI = ['da_visitare', 'visitata', 'si', 'no', 'iscritta', 'esclusa'] as const;
 export type Stato = (typeof STATI)[number];
-export const PAROLA_STATO: Record<Stato, string> = { da_visitare: 'da visitare', visitata: 'visitata', si: 'sì', no: 'no', iscritta: 'iscritta' };
+export const PAROLA_STATO: Record<Stato, string> = { da_visitare: 'da visitare', visitata: 'visitata', si: 'sì', no: 'no', iscritta: 'iscritta', esclusa: 'esclusa' };
 export const statoValido = (s: unknown): s is Stato => typeof s === 'string' && (STATI as readonly string[]).includes(s);
 
 export const OSM = /^(node|way|relation)\/[0-9]{1,15}$/;
@@ -191,7 +193,7 @@ const giornoVero = (s: unknown): s is string => typeof s === 'string' && GIORNO.
 /** Lo stato scritto a mano nella tabella n8n, letto come lo legge il flusso 16 (solo le parole giuste). */
 export function statoDallaTabella(v: unknown): Stato | null {
   const t = String(v ?? '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/_/g, ' ').replace(/[^a-z ]+/g, ' ').replace(/\s+/g, ' ').trim();
-  const parole: Record<string, Stato> = { visitata: 'visitata', visitato: 'visitata', visto: 'visitata', vista: 'visitata', si: 'si', yes: 'si', no: 'no', iscritta: 'iscritta', iscritto: 'iscritta' };
+  const parole: Record<string, Stato> = { visitata: 'visitata', visitato: 'visitata', visto: 'visitata', vista: 'visitata', si: 'si', yes: 'si', no: 'no', iscritta: 'iscritta', iscritto: 'iscritta', esclusa: 'esclusa', escluso: 'esclusa' };
   return parole[t] ?? null;
 }
 
@@ -268,7 +270,8 @@ export async function statiPerIlFlusso(db: SupabaseClient) {
     conti: {
       proposte: conta((s) => s.proposta),
       prese: conta((s) => s.presa),
-      visitate: conta((s) => s.stato !== 'da_visitare'),
+      visitate: conta((s) => s.stato !== 'da_visitare' && s.stato !== 'esclusa'),
+      escluse: conta((s) => s.stato === 'esclusa'),
       si: conta((s) => s.stato === 'si' || s.stato === 'iscritta'),
       iscritte: conta((s) => s.stato === 'iscritta'),
       no: conta((s) => s.stato === 'no'),

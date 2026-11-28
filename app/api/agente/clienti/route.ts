@@ -55,6 +55,8 @@ export const POST = conAgente({ name: 'agente-clienti-tocca', max: 600, windowMs
     else if (corpo.azione === 'lascia') esito = await lascia(db, osm, chi);
     else if (corpo.azione === 'stato') {
       if (!statoValido(corpo.stato)) return ApiErrors.invalidRequest('Lo stato è una di queste parole: visitata, si, no, iscritta.');
+      // «esclusa» toglie l'attività dalla mappa di tutti: la decide l'admin, non un agente.
+      if (corpo.stato === 'esclusa' && !chi.admin) return ApiErrors.forbidden('Togliere un’attività dalla mappa lo decide Nicola.');
       esito = await segnaStato(db, osm, corpo.stato, chi);
     } else return ApiErrors.invalidRequest('Azione non valida.');
     if (!esito.ok) return PERCHE[esito.perche]();

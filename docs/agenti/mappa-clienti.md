@@ -26,7 +26,9 @@ La tabella `clienti_da_visitare` (migrazione 999g) tiene la prenotazione e lo st
 
 `https://www.mycity-marketplace.com/api/agenzia/clienti-da-visitare`, intestazione `x-mycity-segreto: <N8N_CLIENTI_DA_VISITARE_SEGRETO>`. Senza segreto su Vercel la porta resta chiusa (503).
 
-**GET** → `{ ok, data: { stati: [{ osm, proposta, presa, stato }], conti: { proposte, prese, visitate, si, iscritte, no } } }`
+**GET** → `{ ok, data: { stati: [{ osm, proposta, presa, stato }], conti: { proposte, prese, visitate, si, iscritte, no, escluse } } }`
+
+Lo stato `esclusa` (Nicola, 28/11 alle 02:45) vuol dire riga tolta, non visitata. Non si mostra agli agenti, non conta fra le visitate, e il flusso la tratta come già proposta. Arriva dalla tabella n8n o la mette l'admin; un agente non la sceglie. Forni e panetterie li toglie il flusso 16 dalla fila: quelli già arrivati al sito si spengono al giro dopo e spariscono dalla mappa, se nessuno ci ha lavorato.
 
 **POST** `{ giro: "<ISO>", attivita: [ … ] }`. Ogni attività:
 
@@ -46,7 +48,7 @@ Le attività che in questo giro non ci sono si spengono (`in_fila = false`), non
 
 ## Cosa cambia nel flusso 16 (repo N8N, `flussi/16-attivita-da-visitare/`)
 
-Da fare nel repo N8N partendo dal ramo di NicolaeRotaru/N8N#41 (o da main dopo la sua unione), così QUANTE_A_SETTIMANA resta 30. Con le sue prove (`flussi/test/16-attivita-da-visitare.test.mjs`). Si ripubblica su n8n solo dopo l'unione e con l'«ok ripubblica» di Nicola.
+Da fare nel repo N8N partendo dal ramo della sessione «Dossier in tre giri da 10 e via i forni» (`claude/intelligent-albattani-h4rmpk`, o da main dopo la sua unione), così non si perdono i 30 dossier, i forni tolti e lo stato «esclusa». Con le sue prove (`flussi/test/16-attivita-da-visitare.test.mjs`). Si ripubblica su n8n solo dopo l'unione e con l'«ok ripubblica» di Nicola.
 
 1. **Config.** Si aggiunge `SITO_URL = https://www.mycity-marketplace.com`.
 2. **Credenziale.** Una «Header Auth» in n8n: nome `MyCity · clienti da visitare`, header `x-mycity-segreto`, valore uguale a `N8N_CLIENTI_DA_VISITARE_SEGRETO` su Vercel.

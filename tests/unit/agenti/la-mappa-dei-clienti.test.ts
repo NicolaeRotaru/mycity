@@ -156,6 +156,16 @@ describe('le prenotazioni: ognuno le sue', () => {
     await tocca({ osm: 'node/1', azione: 'prendi', prenotata_da: BRUNO, punteggio: 999 });
     expect(riga('node/1')).toMatchObject({ prenotata_da: ANNA, punteggio: 80 });
   });
+  it('«esclusa» la mette solo l admin, e non conta come visitata', async () => {
+    come(BRUNO, 'bruno@esempio.it');
+    expect((await tocca({ osm: 'node/2', azione: 'stato', stato: 'esclusa' })).status).toBe(403);
+    expect(riga('node/2').stato).toBe('da_visitare');
+    come(NICOLA, 'nicola@esempio.it', 'admin');
+    expect((await tocca({ osm: 'node/2', azione: 'stato', stato: 'esclusa' })).status).toBe(200);
+    const { statiPerIlFlusso } = await import('@/lib/agenti/clienti');
+    const { getAdminSupabase } = await import('@/lib/supabase/server');
+    expect((await statiPerIlFlusso(getAdminSupabase() as never)).conti).toMatchObject({ visitate: 0, escluse: 1 });
+  });
   it('un identificativo storto o un cliente che non c è: 400 o 404', async () => {
     come(ANNA, 'anna@esempio.it');
     expect((await tocca({ osm: "node/1' or 1=1", azione: 'prendi' })).status).toBe(400);
@@ -257,9 +267,10 @@ describe('pulire quello che manda n8n', () => {
       { osm: 'bottega/2', nome: 'B' },
       { osm: 'node/3', nome: '' },
       { osm: 'way/4', nome: 'D', lat: 200, mappa: 'https://malevolo.example/x', stato_tabella: 'Iscritta' },
+      { osm: 'way/8', nome: 'E', stato_tabella: 'Esclusa' },
     ]);
     expect(scartate).toBe(2);
-    expect(righe.map((r) => [r.osm, r.nome, r.stato_iniziale])).toEqual([['node/1', 'A bis', null], ['way/4', 'D', 'iscritta']]);
+    expect(righe.map((r) => [r.osm, r.nome, r.stato_iniziale])).toEqual([['node/1', 'A bis', null], ['way/4', 'D', 'iscritta'], ['way/8', 'E', 'esclusa']]);
     expect(righe[1]).toMatchObject({ lat: null, mappa: null });
   });
 });
@@ -284,6 +295,7 @@ describe('come si mostra', () => {
   it('chi esce dalla fila resta solo se qualcuno ci ha lavorato', () => {
     expect(daMostrare(c('x', 1, { inFila: false }))).toBe(false);
     expect(daMostrare(c('x', 1, { inFila: false, stato: 'no' }))).toBe(true);
+    expect(daMostrare(c('x', 1, { stato: 'esclusa' }))).toBe(false);
   });
   it('l icona della categoria: dal tipo, poi dal segmento; quello che non si riconosce va su «altri negozi»', () => {
     const k = (tipo: string | null, segmento: string | null = null) => categoriaDi({ tipo, segmento });

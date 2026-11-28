@@ -65,9 +65,9 @@ export function ordina(clienti: Cliente[], ordine: Ordine, io?: { lat: number; l
 
 /**
  * Chi si vede: tutte quelle in fila; quelle uscite dalla fila (chiuse, ora su MyCity) solo se qualcuno ci ha già
- * lavorato (prese, visitate o proposte), così la storia non sparisce.
+ * lavorato (prese, visitate o proposte), così la storia non sparisce. Le «escluse» non si mostrano mai.
  */
-export const daMostrare = (c: Cliente) => c.inFila || c.presa !== 'libera' || c.stato !== 'da_visitare' || Boolean(c.settimana);
+export const daMostrare = (c: Cliente) => c.stato !== 'esclusa' && (c.inFila || c.presa !== 'libera' || c.stato !== 'da_visitare' || Boolean(c.settimana));
 
 export const metri = (m: number | null) => (m === null ? '' : m < 1000 ? `${m} m` : `${(m / 1000).toLocaleString('it-IT', { maximumFractionDigits: 1 })} km`);
 
