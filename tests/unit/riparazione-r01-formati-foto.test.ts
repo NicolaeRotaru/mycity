@@ -13,14 +13,16 @@ describe('il formato rifiutato elenca i formati che la porta accetta davvero', (
   it('ogni formato ammesso compare nella frase', () => {
     const msg = friendlyError(new Error('mime type image/svg+xml is not supported'));
     expect(msg).toMatch(/^Formato non accettato: usa una foto /);
-    for (const tipo of TIPI_IMMAGINE) {
+    // 28/11/2026 (R01-004, onda 2) — tolti HEIC e HEIF, che le caselle delle foto pubbliche non offrono.
+    for (const tipo of TIPI_IMMAGINE.filter((t) => !/hei[cf]$/.test(t))) {
       const nome = tipo.replace('image/', '').replace('jpeg', 'jpg').toUpperCase();
       expect(msg, `manca ${nome}`).toContain(nome);
     }
+    expect(msg).not.toMatch(/HEIC|HEIF/);
   });
 
   it('anche quando il deposito dice «invalid mime type»', () => {
     const msg = friendlyError({ message: 'invalid mime type image/tiff' });
-    expect(msg).toBe('Formato non accettato: usa una foto JPG, PNG, WEBP, GIF, AVIF, HEIC o HEIF.');
+    expect(msg).toBe('Formato non accettato: usa una foto JPG, PNG, WEBP, GIF o AVIF.');
   });
 });

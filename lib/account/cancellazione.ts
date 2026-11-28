@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { getAdminSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
+import { getKycProvider } from '@/lib/kyc/providers';
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
@@ -240,6 +241,17 @@ export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
     azzera: { recipient_name: null, recipient_email: null, message: null },
     sopravvive: true,
     perche: 'nome, email e messaggio di chi ha riscattato il regalo e poi ha chiesto di sparire',
+  },
+  {
+    // 28/11/2026 (R08-012) — Il buono regalo non ancora pagato: la cassa scrive qui nome, email e
+    // messaggio del destinatario invece di mandarli a Stripe (migrazione onda2_A_1). La chiave è
+    // gift_card_in_attesa.buyer_id -> auth.users ON DELETE CASCADE: la riga se ne va con chi compra.
+    // Si ripulisce lo stesso prima, come le altre.
+    tabella: 'gift_card_in_attesa',
+    colonna: 'buyer_id',
+    azzera: { recipient_name: null, recipient_email: null, message: null },
+    sopravvive: false,
+    perche: 'nome, email e messaggio del destinatario di un buono regalo non ancora pagato',
   },
   {
     /*
@@ -646,13 +658,59 @@ export async function togliDallaNewsletter(admin: Admin, userId: string): Promis
  * prima, e se poi la cancellazione dell'account non riesce almeno questi non
  * sono più lì.
  */
-export async function anonimizzaDatiSensibili(admin: Admin, userId: string): Promise<{ ok: boolean; errore?: string }> {
-  const { error } = await admin.from('profiles').update(CAMPI_KYC_DA_AZZERARE).eq('id', userId);
+export async function anonimizzaDatiSensibili(
+  admin: Admin,
+  userId: string,
+  opzioni: { tieniIdDelControllo?: boolean } = {},
+): Promise<{ ok: boolean; errore?: string }> {
+  // R01-015 — Se la scheda presso il fornitore non si è tolta, l'id del controllo resta: è l'unico
+  // filo per ritrovarla la notte dopo (vedi `togliLaSchedaDalFornitoreKyc`).
+  const campi: Record<string, unknown> = { ...CAMPI_KYC_DA_AZZERARE };
+  if (opzioni.tieniIdDelControllo) delete campi.kyc_provider_check_id;
+  const { error } = await admin.from('profiles').update(campi).eq('id', userId);
   if (error) {
     logger.warn('[cancellazione] dati di verifica identità non tutti azzerati', { userId, err: error.message });
     return { ok: false, errore: error.message };
   }
   return { ok: true };
+}
+
+/**
+ * 28/11/2026 (R01-015, onda 2) — LA SCHEDA DELLA VERIFICA D'IDENTITÀ PRESSO IL FORNITORE.
+ *
+ * Con Onfido acceso, la verifica apre da loro una scheda con nome, email, data di nascita, foto del
+ * documento e selfie. Alla cancellazione dell'account si azzerava l'id del controllo sul profilo e la
+ * scheda restava là, senza più il filo per ritrovarla. Adesso si toglie PRIMA, dall'id del controllo
+ * (`kyc_provider_check_id`), come il cliente su Stripe: se non si riesce, l'id resta sul profilo, la
+ * cancellazione si ferma al ②bis (riga che sopravvive) e la notte dopo si riprova.
+ * I fornitori senza dati fuori da noi (prova, revisione a mano) non hanno `cancellaScheda`: niente da fare.
+ */
+export async function togliLaSchedaDalFornitoreKyc(admin: Admin, userId: string): Promise<PuliziaNonRiuscita | null> {
+  const provider = getKycProvider();
+  if (typeof provider.cancellaScheda !== 'function') return null;
+  const nonRiuscita = (errore: string): PuliziaNonRiuscita => ({
+    tabella: 'scheda della verifica d\'identità presso il fornitore',
+    colonna: 'kyc_provider_check_id',
+    sopravvive: true,
+    errore,
+  });
+  try {
+    const { data, error } = await admin.from('profiles').select('kyc_provider_check_id').eq('id', userId);
+    if (error) {
+      logger.error('[cancellazione] id del controllo KYC non letto', { userId, err: error.message });
+      return nonRiuscita(`id del controllo non letto (${error.message})`);
+    }
+    const checkId = (data?.[0] as { kyc_provider_check_id?: string | null } | undefined)?.kyc_provider_check_id ?? null;
+    if (!checkId) return null;
+    const esito = await provider.cancellaScheda(checkId);
+    if (esito === 'fallita') {
+      logger.error('[cancellazione] scheda KYC presso il fornitore non tolta: si riprova', { userId, checkId });
+      return nonRiuscita('scheda non tolta dal fornitore');
+    }
+    return null;
+  } catch (e) {
+    return nonRiuscita(e instanceof Error ? e.message : 'errore');
+  }
 }
 
 /**
@@ -1049,10 +1107,13 @@ export async function cancellaAccount(
   // ② I documenti d'identità e l'IBAN non aspettano: non si vedono a video,
   // toglierli non lascia nessuno con un account a metà.
   if ((fermo = fuoriTempo())) return fermo;
-  await anonimizzaDatiSensibili(admin, userId);
+  const schedaKyc = await togliLaSchedaDalFornitoreKyc(admin, userId);
+  await anonimizzaDatiSensibili(admin, userId, { tieniIdDelControllo: !!schedaKyc });
 
   if ((fermo = fuoriTempo())) return fermo;
   const puliziaFallita = await anonimizzaTestoLibero(admin, userId);
+  // R01-015 — La scheda rimasta dal fornitore ferma la cancellazione al ②bis, come le righe che sopravvivono.
+  if (schedaKyc) puliziaFallita.push(schedaKyc);
   if ((fermo = fuoriTempo())) return fermo;
   // R24-015 — Una newsletter non ripulita ferma la cancellazione al ②bis, come le righe che sopravvivono.
   const newsletter = await togliDallaNewsletter(admin, userId);

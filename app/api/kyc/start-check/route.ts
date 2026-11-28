@@ -165,6 +165,9 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
       idBackUrl,
       selfieUrl,
     },
+    // R01-015 — Il controllo di prima (anche rifiutato): il fornitore riprende la sua scheda invece
+    // di aprirne un'altra con gli stessi dati personali.
+    giaInAttesa.kyc_provider_check_id ?? null,
   );
 
   if (!result.ok) {

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { fintoDatabase, type FintoDatabase } from './aiuti/finto-database-dei-pagamenti';
 
 /**
  * S01 — buoni regalo verso Stripe (schede 1844, 108).
@@ -7,7 +8,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *  · l'email del destinatario non entra in chiaro nella chiave, e il suo nome
  *    non va nella descrizione che finisce sulla ricevuta.
  */
-const stato = vi.hoisted(() => ({ create: undefined as unknown as ReturnType<typeof vi.fn> }));
+const stato = vi.hoisted(() => ({
+  create: undefined as unknown as ReturnType<typeof vi.fn>,
+  db: null as unknown as FintoDatabase,
+}));
 
 vi.mock('@/lib/funzioni-al-lancio', async (o) => ({ ...((await o()) as object), BUONI_REGALO_IN_VENDITA: true }));
 const UTENTE = { id: '11111111-2222-4333-8444-555555555555', email: 'a@b.it', email_confirmed_at: '2026-10-01T10:00:00Z' };
@@ -20,6 +24,8 @@ vi.mock('@/lib/stripe/client', () => {
   return { isStripeConfigured: () => true, getStripe: () => ({ checkout: { sessions: { create: stato.create } } }) };
 });
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+// R08-012 (onda 2): il tentativo si scrive da noi prima di Stripe (gift_card_in_attesa).
+vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => stato.db.client }));
 
 import { POST } from '@/app/api/gift-cards/checkout/route';
 
@@ -31,7 +37,11 @@ function richiesta(corpo: unknown, chiave?: string) {
 
 const EMAIL_LUNGA = `${'x'.repeat(188)}@esempio.it`; // 199 caratteri, sotto il tetto di 200 dello schema
 
-beforeEach(() => stato.create.mockClear());
+beforeEach(() => {
+  stato.create.mockClear();
+  stato.db = fintoDatabase({ gift_card_in_attesa: [] });
+  stato.db.unici = { gift_card_in_attesa: [['buyer_id', 'chiave']] };
+});
 
 describe('buono regalo: la chiave di riserva di Stripe', () => {
   it('con email lunga e senza intestazione resta entro 255 caratteri e non contiene l\'email', async () => {
