@@ -398,6 +398,16 @@ export async function leggiProdottiDellaGriglia(
     // R21-003 — Il ripiego: la colonna non c'è (migrazione 911 non applicata) o il database ha superato
     // il tempo (57014) → la lettura di prima.
     if (!pagato || !prezzoPagatoNonVa(errore)) throw errore;
+    // 28/11/2026 (R12-006, onda 2) — Una pagina dopo la prima, letta sul prezzo pagato COME LA PRIMA,
+    // non ripiega sul prezzo pieno: la pagina 1 e la 2 sarebbero in due ordini diversi (doppioni e
+    // prodotti mai mostrati). Si rilancia l'errore e «Carica altri» propone di riprovare; la stessa
+    // regola vale anche col segno dei cinque minuti acceso da un'altra lettura: lo scorrimento resta
+    // nell'ordine della sua prima pagina, e un nuovo scorrimento decide di nuovo. Se la colonna manca
+    // davvero lo si segna, così la prima pagina dopo lo sa.
+    if (comeLaPrima === true) {
+      if (mancaPrezzoPagato(errore)) segnaSenzaPrezzoPagato(supabase);
+      throw errore;
+    }
     // 27/11/2026 — Un 57014 può venire dal carico del database e non da `prezzo_pagato`: allora
     // anche la lettura sul prezzo pieno cade, e il prezzo pagato non si spegne per cinque minuti.
     // Si spegne solo se la lettura sul prezzo pieno riesce (o se la colonna manca davvero).
