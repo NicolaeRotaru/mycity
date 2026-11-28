@@ -151,7 +151,10 @@ describe('la regola: dove porta una notifica, secondo chi la apre', () => {
     expect(indirizzoDellaNotifica('/seller/ordini-sdg?id=7#sopra', admin)).toBe('/admin/ordini-sdg?id=7#sopra');
     expect(indirizzoDellaNotifica('/seller/orders/abc-123', admin)).toBe('/admin/orders/abc-123');
     expect(indirizzoDellaNotifica('/seller/orders', admin)).toBe('/admin/orders');
-    expect(indirizzoDellaNotifica('/seller/products/9/edit', admin)).toBe('/admin/products');
+    expect(indirizzoDellaNotifica('/seller/products/9/edit', admin)).toBe('/admin/products/9');
+    expect(indirizzoDellaNotifica('/seller/products/3f2a-77/edit', admin)).toBe('/admin/products/3f2a-77');
+    expect(indirizzoDellaNotifica('/seller/products/new', admin)).toBe('/admin/products');
+    expect(indirizzoDellaNotifica('/seller/products/ai-batch', admin)).toBe('/admin/products');
   });
 
   it("per l'admin una pagina del negozio senza gemella porta al cruscotto dell'admin, mai nel negozio", () => {

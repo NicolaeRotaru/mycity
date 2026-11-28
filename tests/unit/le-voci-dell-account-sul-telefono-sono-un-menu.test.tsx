@@ -21,13 +21,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 const mondo = vi.hoisted(() => ({
   percorso: '/profile',
   vai: [] as string[],
+  spinte: [] as string[],
   notifiche: 3,
   messaggi: 2,
 }));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mondo.percorso,
-  useRouter: () => ({ push: (h: string) => { mondo.vai.push(h); }, replace: () => undefined, refresh: () => undefined }),
+  // `replace` è la navigazione del menu; `push` lascerebbe sotto la voce di cronologia del pannello (collaudo del 28/11).
+  useRouter: () => ({ push: (h: string) => { mondo.spinte.push(h); }, replace: (h: string) => { mondo.vai.push(h); }, refresh: () => undefined }),
 }));
 vi.mock('next/link', async () => {
   const { createElement: ce } = await import('react');
@@ -44,15 +46,19 @@ vi.mock('@/components/hooks/useProfile', () => ({
 }));
 vi.mock('@/components/hooks/useNotificationsCount', () => ({ useNotificationsCount: () => mondo.notifiche }));
 vi.mock('@/components/hooks/useMessagesUnread', () => ({ useMessagesUnread: () => mondo.messaggi }));
+// Il pannello «Tu» (MobileAccountSheet): il cambio d'account ha i suoi giri, qui non serve.
+vi.mock('@/components/account/CambiaAccount', () => ({ default: () => null }));
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
 const { default: AccountShell } = await import('@/components/account/AccountShell');
 const { default: DemoShell } = await import('@/components/preventivo/DemoShell');
+const { default: MobileAccountSheet } = await import('@/components/MobileAccountSheet');
 
 let smonta: (() => void) | null = null;
 beforeEach(() => {
   mondo.percorso = '/profile';
   mondo.vai = [];
+  mondo.spinte = [];
   mondo.notifiche = 3;
   mondo.messaggi = 2;
 });
@@ -127,7 +133,9 @@ describe("l'area account sul telefono", () => {
     const div = await monta(createElement(AccountShell, null, createElement('p', null, 'contenuto')));
     await clic(pulsanteMenu(div));
     await clic(div.querySelector('[role="dialog"] a[href="/orders"]')!);
+    // Al posto della voce del pannello, non sopra: un solo Indietro torna alla pagina di prima.
     expect(mondo.vai).toEqual(['/orders']);
+    expect(mondo.spinte, 'con push resta sotto la voce del pannello: un Indietro a vuoto').toEqual([]);
     expect(div.querySelector('[role="dialog"]')).toBeNull();
 
     await clic(pulsanteMenu(div));
@@ -154,5 +162,19 @@ describe('il pannello demo del preventivo sul telefono', () => {
     expect(link.some((t) => t.includes('Ordini'))).toBe(false);
     expect(link.some((t) => t.includes('Abbonamento'))).toBe(true);
     expect(testo).toContain('si accende quando attivi l’abbonamento');
+  });
+});
+
+describe('il pannello «Tu» del telefono', () => {
+  it('una voce porta alla sua pagina al posto della voce del pannello, senza lasciare un Indietro a vuoto', async () => {
+    // 28/11/2026 — Stesso difetto trovato dal collaudo nel menu dell'account: con push il primo Indietro non faceva niente.
+    let chiuso = false;
+    const div = await monta(createElement(MobileAccountSheet, {
+      open: true, onClose: () => { chiuso = true; }, role: 'buyer', displayName: 'Mario', onSignOut: () => undefined,
+    }));
+    await clic(div.querySelector('[role="dialog"] a[href="/orders"]')!);
+    expect(mondo.vai).toEqual(['/orders']);
+    expect(mondo.spinte).toEqual([]);
+    expect(chiuso).toBe(true);
   });
 });

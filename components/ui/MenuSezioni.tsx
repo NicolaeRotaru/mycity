@@ -25,8 +25,9 @@ import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
  * ritorno al pulsante) e `useCloseOnBack` (il tasto Indietro del telefono chiude solo il pannello),
  * con la stessa navigazione di MobileAccountSheet, che è già collaudata.
  *
- * Armonia (skill di ad-mycity): spazi di Fibonacci (f1-f3), passaggi di 222 ms (2 × 111) sulla curva
- * aurea. Niente trama: è un menu, si legge e basta.
+ * Armonia (skill di ad-mycity): spazi di Fibonacci (f1-f3); i passaggi di colore e d'ombra del riquadro e
+ * delle voci durano 222 ms (2 × 111) sulla curva aurea. L'apertura del pannello usa invece `animate-slide-up`
+ * della casa (260 ms), la stessa degli altri pannelli dal basso. Niente trama: è un menu, si legge e basta.
  */
 
 export type VoceDelMenu = {
@@ -88,15 +89,19 @@ export default function MenuSezioni({
   const IconaAttuale = attuale?.icon ?? LayoutGrid;
   const daLeggere = voci.reduce((somma, v) => somma + (v.conto && v.conto > 0 ? v.conto : 0), 0);
 
-  // Come in MobileAccountSheet: chi naviga lo dice prima, così la chiusura non torna indietro nella
-  // cronologia (annullerebbe il link appena premuto). Ctrl/cmd-clic apre in un'altra scheda, come sempre.
+  // Chi naviga lo dice prima, così la chiusura non torna indietro nella cronologia (annullerebbe il link
+  // appena premuto). Ctrl/cmd-clic apre in un'altra scheda, come sempre.
+  // 28/11/2026 (collaudo) — Con `router.push` la voce che `useCloseOnBack` aggiunge all'apertura restava
+  // sotto la pagina nuova: da /about, tre voci scelte dal menu, e per tornare a /about servivano 7 Indietro
+  // invece di 4 (un Indietro su due non faceva niente). `replace` mette la pagina nuova al posto di quella
+  // voce: la cronologia resta quella che si avrebbe senza menu.
   const vai = (e: React.MouseEvent, href: string, eQui: boolean) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
     e.preventDefault();
     if (eQui) { chiudi(); return; }
     navigazioneRef.current = true;
     chiudi();
-    router.push(href);
+    router.replace(href);
   };
 
   return (
@@ -117,7 +122,7 @@ export default function MenuSezioni({
           <IconaAttuale size={20} strokeWidth={2.2} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-2xs font-bold uppercase tracking-label text-ink-400">{sopratitolo}</span>
+          <span className="block truncate text-2xs font-bold uppercase tracking-label text-ink-400">{sopratitolo}</span>
           <span className="block truncate font-serif text-[17px] font-bold leading-tight text-ink-900">
             {attuale?.label ?? 'Scegli una sezione'}
           </span>

@@ -39,7 +39,10 @@ export default function MobileAccountSheet({ open, onClose, role, displayName, s
     e.preventDefault();
     navigatingRef.current = true;
     onClose();
-    router.push(href);
+    // 28/11/2026 (collaudo del menu dell'account) — Con `push` la voce che `useCloseOnBack` aggiunge
+    // all'apertura restava sotto la pagina nuova, e il primo Indietro non faceva niente. `replace` la
+    // sostituisce con la pagina scelta. Stesso difetto e stessa correzione di components/ui/MenuSezioni.tsx.
+    router.replace(href);
   };
 
   // #152 — Esc e blocco dello scorrimento c'erano gia'; mancavano la trappola

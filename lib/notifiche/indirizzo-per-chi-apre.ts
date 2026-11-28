@@ -23,6 +23,8 @@ const GEMELLE_NELL_ADMIN: ReadonlyArray<{ negozio: RegExp; admin: (pezzi: RegExp
   // Il dettaglio di un ordine: l'admin lo apre con lo stesso identificativo.
   { negozio: /^\/seller\/orders\/([^/]+)\/?$/, admin: (p) => `/admin/orders/${p[1]}`, tieniCoda: false },
   { negozio: /^\/seller\/orders\/?$/, admin: () => '/admin/orders', tieniCoda: false },
+  // Un prodotto preciso (l'identificativo ha almeno una cifra: «new» e «ai-batch» no) apre la sua scheda nell'admin.
+  { negozio: /^\/seller\/products\/([^/]*\d[^/]*)(\/edit)?\/?$/, admin: (p) => `/admin/products/${p[1]}`, tieniCoda: false },
   { negozio: /^\/seller\/products(\/.*)?$/, admin: () => '/admin/products', tieniCoda: false },
   { negozio: /^\/seller\/preventivo(\/.*)?$/, admin: () => '/admin/preventivi', tieniCoda: false },
 ];
