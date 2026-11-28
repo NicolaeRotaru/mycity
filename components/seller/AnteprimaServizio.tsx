@@ -12,6 +12,10 @@ import {
   schedaGoogle,
   type FormatoMedia,
 } from '@/lib/agenzia/contenuti-servizi';
+import { firmaDi, ritardiDiAccensione, tokenCss } from '@/lib/armonia';
+import TramaNascosta from '@/components/armonia/TramaNascosta';
+import LunaDiOggi from '@/components/armonia/LunaDiOggi';
+import SigilloNascosto from '@/components/armonia/SigilloNascosto';
 
 /**
  * COSA RICEVI — l'anteprima di un servizio, dentro la pagina del servizio (Nicola, 23/11/2026).
@@ -25,10 +29,14 @@ import {
  * `scheda`: la scheda del locale mandata da n8n (24/11/2026). Senza, la bozza e il piano restano generici.
  * `bozzaAd`: la bozza del sito scritta dall'AD (24/11/2026). Se c'è, i testi del sito sono i suoi.
  */
-type Props = { id: ServizioAgenzia; nome: string; tipo: TipoAttivita; giorno: string; scheda?: SchedaCliente | null; bozzaAd?: BozzaSitoAd | null };
+/**
+ * `nascita`: il giorno in cui l'attività si è iscritta a MyCity (28/11/2026). Fa nascere la firma dell'armonia
+ * nascosta della bozza del sito; non è `giorno`, che è «oggi» e cambierebbe la bozza da un giorno all'altro.
+ */
+type Props = { id: ServizioAgenzia; nome: string; tipo: TipoAttivita; giorno: string; nascita?: string | null; scheda?: SchedaCliente | null; bozzaAd?: BozzaSitoAd | null };
 
-export default function AnteprimaServizio({ id, nome, tipo, giorno, scheda, bozzaAd }: Props) {
-  if (id === 'sito_web') return <BozzaDelSito nome={nome} tipo={tipo} scheda={scheda} bozzaAd={bozzaAd} />;
+export default function AnteprimaServizio({ id, nome, tipo, giorno, nascita, scheda, bozzaAd }: Props) {
+  if (id === 'sito_web') return <BozzaDelSito nome={nome} tipo={tipo} nascita={nascita ?? null} scheda={scheda} bozzaAd={bozzaAd} />;
   if (id === 'analisi') return <CosaContieneLAnalisi />;
   if (id === 'social') {
     return (
@@ -57,12 +65,16 @@ function DaConfermare({ testo = 'da confermare' }: { testo?: string }) {
   return <span className="ml-1 rounded bg-amber-100 px-1 py-px text-2xs font-semibold text-amber-800">{testo}</span>;
 }
 
-function BozzaDelSito({ nome, tipo, scheda, bozzaAd }: { nome: string; tipo: TipoAttivita; scheda?: SchedaCliente | null; bozzaAd?: BozzaSitoAd | null }) {
+function BozzaDelSito({ nome, tipo, nascita, scheda, bozzaAd }: { nome: string; tipo: TipoAttivita; nascita: string | null; scheda?: SchedaCliente | null; bozzaAd?: BozzaSitoAd | null }) {
   const fattaCoiDati = bozzaSito(nome, tipo, scheda);
   // La bozza dell'AD prende il posto dei testi; indirizzo, nome e pulsante restano quelli calcolati.
   const b = bozzaAd
     ? { ...fattaCoiDati, sottotitolo: bozzaAd.sottotitolo ?? fattaCoiDati.sottotitolo, sezioni: sezioniDellaBozza(bozzaAd) }
     : fattaCoiDati;
+  // ARMONIA NASCOSTA (Nicola, 28/11/2026): ogni sito nasce dalla firma della sua attività. La data è il
+  // giorno d'iscrizione a MyCity, che non cambia mai; senza, Mercurio. Vedi lib/armonia e la skill «armonia».
+  const firma = firmaDi({ nome: b.nome, data: nascita });
+  const ritardi = ritardiDiAccensione(firma.pianeta, b.sezioni.length);
   return (
     <Riquadro
       icona={Globe}
@@ -71,7 +83,7 @@ function BozzaDelSito({ nome, tipo, scheda, bozzaAd }: { nome: string; tipo: Tip
         ? 'I testi li abbiamo scritti per te con quello che sappiamo del tuo locale. Ogni testo è da confermare: li correggi tu, prima che il sito vada online.'
         : 'Una prima bozza fatta con i tuoi dati: testi e foto li completiamo insieme.'}
     >
-      <div className="overflow-hidden rounded-lg border border-cream-300 bg-white shadow-warm-sm">
+      <div className="overflow-hidden rounded-lg border border-cream-300 bg-white shadow-warm-sm" style={tokenCss(firma)} data-armonia-numero={firma.numero}>
         {/* La barra del browser: l'indirizzo è un suggerimento, da verificare se è libero. */}
         <div className="flex items-center gap-2 border-b border-cream-200 bg-cream-100 px-3 py-1.5">
           <span className="flex gap-1" aria-hidden>
@@ -81,18 +93,29 @@ function BozzaDelSito({ nome, tipo, scheda, bozzaAd }: { nome: string; tipo: Tip
           </span>
           <span className="flex-1 truncate rounded bg-white px-2 py-0.5 font-mono text-[11px] text-ink-600">{b.indirizzo}</span>
         </div>
-        <div className="bg-ink-900 px-4 py-6 text-center text-white">
-          <p className="font-serif text-xl font-bold">{b.nome}</p>
-          <p className="mt-1 text-xs text-cream-100">{b.sottotitolo}</p>
-          <span className="mt-3 inline-block rounded-full bg-primary-700 px-3 py-1 text-xs font-bold">{b.invito}</span>
+        <div className="relative overflow-hidden bg-ink-900 px-4 py-6 text-center text-white">
+          <TramaNascosta firma={firma} className="text-cream-100" />
+          <div className="relative">
+            <p className="font-serif text-xl font-bold">{b.nome}</p>
+            <p className="mt-1 text-xs text-cream-100">{b.sottotitolo}</p>
+            <span className="mt-3 inline-block bg-primary-700 px-3 py-1 text-xs font-bold" style={{ borderRadius: firma.raggio }}>{b.invito}</span>
+          </div>
         </div>
-        <div className="grid gap-px bg-cream-200 sm:grid-cols-2">
-          {b.sezioni.map((s) => (
-            <div key={s.titolo} className="bg-white p-3">
+        {/* Le sezioni in sezione aurea (1,618 a 1) e accese nell'ordine del quadrato magico del pianeta. */}
+        <div className="grid gap-px bg-cream-200 sm:grid-cols-[1.618fr_1fr]">
+          {b.sezioni.map((s, i) => (
+            <div key={s.titolo} className="armonia-entra bg-white p-3" style={{ animationDelay: `${ritardi[i] ?? 0}ms` }}>
               <p className="text-xs font-bold text-ink-900">{s.titolo}{s.daConfermare && <DaConfermare testo={bozzaAd ? 'da confermare dal titolare' : undefined} />}</p>
               <p className="mt-0.5 text-xs text-ink-600">{s.testo}</p>
             </div>
           ))}
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t border-cream-200 bg-cream-50 px-3 py-1.5 text-2xs text-ink-500">
+          <span className="truncate">{b.nome}</span>
+          <span className="flex shrink-0 items-center gap-1.5">
+            <SigilloNascosto firma={firma} dimensione={10} />
+            <LunaDiOggi dimensione={10} />
+          </span>
         </div>
       </div>
       <p className="mt-2 text-xs text-ink-500">

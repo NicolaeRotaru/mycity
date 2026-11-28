@@ -41,6 +41,7 @@ import RecentlyViewed from '@/components/RecentlyViewed';
 import StickyAddToCart from '@/components/StickyAddToCart';
 import { AttivaAbbonamento } from '@/components/products/AttivaAbbonamento';
 import { eDiSdg } from '@/lib/products/sdgSeller';
+import { CHIAVE_PREVENTIVO, leggiPreventivoAgenzia } from '@/components/seller/preventivo-agenzia';
 import { dettagliDelServizio, eServizio, ETICHETTA_PRENOTA, ETICHETTA_PRENOTA_CORTA } from '@/lib/products/servizio';
 import QuandoSiVede from '@/components/QuandoSiVede';
 import SimilarProducts from '@/components/SimilarProducts';
@@ -240,6 +241,13 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // 27/11/2026 — Un servizio (migrazione 999g) non si compra col carrello: si prenota scrivendo al negozio.
   // Gli abbonamenti di SDG sono servizi (999g) ma hanno il loro percorso (AttivaAbbonamento), che vince.
   const eUnServizio = eServizio(rigaDelRecesso) && !eDiSdg(product?.seller_id);
+  // 28/11/2026 — Sulla pagina di un abbonamento di SDG, un negozio già abbonato non deve vedere «Scegli l'abbonamento».
+  const { data: preventivoDelNegozio } = useQuery({
+    queryKey: CHIAVE_PREVENTIVO,
+    queryFn: leggiPreventivoAgenzia,
+    enabled: isSeller && eDiSdg(product?.seller_id),
+    retry: false,
+  });
   const dettagliServizio = eUnServizio && rigaDelRecesso ? dettagliDelServizio(rigaDelRecesso) : null;
   const fraseReso = fraseResoDelProdotto(rigaDelRecesso);
 
@@ -1382,7 +1390,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           <div className="bg-surface-0 border border-surface-200 rounded-xl p-5 shadow-card space-y-3">
             <div className="text-2xl font-extrabold font-serif text-ink-900">{formatPrice(price)}</div>
             {eAbbonamentoSdg ? (
-              <AttivaAbbonamento chiGuardaEUnNegozio={isSeller} />
+              <AttivaAbbonamento chiGuardaEUnNegozio={isSeller} giaAbbonato={preventivoDelNegozio ? !!preventivoDelNegozio.attivo : null} />
             ) : eUnServizio ? (
               <>
                 {dettagliServizio && <p className="text-xs text-ink-600">Servizio · {dettagliServizio}</p>}

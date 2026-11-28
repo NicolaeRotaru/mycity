@@ -156,6 +156,9 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
     // 27/11/2026 — Quello in contanti in corso, sbloccato al «Sì» dell'agente, è il primo: lo sconto resta.
     primoMeseScontato: abbonamento.error ? true : primoMeseAncoraScontato((abbonamento.data as { stato?: string | null; origine?: string | null }[] | null) ?? []),
   });
+  // L'armonia nascosta (28/11/2026): la firma del sito nasce dal giorno d'iscrizione, che non cambia mai.
+  // `p.data` invece è «oggi»: con quello la bozza cambiava faccia da un giorno all'altro (collaudo del 28/11).
+  preventivo.nascitaAttivita = typeof p.created_at === 'string' ? p.created_at.slice(0, 10) : null;
   // L'offerta su misura (24/11/2026): dalla vetrina, dalla scheda e dalle analisi. Un guasto qui non
   // ferma il preventivo: senza offerta la pagina mostra quello che mostrava prima.
   try {

@@ -9,8 +9,8 @@ import { FRASE_CONDIZIONI, FRASE_PARTNER } from '@/lib/agenzia/preventivo';
  * pagina Abbonamento del negozio, che paga con Stripe in abbonamento. Chi ha un negozio va alla sua
  * pagina Abbonamento; chi non lo ha, prima si iscrive (lib/products/sdgSeller.ts).
  */
-export function AttivaAbbonamento({ chiGuardaEUnNegozio }: { chiGuardaEUnNegozio: boolean }) {
-  const dove = doveSiAttivaLAbbonamento(chiGuardaEUnNegozio);
+export function AttivaAbbonamento({ chiGuardaEUnNegozio, giaAbbonato = false }: { chiGuardaEUnNegozio: boolean; giaAbbonato?: boolean | null }) {
+  const dove = doveSiAttivaLAbbonamento(chiGuardaEUnNegozio, giaAbbonato);
   return (
     <div className="space-y-3" data-testid="attiva-abbonamento">
       <p className="text-xs text-ink-600">

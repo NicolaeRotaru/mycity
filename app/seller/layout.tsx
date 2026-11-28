@@ -19,6 +19,7 @@ import { percorsoInRevisione } from '@/lib/auth/decisione-portiere';
 import { PERCORSO_ABBONAMENTO, hrefServizio } from '@/lib/agenzia/indirizzi-servizi';
 import { SERVIZI_AGENZIA } from '@/lib/agenzia/preventivo';
 import { ETICHETTE_SERVIZI } from '@/components/seller/servizi-nel-menu';
+import { CHIAVE_PREVENTIVO, leggiPreventivoAgenzia } from '@/components/seller/preventivo-agenzia';
 
 /**
  * Ondata 10 — lo stato della richiesta del negozio, letto davvero.
@@ -69,6 +70,15 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   // pausa (né in caricamento né in errore) e il dato è vuoto, e la frase
   // definitiva «non ci è ancora arrivata» sarebbe una notizia falsa.
   const statoIllegibile = daLeggereLaRichiesta && richiesta.status !== 'success' && !statoRichiesta;
+  // 28/11/2026 — Chi ha accettato il preventivo ha già l'abbonamento mentre aspetta l'approvazione: il pulsante
+  // «Scegli l'abbonamento» si mostra solo a chi risulta senza. Se la lettura non riesce non si mostra (lato prudente).
+  const { data: preventivoInAttesa } = useQuery({
+    queryKey: CHIAVE_PREVENTIVO,
+    queryFn: leggiPreventivoAgenzia,
+    enabled: daLeggereLaRichiesta && richiestaInviata,
+    retry: false,
+  });
+  const senzaAbbonamento = !!preventivoInAttesa && !preventivoInAttesa.attivo;
   const isPending   = isSeller && approvalStatus === 'pending';
   const isSuspended = isSeller && approvalStatus === 'suspended';
   const isRejected  = isSeller && approvalStatus === 'rejected';
@@ -289,7 +299,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           )}
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
             {isPending && richiestaInviata && <Button href="/seller/products">Prepara i tuoi prodotti</Button>}
-            {isPending && richiestaInviata && <Button href={PERCORSO_ABBONAMENTO}>Scegli l’abbonamento</Button>}
+            {isPending && richiestaInviata && senzaAbbonamento && <Button href={PERCORSO_ABBONAMENTO}>Scegli l’abbonamento</Button>}
             {isPending && richiestaInviata && <Button href="/sell" variant="secondary" icon={Pencil}>Dati di chi firma</Button>}
             <Button href="/sell" variant="secondary" icon={Pencil}>Modifica richiesta</Button>
             <Button href="/?shop=1" icon={Home}>Vai al marketplace</Button>

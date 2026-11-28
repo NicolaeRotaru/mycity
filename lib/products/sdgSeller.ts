@@ -28,7 +28,11 @@ export function eDiSdg(sellerId: string | null | undefined): boolean {
  * Dove porta il pulsante di un abbonamento nella pagina prodotto: chi ha un negozio
  * va alla sua pagina Abbonamento, dove sceglie e paga; chi non lo ha, prima si iscrive.
  */
-export function doveSiAttivaLAbbonamento(chiGuardaEUnNegozio: boolean): { href: string; testo: string } {
+export function doveSiAttivaLAbbonamento(chiGuardaEUnNegozio: boolean, giaAbbonato: boolean | null = false): { href: string; testo: string } {
+  // 28/11/2026 — Un negozio che ha già l'abbonamento non sceglie di nuovo: va a vedere il suo. Finché non si sa
+  // (lettura in corso o non riuscita, `null`) il pulsante non promette una scelta: porta alla pagina e basta.
+  if (chiGuardaEUnNegozio && giaAbbonato === true) return { href: PERCORSO_ABBONAMENTO, testo: 'Vedi il tuo abbonamento' };
+  if (chiGuardaEUnNegozio && giaAbbonato === null) return { href: PERCORSO_ABBONAMENTO, testo: 'Vai alla pagina Abbonamento del tuo negozio' };
   return chiGuardaEUnNegozio
     ? { href: PERCORSO_ABBONAMENTO, testo: 'Scegli l’abbonamento dal tuo negozio' }
     : { href: '/sell', testo: 'Iscrivi la tua attività per attivarlo' };

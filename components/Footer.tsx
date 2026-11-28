@@ -21,6 +21,10 @@ import { rigaIdentita, titolare } from '@/lib/legal/titolare';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
 import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
 import { NEWSLETTER_ACCESA } from '@/lib/funzioni-al-lancio';
+import { FIRMA_MYCITY } from '@/lib/armonia/firma';
+import TramaNascosta from '@/components/armonia/TramaNascosta';
+import LunaDiOggi from '@/components/armonia/LunaDiOggi';
+import SigilloNascosto from '@/components/armonia/SigilloNascosto';
 
 const SOCIALS = [
   {
@@ -381,9 +385,19 @@ const Footer = () => {
       </div>
 
       {/* Dati legali azienda */}
-      <div className="border-t border-cream-300 py-5 text-center text-xs text-ink-500 space-y-1 px-4">
+      {/* ARMONIA NASCOSTA (Nicola, 28/11/2026): nella fascia dei dati legali la trama della firma di MyCity
+          con la rosa dei sedici settori etruschi di Piacenza, solo nei margini (la maschera spegne il centro,
+          dove sta il testo), e accanto al nome la luna di oggi e il sigillo. La trama sta dietro (isolate +
+          -z-10) e fuori dal contenitore space-y, che altrimenti le darebbe un margine. */}
+      <div className="relative isolate overflow-hidden border-t border-cream-300">
+        <TramaNascosta firma={FIRMA_MYCITY} centro="rosa" larghezza={377} altezza={89} opacita={0.05} className="-z-10 text-ink-500" />
+      <div className="py-5 text-center text-xs text-ink-500 space-y-1 px-4">
         <div>
           © {new Date().getFullYear()} <span className="font-semibold text-ink-700">{chiSiamo.denominazione}</span> · Il mercato locale della tua città
+          <span className="ml-1.5 inline-flex items-center gap-1 align-[-1px] text-ink-400">
+            <LunaDiOggi dimensione={10} />
+            <SigilloNascosto firma={FIRMA_MYCITY} dimensione={10} />
+          </span>
         </div>
         {/*
           I dati legali si stampano solo se esistono davvero (lib/legal/titolare).
@@ -404,6 +418,7 @@ const Footer = () => {
           NextIntlClientProvider) resta pronta: per riattivarlo, completare la
           migrazione delle stringhe e ripristinare <LocaleSwitcher /> qui.
         */}
+      </div>
       </div>
     </footer>
   );
