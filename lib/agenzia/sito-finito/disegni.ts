@@ -51,17 +51,17 @@ export function disegnoPer(testo: string): Disegno {
   const t = testo.toLowerCase();
   const regole: [RegExp, Disegno][] = [
     [/colazion|brioch|cornett|pasticc|dolc[ei] da forno|croiss/, 'cornetto'],
-    [/aperitiv|cocktail|spritz|drink|seral|serat/, 'calice'],
+    [/aperitiv|cocktail|spritz|drink|seral|serat|\bbirr/, 'calice'],
     [/vin[oi]\b|enotec|cantin|calic/, 'vino'],
     [/pranz|panin|focacc|piadin|tramezz|salat/, 'panino'],
     [/pizz/, 'pizza'],
     [/gelat/, 'gelato'],
     [/tort|pasticcer|dolc/, 'torta'],
     [/pane|forn[oi]\b|panific/, 'pane'],
-    [/fior|piant|verde/, 'fiore'],
+    [/fior|floreal|piant|verde|bouquet/, 'fiore'],
     [/parrucch|capell|barbier|estetic/, 'forbici'],
     [/negozi|boutique|abbigliam|regal|bottega/, 'borsa'],
-    [/caff|cappucc|espresso|bar\b|tè\b|the\b/, 'tazza'],
+    [/\bcaff|cappucc|espresso|\bbar\b|\btè\b|\bthe\b/, 'tazza'],
   ];
   return regole.find(([r]) => r.test(t))?.[1] ?? 'stella';
 }

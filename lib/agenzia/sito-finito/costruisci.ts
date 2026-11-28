@@ -196,6 +196,10 @@ function pagineVisibili(fascia: Abbonamento, c: ContenutoSito, eventi: EventoInC
     if (p.percorso === '/novita') return !!c.novita;
     if (p.percorso === '/domande') return c.domande.length > 0;
     return true;
+  }).filter((p) => {
+    // Collaudo 28/11: «Cosa offriamo» senza niente da offrire restava nel menu col solo titolo.
+    if (p.percorso === '/cosa-offriamo') return c.offerta.length > 0 || c.momenti.length > 0;
+    return true;
   });
 }
 
@@ -220,9 +224,13 @@ function immagine(ctx: Contesto, i: number, classe: string, alt: string): string
 }
 
 function pulsantiPrincipali(ctx: Contesto): string {
-  const haOfferta = ctx.pagine.some((p) => p.percorso === '/cosa-offriamo');
+  const paginaOfferta = ctx.pagine.some((p) => p.percorso === '/cosa-offriamo');
+  const haOfferta = ctx.c.offerta.length > 0 || ctx.c.momenti.length > 0;
   const haContatti = ctx.pagine.some((p) => p.percorso === '/contatti');
-  return `<p class="pulsanti"><a class="pulsante" href="${esc(haOfferta ? ctx.link('/cosa-offriamo') : '#offerta')}">Guarda cosa offriamo</a><a class="pulsante chiaro" href="${esc(haContatti ? ctx.link('/contatti') : '#contatti')}">${ctx.orari ? 'Orari e indirizzo' : 'Come arrivare'}</a></p>`;
+  const contatti = `<a class="pulsante${haOfferta ? ' chiaro' : ''}" href="${esc(haContatti ? ctx.link('/contatti') : '#contatti')}">${ctx.orari ? 'Orari e indirizzo' : 'Come arrivare'}</a>`;
+  // Collaudo 28/11: senza niente da offrire il pulsante puntava a un'ancora che non c'era.
+  const offerta = haOfferta ? `<a class="pulsante" href="${esc(paginaOfferta ? ctx.link('/cosa-offriamo') : '#offerta')}">Guarda cosa offriamo</a>` : '';
+  return `<p class="pulsanti">${offerta}${contatti}</p>`;
 }
 
 function copertina(ctx: Contesto): string {
@@ -382,7 +390,7 @@ function stile(p: (typeof PALETTE)[Palette], marchio: string, token: string): st
 @font-face{font-family:"Inter";src:url(/siti/caratteri/inter-latin-wght-normal.woff2) format("woff2");font-weight:100 900;font-display:swap}
 :root{--fondo:${p.fondo};--carta:${p.carta};--tenue:${p.tenue};--inchiostro:${p.inchiostro};--marchio:${marchio};--accento:${p.accento};--scuro:${p.scuro};--bordo:color-mix(in srgb,var(--inchiostro) 12%,transparent);--curva:cubic-bezier(.382,0,.618,1);${token}}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-body{margin:0;background:var(--fondo);color:var(--inchiostro);font:400 17px/1.62 "Inter",system-ui,-apple-system,"Segoe UI",sans-serif;padding-bottom:76px}
+body{margin:0;background:var(--fondo);color:var(--inchiostro);font:400 16px/1.618 "Inter",system-ui,-apple-system,"Segoe UI",sans-serif;padding-bottom:76px}
 @media (min-width:860px){body{padding-bottom:0}}
 img{max-width:100%;display:block}a{color:var(--marchio)}
 h1,h2,h3{font-family:"Fraunces",Georgia,serif;font-weight:600;line-height:1.1;margin:0 0 13px;text-wrap:balance;letter-spacing:-.01em}
@@ -419,7 +427,7 @@ nav a[aria-current=page]{color:var(--marchio);border-bottom-color:var(--marchio)
 .vista .tessera{position:absolute;width:150px;padding:14px;background:var(--carta);border-radius:20px;box-shadow:0 18px 36px -18px rgba(0,0,0,.35);color:var(--inchiostro)}
 .vista .tessera .disegno{width:100%;height:80px;object-fit:contain;margin:0}
 .vista .tessera.uno{left:2%;bottom:6%;transform:rotate(-5deg)}.vista .tessera.due{right:0;top:2%;transform:rotate(4deg)}
-.banda{padding-top:61px;padding-bottom:61px}
+.banda{padding-top:55px;padding-bottom:55px}
 .intro{max-width:44em;color:var(--tenue);font-size:18px}
 .schede{display:grid;gap:21px;margin-top:21px}@media (min-width:760px){.schede.tre{grid-template-columns:repeat(3,1fr)}}
 .scheda{background:var(--carta);border:1px solid var(--bordo);border-radius:var(--armonia-raggio,20px);padding:26px 24px;text-align:center}
@@ -440,7 +448,7 @@ svg.disegno{width:180px}
 .menu{display:grid;gap:21px;margin-top:21px}@media (min-width:760px){.menu{grid-template-columns:repeat(2,1fr)}}
 .menu-sez{background:var(--carta);border:1px solid var(--bordo);border-radius:20px;padding:24px}
 .menu-sez p{color:var(--tenue)}.menu-sez ul{margin:8px 0 0;padding-left:18px;columns:2;column-gap:21px}
-.tinta{background:color-mix(in srgb,var(--accento) 45%,var(--fondo));padding:61px 0}
+.tinta{background:color-mix(in srgb,var(--accento) 45%,var(--fondo));padding:55px 0}
 .motivi{list-style:none;margin:21px 0 0;padding:0;display:grid;gap:21px}@media (min-width:760px){.motivi{grid-template-columns:repeat(3,1fr)}}
 .motivi .numero{display:block;font:700 44px/1 "Fraunces",Georgia,serif;color:var(--marchio);margin-bottom:8px}
 .chips{list-style:none;padding:0;margin:13px 0 0;display:flex;flex-wrap:wrap;gap:8px}.chips li{background:var(--carta);border:1px solid var(--bordo);border-radius:999px;padding:6px 14px;font-size:15px}
@@ -508,7 +516,7 @@ export function paginaDelSito(dati: DatiSitoFinito, percorso: string, adesso = D
   const [primo, ...resto] = casa ? corpo : [testaPagina, ...corpo];
 
   const titoloPagina = casa ? `${dati.nome}${dati.citta ? ` · ${dati.citta}` : ''}` : `${pagina.titolo} · ${dati.nome}`;
-  const anno = new Date(adesso).getFullYear();
+  const anno = romeNow(new Date(adesso)).getFullYear();
   // I dati del locale per Google (schema.org): JSON, non codice. «<» scritto come <, così non chiude mai il blocco.
   const datiGoogle = JSON.stringify({
     '@context': 'https://schema.org',

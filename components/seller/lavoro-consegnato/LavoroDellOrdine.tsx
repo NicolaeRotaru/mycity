@@ -2,7 +2,7 @@ import { FASCE } from '@/lib/agenti/fasce';
 import type { LavoroDellOrdine } from '@/lib/agenzia/lavoro-dell-ordine';
 import type { ParteConsegnata } from '@/lib/agenzia/lavoro-consegnato/quale-parte';
 import { STANDARD } from '@/lib/agenzia/sito-finito/standard';
-import { paginePubbliche } from '@/lib/agenzia/sito-finito/costruisci';
+import { paginePubbliche, pagineDelSito } from '@/lib/agenzia/sito-finito/costruisci';
 import { Elenco, LinkEsterno, SCHEDA, Sezione, giornoCorto } from './comuni';
 
 /**
@@ -74,6 +74,12 @@ function IlTuoSito({ ordine }: { ordine: LavoroDellOrdine }) {
   // I testi come stanno sul sito: senza le frasi da bozza, che sul sito online non ci sono.
   const pagine = paginePubbliche(b.pagine);
   const link = (percorso: string) => (indirizzo ? (percorso === '/' ? indirizzo : `${indirizzo}${percorso}`) : null);
+  // Collaudo 28/11: i collegamenti si prendono dalle pagine che il sito ha davvero (lo standard della fascia), non dai
+  // testi salvati: un sito vecchio con «/menu» dava 404.
+  const vere = pagineDelSito({
+    nome: ordine.nomeAttivita, sottotitolo: b.sottotitolo, fascia: ordine.fascia, contenuto: b.contenuto ?? null, citta: null, indirizzo: null,
+    telefono: null, orari: null, social: [], logo: null, foto: [], colore: null, vetrina: null, nascita: null, pagine: b.pagine, eventi: [], base: '',
+  });
   return (
     <>
       <section className={`mb-4 ${SCHEDA}`} aria-labelledby="sito-online">
@@ -88,6 +94,11 @@ function IlTuoSito({ ordine }: { ordine: LavoroDellOrdine }) {
             </p>
             <p className="mt-2 break-all text-sm text-ink-700">Il suo indirizzo: <a href={indirizzo} target="_blank" rel="noopener" className="font-semibold text-primary-700 underline">{indirizzo.replace(/^https?:\/\//, '')}</a></p>
             <p className="mt-2 text-sm text-ink-700">Puoi già mandarlo ai tuoi clienti. Ogni testo si cambia quando vuoi: basta dircelo.</p>
+            {vere.length > 1 && (
+              <p className="mt-2 text-sm text-ink-700">
+                Le pagine: {vere.map((p, i) => <span key={p.percorso}>{i > 0 ? ' · ' : ''}<LinkEsterno href={link(p.percorso)!}>{p.titolo}</LinkEsterno></span>)}
+              </p>
+            )}
           </>
         ) : (
           <p className="mt-2 text-sm text-ink-700">Sta andando online: tra poco qui trovi il pulsante per aprirlo.</p>
@@ -95,7 +106,6 @@ function IlTuoSito({ ordine }: { ordine: LavoroDellOrdine }) {
       </section>
       {pagine.map((p, i) => (
         <Sezione key={p.percorso} id={`sito-pagina-${i}`} titolo={`Pagina ${i + 1}: ${p.titolo}`}>
-          {link(p.percorso) && <p className="mb-2 text-sm"><LinkEsterno href={link(p.percorso)!}>Apri questa pagina</LinkEsterno></p>}
           <div className="space-y-3">
             {p.sezioni.map((s, j) => (
               <div key={`${s.titolo}-${j}`}>

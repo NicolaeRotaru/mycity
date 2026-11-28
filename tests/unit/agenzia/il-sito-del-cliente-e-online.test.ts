@@ -153,6 +153,40 @@ describe('i siti scritti la mattina, coi soli testi a pagine (Raquel Cafè oggi)
   });
 });
 
+describe('collaudo del 28/11 pomeriggio: i buchi dello standard', () => {
+  const sez = (titolo: string, testo: string) => ({ titolo, testo, stato: 'da_confermare' as const });
+  it('i testi vecchi di un’attività senza parole da bar non perdono sezioni (il parrucchiere)', () => {
+    const pagine = [
+      { titolo: 'Home', percorso: '/', sezioni: [sez('Benvenuti', 'Un salone nel centro di Piacenza, curato e accogliente.')] },
+      { titolo: 'Servizi', percorso: '/servizi', sezioni: [sez('Taglio e piega', 'Taglio su misura e piega per ogni occasione.'), sez('Colore', 'Colore e riflessi con prodotti delicati.'), sez('Barba', 'Rasatura e cura della barba.')] },
+    ];
+    const d = dati({ nome: 'Salone Prova', pagine, fascia: 'business' });
+    const casa = paginaDelSito(d, '/')!;
+    expect(casa.match(/<article class="scheda entra"/g)).toHaveLength(3);
+    for (const t of ['Taglio e piega', 'Colore', 'Barba']) expect(casa).toContain(t);
+    expect(casa).toMatch(/<p class="occhiello">[^<]+<\/p>/);
+    expect(paginaDelSito(d, '/il-locale')).toContain('Un salone nel centro di Piacenza');
+  });
+  it('«scaffali» non fa un bar; «floreali» è un fiore; le birre hanno il calice', async () => {
+    const { disegnoPer } = await import('@/lib/agenzia/sito-finito/disegni');
+    expect(disegnoPer('Scaffali pieni di attrezzi')).toBe('stella');
+    expect(disegnoPer('Matrimoni ed eventi floreali')).toBe('fiore');
+    expect(disegnoPer('Birre artigianali da bere con la pizza')).toBe('calice');
+  });
+  it('niente da offrire: niente pagina «Cosa offriamo» e nessun pulsante verso un’ancora che non c’è', () => {
+    const vuoto = { ...CONTENUTO, momenti: [], offerta: [] };
+    expect(pagineDelSito(dati({ contenuto: vuoto })).map((p) => p.titolo)).not.toContain('Cosa offriamo');
+    const base = paginaDelSito(dati({ contenuto: vuoto, fascia: 'base' }), '/')!;
+    expect(base).not.toContain('href="#offerta"');
+    expect(base).not.toContain('Guarda cosa offriamo');
+  });
+  it('il carattere del testo è 16, non 17 (numero vietato dall’armonia)', () => {
+    const h = paginaDelSito(dati({ contenuto: CONTENUTO }), '/')!;
+    expect(h).toContain('font:400 16px/1.618 "Inter"');
+    expect(h).not.toMatch(/\b17px/);
+  });
+});
+
 describe('niente frasi da bozza', () => {
   it('toglie solo le frasi da bozza e tiene le altre', () => {
     expect(testoPubblico('Fermatevi da noi per una pausa. Orari: da confermare col titolare.')).toBe('Fermatevi da noi per una pausa.');
@@ -226,6 +260,17 @@ describe('la risposta dell’AD nella forma nuova', () => {
   it('un prezzo, un orario o un nome di persona nel contenuto: scartata intera', () => {
     expect(sitoDallaRisposta(risposta({ perche: [{ titolo: 'Prezzi bassi', testo: 'Il cappuccino costa 1,50 €.' }] }), 'business', 'Raquel').ok).toBe(false);
     expect(sitoDallaRisposta(risposta({ come_arrivare: 'Aperti dalle 7:00 alle 20:00 in Piazza Duomo.' }), 'business', 'Raquel').ok).toBe(false);
+  });
+  it('una frase corta o un elenco troppo lungo non buttano la risposta: si tiene, e si taglia', () => {
+    const e = sitoDallaRisposta(risposta({ perche: [{ titolo: 'Comodo', testo: 'Comodo.' }], momenti: [...CONTENUTO.momenti, { titolo: 'Quarta', testo: 'Una scheda in più.', disegno: 'stella' }] }), 'business', 'Raquel');
+    if (!e.ok) throw new Error(e.motivo);
+    expect(e.sito.contenuto?.momenti).toHaveLength(3);
+    expect(e.sito.contenuto?.perche[0].testo).toBe('Comodo.');
+  });
+  it('gli orari scritti in altro modo e il gioco con altri nomi: scartata', () => {
+    for (const t of ['Siamo aperti 7-20 in Piazza Duomo.', 'Lun-sab 7/19, domenica chiuso.', 'Vi aspettiamo dalle sette di mattina.', 'Qui trovi anche la Snai.']) {
+      expect(sitoDallaRisposta(risposta({ come_arrivare: t }), 'business', 'Raquel').ok, t).toBe(false);
+    }
   });
   it('un disegno fuori lista diventa quello che va col titolo; una tavolozza sconosciuta diventa crema', () => {
     const e = sitoDallaRisposta(risposta({ momenti: [{ titolo: 'Colazione', testo: 'Caffè e brioche per cominciare.', disegno: 'astronave' }], palette: 'fucsia' }), 'base', 'Raquel');
@@ -342,10 +387,20 @@ describe('la rotta /sito', () => {
     const r = await chiedi('raquel-cafe-ffb27af9', ['chi-siamo']);
     expect(r.status).toBe(308);
     expect(r.headers.get('location')).toBe('https://www.mycity-marketplace.com/sito/raquel-cafe-ffb27af9/il-locale');
+    // Nome vecchio e pagina vecchia: due passi, prima il nome giusto, poi la pagina nuova.
     const v = await chiedi('caffe-rosa-ffb27af9', ['dove-siamo']);
-    expect(v.headers.get('location')).toBe('https://www.mycity-marketplace.com/sito/raquel-cafe-ffb27af9/contatti');
+    expect(v.headers.get('location')).toBe('https://www.mycity-marketplace.com/sito/raquel-cafe-ffb27af9/dove-siamo');
+    const v2 = await chiedi('raquel-cafe-ffb27af9', ['dove-siamo']);
+    expect(v2.headers.get('location')).toBe('https://www.mycity-marketplace.com/sito/raquel-cafe-ffb27af9/contatti');
     const n = await chiedi('caffe-rosa-ffb27af9', ['cosa-offriamo']);
     expect(n.headers.get('location')).toBe('https://www.mycity-marketplace.com/sito/raquel-cafe-ffb27af9/cosa-offriamo');
+  });
+  it('sul Base (una pagina sola) i vecchi percorsi portano alla home e ai contatti, mai a una pagina che non c’è', async () => {
+    db.ordini = { data: [ordine({ fascia: 'base', sito: { fascia: 'base', sottotitolo: 'Caffetteria rosa', pagine: [PAGINE_RAQUEL[0]] } })], error: null };
+    const a = await chiedi('raquel-cafe-ffb27af9', ['chi-siamo']);
+    expect(a.headers.get('location')).toBe('https://www.mycity-marketplace.com/sito/raquel-cafe-ffb27af9');
+    const b = await chiedi('raquel-cafe-ffb27af9', ['dove-siamo']);
+    expect(b.headers.get('location')).toBe('https://www.mycity-marketplace.com/sito/raquel-cafe-ffb27af9#contatti');
   });
   it('senza sito: 404 che non resta in cache', async () => {
     db.ordini = { data: [], error: null };

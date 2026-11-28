@@ -87,18 +87,25 @@ export function contenutoDaPagine(pagine: PaginaDellaBozza[], nome: string, sott
   racconto.forEach((x) => usate.add(x.titolo));
   const titoloRacconto = racconto.find((x) => /locale|chi siamo|storia/i.test(x.titolo))?.titolo ?? racconto[0]?.titolo ?? 'Chi siamo';
 
+  // Collaudo 28/11: le sezioni senza un disegno riconoscibile si perdevano (il parrucchiere perdeva «Colore» e
+  // «Barba»). Ora ogni sezione rimasta è una voce dell'offerta, col disegno che le va meglio o la stella; quelle che
+  // la home dell'AD aveva come presentazione vanno nel racconto del locale.
+  const restanti = tutte.filter((x) => !usate.has(x.titolo));
+  const presentazioni = racconto.length ? restanti.filter((x) => x.pagina === '/' && disegnoPer(`${x.titolo} ${x.testo}`) === 'stella') : [];
+  presentazioni.forEach((x) => usate.add(x.titolo));
   const categorie: Categoria[] = tutte
     .filter((x) => !usate.has(x.titolo))
-    .map((x) => ({ x, d: disegnoPer(`${x.titolo} ${x.testo}`) }))
-    .filter(({ d }) => d !== 'stella')
-    .map(({ x, d }) => {
+    .map((x) => {
       usate.add(x.titolo);
-      return { categoria: x.titolo, descrizione: x.testo, voci: [], disegno: d };
+      return { categoria: x.titolo, descrizione: x.testo, voci: [], disegno: disegnoPer(`${x.titolo} ${x.testo}`) };
     });
 
-  const resto = tutte.filter((x) => !usate.has(x.titolo));
-  const momenti: Momento[] = categorie.slice(0, 3).map((c) => ({ titolo: c.categoria, testo: c.descrizione, disegno: c.disegno }));
-  const parole = [...new Set(categorie.map((c) => PAROLA_DEL_DISEGNO[c.disegno]).filter((p): p is string => !!p))].slice(0, 4);
+  const resto = presentazioni;
+  // I momenti: prima le categorie col loro disegno, poi le altre.
+  const ordinate = [...categorie.filter((c) => c.disegno !== 'stella'), ...categorie.filter((c) => c.disegno === 'stella')];
+  const momenti: Momento[] = ordinate.slice(0, 3).map((c) => ({ titolo: c.categoria, testo: c.descrizione, disegno: c.disegno }));
+  const dalleParole = [...new Set(categorie.map((c) => PAROLA_DEL_DISEGNO[c.disegno]).filter((p): p is string => !!p))].slice(0, 4);
+  const parole = dalleParole.length ? dalleParole : categorie.slice(0, 3).map((c) => c.categoria.toLowerCase());
 
   return {
     occhiello: parole.join(' · '),
@@ -108,7 +115,7 @@ export function contenutoDaPagine(pagine: PaginaDellaBozza[], nome: string, sott
     momentiIntro: panoramica?.testo ?? '',
     momenti,
     perche: [],
-    locale: racconto.length ? { titolo: titoloRacconto, paragrafi: [...racconto.map((r) => r.testo), ...resto.filter((r) => r.pagina === '/').map((r) => r.testo)] } : null,
+    locale: racconto.length ? { titolo: titoloRacconto, paragrafi: [...racconto.map((r) => r.testo), ...resto.map((r) => r.testo)] } : null,
     offerta: categorie,
     citta: null,
     comeArrivare: arrivare?.testo ?? null,

@@ -128,23 +128,31 @@ const corto = (t: string) => t.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\
 const testo = (min: number, max: number) => z.string().transform(corto).pipe(z.string().min(min).max(max));
 const percorso = z.string().regex(/^\/[a-z0-9-]{0,40}$/);
 
-const disegno = z.string().max(20);
-const paragrafi = (max: number) => z.array(testo(10, 700)).max(max);
+const disegno = z.string().max(40);
+/**
+ * Collaudo 28/11: lo schema mandato all'AD non dice lunghezze, e uno zod severo scartava risposte buone per una
+ * parola sola («Comodo.» troppo corto, una nota troppo lunga). Qui: mai vuoto, e oltre il tetto si taglia invece di
+ * buttare tutto. I divieti veri (prezzi, contatti, orari, nomi) restano severi più sotto.
+ */
+const pieno = (max: number) => z.string().transform(corto).pipe(z.string().min(1)).transform((t) => t.slice(0, max));
+const facoltativo = (max: number) => z.string().nullable().transform((t) => (t ? corto(t).slice(0, max) : ''));
+const lista = <T extends z.ZodTypeAny>(voce: T, max: number) => z.array(voce).transform((a) => a.slice(0, max));
+const frasi = (max: number) => z.array(z.string()).transform((a) => a.map(corto).filter(Boolean).map((t) => t.slice(0, 700)).slice(0, max));
 const ContenutoRisposta = z.object({
-  occhiello: z.string().max(100).transform(corto),
-  titolo: testo(2, 90),
-  sottotitolo: testo(3, 260),
-  momenti_titolo: testo(2, 90),
-  momenti_intro: z.string().max(400).transform(corto),
-  momenti: z.array(z.object({ titolo: testo(2, 70), testo: testo(10, 400), disegno })).min(1).max(3),
-  perche: z.array(z.object({ titolo: testo(2, 70), testo: testo(10, 400) })).max(3),
-  locale: z.object({ titolo: testo(2, 90), paragrafi: paragrafi(3) }).nullable(),
-  offerta: z.array(z.object({ categoria: testo(2, 70), descrizione: z.string().max(400).transform(corto), voci: z.array(testo(1, 70)).max(12), disegno })).max(6),
-  citta: z.object({ titolo: testo(2, 90), paragrafi: paragrafi(2), vicino: z.array(testo(2, 70)).max(5) }).nullable(),
-  come_arrivare: z.string().max(400).transform(corto).nullable(),
-  novita: z.object({ titolo: testo(2, 90), paragrafi: paragrafi(2) }).nullable(),
-  domande: z.array(z.object({ domanda: testo(5, 160), risposta: testo(3, 400) })).max(6),
-  palette: z.string().max(20),
+  occhiello: facoltativo(100),
+  titolo: pieno(90),
+  sottotitolo: pieno(300),
+  momenti_titolo: facoltativo(90),
+  momenti_intro: facoltativo(400),
+  momenti: z.array(z.object({ titolo: pieno(70), testo: pieno(400), disegno })).min(1).transform((a) => a.slice(0, 3)),
+  perche: lista(z.object({ titolo: pieno(70), testo: pieno(400) }), 3),
+  locale: z.object({ titolo: pieno(90), paragrafi: frasi(3) }).nullable(),
+  offerta: lista(z.object({ categoria: pieno(70), descrizione: facoltativo(400), voci: z.array(z.string()).transform((a) => a.map(corto).filter(Boolean).map((t) => t.slice(0, 70)).slice(0, 12)), disegno }), 6),
+  citta: z.object({ titolo: pieno(90), paragrafi: frasi(2), vicino: z.array(z.string()).transform((a) => a.map(corto).filter(Boolean).map((t) => t.slice(0, 70)).slice(0, 5)) }).nullable(),
+  come_arrivare: facoltativo(400),
+  novita: z.object({ titolo: pieno(90), paragrafi: frasi(2) }).nullable(),
+  domande: lista(z.object({ domanda: pieno(160), risposta: pieno(400) }), 6),
+  palette: z.string().max(40),
 });
 type ContenutoLetto = z.infer<typeof ContenutoRisposta>;
 
@@ -214,7 +222,13 @@ export type EsitoSito = { ok: true; sito: BozzaSitoOrdine } | { ok: false; motiv
  */
 export const ORARIO = /\b([01]?\d|2[0-3])[:.][0-5]\d\b|\b(dalle|alle)\s+(ore\s+)?([01]?\d|2[0-3])\b|\bore\s+([01]?\d|2[0-3])\b|\borari[oa]?\b[^.]*\d/i;
 
-const VIETATI = /\b(sisal|scommess\w*|gratta e vinci|superenalotto|tabacc\w*|sigarett\w*|sigar[oi])\b/i;
+/**
+ * Collaudo 28/11 — gli orari scritti in altri modi: «Aperti 7-20», «Lun-sab 7/19», «dalle sette». Anche questi il
+ * sito non li ha mai dati all'AD.
+ */
+export const ORARIO_A_PAROLE = /\b(apert[oi]|apriamo|chiudiamo|lun\w*|mar\w*|mer\w*|gio\w*|ven\w*|sab\w*|dom\w*)\b[^.]{0,24}?\b([01]?\d|2[0-3])\s*[-–/]\s*([01]?\d|2[0-3])\b|\b(dalle|alle)\s+(ore\s+)?(sei|sette|otto|nove|dieci|undici|dodici|tredici|quattordici|quindici|sedici|diciassette|diciotto|diciannove|venti|ventuno|ventidue|ventitré)\b/i;
+
+const VIETATI = /\b(sisal|snai|lottomatica|eurobet|goldbet|scommess\w*|gratta e vinci|superenalotto|tabacc\w*|sigarett\w*|sigar[oi])\b/i;
 
 /**
  * La risposta dell'AD diventa la bozza dell'ordine solo se rispetta tutto: le pagine della fascia, nessun prezzo,
@@ -269,7 +283,7 @@ export function sitoDallaRisposta(grezza: unknown, fascia: Abbonamento, nomeLoca
     if (!fraseMostrabile(pulita, 1, 10_000) || haUnNomeDiPersona(pulita)) {
       return { ok: false, motivo: `la bozza del sito dell’AD ha un prezzo, un contatto, un orario, un indirizzo web, un nome di persona o un dato di Google (${f.dove})` };
     }
-    if (ORARIO.test(pulita)) return { ok: false, motivo: `la bozza del sito dell’AD ha un orario di apertura, che non le abbiamo dato (${f.dove})` };
+    if (ORARIO.test(pulita) || ORARIO_A_PAROLE.test(pulita)) return { ok: false, motivo: `la bozza del sito dell’AD ha un orario di apertura, che non le abbiamo dato (${f.dove})` };
     if (VIETATI.test(pulita)) return { ok: false, motivo: `la bozza del sito dell’AD nomina gioco o tabacco (${f.dove})` };
   }
   if (r.fonti.some(fonteDiGoogle)) return { ok: false, motivo: 'la bozza del sito dell’AD cita una pagina di Google o TripAdvisor come fonte' };
