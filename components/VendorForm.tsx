@@ -348,14 +348,19 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
         // Un campo che prima era vuoto non «resta com'era»: semplicemente non si salva.
         // Con due campi diversi (uno vuoto, uno già salvato) la frase si divide per gruppo.
         const vuoti = chiavi.filter((k) => !salvati[k]);
-        const rimasti = chiavi.filter((k) => !!salvati[k]);
+        const rimasti = chiavi.filter((k) => !!salvati[k] && !nonToccati.includes(k));
         const fraseVuoti = vuoti.length > 0
           ? `${vuoti.map(nomeDi).join(', ')} ${vuoti.length > 1 ? 'non si sono salvati' : 'non si è salvato'}`
           : '';
         const fraseRimasti = rimasti.length > 0
           ? `${rimasti.map(nomeDi).join(', ')} ${rimasti.length > 1 ? "sono rimasti com'erano" : "è rimasto com'era"}`
           : '';
-        const cheFine = [fraseVuoti, fraseRimasti].filter(Boolean).join(', ');
+        // R04-010 — Un valore già salvato che le regole di oggi rifiutano resta, ma il negoziante deve sapere
+        // che così non va: «è rimasto com'era» da solo sembrava dire che era tutto a posto.
+        const fraseDaCorreggere = nonToccati.length > 0
+          ? `${nonToccati.map(nomeDi).join(', ')} ${nonToccati.length > 1 ? "sono rimasti com'erano ma vanno corretti" : "è rimasto com'era ma va corretto"}`
+          : '';
+        const cheFine = [fraseVuoti, fraseRimasti, fraseDaCorreggere].filter(Boolean).join(', ');
         socialNonSalvati = true;
         setCustomError(`${campo}: ${primo.message}`);
         avvisoASalvataggioRiuscito.current = `${campo}: ${primo.message} Il resto è salvato; ${cheFine}.`;

@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
-import { normalizeCustomization } from '@/lib/store-customization';
+import { personalizzazioneDaModificare } from '@/lib/store-customization';
 import type { StoreHours } from '@/lib/store-hours';
 import type { StoreMediaItem } from '@/components/StoreMediaCarousel';
 import VendorForm, { type VendorFormData } from '@/components/VendorForm';
@@ -95,7 +95,9 @@ export default function StoreDetailsEditor({ profile, onBack }: { profile: Profi
             storeHours:       (profile.store_hours && typeof profile.store_hours === 'object' && !Array.isArray(profile.store_hours))
                                 ? (profile.store_hours as StoreHours)
                                 : {},
-            storeCustomization: normalizeCustomization(profile.store_customization),
+            // R04-010 — I social già salvati arrivano al modulo come sono, anche quelli che le regole di oggi
+            // rifiutano: con la lettura della vetrina il campo si apriva vuoto e il «Salva» li cancellava.
+            storeCustomization: personalizzazioneDaModificare(profile.store_customization),
           }}
           onSubmit={(d) => update.mutate(d)}
           isLoading={update.isPending}

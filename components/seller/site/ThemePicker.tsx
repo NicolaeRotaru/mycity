@@ -11,7 +11,7 @@ import { THEME_PRESETS, type ThemeKey } from '@/lib/store-site';
 import {
   ACCENT_PRESETS,
   DEFAULT_ACCENT,
-  normalizeCustomization,
+  personalizzazioneDaModificare,
 } from '@/lib/store-customization';
 
 /**
@@ -57,12 +57,14 @@ export default function ThemePicker({
         .eq('id', user.id)
         .single();
       // Questa è una lettura-modifica-scrittura, ed è il caso peggiore di tutta la cartella.
-      // Con l'errore ingoiato `profile` resta undefined, `normalizeCustomization` restituisce i
+      // Con l'errore ingoiato `profile` resta undefined, `personalizzazioneDaModificare` restituisce i
       // valori di partenza, e la scrittura qui sotto RISCRIVE tutta la personalizzazione della
       // vetrina con quei valori: copertina, sezioni, tema — persi, per cambiare un colore.
       // Non è una schermata che mostra un numero sbagliato: è un dato del negoziante cancellato.
       if (erroreLettura) throw erroreLettura;
-      const current = normalizeCustomization(profile?.store_customization);
+      // R04-010 — Si riscrive tutto: un social già salvato che le regole di oggi rifiutano resta com'era,
+      // invece di sparire dal database per un cambio di colore.
+      const current = personalizzazioneDaModificare(profile?.store_customization);
       const next = { ...current, theme: { ...current.theme, accent: hex } };
       const { error } = await supabase
         .from('profiles')
