@@ -96,6 +96,20 @@ export const POST = withAdminAuth(async ({ req, user }) => {
   return apiSuccess({ id: data.id });
 });
 
+/**
+ * 28/11/2026 (R04-004) — IL RIFIUTO DELLA GUARDIA DEGLI ALLERGENI ARRIVA CON IL SUO MOTIVO.
+ * La guardia della migrazione 363 (`categories`, BEFORE UPDATE OR DELETE) rifiuta con 23514 e una
+ * frase scritta per chi amministra: «La categoria «Alimentari» non si cancella: da lei dipende
+ * l'obbligo di allergeni e ingredienti». La cancellazione la trasformava in «Impossibile eliminare
+ * la categoria» (500), la modifica in «Foto non ammessa dal database» (l'altro 23514, quello della
+ * foto). Ora la frase del database passa com'è; ogni altro 23514 resta com'era.
+ */
+function rifiutoDellaGuardiaAllergeni(error: { code?: string; message?: string } | null): string | null {
+  if (error?.code !== '23514') return null;
+  const frase = (error.message ?? '').trim();
+  return /allergeni e ingredienti/i.test(frase) ? frase : null;
+}
+
 export const PATCH = withAdminAuth(async ({ req, user }) => {
   let body: unknown;
   try { body = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
@@ -120,6 +134,8 @@ export const PATCH = withAdminAuth(async ({ req, user }) => {
   }
   const { error } = await admin.from('categories').update(patch).eq('id', id);
   if (error) {
+    const guardia = rifiutoDellaGuardiaAllergeni(error);
+    if (guardia) return ApiErrors.invalidRequest(guardia);
     if (error.code === '23505') return ApiErrors.invalidRequest('Slug già esistente');
     if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…');
     return ApiErrors.internal('Impossibile aggiornare la categoria');
@@ -157,6 +173,8 @@ export const DELETE = withAdminAuth(async ({ req, user }) => {
   }
   const { error } = await admin.from('categories').delete().eq('id', id);
   if (error) {
+    const guardia = rifiutoDellaGuardiaAllergeni(error);
+    if (guardia) return ApiErrors.invalidRequest(guardia);
     if (error.code === '23503') return ApiErrors.invalidRequest('Categoria usata da prodotti o sottocategorie: non eliminabile');
     return ApiErrors.internal('Impossibile eliminare la categoria');
   }
