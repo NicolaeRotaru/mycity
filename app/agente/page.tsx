@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Scheda from '@/components/agenti/Scheda';
 import AggiungiAttivita from '@/components/agenti/AggiungiAttivita';
+import { sitoDaConfermare } from '@/lib/agenti/scheda';
 import st from '@/components/agenti/scheda.module.css';
 import type { Scheda as TScheda } from '@/lib/agenti/scheda';
 
@@ -181,7 +182,7 @@ export default function PaginaAgente() {
         <div id="scheda">{scheda && <Scheda s={scheda} />}</div>
         {/* 27/11/2026 — Il secondo momento con un clic (Nicola): quando il titolare dice sì, nasce il preventivo. */}
         {/* Solo a scheda finita: prima il tipo e l'indirizzo spesso mancano (collaudo del 27/11). */}
-        {scheda && lavoro && fase === 'fatto' && <AggiungiAttivita key={lavoro} lavoro={lavoro} nome={scheda.nome} consigliato={scheda.consigliato} sitoDaControllare={scheda.sito.misura?.aperto && scheda.sito.misura.prova === 'nome' ? scheda.sito.misura.url : null} />}
+        {scheda && lavoro && fase === 'fatto' && <AggiungiAttivita key={lavoro} lavoro={lavoro} nome={scheda.nome} consigliato={scheda.consigliato} sitoDaControllare={sitoDaConfermare(scheda)} />}
         {fase === 'fatto' && lavoro && <p className={c('nota')}>La trovi fra «Le tue ultime schede», anche da un altro telefono dove entri col tuo account.</p>}
       </div>
     </div>

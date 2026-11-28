@@ -224,7 +224,7 @@ const NUMERI_ROMANI = /^(?=[ivxl]+$)(?:xl|l?x{0,3})(?:ix|iv|v?i{0,3})$/;
  * e «Via Mazzini», «Via IV Novembre» e «Via 4 Novembre», «Corso Vittorio Emanuele II» e «C.so V. Emanuele II» si
  * riconoscono (terzo collaudo del 28/11). Una via che comincia con un numero non scambia quel numero per il civico.
  */
-function viaECivico(indirizzo: string | null | undefined): { parola: string; civico: string } | null {
+function viaECivico(indirizzo: string | null | undefined): { parole: string[]; civico: string } | null {
   const pezzi = String(indirizzo ?? '').split(',').map((p) => slug(p)).filter(Boolean);
   if (!pezzi.length) return null;
   let via = pezzi[0];
@@ -235,8 +235,9 @@ function viaECivico(indirizzo: string | null | undefined): { parola: string; civ
   }
   if (!civico) return null;
   const parole = via.split(' ').filter((w) => /^[a-z]{3,}$/.test(w) && !ARTICOLI.has(w) && !NUMERI_ROMANI.test(w) && !new RegExp(`^(?:${TIPI_DI_VIA})$`).test(w));
-  const parola = parole[parole.length - 1];
-  return parola ? { parola, civico } : null;
+  if (!parole.length) return null;
+  // L'ultima parola («Giuseppe Mazzini» → «mazzini») e la prima («Dante Alighieri» → «dante»): i siti accorciano tutte e due.
+  return { parole: [...new Set([parole[parole.length - 1], parole[0]])], civico };
 }
 
 /**
@@ -247,11 +248,21 @@ function viaECivico(indirizzo: string | null | undefined): { parola: string; civ
 export function indirizzoNellaPagina(testoPagina: string, indirizzo: string | null | undefined): boolean {
   const nostro = viaECivico(indirizzo);
   if (!nostro) return false;
-  return new RegExp(`(^| )${nostro.parola}( [a-z0-9]+){0,2}?( n| nr| numero)? ${nostro.civico}([abc]| [abc])?( |$)`).test(slug(testoPagina));
+  // Fra la via e il civico può stare solo un numero romano («Emanuele II 120») o «n.»: due parole qualsiasi facevano
+  // passare «Via Roma 45 int. 10» o «20 settembre dalle 12» (collaudo del 28/11).
+  const testo = slug(testoPagina);
+  return nostro.parole.some((p) => new RegExp(`(^| )${p}( [ivxl]{1,6})?( n| nr| numero)? ${nostro.civico}([abc]| [abc])?( |$)`).test(testo));
 }
 
 /** Il testo che si legge in una pagina: senza tag, script e indirizzi dei collegamenti (un link a un profilo non è il nome). */
-const testoVisibile = (html: string) => html.slice(0, 300_000).replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]*>/g, ' ');
+const testoVisibile = (html: string) => {
+  const h = html.slice(0, 300_000);
+  // L'indirizzo scritto solo nei dati strutturati (JSON-LD «streetAddress»), che Google legge e il visitatore no.
+  const strutturati = [...h.matchAll(/"streetAddress"\s*:\s*"([^"]{1,200})"/gi)].map((m) => m[1]).join(' ');
+  return `${h.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]*>/g, ' ')} ${strutturati}`
+    // Le entità («&nbsp;», «&#160;») sono spazi o lettere, non parole: «Duomo&nbsp;n.&nbsp;23» è «Duomo n. 23».
+    .replace(/&amp;/gi, '&').replace(/&#?[a-z0-9]{2,8};/gi, ' ');
+};
 
 /** Con che prova una pagina è del locale: l'ha data il venditore, porta il nostro indirizzo, o solo il nome. */
 export type ProvaDelSito = 'venditore' | 'indirizzo' | 'nome';

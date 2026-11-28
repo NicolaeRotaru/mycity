@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { adCollegato, avviaLavoro, leggiLavoro } from '@/lib/agenti/n8n';
 import { FLUSSO } from '@/lib/agenti/compito';
+import { sitoCerto } from '@/lib/agenti/scheda';
 import { eDiSdg } from '@/lib/products/sdgSeller';
 import { FASCE, canonePrimoMese, type Abbonamento } from './preventivo';
 import { tipoDelProfilo, type TipoAttivita } from './tipi-attivita';
@@ -279,7 +280,8 @@ export async function chiediIlPianoCompleto(ordineId: string): Promise<EsitoRich
       const misura = scheda.sito?.misura;
       const dallaScheda: DatiAttivita['dallaScheda'] = {
         tipo: scheda.tipo ? scheda.tipo.slice(0, 120) : null,
-        sito: misura?.aperto && /^https?:\/\//i.test(misura.url) ? misura.url.slice(0, 300) : null,
+        // 28/11/2026 — Un sito trovato solo dal nome e mai confermato può essere di un omonimo: a SDG non va come «sito di oggi».
+        sito: sitoCerto(misura)?.slice(0, 300) ?? null,
         social: (scheda.social ?? []).filter((x) => x.stato === 'trovato').slice(0, 3).map((x) => ({ canale: x.canale, fonte: x.fonte && /^https:\/\//i.test(x.fonte) ? x.fonte.slice(0, 300) : null })),
         perche: su?.perche ? su.perche.slice(0, 400) : null,
         servizi: Object.fromEntries(Object.entries(su?.servizi ?? {}).map(([k, v]) => [k, String(v).slice(0, 360)])),

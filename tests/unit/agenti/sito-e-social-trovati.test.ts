@@ -29,7 +29,7 @@ const { candidatiDominio, eIlSitoDi, provaDelSito, sitoIndicato, portaIlNome, in
 const { maiLetta } = await import('@/lib/agenti/mai-lette');
 const reteVera = await vi.importActual<typeof import('@/lib/agenti/rete')>('@/lib/agenti/rete');
 const { leggiCanaleDelVenditore } = await import('@/lib/agenti/canale-venditore');
-const { primaScheda, unisci, pulisci, normalizza } = await import('@/lib/agenti/scheda');
+const { primaScheda, unisci, pulisci, normalizza, sitoCerto, sitoDaConfermare } = await import('@/lib/agenti/scheda');
 const { confermaQuelloCheHaTrovatoLAd, instagramPerIlFlusso, collegamentiDellaPagina } = await import('@/lib/agenti/conferma-ad');
 const { attivitaDallaScheda } = await import('@/lib/agenti/aggiungi');
 
@@ -121,6 +121,48 @@ describe('il sito indovinato', () => {
     // Un sito vero che scrive anche un altro indirizzo (sede legale, parcheggio, WhatsApp) non si perde più.
     expect(provaDelSito('<title>Bar Mazzini</title><body>Via Mazzini 12, Piacenza. Sede legale: Via Roma 1. Ordina via WhatsApp al 333 1234567</body>', 'Bar Mazzini', 'Piacenza', { indirizzo: 'Via Giuseppe Mazzini, 12, 29121 Piacenza PC' })).toBe('indirizzo');
     expect(provaDelSito('<title>Raquel Caffè</title><body>Parcheggio in Piazza Cittadella 1, Piacenza</body>', RAQUEL, 'Piacenza', { indirizzo: 'Piazza Duomo, 23' })).toBe('nome');
+  });
+
+  it('collaudo di «restringi»: un sito trovato solo dal nome non scavalca l’Instagram del venditore né quello della mappa', () => {
+    const misura = { url: 'https://raquel.it/', aperto: true, https: true, titolo: 'Raquel Caffè', descrizione: null, telefonino: true, pagine: 1, funzioni: [], social: { instagram: 'https://www.instagram.com/raquel_altro/' }, piattaforma: null, anno: null, stima: 'semplice', errore: null, prova: 'nome' };
+    const conVenditore = primaScheda({ letto, osm: null, misura, citta: 'Piacenza', data: 'x', venditore: { canale: { sito: null, instagram: 'raquel_cafe23', facebook: null, tiktok: null } } });
+    expect(conVenditore.social.find((p) => p.canale === 'Instagram')).toMatchObject({ fonte: 'https://www.instagram.com/raquel_cafe23/', origine: 'venditore' });
+    expect(instagramPerIlFlusso(conVenditore)).toBe('raquel_cafe23');
+    const osm = { lat: 45, lon: 9, indirizzo: null, luogo: { nome: 'Raquel Cafè', tipo: 'cafe', telefono: null, sito: null, orari: null, instagram: 'https://www.instagram.com/raquel_cafe23/', facebook: null, fonte: 'https://www.openstreetmap.org/node/1' }, concorrenti: [], concorrentiContati: 0, raggio: 300, avvisi: [] };
+    const conMappa = primaScheda({ letto, osm, misura, citta: 'Piacenza', data: 'x' });
+    expect(conMappa.social.find((p) => p.canale === 'Instagram')).toMatchObject({ fonte: 'https://www.instagram.com/raquel_cafe23/', origine: 'mappa' });
+    expect(instagramPerIlFlusso(conMappa)).toBe('raquel_cafe23');
+    // Senza niente di certo, il profilo del sito solo-nome si mostra (da controllare) ma non va al 16.
+    const soloSito = primaScheda({ letto, osm: null, misura, citta: 'Piacenza', data: 'x' });
+    expect(soloSito.social.find((p) => p.canale === 'Instagram')?.giudizio).toMatch(/da controllare/);
+    expect(instagramPerIlFlusso(soloSito)).toBeNull();
+  });
+
+  it('fra la via e il civico solo un numero romano o «n.»: niente «int. 10», «20 settembre dalle 12», «1° piano»', () => {
+    expect(indirizzoNellaPagina('Via Roma 45 int. 10, Piacenza', 'Via Roma, 10, Piacenza')).toBe(false);
+    expect(indirizzoNellaPagina('Festa il 20 settembre dalle 12 in piazza', 'Via XX Settembre, 12, Piacenza')).toBe(false);
+    expect(indirizzoNellaPagina('Via Roma 15, 1° piano', 'Via Roma, 1, Piacenza')).toBe(false);
+    expect(indirizzoNellaPagina('Via 4 Novembre 50/10', 'Via 4 Novembre, 10, Piacenza')).toBe(false);
+    expect(indirizzoNellaPagina('Via XX Settembre 12, Piacenza', 'Via XX Settembre, 12, Piacenza')).toBe(true);
+  });
+
+  it('l’indirizzo si legge anche con «&nbsp;», nei dati strutturati, e con la via accorciata al primo nome («Via Dante»)', () => {
+    const ind = 'Piazza Duomo, 23, 29121 Piacenza PC';
+    expect(provaDelSito('<title>Raquel | Piacenza</title><body>Piazza Duomo&nbsp;n.&nbsp;23, Piacenza</body>', RAQUEL, 'Piacenza', { indirizzo: ind })).toBe('indirizzo');
+    expect(provaDelSito('<title>Raquel | Piacenza</title><script type="application/ld+json">{"address":{"streetAddress":"Piazza Duomo 23"}}</script><body>Piacenza</body>', RAQUEL, 'Piacenza', { indirizzo: ind })).toBe('indirizzo');
+    expect(indirizzoNellaPagina('Via Dante 5, Piacenza', 'Via Dante Alighieri, 5, 29121 Piacenza PC')).toBe(true);
+  });
+
+  it('il sito certo va a SDG e nel negozio; quello da confermare (solo in https) si chiede al titolare', () => {
+    const m = (prova, url = 'https://raquel.it/') => ({ url, aperto: true, prova });
+    expect(sitoCerto(m('indirizzo'))).toBe('https://raquel.it/');
+    expect(sitoCerto(m('venditore', 'http://raquel.it/'))).toBe('http://raquel.it/');
+    expect(sitoCerto(m(undefined))).toBe('https://raquel.it/');
+    expect(sitoCerto(m('nome'))).toBeNull();
+    expect(sitoCerto({ url: 'https://raquel.it/', aperto: false })).toBeNull();
+    expect(sitoDaConfermare({ sito: { misura: m('nome') } })).toBe('https://raquel.it/');
+    expect(sitoDaConfermare({ sito: { misura: m('nome', 'http://raquel.it/') } })).toBeNull();
+    expect(sitoDaConfermare({ sito: { misura: m('indirizzo') } })).toBeNull();
   });
 
   it('un numero romano in fondo al nome della via non è la parola che conta («Via Papa Giovanni XXIII»)', () => {

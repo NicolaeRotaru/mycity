@@ -64,6 +64,20 @@ export type Scheda = {
 
 // ———————————————————————————————— attrezzi
 
+/**
+ * 28/11/2026 — Il sito certo della scheda (aperto, e non riconosciuto solo dal nome), o `null`. Lo usano l'ordine a SDG e
+ * chi decide cosa entra nel negozio: un sito trovato solo dal nome può essere di un omonimo («restringi»).
+ */
+export function sitoCerto(m: MisuraSito | null | undefined): string | null {
+  return m?.aperto && m.prova !== 'nome' && /^https?:\/\//i.test(m.url) ? m.url : null;
+}
+
+/** Il sito trovato solo dal nome, in https, che il venditore può far confermare al titolare; altrimenti `null`. */
+export function sitoDaConfermare(s: Pick<Scheda, 'sito'>): string | null {
+  const m = s.sito?.misura;
+  return m?.aperto && m.prova === 'nome' && /^https:\/\//i.test(m.url) ? m.url : null;
+}
+
 export const httpsValido = (u: unknown): u is string => typeof u === 'string' && u.length <= 600 && /^https:\/\/[^\s"'<>]+$/.test(u);
 /** Una pagina aperta davvero dal programma: va bene anche in http (il sito di un negozio può non essere protetto). */
 const apertaDalProgramma = (u: unknown): u is string => typeof u === 'string' && u.length <= 600 && /^https?:\/\/[^\s"'<>]+$/.test(u);
@@ -168,9 +182,14 @@ export function primaScheda({ letto, osm, misura, citta, data, venditore = null 
   // I profili: prima quelli collegati dal sito stesso (confermati), poi quelli della mappa libera, solo se il
   // link porta davvero a quel social (sulla mappa chiunque può scrivere qualunque indirizzo).
   const DOMINI: Record<string, string> = { Instagram: 'instagram.com', Facebook: 'facebook.com', TikTok: 'tiktok.com' };
+  // 28/11/2026 (collaudo) — Un sito riconosciuto solo dal nome può essere di un omonimo: i suoi profili non scavalcano
+  // quello della mappa libera, e nemmeno quello copiato dal venditore (più sotto).
+  const sitoCerto = !!sitoAperto && sitoAperto.prova !== 'nome';
   const profilo = (canale: string, daSito?: string, daOsm?: string | null) => {
-    if (daSito && sitoAperto) social.push({ canale, stato: 'trovato', livello: 'da vedere', giudizio: 'Il sito dell’attività porta a questo profilo. Ritmo e video li guarda l’AD.', fonte: daSito, origine: 'sito' });
-    else if (daOsm && httpsValido(daOsm) && dominioDi(daOsm) === DOMINI[canale]) social.push({ canale, stato: 'trovato', livello: 'da vedere', giudizio: 'Profilo scritto sulla mappa libera: da controllare.', fonte: daOsm, origine: 'mappa' });
+    const dallaMappa = daOsm && httpsValido(daOsm) && dominioDi(daOsm) === DOMINI[canale] ? daOsm : null;
+    if (daSito && sitoCerto) social.push({ canale, stato: 'trovato', livello: 'da vedere', giudizio: 'Il sito dell’attività porta a questo profilo. Ritmo e video li guarda l’AD.', fonte: daSito, origine: 'sito' });
+    else if (dallaMappa) social.push({ canale, stato: 'trovato', livello: 'da vedere', giudizio: 'Profilo scritto sulla mappa libera: da controllare.', fonte: dallaMappa, origine: 'mappa' });
+    else if (daSito && sitoAperto) social.push({ canale, stato: 'trovato', livello: 'da vedere', giudizio: 'Il sito trovato dal nome porta a questo profilo: da controllare, come il sito.', fonte: daSito, origine: 'sito' });
   };
   profilo('Instagram', sitoAperto?.social.instagram, l?.instagram);
   profilo('Facebook', sitoAperto?.social.facebook, l?.facebook);
@@ -178,7 +197,7 @@ export function primaScheda({ letto, osm, misura, citta, data, venditore = null 
   // Il profilo copiato dal venditore dalla scheda Google: vale come trovato, se il sito non ne collega già uno.
   const dalVenditore: [string, 'Instagram' | 'Facebook' | 'TikTok'][] = [[venditore?.canale?.instagram ?? '', 'Instagram'], [venditore?.canale?.facebook ?? '', 'Facebook'], [venditore?.canale?.tiktok ?? '', 'TikTok']];
   for (const [nomeProfilo, canale] of dalVenditore) {
-    if (!nomeProfilo || social.some((p) => p.canale === canale && p.origine === 'sito')) continue;
+    if (!nomeProfilo || (sitoCerto && social.some((p) => p.canale === canale && p.origine === 'sito'))) continue;
     const i = social.findIndex((p) => p.canale === canale);
     const voce: Social = { canale, stato: 'trovato', livello: 'da vedere', giudizio: 'L’hai copiato tu dalla scheda Google. Ritmo e video li guarda l’AD.', fonte: linkDelProfilo(canale, nomeProfilo), origine: 'venditore' };
     if (i < 0) social.push(voce); else social[i] = voce;
