@@ -9,6 +9,7 @@ import type Stripe from 'stripe';
 import { getStripe, computeOrderSplit } from '@/lib/stripe/client';
 import { formatPriceFromCents } from '@/lib/format';
 import { marcaCarrelloRecuperato } from '@/lib/carrelli-abbandonati';
+import { togliIlPagatoDalCarrelloSalvato } from '@/lib/carrello-sul-server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { logger } from '@/lib/logger';
@@ -486,6 +487,9 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     // un ordine. Lo marca anche il browser, ma il browser puo' chiudersi — chi
     // paga e chiude la scheda non passa mai di li'. Qui il fatto e' certo.
     await marcaCarrelloRecuperato(admin, buyerId);
+    // R10-006 — Anche dal carrello salvato sul server, che chi non torna da Stripe ritrovava pieno
+    // (il perché in lib/carrello-sul-server.ts). Solo con ordini nuovi: un avviso ripetuto non ritocca.
+    await togliIlPagatoDalCarrelloSalvato(admin, buyerId, groups.flatMap((g) => g.items));
   }
   const daAvvisare = await suonaLaCampanellaAiNegozi(admin, createdOrderIds, pendingCheckoutId);
   const nuovi = createdOrderIds.filter((c) => daAvvisare.has(c.orderId));

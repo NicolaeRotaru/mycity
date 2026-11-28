@@ -255,7 +255,7 @@ export default function AdminProductsPage() {
                           {p.name}
                         </Link>
                         {p.external_marketplace && (
-                          <span className="inline-block mt-0.5 rounded-full bg-accent-100 text-accent-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase">
+                          <span className="inline-block mt-0.5 rounded-full bg-accent-100 text-accent-700 px-1.5 py-0.5 text-2xs font-semibold uppercase">
                             import · {p.external_marketplace}
                           </span>
                         )}

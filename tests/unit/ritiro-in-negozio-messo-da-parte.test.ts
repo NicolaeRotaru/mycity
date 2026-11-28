@@ -19,8 +19,8 @@ function leggi(file: string): string {
 }
 
 describe('il ritiro in negozio non si offre', () => {
-  it('l opzione e spenta', () => {
-    expect(RITIRO_IN_NEGOZIO_ATTIVO).toBe(false);
+  it('R12-009 — l opzione è accesa dal lancio (decisione di Nicola), gratis per il cliente', () => {
+    expect(RITIRO_IN_NEGOZIO_ATTIVO).toBe(true);
   });
 
   it('lo sconto e zero, cosi nessun negozio lo paga senza saperlo', () => {
@@ -102,7 +102,7 @@ describe('e in vetrina non si promette il ritiro finché è spento', () => {
     expect(temiDellaSpedizione(true)).toMatch(/ritiro in negozio/i);
   });
 
-  it('e la descrizione vera della pagina negozio — quella di Google e di WhatsApp — non lo promette', async () => {
+  it('e la descrizione vera della pagina negozio — quella di Google e di WhatsApp — segue l’interruttore', async () => {
     // Qui non si cerca una parola nel file: si ESEGUE la `generateMetadata` vera del guscio del
     // negozio. La riga del database la serve una risposta finta, e il negozio è il caso che conta:
     // approvato e SENZA descrizione propria, cioè quello in cui entra in gioco la frase di ripiego.
@@ -147,11 +147,16 @@ describe('e in vetrina non si promette il ritiro finché è spento', () => {
       ];
       for (const testo of scritte) {
         expect(testo, 'la descrizione della pagina negozio è sparita: questa prova non misura niente').toBeTruthy();
-        expect(
-          testo,
-          `con il ritiro spento la pagina negozio scrive «${testo}»: chi arriva dal QR in vetrina o ` +
-            'da un link su WhatsApp legge una promessa che alla cassa non trova',
-        ).not.toMatch(/ritiro/i);
+        // R12-009 — Dal lancio il ritiro è acceso: la vetrina lo dice. Spento, non lo deve promettere.
+        if (RITIRO_IN_NEGOZIO_ATTIVO) {
+          expect(testo, 'col ritiro acceso la pagina negozio non lo dice').toMatch(/ritiro in negozio/i);
+        } else {
+          expect(
+            testo,
+            `con il ritiro spento la pagina negozio scrive «${testo}»: chi arriva dal QR in vetrina o ` +
+              'da un link su WhatsApp legge una promessa che alla cassa non trova',
+          ).not.toMatch(/ritiro/i);
+        }
       }
       // E la frase c'è davvero: se sparisse tutta, il controllo qui sopra passerebbe senza motivo.
       expect(meta.description).toContain(fraseComeArriva());

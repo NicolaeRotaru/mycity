@@ -724,7 +724,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           <div className="flex justify-between"><span className="text-ink-600">Pagamento</span><span className="font-medium text-ink-800">{cod ? 'Contanti alla consegna' : 'Carta (online)'}</span></div>
           <div className="flex justify-between font-bold text-base pt-1 border-t border-cream-300"><span>Totale</span><span className="font-serif text-primary-800">{formatPrice(order.total_price)}</span></div>
           {!riepilogo.torna && (
-            <p className="border-t border-cream-200 pt-1 text-[12px] text-ink-500">
+            <p className="border-t border-cream-200 pt-1 text-xs text-ink-500">
               Le voci qui sopra non fanno esattamente il totale
               ({formatPrice(Math.abs(riepilogo.differenzaCentesimi) / 100)} di differenza).
               Il totale è quello scritto sull&apos;ordine.

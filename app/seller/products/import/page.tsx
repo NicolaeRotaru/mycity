@@ -307,7 +307,7 @@ function CaricamentoDaFile() {
                     <td className="p-2 font-medium text-ink-900 truncate max-w-xs">{r.name || '—'}</td>
                     <td className="p-2">{formatPrice(r.price)}</td>
                     <td className="p-2">{r.stock ?? '—'}</td>
-                    <td className="p-2"><code className="text-[10px] bg-cream-100 px-1 rounded">{r.category_slug}</code></td>
+                    <td className="p-2"><code className="text-2xs bg-cream-100 px-1 rounded">{r.category_slug}</code></td>
                     <td className="p-2">
                       {r.errors.length === 0 ? (
                         <span className="text-olive-700 inline-flex items-center gap-1"><CheckCircle2 size={12} /> OK</span>

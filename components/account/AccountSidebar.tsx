@@ -127,7 +127,7 @@ export default function AccountSidebar() {
           )}
           <div className="min-w-0">
             <p className="truncate font-serif text-[15px] font-bold text-ink-900">{name}</p>
-            <p className="truncate text-[12px] text-ink-500">
+            <p className="truncate text-xs text-ink-500">
               {since ? `Cliente dal ${since}` : email}
             </p>
           </div>
@@ -138,7 +138,7 @@ export default function AccountSidebar() {
       <div className="flex flex-col gap-2">
         {NAV.map((sec) => (
           <div key={sec.group}>
-            <p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.08em] text-ink-400">
+            <p className="mb-1 px-3 text-2xs font-bold uppercase tracking-[0.08em] text-ink-400">
               {sec.group}
             </p>
             <ul className="flex flex-col gap-0.5">
@@ -151,7 +151,7 @@ export default function AccountSidebar() {
                     <Link
                       href={n.href}
                       aria-current={on ? 'page' : undefined}
-                      className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-[14px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 ${
+                      className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 ${
                         on
                           ? 'bg-primary-50 font-bold text-primary-800'
                           : 'font-medium text-ink-700 hover:bg-cream-100 hover:text-ink-900'
@@ -186,7 +186,7 @@ export default function AccountSidebar() {
         type="button"
         onClick={handleSignOut}
         disabled={signingOut}
-        className="mt-1 flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[14px] font-medium text-ink-500 transition-colors hover:bg-secondary-50 hover:text-secondary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 disabled:opacity-60"
+        className="mt-1 flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-ink-500 transition-colors hover:bg-secondary-50 hover:text-secondary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 disabled:opacity-60"
       >
         <LogOut size={18} strokeWidth={2.2} className="shrink-0 text-ink-400" aria-hidden />
         Esci

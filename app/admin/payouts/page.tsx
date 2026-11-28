@@ -869,7 +869,7 @@ export default function AdminPayoutsPage() {
                               {t.label}
                             </span>
                             {o.stripe_transfer_id && (
-                              <span className="mt-0.5 block font-mono text-[10px] text-ink-400">
+                              <span className="mt-0.5 block font-mono text-2xs text-ink-400">
                                 {o.stripe_transfer_id.slice(0, 14)}…
                               </span>
                             )}

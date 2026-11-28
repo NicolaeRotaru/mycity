@@ -60,7 +60,7 @@ export function AdminStatCard({
         <span className={`inline-flex h-[38px] w-[38px] items-center justify-center rounded-md ${t.bg} ${t.fg}`}>
           <Icon size={19} strokeWidth={2.2} aria-hidden />
         </span>
-        <span className="text-[10px] font-bold uppercase tracking-[0.04em] text-ink-400">{label}</span>
+        <span className="text-2xs font-bold uppercase tracking-[0.04em] text-ink-400">{label}</span>
       </div>
       <p className="text-[26px] font-extrabold leading-none text-ink-900">{value}</p>
       {nota && <p className="mt-2 text-xs leading-snug text-ink-500">{nota}</p>}

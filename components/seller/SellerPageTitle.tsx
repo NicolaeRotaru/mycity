@@ -38,7 +38,7 @@ export default function SellerPageTitle({ eyebrow, title, sub, action, className
               {eyebrow}
             </p>
           )}
-          <h1 className="font-serif text-[30px] font-extrabold leading-[1.1] tracking-[-0.01em] text-ink-900">
+          <h1 className="font-serif text-3xl font-extrabold leading-[1.1] tracking-[-0.01em] text-ink-900">
             {title}
           </h1>
           {sub && <p className="mt-1.5 text-sm leading-relaxed text-ink-500">{sub}</p>}

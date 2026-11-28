@@ -225,7 +225,7 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={busy}
-          className="mt-3 inline-flex items-center gap-2 rounded-md bg-secondary-700 px-4 py-2.5 font-semibold text-white shadow-sm transition-colors hover:bg-secondary-800 disabled:opacity-60"
+          className="mt-3 inline-flex items-center gap-2 rounded-md bg-secondary-700 px-4 py-2.5 font-semibold text-white shadow-warm-sm transition-colors hover:bg-secondary-800 disabled:opacity-60"
         >
           {busy ? (
             <>

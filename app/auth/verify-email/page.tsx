@@ -86,7 +86,7 @@ function VerifyEmailInner() {
 
   return (
     <div className="mx-auto max-w-md p-6">
-      <div className="rounded-2xl bg-white p-8 shadow ring-1 ring-cream-300">
+      <div className="rounded-2xl bg-white p-8 shadow-warm ring-1 ring-cream-300">
         <div className="text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-50 text-primary-600">
             <Mail size={28} strokeWidth={2.2} aria-hidden />

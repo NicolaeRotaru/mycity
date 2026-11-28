@@ -63,9 +63,9 @@ export function fuoriZonaDiConsegna(opts: DoveVaLaConsegna & { pickupInStore?: b
  * Cosa si dice a chi abita fuori zona — un'offerta, non un muro.
  *
  * Il ritiro in negozio si nomina solo se è davvero acceso
- * (`RITIRO_IN_NEGOZIO_ATTIVO`): oggi è spento, e mandare qualcuno in negozio a
- * ritirare quando la cassa non glielo permette è una porta chiusa spacciata per
- * via d'uscita.
+ * (`RITIRO_IN_NEGOZIO_ATTIVO`, acceso dal lancio, R12-009): spento, mandare
+ * qualcuno in negozio a ritirare quando la cassa non glielo permette sarebbe una
+ * porta chiusa spacciata per via d'uscita.
  *
  * 28/10/2026 — Il messaggio diceva «Per ora consegniamo a Piacenza e
  * dintorni»: col confine a 5 km Podenzano, Rottofreno e Gossolengo restano

@@ -131,7 +131,7 @@ export default function RiderHistoryPage() {
           {orders.length} consegne completate · {formatPrice(totalEarned)} guadagnati
         </p>
         {lettura?.troncato && (
-          <p role="status" className="mt-1 text-[12px] font-semibold text-accent-800">
+          <p role="status" className="mt-1 text-xs font-semibold text-accent-800">
             Sono le tue ultime {orders.length} consegne: le più vecchie non sono contate qui.
           </p>
         )}

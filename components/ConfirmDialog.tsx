@@ -169,7 +169,7 @@ export function ConfirmDialogHost() {
     >
       <div
         ref={boxRef}
-        className="bg-white w-full sm:w-auto sm:min-w-[420px] sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden animate-slideUp sm:animate-popIn pb-[max(env(safe-area-inset-bottom),16px)] sm:pb-0"
+        className="bg-white w-full sm:w-auto sm:min-w-[420px] sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-warm-xl overflow-hidden animate-slideUp sm:animate-popIn pb-[max(env(safe-area-inset-bottom),16px)] sm:pb-0"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top accent bar brand */}
@@ -216,7 +216,7 @@ export function ConfirmDialogHost() {
             // Sul dialogo distruttivo il fuoco parte da «Annulla» (vedi sopra):
             // chi tira via le mani dalla tastiera non deve cancellare niente.
             autoFocus={!isDanger}
-            className={`px-4 py-3 rounded-xl font-bold text-white shadow-md active:scale-[0.98] transition-all ${
+            className={`px-4 py-3 rounded-xl font-bold text-white shadow-warm active:scale-[0.98] transition-all ${
               isDanger
                 ? 'bg-red-600 hover:bg-red-700 shadow-red-200'
                 : 'bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 shadow-primary-200'

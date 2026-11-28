@@ -151,7 +151,7 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
                   type="button"
                   onClick={() => remove(i)}
                   aria-label="Rimuovi immagine"
-                  className="absolute top-1 right-1 bg-white/90 text-ink-600 hover:text-red-600 rounded p-1 shadow"
+                  className="absolute top-1 right-1 bg-white/90 text-ink-600 hover:text-red-600 rounded p-1 shadow-warm"
                 >
                   <Trash2 size={14} aria-hidden />
                 </button>

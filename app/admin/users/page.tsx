@@ -1247,7 +1247,7 @@ function DetailPanel({
           <button
             type="button"
             onClick={onApprove}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg bg-olive-600 hover:bg-olive-700 text-white font-bold shadow-md"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg bg-olive-600 hover:bg-olive-700 text-white font-bold shadow-warm"
           >
             <CheckCircle2 size={18} strokeWidth={2.2} aria-hidden /> Approva
           </button>
@@ -1375,7 +1375,7 @@ function PannelloFattorino({
               type="button"
               onClick={onApprove}
               disabled={!puoApprovare}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg bg-olive-600 hover:bg-olive-700 text-white font-bold shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg bg-olive-600 hover:bg-olive-700 text-white font-bold shadow-warm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle2 size={18} strokeWidth={2.2} aria-hidden /> Approva
             </button>

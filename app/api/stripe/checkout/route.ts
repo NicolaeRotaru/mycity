@@ -17,7 +17,7 @@ import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { romeNow } from '@/lib/store-hours';
-import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
+import { motivoFasciaRifiutata, motivoRitiroRifiutato } from '@/lib/quando-arriva';
 import { rifiutoPerFasciaPiena } from '@/lib/ordini/giri-della-fascia';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
@@ -61,7 +61,8 @@ async function rifiutoDellaFascia(
   negozi: readonly { nome?: string | null; orari?: unknown }[],
   clienteId: string,
 ): Promise<string | null> {
-  if (body.pickupInStore) return null;
+  // R12-009 — Il ritiro non ha fascia, ma un negozio in ferie non si può ritirare.
+  if (body.pickupInStore) return motivoRitiroRifiutato(negozi);
   const rifiutata = motivoFasciaRifiutata(body.deliverySlot, negozi);
   if (rifiutata) return rifiutata;
   // 26/11/2026 — Al massimo `ORDINI_PER_FASCIA` giri per fascia (fatto `consegna.capienza`): al sesto
@@ -166,7 +167,7 @@ export const POST = conFilaPerRichiesta(withAuthRateLimit({ name: 'stripe-checko
     return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
   }
 
-  // Il ritiro in negozio e' messo da parte (RITIRO_IN_NEGOZIO_ATTIVO). Il
+  // Il ritiro in negozio passa dall'interruttore (RITIRO_IN_NEGOZIO_ATTIVO, acceso dal lancio, R12-009). Spento, il
   // browser potrebbe chiederlo lo stesso — una richiesta costruita a mano,
   // o una scheda aperta da prima del rilascio. Qui si spegne, una volta
   // sola, subito dopo la convalida: cosi' ogni uso piu' sotto lo vede gia'

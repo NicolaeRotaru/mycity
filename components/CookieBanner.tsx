@@ -136,7 +136,7 @@ export default function CookieBanner({ apertoDalServer = false }: { apertoDalSer
       style={{ bottom: fondoDellaBarra(corsieSotto(VARIABILE_ALTEZZA)) }}
       className="fixed inset-x-0 z-[100] p-3 sm:p-4"
     >
-      <div className="relative mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-cream-300">
+      <div className="relative mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-warm-xl ring-1 ring-cream-300">
         <h2 id="cookie-banner-title" ref={titoloRef} tabIndex={-1} className="flex items-center gap-2 text-base font-semibold text-ink-900 focus:outline-none">
           <Cookie size={18} strokeWidth={2.2} aria-hidden /> Cookie e tecnologie simili
         </h2>

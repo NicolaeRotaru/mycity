@@ -14,7 +14,7 @@ import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { romeNow } from '@/lib/store-hours';
-import { MOTIVO_FASCIA_PIENA, motivoFasciaRifiutata } from '@/lib/quando-arriva';
+import { MOTIVO_FASCIA_PIENA, motivoFasciaRifiutata, motivoRitiroRifiutato } from '@/lib/quando-arriva';
 import { eLaFasciaPienaDelDatabase, rifiutoPerFasciaPiena } from '@/lib/ordini/giri-della-fascia';
 // R09-009 — La fascia riportata al giorno della richiesta: una copia sola, condivisa con la carta.
 import { fasciaDelGiornoDellaRichiesta } from '@/lib/ordini/fascia-leggibile';
@@ -422,7 +422,7 @@ export const POST = conFilaPerRichiesta(withAuthRateLimit(
       return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
     }
 
-    // Il ritiro in negozio e' messo da parte (RITIRO_IN_NEGOZIO_ATTIVO). Il
+    // Il ritiro in negozio passa dall'interruttore (RITIRO_IN_NEGOZIO_ATTIVO, acceso dal lancio, R12-009). Spento, il
     // browser potrebbe chiederlo lo stesso — una richiesta costruita a mano,
     // o una scheda aperta da prima del rilascio. Qui si spegne, una volta
     // sola, subito dopo la convalida: cosi' ogni uso piu' sotto lo vede gia'
@@ -1034,7 +1034,11 @@ export const POST = conFilaPerRichiesta(withAuthRateLimit(
     // cassa propone «Domani»: rifiutare quell'ordine perché il negozio è chiuso
     // adesso vuol dire perdere tutti gli ordini della sera per il giorno dopo.
     const consegnaVeloce = eConsegnaVeloce({ fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore });
-    if (!body.pickupInStore) {
+    if (body.pickupInStore) {
+      // R12-009 — Il ritiro non ha fascia, ma un negozio in ferie (settimana tutta chiusa) non si ritira.
+      const noRitiro = motivoRitiroRifiutato((sellers ?? []).map((s) => ({ nome: s.store_name, orari: s.store_hours })));
+      if (noRitiro) return esciERilascia(ApiErrors.conflict(noRitiro));
+    } else {
       // 30/10/2026 (ondata 21) — Una fascia di oggi si sceglie fino a 60 minuti prima della fine
       // (scelta di Nicola). Alle 17:50 «In giornata · 15:00–18:00» vuol dire «arriva fra dieci
       // minuti»: il negozio la riceverebbe già in ritardo. La stessa regola della cassa.

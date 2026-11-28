@@ -189,7 +189,7 @@ export default function CameraCapture({ open, onClose, onCapture }: Props) {
               type="button"
               onClick={capture}
               disabled={!ready}
-              className="inline-flex items-center gap-2 rounded-full bg-primary-600 px-6 py-3 font-semibold text-white shadow-md hover:bg-primary-700 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full bg-primary-600 px-6 py-3 font-semibold text-white shadow-warm hover:bg-primary-700 disabled:opacity-50"
             >
               <Camera size={20} strokeWidth={2.2} aria-hidden /> Scatta
             </button>

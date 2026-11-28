@@ -86,6 +86,11 @@ const PAGINA_SPEDIZIONI = [
   'dalle 8 alle 21, a negozi aperti, con un fattorino in servizio',
   `Fino a ${KM} km`,
   "dal negozio, in linea d'aria",
+  // R12-009 (28/11/2026) — Il ritiro in negozio è acceso dal lancio, gratis per il cliente (decisione
+  // di Nicola). Riletta contro la cassa: col ritiro la consegna vale zero (lib/ordini/prezzi.ts), e
+  // la notifica «Ordine pronto … puoi passare a ritirarlo» parte dal database (migrazione 832).
+  'Ritiro in negozio',
+  'Niente spese di spedizione',
   'Tempi di consegna',
   // Lo spazio prima del punto è il grassetto della fascia che `testoDi` scioglie in uno spazio.
   "La consegna arriva nella fascia oraria che scegli in cassa . Se ti serve prima, c'è la consegna veloce in 30-60 minuti dalla conferma del negozio: si può dalle 8 alle 21, a negozi aperti, con un fattorino in servizio. Quando non si può, la cassa non te la propone.",
@@ -100,6 +105,8 @@ const PAGINA_SPEDIZIONI = [
   `Oltre alla spesa paghi solo la consegna: ${TRE_EURO} una volta sola per tutto il carrello, all’ora che scegli in cassa; ${UN_EURO} in più per ogni negozio in più e ${UN_EURO} in più per ogni negozio dove spendi meno di ${DIECI_EURO}; la consegna veloce ${UN_EURO} in più, compresa se un negozio è sotto i ${DIECI_EURO} . Non c'è un costo a chilometro.`,
   'Se ordini da più negozi la consegna resta una: il fattorino passa da tutti in un giro solo.',
   'Il totale lo vedi sempre in cassa, prima di confermare l’ordine.',
+  'Ritiro in negozio',
+  "Scegliendo il ritiro in negozio non paghi la consegna. Riceverai una notifica appena l'ordine sarà pronto.",
   'Tracciamento',
   'Da "I miei ordini" vedi in tempo reale:',
   'In attesa di conferma',

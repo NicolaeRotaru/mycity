@@ -92,7 +92,7 @@ function SchedaOrdine({ o, chiedendo, chiedi }: { o: Ordine; chiedendo: Azione |
   const s = d.dallaScheda;
   const piano = o.piano;
   return (
-    <article className="min-w-0 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-sm" aria-labelledby={`ordine-${o.id}`}>
+    <article className="min-w-0 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-warm-sm" aria-labelledby={`ordine-${o.id}`}>
       <header className="border-b border-ink-100 p-4 sm:p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id={`ordine-${o.id}`} className="font-serif text-xl font-extrabold text-ink-900">{o.nome_attivita}</h2>

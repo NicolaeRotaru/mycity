@@ -447,7 +447,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
                       <span className="sr-only">{mine ? 'Tu: ' : `${inArrivo ? 'Interlocutore' : counterpartName}: `}</span>
                       {it.msg.body}
                     </p>
-                    <p className={`text-[10px] mt-0.5 text-right ${mine ? 'text-primary-100' : 'text-ink-400'}`}>
+                    <p className={`text-2xs mt-0.5 text-right ${mine ? 'text-primary-100' : 'text-ink-400'}`}>
                       {formatTime(it.msg.created_at)}
                     </p>
                   </div>

@@ -54,7 +54,7 @@ function HealthTile({
         niente. Chi non vede lo schermo sente l'etichetta e la riga sotto, che
         il perche' lo scrivono per esteso.
       */}
-      <p className="text-[24px] font-extrabold leading-none text-ink-900" aria-hidden={value === NON_LETTO || undefined}>{value}</p>
+      <p className="text-2xl font-extrabold leading-none text-ink-900" aria-hidden={value === NON_LETTO || undefined}>{value}</p>
       <p className="mt-1.5 text-xs text-ink-500">{label}</p>
       {hint && <p className="mt-0.5 text-[11px] text-ink-400">{hint}</p>}
     </div>

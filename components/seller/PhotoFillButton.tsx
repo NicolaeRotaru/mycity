@@ -118,7 +118,7 @@ const PhotoFillButton = ({ onFilled, onImages }: Props) => {
           type="button"
           onClick={() => setCameraOpen(true)}
           disabled={busy}
-          className="flex-1 sm:flex-none bg-white text-primary-800 hover:bg-primary-50 disabled:opacity-60 px-4 py-2.5 rounded-md font-semibold whitespace-nowrap shadow-md flex items-center justify-center gap-2"
+          className="flex-1 sm:flex-none bg-white text-primary-800 hover:bg-primary-50 disabled:opacity-60 px-4 py-2.5 rounded-md font-semibold whitespace-nowrap shadow-warm flex items-center justify-center gap-2"
         >
           {busy ? (
             <>

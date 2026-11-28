@@ -17,6 +17,8 @@ import { toast } from 'sonner';
 import { riordina } from '@/lib/riordino';
 import {
   BUYER_TIMELINE,
+  BUYER_TIMELINE_RITIRO,
+  etichettaPronto,
   ORDER_STATUS_ICON,
   ORDER_STATUS_LABEL,
   isPastStatus,
@@ -425,8 +427,15 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
     OUT_FOR_DELIVERY: 'Il fattorino è in viaggio verso di te',
     DELIVERED: 'Consegnato — grazie!',
     CANCELED: 'Questo ordine è stato annullato',
+    // R12-009 — Col ritiro in negozio acceso il fattorino non c'è: a ritirare va il cliente, col codice.
+    ...(ritiroInNegozio
+      ? { READY: 'Pronto in negozio · passa a ritirarlo e mostra il codice', DELIVERED: 'Ritirato — grazie!' }
+      : {}),
   };
   const heroSub = HERO_SUBTITLE[status] ?? ORDER_STATUS_LABEL[status];
+  const passiDelCliente = ritiroInNegozio ? BUYER_TIMELINE_RITIRO : BUYER_TIMELINE;
+  const etichettaDelPasso = (passo: OrderStatus) =>
+    passo === 'READY' ? etichettaPronto(ritiroInNegozio) : ORDER_STATUS_LABEL[passo];
 
   // "Consegna stimata": in OUT_FOR_DELIVERY usiamo l'ETA DERIVATA (rider→cliente)
   // se disponibile ("~N min"); altrimenti una finestra relativa coerente col copy
@@ -723,10 +732,10 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             <div className="text-sm text-red-700">Questo ordine è stato annullato.</div>
           ) : (
             <ol className="relative">
-              {BUYER_TIMELINE.map((step, i) => {
+              {passiDelCliente.map((step, i) => {
                 const past = isPastStatus(status, step);
                 const active = isActiveStatus(status, step);
-                const isLast = i === BUYER_TIMELINE.length - 1;
+                const isLast = i === passiDelCliente.length - 1;
                 const StepIcon = ORDER_STATUS_ICON[step];
                 const tsKey = STEP_TIMESTAMP[step];
                 const ts = tsKey ? (order[tsKey] as string | null) : null;
@@ -752,7 +761,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                     {/* Testo: stato veicolato anche a parole (non solo via colore) */}
                     <div className="pb-5">
                       <p className={`text-base ${active ? 'font-bold' : 'font-semibold'} ${past || active ? 'text-ink-900' : 'text-ink-400'}`}>
-                        {ORDER_STATUS_LABEL[step]}
+                        {etichettaDelPasso(step)}
                       </p>
                       <p className="mt-0.5 text-sm text-ink-500">
                         {active ? (HERO_SUBTITLE[status] ?? 'In corso') : past ? 'Completato' : 'In attesa'}
