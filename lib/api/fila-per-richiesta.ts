@@ -30,10 +30,16 @@ const filaDellaRichiesta = new AsyncLocalStorage<object>();
  * Avvolge il gestore di una rotta: dentro, i lavori dopo la risposta usano la fila di QUESTA
  * richiesta. Una rotta chiamata da un'altra rotta (app/api/chat/conversations → messages) resta
  * nella fila di chi l'ha chiamata: una richiesta, una fila.
+ *
+ * Il tipo resta quello del gestore, intero: gli involucri di lib/api/middleware.ts danno alla rotta
+ * due firme (con e senza il contesto di Next, `RottaDiNext`), e un generico sugli argomenti ne
+ * teneva solo l'ultima, quella senza contesto.
  */
-export function conFilaPerRichiesta<A extends unknown[], R>(gestore: (...argomenti: A) => R): (...argomenti: A) => R {
-  return (...argomenti: A) =>
-    filaDellaRichiesta.getStore() ? gestore(...argomenti) : filaDellaRichiesta.run({}, () => gestore(...argomenti));
+export function conFilaPerRichiesta<F extends (...argomenti: never[]) => unknown>(gestore: F): F {
+  const chiama = gestore as unknown as (...argomenti: unknown[]) => unknown;
+  const avvolto = (...argomenti: unknown[]) =>
+    filaDellaRichiesta.getStore() ? chiama(...argomenti) : filaDellaRichiesta.run({}, () => chiama(...argomenti));
+  return avvolto as unknown as F;
 }
 
 /** La chiave della richiesta avvolta in corso, o `null` fuori da una richiesta avvolta. */
