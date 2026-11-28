@@ -332,16 +332,65 @@ describe('il titolare tocca un altro abbonamento, conferma col codice dell email
     expect(r.querySelector('[role="alert"]')?.textContent).toContain('password di almeno 8 caratteri');
   });
 
+  // Collaudo del 28/11: le strade normali del secondo passo non devono perdere la password per strada.
+  it('codice sbagliato e poi giusto: anche il secondo invio porta la password', async () => {
+    let risposte = 0;
+    const chiamate: Array<{ url: string; corpo: Record<string, unknown> }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      chiamate.push({ url, corpo: JSON.parse(String(init.body)) });
+      if (url.endsWith('/codice')) return new Response(JSON.stringify({ ok: true, data: { gettone: 'gettone-firmato' } }), { status: 200 });
+      risposte += 1;
+      return risposte === 1
+        ? new Response(JSON.stringify({ ok: false, error: { message: 'Il codice non è giusto.' } }), { status: 400 })
+        : new Response(JSON.stringify({ ok: true, data: { url: null, entra: '/seller/abbonamento', accessoInviato: true } }), { status: 200 });
+    }));
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await primoPasso(r);
+    await scriviCodice(r, '000000');
+    await invia(r);
+    await scriviCodice(r, '123456');
+    await invia(r);
+    const accetta = chiamate.filter((c) => c.url.endsWith('/accetta'));
+    expect(accetta.map((c) => c.corpo.password)).toEqual([PASSWORD, PASSWORD]);
+    expect(vai).toHaveBeenCalledWith('/seller/abbonamento');
+  });
+
+  it('«rimanda il codice» e poi il codice nuovo: la conferma porta ancora la password', async () => {
+    const chiamate = serverFinto({ status: 200, corpo: { ok: true, data: { url: null, entra: '/seller/abbonamento', accessoInviato: true } } });
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await primoPasso(r);
+    const rimanda = [...r.querySelectorAll('button')].find((b) => b.textContent === 'rimanda il codice') as HTMLButtonElement;
+    await premi(rimanda);
+    await act(async () => { await new Promise((ok) => setTimeout(ok, 0)); });
+    await scriviCodice(r, '654321');
+    await invia(r);
+    expect(chiamate.filter((c) => c.url.endsWith('/codice'))).toHaveLength(2);
+    expect(chiamate.at(-1)).toMatchObject({ url: `/api/preventivo/${CODICE}/accetta`, corpo: { password: PASSWORD, codice: '654321' } });
+  });
+
+  it('una password oltre il tetto di Supabase (37 «è»: 37 caratteri, 74 byte) non fa partire il codice', async () => {
+    const posta = vi.fn();
+    vi.stubGlobal('fetch', posta);
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await premi(oraVisita(r, '10:00'));
+    await scriviEmail(r, 'titolare@grida.it');
+    await scriviPassword(r, 'è'.repeat(37));
+    await premi(r.querySelector('input[type="checkbox"]:not([name="servizi"])') as HTMLInputElement);
+    await invia(r);
+    expect(posta).not.toHaveBeenCalled();
+    expect(r.querySelector('[role="alert"]')?.textContent).toContain('troppo lunga');
+  });
+
   it('la password che Supabase trova troppo debole: si torna alla scelta, col campo vuoto e il messaggio', async () => {
-    const { PASSWORD_TROPPO_DEBOLE } = await import('@/lib/agenzia/password-dal-link');
-    serverFinto({ status: 409, corpo: { ok: false, error: { message: PASSWORD_TROPPO_DEBOLE } } });
+    const { PASSWORD_RUBATA } = await import('@/lib/auth/errori-nuova-password');
+    serverFinto({ status: 409, corpo: { ok: false, error: { message: PASSWORD_RUBATA } } });
     const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
     await primoPasso(r);
     await scriviCodice(r, '123456');
     await invia(r);
     expect(r.querySelector('#codice-email')).toBeNull();
     expect((r.querySelector('#password-titolare') as HTMLInputElement).value).toBe('');
-    expect(r.querySelector('[role="alert"]')?.textContent).toContain('troppo facile da indovinare');
+    expect(r.querySelector('[role="alert"]')?.textContent).toContain('password rubate');
     expect(vai).not.toHaveBeenCalled();
   });
 

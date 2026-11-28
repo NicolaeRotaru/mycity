@@ -39,6 +39,8 @@ const db = vi.hoisted(() => ({
   link: [] as Array<Record<string, unknown>>,
   utente: [] as Array<Record<string, unknown>>,
   erroreUtente: null as null | { message: string; code?: string },
+  /** 28/11 — La riapertura del preventivo non riesce (doppio guasto). */
+  riaperturaRotta: false,
   postaRotta: false,
   sblocchi: [] as string[],
   avvisi: [] as string[],
@@ -109,6 +111,7 @@ vi.mock('@/lib/supabase/server', () => {
           return { data: [], error: null };
         },
         then: (res: (v: unknown) => unknown) => {
+          if (db.riaperturaRotta && valori.stato === 'aperto') return res({ error: { message: 'database giù' } });
           const p = db.preventivo;
           if (p && p.codice === filtri.codice) Object.assign(p, valori);
           return res({ error: null });
@@ -185,6 +188,7 @@ beforeEach(() => {
   db.link = [];
   db.utente = [];
   db.erroreUtente = null;
+  db.riaperturaRotta = false;
   db.erroreVisita = null;
   db.postaRotta = false;
   db.sblocchi = [];
@@ -498,7 +502,9 @@ describe('la visita di SDG scelta nel link', () => {
  * 28/11/2026 verso le 13:30 — Nicola, iscrivendo un bar dal telefono: il pulsante dell'email vale una volta sola,
  * poi «Accedi» chiede email e password, e il titolare una password non l'aveva mai scelta. Casi (dato → atteso):
  *  · con la password → va sull'utente del negozio insieme all'email, e l'email dice «con la password che hai scelto»;
- *  · 7 caratteri, o 73 → 400 prima del codice, niente si accetta, l'utente non si tocca;
+ *  · 7 caratteri, 73, o 40 «è» (40 caratteri ma 80 byte: Supabase conta i byte) → 400 prima del codice, niente
+ *    si accetta, l'utente non si tocca;
+ *  · la password non compare mai in avvisi a Nicola, email (html e testo) e registri;
  *  · senza password (pagina aperta prima di oggi) → si accetta come prima, e l'email dice «Password dimenticata?»;
  *  · Supabase la rifiuta (weak_password, 422) → 409 col messaggio della password, il preventivo torna aperto,
  *    nessun avviso «email già usata»;
@@ -519,7 +525,23 @@ describe('la password scelta nel link', () => {
     expect(String(accesso.html)).not.toContain(PASSWORD);
   });
 
-  it.each([['7 caratteri', '1234567'], ['73 caratteri', 'a'.repeat(73)]])('%s: 400 prima del codice, niente si accetta', async (_n, password) => {
+  it('non compare mai in avvisi a Nicola, email e registri, nemmeno quando Supabase la rifiuta', async () => {
+    const c = await chiediCodice();
+    db.erroreUtente = { message: 'Password is known to be weak', code: 'weak_password' };
+    await conferma(c, { password: PASSWORD });
+    db.erroreUtente = null;
+    const ok = await conferma(c, { password: PASSWORD });
+    expect(ok.status).toBe(200);
+    const { logger } = await import('@/lib/logger');
+    const registri = JSON.stringify([vi.mocked(logger.error).mock.calls, vi.mocked(logger.warn).mock.calls, vi.mocked(logger.info).mock.calls]);
+    expect(registri).toContain('password rifiutata');
+    expect(registri).not.toContain(PASSWORD);
+    expect(db.testiAvvisi.length).toBeGreaterThan(0);
+    expect(JSON.stringify([db.avvisi, db.testiAvvisi])).not.toContain(PASSWORD);
+    expect(JSON.stringify(db.posta)).not.toContain(PASSWORD);
+  });
+
+  it.each([['7 caratteri', '1234567'], ['73 caratteri', 'a'.repeat(73)], ['40 «è», 80 byte', 'è'.repeat(40)]])('%s: 400 prima del codice, niente si accetta', async (_n, password) => {
     const c = await chiediCodice();
     const r = await conferma(c, { password });
     expect(r.status).toBe(400);
@@ -539,15 +561,40 @@ describe('la password scelta nel link', () => {
     expect(String(db.posta.at(-1)!.html)).toContain('Password dimenticata?');
   });
 
-  it('Supabase la trova troppo debole: 409 col messaggio della password, il preventivo torna aperto, nessun avviso', async () => {
-    const { PASSWORD_TROPPO_DEBOLE } = await import('@/lib/agenzia/password-dal-link');
+  it('Supabase la trova troppo semplice: 409 col motivo, il preventivo torna aperto, nessun avviso', async () => {
+    const { PASSWORD_SEMPLICE } = await import('@/lib/auth/errori-nuova-password');
     const c = await chiediCodice();
     db.erroreUtente = { message: 'Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz, 0123456789', code: 'weak_password' };
     const r = await conferma(c, { password: 'abcdefgh' });
     expect(r.status).toBe(409);
-    expect((await r.json()).error.message).toBe(PASSWORD_TROPPO_DEBOLE);
+    expect((await r.json()).error.message).toBe(PASSWORD_SEMPLICE);
     expect(db.preventivo?.stato).toBe('aperto');
     expect(db.avvisi).toEqual([]);
+  });
+
+  // Collaudo del 28/11: con la classe vera di Supabase, e il motivo che manda. Una password lunga ma rubata non
+  // deve sentirsi dire «aggiungi numeri»: girerebbe in tondo, un codice nuovo a ogni giro.
+  it('la classe vera di Supabase con motivo «pwned»: il titolare legge che è una password rubata', async () => {
+    const { AuthWeakPasswordError } = await import('@supabase/supabase-js');
+    const { PASSWORD_RUBATA } = await import('@/lib/auth/errori-nuova-password');
+    const c = await chiediCodice();
+    db.erroreUtente = new AuthWeakPasswordError('Password is known to be weak and easy to guess, please choose a different one.', 422, ['pwned']) as unknown as { message: string; code?: string };
+    const r = await conferma(c, { password: 'Juventus-1897-campioni' });
+    expect(r.status).toBe(409);
+    expect((await r.json()).error.message).toBe(PASSWORD_RUBATA);
+    expect(db.preventivo?.stato).toBe('aperto');
+  });
+
+  it('password rifiutata e preventivo che non si riapre: «scrivici» al titolare e un avviso a Nicola', async () => {
+    const c = await chiediCodice();
+    db.erroreUtente = { message: 'Password should be at least 10 characters.', code: 'weak_password' };
+    db.riaperturaRotta = true;
+    const r = await conferma(c, { password: PASSWORD });
+    expect(r.status).toBe(409);
+    expect((await r.json()).error.message).toContain('Scrivici');
+    expect(db.avvisi).toHaveLength(1);
+    expect(db.testiAvvisi[0]).toContain('riaprilo a mano');
+    expect(db.testiAvvisi[0]).not.toContain(PASSWORD);
   });
 
   it('un errore che nomina la password ma non è weak_password resta il percorso dell email', async () => {

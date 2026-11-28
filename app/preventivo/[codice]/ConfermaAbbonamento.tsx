@@ -8,7 +8,7 @@ import { ETICHETTE_SERVIZI, SERVIZI_AGENZIA, SPIEGAZIONE_AL_TITOLARE, type Servi
 import { FRASE_CONTANTI, PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagamento-servizi';
 import { DURATA_VISITA, GIORNO_NON_PIU_VALIDO, ORA_GIA_PRESA, type GiornoVisita } from '@/lib/agenzia/visita-sdg';
 import { PasswordInput } from '@/components/ui/Field';
-import { PASSWORD_MASSIMA, PASSWORD_MINIMA, PASSWORD_TROPPO_DEBOLE } from '@/lib/agenzia/password-dal-link';
+import { byteDellaPassword, eFraseDellaPassword, PASSWORD_MASSIMA, PASSWORD_MINIMA, PASSWORD_TROPPO_LUNGA } from '@/lib/agenzia/password-dal-link';
 
 /**
  * LE TRE FASCE, IL CODICE DELL'EMAIL E L'INGRESSO — 27/11/2026 (app/preventivo/[codice]/page.tsx).
@@ -128,7 +128,7 @@ export default function ConfermaAbbonamento({
         setVisita(null);
         setFase('scelta');
       }
-      if (messaggio === PASSWORD_TROPPO_DEBOLE) {
+      if (eFraseDellaPassword(messaggio)) {
         // Il campo della password sta nel primo passo: si torna lì, vuoto, e si riconferma con un codice nuovo.
         setPassword('');
         setFase('scelta');
@@ -169,6 +169,10 @@ export default function ConfermaAbbonamento({
     }
     if (password.length < PASSWORD_MINIMA) {
       setErrore(`Scegli una password di almeno ${PASSWORD_MINIMA} caratteri: ti serve per rientrare nella tua pagina.`);
+      return;
+    }
+    if (byteDellaPassword(password) > PASSWORD_MASSIMA) {
+      setErrore(PASSWORD_TROPPO_LUNGA);
       return;
     }
     if (!condizioni) {

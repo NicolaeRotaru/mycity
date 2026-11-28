@@ -13,7 +13,7 @@ import { sbloccaInContanti, sbloccoRiuscito } from '@/lib/agenzia/abbonamento-co
 import { ORA_GIA_PRESA, scriviVisita } from '@/lib/agenzia/visita-sdg';
 import { creaOrdineSdg } from '@/lib/agenzia/ordine-sdg';
 import { ETICHETTE_SERVIZI, leggiServiziScelti, type ServizioAgenzia } from '@/lib/agenzia/servizi-scelti';
-import { PASSWORD_TROPPO_DEBOLE } from '@/lib/agenzia/password-dal-link';
+import { fraseDellaPasswordRifiutata } from '@/lib/agenzia/password-dal-link';
 
 /**
  * IL PREVENTIVO COL LINK COL CODICE — 24/11/2026.
@@ -57,8 +57,8 @@ import { PASSWORD_TROPPO_DEBOLE } from '@/lib/agenzia/password-dal-link';
  * 28/11/2026 verso le 13:30 — Nicola, iscrivendo un bar: il pulsante dell'email vale una volta sola, poi «Accedi»
  * chiede email e password, e il titolare una password non l'aveva mai scelta: restava fuori. Ora la sceglie nel
  * link, insieme all'email (`password`, già controllata da chi chiama), e va sull'utente nella stessa scrittura
- * dell'email. Se Supabase la trova troppo debole, niente si accetta: il preventivo torna aperto e il titolare ne
- * sceglie un'altra. Assente (pagina aperta prima di oggi): si accetta come prima, e si rientra dall'email.
+ * dell'email. Se Supabase la trova troppo debole, niente si accetta: il preventivo torna aperto, il titolare legge
+ * il motivo (rubata, corta, semplice) e ne sceglie un'altra. Assente (pagina aperta prima di oggi): si accetta come prima, e si rientra dall'email.
  *
  * 28/11/2026 verso le 01:40 — Nicola: i servizi li sceglie il venditore in anticipo, «però lo deve poter fare
  * anche» il cliente. Il link mostra i servizi segnati dal venditore (`serviziScelti`), il titolare li può cambiare
@@ -227,10 +227,21 @@ export async function accettaPreventivoColCodice(input: {
     // 28/11 — La password troppo debole non è un'email già usata: il titolare ne sceglie un'altra e riconferma.
     if (input.password && passwordRifiutata(utente.error as { code?: string; message?: string; name?: string })) {
       logger.warn('[preventivo-codice] password rifiutata da Supabase', { sellerId: id, riaperto });
+      if (!riaperto) {
+        // Doppio guasto (collaudo del 28/11): il titolare legge «scrivici», ma senza questo avviso nessuno lo sa.
+        await notifyAdmins(
+          `${preventivo.nomeAttivita} non è riuscito ad accettare il preventivo`,
+          'Supabase ha rifiutato la password scelta dal titolare, e il preventivo NON è tornato aperto (risulta accettato ma senza email): riaprilo a mano, poi chiamalo.',
+          '/admin/preventivi',
+          { unaVoltaPer: `preventivo-password-rifiutata:${id}` },
+        ).catch((e: unknown) => logger.warn('[preventivo-codice] avviso password rifiutata non partito', { sellerId: id, errore: String(e) }));
+      }
       return {
         ok: false,
         motivo: 'PASSWORD_DEBOLE',
-        messaggio: riaperto ? PASSWORD_TROPPO_DEBOLE : 'Non sono riuscito a salvare la password. Scrivici e lo sistemiamo noi.',
+        messaggio: riaperto
+          ? fraseDellaPasswordRifiutata(utente.error as { message?: unknown; code?: unknown; reasons?: unknown })
+          : 'Non sono riuscito a salvare la password. Scrivici e lo sistemiamo noi.',
       };
     }
     // 27/11/2026 23:34 — Nicola, su Luna Rossa: codice giusto, e la pagina diceva solo «non sono riuscito a

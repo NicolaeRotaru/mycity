@@ -14,7 +14,7 @@ import { chiaveDelGettone, verificaCodice } from '@/lib/agenzia/codice-dal-link'
 import { sessioneDalLink, type SessioneDalLink } from '@/lib/agenzia/entra-dal-link';
 import { richiestaDalSito } from '@/lib/agenzia/richiesta-dal-sito';
 import { GIORNO_NON_PIU_VALIDO, orarioDellaVisitaValido } from '@/lib/agenzia/visita-sdg';
-import { PASSWORD_MASSIMA, PASSWORD_MINIMA } from '@/lib/agenzia/password-dal-link';
+import { byteDellaPassword, PASSWORD_MASSIMA, PASSWORD_MINIMA, PASSWORD_TROPPO_LUNGA } from '@/lib/agenzia/password-dal-link';
 
 export const runtime = 'nodejs';
 
@@ -46,8 +46,8 @@ export const runtime = 'nodejs';
  * Senza `visita` si accetta lo stesso (nessun giorno libero, o pagina vecchia): l'avviso a Nicola lo dice.
  *
  * 28/11/2026 verso le 13:30 — Nicola, iscrivendo un bar: «deve anche inserire la password, così può accedere con
- * email e password che ha inserito nell'iscrizione». `password` (8-72 caratteri, come la registrazione; 72 è il
- * tetto di Supabase) va sull'utente del negozio con l'email. Si controlla prima del codice, così una password
+ * email e password che ha inserito nell'iscrizione». `password` (almeno 8 caratteri, come la registrazione; al
+ * massimo 72 byte, il tetto di Supabase) va sull'utente del negozio con l'email. Si controlla prima del codice, così una password
  * corta non consuma un tentativo. Assente (pagina aperta prima di oggi): si accetta come prima.
  */
 
@@ -67,7 +67,8 @@ const Richiesta = z.object({
   password: z
     .string()
     .min(PASSWORD_MINIMA, `La password deve avere almeno ${PASSWORD_MINIMA} caratteri.`)
-    .max(PASSWORD_MASSIMA, `La password può avere al massimo ${PASSWORD_MASSIMA} caratteri.`)
+    // Il tetto di Supabase è in byte (lib/agenzia/password-dal-link.ts): «è» ne vale due.
+    .refine((p) => byteDellaPassword(p) <= PASSWORD_MASSIMA, PASSWORD_TROPPO_LUNGA)
     .optional(),
 });
 
