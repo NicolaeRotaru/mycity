@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -563,7 +563,7 @@ function AdminUsersPageInner() {
    * data di nascita: solo quando si apre la scheda di un fattorino, con link
    * firmati brevi, e la lettura resta a verbale.
    */
-  const { data: documentiRider, isLoading: documentiRiderInArrivo } = useQuery({
+  const { data: documentiRider, isLoading: documentiRiderInArrivo, refetch: rileggiDocumentiRider } = useQuery({
     queryKey: [...queryKeys.admin.users(), 'documenti-rider', detailId],
     enabled: !!detailId && detail?.role === 'rider',
     gcTime: 0,
@@ -1013,6 +1013,7 @@ function AdminUsersPageInner() {
           profile={detail}
           datiIdentita={datiIdentita ?? null}
           documentiRider={documentiRiderInArrivo ? undefined : (documentiRider ?? null)}
+          rinnovaLinkDocumenti={() => { void rileggiDocumentiRider(); }}
           onClose={() => setDetailId(null)}
           onApprove={() => { approve.mutate(detail.id); setDetailId(null); }}
           onReject={async () => {
@@ -1147,7 +1148,7 @@ function datoIdentita(d: DatiIdentita | null, campo: 'legal_fiscal_code' | 'busi
 }
 
 function DetailPanel({
-  profile, datiIdentita, documentiRider, onClose, onApprove, onReject,
+  profile, datiIdentita, documentiRider, rinnovaLinkDocumenti, onClose, onApprove, onReject,
 }: {
   profile: Profile;
   // #81 — Codice fiscale e partita IVA arrivano solo qui, per questo utente,
@@ -1155,6 +1156,8 @@ function DetailPanel({
   datiIdentita: DatiIdentita | null;
   /** Solo per i fattorini: undefined = in arrivo, null = lettura non riuscita. */
   documentiRider?: DatiEsameRider | null;
+  /** Solo per i fattorini: chiede link nuovi ai documenti (una lettura in più nel registro). */
+  rinnovaLinkDocumenti?: () => void;
   onClose: () => void;
   onApprove: () => void;
   onReject: () => void;
@@ -1185,6 +1188,7 @@ function DetailPanel({
         profile={profile}
         datiIdentita={datiIdentita}
         documentiRider={documentiRider}
+        rinnovaLink={rinnovaLinkDocumenti}
         onClose={onClose}
         onApprove={onApprove}
         onReject={onReject}
@@ -1274,16 +1278,35 @@ function etichettaVeicolo(tipo: string | null | undefined): string {
   return VEICOLI[tipo] ?? tipo;
 }
 
+/**
+ * 28/11/2026 (R04-005) — I LINK AI DOCUMENTI SCADONO ANCHE A PANNELLO APERTO.
+ * La rotta firma i link per 120 secondi (app/api/kyc/documenti-rider/[id]/route.ts). Il pannello
+ * li rileggeva solo tornando sulla scheda: chi restava a guardare la patente, poi apriva la
+ * polizza, trovava la pagina d'errore del deposito. Poco prima della scadenza i link lasciano il
+ * posto a «Rinnova il link»: una lettura nuova (e una riga nel registro) solo quando la si chiede,
+ * niente rilettura a orologio.
+ */
+const LINK_DOCUMENTI_VALIDI_MS = 110_000;
+
 function PannelloFattorino({
-  profile, datiIdentita, documentiRider, onClose, onApprove, onReject,
+  profile, datiIdentita, documentiRider, rinnovaLink, onClose, onApprove, onReject,
 }: {
   profile: Profile;
   datiIdentita: DatiIdentita | null;
   documentiRider?: DatiEsameRider | null;
+  rinnovaLink?: () => void;
   onClose: () => void;
   onApprove: () => void;
   onReject: () => void;
 }) {
+  const [linkScaduti, setLinkScaduti] = useState(false);
+  useEffect(() => {
+    // Documenti nuovi (prima lettura o rinnovo): link freschi, e l'orologio riparte da qui.
+    setLinkScaduti(false);
+    if (!documentiRider?.documenti?.some((d) => d.url)) return;
+    const t = setTimeout(() => setLinkScaduti(true), LINK_DOCUMENTI_VALIDI_MS);
+    return () => clearTimeout(t);
+  }, [documentiRider]);
   const inArrivo = documentiRider === undefined;
   const esito = esameRider(documentiRider ?? null, giornoPiacenza());
   const motivi = inArrivo
@@ -1356,7 +1379,11 @@ function PannelloFattorino({
           {esito.documenti.map((d) => (
             <DetailRow key={d.chiave} label={d.etichetta}>
               <span className="inline-flex flex-wrap items-center gap-2">
-                {d.url ? (
+                {d.url && linkScaduti ? (
+                  <button type="button" onClick={rinnovaLink} className="text-primary-700 underline">
+                    Link scaduto: rinnova il link
+                  </button>
+                ) : d.url ? (
                   <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-primary-700 underline">
                     Apri {d.etichetta.toLowerCase()}
                   </a>
