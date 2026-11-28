@@ -127,7 +127,18 @@ async function colonneFacoltative(admin: SupabaseClient, codice: string, colonne
 }
 
 /** Crea l'ordine di servizio per SDG di un preventivo appena accettato. Non lancia mai. */
-export async function creaOrdineSdg(input: { sellerId: string; codice: string; fascia: Abbonamento; visitaIl?: string | null }): Promise<EsitoOrdineSdg> {
+export async function creaOrdineSdg(input: {
+  sellerId: string;
+  codice: string;
+  fascia: Abbonamento;
+  visitaIl?: string | null;
+  /**
+   * Collaudo 28/11/2026 — I servizi confermati dal titolare nel link. Valgono loro, non quelli riletti dal preventivo:
+   * se la loro scrittura sul preventivo non è riuscita (o manca la 999h), dal database tornerebbero quelli del
+   * venditore (o tutti e quattro) e partirebbero i lavori sbagliati. Assenti: si rileggono dal preventivo.
+   */
+  servizi?: readonly ServizioAgenzia[] | null;
+}): Promise<EsitoOrdineSdg> {
   try {
     return await creaOrdine(input);
   } catch (e) {
@@ -136,7 +147,7 @@ export async function creaOrdineSdg(input: { sellerId: string; codice: string; f
   }
 }
 
-async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: string; codice: string; fascia: Abbonamento; visitaIl?: string | null }): Promise<EsitoOrdineSdg> {
+async function creaOrdine({ sellerId, codice, fascia, visitaIl, servizi: confermati }: { sellerId: string; codice: string; fascia: Abbonamento; visitaIl?: string | null; servizi?: readonly ServizioAgenzia[] | null }): Promise<EsitoOrdineSdg> {
   if (!fasciaValida(fascia)) return { ok: false, motivo: 'guasto', dettaglio: `fascia non valida: ${String(fascia)}` };
   const admin = getAdminSupabase();
 
@@ -156,7 +167,9 @@ async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: st
     // 28/11 — I servizi scelti dall'agente (999h): prima della migrazione non ci sono, e valgono tutti e quattro.
     colonneFacoltative(admin, codice, 'servizi_scelti, nota_agente'),
   ]);
-  const { servizi, nota: notaAgente } = leggiServiziScelti(richiesta?.servizi_scelti, richiesta?.nota_agente);
+  const letti = leggiServiziScelti(richiesta?.servizi_scelti, richiesta?.nota_agente);
+  const notaAgente = letti.nota;
+  const servizi = (confermati?.length ? leggiServiziScelti(confermati, null).servizi : null) ?? letti.servizi;
   const p = (profilo.data ?? {}) as { store_name?: string | null; store_address?: string | null; city?: string | null; business_type?: string | null; business_type_detail?: string | null };
   const nome = String(p.store_name ?? '').trim().slice(0, 120) || 'Attività senza nome';
   const tipo = tipoDelProfilo(p.business_type);

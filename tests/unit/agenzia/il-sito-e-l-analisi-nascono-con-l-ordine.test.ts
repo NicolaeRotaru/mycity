@@ -460,4 +460,43 @@ describe('⑦ valgono i servizi confermati dal cliente, non quelli del venditore
     expect((await accetta('base', ['sito_web'])).ok).toBe(true);
     expect(stato.db.tabelle.preventivi_con_codice[0].stato).toBe('accettato');
   });
+
+  // Collaudo 28/11/2026 — L'ordine rileggeva i servizi dal preventivo: se la scrittura di quelli del cliente cadeva,
+  // partivano i lavori del venditore mentre l'avviso a Nicola diceva «Servizi confermati» quelli del cliente.
+  it('se la scrittura dei servizi del cliente cade, partono lo stesso i lavori dei servizi del cliente', async () => {
+    Object.assign(stato.db.tabelle.preventivi_con_codice[0], { servizi_scelti: ['sito_web'] });
+    stato.db.scrittureGuaste = { preventivi_con_codice: ['servizi_scelti'] };
+    expect((await accetta('business', ['social', 'social', 'analisi'])).ok).toBe(true);
+    await aspettaILavori(2);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(stato.db.tabelle.preventivi_con_codice[0].servizi_scelti).toEqual(['sito_web']);
+    expect(stato.avviati.map((a) => a.job.compito).sort()).toEqual([COMPITO_PIANO, COMPITO_ANALISI].sort());
+    expect(ordini()[0].dati_attivita).toMatchObject({ servizi: ['social', 'analisi'] });
+  });
+
+  it('prima della 999h valgono i servizi del cliente, non tutti e quattro', async () => {
+    stato.db.colonneMancanti = { preventivi_con_codice: ['servizi_scelti', 'nota_agente'] };
+    expect((await accetta('business', ['social'])).ok).toBe(true);
+    await aspettaILavori(1);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(stato.avviati.map((a) => a.job.compito)).toEqual([COMPITO_PIANO]);
+  });
+
+  it('un preventivo già accettato o chiuso non scrive servizi e non fa partire lavori', async () => {
+    for (const st of ['accettato', 'chiuso'] as const) {
+      Object.assign(stato.db.tabelle.preventivi_con_codice[0], { stato: st, servizi_scelti: ['sito_web'] });
+      const preventivo = await leggiPreventivoColCodice(CODICE);
+      const esito = await accettaPreventivoColCodice({ preventivo: preventivo!, codice: CODICE, email: 'titolare@esempio.it', fascia: 'business', servizi: ['analisi'] });
+      expect(esito.ok).toBe(false);
+      expect(stato.db.tabelle.preventivi_con_codice[0].servizi_scelti).toEqual(['sito_web']);
+    }
+    // Anche se il preventivo letto dice «aperto» ma intanto l'ha preso un altro invio (la presa conta le righe).
+    const preventivo = await leggiPreventivoColCodice(CODICE);
+    const esito = await accettaPreventivoColCodice({ preventivo: { ...preventivo!, stato: 'aperto' }, codice: CODICE, email: 'titolare@esempio.it', fascia: 'business', servizi: ['analisi'] });
+    expect(esito.ok).toBe(false);
+    expect(stato.db.tabelle.preventivi_con_codice[0].servizi_scelti).toEqual(['sito_web']);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(stato.avviati).toEqual([]);
+    expect(ordini()).toEqual([]);
+  });
 });

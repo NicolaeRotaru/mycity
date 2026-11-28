@@ -18,6 +18,8 @@ export type DbFinto = {
   scritture: { tabella: string; tipo: 'insert' | 'update'; valori: Riga }[];
   /** I valori predefiniti delle colonne (DEFAULT del database), per tabella: entrano nelle righe nuove. */
   predefiniti?: Record<string, Riga>;
+  /** Scritture che falliscono anche se la colonna c'è (un guasto del momento), per tabella: le colonne che le fanno cadere. */
+  scrittureGuaste?: Record<string, string[]>;
 };
 
 export function nuovoDb(): DbFinto {
@@ -65,6 +67,7 @@ export function supabaseFinto(db: DbFinto) {
         if (azione.tipo === 'update') {
           const m = mancante(Object.keys(azione.valori).join(','));
           if (m) return { data: null, error: { message: m } };
+          if (Object.keys(azione.valori).some((k) => db.scrittureGuaste?.[tabella]?.includes(k))) return { data: null, error: { message: 'canceling statement due to statement timeout' } };
           const toccate = righe().filter((x) => filtri.every((f) => f(x)));
           for (const r of toccate) Object.assign(r, azione.valori);
           db.scritture.push({ tabella, tipo: 'update', valori: azione.valori });

@@ -56,8 +56,9 @@ import { ETICHETTE_SERVIZI, leggiServiziScelti, type ServizioAgenzia } from '@/l
  * 28/11/2026 verso le 01:40 — Nicola: i servizi li sceglie il venditore in anticipo, «però lo deve poter fare
  * anche» il cliente. Il link mostra i servizi segnati dal venditore (`serviziScelti`), il titolare li può cambiare
  * e all'accettazione valgono quelli confermati da lui (`servizi`, già controllati da chi chiama): si scrivono sul
- * preventivo prima che nasca l'ordine, che li rilegge da lì (lib/agenzia/ordine-sdg.ts). Senza la 999h non si
- * scrivono, e valgono tutti e quattro.
+ * preventivo prima che nasca l'ordine (lib/agenzia/ordine-sdg.ts), e all'ordine si passano anche direttamente
+ * (collaudo 28/11): se la scrittura non riesce (o manca la 999h) valgono lo stesso quelli confermati dal titolare,
+ * non quelli del venditore riletti dal preventivo. Senza scelta di nessuno valgono tutti e quattro.
  */
 
 export const CODICE_VALIDO = /^[0-9a-f]{64}$/;
@@ -247,8 +248,8 @@ export async function accettaPreventivoColCodice(input: {
   if (profilo.error) logger.error('[preventivo-codice] profilo non compilato', { sellerId: id, message: profilo.error.message });
   const profiloCompilato = !profilo.error;
 
-  // 1-bis) 28/11 — I servizi confermati dal titolare vanno sul preventivo prima che nasca l'ordine, che li rilegge da
-  // lì. Prima della 999h la colonna non c'è: si va avanti, e valgono tutti e quattro.
+  // 1-bis) 28/11 — I servizi confermati dal titolare vanno sul preventivo prima che nasca l'ordine. Prima della 999h
+  // la colonna non c'è: si va avanti, e all'ordine arrivano lo stesso (creaOrdineSdg qui sotto).
   const serviziValidi = servizi ?? preventivo.serviziScelti ?? null;
   if (servizi) {
     const scritti = await admin.from('preventivi_con_codice').update({ servizi_scelti: servizi }).eq('codice', codice).then((r) => r, (e: unknown) => ({ error: { message: String(e) } }));
@@ -286,7 +287,9 @@ export async function accettaPreventivoColCodice(input: {
     '/admin/preventivi',
     { unaVoltaPer: `preventivo-codice:${id}` },
   ).catch((e: unknown) => logger.warn('[preventivo-codice] avviso a Nicola non partito', { sellerId: id, errore: String(e) }));
-  await creaOrdineSdg({ sellerId: id, codice, fascia, visitaIl: visita ?? null }); // 27/11/2026 — L'ordine di servizio arriva a SDG (lib/agenzia/ordine-sdg.ts): non lancia mai.
+  // 27/11/2026 — L'ordine di servizio arriva a SDG (lib/agenzia/ordine-sdg.ts): non lancia mai. Collaudo 28/11: i
+  // servizi confermati passano anche qui, così valgono loro anche se la scrittura qui sopra non è riuscita.
+  await creaOrdineSdg({ sellerId: id, codice, fascia, visitaIl: visita ?? null, servizi });
 
   // 4) Il titolare entra subito, se chi chiama lo sa fare. Se non riesce, resta l'email qui sotto.
   let entrato = false;
