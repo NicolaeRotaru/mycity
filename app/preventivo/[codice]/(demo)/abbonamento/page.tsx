@@ -140,7 +140,7 @@ export default async function PreventivoDalLink({
                 {r.perche.map((x) => <li key={x}>{x}</li>)}
               </ul>
               {(r.id === 'sito_web' || r.id === 'social') && (
-                <AnteprimaServizio id={r.id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} scheda={scheda} />
+                <AnteprimaServizio id={r.id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} nascita={p.nascitaAttivita} scheda={scheda} />
               )}
             </li>
           ))}

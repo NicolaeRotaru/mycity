@@ -199,7 +199,9 @@ export default function PaginaAbbonamento() {
         {/* 25/11/2026 — L'analisi del business dell'attività (Nicola): parte generale e parte specifica. */}
         <AnalisiAziendale corta analisi={p.analisiAziendale} stato={p.analisiAziendaleStato} fascia={p.attivo?.fascia ?? fascia} dettaglioHref={hrefServizio('analisi')} />
 
-        {/* I tre abbonamenti: tutti comprendono tutti i servizi, cambia quanto (Nicola, 24/11). */}
+        {/* I tre abbonamenti: tutti comprendono tutti i servizi, cambia quanto (Nicola, 24/11).
+            28/11/2026 — Chi è già abbonato non sceglie più: la scelta sparisce, resta il suo abbonamento qui sopra. */}
+        {!p.attivo && (
         <section className="mt-6" aria-labelledby="le-tre-fasce">
           <h2 id="le-tre-fasce" className="font-serif text-lg font-bold text-ink-900">Base, Business o Premium</h2>
           <p className="mt-1 text-sm text-ink-600">
@@ -295,6 +297,7 @@ export default function PaginaAbbonamento() {
               : `${FRASE_CONTANTI} Chiedi di essere contattato e ci mettiamo d’accordo.`}
           </p>
         </section>
+        )}
       </article>
 
       <div className="mt-5 flex flex-wrap gap-3">
