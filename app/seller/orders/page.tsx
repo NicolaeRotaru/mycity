@@ -23,6 +23,7 @@ import { LETTURA_ORDINI_DEL_NEGOZIO, rigaScadenzaPerIlNegozio } from '@/lib/ordi
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
 import { useProfile } from '@/components/hooks/useProfile';
 import { eDiSdg } from '@/lib/products/sdgSeller';
+import OrdiniSdg from '@/components/sdg/OrdiniSdg';
 
 /**
  * 30/10/2026 (ondata 24) — Gli orari del negozio, letti insieme all'ordine (`seller:profiles(store_hours)`):
@@ -84,31 +85,29 @@ const STATUS_FILTERS: { label: string; statuses: OrderStatus[] }[] = [
   { label: 'Completati',  statuses: ['DELIVERED', 'CANCELED'] },
 ];
 
-/**
- * 28/11/2026 — UN LINK VECCHIO A «ORDINI» PORTAVA SDG AGENZIA SU «NESSUN ORDINE».
- *
- * Gli ordini di SDG sono ordini di servizio (tabella `ordini_sdg`) e stanno in /seller/ordini-sdg:
- * qui ci sono solo gli ordini dei prodotti, che SDG non ha. Questa pagina chi è l'utente lo sa solo
- * nel browser, quindi niente redirect dal server: per l'account di SDG c'è un riquadro in cima che
- * porta agli ordini di servizio. Gli altri negozi non lo vedono.
- */
-function RiquadroOrdiniDiServizio() {
-  return (
-    <div role="note" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-ink-800">
-      <span>I tuoi ordini sono ordini di servizio: non arrivano qui.</span>
-      <Link href="/seller/ordini-sdg" className="font-semibold text-primary-700 underline">
-        Vai agli ordini di servizio
-      </Link>
-    </div>
-  );
-}
-
 function isCod(method: string | null | undefined): boolean {
   const m = (method ?? '').toLowerCase();
   return m === 'cod' || m === 'cash';
 }
 
+/**
+ * 28/11/2026 — SDG AGENZIA APRIVA «ORDINI» E NON TROVAVA I SUOI ORDINI.
+ *
+ * Nicola, alle 00:51: «dentro Agenzia SDG non ho trovato dentro la pagina ordini nessun ordine».
+ * Gli ordini di SDG sono ordini di servizio (tabella `ordini_sdg`), non ordini dei prodotti: per
+ * l'account di SDG questa pagina mostra direttamente il loro elenco, lo stesso di /seller/ordini-sdg.
+ * Così ci arrivano tutti gli ingressi a «Ordini»: il riquadro della dashboard, il pulsante in alto,
+ * il menu dell'account e la barra in basso. Per SDG la tabella `orders` non si legge mai: finché non
+ * si sa chi è, la pagina aspetta, e la lista dei prodotti si monta solo per gli altri negozi.
+ */
 export default function SellerOrdersPage() {
+  const { profile, isLoading } = useProfile();
+  if (isLoading) return <LoadingState />;
+  if (eDiSdg(profile?.id)) return <OrdiniSdg />;
+  return <OrdiniDeiProdotti />;
+}
+
+function OrdiniDeiProdotti() {
   /**
    * 22/8/2026 — QUESTA PAGINA RISCARICAVA TUTTA LA STORIA DEL NEGOZIO OGNI
    * TRENTA SECONDI.
@@ -174,24 +173,18 @@ export default function SellerOrdersPage() {
   const adesso = useOraCheCorre();
   const lettoAlle = new Date(Math.max(adesso, queryOrders.dataUpdatedAt || 0, queryOrders.errorUpdatedAt || 0));
 
-  const { profile } = useProfile();
-  const riquadroSdg = eDiSdg(profile?.id) ? <RiquadroOrdiniDiServizio /> : null;
-
   const vistaqueryOrders = vistaDaQuery(queryOrders, { quanti: orders.length });
-  if (vistaqueryOrders.mostraScheletro) return <>{riquadroSdg}<LoadingState /></>;
+  if (vistaqueryOrders.mostraScheletro) return <LoadingState />;
   // Un errore copre la pagina solo se non c'è niente da mostrare: allo sblocco del
   // telefono, con la rete che si riaggancia, gli ordini già letti restano a schermo.
   const aggiornamentoCaduto = vistaqueryOrders.mostraErrore && orders.length > 0;
   if (vistaqueryOrders.mostraErrore && !aggiornamentoCaduto) {
     return (
-      <>
-        {riquadroSdg}
-        <ErrorState
-          title="Non sono riuscito a leggere i tuoi ordini"
-          description="La lettura non è riuscita, quindi non so quali ordini hai. Non vuol dire che non ne hai: riprova fra un momento."
-          onRetry={() => queryOrders.refetch()}
-        />
-      </>
+      <ErrorState
+        title="Non sono riuscito a leggere i tuoi ordini"
+        description="La lettura non è riuscita, quindi non so quali ordini hai. Non vuol dire che non ne hai: riprova fra un momento."
+        onRetry={() => queryOrders.refetch()}
+      />
     );
   }
 
@@ -202,7 +195,6 @@ export default function SellerOrdersPage() {
 
   return (
     <div>
-      {riquadroSdg}
       <SellerPageTitle
         eyebrow="Operativo"
         title="Ordini ricevuti"

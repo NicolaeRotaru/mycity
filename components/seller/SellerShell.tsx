@@ -90,6 +90,8 @@ function isActive(pathname: string, href: string): boolean {
     // Dashboard attivo anche sulla root /seller (redirect verso la dashboard).
     return pathname === '/seller/dashboard' || pathname === '/seller';
   }
+  // Per SDG anche «Ordini» (/seller/orders) mostra gli ordini di servizio: la sua voce resta accesa.
+  if (href === VOCE_ORDINI_DI_SERVIZIO.href && pathname === '/seller/orders') return true;
   // Tiene attiva solo la voce più specifica: products non resta attivo su
   // products/ai-batch (che ha la sua voce AI Studio).
   if (href === '/seller/products') {
