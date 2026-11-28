@@ -137,7 +137,12 @@ export function datiPerIlPianoCompleto(input: {
 
 const senzaControllo = (t: string) => t.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
 const testo = (max: number) => z.string().transform(senzaControllo).pipe(z.string().min(1).max(max));
-const giorno = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+// Collaudo 28/11/2026: un giorno vero, non solo nella forma. «2026-11-99» passava il confronto col periodo (si confronta
+// come testo) e faceva crollare la pagina del titolare; «2026-11-31» si mostrava come «1 dicembre».
+const giorno = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((g) => {
+  const d = new Date(`${g}T12:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === g;
+}, 'giorno che non esiste');
 const ora = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const fonte = z.string().max(600).regex(/^https:\/\/[^\s"'<>]+$/);
 
@@ -152,7 +157,9 @@ const RispostaDellAd = z.object({
     cosa_riprendere: testo(600),
     in_citta: z.union([testo(300), z.null()]),
     fonte_evento: z.union([fonte, z.null()]),
-    pilastro: z.string().max(60).nullish(),
+    // Collaudo 28/11/2026: il pilastro è facoltativo e serve solo a disegnare. Un valore storto (numero, testo lungo)
+    // non deve far scartare il piano intero: si legge come testo, e se non è uno dei cinque si scarta solo lui.
+    pilastro: z.unknown().optional().transform((v) => (typeof v === 'string' ? v.trim().slice(0, 80) : null)),
   })).min(1).max(40),
   note: z.array(testo(300)).max(4),
 });
@@ -209,7 +216,7 @@ export function pianoDallaRisposta(grezza: unknown, partenza: PianoDelMese, fasc
       didascalia: c.didascalia, cosaRiprendere: c.cosa_riprendere,
       inCitta: c.fonte_evento ? c.in_citta : null, fonteEvento: c.in_citta ? c.fonte_evento : null,
       // Solo uno dei cinque pilastri dello standard: un nome diverso si scarta, e il pilastro si ricava dal tema.
-      pilastro: c.pilastro && (PILASTRI as readonly string[]).includes(c.pilastro) ? c.pilastro : null,
+      pilastro: PILASTRI.find((p) => p.toLowerCase() === (c.pilastro ?? '').toLowerCase()) ?? null,
     }));
   return {
     ok: true,

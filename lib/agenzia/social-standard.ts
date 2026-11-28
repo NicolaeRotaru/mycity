@@ -45,7 +45,7 @@ export function pilastriPerIlTipo(tipo: TipoAttivita): { nome: Pilastro; descriz
   const vetrina = tipo === 'servizi' ? 'Come trovarci e prenotare dalla vetrina MyCity.' : 'Come ordinare dalla vetrina MyCity e riceverlo a casa, o ritirarlo.';
   return [
     { nome: 'Quello che offriamo', descrizione: `${c.offerta.charAt(0).toUpperCase()}${c.offerta.slice(1)}: le foto vere, senza prezzi non confermati.` },
-    { nome: 'Dietro le quinte', descrizione: `Le persone e le mani al lavoro ${c.dove}: mettono un volto sull'attività e fanno tornare i clienti.` },
+    { nome: 'Dietro le quinte', descrizione: `Le persone e le mani al lavoro ${c.dove}: mettono un volto sull'attività.` },
     { nome: 'Clienti e quartiere', descrizione: 'Le domande che fanno i clienti, i sondaggi, il quartiere intorno: nessun nome di cliente senza il suo consenso.' },
     { nome: 'La vetrina MyCity', descrizione: vetrina },
     { nome: 'Il mese in città', descrizione: 'Il tema del mese e gli eventi veri della città, solo con una fonte.' },
@@ -115,32 +115,38 @@ const CANALE_TROVATO: Record<'Instagram' | 'Facebook' | 'Scheda Google', RegExp>
   'Scheda Google': /google|maps/i,
 };
 
+/** Il canale si riconosce dal suo nome o dal dominio della pagina, mai dal resto dell'indirizzo («instagram.com/mapsbakery»). */
+export function canaleE(nome: keyof typeof CANALE_TROVATO, c: { canale: string; fonte: string | null }): boolean {
+  let dominio = '';
+  try {
+    dominio = c.fonte ? new URL(c.fonte).hostname : '';
+  } catch {
+    dominio = '';
+  }
+  return CANALE_TROVATO[nome].test(c.canale) || CANALE_TROVATO[nome].test(dominio);
+}
+
 function canaliDelPiano(d: DatiPerLoStandard, citta: string): Social['canali'] {
   const f = FASCE[d.fascia];
   const video = f.video > 0 ? `, con ${f.video === 1 ? 'un video breve' : `${f.video} video brevi`} al mese` : '';
   const storie = d.fascia === 'premium' ? ' e le storie' : '';
   const google: Record<Abbonamento, string> = {
-    base: 'La creiamo o la sistemiamo all’avvio: chi cerca vicino a te ti trova, con la categoria giusta, gli orari, le foto e il collegamento alla vetrina MyCity.',
-    business: 'La sistemiamo all’avvio, e alle recensioni rispondiamo noi: chi cerca vicino a te trova una scheda curata.',
-    premium: 'La curiamo ogni mese: foto nuove, un post a settimana e le risposte alle recensioni.',
+    base: 'La creiamo o la sistemiamo all’avvio, per farti trovare da chi cerca vicino a te: la categoria giusta, gli orari, le foto e il collegamento alla vetrina MyCity.',
+    business: 'La sistemiamo all’avvio, e le risposte alle recensioni le scriviamo noi.',
+    // Collaudo 28/11: il listino Premium non dà una frequenza ai post su Google, e qui non se ne inventa una.
+    premium: 'La curiamo ogni mese: foto nuove, i post e le risposte alle recensioni.',
   };
   const ruoli: Record<keyof typeof CANALE_TROVATO, string> = {
     Instagram: `La vetrina di tutti i giorni: post e caroselli con le foto vere${video}${storie}.`,
-    Facebook: `Gli stessi contenuti di Instagram, pubblicati insieme: a ${citta} lo usano ancora in tanti.`,
+    Facebook: 'Gli stessi contenuti di Instagram, pubblicati insieme.',
     'Scheda Google': google[d.fascia],
   };
   return (Object.keys(CANALE_TROVATO) as (keyof typeof CANALE_TROVATO)[]).map((nome) => {
-    const trovato = (d.canaliTrovati ?? []).find((c) => CANALE_TROVATO[nome].test(`${c.canale} ${c.fonte ?? ''}`));
+    const trovato = (d.canaliTrovati ?? []).find((c) => canaleE(nome, c));
     // Mai «da aprire»: l'analisi può non aver visto un profilo che c'è (il Raquel Cafè del 28/11). Si collega alla visita.
     return { nome, account: profiloCorto(trovato?.fonte) ?? (trovato ? 'trovato, da collegare alla visita' : 'da collegare alla visita'), ruolo: ruoli[nome], da_aprire: false };
   });
 }
-
-const lunediDi = (giorno: string) => {
-  const d = new Date(`${giorno}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-  return d.toISOString().slice(0, 10);
-};
 
 /** Le percentuali dei pilastri contate sul calendario vero, arrotondate perché la somma faccia 100. */
 function percentuali(conti: Map<Pilastro, number>, totale: number): Map<Pilastro, number> {
@@ -157,8 +163,15 @@ function percentuali(conti: Map<Pilastro, number>, totale: number): Map<Pilastro
   return new Map(voci.map((v) => [v.p, v.intero]));
 }
 
-const giornoValido = (g: unknown): g is string => typeof g === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(g);
-const oraValida = (o: unknown): o is string => typeof o === 'string' && /^\d{2}:\d{2}$/.test(o);
+/** Un giorno vero, non solo nella forma: «2026-11-99» e «2026-11-31» no (collaudo 28/11: facevano crollare la pagina). */
+export const giornoValido = (g: unknown): g is string => {
+  if (typeof g !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(g)) return false;
+  const d = new Date(`${g}T12:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === g;
+};
+const oraValida = (o: unknown): o is string => typeof o === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(o);
+const testoOVuoto = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+const TIPI = ['Post', 'Carosello', 'Reel', 'Storia'];
 
 /**
  * Il piano di un cliente nella forma standard (quella di SDG), personalizzato coi suoi dati e col suo abbonamento.
@@ -173,7 +186,8 @@ export function socialDalPiano(piano: PianoDelMese | null | undefined, d: DatiPe
 
   const grezzi = Array.isArray(piano?.contenuti) ? piano!.contenuti : [];
   const contenuti = grezzi
-    .filter((c) => c && giornoValido(c.data) && oraValida(c.ora) && typeof c.tema === 'string')
+    // Un contenuto senza tipo, o una storia fuori dal Premium (il listino le dà solo lì), non si mostra.
+    .filter((c) => c && giornoValido(c.data) && oraValida(c.ora) && typeof c.tema === 'string' && TIPI.includes(c.tipo) && (c.tipo !== 'Storia' || fascia === 'premium'))
     .sort((a, b) => (a.data + a.ora).localeCompare(b.data + b.ora));
 
   // Lo strato: da quale abbonamento arriva ogni contenuto. Il Base dà 8 post senza video; il Business ne aggiunge 4,
@@ -192,22 +206,17 @@ export function socialDalPiano(piano: PianoDelMese | null | undefined, d: DatiPe
     return fascia === 'premium' ? 'premium' : 'business';
   };
 
-  // Il Premium cura anche la scheda Google: il primo post o carosello di ogni settimana esce anche lì.
-  const settimaneConGoogle = new Set<string>();
   const formato: Record<string, string> = { Post: 'Post foto', Carosello: 'Carosello', Reel: 'Reel', Storia: 'Storia' };
   const calendario: Social['calendario'] = contenuti.map((c) => {
-    const lunedi = lunediDi(c.data);
-    const suGoogle = fascia === 'premium' && (c.tipo === 'Post' || c.tipo === 'Carosello') && !settimaneConGoogle.has(lunedi);
-    if (suGoogle) settimaneConGoogle.add(lunedi);
     const evento = c.inCitta && c.fonteEvento && /^https:\/\//.test(c.fonteEvento) ? { in_citta: c.inCitta, fonte_evento: c.fonteEvento } : {};
     return {
       giorno: c.data,
       ora: c.ora,
-      canale: suGoogle ? 'Instagram + Facebook + Scheda Google' : 'Instagram + Facebook',
-      formato: formato[c.tipo] ?? String(c.tipo),
+      canale: 'Instagram + Facebook',
+      formato: formato[c.tipo],
       pilastro: pilastroDelContenuto(c),
       titolo: c.tema,
-      testo: c.didascalia ?? '',
+      testo: testoOVuoto(c.didascalia),
       strato: strato(c),
       stato: 'da_approvare',
       ...evento,
@@ -228,23 +237,22 @@ export function socialDalPiano(piano: PianoDelMese | null | undefined, d: DatiPe
     { voce: 'Contenuti nel mese (post, caroselli e video)', quanti: feed.length },
     ...(reel > 0 ? [{ voce: 'di cui video brevi (reel)', quanti: reel }] : []),
     ...(storie > 0 ? [{ voce: 'Storie', quanti: storie }] : []),
-    ...(settimaneConGoogle.size > 0 ? [{ voce: 'Post anche sulla scheda Google', quanti: settimaneConGoogle.size }] : []),
   ];
 
   const suMisura = (d.suMisura ?? '').trim();
   const intestazione = piano?.intestazione;
-  const hashtag = (intestazione?.hashtag ?? '').trim();
-  const primaDiPubblicare = (intestazione?.primaDiPubblicare ?? '').trim();
+  const hashtag = testoOVuoto(intestazione?.hashtag);
+  const primaDiPubblicare = testoOVuoto(intestazione?.primaDiPubblicare);
   const intrattenimento = tipo === 'bar' || tipo === 'ristorante';
 
   return {
-    titolo: `Piano editoriale ${f.nome} di ${nome}${piano?.periodo?.titolo ? `, ${piano.periodo.titolo}` : ''}`,
+    titolo: `Piano editoriale ${f.nome} di ${nome}${testoOVuoto(piano?.periodo?.titolo) ? `, ${testoOVuoto(piano?.periodo?.titolo)}` : ''}`,
     fascia,
     mese: giornoValido(piano?.periodo?.dal) ? piano!.periodo.dal.slice(0, 7) : '',
     aggiornato_il: '',
     obiettivo: `${OBIETTIVO[tipo](nome, citta)} Sono obiettivi, non promesse.${suMisura ? ` Su misura per te: ${suMisura}` : ''}`,
     a_chi_parliamo: A_CHI[tipo](nome, citta),
-    tono: (intestazione?.canaliETono ?? '').trim() || null,
+    tono: testoOVuoto(intestazione?.canaliETono) || null,
     canali: canaliDelPiano({ ...d, fascia }, citta),
     pilastri,
     quantita,
@@ -254,7 +262,7 @@ export function socialDalPiano(piano: PianoDelMese | null | undefined, d: DatiPe
     extra_premium: [
       { voce: `Il ${f.nome}`, cosa: LISTINO[fascia].servizi.social, costo_fuori_canone: null },
       ...(fascia !== 'base' ? [{ voce: 'Le risposte alle recensioni', cosa: 'Le scriviamo noi, con il tono della tua attività: niente recensioni comprate o scambiate con sconti.', costo_fuori_canone: null }] : []),
-      ...(fascia === 'premium' && storie === 0 ? [{ voce: 'Le storie', cosa: 'Giorno per giorno, quando c’è qualcosa da far vedere: non sono nel calendario, le decidiamo con te.', costo_fuori_canone: null }] : []),
+      ...(fascia === 'premium' && storie === 0 ? [{ voce: 'Le storie', cosa: 'Quando c’è qualcosa da far vedere: non sono nel calendario, le decidiamo con te.', costo_fuori_canone: null }] : []),
     ],
     misure: [
       { kpi: 'Persone raggiunte su Instagram e Facebook', obiettivo: 'Più del mese prima: il punto di partenza lo leggiamo all’avvio', come_si_misura: 'Le statistiche di Instagram e Facebook, lette a fine mese' },
@@ -262,7 +270,7 @@ export function socialDalPiano(piano: PianoDelMese | null | undefined, d: DatiPe
       { kpi: 'Messaggi ricevuti sui social', obiettivo: 'Più del mese prima', come_si_misura: 'I messaggi diretti, contati a fine mese' },
       { kpi: 'Ordini e richieste dalla vetrina MyCity', obiettivo: 'Più del mese prima', come_si_misura: 'Gli ordini nel tuo pannello MyCity' },
       ...(f.video > 0 ? [{ kpi: 'Quanto guardano i video', obiettivo: 'Più del mese prima', come_si_misura: 'Le visualizzazioni dei reel, nelle statistiche di Instagram' }] : []),
-      ...(fascia !== 'base' ? [{ kpi: 'Recensioni con una risposta', obiettivo: 'Tutte le recensioni nuove del mese', come_si_misura: 'La scheda Google' }] : []),
+      ...(fascia !== 'base' ? [{ kpi: 'Recensioni con una risposta', obiettivo: 'Le recensioni nuove con una risposta scritta da noi', come_si_misura: 'La scheda Google' }] : []),
     ],
     regole: [
       'Ogni contenuto lo vedi prima che esca: si pubblica solo col tuo sì.',

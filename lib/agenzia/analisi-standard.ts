@@ -3,6 +3,7 @@ import type { Abbonamento } from './preventivo';
 import { ANALISI_PER_FASCIA } from './rapporto';
 import type { AnalisiAvvioOrdine } from './analisi-dell-ordine-ad';
 import type { Analisi } from './lavoro-consegnato/tipi';
+import { canaleE } from './social-standard';
 
 /**
  * LO STANDARD DELL'ANALISI DI MERCATO — 28/11/2026.
@@ -32,11 +33,7 @@ export type DatiPerLAnalisiStandard = {
 
 const https = (v: unknown): string | null => (typeof v === 'string' && /^https:\/\/[^\s"'<>]+$/.test(v) ? v : null);
 
-const CANALI: { nome: string; cerca: RegExp }[] = [
-  { nome: 'Instagram', cerca: /instagram/i },
-  { nome: 'Facebook', cerca: /facebook/i },
-  { nome: 'Scheda Google', cerca: /google|maps/i },
-];
+const CANALI = ['Instagram', 'Facebook', 'Scheda Google'] as const;
 
 /** La presenza online: quello che l'analisi ha trovato. Mai «non c'è»: un profilo non visto si verifica alla visita. */
 function presenza(d: DatiPerLAnalisiStandard): Analisi['presenza_online_sdg'] {
@@ -44,8 +41,8 @@ function presenza(d: DatiPerLAnalisiStandard): Analisi['presenza_online_sdg'] {
   const sito = (d.sito ?? '').trim();
   return [
     { canale: 'Sito web', stato: sito ? 'trovato' : 'da verificare alla visita', indirizzo: https(sito), nota: null },
-    ...CANALI.map(({ nome, cerca }) => {
-      const t = trovati.find((c) => cerca.test(`${c.canale} ${c.fonte ?? ''}`));
+    ...CANALI.map((nome) => {
+      const t = trovati.find((c) => canaleE(nome, c));
       return { canale: nome, stato: t ? 'trovato' : 'da verificare alla visita', indirizzo: https(t?.fonte), nota: null };
     }),
   ];

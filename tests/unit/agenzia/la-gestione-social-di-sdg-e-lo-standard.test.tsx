@@ -60,14 +60,14 @@ describe('① e ② la forma di SDG, misurata sull’abbonamento', () => {
     expect(s.titolo).toContain(`Piano editoriale ${FASCE[fascia].nome} di Caffè di Prova`);
   });
 
-  it('solo il Premium mette i post anche sulla scheda Google, uno a settimana', () => {
-    const premium = socialDalPiano(piano('premium'), { nome: 'X', fascia: 'premium' });
-    const suGoogle = premium.calendario.filter((c) => c.canale.includes('Scheda Google'));
-    expect(suGoogle.length).toBe(4);
-    expect(premium.quantita).toContainEqual({ voce: 'Post anche sulla scheda Google', quanti: 4 });
-    for (const f of ['base', 'business'] as const) {
-      expect(socialDalPiano(piano(f), { nome: 'X', fascia: f }).calendario.some((c) => c.canale.includes('Scheda Google'))).toBe(false);
+  it('collaudo 28/11: nessuna fascia promette post su Google con una frequenza che il listino non dà', () => {
+    for (const f of FASCE_ID) {
+      const s = socialDalPiano(piano(f), { nome: 'X', fascia: f });
+      expect(s.calendario.some((c) => c.canale.includes('Scheda Google'))).toBe(false);
+      expect(JSON.stringify(s)).not.toMatch(/un post a settimana|Post anche sulla scheda Google/);
     }
+    const premium = socialDalPiano(piano('premium'), { nome: 'X', fascia: 'premium' });
+    expect(premium.canali.find((c) => c.nome === 'Scheda Google')?.ruolo).toBe('La curiamo ogni mese: foto nuove, i post e le risposte alle recensioni.');
   });
 
   it('le recensioni e la misura dei video arrivano col Business; il Base non le promette', () => {
@@ -130,6 +130,28 @@ describe('③ cucito sul cliente', () => {
     expect(s.titolo).toBe('Piano editoriale Business di Bar Vecchio');
     expect(SocialSchema.safeParse(s).success).toBe(true);
     expect(() => socialDalPiano(null, { nome: '', fascia: 'premium' })).not.toThrow();
+  });
+
+  it('collaudo 28/11: date impossibili, tipi mancanti, storie fuori dal Premium e testi non testo non rompono niente', () => {
+    const p = piano('base');
+    p.contenuti[0] = { ...p.contenuti[0], data: '2026-11-99' };
+    p.contenuti[1] = { ...p.contenuti[1], data: '2026-11-31' };
+    p.contenuti[2] = { ...p.contenuti[2], tipo: undefined as unknown as 'Post' };
+    p.contenuti[3] = { ...p.contenuti[3], tipo: 'Storia' };
+    p.contenuti[4] = { ...p.contenuti[4], ora: '25:99' };
+    (p.intestazione as unknown as Record<string, unknown>).hashtag = 42;
+    (p.intestazione as unknown as Record<string, unknown>).canaliETono = null;
+    const s = socialDalPiano(p, { nome: 'X', fascia: 'base' });
+    expect(s.calendario.length).toBe(3);
+    expect(JSON.stringify(s)).not.toMatch(/undefined|null"|2026-11-99|2026-11-31|25:99/);
+    expect(s.tono).toBeNull();
+  });
+
+  it('collaudo 28/11: un profilo con «maps» nel nome resta Instagram e non diventa la scheda Google', () => {
+    const s = socialDalPiano(piano('base'), { nome: 'X', fascia: 'base', canaliTrovati: [{ canale: 'Instagram', fonte: 'https://www.instagram.com/mapsbakery_pc/' }] });
+    const per = Object.fromEntries(s.canali.map((c) => [c.nome, c.account]));
+    expect(per.Instagram).toBe('instagram.com/mapsbakery_pc');
+    expect(per['Scheda Google']).toBe('da collegare alla visita');
   });
 
   it('l’evento in città con la sua fonte resta nel calendario; senza fonte https no', () => {
@@ -228,6 +250,26 @@ describe('⑤ l’AD sceglie il pilastro fra i cinque', () => {
     expect(s.calendario[0].pilastro).toBe('Dietro le quinte');
     expect(s.calendario[1].pilastro).toBe(pilastroDelContenuto({ tema: p.contenuti[1].tema }));
     expect(JSON.stringify(s)).not.toContain('Sconti pazzi');
+  });
+
+  it('collaudo 28/11: un pilastro storto non fa scartare il piano; una data che non esiste sì', () => {
+    const p = piano('base');
+    const risposta = (pilastro: unknown, data?: string) => ({
+      intestazione: { canali_e_tono: 'Instagram e Facebook, tono cordiale', hashtag: '#Piacenza', prima_di_pubblicare: 'Confermare gli orari col titolare.' },
+      contenuti: p.contenuti.map((c, i) => ({
+        data: i === 0 && data ? data : c.data, ora: c.ora, tipo: c.tipo, tema: c.tema, didascalia: 'Una didascalia semplice. #Piacenza',
+        cosa_riprendere: 'Una foto verticale.', in_citta: null, fonte_evento: null, pilastro: i === 0 ? pilastro : undefined,
+      })),
+      note: [],
+    });
+    for (const [pilastro, atteso] of [[123, null], ['x'.repeat(500), null], ['dietro le quinte', 'Dietro le quinte'], ['La vetrina MyCity ', 'La vetrina MyCity']] as const) {
+      const e = pianoDallaRisposta(risposta(pilastro), p, 'base');
+      expect(e.ok, `pilastro ${String(pilastro).slice(0, 20)}`).toBe(true);
+      if (e.ok) expect(e.piano.contenuti[0].pilastro).toBe(atteso);
+    }
+    // «2026-11-99» sta fra «2026-11-30» e «2026-12-27» se si confronta come testo: si scarta perché non esiste.
+    const fuori = pianoDallaRisposta(risposta(null, `${p.periodo.dal.slice(0, 8)}99`), p, 'base');
+    expect(fuori.ok).toBe(false);
   });
 
   it('i temi del piano del sito finiscono ognuno nel suo pilastro', () => {

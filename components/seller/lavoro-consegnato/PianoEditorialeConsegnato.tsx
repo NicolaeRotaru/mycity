@@ -16,6 +16,8 @@ const STRATO: Record<string, string> = { base: 'Base', business: 'Business', pre
 /** Il lunedì della settimana di un giorno «AAAA-MM-GG», come «2026-11-30» (chiave per raggruppare). */
 function lunediDi(giorno: string): string {
   const d = new Date(`${giorno}T12:00:00Z`);
+  // Una data impossibile non fa crollare la pagina (collaudo 28/11): resta da sola nella sua «settimana».
+  if (Number.isNaN(d.getTime())) return giorno;
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   return d.toISOString().slice(0, 10);
 }
