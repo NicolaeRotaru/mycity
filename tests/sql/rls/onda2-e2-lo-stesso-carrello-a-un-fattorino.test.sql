@@ -101,6 +101,13 @@ INSERT INTO esiti SELECT 'contanti: col pane si prende la verdura pronta; non la
   (risposta ->> 'ok')::boolean AND risposta -> 'insieme' = '["e2110000-0000-4000-8000-0000000000a4"]'::jsonb, risposta::text
   FROM r WHERE caso = 'luca contanti';
 
+-- ── un ritiro in negozio non si prende nemmeno conoscendone l'id ─────────
+SET LOCAL request.jwt.claims = '{"sub":"e2110003-3333-4333-8333-333333333333","role":"authenticated"}';
+INSERT INTO r SELECT 'gino ritiro', public.prendi_ordine('e2110000-0000-4000-8000-0000000000a3');
+INSERT INTO esiti SELECT 'un ritiro in negozio chiesto per id: NON_PIU_DISPONIBILE, e non si prende',
+  (risposta ->> 'ok')::boolean IS FALSE AND risposta ->> 'motivo' = 'NON_PIU_DISPONIBILE', risposta::text
+  FROM r WHERE caso = 'gino ritiro';
+
 -- ── contanti senza riga del tentativo: Gino prende b1 di Anna ─────────────
 SET LOCAL request.jwt.claims = '{"sub":"e2110003-3333-4333-8333-333333333333","role":"authenticated"}';
 INSERT INTO r SELECT 'gino anna chiave', public.prendi_ordine('e2110000-0000-4000-8000-0000000000b1');

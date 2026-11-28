@@ -101,6 +101,9 @@ BEGIN
    WHERE id = p_order_id
      AND rider_id IS NULL
      AND delivery_status = 'READY'
+     -- Collaudo dell'onda 2: un ritiro in negozio non va a nessun fattorino, nemmeno a chi ne conosce l'id
+     -- (il ritiro è acceso al lancio, R12-009). Prima lo escludevano solo la bacheca e gli «insieme».
+     AND COALESCE(pickup_in_store, false) = false
   RETURNING id INTO v_preso;
 
   IF v_preso IS NULL THEN

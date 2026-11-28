@@ -3,7 +3,7 @@
 -- =============================================================================
 --   tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test
 --
--- Il grilletto di onda2_A_3 guardava solo le scritture che nominano `status` o il segno
+-- Il grilletto di 999k guardava solo le scritture che nominano `status` o il segno
 -- (BEFORE UPDATE OF status, tolto_dallo_staff_at). Ma un altro grilletto rimette in vendita da solo:
 -- trg_auto_republish (BEFORE UPDATE OF stock) porta a 'available' un prodotto 'out_of_stock' o
 -- 'sold_out' quando la giacenza passa da 0 a più di 0. Il negozio, coi suoi permessi, poteva:
