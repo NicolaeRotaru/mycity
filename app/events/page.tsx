@@ -260,7 +260,7 @@ export default function EventsPage() {
                       className="object-cover"
                     />
                     {isLive && (
-                      <span className="absolute top-3 left-3 inline-flex items-center gap-1 bg-rose-600 text-white px-2 py-1 rounded-full text-[10px] font-bold tracking-wider">
+                      <span className="absolute top-3 left-3 inline-flex items-center gap-1 bg-rose-600 text-white px-2 py-1 rounded-full text-2xs font-bold tracking-wider">
                         <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                         LIVE ORA
                       </span>

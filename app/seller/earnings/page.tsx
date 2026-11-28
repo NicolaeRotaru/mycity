@@ -314,7 +314,7 @@ export default function SellerEarningsPage() {
                       title={formatPrice(val)}
                     />
                   </div>
-                  <span className="text-[10px] text-ink-500">
+                  <span className="text-2xs text-ink-500">
                     {new Date(day).toLocaleDateString('it', { weekday: 'short' })}
                   </span>
                 </div>

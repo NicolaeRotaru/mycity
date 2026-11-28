@@ -235,11 +235,11 @@ export default function HeroStoreCard() {
                         <div className="aspect-square rounded mb-1.5 overflow-hidden bg-gradient-to-br from-accent-100 to-primary-100 relative">
                           {img && <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="96px" loader={caricatoreFotoRemote} className="object-cover" />}
                         </div>
-                        <p className="text-[10px] text-ink-600 truncate">{p.name}</p>
+                        <p className="text-2xs text-ink-600 truncate">{p.name}</p>
                         {scontato ? (
                           <p className="flex flex-wrap items-baseline gap-x-1 text-xs font-semibold text-secondary-600">
                             {formatPrice(discountedUnitCents(p.price, p.sconto ?? 0) / 100)}
-                            <s className="text-[10px] font-normal text-ink-500">
+                            <s className="text-2xs font-normal text-ink-500">
                               <span className="sr-only">Prezzo pieno </span>{formatPrice(Number(p.price))}
                             </s>
                           </p>

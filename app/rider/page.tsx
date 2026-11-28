@@ -523,7 +523,7 @@ export default function RiderDashboardPage() {
         {statoOnlineIgnoto ? (
           <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-secondary-200 bg-secondary-50 px-5 py-[18px] text-ink-900">
             <div>
-              <p className="font-serif text-[18px] font-extrabold">Non so se sei online</p>
+              <p className="font-serif text-lg font-extrabold">Non so se sei online</p>
               <p className="mt-0.5 text-xs text-ink-600">Non riesco a leggere il tuo stato. Riprova fra un momento.</p>
             </div>
             <Button
@@ -539,13 +539,13 @@ export default function RiderDashboardPage() {
           // R04-011 — La prima lettura sta ancora arrivando: non si dice «Sei offline» e non si
           // offre l'interruttore finché lo stato non si sa.
           <Card variant="surface" radius="2xl" padding="none" aria-live="polite" className="px-5 py-[18px] text-ink-900">
-            <p className="font-serif text-[18px] font-extrabold">Controllo se sei online…</p>
+            <p className="font-serif text-lg font-extrabold">Controllo se sei online…</p>
             <p className="mt-0.5 text-xs text-ink-500">Un momento: sto leggendo il tuo stato.</p>
           </Card>
         ) : (
         <RiquadroOnline online={online}>
           <div>
-            <p className="font-serif text-[18px] font-extrabold">{online ? 'Sei online' : 'Sei offline'}</p>
+            <p className="font-serif text-lg font-extrabold">{online ? 'Sei online' : 'Sei offline'}</p>
             <p className={`mt-0.5 text-xs ${online ? 'text-white/85' : 'text-ink-500'}`}>
               {online ? 'Ricevi le consegne disponibili' : 'Vai online per iniziare'}
             </p>
@@ -581,7 +581,7 @@ export default function RiderDashboardPage() {
         ].map(([label, value]) => (
           <Card key={label} variant="surface" radius="lg" padding="none" className="px-3 py-2.5 text-center">
             <p className="font-serif text-[17px] font-extrabold text-ink-900">{value}</p>
-            <p className="text-[10px] font-bold uppercase tracking-[0.03em] text-ink-400">{label}</p>
+            <p className="text-2xs font-bold uppercase tracking-[0.03em] text-ink-400">{label}</p>
           </Card>
         ))}
       </div>

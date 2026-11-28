@@ -90,8 +90,8 @@ export default function PageListEditor({
               <button type="button" onClick={() => onOpen(p.id)} className="flex-1 min-w-0 text-left">
                 <span className="font-medium text-ink-900 flex items-center gap-1.5">
                   <span className="truncate">{p.title}</span>
-                  {isHome && <span className="text-[10px] uppercase tracking-wide font-bold bg-primary-100 text-primary-700 rounded px-1.5 py-0.5 shrink-0">Home</span>}
-                  {isHidden && <span className="text-[10px] uppercase tracking-wide font-bold bg-cream-200 text-ink-500 rounded px-1.5 py-0.5 shrink-0">Nascosta</span>}
+                  {isHome && <span className="text-2xs uppercase tracking-wide font-bold bg-primary-100 text-primary-700 rounded px-1.5 py-0.5 shrink-0">Home</span>}
+                  {isHidden && <span className="text-2xs uppercase tracking-wide font-bold bg-cream-200 text-ink-500 rounded px-1.5 py-0.5 shrink-0">Nascosta</span>}
                 </span>
                 <span className="block text-xs text-ink-400 truncate">{isHome ? '/' : `/${p.slug}`}</span>
               </button>

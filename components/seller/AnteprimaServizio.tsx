@@ -54,7 +54,7 @@ function Riquadro({ icona: Icona, titolo, nota, children }: { icona: typeof Glob
 }
 
 function DaConfermare({ testo = 'da confermare' }: { testo?: string }) {
-  return <span className="ml-1 rounded bg-amber-100 px-1 py-px text-[10px] font-semibold text-amber-800">{testo}</span>;
+  return <span className="ml-1 rounded bg-amber-100 px-1 py-px text-2xs font-semibold text-amber-800">{testo}</span>;
 }
 
 function BozzaDelSito({ nome, tipo, scheda, bozzaAd }: { nome: string; tipo: TipoAttivita; scheda?: SchedaCliente | null; bozzaAd?: BozzaSitoAd | null }) {

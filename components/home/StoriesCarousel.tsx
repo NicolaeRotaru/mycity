@@ -236,7 +236,7 @@ export default function StoriesCarousel() {
                 )}
               </div>
             </div>
-            <span className="text-[10px] text-ink-700 font-semibold max-w-[72px] truncate">{s.seller?.store_name ?? '—'}</span>
+            <span className="text-2xs text-ink-700 font-semibold max-w-[72px] truncate">{s.seller?.store_name ?? '—'}</span>
           </button>
         ))}
       </div>

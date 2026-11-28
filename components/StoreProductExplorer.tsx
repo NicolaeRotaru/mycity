@@ -113,7 +113,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
           <Filter size={16} strokeWidth={2.2} aria-hidden />
           <span className="hidden sm:inline">Filtri</span>
           {activeFilters > 0 && (
-            <span className="bg-primary-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
+            <span className="bg-primary-600 text-white text-2xs font-bold rounded-full px-1.5 py-0.5 leading-none">
               {activeFilters}
             </span>
           )}

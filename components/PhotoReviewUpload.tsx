@@ -226,7 +226,7 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
             ) : (
               <>
                 <Camera size={20} className="text-ink-400" />
-                <span className="text-[10px] text-ink-500 mt-0.5">{files.length}/{max}</span>
+                <span className="text-2xs text-ink-500 mt-0.5">{files.length}/{max}</span>
               </>
             )}
           </label>

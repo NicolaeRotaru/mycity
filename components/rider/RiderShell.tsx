@@ -90,7 +90,7 @@ export default function RiderShell({
                     }`}
                   >
                     <Icon size={22} strokeWidth={on ? 2.4 : 2} aria-hidden />
-                    <span className={`text-[10px] tracking-tight ${on ? 'font-bold' : 'font-medium'}`}>
+                    <span className={`text-2xs tracking-tight ${on ? 'font-bold' : 'font-medium'}`}>
                       {tab.label}
                     </span>
                   </Link>

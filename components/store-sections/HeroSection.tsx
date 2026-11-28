@@ -199,7 +199,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
                 e finiva mozzata. Il nome del negozio è il titolo della sua
                 pagina: si legge intero. `break-words` serve al nome tutto
                 attaccato, che senza andrebbe oltre il bordo. */}
-            <h1 className="flex flex-wrap items-center gap-2 font-serif text-[24px] font-extrabold leading-tight text-white sm:text-[34px]">
+            <h1 className="flex flex-wrap items-center gap-2 font-serif text-2xl font-extrabold leading-tight text-white sm:text-[34px]">
               <span className="min-w-0 break-words [overflow-wrap:anywhere] drop-shadow-sm">{store.store_name}</span>
               {isVerifiedStore(store) && (
                 <span className="text-white/90">
