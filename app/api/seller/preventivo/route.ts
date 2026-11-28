@@ -11,6 +11,7 @@ import {
 import { inviaAlFlusso } from '@/lib/agenzia/flusso-n8n';
 import { leggiPreventivo, type Letti } from '@/lib/agenzia/leggi-preventivo';
 import { testoOffertaPerAvviso } from '@/lib/agenzia/offerta-su-misura';
+import { abbonamentoIncluso, MESSAGGIO_ABBONAMENTO_INCLUSO } from '@/lib/agenzia/abbonamento-di-sdg';
 
 export const runtime = 'nodejs';
 
@@ -53,6 +54,8 @@ const Accettazione = z.object({
 export const POST = withSellerAnchePendingRateLimit(
   { name: 'seller-preventivo-accetta', max: 5, windowMs: 60_000 },
   async ({ user, req }) => {
+    // 28/11/2026 — SDG ha il Premium incluso (Nicola): non sceglie un abbonamento e non manda avvisi di scelta.
+    if (abbonamentoIncluso(user.id)) return ApiErrors.conflict(MESSAGGIO_ABBONAMENTO_INCLUSO);
     let corpo: unknown;
     try {
       corpo = await jsonRichiesta(req, TETTO_JSON);

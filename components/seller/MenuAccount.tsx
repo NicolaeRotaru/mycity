@@ -42,12 +42,15 @@ export default function MenuAccount({
   iniziali,
   email,
   compatto,
+  conProfilo = true,
   onEsci,
 }: {
   nome: string;
   iniziali: string;
   email: string | null;
   compatto: boolean;
+  /** 28/11/2026 — Il Profilo si apre solo da negozio approvato: prima la voce porterebbe alla pagina d'attesa. */
+  conProfilo?: boolean;
   onEsci: () => void;
 }) {
   const pathname = usePathname() ?? '';
@@ -143,10 +146,12 @@ export default function MenuAccount({
               )}
             </span>
           </Link>
-          <Link href="/seller/profile" prefetch={false} className={voce}>
-            <Settings size={16} className="shrink-0 text-ink-500" aria-hidden />
-            Profilo e impostazioni
-          </Link>
+          {conProfilo && (
+            <Link href="/seller/profile" prefetch={false} className={voce}>
+              <Settings size={16} className="shrink-0 text-ink-500" aria-hidden />
+              Profilo e impostazioni
+            </Link>
+          )}
           {/* 25/11/2026 — Più account, senza uscire (Nicola). */}
           <div className="border-t border-cream-200">
             <CambiaAccount />

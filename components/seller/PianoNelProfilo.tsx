@@ -21,7 +21,9 @@ export default function PianoNelProfilo() {
 
   const sotto =
     etichetta.tono === 'attivo'
-      ? attivo?.rinnovoIl
+      ? attivo?.incluso
+        ? 'Incluso: non paghi niente.'
+        : attivo?.rinnovoIl
         ? `Attivo · si rinnova il ${formatDate(attivo.rinnovoIl)}`
         : 'Attivo'
       : daSistemare

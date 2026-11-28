@@ -427,7 +427,11 @@ export function consigliataDallOfferta(
   return meglio;
 }
 
-export type AbbonamentoAttivo = { fascia: Abbonamento; stato: 'active' | 'past_due'; rinnovoIl: string | null };
+/**
+ * `incluso`: l'abbonamento c'è per regola e non si paga (28/11/2026, oggi solo SDG Agenzia:
+ * lib/agenzia/abbonamento-di-sdg.ts). Le pagine non parlano di rinnovo, disdetta o pagamento.
+ */
+export type AbbonamentoAttivo = { fascia: Abbonamento; stato: 'active' | 'past_due'; rinnovoIl: string | null; incluso?: true };
 
 /** La fascia consigliata dai dati: il catalogo grande va sul Premium, una vetrina da rifare sul Business. */
 export function fasciaConsigliata(d: DatiAttivita, righe: VoceMancante[]): { id: Abbonamento; perche: string } {

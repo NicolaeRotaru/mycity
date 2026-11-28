@@ -21,6 +21,7 @@ import { useProfile } from '@/components/hooks/useProfile';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { useBranding } from '@/components/hooks/useBranding';
 import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
+import CampanellaConTendina from '@/components/account/CampanellaConTendina';
 
 /** Chiave su cui agganciare un badge "live" (pallino) calcolato da un conteggio. */
 type BadgeKey = 'disputes' | 'sos' | 'segnalazioni';
@@ -189,10 +190,11 @@ function AdminNav({
  * su telefono portavano alle notifiche. Ma `notifyAdmins` scrive solo lì, e alcuni avvisi sono
  * l'unico promemoria di un lavoro a mano sui soldi («Storno al venditore non riuscito»,
  * «Credito MyCity non restituito», «Togli X € dal prossimo bonifico»): si vedevano solo uscendo
- * dal pannello. Ora il contatore delle non lette sta nel piede e nella barra su telefono, con lo
- * stesso conto della barra del sito (`useNotificationsCount`).
+ * dal pannello. Ora il contatore delle non lette sta nel piede, con lo stesso conto della barra del
+ * sito (`useNotificationsCount`). 28/11/2026: la barra in alto ha la campanella con la tendina del
+ * negozio (components/account/CampanellaConTendina.tsx).
  */
-function CampanellaAdmin({ chiara = false, onNavigate }: { chiara?: boolean; onNavigate?: () => void }) {
+function CampanellaAdmin({ onNavigate }: { onNavigate?: () => void }) {
   const nonLette = useNotificationsCount();
   const etichetta = nonLette > 0 ? `Notifiche: ${nonLette} da leggere` : 'Notifiche';
   return (
@@ -200,18 +202,14 @@ function CampanellaAdmin({ chiara = false, onNavigate }: { chiara?: boolean; onN
       href="/notifications"
       onClick={onNavigate}
       aria-label={etichetta}
-      className={
-        chiara
-          ? 'relative inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 hover:bg-white/10 hover:text-white'
-          : 'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-white/[0.78] transition-colors hover:bg-white/5 hover:text-white'
-      }
+      className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-white/[0.78] transition-colors hover:bg-white/5 hover:text-white"
     >
-      <Bell size={chiara ? 20 : 16} strokeWidth={2.2} aria-hidden />
-      {!chiara && <span>Notifiche</span>}
+      <Bell size={16} strokeWidth={2.2} aria-hidden />
+      <span>Notifiche</span>
       {nonLette > 0 && (
         <span
           aria-hidden
-          className={`${chiara ? 'absolute -right-0.5 -top-0.5' : 'ml-auto'} inline-flex min-w-[18px] items-center justify-center rounded-full bg-secondary-600 px-1 text-xs font-bold text-white`}
+          className="ml-auto inline-flex min-w-[18px] items-center justify-center rounded-full bg-secondary-600 px-1 text-xs font-bold text-white"
         >
           {nonLette > 99 ? '99+' : nonLette}
         </span>
@@ -265,7 +263,7 @@ function useAdminIdentity() {
   const handleSignOut = async () => {
     await esciEVaiAllAccesso(router);
   };
-  return { name, initials, handleSignOut };
+  return { name, initials, handleSignOut, profileId: profile?.id ?? null };
 }
 
 export default function AdminSidebar() {
@@ -285,13 +283,20 @@ export default function AdminSidebar() {
 }
 
 /**
- * Topbar mobile (md:hidden): la sidebar scura è desktop-only, quindi su mobile
- * l'admin avrebbe avuto solo il contenuto senza navigazione. Logo + hamburger
- * che apre un drawer con la stessa nav. Sticky in cima al contenuto.
+ * La barra in alto del pannello.
+ *
+ * 28/11/2026 — Nicola, dal telefono: «l'admin ha la barra in alto nera… vorrei che la rendessi uguale a
+ * quella di SDG e di Pane Quotidiano… mettici anche le notifiche». Era nera, col marchio e una campanella
+ * che portava via alla pagina delle notifiche. Ora è la barra bianca del pannello del negozio
+ * (components/seller/SellerShell.tsx): il menu a sinistra su telefono, a destra la campanella con la
+ * tendina delle ultime notifiche (components/account/CampanellaConTendina.tsx) e il cerchio con le
+ * iniziali. La ricerca dei prodotti e «Pubblica prodotto» del negozio qui non servono, e non ci sono.
+ * Sul computer la barra resta, con la campanella; nome e uscita stanno in fondo alla barra laterale.
+ * Il cassetto che si apre dal menu è quello di prima: scuro, con le stesse voci della barra laterale.
  */
 export function AdminMobileTopbar() {
   const pathname = usePathname() ?? '';
-  const { name, initials, handleSignOut } = useAdminIdentity();
+  const { name, initials, handleSignOut, profileId } = useAdminIdentity();
   const badges = useAdminBadgeCounts();
   const [open, setOpen] = useState(false);
   const cassettoRef = useRef<HTMLDivElement>(null);
@@ -309,20 +314,27 @@ export function AdminMobileTopbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 flex items-center justify-between bg-ink-900 px-4 py-3 text-white md:hidden">
-        <Link href="/admin/today" aria-label="MyCity Admin"><AdminLogo /></Link>
-        <div className="flex items-center gap-1">
-        <CampanellaAdmin chiara />
+      <header className="sticky top-0 z-40 flex items-center gap-4 border-b border-cream-300 bg-surface-0 px-4 py-3 sm:px-6 md:px-7">
+        {/* Menu — telefono (sul computer c'è la barra laterale) */}
         <button
           ref={pulsanteRef}
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Apri menu"
           aria-expanded={open}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 hover:bg-white/10 hover:text-white"
+          className="inline-flex shrink-0 items-center justify-center rounded-md p-1.5 text-ink-700 hover:bg-cream-100 md:hidden"
         >
-          <Menu size={22} strokeWidth={2.2} aria-hidden />
+          <Menu size={22} aria-hidden />
         </button>
+
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+          <CampanellaConTendina userId={profileId} idPannello="pannello-notifiche-admin" etichettaConConto />
+          {/* Le iniziali, come il negozio: sul computer nome e ruolo stanno in fondo alla barra laterale. */}
+          <Link href="/profile" className="flex items-center gap-2 md:hidden" title={`${name} · Admin`} aria-label={`Il tuo account: ${name}, Admin`}>
+            <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-sm font-bold text-white">
+              {initials}
+            </span>
+          </Link>
         </div>
       </header>
 

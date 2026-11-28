@@ -178,7 +178,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
 
   if (isSuspended) {
     return (
-      <div className="container mx-auto p-6 max-w-2xl">
+      <SellerShell menu="solo_account">
+      <div className="container mx-auto max-w-2xl">
         <div className="bg-white border-2 border-accent-200 rounded-2xl p-8 text-center">
           <div className="w-20 h-20 mx-auto rounded-2xl bg-accent-100 flex items-center justify-center mb-4">
             <PauseCircle size={32} className="text-accent-500" aria-hidden />
@@ -198,12 +199,14 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           </div>
         </div>
       </div>
+      </SellerShell>
     );
   }
 
   if (isRejected) {
     return (
-      <div className="container mx-auto p-6 max-w-2xl">
+      <SellerShell menu="solo_account">
+      <div className="container mx-auto max-w-2xl">
         <div className="bg-white border-2 border-secondary-200 rounded-2xl p-8 text-center">
           <div className="w-20 h-20 mx-auto rounded-2xl bg-secondary-100 flex items-center justify-center mb-4">
             <X size={32} className="text-secondary-600" aria-hidden />
@@ -223,6 +226,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           </div>
         </div>
       </div>
+      </SellerShell>
     );
   }
 
@@ -230,7 +234,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     // La richiesta non ci è arrivata (o non sappiamo se è arrivata): niente
     // «stiamo verificando». /sell legge lo stato vero e mostra il modulo o l'attesa.
     return (
-      <div className="container mx-auto p-6 max-w-2xl">
+      <SellerShell menu="solo_account">
+      <div className="container mx-auto max-w-2xl">
         <div className="bg-white border-2 border-primary-200 rounded-2xl p-8 text-center">
           <div className="w-20 h-20 mx-auto rounded-2xl bg-primary-100 flex items-center justify-center mb-4">
             <Store size={32} className="text-primary-600" aria-hidden />
@@ -249,14 +254,18 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           </div>
         </div>
       </div>
+      </SellerShell>
     );
   }
 
   // 24/11/2026 — Modalità demo: chi è in attesa di approvazione vede i servizi, sceglie e paga
   // l'abbonamento, senza il resto del pannello (le rotte lo ricontrollano sul server).
+  // 28/11/2026 — Dentro il guscio del negozio, col menu ridotto e il riquadro dell'account in fondo (Nicola:
+  // «vorrei che fosse così dentro tutti i profili dei venditori»). Anche le altre schermate d'attesa qui sotto
+  // e sopra (richiesta da mandare, sospeso, rifiutato) stanno nel guscio, col solo riquadro dell'account.
   if (isPending && richiestaInviata && percorsoInRevisione(pathname)) {
     return (
-      <div className="container mx-auto p-4 sm:p-6 max-w-5xl">
+      <SellerShell menu="in_verifica">
         <p className="mb-4 rounded-xl border border-accent-200 bg-accent-50 px-3 py-2 text-sm text-ink-700">
           Il tuo negozio è in verifica: intanto prepari i tuoi prodotti e scegli l’abbonamento ai servizi. Sul marketplace
           non si vede niente finché non è approvato e attivo.{' '}
@@ -276,13 +285,14 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           <Link href="/seller/dashboard" className="font-semibold underline">Pagina d’attesa</Link>
         </p>
         {children}
-      </div>
+      </SellerShell>
     );
   }
 
   if (isPending || pending) {
     return (
-      <div className="container mx-auto p-6 max-w-2xl">
+      <SellerShell menu={isPending && richiestaInviata ? 'in_verifica' : 'solo_account'}>
+      <div className="container mx-auto max-w-2xl">
         <div className="bg-white border-2 border-accent-200 rounded-2xl p-8 text-center">
           <div className="w-20 h-20 mx-auto rounded-2xl bg-accent-100 flex items-center justify-center mb-4">
             <Clock size={32} className="text-accent-500" aria-hidden />
@@ -307,6 +317,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           </div>
         </div>
       </div>
+      </SellerShell>
     );
   }
 
