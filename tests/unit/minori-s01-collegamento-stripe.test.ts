@@ -74,7 +74,9 @@ const chiama = async (f: unknown) => {
 
 beforeEach(() => {
   vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_finta');
-  Object.assign(st, { scritturaCade: false, righe: 1, creati: 0, link: 0, linkCade: false, salvati: [] });
+  // R11-011 (onda 2) — Anche `flag`: prima restava quello scritto dal caso precedente, e la prova
+  // «i tre flag tornano falsi» passava anche se in quel caso il conto non si salvava affatto.
+  Object.assign(st, { scritturaCade: false, righe: 1, creati: 0, link: 0, linkCade: false, salvati: [], flag: null });
   st.profilo = { approval_status: 'approved', stripe_account_id: null, store_name: 'Forno' };
 });
 
@@ -127,6 +129,8 @@ describe('633 / revisore — il conto rifatto parte non verificato', () => {
   it('salvando il conto nuovo i tre flag tornano falsi', async () => {
     st.profilo = { ...st.profilo, stripe_account_id: 'acct_vecchio' };
     await chiama(collegaNegozio);
+    // Il conto nuovo si è salvato IN QUESTO caso, una volta, coi tre flag spenti.
+    expect(st.salvati).toEqual(['acct_nuovo']);
     expect(st.flag).toMatchObject({ stripe_account_id: 'acct_nuovo', stripe_charges_enabled: false, stripe_payouts_enabled: false, stripe_details_submitted: false });
   });
 });

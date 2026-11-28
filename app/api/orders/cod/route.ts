@@ -14,7 +14,8 @@ import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { romeNow } from '@/lib/store-hours';
-import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
+import { MOTIVO_FASCIA_PIENA, motivoFasciaRifiutata } from '@/lib/quando-arriva';
+import { eLaFasciaPienaDelDatabase, rifiutoPerFasciaPiena } from '@/lib/ordini/giri-della-fascia';
 // R09-009 — La fascia riportata al giorno della richiesta: una copia sola, condivisa con la carta.
 import { fasciaDelGiornoDellaRichiesta } from '@/lib/ordini/fascia-leggibile';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
@@ -1036,6 +1037,17 @@ export const POST = conFilaPerRichiesta(withAuthRateLimit(
         (sellers ?? []).map((s) => ({ nome: s.store_name, orari: s.store_hours })),
       );
       if (rifiutata) return esciERilascia(ApiErrors.conflict(rifiutata));
+      // 28/11/2026 (R07-009) — Al massimo `ORDINI_PER_FASCIA` giri per fascia anche coi contanti: la
+      // regola stava solo nella rotta della carta, spenta al lancio, e qui la fascia si riempiva senza
+      // limite. La stessa regola (lib/ordini/giri-della-fascia.ts); due invii insieme li ferma il
+      // database (migrazione onda2_F1_1, `eLaFasciaPienaDelDatabase`).
+      const piena = await rifiutoPerFasciaPiena(
+        admin,
+        { fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore },
+        { cliente: user.id, indirizzo: body.delivery.address, cap: body.delivery.zip },
+        'cod',
+      );
+      if (piena) return esciERilascia(ApiErrors.conflict(piena));
     }
 
     // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso (e
@@ -1767,6 +1779,11 @@ export const POST = conFilaPerRichiesta(withAuthRateLimit(
         if (eLaVeloceSenzaFattorinoLibero(orderErr)) {
           logger.warn('[cod] veloce fermata dal database: nessun fattorino libero', { userId: user.id, sellerId: g.sellerId });
           return esciERilascia(ApiErrors.conflict(VELOCE_SENZA_FATTORINO_LIBERO));
+        }
+        // R07-009 — Il database ha fermato la fascia: l'ultimo posto l'ha preso un altro invio.
+        if (eLaFasciaPienaDelDatabase(orderErr)) {
+          logger.warn('[cod] fascia piena fermata dal database', { userId: user.id, sellerId: g.sellerId });
+          return esciERilascia(ApiErrors.conflict(MOTIVO_FASCIA_PIENA));
         }
         logger.error(orderErr ?? new Error('cod-order-insert-null'), { context: 'cod-order-insert', sellerId: g.sellerId });
         return esciERilascia(ApiErrors.internal('Errore nella creazione ordine.'));

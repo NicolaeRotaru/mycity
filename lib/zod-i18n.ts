@@ -22,7 +22,11 @@ import { z } from 'zod';
 import { FRASI_ZOD } from './zod-frasi';
 export { FRASI_ZOD };
 
-z.setErrorMap((issue, ctx) => {
+/** Il giorno di un limite di data, come lo legge una persona a Piacenza: «28/11/2026». */
+const giornoItaliano = (ms: number | bigint) =>
+  new Date(Number(ms)).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric' });
+
+z.setErrorMap((issue) => {
   switch (issue.code) {
     case z.ZodIssueCode.invalid_type:
       if (issue.received === 'undefined' || issue.received === 'null') {
@@ -34,24 +38,26 @@ z.setErrorMap((issue, ctx) => {
       if (issue.type === 'string') {
         return { message: FRASI_ZOD.almenoCaratteri(issue.minimum) };
       }
-      if (issue.type === 'number') {
+      if (issue.type === 'number' || issue.type === 'bigint') {
         return { message: issue.inclusive ? FRASI_ZOD.minimo(issue.minimum) : FRASI_ZOD.maggioreDi(issue.minimum) };
       }
-      if (issue.type === 'array') {
+      if (issue.type === 'array' || issue.type === 'set') {
         return { message: FRASI_ZOD.almenoElementi(issue.minimum) };
       }
+      if (issue.type === 'date') return { message: FRASI_ZOD.dataDal(giornoItaliano(issue.minimum)) };
       break;
 
     case z.ZodIssueCode.too_big:
       if (issue.type === 'string') {
         return { message: FRASI_ZOD.massimoCaratteri(issue.maximum) };
       }
-      if (issue.type === 'number') {
+      if (issue.type === 'number' || issue.type === 'bigint') {
         return { message: issue.inclusive ? FRASI_ZOD.massimo(issue.maximum) : FRASI_ZOD.minoreDi(issue.maximum) };
       }
-      if (issue.type === 'array') {
+      if (issue.type === 'array' || issue.type === 'set') {
         return { message: FRASI_ZOD.massimoElementi(issue.maximum) };
       }
+      if (issue.type === 'date') return { message: FRASI_ZOD.dataFinoAl(giornoItaliano(issue.maximum)) };
       break;
 
     case z.ZodIssueCode.invalid_string:
@@ -59,10 +65,34 @@ z.setErrorMap((issue, ctx) => {
       if (issue.validation === 'url')   return { message: FRASI_ZOD.url };
       if (issue.validation === 'uuid')  return { message: FRASI_ZOD.uuid };
       if (issue.validation === 'regex') return { message: FRASI_ZOD.formato };
-      break;
+      // R07-004 (onda 2) — startsWith, endsWith e includes arrivano come oggetto; date e orari col loro nome.
+      if (typeof issue.validation === 'object') {
+        if ('startsWith' in issue.validation) return { message: FRASI_ZOD.iniziaCon(issue.validation.startsWith) };
+        if ('endsWith' in issue.validation) return { message: FRASI_ZOD.finisceCon(issue.validation.endsWith) };
+        if ('includes' in issue.validation) return { message: FRASI_ZOD.contiene(issue.validation.includes) };
+      }
+      if (issue.validation === 'datetime' || issue.validation === 'date') return { message: FRASI_ZOD.data };
+      if (issue.validation === 'time' || issue.validation === 'duration') return { message: FRASI_ZOD.orario };
+      // Le altre validazioni (ip, cuid, emoji, base64, jwt…): un formato sbagliato, senza il nome tecnico.
+      return { message: FRASI_ZOD.formato };
+
+    case z.ZodIssueCode.invalid_date:
+      return { message: FRASI_ZOD.data };
+
+    case z.ZodIssueCode.not_multiple_of:
+      return { message: FRASI_ZOD.multiploDi(issue.multipleOf) };
+
+    case z.ZodIssueCode.not_finite:
+      return { message: FRASI_ZOD.numeroFinito };
 
     case z.ZodIssueCode.invalid_enum_value:
+    case z.ZodIssueCode.invalid_union_discriminator:
       return { message: FRASI_ZOD.scelta };
+
+    case z.ZodIssueCode.invalid_intersection_types:
+    case z.ZodIssueCode.invalid_arguments:
+    case z.ZodIssueCode.invalid_return_type:
+      return { message: FRASI_ZOD.valoreNonValido };
 
     case z.ZodIssueCode.invalid_union:
     case z.ZodIssueCode.invalid_literal:
@@ -77,5 +107,7 @@ z.setErrorMap((issue, ctx) => {
       return { message: FRASI_ZOD.valoreNonValido };
   }
 
-  return { message: ctx.defaultError };
+  // Un caso che qui sopra non ha una frase sua (un tipo nuovo di Zod, un limite su un tipo raro):
+  // mai il testo inglese di Zod, che al cliente non dice niente.
+  return { message: FRASI_ZOD.valoreNonValido };
 });
