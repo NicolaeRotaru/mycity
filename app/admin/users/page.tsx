@@ -1028,6 +1028,9 @@ function AdminUsersPageInner() {
   );
 }
 
+/** Il tetto del nome del negozio: lo stesso del database (migrazione 830) e dell'iscrizione. */
+const NOME_NEGOZIO_MAX = 80;
+
 function EditUserModal({
   profile, saving, onClose, onSave,
 }: {
@@ -1041,6 +1044,17 @@ function EditUserModal({
   const [storeAddress, setStoreAddress] = useState(profile.store_address ?? '');
   const [storeName, setStoreName] = useState(profile.store_name ?? '');
   const [role, setRole] = useState(profile.role);
+  /**
+   * 28/11/2026 (R04-014) — IL NOME DEL NEGOZIO HA IL SUO TETTO ANCHE QUI.
+   * Il database rifiuta un nome che nasce o cambia oltre 80 caratteri (migrazione 830): da questo
+   * modulo si scopriva solo dopo «Salva». Ora il modulo conta (in caratteri, come il database) e
+   * non salva. Un nome vecchio già oltre il tetto, non toccato, si può lasciare com'è: il database
+   * guarda il nome solo quando cambia.
+   */
+  const nomeNegozio = storeName.trim();
+  const caratteriNomeNegozio = Array.from(nomeNegozio).length;
+  const nomeNegozioTroppoLungo =
+    nomeNegozio !== (profile.store_name ?? '').trim() && caratteriNomeNegozio > NOME_NEGOZIO_MAX;
 
   const inputCls = 'w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700';
 
@@ -1061,6 +1075,10 @@ function EditUserModal({
         id="edit-user-form"
         onSubmit={(e) => {
           e.preventDefault();
+          if (nomeNegozioTroppoLungo) {
+            document.getElementById('admin-nome-negozio')?.focus();
+            return;
+          }
           onSave({
             full_name: fullName.trim() || null,
             phone: phone.trim() || null,
@@ -1111,8 +1129,23 @@ function EditUserModal({
         <div>
           <h3 className="text-xs font-bold uppercase tracking-wide text-ink-500 mb-2">Dati negozio</h3>
           <div>
-            <label className="block text-sm font-semibold mb-1">Nome negozio</label>
-            <input value={storeName} onChange={(e) => setStoreName(e.target.value)} className={inputCls} />
+            <label htmlFor="admin-nome-negozio" className="block text-sm font-semibold mb-1">Nome negozio</label>
+            <input
+              id="admin-nome-negozio"
+              value={storeName}
+              onChange={(e) => setStoreName(e.target.value)}
+              aria-invalid={nomeNegozioTroppoLungo || undefined}
+              aria-describedby="admin-nome-negozio-tetto"
+              className={inputCls}
+            />
+            <p
+              id="admin-nome-negozio-tetto"
+              className={`mt-1 text-xs ${nomeNegozioTroppoLungo ? 'text-rose-700 font-semibold' : 'text-ink-500'}`}
+            >
+              {nomeNegozioTroppoLungo
+                ? `Il nome del negozio può avere al massimo ${NOME_NEGOZIO_MAX} caratteri: accorcialo (ora sono ${caratteriNomeNegozio}).`
+                : `${caratteriNomeNegozio}/${NOME_NEGOZIO_MAX} caratteri`}
+            </p>
           </div>
         </div>
 
