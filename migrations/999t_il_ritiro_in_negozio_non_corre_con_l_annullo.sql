@@ -91,7 +91,7 @@ BEGIN
 
   BEGIN
     INSERT INTO public.notifications (category, user_id, title, body, link) VALUES
-      ('order', v_buyer_id, '📦 Ordine ritirato',
+      ('order', v_buyer_id, 'Ordine ritirato',
        'Hai ritirato il tuo ordine in negozio. Grazie! Puoi lasciare una recensione.',
        '/orders/' || p_order_id);
   EXCEPTION WHEN OTHERS THEN
