@@ -117,13 +117,17 @@ export default function NewReturnPage() {
   // un pane del Panificio non spuntato la pagina offriva il motivo che l'invio
   // rifiutava. E si chiede per la riga scelta: nell'ordine misto il pane da solo è
   // escluso, il miele no. Cambiando riga si chiede di nuovo.
+  // 28/11/2026 (R04-001, onda 2) — Un esito per riga, non uno solo. Con un esito solo, due
+  // risposte fuori ordine si sovrascrivevano: miele → «Ho cambiato idea» → pane, e se la risposta
+  // del miele arrivava dopo quella del pane il rifiuto del pane spariva, il motivo si riaccendeva
+  // e non si richiedeva più. Ogni risposta ora scrive solo la sua chiave.
   const chiaveRipensamento = order?.id ? `${order.id}|${articoloScelto ?? ''}` : null;
-  const [esitoRipensamento, setEsitoRipensamento] = useState<{ chiave: string; rifiuto: string | null } | null>(null);
+  const [esitiRipensamento, setEsitiRipensamento] = useState<Record<string, string | null>>({});
   const [ripensamentoChiestoPer, setRipensamentoChiestoPer] = useState<string | null>(null);
-  const rifiutoRipensamento =
-    esitoRipensamento && esitoRipensamento.chiave === chiaveRipensamento ? esitoRipensamento.rifiuto : null;
+  const rifiutoRipensamento = chiaveRipensamento ? (esitiRipensamento[chiaveRipensamento] ?? null) : null;
   useEffect(() => {
     if (!chiaveRipensamento || reason !== MOTIVO_RIPENSAMENTO || ripensamentoChiestoPer === chiaveRipensamento) return;
+    if (chiaveRipensamento in esitiRipensamento) return;
     setRipensamentoChiestoPer(chiaveRipensamento);
     const chiave = chiaveRipensamento;
     const domanda = new URLSearchParams({ orderId: String(order.id) });
@@ -133,12 +137,13 @@ export default function NewReturnPage() {
         const r = await fetch(`/api/returns/create?${domanda.toString()}`);
         if (!r.ok) return;
         const json = (await r.json()) as { rifiuto?: string | null };
-        setEsitoRipensamento({ chiave, rifiuto: typeof json.rifiuto === 'string' ? json.rifiuto : null });
+        const rifiuto = typeof json.rifiuto === 'string' ? json.rifiuto : null;
+        setEsitiRipensamento((prima) => ({ ...prima, [chiave]: rifiuto }));
       } catch {
         /* domanda non riuscita: decide il server all'invio */
       }
     })();
-  }, [chiaveRipensamento, order?.id, articoloScelto, reason, ripensamentoChiestoPer]);
+  }, [chiaveRipensamento, order?.id, articoloScelto, reason, ripensamentoChiestoPer, esitiRipensamento]);
   useEffect(() => {
     if (rifiutoRipensamento && reason === MOTIVO_RIPENSAMENTO) setReason('');
   }, [rifiutoRipensamento, reason]);

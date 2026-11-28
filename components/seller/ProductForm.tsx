@@ -400,6 +400,20 @@ export default function ProductForm({
     [categories, currentTopId],
   );
   const topName = categories.find((c) => c.id === currentTopId)?.name;
+  /**
+   * 28/11/2026 (R04-001, onda 2) — UN ALIMENTARE NUOVO DICE LA SUA SOTTOCATEGORIA.
+   * Un pane salvato sulla sola radice «Alimentari», senza spunta del recesso, accettava «Ho
+   * cambiato idea»: nessun dato lo distingueva dalla dispensa. Il recesso dei freschi si decide
+   * dalla sottocategoria (Panificio, Salumeria, Latticini…: app/api/returns/create/route.ts),
+   * quindi in creazione la si sceglie. In modifica resta facoltativa: un prodotto già in vendita
+   * non si blocca per un campo che prima non c'era.
+   */
+  const sottocategoriaObbligatoria =
+    mode === 'create' &&
+    categories.find((c) => c.id === currentTopId)?.slug === 'alimentari' &&
+    subcategories.length > 0;
+  const mancaSottocategoria = sottocategoriaObbligatoria && currentCategoryId === currentTopId;
+  const [erroreSottocategoria, setErroreSottocategoria] = useState<string | null>(null);
 
   const { fields: attrFields, topSlug } = getAttributesForCategory(categories, currentCategoryId);
   const topCategoryLabel = topSlug ? categories.find((c) => c.slug === topSlug)?.name : undefined;
@@ -882,6 +896,13 @@ export default function ProductForm({
         document.getElementById('image-dropzone')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
         return;
       }
+      if (mancaSottocategoria) {
+        const messaggio = 'Scegli la sottocategoria: dice se il prodotto è fresco ed escluso dal recesso.';
+        setErroreSottocategoria(messaggio);
+        toast.error(messaggio);
+        document.getElementById('sottocategoria-prodotto')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
       /**
        * 22/8/2026 — UN ALIMENTARE NON SI PUBBLICA SENZA ALLERGENI.
        *
@@ -1309,11 +1330,16 @@ export default function ProductForm({
           </Select>
           {currentTopId && subcategories.length > 0 && (
             <Select
-              label="Sottocategoria (opzionale)"
+              id="sottocategoria-prodotto"
+              label={sottocategoriaObbligatoria ? 'Sottocategoria' : 'Sottocategoria (opzionale)'}
               value={currentCategoryId !== currentTopId ? currentCategoryId : ''}
-              onChange={(e) => setValue('category_id', e.target.value || currentTopId, { shouldValidate: true })}
+              onChange={(e) => {
+                setErroreSottocategoria(null);
+                setValue('category_id', e.target.value || currentTopId, { shouldValidate: true });
+              }}
+              error={mancaSottocategoria ? (erroreSottocategoria ?? undefined) : undefined}
             >
-              <option value="">— tutta «{topName}»</option>
+              <option value="">{sottocategoriaObbligatoria ? 'Seleziona...' : `— tutta «${topName}»`}</option>
               {subcategories.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
