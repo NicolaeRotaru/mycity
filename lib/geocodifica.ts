@@ -80,9 +80,18 @@ type RisultatoDelleMappe = {
 // I nomi del posto in cui cade un risultato: il comune e, per chi scrive la frazione, la frazione.
 const NOMI_DEL_POSTO = ['city', 'town', 'village', 'municipality', 'hamlet', 'suburb', 'quarter', 'city_district', 'neighbourhood'];
 
-/** «Piacenza (PC)», «Piacenza PC», «piacenza» → la stessa cosa. */
+/**
+ * «Piacenza (PC)», «Piacenza PC», «piacenza pc», «Piacenza - PC», «piacenza» → la stessa cosa.
+ * 27/11/2026 — La sigla si toglie anche minuscola: «piacenza pc» restava «piacenza pc» e nessun
+ * risultato delle mappe aveva quel nome. Vale per le due parti del confronto (`stessoNome`).
+ */
 function pulisciCitta(citta: string): string {
-  return citta.replace(/\([^)]*\)/g, ' ').replace(/\s+[A-Z]{2}\s*$/, ' ').replace(/\s+/g, ' ').trim();
+  return citta
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\s+\p{L}{2}\.?\s*$/u, ' ')
+    .replace(/[\s,;.\-–]+$/u, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 function stessoNome(a: string): string {
   return pulisciCitta(a).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -90,17 +99,52 @@ function stessoNome(a: string): string {
 
 /** La frase «via, CAP città, Italia» (quella di sopra, e quella che manda la cassa) nei suoi pezzi. */
 function pezziDellaDomanda(q: string): { via: string; citta: string; cap: string; testo: string } {
-  const testo = q.trim().replace(/,?\s*(italia|italy)\s*$/i, '').replace(/[\s,]+$/, '').trim();
-  const virgola = testo.lastIndexOf(',');
+  // «Piacenza, Italia» scritto nella città: la domanda finisce con due «, Italia». Le altre si tolgono
+  // solo dopo una virgola («Corso Italia, Italia» resta «Corso Italia»).
+  const testo = q
+    .trim()
+    .replace(/,?\s*(italia|italy)\s*$/i, '')
+    .replace(/(?:\s*,\s*(?:italia|italy))+\s*$/i, '')
+    .replace(/[\s,]+$/, '')
+    .trim();
+  return dividiLaDomanda(testo, testo);
+}
+
+function dividiLaDomanda(parte: string, testo: string): { via: string; citta: string; cap: string; testo: string } {
+  const virgola = parte.lastIndexOf(',');
   if (virgola >= 0) {
-    const coda = testo.slice(virgola + 1).trim();
-    const m = coda.match(/^(\d{5})?\s*(.*)$/);
-    const cap = m?.[1] ?? '';
-    const citta = pulisciCitta(m?.[2] ?? '');
+    const prima = parte.slice(0, virgola).trim();
+    const coda = parte.slice(virgola + 1).trim();
+    // 27/11/2026 — «Piacenza, PC»: la sigla della provincia dopo una virgola non è la città
+    // (si cercava la città «PC»). Si guarda la parte prima, se lì c'è una città o un CAP.
+    if (/^\(?\s*\p{L}{2}\.?\s*\)?$/u.test(coda)) {
+      const senzaSigla = dividiLaDomanda(prima, testo);
+      if (senzaSigla.citta || senzaSigla.cap) return senzaSigla;
+    }
+    const { cap, resto } = capDellaCoda(coda);
+    const citta = pulisciCitta(resto);
     // «Via Roma, 12»: la coda è il numero civico, non una città.
-    if (cap || /\p{L}/u.test(citta)) return { via: testo.slice(0, virgola).trim(), citta, cap, testo };
+    if (cap || /\p{L}/u.test(citta)) return { via: prima, citta, cap, testo };
   }
-  return { via: testo, citta: '', cap: '', testo };
+  return { via: parte, citta: '', cap: '', testo };
+}
+
+/**
+ * 27/11/2026 — Il CAP come lo scrivono le persone: «29121», «29 121», in testa o in coda alla città
+ * («Piacenza 29121»). Prima valeva solo «29121» in testa: il resto finiva dentro il nome della città
+ * e nessun risultato tornava. Un CAP di quattro cifre (lo zero iniziale perso, o un errore di
+ * battitura) si toglie dal nome ma non filtra: meglio la città sola che un CAP sbagliato.
+ */
+function capDellaCoda(coda: string): { cap: string; resto: string } {
+  const cinque = /(?:^|\s)(\d{2})\s?(\d{3})(?=\s|$)/u;
+  const m = coda.match(cinque);
+  if (m) return { cap: m[1] + m[2], resto: coda.replace(cinque, ' ').replace(cinque, ' ') };
+  return { cap: '', resto: coda.replace(/(?:^|\s)\d{4}(?=\s|$)/u, ' ') };
+}
+
+/** Lo stesso comune ha più CAP (Piacenza 29121 e 29122): le prime tre cifre dicono la città. */
+function capDellaStessaCitta(a: string, b: string): boolean {
+  return a.length === 5 && b.length === 5 && a.slice(0, 3) === b.slice(0, 3);
 }
 
 /**
@@ -116,13 +160,18 @@ function affidabile(
   const lng = r.lon != null ? parseFloat(r.lon) : NaN;
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   const a = r.address ?? {};
+  let comuneVisto = false;
   if (scritto.citta) {
     const nomi = NOMI_DEL_POSTO.map((k) => a[k]).filter((v): v is string => !!v).map(stessoNome);
     if (nomi.length === 0 ? comuneObbligatorio : !nomi.includes(stessoNome(scritto.citta))) return null;
+    comuneVisto = nomi.length > 0;
   }
   if (scritto.cap && a.postcode) {
     const cap = a.postcode.split(/[;,]/).map((c) => c.replace(/\D/g, '')).filter(Boolean);
-    if (cap.length > 0 && !cap.includes(scritto.cap)) return null;
+    // 27/11/2026 — Col comune confermato dalle mappe, un altro CAP della stessa città (29122 per una
+    // via che le mappe danno 29121) non scarta il risultato. Senza comune il CAP deve essere quello.
+    const vale = (c: string) => c === scritto.cap || (comuneVisto && capDellaStessaCitta(c, scritto.cap));
+    if (cap.length > 0 && !cap.some(vale)) return null;
   }
   return { lat, lng, nome: typeof r.display_name === 'string' && r.display_name.trim() ? r.display_name.trim() : null };
 }

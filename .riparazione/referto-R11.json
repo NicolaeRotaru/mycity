@@ -1,0 +1,269 @@
+{
+  "sessione": "R11",
+  "aggiornato": "2026-11-27 02:10",
+  "finita": true,
+  "testa": "569640798f69ad0583f744c8eb95922fc0b3da9f",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "569640798f69ad0583f744c8eb95922fc0b3da9f",
+    "nota": "typecheck, lint e test: 2336 file di prove passati, 1 saltato; 14326 casi passati, 2 saltati. Uscita 0."
+  },
+  "voci": [
+    {
+      "id": "R11-001",
+      "chiave": "deploy-sre|chat e recensioni del negozio, senza la 181, scrivono un avviso a ogni apertura e non usano il ripiego dei nomi",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r09-avviso-recensioni.test.tsx",
+        "tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-avviso-recensioni.test.tsx tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base <C della cura>^ --file lib/queries/controparte-della-chat.ts --prove tests/unit/riparazione-r09-avviso-recensioni.test.tsx --json (provata su un commit temporaneo, poi git reset --hard: nulla resta nel ramo)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La metà «avviso a ogni apertura» è già chiusa alla base (5381741c, lib/queries/controparte-della-chat.ts:70-75: una volta per processo e per pagina se la funzione manca). La cura dell'altra metà (nomiDeiClienti passa a fetchNomiDeiClienti quando la 181 manca, dandogli la risposta già avuta: una sola chiamata alla funzione per apertura) è pronta e provata ma NON committata: fa rosse due prove comuni che fissano il difetto. tests/unit/riparazione-r09-avviso-recensioni.test.tsx importa lib/logger.ts (R10) e app/seller/reviews/page.tsx; tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts monta app/messages, app/seller/reviews, app/seller/customers che usano lib/queries/seller-public-profiles.ts (R09) e lib/logger.ts (R10); con la cura entrambe dipendono da fetchNomiDeiClienti (file di R09). Con cura + le due prove modificate: 5 file di prove sui nomi + 20 delle pagine chat/recensioni verdi (200 casi); senza cura le prove modificate sono rosse (5 casi). Rimessa con la prova r09 modificata: uscita 0; con la mia prova nuova + r09: uscita 0; con la prova i-nomi: uscita 3, falso strutturale (il database finto della prova scrive «function nomi_dei_clienti_del_negozio does not exist», che la regola STRUTTURA legge come nome mancante; i rossi al passo ② sono tutti AssertionError).",
+      "serve_file_altrui": [
+        {
+          "file": "lib/queries/controparte-della-chat.ts",
+          "modifica": "FILE MIO, cura non committata (si committa insieme alle due prove qui sotto, con la firma di Nicola). Diff esatto:\ndiff --git a/lib/queries/controparte-della-chat.ts b/lib/queries/controparte-della-chat.ts\nindex 20b9c2a..736ea1a 100644\n--- a/lib/queries/controparte-della-chat.ts\n+++ b/lib/queries/controparte-della-chat.ts\n@@ -1,5 +1,5 @@\n import { logger } from '@/lib/logger';\n-import { fetchSellerPublicMap, type LettoreVista } from '@/lib/queries/seller-public-profiles';\n+import { fetchNomiDeiClienti, fetchSellerPublicMap, type LettoreVista } from '@/lib/queries/seller-public-profiles';\n \n /**\n  * IN CHAT, IL CLIENTE VEDE L'INSEGNA DEL NEGOZIO LETTA DALLA VETRINA PUBBLICA.\n@@ -51,8 +51,14 @@ const avvisiSenzaLaFunzioneDati = new Set<string>();\n \n /**\n  * I nomi dei clienti che chi guarda ha davanti, per id. Se la funzione non\n- * risponde (o non c'è ancora, prima della 181) la mappa è vuota e vale il\n- * ripiego «Cliente»: il nome è un dettaglio, i messaggi no.\n+ * risponde la mappa è vuota e vale il ripiego «Cliente»: il nome è un\n+ * dettaglio, i messaggi no.\n+ *\n+ * 27/11/2026 — Se la funzione non c'è ancora (prima della 181) si passa al\n+ * ripiego che già esiste, `fetchNomiDeiClienti`: il nome di consegna degli\n+ * ordini che chi guarda legge già. Prima chat e recensioni si fermavano a\n+ * «Cliente» anche per chi aveva ordinato. La funzione si chiede una volta sola\n+ * per apertura: al ripiego arriva la risposta già avuta, non una seconda domanda.\n  */\n export async function nomiDeiClienti(\n   supa: LettoreChat,\n@@ -70,8 +76,11 @@ export async function nomiDeiClienti(\n     // R09-002 — Finche' manca la funzione (migrazione 181) l'avviso si scrive una volta per processo e per\n     // pagina, non a ogni apertura; un guasto vero resta nel registro ogni volta.\n     if (funzioneNonAncoraCreata(e)) {\n-      if (avvisiSenzaLaFunzioneDati.has(etichetta)) return new Map();\n-      avvisiSenzaLaFunzioneDati.add(etichetta);\n+      if (!avvisiSenzaLaFunzioneDati.has(etichetta)) {\n+        avvisiSenzaLaFunzioneDati.add(etichetta);\n+        logger.warn(`${etichetta} nomi dei clienti senza la funzione della 181: letti dagli ordini`, e);\n+      }\n+      return fetchNomiDeiClienti({ from: (tabella: string) => supa.from(tabella), rpc: async () => ({ data: null, error: e }) }, unici);\n     }\n     logger.warn(`${etichetta} nomi dei clienti non letti: mostrati con «Cliente»`, e);\n     return new Map();"
+        },
+        {
+          "file": "tests/unit/riparazione-r09-avviso-recensioni.test.tsx",
+          "modifica": "Diff esatto (il database finto legge anche gli ordini; la prima apertura pretende il nome di consegna «Maria Rossi» e una sola chiamata alla funzione per apertura). Da cambiare anche la riga 10 del commento: «le recensioni restano senza nome («Cliente»)» → «le recensioni sono firmate col nome di consegna degli ordini».\ndiff --git a/tests/unit/riparazione-r09-avviso-recensioni.test.tsx b/tests/unit/riparazione-r09-avviso-recensioni.test.tsx\nindex fba02b8..a2005a2 100644\n--- a/tests/unit/riparazione-r09-avviso-recensioni.test.tsx\n+++ b/tests/unit/riparazione-r09-avviso-recensioni.test.tsx\n@@ -8,15 +8,22 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';\n  * R09-002 — La pagina delle recensioni, senza la funzione dei nomi (migrazione 181), scriveva l'avviso a\n  * ogni apertura. Adesso una volta per processo; le recensioni restano senza nome («Cliente»).\n  */\n-const stato = vi.hoisted(() => ({ code: 'PGRST202' }));\n+const stato = vi.hoisted(() => ({ code: 'PGRST202', rpc: 0 }));\n vi.mock('next-intl', () => ({ useTranslations: () => (k: string) => k }));\n vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));\n vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));\n vi.mock('@/lib/supabase/client', () => ({\n   supabase: {\n     auth: { getUser: async () => ({ data: { user: { id: 'negozio-1' } } }) },\n-    rpc: async () => ({ data: null, error: { code: stato.code, message: 'errore nomi' } }),\n-    from: () => ({\n+    rpc: async () => { stato.rpc += 1; return { data: null, error: { code: stato.code, message: 'errore nomi' } }; },\n+    // Senza la 181 il nome arriva dagli ordini che il negozio legge già (il nome di consegna).\n+    from: (tabella: string) => tabella === 'orders' ? ({\n+      select: () => ({\n+        in: () => ({\n+          order: () => ({ limit: async () => ({ data: [{ user_id: 'u1', delivery_full_name: 'Maria Rossi' }], error: null }) }),\n+        }),\n+      }),\n+    }) : ({\n       select: () => ({\n         eq: () => ({\n           order: async () => ({\n@@ -57,11 +64,15 @@ beforeEach(async () => {\n });\n \n describe('R09-002 · recensioni: l\\'avviso della funzione assente non si ripete', () => {\n-  it('due aperture senza la 181: un avviso, recensioni leggibili', async () => {\n+  it('due aperture senza la 181: un avviso, recensioni leggibili e firmate col nome di consegna', async () => {\n     stato.code = 'PGRST202';\n-    expect(await apri()).toContain('Buonissimo');\n+    stato.rpc = 0;\n+    const prima = await apri();\n+    expect(prima).toContain('Buonissimo');\n+    expect(prima, 'senza la 181 le recensioni non usano il ripiego dei nomi').toContain('Maria Rossi');\n     expect(await apri()).toContain('Buonissimo');\n     expect(await avvisi()).toBe(1);\n+    expect(stato.rpc, 'una sola chiamata alla funzione per apertura').toBe(2);\n   });\n \n   it('un guasto vero: un avviso a ogni apertura', async () => {"
+        },
+        {
+          "file": "tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts",
+          "modifica": "Diff esatto (senza la 181 si pretende il nome di consegna degli ordini al posto di «Cliente», e nessun nome di estranei):\ndiff --git a/tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts b/tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts\nindex 727256a..9fe3894 100644\n--- a/tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts\n+++ b/tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts\n@@ -207,16 +207,20 @@ describe('① in chat il negozio legge il nome di ogni cliente', () => {\n     s.smonta();\n   }, 60000);\n \n-  it.each(MONDI)('senza la 181 la chat resta in piedi e dice «Cliente», non «Utente» — %s', async (_n, mondo) => {\n+  it.each(MONDI)('senza la 181 la chat resta in piedi e legge il nome di consegna degli ordini, non «Utente» — %s', async (_n, mondo) => {\n     const elenco = await aSchermo('app/messages/page.tsx', {}, mondo, PANE, { con181: false });\n     expect(elenco.errori.size, [...elenco.errori.values()].join(' · ')).toBe(0);\n     const testo = await attendiFinche(elenco.s, () => (elenco.s.radice.textContent ?? '').includes('A che ora chiudete?'));\n-    expect(riga(elenco.s, 'A che ora chiudete?')).toContain('Cliente');\n+    const diMaria = riga(elenco.s, 'A che ora chiudete?');\n+    expect(diMaria, 'senza la 181 la chat non usa il ripiego dei nomi').toContain('Maria Rossi');\n+    expect(diMaria).not.toContain('Giulia Bianchi');\n+    expect(riga(elenco.s, 'Avete la focaccia senza sale?')).toContain('Giulia Bianchi');\n     expect(testo).not.toContain('Utente');\n+    expect(testo).not.toContain('Carlo Estraneo');\n     elenco.s.smonta();\n     const una = await aSchermo('app/messages/[id]/page.tsx', { params: { id: CONV_MARIA } }, mondo, PANE, { con181: false });\n     await attendiFinche(una.s, () => !!una.s.radice.querySelector('h2'));\n-    expect(una.s.radice.querySelector('h2')?.textContent).toBe('Cliente');\n+    expect(una.s.radice.querySelector('h2')?.textContent).toBe('Maria Rossi');\n     una.s.smonta();\n   }, 60000);\n });\n@@ -234,12 +238,13 @@ describe('② le recensioni del negozio si aprono', () => {\n     s.smonta();\n   }, 60000);\n \n-  it.each(MONDI)('senza la 181 la recensione resta leggibile, firmata «Cliente» — %s', async (_n, mondo) => {\n+  it.each(MONDI)('senza la 181 la recensione resta leggibile, firmata col nome di consegna degli ordini — %s', async (_n, mondo) => {\n     const { s, errori } = await aSchermo('app/seller/reviews/page.tsx', {}, mondo, PANE, { con181: false });\n     expect(errori.get(JSON.stringify(['seller', 'reviews'])), 'la lettura delle recensioni e caduta').toBeUndefined();\n     const testo = await attendiFinche(s, () => (s.radice.textContent ?? '').includes('Focaccia ancora calda'));\n     expect(testo).toContain('Focaccia ancora calda');\n-    expect(testo).toContain('Cliente');\n+    expect(testo, 'senza la 181 le recensioni non usano il ripiego dei nomi').toContain('Maria Rossi');\n+    expect(testo).not.toContain('Carlo Estraneo');\n     s.smonta();\n   }, 60000);\n });"
+        }
+      ],
+      "nota": "Pronta anche una prova mia, non committata perché rossa senza la cura: tests/unit/riparazione-r11-nomi-dei-clienti-ripiego.test.ts (4 casi su conInsegnaDelNegozio/nomiDeiClienti con un client finto: senza la funzione → «Maria Rossi» dagli ordini e «Cliente» per chi non ha ordinato; rpc chiamata 1 volta; con la funzione gli ordini non si leggono; un guasto vero non legge gli ordini). La regista può chiederla; la r09 modificata copre già la chiamata unica. Con la cura, la prima apertura senza la 181 scrive due avvisi una volta sola (quello per pagina di questo file e quello per processo di fetchNomiDeiClienti).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-002",
+      "chiave": "deploy-sre|sulla strada della carta la posta spenta non avvisa nessuno",
+      "esito": "riparato",
+      "commit": "c30557383964043fd494bbf99922fbefe6ebf5d2",
+      "file_toccati": [
+        "lib/stripe/webhook/posta-non-partita.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-posta-spenta-carta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-posta-spenta-carta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c30557383964043fd494bbf99922fbefe6ebf5d2^ --file lib/stripe/webhook/posta-non-partita.ts --prove tests/unit/riparazione-r11-posta-spenta-carta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In avvisaSeLaPostaNonParte il «skipped» per RESEND_API_KEY/RESEND_FROM mancanti, solo con VERCEL_ENV=production, suona la campanella «la posta del sito è spenta» con la stessa chiave della strada dei contanti (posta-spenta:<ordine>), una per ordine. Prova: il webhook vero della carta (handleCheckoutCompleted) con la vera sendEmail e Resend finto: posta spenta → una campanella; posta accesa e anteprima → nessuna. Le 212 prove esistenti della catena (webhook, cassa in contanti, rimborsi, buoni) verdi (1383 casi).",
+      "verificato_da": "revisore (subagente sonnet, mandato di smentire): rilanciate la prova (4/4) e le 220 prove su webhook, contanti e posta-non-partita (1439 casi), letto il diff. Regge: in anteprima o con altri skipped non suona niente, e la chiave è uguale a quella dei contanti. Effetto da sapere: sui contanti suona prima la campanella generica, e quella specifica «ordine in contanti» (stessa chiave) non suona più. Cambia solo la dicitura."
+    },
+    {
+      "id": "R11-003",
+      "chiave": "microcopy|sulla bacheca del fattorino una casella dice ancora «rating» in inglese",
+      "esito": "non_fatto",
+      "nota": "Non fatta: il lotto 2 non è partito. La sessione ha superato il 70% del limite di spesa (14,24 $ su 20 $) durante il lotto 1, e la regia ha detto di non aprire lotti nuovi."
+    },
+    {
+      "id": "R11-004",
+      "chiave": "qa-flussi|la prova «la cassa disegna il modulo» non gira in nessun lavoro della ci",
+      "esito": "non_fatto",
+      "nota": "Non fatta: il lotto 2 non è partito. La sessione ha superato il 70% del limite di spesa (14,24 $ su 20 $) durante il lotto 1, e la regia ha detto di non aprire lotti nuovi."
+    },
+    {
+      "id": "R11-005",
+      "chiave": "qa-flussi|le prove dei permessi in sql certificano un database ricostruito dai file, non quello vero",
+      "esito": "parziale",
+      "commit": "2782f5050cfd83e3b2ab3bdeccb8fcf562434223",
+      "file_toccati": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/deriva-migrazioni-produzione.yml"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-regole-del-database-vero.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-regole-del-database-vero.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2782f5050cfd83e3b2ab3bdeccb8fcf562434223^ --file .github/workflows/ci.yml,.github/workflows/deriva-migrazioni-produzione.yml --prove tests/unit/riparazione-r11-regole-del-database-vero.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "rls-locale passa a postgres:17. Nel flusso della deriva: servizio postgres:17, ricostruzione con apply.sh (solo verso il Postgres del giro), e un passo che legge i due database con la stessa domanda (BEGIN TRANSACTION READ ONLY, SET LOCAL search_path, una SELECT sui cataloghi, ROLLBACK) e fa uscire solo tipo|md5(chiave)|md5(contenuto) per RLS, regole, funzioni, esegue, permessi, colonne, inneschi e viste (pg_get_viewdef + reloptions); stampa solo i conti per tipo (diversi · mancano · in più), mai righe, nomi o definizioni; gli errori di psql verso il vero non si stampano; nessun segreto nuovo; i passi nuovi girano anche se i nomi sono rossi. Prova vitest: legge i due flussi (postgres:17, sola lettura, solo md5, solo SUPABASE_DB_URL, niente set -x/comm/diff) e fa girare il passo vero con un psql finto (uguali → 0; regola cambiata, vista mancante, funzione in più → conti giusti e nessuna impronta/testo nel log; vero che non risponde → nessun indirizzo/utente nel log; lato vuoto → «non vale»). Mai lanciato contro un database remoto. Postgres 17 qui non c'è (solo il 16 di Ubuntu): sul 16 locale ho ricostruito due database da tutte le 256 migrazioni e fatto girare il passo vero fra i due (1002 oggetti, nessuna differenza, uscita 0) e dopo aver cambiato una regola, le opzioni di una vista, tolto e aggiunto una funzione (uscita 1, conti 1/1/1+1 ed esegue 2+2, nessun nome nel log). Le 24 prove esistenti che leggono i flussi verdi.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/sql/harness/apply.sh",
+          "modifica": "Saltare le migrazioni che la produzione non ha. Dopo la riga MIG=\"$ROOT/migrations\" aggiungere:\n# Con SALTA_MIGRAZIONI=<file> (un nome di file per riga, per esempio quelle che il controllo della deriva\n# trova mancanti in produzione) quelle non si applicano e non si registrano: il database ricostruito e'\n# quello che la produzione ha davvero, non «tutti i file, 161 compresa». Senza la variabile, come prima.\nSALTA=\"${SALTA_MIGRAZIONI:-}\"\nskipped=0\nNel ciclo, subito dopo name=\"$(basename \"$f\")\":\n  if [ -n \"$SALTA\" ] && grep -qxF \"$name\" \"$SALTA\"; then skipped=$((skipped + 1)); echo \"  ↷ $name (saltata)\"; continue; fi\nE dopo la riga echo \"▶ applicate $applied · fallite $failed\" (che resta uguale):\n[ -z \"$SALTA\" ] || echo \"▶ saltate $skipped (SALTA_MIGRAZIONI)\""
+        },
+        {
+          "file": "scripts/check-migration-drift.mjs",
+          "modifica": "Scrivere l'elenco delle mancanti per apply.sh: in main(), subito dopo `const esito = esitoDelConfronto(repoMigrationNames(), applicate);` aggiungere `if (process.env.MANCANTI_ESPORTA) fs.writeFileSync(process.env.MANCANTI_ESPORTA, esito.mancanti.map((f) => `${f}\\n`).join(''));` (esito.mancanti sono già i nomi dei file in migrations/)."
+        }
+      ],
+      "cosa_resta": "1) Le due modifiche qui sopra (file non miei). 2) Poi, nel flusso della deriva (mio, onda dopo): MANCANTI_ESPORTA: $RUNNER_TEMP/mancanti.txt (la cartella temporanea del runner) nel passo «Confronta il repository con il database vero», e un passo «SALTA_MIGRAZIONI=$RUNNER_TEMP/mancanti.txt bash tests/sql/harness/apply.sh mycity_come_produzione && bash tests/sql/harness/run.sh mycity_come_produzione» verso il Postgres del giro: le prove dei permessi girano sul database come la produzione l'ha, e una rossa vuol dire «produzione diversa dal deposito». 3) Al primo giro vero (Nicola, workflow_dispatch) vedere i conti: il confronto non è mai girato contro la produzione, e la 161 non applicata e le differenze fra lo shim Supabase locale e Supabase (permessi di default di anon/authenticated, schema storage) possono dare conti diversi da zero da subito; 4) rls-locale su postgres:17 non provato qui (Postgres 17 non installato; il 26/11 il lotto R01 e il revisore l'avevano visto verde: apply 235/0, run.sh, db pieno, check-drift).",
+      "verificato_da": "revisore (subagente sonnet, mandato di smentire): i due flussi sono YAML valido (js-yaml), prova 10/10. Il passo nuovo non ha set -x. Il database vero si legge solo in una transazione READ ONLY con ROLLBACK, l'uscita va su file temporaneo con soli md5 e si stampano solo i conti. Un errore di psql o un'uscita vuota fa rosso. Nessun segreto nuovo. Regge. Dubbio non verificabile: possibili falsi rossi per le differenze fra lo shim Supabase locale e il vero (schema storage, permessi di default)."
+    },
+    {
+      "id": "R11-006",
+      "chiave": "qa-flussi|due ordini dello stesso carrello possono finire a due fattorini diversi, e il secondo fa un viaggio intero per 1 euro",
+      "esito": "parziale",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": "",
+      "prova_tipo": "comando",
+      "prova_eseguita": false,
+      "rimessa": {
+        "esito": "non_applicabile",
+        "uscita": null,
+        "comando": ""
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessun commit. Scritta la nuova prendi_ordine (nota) dalla 661: stessi controlli (NON_FATTORINO, DOCUMENTI_SCADUTI), stesso set_config, stessa presa atomica dell'ordine scelto e stesse risposte 661; in più, nella stessa transazione, prende gli altri ordini READY e liberi dello stesso carrello (carta: stesso stripe_transfer_group; contanti: stessa riga di cod_checkout_attempts.order_ids; sempre stesso cliente), bloccando prima le righe del giro in ordine di id per non andare in stallo fra due fattorini, e risponde anche 'insieme'. Provata SOLO su un Postgres 16 locale (database ricostruito dalle migrazioni, transazione con ROLLBACK): carta → prende pane e frutta; contanti → prende il pronto, lascia quello in preparazione; il secondo fattorino legge GIA_PRESO; un altro carrello resta solo; e con la funzione nuova caricata le 5 prove SQL esistenti su prendi_ordine (06, 08, r03-scadenze, r04-presa-persa, s01-03) verdi. File della migrazione NON creato.",
+      "nota": "SQL esatto della nuova prendi_ordine (da mettere in una migrazione dell'onda delle migrazioni):\nCREATE OR REPLACE FUNCTION public.prendi_ordine(p_order_id uuid)\nRETURNS jsonb\nLANGUAGE plpgsql\nSECURITY DEFINER\nSET search_path = public\nAS $$\nDECLARE\n  v_uid     uuid := (SELECT auth.uid());\n  v_preso   uuid;\n  v_giro    uuid[];\n  v_insieme uuid[];\nBEGIN\n  -- Solo un fattorino approvato. Stessa condizione della vista della bacheca.\n  IF v_uid IS NULL OR NOT public.is_rider_approvato() THEN\n    RETURN jsonb_build_object('ok', false, 'motivo', 'NON_FATTORINO');\n  END IF;\n\n  -- 270 — e con patente e polizza in regola per il suo mezzo.\n  IF NOT public.is_rider_in_regola() THEN\n    RETURN jsonb_build_object('ok', false, 'motivo', 'DOCUMENTI_SCADUTI');\n  END IF;\n\n  PERFORM set_config('mycity.allow_order_write', '1', true);\n\n  -- Gli ordini dello stesso carrello, sempre dello stesso cliente: con la carta lo stesso\n  -- stripe_transfer_group, in contanti la stessa riga di cod_checkout_attempts (order_ids).\n  -- Sempre compreso l'ordine scelto.\n  SELECT array_agg(DISTINCT g.id ORDER BY g.id)\n    INTO v_giro\n    FROM (\n      SELECT p_order_id AS id\n      UNION\n      SELECT o2.id\n        FROM public.orders o1\n        JOIN public.orders o2\n          ON o2.stripe_transfer_group = o1.stripe_transfer_group\n         AND o2.user_id = o1.user_id\n       WHERE o1.id = p_order_id\n         AND o1.stripe_transfer_group IS NOT NULL\n      UNION\n      SELECT o2.id\n        FROM public.orders o1\n        JOIN public.cod_checkout_attempts a\n          ON a.user_id = o1.user_id\n         AND a.order_ids @> jsonb_build_array(jsonb_build_object('id', o1.id::text))\n        CROSS JOIN LATERAL jsonb_array_elements(a.order_ids) AS e(el)\n        JOIN public.orders o2\n          ON o2.id::text = e.el ->> 'id'\n         AND o2.user_id = o1.user_id\n       WHERE o1.id = p_order_id\n    ) g;\n\n  -- Le righe del giro si bloccano prima della presa, in ordine di id: due fattorini che\n  -- toccano nello stesso istante due ordini dello stesso carrello non si fermano a vicenda;\n  -- il secondo aspetta e poi trova le righe già prese (GIA_PRESO, come oggi).\n  PERFORM 1 FROM public.orders WHERE id = ANY (v_giro) ORDER BY id FOR UPDATE;\n\n  -- Atomico: chi arriva secondo trova rider_id gia' pieno e non aggiorna nulla.\n  UPDATE public.orders\n     SET rider_id = v_uid,\n         delivery_status = 'ASSIGNED'\n   WHERE id = p_order_id\n     AND rider_id IS NULL\n     AND delivery_status = 'READY'\n  RETURNING id INTO v_preso;\n\n  IF v_preso IS NULL THEN\n    -- 661 — «Già preso» solo se l'ha preso davvero un altro fattorino.\n    IF EXISTS (\n      SELECT 1 FROM public.orders\n       WHERE id = p_order_id\n         AND rider_id IS NOT NULL\n         AND rider_id <> v_uid\n    ) THEN\n      RETURN jsonb_build_object('ok', false, 'motivo', 'GIA_PRESO');\n    END IF;\n    RETURN jsonb_build_object('ok', false, 'motivo', 'NON_PIU_DISPONIBILE');\n  END IF;\n\n  -- Con l'ordine scelto, nella stessa transazione, gli altri ordini PRONTI e liberi dello\n  -- stesso carrello: un giro solo, un fattorino solo. Gli ordini del carrello ancora in\n  -- preparazione restano sulla bacheca come oggi.\n  WITH presi AS (\n    UPDATE public.orders\n       SET rider_id = v_uid,\n           delivery_status = 'ASSIGNED'\n     WHERE id = ANY (v_giro)\n       AND id <> p_order_id\n       AND rider_id IS NULL\n       AND delivery_status = 'READY'\n       AND COALESCE(pickup_in_store, false) = false\n    RETURNING id\n  )\n  SELECT coalesce(array_agg(id ORDER BY id), ARRAY[]::uuid[]) INTO v_insieme FROM presi;\n\n  RETURN jsonb_build_object('ok', true, 'id', v_preso, 'insieme', to_jsonb(v_insieme));\nEND;\n$$;\nREVOKE EXECUTE ON FUNCTION public.prendi_ordine(uuid) FROM public, anon;\nGRANT  EXECUTE ON FUNCTION public.prendi_ordine(uuid) TO authenticated;",
+      "cosa_resta": "1) La migrazione con la prendi_ordine qui sopra (vietata in quest'onda). 2) La bacheca raggruppata per carrello: la vista ordini_disponibili_rider (ultima definizione nella 161) non porta nessuna chiave del carrello, e negli ordini in contanti la chiave non sta sulla riga dell'ordine; raggruppare in app/rider/page.tsx senza quella colonna vorrebbe dire indovinare (zona, fascia, ora), cioè unire ordini di clienti diversi: niente modifica alla pagina. Serve aggiungere alla vista, in fondo, una colonna tipo `md5(coalesce(o.stripe_transfer_group, (SELECT a.chiave FROM cod_checkout_attempts a WHERE a.user_id = o.user_id AND a.order_ids @> jsonb_build_array(jsonb_build_object('id', o.id::text)) LIMIT 1))) AS carrello`, poi la pagina raggruppa per `carrello` (leggendo la colonna solo dopo che la migrazione è applicata, o la lettura della bacheca si rompe). 3) Regola da Nicola: gli ordini del carrello ancora in preparazione, quando il primo fattorino ha preso il resto, vanno tenuti per lui o restano liberi? (oggi la funzione nuova li lascia liberi.)",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-007",
+      "chiave": "qa-flussi|la pulizia di città e cap nella ricerca indirizzi lascia passare null su scritture comuni",
+      "esito": "riparato",
+      "commit": "c725bd75283a0d03736a5e2882baf6c2a7561e97",
+      "file_toccati": [
+        "lib/geocodifica.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-citta-e-cap-scritti-a-mano.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-citta-e-cap-scritti-a-mano.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c725bd75283a0d03736a5e2882baf6c2a7561e97^ --file lib/geocodifica.ts --prove tests/unit/riparazione-r11-citta-e-cap-scritti-a-mano.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "pulisciCitta toglie la sigla anche minuscola e la punteggiatura in coda; pezziDellaDomanda salta la sigla dopo una virgola («Piacenza, PC»), legge il CAP con lo spazio o in coda alla città, toglie dal nome un CAP di 4 cifre senza usarlo come filtro, regge «Piacenza, Italia»; affidabile accetta un CAP con le stesse prime tre cifre solo se le mappe confermano il comune. Prova a tabella (17 scritture di Piacenza, 4 con l'apostrofo, 4 con l'accento, la rotta) e 3 casi che restano null. Le 47 prove esistenti su geocodifica/geocode verdi.",
+      "nota": "Resta non provabile qui (le prove non vanno in rete): Nominatim riceve ancora il postalcode scritto; se il servizio vero filtra lui per CAP, un CAP sbagliato della stessa città può tornare senza risultati prima del nostro filtro.",
+      "verificato_da": "revisore (subagente sonnet, mandato di smentire): rilanciate la prova e le 44 prove su geocodifica (321 casi). Controllato che il CAP «della stessa città» valga solo con il comune confermato dalle mappe (lib/geocodifica.ts:171-176). Regge."
+    },
+    {
+      "id": "R11-008",
+      "chiave": "qa-flussi|una veloce già in attesa scade subito quando il negozio preme «finito per oggi»",
+      "esito": "gia_riparato_prima",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": "git merge-base --is-ancestor 447fdd4 2ba05a74 (→ 0) ; git grep -n 'sospesoIl\\|finitoOggiIl\\|chiusoFinoAl' 2ba05a74 -- lib components app (→ niente)",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_applicabile",
+        "uscita": null,
+        "comando": ""
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base il tasto «finito per oggi» non esiste: R26-012 (6a16767) che faceva vedere la sospensione a isStoreClosedForOrder è stato annullato da 447fdd4, antenato della base. isStoreClosedForOrder guarda solo gli orari della settimana, quindi la veloce in attesa non può scadere per quel tasto. Nessuna modifica.",
+      "prova": "lib/store-hours.ts:112-118 (isStoreClosedForOrder: solo orari settimanali, nessuna sospensione); 447fdd4 «Revert R26-012 il negozio può dire «finito per oggi» e «chiuso fino al»» è antenato di 2ba05a74.",
+      "nota": "Se R26-012 torna, torna anche la domanda: col tasto premuto, chiusuraPerLaVeloce (lib/ordini/scadenza-accettazione.ts:241) cerca il primo minuto chiuso partendo dalla NASCITA con gli orari di adesso, e la veloce già in attesa da più di 20 minuti scade al giro dopo. Domanda per Nicola in quel caso: la veloce già in attesa scade col tasto (regola del 31/10: «scade quando il negozio smette di poterla servire») o ha ancora i 20 minuti del freno contati dalla pressione del tasto?",
+      "verificato_da": "revisore (subagente sonnet, mandato di smentire): 447fdd4 è nella storia di HEAD; i grep (finito per oggi, chiuso fino, closed_until, paused_until, vacation, accepting_orders…) in app, components, lib e migrations non trovano nessun modo per il negozio di sospendersi per oggi che arrivi a lib/ordini/scadenza-accettazione.ts. Confermato."
+    },
+    {
+      "id": "R11-009",
+      "chiave": "qa-flussi|«ripeti ordine» rimette nel carrello una quantità oltre la scorta (la ferma solo la cassa)",
+      "esito": "riparato",
+      "commit": "0b82f72135956812456eb36b18397f5be51ccbbf",
+      "file_toccati": [
+        "lib/riordino.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-riordino-righe-doppie.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-riordino-righe-doppie.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0b82f72135956812456eb36b18397f5be51ccbbf^ --file lib/riordino.ts --prove tests/unit/riparazione-r11-riordino-righe-doppie.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "quantiNe toglie dalla scorta anche i pezzi già messi dalle righe precedenti dello stesso riordino (conto per variante e per prodotto); quando vale la scorta del prodotto (quella della variante non si legge) si contano carrello e righe di tutte le varianti. Prova: 2+2 con scorta 3 → 3 (anche con la stessa variante e con «Aggiungi»), due varianti col proprio tetto restano indipendenti, scorta 0 → niente. Le 6 prove esistenti su lib/riordino verdi.",
+      "verificato_da": "revisore (subagente sonnet, mandato di smentire): rilanciate la prova e le 7 prove su riordino (36 casi), letti i casi quantità 0, scorta null o illimitata, variante senza scorta propria, carrello già pieno. Regge."
+    },
+    {
+      "id": "R11-010",
+      "chiave": "qa-flussi|nessuna prova nel browser gira mai sullo schermo di un telefono, e su telefono una è già rossa",
+      "esito": "non_fatto",
+      "nota": "Non fatta: il lotto 2 non è partito. La sessione ha superato il 70% del limite di spesa (14,24 $ su 20 $) durante il lotto 1, e la regia ha detto di non aprire lotti nuovi."
+    },
+    {
+      "id": "R11-011",
+      "chiave": "qa-flussi|una prova del collegamento stripe passa solo grazie al caso precedente: i tre flag non si azzerano tra un caso e l'altro",
+      "esito": "non_fatto",
+      "nota": "Non fatta: il lotto 2 non è partito. La sessione ha superato il 70% del limite di spesa (14,24 $ su 20 $) durante il lotto 1, e la regia ha detto di non aprire lotti nuovi."
+    },
+    {
+      "id": "R11-012",
+      "chiave": "stati-ui|oncount della griglia non sa dire «non so»: con la griglia ferma al tetto la categoria può restare su un numero vecchio",
+      "esito": "non_fatto",
+      "nota": "Non fatta: il lotto 2 non è partito. La sessione ha superato il 70% del limite di spesa (14,24 $ su 20 $) durante il lotto 1, e la regia ha detto di non aprire lotti nuovi."
+    },
+    {
+      "id": "R11-013",
+      "chiave": "tipografia|otto spaziature diverse per la stessa etichetta maiuscola",
+      "esito": "non_fatto",
+      "nota": "Non fatta: il lotto 2 non è partito. La sessione ha superato il 70% del limite di spesa (14,24 $ su 20 $) durante il lotto 1, e la regia ha detto di non aprire lotti nuovi."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "la prova di ripristino mensile riapre la copia di Postgres 17 su un postgres:16",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": ".github/workflows/backup-db.yml:448",
+      "descrizione": "Il lavoro di prova del ripristino usa il servizio postgres:16 mentre la copia è fatta con pg_dump 17 da una produzione 17; pg_restore gira con || true e gli errori diventano un avviso. La prova certifica un ripristino su un motore che la produzione non usa (e il SET transaction_timeout delle copie 17 sul 16 è un errore atteso). Non provato: dedotto dal codice."
+    },
+    {
+      "titolo": "l avviso della posta non partita per i conti Stripe bloccati arriva una volta sola per sempre, per tutti i conti",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "lib/stripe/webhook/posta-non-partita.ts:52-54 (riferimentoDi) · lib/stripe/webhook/trasferimenti.ts:131,142",
+      "descrizione": "Gli invii dei conti Stripe passano solo accountId (e profiloId), che la catena del riferimento non guarda: la chiave unaVoltaPer diventa posta-non-partita:<cosa>:senza-riferimento, e dopo il primo rifiuto di Resend per un conto, quello di un altro conto risulta già mandato. Cura: aggiungere dati.accountId alla catena del riferimento. Non riparato: la voce non lo nomina."
+    },
+    {
+      "titolo": "Falla di sicurezza da chiudere (rilascio): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "sicurezza",
+      "severita": "minore",
+      "file": "(nel referto privato)",
+      "riservato": true
+    }
+  ],
+  "domande_per_nicola": [
+    "R11-001: puoi firmare le modifiche a due prove comuni, tests/unit/riparazione-r09-avviso-recensioni.test.tsx e tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts? Oggi fissano il difetto. Con la firma la cura di lib/queries/controparte-della-chat.ts si committa insieme a loro: i diff esatti sono nella voce.",
+    "R11-006: quando il primo fattorino prende gli ordini pronti di un carrello, quelli dello stesso carrello ancora in preparazione restano liberi sulla bacheca o li teniamo per lui? La prendi_ordine scritta nella nota li lascia liberi.",
+    "R11-008 (solo se torna il tasto «finito per oggi», annullato con 447fdd4): una veloce già in attesa scade quando il tasto viene premuto, o ha ancora i 20 minuti contati dalla pressione?"
+  ],
+  "conto": {
+    "agenti": 2,
+    "subagenti": 2,
+    "costo_usd": 16.44,
+    "nota": "1 riparatore per il lotto 1, fermato al limite di spesa, e 1 revisore sonnet. Il lotto 2 non è partito. Spesa letta con get_session alle 02:10: 16,44 $."
+  },
+  "costo_usd": 16.44
+}
