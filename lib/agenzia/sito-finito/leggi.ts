@@ -1,5 +1,6 @@
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { env } from '@/lib/env';
 import { giornoAPiacenza } from '@/lib/armonia';
 import { accentHex, normalizeCustomization, socialLinks } from '@/lib/store-customization';
 import { leggiServiziScelti, servizioScelto } from '@/lib/agenzia/servizi-scelti';
@@ -36,6 +37,18 @@ type RigaProfilo = {
   created_at: string | null;
 };
 
+/** L'immagine, se sta nell'archivio Supabase del sito; altrimenti `null`. */
+function dalNostroArchivio(u: string | null): string | null {
+  if (!u) return null;
+  try {
+    const nostro = new URL(env.supabaseUrl() ?? '').host;
+    const sua = new URL(u);
+    return sua.protocol === 'https:' && nostro && sua.host === nostro ? sua.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function leggiSitoDelCliente(pezzo: string): Promise<SitoDelCliente> {
   const letto = leggiIndirizzo(pezzo);
   if (!letto) return { stato: 'nessuno' };
@@ -52,7 +65,7 @@ export async function leggiSitoDelCliente(pezzo: string): Promise<SitoDelCliente
     if (ordini.error || !ordini.data?.length) return { stato: 'nessuno' };
     const righe = ordini.data as unknown as RigaOrdine[];
     // Due negozi con le stesse 8 cifre iniziali: vince quello con il nome giusto, altrimenti nessuno.
-    const o = righe.length === 1 ? righe[0] : righe.find((r) => percorsoDelSito(r.seller_id, r.nome_attivita)?.endsWith(`/${pezzo}`));
+    const o = righe.length === 1 ? righe[0] : righe.find((r) => percorsoDelSito(r.seller_id, r.nome_attivita)?.endsWith(`/${pezzo.toLowerCase()}`));
     if (!o || !o.sito || !Array.isArray(o.sito.pagine) || o.sito.pagine.length === 0) return { stato: 'nessuno' };
     if (!servizioScelto(leggiServiziScelti(o.dati_attivita?.servizi, null).servizi, 'sito_web')) return { stato: 'nessuno' };
 
@@ -67,7 +80,8 @@ export async function leggiSitoDelCliente(pezzo: string): Promise<SitoDelCliente
       .maybeSingle();
     if (p.error || !p.data) return { stato: 'nessuno' };
     const prof = p.data as unknown as RigaProfilo;
-    if (prof.approval_status === 'suspended') return { stato: 'nessuno' };
+    // Collaudo 28/11: sospeso o respinto (anche il ripiego della cancellazione dell'account mette «rejected»): niente sito.
+    if (prof.approval_status === 'suspended' || prof.approval_status === 'rejected') return { stato: 'nessuno' };
     const pers = normalizeCustomization(prof.store_customization);
 
     return {
@@ -82,8 +96,9 @@ export async function leggiSitoDelCliente(pezzo: string): Promise<SitoDelCliente
         telefono: prof.store_phone?.trim() || null,
         orari: prof.store_hours,
         social: socialLinks(pers).map((s) => ({ label: s.label, href: s.href })),
-        logo: prof.store_logo,
-        foto: fotoDalNegozio(prof.store_media),
+        // Solo immagini dal nostro Supabase: è l'unica casa di immagini che la politica di sicurezza del sito lascia passare.
+        logo: dalNostroArchivio(prof.store_logo),
+        foto: fotoDalNegozio(prof.store_media).filter((f) => dalNostroArchivio(f) !== null),
         colore: accentHex(pers),
         // La firma nasce dal giorno d'iscrizione a MyCity, che non cambia (skill «armonia», regola 8).
         nascita: prof.created_at ? giornoAPiacenza(new Date(prof.created_at)) : null,

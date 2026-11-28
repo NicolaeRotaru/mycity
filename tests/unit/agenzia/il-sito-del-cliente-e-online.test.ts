@@ -67,6 +67,30 @@ describe('il sito finito: niente frasi da bozza', () => {
   });
 });
 
+describe('collaudo del 28/11: i buchi trovati prima di consegnare', () => {
+  it('le frasi buone restano, quelle da bozza se ne vanno', () => {
+    for (const buona of ['Il titolare vi accoglie ogni mattina.', 'Prenotazione confermata in pochi minuti.', 'La pubblicazione dei nostri libri preferiti.', 'Il gusto è confermato dai clienti da vent’anni.']) {
+      expect(testoPubblico(buona)).toBe(buona);
+    }
+    for (const bozza of ['Il menu verrà aggiunto a breve.', 'Prezzi: [da inserire].', 'Il menu è in arrivo.', 'Presto potrete prenotare online.', 'Orari da definire.', 'Le foto arriveranno dopo la visita.']) {
+      expect(testoPubblico(bozza)).toBe('');
+    }
+  });
+  it('la frase sotto il nome passa dal filtro: «da confermare» non va su Google né in copertina', () => {
+    const h = paginaDelSito(dati({ sottotitolo: 'Testi da confermare col titolare.' }), '/')!;
+    expect(h).not.toMatch(/confermar|titolare/i);
+    expect(h).toContain('<meta name="description" content="Raquel 💗 Cafè, a Piacenza">');
+  });
+  it('una pagina rimasta senza sezioni non entra nel menu e non si apre; un titolo da bozza si rinomina', () => {
+    const pagine = [PAGINE_RAQUEL[0], { titolo: 'Menu (da confermare)', percorso: '/menu', sezioni: [{ titolo: 'Piatti', testo: 'Il menu sarà inserito dopo la conferma col titolare.', stato: 'da_confermare' as const }] }, { titolo: 'Novità da definire', percorso: '/novita', sezioni: [{ titolo: 'Dicembre', testo: 'A dicembre la piazza si accende di luci.', stato: 'da_confermare' as const }] }, PAGINE_RAQUEL[2]];
+    const h = paginaDelSito(dati({ pagine }), '/')!;
+    expect(h).not.toContain('/menu');
+    expect(paginaDelSito(dati({ pagine }), '/menu')).toBeNull();
+    expect(h).toContain('>Novita</a>');
+    expect(h).not.toMatch(/da definire|da confermare/i);
+  });
+});
+
 describe('il sito finito: una pagina vera', () => {
   const casa = paginaDelSito(dati(), '/', Date.UTC(2026, 10, 28, 13))!;
   it('è un documento intero, in italiano, senza script, che Google non indicizza su questo indirizzo', () => {
@@ -101,7 +125,7 @@ describe('il sito finito: una pagina vera', () => {
     expect(casa).toMatch(/--armonia-tono:hsl\(/);
     expect(casa).toMatch(/<svg class="trama" aria-hidden="true"/);
     expect(casa).toMatch(/\.trama\{[^}]*opacity:\.06/);
-    expect(casa).toMatch(/mask-image:radial-gradient\(ellipse at center,transparent 38%/);
+    expect(casa).toMatch(/mask-image:linear-gradient\(90deg,#000,transparent 8%,transparent 92%,#000\)/);
     expect(casa).toMatch(/<svg class="luna" aria-hidden="true"/);
     expect(casa).toContain('@media (prefers-reduced-motion:reduce){.sezione{animation:none}}');
   });
@@ -177,9 +201,20 @@ describe('leggiSitoDelCliente', () => {
     db.ordini = { data: [ordine({ dati_attivita: { servizi: ['social'] } })], error: null };
     expect((await leggiSitoDelCliente('raquel-cafe-ffb27af9')).stato).toBe('nessuno');
   });
-  it('il negozio è sospeso → nessun sito', async () => {
+  it('il negozio è sospeso o respinto → nessun sito (collaudo 28/11: il respinto restava online)', async () => {
     db.profilo = { data: profilo({ approval_status: 'suspended' }), error: null };
     expect((await leggiSitoDelCliente('raquel-cafe-ffb27af9')).stato).toBe('nessuno');
+    db.profilo = { data: profilo({ approval_status: 'rejected' }), error: null };
+    expect((await leggiSitoDelCliente('raquel-cafe-ffb27af9')).stato).toBe('nessuno');
+  });
+  it('logo e foto entrano solo dal nostro archivio Supabase, gli unici che la sicurezza del sito lascia vedere', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://abc.supabase.co');
+    db.profilo = { data: profilo({ store_logo: 'https://altro.it/logo.png', store_media: ['https://abc.supabase.co/storage/v1/object/public/a.jpg', 'https://altro.it/b.jpg'] }), error: null };
+    const r = await leggiSitoDelCliente('raquel-cafe-ffb27af9');
+    vi.unstubAllEnvs();
+    if (r.stato !== 'online') throw new Error(r.stato);
+    expect(r.dati.logo).toBeNull();
+    expect(r.dati.foto).toEqual(['https://abc.supabase.co/storage/v1/object/public/a.jpg']);
   });
   it('nome vecchio nell’indirizzo → rimanda a quello giusto', async () => {
     expect(await leggiSitoDelCliente('caffe-rosa-ffb27af9')).toEqual({ stato: 'altrove', percorso: '/sito/raquel-cafe-ffb27af9' });

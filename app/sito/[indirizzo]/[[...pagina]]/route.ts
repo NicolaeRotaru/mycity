@@ -17,7 +17,8 @@ export const dynamic = 'force-dynamic';
 const INTESTAZIONI = {
   'content-type': 'text/html; charset=utf-8',
   'x-robots-tag': 'noindex',
-  'cache-control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=600',
+  // Al massimo un minuto: un negozio sospeso sparisce entro un minuto (collaudo 28/11).
+  'cache-control': 'public, max-age=0, s-maxage=60',
 } as const;
 
 const NON_TROVATO = `<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Sito non trovato</title><style>body{margin:0;font:1rem/1.6 system-ui,sans-serif;background:#FBF7F2;color:#2C2A28;display:grid;place-items:center;min-height:100vh;padding:21px;text-align:center}a{color:#C0492C}</style></head><body><main><h1>Questo sito non c'è</h1><p>L'indirizzo è sbagliato, oppure il sito non è ancora pronto.</p><p><a href="/">Vai a MyCity</a></p></main></body></html>`;

@@ -43,29 +43,56 @@ export type DatiSitoFinito = {
 
 // ———————————————————————————————— i testi
 
-/** Le parole di una frase da bozza: su un sito online non si scrive che qualcosa «arriverà». */
-const DA_BOZZA = /\b(da confermare|confermat\w*|conferm[ai]\w*|titolare|pubblicazion\w*|metteremo|inseriremo|aggiungeremo|sar[àa] inserit\w*|saranno inserit\w*|segnaposto)\b/i;
+/**
+ * Le frasi da bozza. Collaudo del 28/11: la prima regola guardava parole sole («titolare», «confermato»,
+ * «pubblicazione») e toglieva frasi buone («Il titolare vi accoglie ogni mattina», «Prenotazione confermata in pochi
+ * minuti»), mentre lasciava passare «verrà aggiunto a breve» o «[da inserire]». Qui si guardano i modi di dire della bozza.
+ */
+const DA_BOZZA: readonly RegExp[] = [
+  /\bda (confermare|definire|inserire|completare|verificare|aggiungere)\b/i,
+  /\bconferm\w*\b[^.!?]*\btitolare\b|\btitolare\b[^.!?]*\bconferm\w*/i,
+  /\b(dopo|prima del(la)?|in attesa del(la)?) (sua )?(conferma|pubblicazione|visita)\b/i,
+  /\b(metteremo|inseriremo|aggiungeremo|pubblicheremo|inseriamo|arriveranno)\b/i,
+  /\b(verr[àa]|sar[àa]|verranno|saranno) (presto )?(aggiunt|inserit|pubblicat|indicat|comunicat)\w*/i,
+  /(?:^|\s)(è|sono) in arrivo\b|\bpresto potrete\b|\bsegnaposto\b|\blorem ipsum\b|\bTBD\b/i,
+  /\[[^\]]*\]/,
+];
+const daBozza = (f: string) => DA_BOZZA.some((r) => r.test(f));
 
 /** Il testo di una sezione senza le frasi da bozza. Stringa vuota se non resta niente. */
 export function testoPubblico(testo: string): string {
   return testo
     .replace(/\s+/g, ' ')
     .trim()
-    .split(/(?<=[.!?])\s+/)
-    .filter((f) => f && !DA_BOZZA.test(f))
+    .replace(/([.!?])\s+/g, '$1\n')
+    .split('\n')
+    .filter((f) => f && !daBozza(f))
     .join(' ')
     .trim();
 }
 
-/** Le pagine dell'AD pronte per il sito: frasi da bozza tolte, sezioni vuote tolte, percorsi puliti. */
+/** Il titolo di una pagina senza bozza: se lo è, il nome dal suo percorso («/chi-siamo» → «Chi siamo»). */
+function titoloPubblico(titolo: string, percorso: string): string {
+  if (!daBozza(titolo)) return titolo;
+  if (percorso === '/') return 'Home';
+  const t = percorso.slice(1).replace(/-/g, ' ');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/** Le pagine dell'AD pronte per il sito: frasi da bozza tolte, sezioni vuote tolte, titoli puliti. */
 export function paginePubbliche(pagine: PaginaDellaBozza[]): PaginaDellaBozza[] {
   return pagine.map((p) => ({
-    titolo: p.titolo,
+    titolo: titoloPubblico(p.titolo, p.percorso),
     percorso: p.percorso,
     sezioni: p.sezioni
       .map((s) => ({ ...s, testo: testoPubblico(s.testo) }))
-      .filter((s) => s.testo.length > 0 && !DA_BOZZA.test(s.titolo)),
+      .filter((s) => s.testo.length > 0 && !daBozza(s.titolo)),
   }));
+}
+
+/** La frase sotto il nome, senza bozza; se non resta niente, nome e città. */
+export function sottotitoloPubblico(sottotitolo: string, nome: string, citta: string | null): string {
+  return testoPubblico(sottotitolo) || `${nome}${citta ? `, a ${citta}` : ''}`;
 }
 
 // ———————————————————————————————— gli attrezzi
@@ -142,9 +169,14 @@ function paginaDeiContatti(pagine: PaginaDellaBozza[]): string {
 
 /** L'HTML intero di una pagina del sito, o `null` se il percorso non è una delle pagine. */
 export function paginaDelSito(dati: DatiSitoFinito, percorso: string, adesso = Date.now()): string | null {
-  const pagine = paginePubbliche(dati.pagine);
+  // Collaudo 28/11: una pagina rimasta senza sezioni (erano tutte frasi da bozza) non entra nel menu e non si apre,
+  // a meno che sia la home o quella dei contatti, che porta il blocco «Come trovarci» coi dati veri.
+  const tutte = paginePubbliche(dati.pagine);
+  const contatti = paginaDeiContatti(tutte);
+  const pagine = tutte.filter((p) => p.sezioni.length > 0 || p.percorso === '/' || p.percorso === contatti);
   const pagina = pagine.find((p) => p.percorso === percorso);
   if (!pagina) return null;
+  const sottotitolo = sottotitoloPubblico(dati.sottotitolo, dati.nome, dati.citta);
   const casa = percorso === '/';
   const colore = hex(dati.colore);
   const logo = https(dati.logo);
@@ -164,7 +196,7 @@ export function paginaDelSito(dati: DatiSitoFinito, percorso: string, adesso = D
   const sezioni = pagina.sezioni
     .map((s, i) => `<section class="sezione" style="animation-delay:${ritardi[i] ?? 0}ms"><h2>${esc(s.titolo)}</h2><p>${esc(s.testo)}</p></section>`)
     .join('');
-  const conContatti = paginaDeiContatti(pagine) === percorso || pagine.length === 1;
+  const conContatti = contatti === percorso || pagine.length === 1;
   const m = mappa(dati);
   const titoloPagina = casa ? `${dati.nome}${dati.citta ? ` · ${dati.citta}` : ''}` : `${pagina.titolo} · ${dati.nome}`;
   const anno = new Date(adesso).getFullYear();
@@ -175,11 +207,11 @@ export function paginaDelSito(dati: DatiSitoFinito, percorso: string, adesso = D
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(titoloPagina)}</title>
-<meta name="description" content="${esc(dati.sottotitolo)}">
+<meta name="description" content="${esc(sottotitolo)}">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="${colore}">
 <meta property="og:title" content="${esc(titoloPagina)}">
-<meta property="og:description" content="${esc(dati.sottotitolo)}">
+<meta property="og:description" content="${esc(sottotitolo)}">
 <meta property="og:type" content="website">
 ${logo ? `<meta property="og:image" content="${esc(logo)}">` : ''}
 <style>
@@ -192,7 +224,7 @@ h1,h2,h3{font-family:Georgia,"Times New Roman",serif;font-weight:700;line-height
 .salta{position:absolute;left:-999px}.salta:focus{left:13px;top:13px;background:var(--carta);padding:8px 13px;z-index:9}
 .contenitore{max-width:987px;margin:0 auto;padding:0 21px}
 header.testata{position:relative;overflow:hidden;isolation:isolate;background:linear-gradient(160deg,color-mix(in srgb,var(--marchio) 10%,var(--fondo)),var(--fondo) 61.8%);border-bottom:1px solid var(--bordo)}
-.trama{position:absolute;inset:0;width:100%;height:100%;z-index:-1;color:var(--armonia-tono);opacity:.06;pointer-events:none;-webkit-mask-image:radial-gradient(ellipse at center,transparent 38%,#000 82%);mask-image:radial-gradient(ellipse at center,transparent 38%,#000 82%)}
+.trama{position:absolute;inset:0;width:100%;height:100%;z-index:-1;color:var(--armonia-tono);opacity:.06;pointer-events:none;-webkit-mask-image:linear-gradient(90deg,#000,transparent 8%,transparent 92%,#000);mask-image:linear-gradient(90deg,#000,transparent 8%,transparent 92%,#000)}
 .barra{display:flex;align-items:center;justify-content:space-between;gap:13px;flex-wrap:wrap;padding:21px 0 13px}
 .marchio{display:flex;align-items:center;gap:13px;text-decoration:none;color:var(--inchiostro);font:700 1.15rem/1.2 Georgia,serif}
 .marchio img{width:55px;height:55px;object-fit:cover;border-radius:var(--armonia-raggio,13px);background:var(--carta)}
@@ -221,7 +253,7 @@ main.contenitore{padding:34px 21px 55px}
 .contatti h3{font-size:1.1rem;margin-bottom:8px}
 .contatti-griglia{display:grid;gap:21px}
 @media (min-width:720px){.contatti-griglia{grid-template-columns:61.8fr 38.2fr}}
-.voce{margin:0 0 13px}.etichetta{display:block;font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--tenue)}
+.voce{margin:0 0 13px}.etichetta{display:block;font-size:.85rem;font-weight:700;color:var(--tenue)}
 .orari{border-collapse:collapse;width:100%}.orari th,.orari td{text-align:left;padding:5px 0;border-bottom:1px solid var(--bordo);font-weight:400}.orari th{font-weight:600;padding-right:13px}
 footer{border-top:1px solid var(--bordo);padding:21px 0 34px;color:var(--tenue);font-size:.9rem}
 footer .riga{display:flex;justify-content:space-between;gap:13px;flex-wrap:wrap;align-items:center}
@@ -242,7 +274,7 @@ ${tramaSvg}
     ${menu}
   </div>
   ${casa
-    ? `<div class="copertina"><h1>${esc(dati.nome)}</h1><p>${esc(dati.sottotitolo)}</p>${m || dati.telefono ? `<p class="pulsanti">${m ? `<a class="pulsante" href="${esc(m)}" rel="noopener" target="_blank">Come arrivare</a>` : ''}${dati.telefono ? `<a class="pulsante chiaro" href="tel:${esc(telefonoPerLink(dati.telefono))}">Chiama</a>` : ''}</p>` : ''}</div>`
+    ? `<div class="copertina"><h1>${esc(dati.nome)}</h1><p>${esc(sottotitolo)}</p>${m || dati.telefono ? `<p class="pulsanti">${m ? `<a class="pulsante" href="${esc(m)}" rel="noopener" target="_blank">Come arrivare</a>` : ''}${dati.telefono ? `<a class="pulsante chiaro" href="tel:${esc(telefonoPerLink(dati.telefono))}">Chiama</a>` : ''}</p>` : ''}</div>`
     : `<div class="titolo-pagina"><h1>${esc(pagina.titolo)}</h1></div>`}
 </div>
 </header>
