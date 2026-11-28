@@ -430,6 +430,93 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     // scritto — senza questa lettura la difesa dal doppio invio non c'e' piu'.
     logger.warn('[stripe] tentativo gia aperto non cercato', { message: tentativoGiaAperto.error.message });
   }
+
+  /**
+   * 28/11/2026 (R05-008) — I NEGOZI DEL CARRELLO, PRESI ALLO STESSO MODO DALLE DUE STRADE.
+   *
+   * La vetrina pubblica non restituisce ogni negozio che vende: un negozio approvato senza insegna,
+   * o in modalità demo (fuori vetrina, migrazione 709), non c'è. La richiesta nuova lo riprendeva
+   * dal profilo col client di servizio; il riuso della pagina già aperta no, e il negozio mancante
+   * saltava il «negozio chiuso»: alle 14:00 la pagina per «Oggi · 13:00–16:30» di un forno che
+   * riapre alle 16:30 si restituiva, mentre una richiesta nuova prendeva 409. E con la lettura
+   * caduta, al riuso si guardava solo l'orologio. Adesso le due strade chiedono qui (una lettura
+   * sola, ricordata): o tornano tutti i negozi del carrello, o il rifiuto della richiesta nuova.
+   *
+   * 28/10/2026 — UNA LETTURA DEI NEGOZI CORTA FERMA IL PAGAMENTO.
+   *
+   * Stessa porta della rotta dei contanti: l'errore si buttava e nessuno
+   * contava i negozi tornati. Con la lista vuota «negozio chiuso» e «fuori
+   * zona» non controllavano nessuno e la consegna perdeva le coordinate del
+   * negozio. Ogni negozio del carrello deve tornare, o il pagamento non si apre.
+   */
+  type NegozioDelCarrello = {
+    id: string;
+    store_name: string | null;
+    store_lat: number | null;
+    store_lng: number | null;
+    store_hours: unknown;
+  };
+  type NegoziDelCarrello =
+    | { negozi: NegozioDelCarrello[]; rifiuto: null }
+    | { negozi: null; rifiuto: ReturnType<typeof ApiErrors.unavailable> };
+  let negoziRisolti: Promise<NegoziDelCarrello> | null = null;
+  const negoziDelCarrello = (): Promise<NegoziDelCarrello> =>
+    (negoziRisolti ??= (async (): Promise<NegoziDelCarrello> => {
+      if (venditoriLetti.error || !venditoriLetti.data) {
+        logger.error('[stripe] lettura dei negozi fallita: pagamento non aperto', {
+          userId: user.id,
+          negozi: sellerIds.length,
+          message: venditoriLetti.error?.message ?? 'nessun dato',
+        });
+        return {
+          negozi: null,
+          rifiuto: ApiErrors.unavailable('Non riusciamo a controllare il negozio in questo momento. Riprova fra poco.'),
+        };
+      }
+      const negozi: NegozioDelCarrello[] = venditoriLetti.data.map((s) => ({
+        id: s.id,
+        store_name: s.store_name ?? null,
+        store_lat: s.store_lat ?? null,
+        store_lng: s.store_lng ?? null,
+        store_hours: (s as { store_hours?: unknown }).store_hours,
+      }));
+      const negoziLetti = new Set(negozi.map((s) => s.id));
+      const negoziMancanti = sellerIds.filter((id) => !negoziLetti.has(id));
+      if (negoziMancanti.length === 0) return { negozi, rifiuto: null };
+      // Un negozio approvato senza insegna (o fuori vetrina) la vetrina non lo restituisce: i dati
+      // per i controlli si prendono dal profilo, col client di servizio. Chi non è un negozio
+      // approvato non passa.
+      const { data: profiliMancanti, error: errProfili } = await admin
+        .from('profiles')
+        .select('id, store_name, store_lat, store_lng, store_hours, role, is_approved')
+        .in('id', negoziMancanti);
+      const recuperati = (profiliMancanti ?? []).filter((p) => p.role === 'seller' && p.is_approved === true);
+      if (errProfili || recuperati.length !== negoziMancanti.length) {
+        logger.error('[stripe] negozi del carrello non trovati: pagamento non aperto', {
+          userId: user.id,
+          negoziMancanti,
+          trovatiNelProfilo: recuperati.length,
+          message: errProfili?.message,
+        });
+        return {
+          negozi: null,
+          rifiuto: errProfili
+            ? ApiErrors.unavailable('Non riusciamo a controllare il negozio in questo momento. Riprova fra poco.')
+            : ApiErrors.conflict('Un negozio del carrello non accetta ordini in questo momento. Toglilo dal carrello e riprova.'),
+        };
+      }
+      for (const p of recuperati) {
+        negozi.push({
+          id: p.id,
+          store_name: p.store_name ?? null,
+          store_lat: p.store_lat ?? null,
+          store_lng: p.store_lng ?? null,
+          store_hours: p.store_hours,
+        });
+      }
+      return { negozi, rifiuto: null };
+    })());
+
   const sessioneGiaAperta =
     (tentativoGiaAperto.data as {
       id: string;
@@ -453,33 +540,24 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
      * chi scrive questa rotta non può più restituire una cassa senza averlo
      * guardato, perché senza quel resoconto non gli si compila.
      */
+    // 28/11/2026 (R05-008) — I negozi come per la richiesta nuova: anche quelli fuori vetrina, letti
+    // col client di servizio. Lettura caduta o negozio che non vende: la pagina vecchia non si
+    // restituisce, si risponde col rifiuto della richiesta nuova. Prima della pulizia, come gli altri.
+    const negoziAlRiuso = await negoziDelCarrello();
+    if (negoziAlRiuso.rifiuto) return negoziAlRiuso.rifiuto;
+    const orariAlRiuso = negoziAlRiuso.negozi.map((s) => ({ nome: s.store_name, orari: s.store_hours }));
     // R26-021 — La veloce si controlla PRIMA della pulizia: un rifiuto non chiude le altre casse.
     if (eConsegnaVeloce({ fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore })) {
       const veloceOra = veloceSiPuo({
         adesso: romeNow(),
-        negozi: venditoriLetti.error || !venditoriLetti.data
-          ? null
-          : venditoriLetti.data.map((s) => ({
-              nome: (s as { store_name?: string | null }).store_name ?? 'Il negozio',
-              orari: (s as { store_hours?: unknown }).store_hours,
-            })),
+        negozi: orariAlRiuso.map((n) => ({ nome: n.nome ?? 'Il negozio', orari: n.orari })),
         fattoriniOnline: await contaFattoriniOnline(admin),
       });
       if (!veloceOra.possibile) return ApiErrors.conflict(veloceOra.perche);
     }
     // 27/11/2026 — Anche la fascia e il tetto, prima della pulizia: la pagina vecchia non scavalca
-    // il 409 che prenderebbe una richiesta nuova. Senza i negozi letti si guarda almeno l'orologio.
-    const fasciaNoAlRiuso = await rifiutoDellaFascia(
-      admin,
-      body,
-      venditoriLetti.error || !venditoriLetti.data
-        ? []
-        : venditoriLetti.data.map((s) => ({
-            nome: (s as { store_name?: string | null }).store_name ?? null,
-            orari: (s as { store_hours?: unknown }).store_hours,
-          })),
-      user.id,
-    );
+    // il 409 che prenderebbe una richiesta nuova.
+    const fasciaNoAlRiuso = await rifiutoDellaFascia(admin, body, orariAlRiuso, user.id);
     if (fasciaNoAlRiuso) return ApiErrors.conflict(fasciaNoAlRiuso);
 
     let sessioneRiletta: SessioneRiletta = null;
@@ -592,55 +670,11 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     });
   }
 
-  /**
-   * 28/10/2026 — UNA LETTURA DEI NEGOZI CORTA FERMA IL PAGAMENTO.
-   *
-   * Stessa porta della rotta dei contanti: l'errore si buttava e nessuno
-   * contava i negozi tornati. Con la lista vuota «negozio chiuso» e «fuori
-   * zona» non controllavano nessuno e la consegna perdeva le coordinate del
-   * negozio. Ogni negozio del carrello deve tornare, o il pagamento non si apre.
-   */
-  if (venditoriLetti.error || !venditoriLetti.data) {
-    logger.error('[stripe] lettura dei negozi fallita: pagamento non aperto', {
-      userId: user.id,
-      negozi: sellerIds.length,
-      message: venditoriLetti.error?.message ?? 'nessun dato',
-    });
-    return ApiErrors.unavailable('Non riusciamo a controllare il negozio in questo momento. Riprova fra poco.');
-  }
-  const sellers = [...venditoriLetti.data];
-  const negoziLetti = new Set(sellers.map((s) => s.id));
-  const negoziMancanti = sellerIds.filter((id) => !negoziLetti.has(id));
-  if (negoziMancanti.length > 0) {
-    // Un negozio approvato senza insegna la vetrina non lo restituisce: i dati
-    // per i controlli si prendono dal profilo, col client di servizio. Chi non
-    // e' un negozio approvato non passa.
-    const { data: profiliMancanti, error: errProfili } = await admin
-      .from('profiles')
-      .select('id, store_name, store_lat, store_lng, store_hours, role, is_approved')
-      .in('id', negoziMancanti);
-    const recuperati = (profiliMancanti ?? []).filter((p) => p.role === 'seller' && p.is_approved === true);
-    if (errProfili || recuperati.length !== negoziMancanti.length) {
-      logger.error('[stripe] negozi del carrello non trovati: pagamento non aperto', {
-        userId: user.id,
-        negoziMancanti,
-        trovatiNelProfilo: recuperati.length,
-        message: errProfili?.message,
-      });
-      return errProfili
-        ? ApiErrors.unavailable('Non riusciamo a controllare il negozio in questo momento. Riprova fra poco.')
-        : ApiErrors.conflict('Un negozio del carrello non accetta ordini in questo momento. Toglilo dal carrello e riprova.');
-    }
-    for (const p of recuperati) {
-      sellers.push({
-        id: p.id,
-        store_name: p.store_name,
-        store_lat: p.store_lat,
-        store_lng: p.store_lng,
-        store_hours: p.store_hours,
-      });
-    }
-  }
+  // 28/10/2026 / 28/11/2026 (R05-008) — Ogni negozio del carrello deve tornare, o il pagamento non
+  // si apre: la regola sta in `negoziDelCarrello`, la stessa del riuso della pagina già aperta.
+  const letturaNegozi = await negoziDelCarrello();
+  if (letturaNegozi.rifiuto) return letturaNegozi.rifiuto;
+  const sellers = letturaNegozi.negozi;
 
   const sellerNameMap = new Map<string, string>();
   const sellerCoordMap = new Map<string, { lat: number | null; lng: number | null }>();
