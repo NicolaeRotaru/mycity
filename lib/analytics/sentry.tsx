@@ -40,7 +40,7 @@ async function initSentry() {
 }
 
 
-export async function captureError(err: unknown, context?: Record<string, any>) {
+export async function captureError(err: unknown, context?: Record<string, unknown>) {
   if (!DSN) {
     console.error('[error]', err, context);
     return;

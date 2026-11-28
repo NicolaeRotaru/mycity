@@ -63,7 +63,6 @@ export function notaConContatti(nota: string): boolean {
   return /@[a-z0-9-]+\.[a-z]{2,}/i.test(nota) || /https?:\/\/|www\./i.test(nota) || (nota.match(/[\d+][\d .\/-]*\d/g) ?? []).some((x) => x.replace(/\D/g, '').length >= 8);
 }
 
-// eslint-disable-next-line no-control-regex
 const pulisciNota = (t: string) => t.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** Quello che arriva dal browser dell'agente: almeno un servizio, nessuno fuori elenco, la nota corta e senza contatti. */

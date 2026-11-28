@@ -60,7 +60,6 @@ export default async function StoreOG({ params }: { params: { id: string } }) {
               // scritto sopra — perdeva i due lati proprio nell'anteprima che il
               // negoziante manda ai suoi clienti. La scheda prodotto, stesso
               // meccanismo e stesso tipo di file, lo conteneva gia'.
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={logo} alt="" width={220} height={220} style={{ objectFit: 'contain' }} />
             ) : (
               <div style={{ fontSize: 130, fontFamily: MARCHIO_FONT_FAMILY, fontWeight: MARCHIO_FONT_WEIGHT, color: '#A03B25' }}>My</div>

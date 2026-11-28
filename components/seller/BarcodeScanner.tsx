@@ -127,7 +127,6 @@ export default function BarcodeScanner({ open, onClose, onDetected }: Props) {
       ) : (
         <div className="space-y-3">
           <div className="relative mx-auto aspect-[4/3] w-full max-w-sm overflow-hidden rounded-xl bg-black">
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="h-20 w-[82%] rounded-lg border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />

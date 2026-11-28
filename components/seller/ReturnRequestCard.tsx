@@ -265,7 +265,6 @@ export default function ReturnRequestCard({ ret, orderTotal, righe, scontoCents 
           <div className="flex flex-wrap gap-2">
             {ret.photo_urls.filter(fotoDiCasa).map((url, i) => (
               <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative w-20 h-20 rounded-lg overflow-hidden bg-cream-100 border border-cream-200">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={url} alt={`Foto reso ${i + 1}`} loading="lazy" className="w-full h-full object-cover" />
               </a>
             ))}

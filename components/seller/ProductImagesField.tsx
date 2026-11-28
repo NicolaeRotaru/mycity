@@ -196,7 +196,6 @@ export default function ProductImagesField({
                 className="group"
               >
                 <div className="relative aspect-square">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={url} alt="" loading="lazy" className="w-full h-full object-cover rounded" />
                   <button
                     type="button"

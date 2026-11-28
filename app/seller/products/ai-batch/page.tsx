@@ -301,7 +301,6 @@ function UrlImportPanel() {
           </div>
           <div className="flex gap-4">
             {imported.image_urls[0] ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={sizedImage(imported.image_urls[0], 160)} alt="" className="h-20 w-20 shrink-0 rounded-lg object-cover" />
             ) : null}
             <div className="min-w-0 flex-1">

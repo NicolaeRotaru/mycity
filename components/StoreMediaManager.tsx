@@ -171,7 +171,6 @@ const StoreMediaManager = ({ value, onChange, onUploadingChange }: Props) => {
                   // 6/9/2026 — La foto arrivava alla misura con cui era stata caricata (fino a 10 MB, il tetto
                   // del deposito) per stare in un francobollo. Adesso si chiede al server la copia della misura
                   // del riquadro, il doppio in pixel perche' i telefoni ne hanno due per ognuno.
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={sizedImage(m.url, 160)} alt="" loading="lazy" className="w-full h-full object-cover" />
                 ) : (
                   <video src={m.url} muted playsInline className="w-full h-full object-cover" />

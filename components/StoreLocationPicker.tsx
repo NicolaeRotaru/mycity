@@ -2,6 +2,7 @@
 
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useId, useRef, useState } from 'react';
+import type { Map as MappaLeaflet, Marker } from 'leaflet';
 import { Search, RadioTower, Target, MapPin, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { dentroLAreaServita, FRASE_NEGOZIO_FUORI_AREA } from '@/lib/ordini/zona-di-consegna';
@@ -42,8 +43,8 @@ interface Props {
 
 const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
   const mapDivRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
+  const mapRef = useRef<MappaLeaflet | null>(null);
+  const markerRef = useRef<Marker | null>(null);
 
   const eraIlVecchioPuntoDiPartenza =
     defaultValue?.lat === VECCHIO_PUNTO_DI_PARTENZA.lat && defaultValue?.lng === VECCHIO_PUNTO_DI_PARTENZA.lng;
@@ -98,7 +99,7 @@ const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
       if (cancelled || !mapDivRef.current || mapRef.current) return;
 
       // Fix per le icone Leaflet con Next/Webpack
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
       L.Icon.Default.mergeOptions({
                 // #76 — Le icone del segnaposto arrivavano da unpkg.com, un CDN di
         // terzi: ogni persona che apriva una mappa faceva una richiesta a un
