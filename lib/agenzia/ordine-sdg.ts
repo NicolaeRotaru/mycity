@@ -5,7 +5,6 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { adCollegato, avviaLavoro, leggiLavoro } from '@/lib/agenti/n8n';
-import { normalizza, pulisci, unisci, type Scheda } from '@/lib/agenti/scheda';
 import { FLUSSO } from '@/lib/agenti/compito';
 import { eDiSdg } from '@/lib/products/sdgSeller';
 import { FASCE, canonePrimoMese, type Abbonamento } from './preventivo';
@@ -17,6 +16,9 @@ import { fraseVisita } from './visita';
 
 export { fraseVisita };
 import { COMPITO_PIANO, SCHEMA_PIANO, VENDITORE_DEI_PIANI, dallaSchedaDellAgente, datiPerIlPianoCompleto, pianoDallaRisposta } from './piano-completo-ad';
+import { PEZZI_ORDINE, chiediIlPezzo, schedaDellAgente } from './pezzi-dell-ordine';
+import { ETICHETTE_SERVIZI, LAVORO_DEL_SERVIZIO, leggiServiziScelti, servizioScelto, type ServizioAgenzia } from './servizi-scelti';
+
 
 /**
  * L'ORDINE DI SERVIZIO CHE ARRIVA A SDG — 27/11/2026.
@@ -36,6 +38,9 @@ import { COMPITO_PIANO, SCHEMA_PIANO, VENDITORE_DEI_PIANI, dallaSchedaDellAgente
  *  4. avvisa Nicola, che oggi è chi apre la pagina di SDG (l'account di SDG non entra ancora);
  *  5. DOPO la risposta al titolare chiede all'AD il piano completo (lib/agenzia/piano-completo-ad.ts): se n8n non
  *     risponde l'ordine resta col piano del sito e lo stato «da collegare», e si può richiedere dalla pagina.
+ *     28/11/2026 — Insieme al piano partono la bozza del sito e l'analisi all'avvio, secondo la fascia
+ *     (lib/agenzia/pezzi-dell-ordine.ts, migrazione 999h): tre lavori, tre corse dell'AD per cliente. Anche loro dopo
+ *     la risposta e senza mai fermare l'accettazione: se l'AD non risponde restano «da collegare».
  * Gli abbonamenti di SDG non entrano mai in `orders` (trigger della 707): l'ordine ha la sua tabella.
  */
 
@@ -58,6 +63,13 @@ export type DatiAttivita = {
     perche: string | null;
     servizi: Record<string, string>;
   } | null;
+  /**
+   * 28/11/2026 — Quali servizi gli servono, scelti dall'agente insieme all'abbonamento (migrazione 999h, dal
+   * preventivo). `null` o assente = la scelta non c'è (preventivo di prima): valgono tutti e quattro.
+   */
+  servizi?: ServizioAgenzia[] | null;
+  /** La nota libera dell'agente: un'indicazione per l'AD e per SDG, mai un testo da pubblicare. */
+  notaAgente?: string | null;
 };
 
 export type OrdineSdg = {
@@ -115,7 +127,18 @@ async function colonneFacoltative(admin: SupabaseClient, codice: string, colonne
 }
 
 /** Crea l'ordine di servizio per SDG di un preventivo appena accettato. Non lancia mai. */
-export async function creaOrdineSdg(input: { sellerId: string; codice: string; fascia: Abbonamento; visitaIl?: string | null }): Promise<EsitoOrdineSdg> {
+export async function creaOrdineSdg(input: {
+  sellerId: string;
+  codice: string;
+  fascia: Abbonamento;
+  visitaIl?: string | null;
+  /**
+   * Collaudo 28/11/2026 — I servizi confermati dal titolare nel link. Valgono loro, non quelli riletti dal preventivo:
+   * se la loro scrittura sul preventivo non è riuscita (o manca la 999h), dal database tornerebbero quelli del
+   * venditore (o tutti e quattro) e partirebbero i lavori sbagliati. Assenti: si rileggono dal preventivo.
+   */
+  servizi?: readonly ServizioAgenzia[] | null;
+}): Promise<EsitoOrdineSdg> {
   try {
     return await creaOrdine(input);
   } catch (e) {
@@ -124,7 +147,7 @@ export async function creaOrdineSdg(input: { sellerId: string; codice: string; f
   }
 }
 
-async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: string; codice: string; fascia: Abbonamento; visitaIl?: string | null }): Promise<EsitoOrdineSdg> {
+async function creaOrdine({ sellerId, codice, fascia, visitaIl, servizi: confermati }: { sellerId: string; codice: string; fascia: Abbonamento; visitaIl?: string | null; servizi?: readonly ServizioAgenzia[] | null }): Promise<EsitoOrdineSdg> {
   if (!fasciaValida(fascia)) return { ok: false, motivo: 'guasto', dettaglio: `fascia non valida: ${String(fascia)}` };
   const admin = getAdminSupabase();
 
@@ -135,13 +158,18 @@ async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: st
   if (!riga || riga.seller_id !== sellerId || riga.stato !== 'accettato') return { ok: false, motivo: 'non-accettato' };
 
   // 2) Agente e scheda (999c), visita (999b, se chi chiama non la passa), profilo, scheda del locale, canone.
-  const [chi, visita, profilo, schedaLocale, abbonamenti] = await Promise.all([
+  const [chi, visita, profilo, schedaLocale, abbonamenti, richiesta] = await Promise.all([
     colonneFacoltative(admin, codice, 'lavoro, agente_email'),
     visitaIl === undefined ? colonneFacoltative(admin, codice, 'visita_il') : Promise.resolve({ visita_il: visitaIl }),
     admin.from('profiles').select('store_name, store_address, city, business_type, business_type_detail').eq('id', sellerId).maybeSingle(),
     admin.from('schede_clienti').select('scheda').eq('id_attivita', sellerId).maybeSingle(),
     admin.from('abbonamenti_servizi').select('fascia, canone_centesimi, stato, origine').eq('seller_id', sellerId),
+    // 28/11 — I servizi scelti dall'agente (999h): prima della migrazione non ci sono, e valgono tutti e quattro.
+    colonneFacoltative(admin, codice, 'servizi_scelti, nota_agente'),
   ]);
+  const letti = leggiServiziScelti(richiesta?.servizi_scelti, richiesta?.nota_agente);
+  const notaAgente = letti.nota;
+  const servizi = (confermati?.length ? leggiServiziScelti(confermati, null).servizi : null) ?? letti.servizi;
   const p = (profilo.data ?? {}) as { store_name?: string | null; store_address?: string | null; city?: string | null; business_type?: string | null; business_type_detail?: string | null };
   const nome = String(p.store_name ?? '').trim().slice(0, 120) || 'Attività senza nome';
   const tipo = tipoDelProfilo(p.business_type);
@@ -160,7 +188,7 @@ async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: st
     accettatoIl: riga.accettato_il ?? null,
     scheda: schedaLocale.error ? null : leggiSchedaSalvata((schedaLocale.data as { scheda?: unknown } | null)?.scheda),
   });
-  const dati: DatiAttivita = { tipo, dettaglio: p.business_type_detail ?? null, indirizzo: p.store_address ?? null, citta: p.city ?? null, dallaScheda: null };
+  const dati: DatiAttivita = { tipo, dettaglio: p.business_type_detail ?? null, indirizzo: p.store_address ?? null, citta: p.city ?? null, dallaScheda: null, servizi, notaAgente };
 
   // 3) L'ordine: uno per attività. Con la chiave unica su seller_id, un secondo invio non scrive niente.
   const scritto = await admin
@@ -203,26 +231,31 @@ async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: st
       `Abbonamento ${FASCE[fascia].nome}, ${(canone / 100).toLocaleString('it-IT')} € al mese, in contanti al primo servizio.`,
       `${fraseVisita(visitaLetta)}.`,
       emailValida(chi?.agente_email) ? `Portato dall'agente ${emailValida(chi?.agente_email)}.` : 'Senza agente (preventivo nato fuori dalla pagina degli agenti).',
-      'Il piano editoriale del primo mese è già nell’ordine; quello completo lo prepara l’AD.',
-    ].join(' '),
+      servizi ? `Servizi scelti: ${servizi.map((x) => ETICHETTE_SERVIZI[x]).join(', ')}.` : 'L’agente non ha scelto i servizi: valgono tutti e quattro.',
+      notaAgente ? `Nota dell’agente: «${notaAgente}».` : '',
+      `L’AD prepara: ${lavoriDaChiedere(servizi).map((l) => NOME_DEL_LAVORO[l]).join(', ') || 'niente (solo foto e video, li fa la squadra alla visita)'}.`,
+    ].filter(Boolean).join(' '),
     '/seller/ordini-sdg',
     { unaVoltaPer: `ordine-sdg:${sellerId}` },
   ).catch((e: unknown) => logger.warn('[ordine-sdg] avviso a Nicola non partito', { sellerId, errore: String(e) }));
 
-  // 5) Il piano completo, dopo la risposta al titolare.
-  dopoLaRisposta(() => chiediIlPianoCompleto(id).then(() => undefined));
+  // 5) Il piano completo, la bozza del sito e l'analisi all'avvio, dopo la risposta al titolare. Ognuno per conto
+  //    suo: se uno non parte gli altri partono lo stesso, e nessuno lancia.
+  //    28/11 — Solo per i servizi scelti dall'agente (Gestione social e Google → piano, Gestione sito web → sito,
+  //    Analisi di mercato → analisi); quelli non scelti non partono e non costano corse dell'AD.
+  const lavori = lavoriDaChiedere(servizi);
+  dopoLaRisposta(() => Promise.all([
+    ...(lavori.includes('piano') ? [chiediIlPianoCompleto(id)] : []),
+    ...PEZZI_ORDINE.filter((pezzo) => lavori.includes(pezzo)).map((pezzo) => chiediIlPezzo(id, pezzo)),
+  ]).then(() => undefined));
   return { ok: true, nuovo: true, id };
 }
 
-/** La scheda dell'agente, letta da n8n e pulita come la legge la sua pagina; `null` se non c'è o non si legge. */
-async function schedaDellAgente(lavoro: string | null): Promise<Scheda | null> {
-  if (!lavoro) return null;
-  const r = await leggiLavoro(lavoro);
-  if (r.stato === 'sconosciuto') return null;
-  const prima = normalizza(r.prima);
-  if (!prima) return null;
-  return r.stato === 'pronta' ? unisci(prima, pulisci(r.risultato), r.avvisi ?? []) : prima;
+/** I lavori dell'AD per i servizi scelti (tutti e tre quando la scelta non c'è), nell'ordine piano, sito, analisi. */
+export function lavoriDaChiedere(servizi: readonly ServizioAgenzia[] | null | undefined): ('piano' | 'sito' | 'analisi')[] {
+  return (['social', 'sito_web', 'analisi'] as const).filter((id) => servizioScelto(servizi, id)).map((id) => LAVORO_DEL_SERVIZIO[id]!);
 }
+const NOME_DEL_LAVORO = { piano: 'il piano editoriale completo', sito: 'la bozza del sito', analisi: 'l’analisi di mercato all’avvio' } as const;
 
 export type EsitoRichiestaPiano = { esito: 'chiesto' | 'non-serve' | 'non-partito' | 'guasto'; dettaglio?: string };
 

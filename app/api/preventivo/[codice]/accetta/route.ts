@@ -5,7 +5,7 @@ import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
-import { ABBONAMENTI } from '@/lib/agenzia/preventivo';
+import { ABBONAMENTI, SERVIZI_AGENZIA } from '@/lib/agenzia/preventivo';
 import { apriCassaDalLink } from '@/lib/agenzia/cassa-dal-link';
 import { pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
 import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
@@ -54,6 +54,9 @@ const Richiesta = z.object({
   // Facoltativa per il server: senza giorni liberi (o da una pagina aperta prima di oggi) si accetta lo stesso
   // e Nicola nell'avviso legge «chiamalo per fissare la visita». La pagina la chiede sempre quando ci sono giorni.
   visita: z.string().max(40).optional(),
+  // 28/11/2026 — I servizi confermati dal titolare: li trova segnati dal venditore e li può cambiare. Almeno uno,
+  // solo fra i quattro. Assenti (pagina aperta prima di oggi): restano quelli del venditore.
+  servizi: z.array(z.enum(SERVIZI_AGENZIA, { message: 'Un servizio non è fra quelli previsti.' })).min(1, 'Scegli almeno un servizio.').max(SERVIZI_AGENZIA.length).optional(),
 });
 
 const QUARTO_D_ORA = 15 * 60_000;
@@ -84,7 +87,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
   }
   const esito = Richiesta.safeParse(corpo);
   if (!esito.success) return ApiErrors.invalidRequest(esito.error.issues[0]?.message ?? 'Dati non validi');
-  const { email, abbonamento, codice: codiceEmail, gettone, visita } = esito.data;
+  const { email, abbonamento, codice: codiceEmail, gettone, visita, servizi } = esito.data;
   if (visita !== undefined && !orarioDellaVisitaValido(visita, new Date())) {
     return ApiErrors.invalidRequest(GIORNO_NON_PIU_VALIDO);
   }
@@ -114,6 +117,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
     email,
     fascia: abbonamento,
     visita,
+    servizi,
     entraSubito: puoEntrare && sessione ? sessione.entra : undefined,
   });
   if (!accettato.ok) {

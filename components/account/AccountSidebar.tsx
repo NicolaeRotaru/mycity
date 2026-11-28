@@ -11,6 +11,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { esciEVaiAllAccesso } from '@/lib/auth/uscita';
 import { logoNegozio } from '@/lib/image-url';
 import { useProfile } from '@/components/hooks/useProfile';
 import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
@@ -102,9 +103,7 @@ export default function AccountSidebar() {
   const handleSignOut = async () => {
     if (signingOut) return;
     setSigningOut(true);
-    await supabase.auth.signOut();
-    router.push('/sign-in');
-    router.refresh();
+    await esciEVaiAllAccesso(router);
   };
 
   return (

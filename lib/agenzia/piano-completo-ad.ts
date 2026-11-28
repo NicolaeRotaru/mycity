@@ -3,6 +3,8 @@ import { FASCE } from '@/lib/agenti/fasce';
 import type { Scheda } from '@/lib/agenti/scheda';
 import type { Abbonamento } from './preventivo';
 import { TIPI_CONTENUTO, type ContenutoDelPiano, type PianoDelMese } from './piano-del-primo-mese';
+import { fraseMostrabile } from './rapporto';
+import { haUnNomeDiPersona } from './nomi-di-persona';
 
 /**
  * IL PIANO COMPLETO, CHIESTO ALL'AD — 27/11/2026.
@@ -28,7 +30,7 @@ export const VENDITORE_DEI_PIANI = 'sdg.servizi@mycity-system.local';
 /** I tetti del nodo «Controlla il lavoro» del flusso 14, letti dal flusso vivo il 27/11/2026. */
 export const TETTI_FLUSSO_14 = { compito: 30_000, richiesta: 60_000, prima: 80_000 } as const;
 
-export const COMPITO_PIANO = `Sei l'AD digitale di MyCity. SDG Agenzia (il partner di MyCity per siti, social, foto e video) ha un cliente nuovo: il titolare ha appena confermato l'abbonamento. Prepara il PIANO EDITORIALE DEL PRIMO MESE, pronto da lavorare per il team creativo. Il titolare lo vedrà solo dopo che SDG lo avrà controllato.
+export const COMPITO_PIANO = `Sei l'AD digitale di MyCity. SDG Agenzia (il partner di MyCity per siti, social, foto e video) ha un cliente nuovo: il titolare ha appena confermato l'abbonamento. Prepara il PIANO EDITORIALE DEL PRIMO MESE, pronto da lavorare per il team creativo. Il titolare lo vedrà come bozza nella sua pagina e lo confermerà con SDG alla prima visita.
 
 IL FORMATO è quello del piano del Caffè di Piacenza, dicembre 2026: in testa cliente, abbonamento, canali e tono, hashtag fissi, cosa confermare prima di pubblicare; poi una riga per ogni contenuto con data, ora, tipo (Post, Carosello, Reel), tema, didascalia proposta, cosa riprendere, evento in città.
 Esempio di una riga del Caffè: data 2026-12-05, ora 09:00, tipo Reel, tema «Sabato di mercato in Piazza Duomo», didascalia «Il sabato mattina Piazza Duomo si riempie di banchi e di voci. Il giro al mercato comincia (e finisce) con un caffè da noi. #Piacenza #CaffèDiPiacenza #PiazzaDuomo», cosa riprendere «Video verticale di 15-20 secondi, 5 clip da 3 secondi: banchi del mercato, gente che passa, porta del bar, cappuccino servito. Niente volti riconoscibili in primo piano», in città «Mercato del sabato mattina».
@@ -174,6 +176,22 @@ export function pianoDallaRisposta(grezza: unknown, partenza: PianoDelMese, fasc
   const pulito = (t: string) => { const x = t.replace(/#[\p{L}\p{N}_]+/gu, ' ').toLowerCase(); return nome.length >= 2 ? x.split(nome).join(' ') : x; };
   if (r.contenuti.some((c) => VIETATI.test(pulito(`${c.tema} ${c.didascalia}`)))) return { ok: false, motivo: 'il piano dell’AD nomina gioco o tabacco, che non si pubblicizzano' };
   if (/@[a-z0-9-]+\.[a-z]{2,}/i.test(JSON.stringify(r))) return { ok: false, motivo: 'il piano dell’AD contiene un indirizzo email' };
+  // Collaudo 28/11/2026 — Il piano dell'AD ora lo vede il titolare nella sua pagina (lib/agenzia/lavoro-dell-ordine.ts)
+  // senza che SDG lo abbia controllato prima: passa dalle stesse regole del sito e dell'analisi dell'ordine (niente
+  // prezzi, telefoni, indirizzi web, «@profili», voti o recensioni di Google, nomi di persona). Gli orari no: un
+  // evento in città («dalle 8 alle 13») si può scrivere. Hashtag e nome del locale si tolgono prima del controllo.
+  const nomeRe = nome.length >= 2 ? new RegExp(nome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi') : null;
+  // Gli orari («alle 21.00») si tolgono prima: per la regola dei prezzi «21.00» sembra un prezzo. Nell'intestazione si
+  // tolgono anche i profili del locale («@caffe_di_piacenza» in canali e tono): sono suoi, non persone citate.
+  const mostrabile = (t: string | null, intestazione = false) => {
+    let senza = (t ?? '').replace(/#[\p{L}\p{N}_]+/gu, ' ').replace(/\b\d{1,2}[.:]\d{2}\b/g, ' ');
+    if (intestazione) senza = senza.replace(/[@＠][\p{L}\d_.]+/gu, ' ');
+    const x = (nomeRe ? senza.split(nomeRe).join(' il locale ') : senza).replace(/\s+/g, ' ').trim();
+    return !x || (!!fraseMostrabile(x, 1, 10_000) && !haUnNomeDiPersona(x));
+  };
+  const daControllare = [...r.note, ...r.contenuti.flatMap((c) => [c.tema, c.didascalia, c.cosa_riprendere, c.in_citta])];
+  const intestazione = [r.intestazione.canali_e_tono, r.intestazione.hashtag, r.intestazione.prima_di_pubblicare];
+  if (!daControllare.every((t) => mostrabile(t)) || !intestazione.every((t) => mostrabile(t, true))) return { ok: false, motivo: 'il piano dell’AD ha un prezzo, un contatto, un indirizzo web, un nome di persona o un dato di Google' };
 
   const contenuti: ContenutoDelPiano[] = [...r.contenuti]
     .sort((a, b) => (a.data === b.data ? a.ora.localeCompare(b.ora) : a.data.localeCompare(b.data)))

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import st from '@/components/agenti/scheda.module.css';
 import ag from '@/components/agenti/aggiungi.module.css';
 import { FASCE, ID_FASCE, euro, type IdFascia } from '@/lib/agenti/fasce';
+import { ETICHETTE_SERVIZI, NOTA_MASSIMA, SERVIZI_AGENZIA, SPIEGAZIONE_SERVIZI, type ServizioAgenzia } from '@/lib/agenzia/servizi-scelti';
 
 /**
  * IL PULSANTE «AGGIUNGI ATTIVITÀ» SOTTO LA SCHEDA — 27/11/2026.
@@ -22,6 +23,12 @@ import { FASCE, ID_FASCE, euro, type IdFascia } from '@/lib/agenti/fasce';
  * portarlo alla pagina con su scritto tutte le cose che deve fare adesso SDG». Dopo il «Sì» il riquadro chiede da
  * solo ogni 10 secondi a che punto è il preventivo (app/api/agente/attivita), solo con la scheda visibile, e smette
  * dopo 30 minuti; appena è «accettato» porta l'agente a «Adesso tocca a SDG» (app/agente/tocca-a-sdg).
+ *
+ * 28/11/2026 01:10 e 01:25 — Nicola: il lavoro nasce dall'abbonamento «ma anche al servizio di cui ha bisogno, che lo
+ * selezionerà il venditore nel momento in cui seleziona l'abbonamento», fra Foto e video, Gestione social e Google,
+ * Gestione sito web, Analisi di mercato. Sotto l'abbonamento c'è «Di quali servizi ha bisogno?»: più voci, almeno una,
+ * e una nota facoltativa. «Sì, aggiungi» si accende solo con abbonamento E almeno un servizio. All'accettazione l'AD
+ * prepara il lavoro solo dei servizi scelti (lib/agenzia/servizi-scelti.ts).
  */
 type Fase = 'pronto' | 'conferma' | 'invio' | 'fatto' | 'errore';
 type Attesa = 'controllo' | 'confermato' | 'chiuso' | 'smesso' | 'persa';
@@ -37,6 +44,10 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null, vai
   const [fase, setFase] = useState<Fase>('pronto');
   const [attesa, setAttesa] = useState<Attesa>('controllo');
   const [fascia, setFascia] = useState<IdFascia | null>(null);
+  const [servizi, setServizi] = useState<ServizioAgenzia[]>([]);
+  const [nota, setNota] = useState('');
+  const pronto = !!fascia && servizi.length > 0;
+  const scegli = (b: ServizioAgenzia) => setServizi((x) => (x.includes(b) ? x.filter((y) => y !== b) : [...x, b]));
   const [sbloccata, setSbloccata] = useState(false);
   const [giaOnline, setGiaOnline] = useState(false);
   const [avvisoDovuto, setAvvisoDovuto] = useState(true);
@@ -47,11 +58,11 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null, vai
   const [copiato, setCopiato] = useState(false);
 
   async function aggiungi() {
-    if (!fascia) return;
+    if (!fascia || servizi.length === 0) return;
     setFase('invio');
     setErrore(null);
     try {
-      const r = await fetch('/api/agente/aggiungi', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lavoro, fascia }) });
+      const r = await fetch('/api/agente/aggiungi', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lavoro, fascia, servizi, ...(nota.trim() ? { nota: nota.trim() } : {}) }) });
       const d = (await r.json().catch(() => null)) as { ok?: boolean; data?: { link?: string | null; nuova?: boolean; avvisato?: boolean; avvisoDovuto?: boolean; sbloccata?: boolean; giaOnline?: boolean }; error?: { message?: string } } | null;
       if (!r.ok || !d?.ok) {
         setErrore(d?.error?.message ?? 'Non sono riuscito ad aggiungere l’attività. Riprova fra poco.');
@@ -158,9 +169,23 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null, vai
             </label>
           ))}
         </fieldset>
-        {!fascia && <p className={c('nota')}>Scegli l’abbonamento per andare avanti.</p>}
+        <fieldset className={c('fasce')} disabled={fase === 'invio'}>
+          <legend>Di quali servizi ha bisogno?</legend>
+          <p className={c('nota')}>Puoi sceglierne più di uno. L’abbonamento dice quanto, i servizi dicono cosa prepariamo. Il canone non cambia.</p>
+          {SERVIZI_AGENZIA.map((b) => (
+            <label key={b} className={c(servizi.includes(b) ? 'fascia scelta' : 'fascia')}>
+              <input type="checkbox" name={`servizio-${lavoro}`} value={b} checked={servizi.includes(b)} onChange={() => scegli(b)} />
+              <span><b>{ETICHETTE_SERVIZI[b]}</b></span>
+              <span className={c('nota')}>{SPIEGAZIONE_SERVIZI[b]}</span>
+            </label>
+          ))}
+          <label className={c('nota')} htmlFor={`nota-${lavoro}`}>Una nota per noi, se serve (facoltativa)</label>
+          <textarea id={`nota-${lavoro}`} value={nota} maxLength={NOTA_MASSIMA} rows={2} onChange={(e) => setNota(e.target.value)} placeholder="Per esempio: vuole far vedere la sala per le feste" />
+          <span className={c('nota')}>{nota.length}/{NOTA_MASSIMA} · niente telefoni o email: sono indicazioni, non dati del titolare.</span>
+        </fieldset>
+        {!pronto && <p className={c('nota')}>{!fascia ? 'Scegli l’abbonamento' : 'Scegli almeno un servizio di cui ha bisogno'} per andare avanti.</p>}
         <div className={c('azioni')}>
-          <button type="button" className={c('bottone')} onClick={aggiungi} disabled={fase === 'invio' || !fascia}>{fase === 'invio' ? 'Aggiungo…' : 'Sì, aggiungi'}</button>
+          <button type="button" className={c('bottone')} onClick={aggiungi} disabled={fase === 'invio' || !pronto}>{fase === 'invio' ? 'Aggiungo…' : 'Sì, aggiungi'}</button>
           <button type="button" className={c('bottone secondario')} onClick={() => setFase('pronto')} disabled={fase === 'invio'}>Non ancora</button>
         </div>
       </section>

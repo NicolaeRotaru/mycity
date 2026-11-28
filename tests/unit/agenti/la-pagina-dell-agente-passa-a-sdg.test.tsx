@@ -49,6 +49,7 @@ async function dopoIlSi() {
   const bottone = (t: string) => [...radice.querySelectorAll('button')].find((b) => b.textContent === t) as HTMLButtonElement;
   await act(async () => { bottone('Aggiungi attività').click(); });
   await act(async () => { (radice.querySelector('input[value="business"]') as HTMLInputElement).click(); });
+  await act(async () => { (radice.querySelector('input[type="checkbox"][value="sito_web"]') as HTMLInputElement).click(); });
   await act(async () => { bottone('Sì, aggiungi').click(); });
   return radice;
 }
