@@ -49,7 +49,7 @@ vi.mock('@/lib/api/middleware', () => ({
 
 const rotta = await import('@/app/api/agente/clienti/route');
 const porta = await import('@/app/api/agenzia/clienti-da-visitare/route');
-const { ordina, coloreDi, daMostrare, telDaChiamare } = await import('@/lib/agenti/clienti-vista');
+const { ordina, coloreDi, daMostrare, telDaChiamare, categoriaDi } = await import('@/lib/agenti/clienti-vista');
 const { pulisciFila } = await import('@/lib/agenti/clienti');
 
 const GET = rotta.GET as unknown as (r: Request) => Promise<Response>;
@@ -252,6 +252,21 @@ describe('come si mostra', () => {
   it('chi esce dalla fila resta solo se qualcuno ci ha lavorato', () => {
     expect(daMostrare(c('x', 1, { inFila: false }))).toBe(false);
     expect(daMostrare(c('x', 1, { inFila: false, stato: 'no' }))).toBe(true);
+  });
+  it('l icona della categoria: dal tipo, poi dal segmento; quello che non si riconosce va su «altri negozi»', () => {
+    const k = (tipo: string | null, segmento: string | null = null) => categoriaDi({ tipo, segmento });
+    expect(k('panetteria', 'fresco')).toBe('panetteria');
+    expect(k('macelleria', 'fresco')).toBe('macelleria');
+    expect(k('frutta e verdura')).toBe('frutta');
+    expect(k('gastronomia')).toBe('formaggi');
+    expect(k('pasticceria')).toBe('pasticceria');
+    expect(k('enoteca', 'regali')).toBe('regali');
+    expect(k('parrucchiere', 'cura della persona')).toBe('persona');
+    expect(k('gelateria', 'bar e ristoranti')).toBe('ristoro');
+    expect(k('artigiano (shoemaker)', 'artigiani')).toBe('artigiani');
+    expect(k('pescheria', 'pescheria (fase 2)')).toBe('altri');
+    expect(k(null, null)).toBe('altri');
+    expect(k('abbigliamento', 'altri negozi')).toBe('altri');
   });
   it('il telefono da toccare', () => {
     expect(telDaChiamare('+39 0523 123 456')).toBe('+390523123456');

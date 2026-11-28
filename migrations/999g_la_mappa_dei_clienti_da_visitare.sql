@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS public.clienti_da_visitare (
   offerta       text CHECK (offerta IS NULL OR char_length(offerta) <= 200),
   mappa         text CHECK (mappa IS NULL OR (char_length(mappa) <= 600 AND mappa LIKE 'https://www.google.com/maps/%')),
   dossier       text CHECK (dossier IS NULL OR char_length(dossier) <= 4000),
-  -- Il lunedì in cui il flusso l'ha messa fra le prime 10 (col dossier dell'AD). NULL = mai proposta.
+  -- Il lunedì in cui il flusso l’ha messa fra le prime 30 (col dossier dell'AD). NULL = mai proposta.
   settimana     date,
   -- È nella fila dell'ultimo giro letto bene. Una che ne esce (chiusa, ora su MyCity) resta, spenta.
   in_fila       boolean NOT NULL DEFAULT true,
@@ -68,7 +68,7 @@ CREATE INDEX IF NOT EXISTS clienti_da_visitare_stato_da_idx ON public.clienti_da
 /**
  * Il giro del lunedì: n8n manda la fila intera. Per ogni attività aggiorna i dati che vengono dalla mappa e dal
  * flusso, e niente altro:
- *  · il dossier non si cancella se questa volta non c'è (lo scrive l'AD solo per le prime 10 della settimana);
+ *  · il dossier non si cancella se questa volta non c'è (lo scrive l’AD solo per le prime 30 della settimana);
  *  · la settimana resta la prima in cui è stata proposta;
  *  · stato_iniziale vale solo per un'attività nuova (il passaggio dalla tabella n8n): dopo, lo stato è del sito;
  *  · prenotazione e stato non si toccano mai.

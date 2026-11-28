@@ -72,3 +72,14 @@ describe('la pagina della mappa dei clienti', () => {
     expect(bottone('iscritta')).toBeUndefined();
   });
 });
+
+describe('il segnaposto della mappa', () => {
+  it('ha l icona, il colore dello stato e un nome leggibile, senza lasciar passare HTML dal nome', async () => {
+    const { htmlSegnaposto } = await import('@/components/agenti/MappaClienti');
+    const h = htmlSegnaposto('Bar "<b>Sole</b>"', 'ristoro', 'mia', false);
+    expect(h).toContain('aria-label="Bar &quot;&lt;b&gt;Sole&lt;/b&gt;&quot;: bar e ristoranti, presa da me"');
+    expect(h).toContain('background:#C0492C');
+    expect(h).toContain('<svg');
+    expect(h).not.toContain('<b>');
+  });
+});

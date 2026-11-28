@@ -8,7 +8,7 @@ Nicola: «la mappa deve visualizzarsi in 2 modi: 1) sulla mappa, 2) una lista ch
 
 - **Chi la vede.** Gli agenti attivi e l'admin, dentro `/agente` (la porta è sempre `lib/agenti/rotta.ts`). L'admin vede anche chi ha preso cosa, e può liberare un cliente o cambiargli lo stato.
 - **Come si dividono i clienti.** Li prenota l'agente. Ognuno vede tutta la mappa. «Ci vado io» lo fa diventare suo; un collega lo vede «preso», senza sapere da chi. «Lascio» lo rimette libero. Nessuno assegna niente a mano.
-- **Quanti.** Tutta la fila del lunedì, circa 650 attività entro 5 km da Pane Quotidiano. Il dossier dell'AD resta sulle prime 10 della settimana.
+- **Quanti.** Tutta la fila del lunedì, circa 650 attività entro 5 km da Pane Quotidiano. Il dossier dell’AD c’è sulle prime 30 della settimana (Nicola, 28/11 alle 02:25; flusso 16 con QUANTE_A_SETTIMANA = 30).
 - **Due viste.** Mappa: un puntino per attività. Il colore dice prima l'esito della visita (sì o iscritta, no, visitata), poi la prenotazione (mia, di un altro, libera). Lista: di serie per priorità (il `punteggio` del flusso), poi per distanza da Pane Quotidiano, vicino a me, tipo, stato, «le mie per prime».
 - **Mai messaggi automatici alle attività.** Dalla pagina si chiama col telefono o si va di persona (art. 130 Codice privacy).
 
@@ -38,7 +38,7 @@ La tabella `clienti_da_visitare` (migrazione 999g) tiene la prenotazione e lo st
 | `lat`, `lon` | la posizione (`pos` in «Metti in fila») |
 | `distanza_m`, `punteggio` | numeri |
 | `mappa` | solo link `https://www.google.com/maps/…` |
-| `dossier` | testo del dossier (solo le prime 10). Vuoto = resta quello di prima |
+| `dossier` | testo del dossier (solo le prime 30). Vuoto = resta quello di prima |
 | `settimana` | `AAAA-MM-GG`, il lunedì in cui è stata proposta. Resta la prima |
 | `stato_tabella` | lo stato scritto a mano nella tabella n8n. Vale solo per un'attività nuova |
 
@@ -46,7 +46,7 @@ Le attività che in questo giro non ci sono si spengono (`in_fila = false`), non
 
 ## Cosa cambia nel flusso 16 (repo N8N, `flussi/16-attivita-da-visitare/`)
 
-Da fare nel repo N8N, con le sue prove (`flussi/test/16-attivita-da-visitare.test.mjs`). Si ripubblica su n8n solo dopo l'unione e con l'«ok ripubblica» di Nicola.
+Da fare nel repo N8N partendo dal ramo di NicolaeRotaru/N8N#41 (o da main dopo la sua unione), così QUANTE_A_SETTIMANA resta 30. Con le sue prove (`flussi/test/16-attivita-da-visitare.test.mjs`). Si ripubblica su n8n solo dopo l'unione e con l'«ok ripubblica» di Nicola.
 
 1. **Config.** Si aggiunge `SITO_URL = https://www.mycity-marketplace.com`.
 2. **Credenziale.** Una «Header Auth» in n8n: nome `MyCity · clienti da visitare`, header `x-mycity-segreto`, valore uguale a `N8N_CLIENTI_DA_VISITARE_SEGRETO` su Vercel.
@@ -59,15 +59,15 @@ Da fare nel repo N8N, con le sue prove (`flussi/test/16-attivita-da-visitare.tes
 5. **«Componi i messaggi».** Il conto usa gli stati del sito. Se il sito non ha risposto, una riga in corsivo lo dice: «Il conto viene dalla tabella n8n: il sito non ha risposto». La frase finale diventa: «Dopo la visita segna lo stato sulla mappa del sito, www.mycity-marketplace.com/agente/clienti: visitata, si, no o iscritta.»
 6. **Ramo nuovo da «Componi i messaggi»**, accanto agli altri due:
    - «Fila per il sito» (Code, `executeOnce`). Solo con `MODALITA = vero` e `letta`; altrimenti restituisce `[]`. Il corpo è `{ giro: new Date().toISOString(), attivita }`, dove `attivita` è:
-     - le attività di `tutte`. Quelle fra le prime 10 hanno `settimana` = la settimana del messaggio e `dossier` = lo stesso testo di «Righe per la tabella»; le altre hanno `settimana: null` e `dossier: ''`;
+     - le attività di `tutte`. Quelle fra le prime QUANTE_A_SETTIMANA (oggi 30) hanno `settimana` = la settimana del messaggio e `dossier` = lo stesso testo di «Righe per la tabella»; le altre hanno `settimana: null` e `dossier: ''`;
      - più le attività di `gia_proposte`, con la loro `settimana` e `stato_tabella` = lo stato della riga n8n.
    - «Manda la fila al sito» (HTTP POST `{{SITO_URL}}/api/agenzia/clienti-da-visitare`, corpo JSON, stessa credenziale). Impostazioni: `onError: continueRegularOutput`, 2 tentativi, timeout 60 s. Se fallisce, Telegram e la tabella sono già andati.
 
 Le prove da aggiungere nel repo N8N:
 
-- con il sito che risponde, un'attività presa o visitata sul sito non torna fra le prime 10, e il conto viene dal sito;
+- con il sito che risponde, un'attività presa o visitata sul sito non torna fra le prime 30, e il conto viene dal sito;
 - con il sito giù, il conto viene dalla tabella e il messaggio lo dice;
 - le candidate portano `lat` e `lon`;
 - le già proposte escono in `gia_proposte` con la posizione;
-- «Fila per il sito» manda tutte più le già proposte, col dossier solo sulle prime 10;
+- «Fila per il sito» manda tutte più le già proposte, col dossier solo sulle prime 30;
 - in prova o con la mappa non letta, al sito non parte niente.

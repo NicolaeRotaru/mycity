@@ -11,7 +11,8 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import type { Cliente, Stato } from '@/lib/agenti/clienti';
 import { PAROLA_STATO } from '@/lib/agenti/clienti';
-import { COLORI, ORDINI, coloreDi, daMostrare, metri, ordina, telDaChiamare, STATI_DOPO_LA_VISITA, type Ordine } from '@/lib/agenti/clienti-vista';
+import { ICONE } from '@/components/agenti/IconaCategoria';
+import { CATEGORIE, COLORI, ORDINI, categoriaDi, coloreDi, daMostrare, metri, ordina, telDaChiamare, STATI_DOPO_LA_VISITA, type Ordine } from '@/lib/agenti/clienti-vista';
 
 const MappaClienti = dynamic(() => import('@/components/agenti/MappaClienti'), {
   ssr: false,
@@ -22,8 +23,13 @@ const ALL_ACCESSO = `/sign-in?returnTo=${encodeURIComponent('/agente/clienti')}`
 const PER_PAGINA = 40;
 type Risposta<T> = { ok?: boolean; data?: T; error?: { message?: string } } | null;
 
-function Pallino({ c }: { c: Pick<Cliente, 'stato' | 'presa'> }) {
-  return <span aria-hidden="true" className="inline-block h-3 w-3 shrink-0 rounded-full border border-white shadow" style={{ background: COLORI[coloreDi(c)].tinta }} />;
+function Pallino({ c }: { c: Pick<Cliente, 'stato' | 'presa' | 'tipo' | 'segmento'> }) {
+  const Icona = ICONE[categoriaDi(c)];
+  return (
+    <span aria-hidden="true" className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-white shadow" style={{ background: COLORI[coloreDi(c)].tinta }}>
+      <Icona size={14} color="#FFFFFF" strokeWidth={2.25} />
+    </span>
+  );
 }
 
 function Scheda({ c, admin, occupato, onAzione }: { c: Cliente; admin: boolean; occupato: boolean; onAzione: (azione: 'prendi' | 'lascia' | 'stato', stato?: Stato) => void }) {
@@ -173,11 +179,18 @@ export default function PaginaClienti() {
       {clienti && visibili.length > 0 && vista === 'mappa' && (
         <div className="mt-4">
           <MappaClienti clienti={visibili} scelto={scelto} onScegli={setScelto} io={io} />
-          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-700" aria-label="Legenda">
+          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-700" aria-label="Legenda dei colori: lo stato">
             {Object.entries(COLORI).map(([k, v]) => (
               <li key={k} className="flex items-center gap-1"><span aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: v.tinta }} />{v.parola}</li>
             ))}
           </ul>
+          <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-700" aria-label="Legenda delle icone: la categoria">
+            {(Object.keys(CATEGORIE) as (keyof typeof CATEGORIE)[]).map((k) => {
+              const Icona = ICONE[k];
+              return <li key={k} className="flex items-center gap-1"><Icona size={13} aria-hidden="true" />{CATEGORIE[k]}</li>;
+            })}
+          </ul>
+          <p className="mt-1 text-xs text-ink-500">La lista mostra le stesse attività, una sotto l’altra.</p>
           {scheda ? <div className="mt-4"><Scheda c={scheda} admin={admin} occupato={occupato} onAzione={(a, s) => tocca(scheda.osm, a, s)} /></div>
             : <p className="mt-3 text-sm text-ink-600">Tocca un puntino per aprire la scheda dell’attività.</p>}
         </div>

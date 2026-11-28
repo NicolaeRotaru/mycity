@@ -19,7 +19,7 @@ export const maxDuration = 30;
  *  · GET  — gli stati che vivono nel sito (chi è già proposto, preso da un agente, visitato) e il conto per il
  *    messaggio del lunedì. Il flusso lo legge prima di «Metti in fila»: è l'unica fonte dello stato.
  *  · POST { giro, attivita: [...] } — tutta la fila del lunedì, con le posizioni, più le attività già proposte
- *    (anche loro con la posizione) e il dossier delle prime 10. Prenotazioni e stati non si toccano mai.
+ *    (anche loro con la posizione) e il dossier delle prime 30. Prenotazioni e stati non si toccano mai.
  *    `giro` è l'istante del giro (ISO): le attività che non c'erano si spengono (in_fila = false), mai si cancellano.
  * Se questa porta non risponde, il flusso va avanti lo stesso: Telegram e la tabella n8n non dipendono da qui.
  */

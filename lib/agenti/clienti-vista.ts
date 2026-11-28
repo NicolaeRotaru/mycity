@@ -79,3 +79,44 @@ export function telDaChiamare(t: string | null): string | null {
 }
 
 export const STATI_DOPO_LA_VISITA: Stato[] = ['visitata', 'si', 'no', 'iscritta'];
+
+/**
+ * 28/11/2026, 02:15 — Nicola: «nella mappa al posto dei puntini è possibile vedere l'icona della categoria di
+ * attività». La categoria si legge dal `tipo` e dal `segmento` del flusso 16; quello che non si riconosce va su
+ * «altri negozi», mai a vuoto. Lo stato resta il colore dello sfondo dell'icona.
+ */
+export type Categoria = 'panetteria' | 'macelleria' | 'frutta' | 'formaggi' | 'pasticceria' | 'regali' | 'persona' | 'ristoro' | 'artigiani' | 'altri';
+
+export const CATEGORIE: Record<Categoria, string> = {
+  panetteria: 'panetteria',
+  macelleria: 'macelleria',
+  frutta: 'frutta e verdura',
+  formaggi: 'formaggi e gastronomia',
+  pasticceria: 'pasticceria',
+  regali: 'enoteca, fiori e regali',
+  persona: 'cura della persona',
+  ristoro: 'bar e ristoranti',
+  artigiani: 'artigiani',
+  altri: 'altri negozi',
+};
+
+const PER_TIPO: [RegExp, Categoria][] = [
+  [/panetteria|panificio|forno|forneria/, 'panetteria'],
+  [/macelleria|salumeria/, 'macelleria'],
+  [/frutta|verdura|fattoria|biologico|naturali/, 'frutta'],
+  [/formaggi|gastronomia|latteria|alimentari|pasta fresca|drogheria/, 'formaggi'],
+  [/pasticceria|cioccolat|dolciumi/, 'pasticceria'],
+  [/enoteca|fiorist|fioraio|regali|vivaio|libreria|giocattoli|cartoleria|gioielleria|profumeria|caff[eè] in grani|^t[eè]$|bevande|alcolici|arte|antiquariato/, 'regali'],
+  [/parrucchier|barbiere|estetic|ottica|cosmetic|erboristeria|farmacia|tatuaggi/, 'persona'],
+  [/ristorante|^bar$|caffetteria|pub|gelateria|pizzeria|trattoria|asporto/, 'ristoro'],
+  [/^artigian/, 'artigiani'],
+];
+const PER_SEGMENTO: Record<string, Categoria> = {
+  regali: 'regali', 'cura della persona': 'persona', 'bar e ristoranti': 'ristoro', artigiani: 'artigiani', fresco: 'formaggi',
+};
+
+export function categoriaDi(c: Pick<Cliente, 'tipo' | 'segmento'>): Categoria {
+  const tipo = (c.tipo ?? '').trim().toLowerCase();
+  for (const [re, cat] of PER_TIPO) if (tipo && re.test(tipo)) return cat;
+  return PER_SEGMENTO[(c.segmento ?? '').trim().toLowerCase()] ?? 'altri';
+}
