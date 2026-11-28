@@ -170,17 +170,37 @@ function inAttesa(stato: unknown): boolean {
 }
 
 /**
- * L'update condizionato allo stato letto. `count` dice quante righe ha toccato:
- * 0 vuol dire che un'altra decisione è arrivata prima.
+ * Le colonne su cui si decide un'approvazione, oltre allo stato: mezzo, scadenze, documenti, dati
+ * di chi firma, data di nascita. Chi approva le ha lette una volta; la scrittura passa solo se sono
+ * ancora quelle.
+ */
+const COLONNE_DELLA_DECISIONE: readonly string[] = [
+  ...COLONNE_PER_APPROVARE.split(',').map((c) => c.trim()).filter((c) => c !== '' && c !== 'approval_status'),
+  'legal_birth_date',
+];
+
+/** I valori letti delle colonne della decisione, da pretendere uguali al momento della scrittura. */
+function valoriDellaDecisione(letto: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(COLONNE_DELLA_DECISIONE.map((c) => [c, letto[c] ?? null]));
+}
+
+/**
+ * L'update condizionato allo stato letto e, quando si approva, ai valori letti delle colonne della
+ * decisione. `count` dice quante righe ha toccato: 0 vuol dire che un'altra decisione è arrivata
+ * prima, o che il profilo è cambiato dopo la lettura.
  */
 async function scriviSeLoStatoENoto(
   admin: ReturnType<typeof getAdminSupabase>,
   id: string,
   statoLetto: unknown,
   patch: Record<string, unknown>,
+  valoriLetti: Record<string, unknown> = {},
 ): Promise<{ error: { message: string; code?: string } | null; count: number | null }> {
   const base = admin.from('profiles').update(patch, { count: 'exact' }).eq('id', id);
-  const q = statoLetto == null ? base.is('approval_status', null) : base.eq('approval_status', String(statoLetto));
+  let q = statoLetto == null ? base.is('approval_status', null) : base.eq('approval_status', String(statoLetto));
+  for (const [colonna, valore] of Object.entries(valoriLetti)) {
+    q = valore == null ? q.is(colonna, null) : q.eq(colonna, String(valore));
+  }
   const { error, count } = await q;
   return { error, count: count ?? null };
 }
@@ -325,15 +345,17 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // insieme passavano tutte e due, con due campanelle, due email e due righe nel
   // registro. Ora una sola tocca la riga; l'altra trova zero righe e riceve 409, e
   // da quel ramo non parte niente.
-  let { error: updErr, count } = await scriviSeLoStatoENoto(admin, params.id, target.approval_status, patch);
+  // Quando si approva, anche mezzo, scadenze e documenti devono essere ancora quelli appena controllati.
+  const valoriLetti = approva && !cliente ? valoriDellaDecisione(target as Record<string, unknown>) : {};
+  let { error: updErr, count } = await scriviSeLoStatoENoto(admin, params.id, target.approval_status, patch, valoriLetti);
   const ripiego = colonnaMancante(updErr) ? rifiutoSenzaColonna(patch) : null;
   if (ripiego) {
     logger.warn('[moderate] rejected_at non c\'è ancora (migrazione 320 da applicare): rifiuto scritto in approved_at', { target: params.id });
-    ({ error: updErr, count } = await scriviSeLoStatoENoto(admin, params.id, target.approval_status, ripiego));
+    ({ error: updErr, count } = await scriviSeLoStatoENoto(admin, params.id, target.approval_status, ripiego, valoriLetti));
   }
   if (updErr) return ApiErrors.internal('Aggiornamento fallito.');
   if (count === 0) {
-    return ApiErrors.conflict('Lo stato di questo profilo è cambiato nel frattempo: ricarica la pagina e riprova.');
+    return ApiErrors.conflict('Lo stato o i dati di questo profilo sono cambiati nel frattempo: ricarica la pagina e riprova.');
   }
 
   // L'esito della notifica si guarda: chi e' rifiutato deve ricevere il motivo,
