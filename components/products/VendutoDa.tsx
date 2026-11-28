@@ -56,7 +56,7 @@ export function VendutoDa({ sellerId, storeName }: { sellerId: string; storeName
 
   return (
     <section className="mt-6 rounded-xl border border-cream-300 bg-cream-50 p-4 text-[13px] leading-relaxed text-ink-700">
-      <h2 className="mb-1.5 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">Venduto da</h2>
+      <h2 className="mb-1.5 text-[13px] font-bold uppercase tracking-label text-ink-700">Venduto da</h2>
       {nome && <p className="font-semibold text-ink-900">{nome}</p>}
       {sede && <p>{sede}</p>}
       {!sede && data.store_address && <p>{data.store_address}</p>}

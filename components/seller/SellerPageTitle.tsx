@@ -34,7 +34,7 @@ export default function SellerPageTitle({ eyebrow, title, sub, action, className
         />
         <div className="min-w-0">
           {eyebrow && (
-            <p className="mb-1 text-xs font-bold uppercase tracking-[0.06em] text-primary-700">
+            <p className="mb-1 text-xs font-bold uppercase tracking-label text-primary-700">
               {eyebrow}
             </p>
           )}

@@ -116,7 +116,7 @@ export default function RiderHelpPage() {
         {/* FAQ accordions */}
         {TOPICS.map((topic) => (
           <section key={topic.title}>
-            <h2 className="mb-2 flex items-center gap-2 px-1 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">
+            <h2 className="mb-2 flex items-center gap-2 px-1 text-[13px] font-bold uppercase tracking-label text-ink-700">
               <topic.icon size={15} strokeWidth={2.2} aria-hidden /> {topic.title}
             </h2>
             <div className="flex flex-col gap-2">

@@ -413,7 +413,7 @@ export default function AdminFunnelPage() {
 
       {/* Segmenti buyer */}
       <div>
-        <p className="mb-2 text-xs font-bold uppercase tracking-[0.04em] text-ink-500">Segmenti</p>
+        <p className="mb-2 text-xs font-bold uppercase tracking-label text-ink-500">Segmenti</p>
         <div className="flex flex-wrap gap-2">
           {segments.map(([label, n, tone]) => (
             <span
@@ -437,18 +437,18 @@ export default function AdminFunnelPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-cream-200">
           <div>
-            <p className="text-xs uppercase tracking-wider text-ink-500">Activation 7gg</p>
+            <p className="text-xs uppercase tracking-label text-ink-500">Activation 7gg</p>
             <p className={`text-3xl font-bold ${activation7d == null ? 'text-ink-400' : activation7d >= 30 ? 'text-olive-700' : activation7d >= 15 ? 'text-accent-700' : 'text-secondary-700'}`}>
               {testoPercentuale(activation7d)}
             </p>
             <p className="text-xs text-ink-500">target Glovo: 35-40%</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-ink-500">Activation totale</p>
+            <p className="text-xs uppercase tracking-label text-ink-500">Activation totale</p>
             <p className={`text-3xl font-bold ${activationEver == null ? 'text-ink-400' : 'text-ink-900'}`}>{testoPercentuale(activationEver)}</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-ink-500">% buyer ricorrente</p>
+            <p className="text-xs uppercase tracking-label text-ink-500">% buyer ricorrente</p>
             <p className={`text-3xl font-bold ${repeatBuyer == null ? 'text-ink-400' : 'text-ink-900'}`}>{testoPercentuale(repeatBuyer)}</p>
             <p className="text-xs text-ink-500">target sano: &gt;40%</p>
           </div>
@@ -466,7 +466,7 @@ export default function AdminFunnelPage() {
             solo lei, come nelle altre tredici tabelle del sito. */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-ink-600 text-xs uppercase tracking-wider">
+            <thead className="text-ink-600 text-xs uppercase tracking-label">
               <tr>
                 <th className="text-left px-3 py-2">Coorte</th>
                 <th className="text-right px-3 py-2">Signup</th>

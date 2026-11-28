@@ -114,7 +114,7 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {
           <Sparkles size={16} className="text-accent-700" />
           In primo piano
         </h3>
-        <span className="text-xs uppercase tracking-wider font-bold text-ink-600">Sponsorizzato</span>
+        <span className="text-xs uppercase tracking-label font-bold text-ink-600">Sponsorizzato</span>
       </div>
       <div className="flex gap-3 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
         {items.map((it) => {

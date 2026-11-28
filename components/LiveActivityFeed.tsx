@@ -57,7 +57,7 @@ const ScheletroAttivita = () => (
         <span className="inline-block w-2.5 h-2.5 rounded-full bg-olive-500 animate-pulse-soft" />
         Cosa sta succedendo a Piacenza
       </h2>
-      <span className="text-xs text-ink-400 uppercase tracking-wider font-semibold">Live</span>
+      <span className="text-xs text-ink-400 uppercase tracking-label font-semibold">Live</span>
     </div>
     <ul className="space-y-1">
       {[0, 1, 2, 3, 4].map((i) => (
@@ -155,7 +155,7 @@ const LiveActivityFeed = () => {
           </span>
           Cosa sta succedendo a Piacenza
         </h2>
-        <span className="text-xs text-ink-400 uppercase tracking-wider font-semibold">Live</span>
+        <span className="text-xs text-ink-400 uppercase tracking-label font-semibold">Live</span>
       </div>
       <ul className="space-y-1">
         {activities.map((a, i) => {

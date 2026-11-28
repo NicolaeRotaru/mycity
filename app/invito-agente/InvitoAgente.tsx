@@ -78,7 +78,7 @@ export default function InvitoAgente({ emailCollegata, giaDentro }: { emailColle
 
   return (
     <div className="mx-auto max-w-md px-4 py-10">
-      <p className="text-xs font-semibold uppercase tracking-wider text-ink-600">MyCity · SDG Agenzia</p>
+      <p className="text-xs font-semibold uppercase tracking-label text-ink-600">MyCity · SDG Agenzia</p>
       <h1 className="mt-1 font-serif text-3xl font-extrabold text-ink-900">Invito per gli agenti</h1>
       <p className="mt-2 text-sm text-ink-600">Con questo invito entri nella pagina degli agenti: incolli il link di Google Maps di un negozio e ricevi la scheda del cliente prima di entrare.</p>
 

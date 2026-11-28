@@ -269,13 +269,13 @@ export default function RiderProfilePage() {
       <div className="grid grid-cols-2 gap-2.5 p-4">
         <div className="rounded-lg border border-cream-300 bg-surface-0 p-3.5">
           <VehicleIcon size={18} className="text-primary-600" aria-hidden />
-          <p className="mt-2 text-[11px] font-bold uppercase text-ink-400">Veicolo</p>
+          <p className="mt-2 text-[11px] font-bold uppercase tracking-label text-ink-400">Veicolo</p>
           <p className="mt-0.5 text-sm font-semibold text-ink-900">{vehicleLabel}</p>
           {vehiclePlate && <p className="text-[11px] text-ink-500">Targa {vehiclePlate}</p>}
         </div>
         <div className="rounded-lg border border-cream-300 bg-surface-0 p-3.5">
           <MapPin size={18} className="text-primary-600" aria-hidden />
-          <p className="mt-2 text-[11px] font-bold uppercase text-ink-400">Zone base</p>
+          <p className="mt-2 text-[11px] font-bold uppercase tracking-label text-ink-400">Zone base</p>
           <p className="mt-0.5 text-sm font-semibold text-ink-900">{riderZones.length > 0 ? riderZones.join(' · ') : 'Tutta la città'}</p>
         </div>
       </div>
@@ -294,7 +294,7 @@ export default function RiderProfilePage() {
 
       {/* Dati personali (form esistente) */}
       <div className="px-4 pb-4">
-        <p className="mb-2.5 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">Dati personali</p>
+        <p className="mb-2.5 text-[13px] font-bold uppercase tracking-label text-ink-700">Dati personali</p>
         <div className="space-y-4 rounded-xl border border-cream-300 bg-surface-0 p-4">
           <Input
             label="Nome e cognome"
@@ -323,7 +323,7 @@ export default function RiderProfilePage() {
 
       {/* Documenti & compliance */}
       <div className="px-4 pb-4">
-        <p className="mb-2.5 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">Documenti & compliance</p>
+        <p className="mb-2.5 text-[13px] font-bold uppercase tracking-label text-ink-700">Documenti & compliance</p>
         <div className="flex flex-col gap-2">
           {docs.map((d) => {
             const meta = STATUS_META[d.status];

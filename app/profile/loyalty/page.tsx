@@ -195,7 +195,7 @@ export default function LoyaltyPage() {
             <tierMeta.icon size={30} className="text-white shrink-0" aria-hidden />
 
             <div className="flex-1">
-              <p className="text-xs uppercase tracking-wider opacity-80">Il tuo livello</p>
+              <p className="text-xs uppercase tracking-label opacity-80">Il tuo livello</p>
               <p className="text-xl font-serif font-bold">{tierMeta.label}</p>
             </div>
             {next.tier && (
@@ -260,7 +260,7 @@ export default function LoyaltyPage() {
         <div className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">
           <div className="flex items-center gap-3 mb-2">
             <Flame size={24} className="text-primary-600" />
-            <p className="text-xs uppercase tracking-wider text-ink-500 font-semibold">Giorni di fila</p>
+            <p className="text-xs uppercase tracking-label text-ink-500 font-semibold">Giorni di fila</p>
           </div>
           <p className="text-3xl font-serif font-bold text-ink-900">{streak} <span className="text-base font-medium text-ink-600">{streak === 1 ? 'giorno' : 'giorni'}</span></p>
           <p className="text-xs text-ink-500 mt-1">
@@ -270,7 +270,7 @@ export default function LoyaltyPage() {
         <div className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">
           <div className="flex items-center gap-3 mb-2">
             <Trophy size={24} className="text-accent-600" />
-            <p className="text-xs uppercase tracking-wider text-ink-500 font-semibold">Record personale</p>
+            <p className="text-xs uppercase tracking-label text-ink-500 font-semibold">Record personale</p>
           </div>
           <p className="text-3xl font-serif font-bold text-ink-900">{longest} <span className="text-base font-medium text-ink-600">{longest === 1 ? 'giorno' : 'giorni'}</span></p>
           <p className="text-xs text-ink-500 mt-1">Il tuo record di giorni di fila.</p>

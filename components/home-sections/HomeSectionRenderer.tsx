@@ -227,7 +227,7 @@ function HomeBlock({
           <div className="container mx-auto px-4 sm:px-6">
             <div className="flex justify-between items-end mb-5 gap-4 flex-wrap">
               <div>
-                <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-label">
                   <Heart size={14} strokeWidth={2.4} />
                   {/* 5/11/2026 — La fila non riceve un ordinamento: mostra gli ultimi prodotti
                       caricati. I titoli di riserva dicevano «più amati / vanno forte / più visti». */}
@@ -319,7 +319,7 @@ function HomeBlock({
         <section className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}>
           <div className="flex justify-between items-end mb-5 gap-4 flex-wrap">
             <div>
-              <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-label">
                 <Store size={14} strokeWidth={2.4} />
                 {c.eyebrow || 'Vicino a te'}
               </span>
@@ -351,7 +351,7 @@ function HomeBlock({
         <section className="bg-gradient-to-br from-accent-100 via-accent-50 to-cream-100 border-y border-cream-300">
           <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_FASCIA} grid grid-cols-1 md:grid-cols-2 gap-8 items-center`}>
             <div>
-              <span className="inline-flex items-center gap-1.5 bg-white/80 text-primary-800 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ring-1 ring-primary-200">
+              <span className="inline-flex items-center gap-1.5 bg-white/80 text-primary-800 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-label ring-1 ring-primary-200">
                 <Mail size={14} strokeWidth={2.4} aria-hidden />
                 {/* 27/10/2026 — Qui si promettevano soldi all'iscrizione, senza nessun meccanismo dietro: via. */}
                 {c.badge || 'Newsletter'}
