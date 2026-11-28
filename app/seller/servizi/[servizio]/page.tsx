@@ -135,7 +135,9 @@ export default function PaginaDelServizio() {
         <AnteprimaServizio id={id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} scheda={scheda} bozzaAd={bozzaAd} />
       )}
 
-      {p && (
+      {/* 28/11/2026 — Nicola, su «PROVA - Raquel Cafè»: «perché c'è la scelta dell'abbonamento se il cliente è già
+          iscritto?». Chi ha già un abbonamento (attivo o col pagamento in ritardo) non vede più le tre fasce né il pulsante. */}
+      {p && !p.attivo && (
         <section className="mt-4 rounded-2xl border border-cream-300 bg-white p-5 sm:p-6 shadow-warm" aria-labelledby="compreso-nei-piani">
           <h2 id="compreso-nei-piani" className="text-sm font-bold text-ink-900">È compreso in tutti e tre gli abbonamenti</h2>
           <ul className="mt-3 space-y-3">
