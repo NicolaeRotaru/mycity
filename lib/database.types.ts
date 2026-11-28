@@ -1622,6 +1622,7 @@ export interface Database {
           rider_payout_claimed_at: string | null;
           stock_restored_at: string | null;
           coupon_released_at: string | null;
+          cod_cart_key: string | null;
         };
         Insert: {
           id?: string;
@@ -1694,6 +1695,7 @@ export interface Database {
           rider_payout_claimed_at?: string | null;
           stock_restored_at?: string | null;
           coupon_released_at?: string | null;
+          cod_cart_key?: string | null;
         };
         Update: {
           id?: string;
@@ -1766,6 +1768,7 @@ export interface Database {
           rider_payout_claimed_at?: string | null;
           stock_restored_at?: string | null;
           coupon_released_at?: string | null;
+          cod_cart_key?: string | null;
         };
         Relationships: [];
       };

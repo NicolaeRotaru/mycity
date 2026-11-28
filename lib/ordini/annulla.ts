@@ -17,6 +17,7 @@ import { eConsegnaVeloce } from '@/lib/ordini/consegna-veloce';
 // la migrazione 124: senza ripiego, prima della 124 la lettura falliva intera e la regola del negozio
 // che rifiuta non scattava (rimborso pieno, senza che nessuno lo sapesse).
 import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
+import { chiaveDelCarrelloInContanti } from '@/lib/ordini/chiave-del-carrello';
 import {
   htmlDelCarrello,
   righeDelCarrello,
@@ -1006,7 +1007,11 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
     .contains('order_ids', JSON.stringify([{ id: o.id }]))
     .limit(1);
   if (errT || !Array.isArray(tentativi) || tentativi.length === 0) {
-    // 21/11/2026 (R04-007) — Senza la riga non si sposta niente, ma non in silenzio.
+    // 28/11/2026 (R06-009, onda 2) — Senza la riga, la chiave del carrello scritta con l'ordine
+    // (migrazione onda2_E1_2): la regola del negozio che rifiuta scatta lo stesso.
+    const dallaChiave = await carrelloDallaChiave(admin, o);
+    if (dallaChiave !== undefined) return dallaChiave;
+    // 21/11/2026 (R04-007) — Senza la riga (e senza la chiave) non si sposta niente, ma non in silenzio.
     await segnalaIlCarrelloSenzaRiga(admin, o, !!errT);
     return null;
   }
@@ -1019,6 +1024,33 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
   if (error || !Array.isArray(data)) return null;
   const righe = data as unknown as RigaDelGiro[];
   return ids.map((id) => righe.find((r) => r.id === id)).filter((r): r is RigaDelGiro => !!r);
+}
+
+/**
+ * 28/11/2026 (R06-009, onda 2) — IL CARRELLO IN CONTANTI DALLA CHIAVE SCRITTA SULL'ORDINE.
+ *
+ * Il carrello in contanti si ritrovava solo dalla riga del tentativo di cassa, che la rotta della
+ * cassa scrive dopo gli ordini, a parte. Ora ogni ordine porta la chiave del suo carrello
+ * (`orders.cod_cart_key`, scritta nella stessa insert: lib/ordini/chiave-del-carrello.ts). Gli ordini
+ * con la stessa chiave e lo stesso cliente sono lo stesso carrello, con certezza: non è un indovinare
+ * dai minuti (la regola della regista resta: due carrelli diversi non si uniscono mai).
+ *
+ * undefined: l'ordine non ha la chiave (nato prima della migrazione, o colonna che non c'è ancora),
+ * e chi chiama fa come prima. null: carrello di un ordine solo, o lettura caduta (la consegna resta
+ * com'è, rimborso pieno, e resta l'errore nel registro).
+ */
+async function carrelloDallaChiave(admin: SupabaseClient, o: RigaDelGiro): Promise<RigaDelGiro[] | null | undefined> {
+  const chiave = await chiaveDelCarrelloInContanti(admin, o.id, 'ricalcolaLaConsegnaDelGiro');
+  if (!chiave) return undefined;
+  const { data, error } = await leggiIlGiro('carrello-contanti-chiave', (c) =>
+    admin.from('orders').select(c).eq('user_id', o.user_id).eq('cod_cart_key', chiave));
+  if (error || !Array.isArray(data)) {
+    logger.error('[ricalcolaLaConsegnaDelGiro] carrello in contanti non letto dalla chiave: consegna NON rifatta', { orderId: o.id });
+    return null;
+  }
+  const righe = data as unknown as RigaDelGiro[];
+  if (righe.length < 2 || !righe.some((r) => r.id === o.id)) return null;
+  return righe.sort((x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id));
 }
 
 /**
@@ -1554,7 +1586,16 @@ async function fratelliInContanti(admin: SupabaseClient, order: { id: string; us
     logger.warn('[annullaERimborsa] carrello in contanti non letto: il codice torna come prima', { orderId: order.id, err: error.message });
     return null;
   }
-  if (!Array.isArray(data) || data.length === 0) return null;
+  if (!Array.isArray(data) || data.length === 0) {
+    // 28/11/2026 (R06-009, onda 2) — Senza la riga, gli ordini con la stessa chiave del carrello.
+    const chiave = await chiaveDelCarrelloInContanti(admin, order.id, 'annullaERimborsa');
+    if (!chiave) return null;
+    const { data: stessi, error: errStessi } = await admin
+      .from('orders').select('id').eq('user_id', order.user_id).eq('cod_cart_key', chiave).neq('id', order.id);
+    if (errStessi || !Array.isArray(stessi)) return null;
+    const fratelli = (stessi as Array<{ id: string }>).map((r) => r.id).filter(Boolean);
+    return fratelli.length > 0 ? fratelli : null;
+  }
   const elenco = (data[0] as { order_ids: unknown }).order_ids;
   const ids = Array.isArray(elenco)
     ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter((id) => !!id && id !== order.id)
