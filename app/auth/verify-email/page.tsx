@@ -8,6 +8,7 @@ import { Mail } from 'lucide-react';
 import { supabase, auth } from '@/lib/supabase/client';
 import { useTranslations } from 'next-intl';
 import Turnstile, { type ManopolaAntiBot } from '@/components/Turnstile';
+import { indirizzoContatto } from '@/lib/contatti-pubblici';
 import {
   leggiEmailDaConfermare,
   memoriaDellaScheda,
@@ -46,6 +47,10 @@ function VerifyEmailInner() {
   // Il gettone anti-robot del reinvio: va con la richiesta a Supabase e vale una volta sola.
   const [captchaToken, setCaptchaToken] = useState('');
   const antiBot = useRef<ManopolaAntiBot>(null);
+  // Il motivo per cui il riquadro anti-robot non si è aperto (onError), da dire sotto il riquadro.
+  const [captchaRotto, setCaptchaRotto] = useState<string | null>(null);
+  // Con la chiave pubblica impostata «Reinvia» resta spento finché il riquadro non dà un gettone.
+  const mancaGettone = !!TURNSTILE_SITE_KEY && !captchaToken;
   // 12/11/2026 (R12-017) — «Reinvia» si spegneva solo durante l'invio: chi lo
   // ripremeva subito prendeva il freno di Supabase e un messaggio rosso. Dopo un
   // invio, o dopo il freno, resta spento col conto alla rovescia.
@@ -72,7 +77,7 @@ function VerifyEmailInner() {
 
   async function resend(e?: React.FormEvent) {
     e?.preventDefault();
-    if (!vista.puoReinviare || attesa > 0) return;
+    if (!vista.puoReinviare || attesa > 0 || mancaGettone) return;
     setResending(true);
     setEsito(null);
     try {
@@ -166,14 +171,22 @@ function VerifyEmailInner() {
                 <Turnstile
                   ref={antiBot}
                   siteKey={TURNSTILE_SITE_KEY}
-                  onVerify={setCaptchaToken}
+                  onVerify={(t) => { setCaptchaToken(t); setCaptchaRotto(null); }}
                   onExpire={() => setCaptchaToken('')}
+                  onError={(motivo) => setCaptchaRotto(motivo)}
                 />
               </div>
             )}
+            {captchaRotto && (
+              <p role="alert" className="text-center text-sm text-ink-600">
+                {captchaRotto} Senza questo controllo il link di conferma non si può rimandare: ricarica la
+                pagina, oppure riprova da un&apos;altra rete. Se non funziona, scrivici a{' '}
+                <a className="underline" href={`mailto:${indirizzoContatto('info')}`}>{indirizzoContatto('info')}</a>.
+              </p>
+            )}
             <button
               type="submit"
-              disabled={!vista.puoReinviare || attesa > 0}
+              disabled={!vista.puoReinviare || attesa > 0 || mancaGettone}
               className="w-full rounded-lg bg-primary-700 px-4 py-2 text-sm font-medium text-white hover:bg-primary-800 disabled:opacity-50"
             >
               {resending

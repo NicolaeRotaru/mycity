@@ -4,10 +4,14 @@
  * Il cambio password (/profile/settings) mostra il riquadro anti-robot e manda il suo gettone a
  * /api/account/cambia-password, che lo passa a Supabase per verificare la password attuale: col
  * CAPTCHA acceso su Supabase quella verifica lo vuole. Dopo ogni tentativo il riquadro si rifà.
+ * Con la chiave pubblica impostata «Aggiorna password» resta spento finché il riquadro non dà il
+ * gettone; se il riquadro non si apre, la pagina dice cosa è successo, cosa fare e a chi scrivere, e
+ * il pulsante resta spento.
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { act, type ComponentType } from 'react';
 import { accendi } from './aiuti/schermo';
+import { indirizzoContatto } from '@/lib/contatti-pubblici';
 
 const UTENTE = { id: 'u-1', email: 'anna@example.com' };
 const stato = vi.hoisted(() => ({ fetch: [] as Array<{ url: string; corpo: unknown }> }));
@@ -77,6 +81,34 @@ function scrivi(campo: HTMLInputElement, valore: string) {
   campo.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+/** Apre le impostazioni sulla scheda Password e scrive i tre campi giusti. */
+async function apriLaSchedaPassword() {
+  window.history.replaceState(null, '', '/profile/settings?tab=password');
+  (globalThis as Record<string, unknown>).fetch = async (url: string, init?: RequestInit) => {
+    stato.fetch.push({ url: String(url), corpo: init?.body ? JSON.parse(String(init.body)) : null });
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  const s = accendi(SettingsPage);
+  await aspetta();
+  const campi = Array.from(s.radice.querySelectorAll('input[type="password"]')) as HTMLInputElement[];
+  expect(campi).toHaveLength(3);
+  await act(async () => {
+    scrivi(campi[0], 'vecchia-123');
+    scrivi(campi[1], 'nuovissima-123');
+    scrivi(campi[2], 'nuovissima-123');
+  });
+  const form = campi[0].closest('form') as HTMLFormElement;
+  const aggiorna = () =>
+    Array.from(form.querySelectorAll('button')).find((b) => /Aggiorna password/.test(b.textContent ?? '')) as HTMLButtonElement;
+  const manda = async () => {
+    await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    await aspetta();
+  };
+  return { s, form, aggiorna, manda };
+}
+
+const cambiMandati = () => stato.fetch.filter((f) => f.url.includes('/api/account/cambia-password'));
+
 describe('il cambio password', () => {
   it('manda alla rotta il gettone del riquadro anti-robot, e dopo il riquadro si rifà', async () => {
     w.__turnstileLoaded = true;
@@ -126,6 +158,59 @@ describe('il cambio password', () => {
       captchaToken: 'gettone-della-password',
     });
     expect(riquadro.rifatti, 'dopo il tentativo il riquadro non chiede un gettone nuovo').toBe(1);
+    s.smonta();
+  });
+
+  it('«Aggiorna password» resta spento finché il riquadro non dà il gettone, poi si accende', async () => {
+    stato.fetch.length = 0;
+    const questo = { disegnati: 0, richiamo: null as null | ((t: string) => void) };
+    w.__turnstileLoaded = true;
+    w.turnstile = {
+      render: (_el: unknown, opzioni: { callback: (t: string) => void }) => {
+        questo.disegnati += 1;
+        questo.richiamo = opzioni.callback;
+        return 'riquadro-pwd-2';
+      },
+      remove: () => undefined,
+      reset: () => undefined,
+    };
+    const { s, aggiorna, manda } = await apriLaSchedaPassword();
+
+    // I tre campi sono a posto e il riquadro è disegnato: manca solo il gettone.
+    expect(questo.disegnati, 'il riquadro anti-robot non è disegnato: la prova non guarda niente').toBe(1);
+    expect(aggiorna().disabled, '«Aggiorna password» è acceso senza il gettone anti-robot').toBe(true);
+    await manda();
+    expect(cambiMandati(), 'senza gettone il cambio password è partito lo stesso').toHaveLength(0);
+
+    await act(async () => { questo.richiamo!('gettone-arrivato'); });
+    expect(aggiorna().disabled, 'col gettone arrivato «Aggiorna password» resta spento').toBe(false);
+    s.smonta();
+  });
+
+  it('se il riquadro non si apre, la pagina dice cosa fare e a chi scrivere, e il pulsante resta spento', async () => {
+    stato.fetch.length = 0;
+    // Lo script di Cloudflare «c'è», ma il riquadro non si apre: il componente vero chiama onError.
+    w.__turnstileLoaded = true;
+    w.turnstile = {
+      render: () => {
+        throw new Error('riquadro rotto');
+      },
+      remove: () => undefined,
+      reset: () => undefined,
+    };
+    const { s, form, aggiorna, manda } = await apriLaSchedaPassword();
+
+    const avviso = form.querySelector<HTMLElement>('[role="alert"]');
+    expect(avviso, 'col riquadro rotto la pagina non dice niente').not.toBeNull();
+    const testo = avviso!.textContent ?? '';
+    expect(testo, "l'avviso non porta il motivo del riquadro").toContain('Il controllo anti-bot non si è aperto.');
+    expect(testo).toMatch(/non può partire/);
+    expect(testo).toMatch(/ricarica la pagina/);
+    expect(avviso!.querySelector('a')?.getAttribute('href')).toBe(`mailto:${indirizzoContatto('info')}`);
+
+    expect(aggiorna().disabled, 'col riquadro rotto «Aggiorna password» si è acceso').toBe(true);
+    await manda();
+    expect(cambiMandati()).toHaveLength(0);
     s.smonta();
   });
 });

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { withAuthRateLimit } from '@/lib/api/middleware';
+import { getClientIp } from '@/lib/rate-limit';
+import { verifyTurnstileToken } from '@/lib/captcha';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
@@ -76,6 +78,20 @@ function fraseDellaPasswordRifiutata(errore: ErroreDiSupabase): string {
     : PASSWORD_SEMPLICE;
 }
 
+/** La frase del gettone anti-robot rifiutato, dal server o da Supabase: la stessa nei due casi. */
+const ANTI_ROBOT_NON_PASSATO =
+  "Il controllo anti-robot non è andato a buon fine, quindi la password attuale non si è potuta verificare: la password non c'entra. Ricarica la pagina e riprova.";
+
+/**
+ * Chi verifica il gettone anti-robot, come in /api/auth/signin e /api/auth/signup: il gettone vale
+ * una volta sola, quindi lo verifica uno solo. Con `CAPTCHA_SU_SUPABASE_ACCESO=1` (o `true`) lo
+ * verifica Supabase nella prova della password attuale e qui non si chiama siteverify; spenta
+ * (qualunque altro valore, o assente) lo verifica il server prima di provare la password.
+ */
+function captchaVerificatoDaSupabase(): boolean {
+  return /^(1|true)$/i.test((process.env.CAPTCHA_SU_SUPABASE_ACCESO ?? '').trim());
+}
+
 export const POST = withAuthRateLimit(
   // Cinque tentativi ogni quarto d'ora: chi cambia la password lo fa una volta,
   // e questa rotta è anche un modo per PROVARE password (la risposta dice se
@@ -110,6 +126,16 @@ export const POST = withAuthRateLimit(
       return ApiErrors.conflict('Questo account accede senza password: usa il tuo fornitore di accesso.');
     }
 
+    // Il gettone anti-robot si verifica qui, prima di provare la password attuale, quando non lo
+    // verifica Supabase. Senza TURNSTILE_SECRET_KEY fuori dalla produzione la verifica si salta
+    // (lib/captcha.ts); in produzione senza chiave rifiuta.
+    if (!captchaVerificatoDaSupabase()) {
+      const cap = await verifyTurnstileToken(corpo.captchaToken, getClientIp(req));
+      if (!cap.ok) {
+        return ApiErrors.invalidRequest(ANTI_ROBOT_NON_PASSATO);
+      }
+    }
+
     // Client nuovo e senza sessione: è l'unico modo per PROVARE la password
     // invece di fidarsi di chi sta già dentro. Non tocca la sessione in corso.
     const prova = creaClientAnonimo();
@@ -123,9 +149,7 @@ export const POST = withAuthRateLimit(
       // dice niente della password: Supabase non l'ha nemmeno provata. Prima finiva nel ramo
       // «Password attuale non corretta» e chi la sapeva giusta credeva di averla dimenticata.
       if (erroreVerifica.code === 'captcha_failed') {
-        return ApiErrors.invalidRequest(
-          "Il controllo anti-robot non è andato a buon fine, quindi la password attuale non si è potuta verificare: la password non c'entra. Ricarica la pagina e riprova.",
-        );
+        return ApiErrors.invalidRequest(ANTI_ROBOT_NON_PASSATO);
       }
       // Si prova comunque la password (chi è entrato con Google può averne impostata una col
       // recupero): solo se non combacia e l'account non ha l'email fra i fornitori, la risposta

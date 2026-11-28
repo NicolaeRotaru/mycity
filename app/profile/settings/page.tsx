@@ -28,6 +28,7 @@ import { Input, Select } from '@/components/ui/Field';
 // casa sua, e il nome ce l'ha (components/ui/Toggle.tsx).
 import { Toggle } from '@/components/ui/Toggle';
 import Turnstile, { type ManopolaAntiBot } from '@/components/Turnstile';
+import { indirizzoContatto } from '@/lib/contatti-pubblici';
 import { pezziDelMotivo } from '@/lib/testo/pezzi-del-motivo';
 
 type Tab = 'account' | 'password' | 'notifications' | 'privacy' | 'danger';
@@ -170,9 +171,14 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changingPwd, setChangingPwd] = useState(false);
-  // Il gettone anti-robot della verifica della password attuale: la rotta lo passa a Supabase.
+  // Il gettone anti-robot della verifica della password attuale: la rotta lo verifica, o lo passa a
+  // Supabase quando lo verifica Supabase (CAPTCHA_SU_SUPABASE_ACCESO).
   const [captchaPwd, setCaptchaPwd] = useState('');
   const antiBotPwd = useRef<ManopolaAntiBot>(null);
+  // Il motivo per cui il riquadro anti-robot non si è aperto (onError), da dire sotto il riquadro.
+  const [captchaPwdRotto, setCaptchaPwdRotto] = useState<string | null>(null);
+  // Con la chiave pubblica impostata «Aggiorna password» resta spento finché il riquadro non dà un gettone.
+  const mancaGettonePwd = !!TURNSTILE_SITE_KEY && !captchaPwd;
 
   // New email
   const [newEmail, setNewEmail] = useState('');
@@ -294,6 +300,7 @@ export default function SettingsPage() {
       toast.error(motivo);
       return;
     }
+    if (mancaGettonePwd) return;
     setChangingPwd(true);
     /**
      * LA PASSWORD ATTUALE SI CONTROLLA SUL SERVER.
@@ -654,14 +661,23 @@ export default function SettingsPage() {
                   <Turnstile
                     ref={antiBotPwd}
                     siteKey={TURNSTILE_SITE_KEY}
-                    onVerify={setCaptchaPwd}
+                    onVerify={(t) => { setCaptchaPwd(t); setCaptchaPwdRotto(null); }}
                     onExpire={() => setCaptchaPwd('')}
+                    onError={(motivo) => setCaptchaPwdRotto(motivo)}
                   />
+                )}
+                {captchaPwdRotto && (
+                  <p role="alert" className="text-sm text-ink-600">
+                    {captchaPwdRotto} Senza questo controllo la password attuale non si può verificare e il
+                    cambio non può partire: ricarica la pagina, oppure riprova da un&apos;altra rete. Se non
+                    funziona, scrivici a{' '}
+                    <a className="underline" href={`mailto:${indirizzoContatto('info')}`}>{indirizzoContatto('info')}</a>.
+                  </p>
                 )}
                 <Button
                   type="submit"
                   loading={changingPwd}
-                  disabled={!puoiProvareACambiare({ currentPassword, newPassword, confirmPassword })}
+                  disabled={!puoiProvareACambiare({ currentPassword, newPassword, confirmPassword }) || mancaGettonePwd}
                 >Aggiorna password</Button>
               </form>
             </section>
