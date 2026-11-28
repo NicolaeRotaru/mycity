@@ -340,7 +340,31 @@ function dominiGoogleMaps(): { script: string; connect: string; img: string; fon
 
 const FRAME_SITI_CONSEGNATI = originiDeiSitiOnline().map((o) => ` ${o}`).join('');
 
-function buildCsp(nonce: string, isDev: boolean): string {
+/**
+ * 28/11/2026 (R11-010) — `upgrade-insecure-requests` SOLO SU UNA PAGINA ARRIVATA IN HTTPS.
+ *
+ * La regola dice al browser: «ogni indirizzo http di questa pagina chiedilo in https». Su una pagina
+ * in https serve (niente contenuto misto). Su una pagina servita in http si rivolta contro il sito:
+ * il browser chiede in https anche i fogli di stile e gli script del sito stesso (/_next/static/…),
+ * che lì non esistono, e la pagina arriva senza stile e senza JavaScript — senza carrello, cassa e
+ * accesso, con il campo «Cerca» del computer e quello del telefono visibili insieme, e i link interni
+ * che non portano da nessuna parte.
+ *
+ * Chrome e Firefox risparmiano `http://localhost`; Safari no. Per questo sullo schermo di un telefono
+ * (il lavoro «e2e-telefono» della CI, WebKit su http://localhost:3000) erano rosse dodici prove che
+ * su Chrome passavano, e lo stesso succede a chi apre il sito in http da un telefono sulla rete di
+ * casa durante lo sviluppo (http://192.168.…:3000), con qualunque browser.
+ *
+ * In produzione (Vercel) la pagina arriva sempre in https — il protocollo della richiesta o,
+ * dietro un proxy, `x-forwarded-proto` — e la regola resta, parola per parola.
+ */
+function paginaArrivataInHttps(req: NextRequest): boolean {
+  if (req.nextUrl.protocol === 'https:') return true;
+  const inoltrata = req.headers.get('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase();
+  return inoltrata === 'https';
+}
+
+function buildCsp(nonce: string, isDev: boolean, inHttps: boolean): string {
   const supaHost = getSupabaseHost();
   const gm = dominiGoogleMaps();
   // In dev manteniamo unsafe-eval per webpack HMR + React fast refresh.
@@ -374,7 +398,8 @@ function buildCsp(nonce: string, isDev: boolean): string {
     "base-uri 'self'",
     "form-action 'self'",
     "object-src 'none'",
-    "upgrade-insecure-requests",
+    // Solo in https: su una pagina in http porterebbe in https anche i file del sito (vedi sopra).
+    ...(inHttps ? ['upgrade-insecure-requests'] : []),
     // 12/11/2026 (R06-025) — La politica proteggeva ma taceva: uno script
     // bloccato (un checkout che smette di funzionare, un'iniezione tentata) non
     // lo veniva a sapere nessuno. Le segnalazioni vanno alla rotta del sito,
@@ -407,7 +432,7 @@ export async function middleware(req: NextRequest) {
   // tutti gli script inline che genera (hydration, RSC, ecc.).
   const nonce = generateNonce();
   const isDev = process.env.NODE_ENV !== 'production';
-  const csp = buildCsp(nonce, isDev);
+  const csp = buildCsp(nonce, isDev, paginaArrivataInHttps(req));
 
   const reqHeaders = new Headers(req.headers);
   reqHeaders.set('x-nonce', nonce);
