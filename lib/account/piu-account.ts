@@ -65,6 +65,8 @@ export const CHIAVI_DELL_ACCOUNT = [
 /** Le pagine dove si entra in un account: lì un account nuovo è atteso, non un cambio fatto altrove. */
 export const PAGINE_DELL_ACCESSO = ['/sign-in', '/sign-up', '/auth/', '/reset-password'];
 const DA_PARTE = 'mycity:da-parte:';
+/** La bozza della cassa: nome, telefono e indirizzo scritti da ospite prima dell'accesso (app/checkout/page.tsx). */
+const BOZZA_DELLA_CASSA = 'mc_checkout_draft';
 /** L'evento che avvisa i menu aperti che l'elenco è cambiato (nella stessa scheda «storage» non arriva). */
 export const EVENTO_ACCOUNT = 'mycity:account-cambiati';
 
@@ -314,6 +316,15 @@ export function dopoEventoAccesso(
 ): void {
   const finita = evento === 'INITIAL_SESSION' && !sessione?.user?.id && dove.sessioneNelDeposito === false;
   if (evento === 'SIGNED_OUT' || finita) {
+    // 28/11/2026 (R01-012, onda 2) — L'accesso finito da solo arriva come INITIAL_SESSION vuota, non
+    // come SIGNED_OUT: la bozza della cassa (nome, telefono, indirizzo) restava nel browser per chi
+    // veniva dopo. Se i dati del browser erano di un account, se ne va come all'«Esci»
+    // (components/providers/QueryProvider.tsx). Se non erano di nessuno è la bozza di un ospite che
+    // sta andando ad accedere (la pagina di accesso riparte senza sessione): resta.
+    if (finita && leggi(d, CHIAVE_UTENTE_DEL_BROWSER)) {
+      togli(d, BOZZA_DELLA_CASSA);
+      togli(s, BOZZA_DELLA_CASSA);
+    }
     dimenticaTutti(d, s);
     return;
   }
