@@ -114,7 +114,8 @@ export async function rifiutoPerFasciaPiena(
   admin: Pick<SupabaseClient, 'from'>,
   ordine: { fascia: string | null | undefined; ritiroInNegozio: boolean },
   porta: Porta,
-  dove: 'cod' | 'stripe',
+  // N-004 (onda 3) — 'veloce': il freno della veloce che sposta l'ordine non confermato in una fascia.
+  dove: 'cod' | 'stripe' | 'veloce',
   adesso: Date = new Date(),
 ): Promise<string | null> {
   const fascia = ordine.fascia;
@@ -127,7 +128,10 @@ export async function rifiutoPerFasciaPiena(
   return !giri.mio && giri.altri + 1 > ORDINI_PER_FASCIA ? MOTIVO_FASCIA_PIENA : null;
 }
 
-/** Il «no» del database (migrazione onda2_F1_1): 23514 col segno `fascia_piena`. È un 409, non un guasto. */
+/**
+ * Il «no» del database (migrazione onda2_F1_1): 23514 col segno `fascia_piena`. È un 409, non un guasto.
+ * N-004 (onda 3) — Lo dice anche quando l'ordine ENTRA nella fascia con uno spostamento (il freno della veloce).
+ */
 export function eLaFasciaPienaDelDatabase(errore: unknown): boolean {
   const e = errore as { code?: unknown; hint?: unknown } | null | undefined;
   return e?.code === '23514' && e?.hint === 'fascia_piena';

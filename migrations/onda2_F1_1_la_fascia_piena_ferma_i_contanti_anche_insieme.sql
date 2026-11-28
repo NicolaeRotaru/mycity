@@ -29,13 +29,27 @@
 -- scritto, lo vede e si ferma con 23514 e il segno `fascia_piena`, che la rotta
 -- trasforma nel 409 «Questa fascia è piena» (`eLaFasciaPienaDelDatabase`).
 --
+-- N-004 (onda 3) — ANCHE QUANDO L'ORDINE ENTRA NELLA FASCIA DOPO, NON SOLO QUANDO NASCE.
+-- Il grilletto guardava solo l'INSERT. Il freno della veloce (lib/ordini/veloce-non-confermata.ts)
+-- sposta con un UPDATE l'ordine veloce che il negozio non ha confermato in 10 minuti nella prima
+-- fascia possibile: in una fascia con già 5 giri entrava il sesto, e nessuno lo fermava. Adesso
+-- il grilletto scatta anche BEFORE UPDATE OF delivery_slot, con le stesse regole e lo stesso
+-- lucchetto, ma solo quando la fascia CAMBIA davvero (riscrivere la stessa fascia, o cambiare
+-- altre colonne di un ordine già nella fascia, non chiede un giro nuovo). L'ordine che si sposta
+-- non si conta fra gli «altri» (la sua riga vecchia è lui). Il freno conta prima i giri e cerca
+-- una fascia con posto (`rifiutoPerFasciaPiena`); questo è l'ultimo «no» se due giri del freno,
+-- o un freno e una cassa, prendono l'ultimo posto insieme.
+-- Le prove: tests/sql/rls/onda3-n004-la-fascia-piena-ferma-anche-lo-spostamento.test.sql e
+-- tests/sql/rls/onda3-n004-due-spostamenti-insieme-nella-fascia-piena.test.sql (due sessioni vere).
+--
 -- Cosa NON cambia:
 --   · gli ordini pagati con la carta: nascono nel webhook DOPO il pagamento, e un
 --     rifiuto lì lascerebbe un cliente che ha pagato senza ordine. Contano fra i
 --     giri, ma non vengono mai fermati qui (cosa fare quando la fascia si riempie
 --     mentre la pagina di Stripe è aperta è una domanda aperta per Nicola);
 --   · il ritiro in negozio, la veloce, gli ordini senza fascia: escono subito;
---   · le righe che ci sono già: si guarda solo l'ordine che nasce.
+--   · le righe che ci sono già: si guarda solo l'ordine che nasce o che cambia fascia;
+--   · lo spostamento di un ordine con la carta non si ferma, come la sua nascita (N-004).
 --
 -- Idempotente: CREATE OR REPLACE e DROP TRIGGER IF EXISTS.
 -- Per tornare indietro:
@@ -90,7 +104,13 @@ DECLARE
   altri   integer;
   nuova_porta text;
 BEGIN
-  -- Solo l'ordine in contanti a domicilio con una fascia, appena venduto. Tutto il resto passa.
+  -- N-004 — Su un UPDATE si guarda solo l'ordine che CAMBIA fascia: lo stesso valore riscritto passa.
+  IF TG_OP = 'UPDATE' AND NEW.delivery_slot IS NOT DISTINCT FROM OLD.delivery_slot THEN
+    RETURN NEW;
+  END IF;
+
+  -- Solo l'ordine in contanti a domicilio con una fascia, appena venduto o appena spostato.
+  -- Tutto il resto passa.
   IF NEW.payment_method IS DISTINCT FROM 'cod'
      OR coalesce(NEW.pickup_in_store, false)
      OR NEW.delivery_slot IS NULL
@@ -129,6 +149,8 @@ BEGIN
         FROM public.orders o
         CROSS JOIN LATERAL public.giorno_e_finestra_della_fascia(o.delivery_slot, o.created_at) f
        WHERE o.delivery_slot IS NOT NULL
+         -- N-004: l'ordine che si sposta non conta se stesso (la sua riga di prima).
+         AND o.id IS DISTINCT FROM NEW.id
          AND o.created_at >= now() - interval '48 hours'
          AND o.delivery_status IS DISTINCT FROM 'CANCELED'
          AND NOT coalesce(o.pickup_in_store, false)
@@ -153,7 +175,7 @@ REVOKE ALL ON FUNCTION public.orders_fascia_piena_ferma_i_contanti() FROM PUBLIC
 
 DROP TRIGGER IF EXISTS orders_fascia_piena_ferma_i_contanti ON public.orders;
 CREATE TRIGGER orders_fascia_piena_ferma_i_contanti
-  BEFORE INSERT ON public.orders
+  BEFORE INSERT OR UPDATE OF delivery_slot ON public.orders
   FOR EACH ROW EXECUTE FUNCTION public.orders_fascia_piena_ferma_i_contanti();
 
 COMMIT;

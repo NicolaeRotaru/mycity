@@ -26,7 +26,14 @@
 --  · gli ordini in contanti consegnati e non ancora rimessi (payout_status AWAITING_REMITTANCE),
 --    qualunque sia la riga del registro;
 --  · i rimborsati per intero (REFUNDED) i cui contanti non sono ancora rientrati: nessuna
---    rimessa di quel fattorino·giorno confermata DOPO l'incasso (regola R29-011).
+--    rimessa di quel fattorino·giorno confermata DOPO l'incasso (regola R29-011);
+--  · (N-003, onda 3) gli ordini ancora IN STRADA (PICKED_UP, OUT_FOR_DELIVERY) i cui contanti
+--    il fattorino ha già dichiarato incassati (`cash_confirmed_at` scritto da lib/cassa/
+--    registra-incasso.ts, l'unica strada dell'incasso, che lo ammette da OUT_FOR_DELIVERY in poi).
+--    Prima si contavano solo i consegnati: incassati i 28 € alla porta e non ancora chiusa la
+--    consegna col codice, per la guardia il fattorino non aveva niente in tasca e l'account si
+--    cancellava. Un ordine in strada senza incasso dichiarato non conta: quei contanti non li ha.
+--    La giornata è quella dell'incasso finché l'ordine non è consegnato.
 -- La cifra è la somma di `cash_collected_cents` di quegli ordini, la stessa unità di prima.
 -- Le giornate sono quelle di quegli ordini PIÙ quelle che il registro dice ancora aperte
 -- (remitted_at vuoto e incasso o ammanco): una giornata che oggi ferma la cancellazione la
@@ -50,26 +57,33 @@ STABLE
 SECURITY INVOKER
 SET search_path TO 'public'
 AS $function$
-  WITH in_mano AS (
-    SELECT (o.delivered_at AT TIME ZONE 'Europe/Rome')::date AS giorno,
-           coalesce(o.cash_collected_cents, 0)::bigint      AS centesimi
+  WITH contanti AS (
+    -- Consegnati, oppure ancora in strada coi contanti già dichiarati incassati (N-003).
+    -- `quando`: la consegna, o l'incasso finché la consegna non c'è.
+    SELECT o.rider_id, o.payout_status, o.cash_collected_cents, o.cash_confirmed_at, o.delivered_at,
+           coalesce(o.delivered_at, o.cash_confirmed_at) AS quando
       FROM public.orders o
      WHERE o.rider_id = p_rider
        AND o.payment_method = 'cod'
-       AND o.delivery_status = 'DELIVERED'
-       AND o.delivered_at IS NOT NULL
        AND (
-             o.payout_status = 'AWAITING_REMITTANCE'
-          OR (
-               o.payout_status = 'REFUNDED'
-               AND NOT EXISTS (
-                 SELECT 1
-                   FROM public.cod_reconciliations r
-                  WHERE r.rider_id = o.rider_id
-                    AND r.for_date = (o.delivered_at AT TIME ZONE 'Europe/Rome')::date
-                    AND r.remitted_at IS NOT NULL
-                    AND r.remitted_at >= coalesce(o.cash_confirmed_at, o.delivered_at)
-               )
+             (o.delivery_status = 'DELIVERED' AND o.delivered_at IS NOT NULL)
+          OR (o.delivery_status IN ('PICKED_UP', 'OUT_FOR_DELIVERY') AND o.cash_confirmed_at IS NOT NULL)
+           )
+  ),
+  in_mano AS (
+    SELECT (o.quando AT TIME ZONE 'Europe/Rome')::date   AS giorno,
+           coalesce(o.cash_collected_cents, 0)::bigint AS centesimi
+      FROM contanti o
+     WHERE o.payout_status = 'AWAITING_REMITTANCE'
+        OR (
+             o.payout_status = 'REFUNDED'
+             AND NOT EXISTS (
+               SELECT 1
+                 FROM public.cod_reconciliations r
+                WHERE r.rider_id = o.rider_id
+                  AND r.for_date = (o.quando AT TIME ZONE 'Europe/Rome')::date
+                  AND r.remitted_at IS NOT NULL
+                  AND r.remitted_at >= coalesce(o.cash_confirmed_at, o.delivered_at)
              )
            )
   ),

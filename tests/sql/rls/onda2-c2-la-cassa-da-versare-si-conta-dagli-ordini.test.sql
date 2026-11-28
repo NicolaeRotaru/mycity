@@ -14,7 +14,11 @@
 --    versati», 40 dei quali versati da ore (R08-004, R08-005);
 --  · fattorino 3: un rimborsato coi contanti ancora in mano conta, uno già rientrato no (R29-011);
 --  · fattorino 4: una giornata che il registro dice in ammanco ferma la cancellazione come prima;
---  · fattorino 5: tutto versato, niente da chiedere.
+--  · fattorino 5: tutto versato, niente da chiedere;
+--  · fattorino 6 (N-003, onda 3): ha incassato 28 € alla porta e la consegna è ancora in strada
+--    (OUT_FOR_DELIVERY, `cash_confirmed_at` scritto). Si contavano solo i consegnati: per la guardia
+--    non aveva niente in tasca e l'account si cancellava. Il secondo ordine in strada, senza incasso
+--    dichiarato, non conta: quei contanti non li ha ancora.
 -- Senza la migrazione la funzione non esiste e la prova è ROSSA.
 -- Tutto in transazione, ROLLBACK.
 -- =============================================================================
@@ -34,7 +38,8 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('c2c20000-0000-0000-0000-000000000012', 'fattorino2-c2@test.it',  '{"role":"rider"}'),
   ('c2c20000-0000-0000-0000-000000000013', 'fattorino3-c2@test.it',  '{"role":"rider"}'),
   ('c2c20000-0000-0000-0000-000000000014', 'fattorino4-c2@test.it',  '{"role":"rider"}'),
-  ('c2c20000-0000-0000-0000-000000000015', 'fattorino5-c2@test.it',  '{"role":"rider"}');
+  ('c2c20000-0000-0000-0000-000000000015', 'fattorino5-c2@test.it',  '{"role":"rider"}'),
+  ('c2c20000-0000-0000-0000-000000000016', 'fattorino6-c2@test.it',  '{"role":"rider"}');
 
 UPDATE public.profiles
    SET is_approved = true, approval_status = 'approved', store_name = 'Pane Quotidiano',
@@ -43,7 +48,8 @@ UPDATE public.profiles
 UPDATE public.profiles SET is_approved = true, approval_status = 'approved'
  WHERE id IN ('c2c20000-0000-0000-0000-000000000002', 'c2c20000-0000-0000-0000-000000000011',
               'c2c20000-0000-0000-0000-000000000012', 'c2c20000-0000-0000-0000-000000000013',
-              'c2c20000-0000-0000-0000-000000000014', 'c2c20000-0000-0000-0000-000000000015');
+              'c2c20000-0000-0000-0000-000000000014', 'c2c20000-0000-0000-0000-000000000015',
+              'c2c20000-0000-0000-0000-000000000016');
 
 -- Gli ordini in contanti consegnati: (id, fattorino, consegnato, incasso registrato, contanti, stato del bonifico).
 -- Novembre: Roma è un'ora avanti a Greenwich, le ore qui sotto sono di Roma.
@@ -71,6 +77,24 @@ SELECT v.id::uuid, 'c2c20000-0000-0000-0000-000000000002', 'c2c20000-0000-0000-0
     -- fattorino 5: tutto versato
     ('c2c20000-0000-0000-0000-0000000005a1', 'c2c20000-0000-0000-0000-000000000015', '2026-11-24 10:00+01', '2026-11-24 10:05+01', 3000, 'HELD')
   ) AS v(id, rider, consegnato, incassato, contanti, stato);
+
+-- N-003 — fattorino 6, due consegne ancora in strada: F con i 28 € già dichiarati incassati alle 19:10,
+-- G senza incasso dichiarato (i contanti non li ha ancora presi).
+INSERT INTO public.orders (
+  id, user_id, seller_id, rider_id, total_price, gross_total_cents, payment_method, payment_status,
+  delivery_status, delivered_at, cash_confirmed_at, cash_collected_cents, pickup_in_store, payout_status,
+  seller_payout_cents, rider_fee_cents,
+  delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip
+)
+SELECT v.id::uuid, 'c2c20000-0000-0000-0000-000000000002', 'c2c20000-0000-0000-0000-000000000001',
+       'c2c20000-0000-0000-0000-000000000016', v.contanti / 100.0, v.contanti, 'cod', v.pagamento,
+       'OUT_FOR_DELIVERY', NULL, v.incassato::timestamptz, v.incassati, false, 'AWAITING_REMITTANCE',
+       v.contanti - 300, 300,
+       'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121'
+  FROM (VALUES
+    ('c2c20000-0000-0000-0000-0000000006f1', 2800, 'PAID',    '2026-11-25 19:10+01', 2800),
+    ('c2c20000-0000-0000-0000-0000000006a1', 1900, 'PENDING', NULL,                  NULL)
+  ) AS v(id, contanti, pagamento, incassato, incassati);
 SET LOCAL mycity.allow_order_write = '';
 
 -- Il registro delle giornate, com'è dopo la quadratura (collected = tutto l'incassato del giorno).
@@ -91,13 +115,15 @@ DECLARE
     'c2c20000-0000-0000-0000-000000000012', '{"centesimi":1500,"giornate":1,"ordini":1}'::jsonb,
     'c2c20000-0000-0000-0000-000000000013', '{"centesimi":2500,"giornate":1,"ordini":1}'::jsonb,
     'c2c20000-0000-0000-0000-000000000014', '{"centesimi":0,"giornate":1,"ordini":0}'::jsonb,
-    'c2c20000-0000-0000-0000-000000000015', '{"centesimi":0,"giornate":0,"ordini":0}'::jsonb);
+    'c2c20000-0000-0000-0000-000000000015', '{"centesimi":0,"giornate":0,"ordini":0}'::jsonb,
+    'c2c20000-0000-0000-0000-000000000016', '{"centesimi":2800,"giornate":1,"ordini":1}'::jsonb);
   nomi jsonb := jsonb_build_object(
     'c2c20000-0000-0000-0000-000000000011', 'R08-006 contanti incassati dopo il versamento dello stesso giorno: si vedono',
     'c2c20000-0000-0000-0000-000000000012', 'R08-004/005 giornata riaperta: si contano solo i contanti non versati',
     'c2c20000-0000-0000-0000-000000000013', 'rimborsato coi contanti in mano conta, quello gia rientrato no',
     'c2c20000-0000-0000-0000-000000000014', 'giornata in ammanco nel registro: ferma ancora la cancellazione',
-    'c2c20000-0000-0000-0000-000000000015', 'tutto versato: niente da chiedere');
+    'c2c20000-0000-0000-0000-000000000015', 'tutto versato: niente da chiedere',
+    'c2c20000-0000-0000-0000-000000000016', 'N-003 contanti dichiarati su una consegna ancora in strada: si vedono');
   chi text;
 BEGIN
   IF to_regprocedure('public.cassa_da_versare_del_fattorino(uuid)') IS NULL THEN
@@ -129,7 +155,7 @@ RESET ROLE;
 -- Nessun soldo toccato: la funzione legge e basta.
 INSERT INTO esiti
 SELECT 'gli ordini restano come erano',
-       count(*) FILTER (WHERE payout_status = 'AWAITING_REMITTANCE') = 2 AND count(*) FILTER (WHERE payout_status = 'HELD') = 3,
+       count(*) FILTER (WHERE payout_status = 'AWAITING_REMITTANCE') = 4 AND count(*) FILTER (WHERE payout_status = 'HELD') = 3,
        format('in attesa %s, rilasciati %s', count(*) FILTER (WHERE payout_status = 'AWAITING_REMITTANCE'),
               count(*) FILTER (WHERE payout_status = 'HELD'))
   FROM public.orders WHERE id::text LIKE 'c2c20000-%';

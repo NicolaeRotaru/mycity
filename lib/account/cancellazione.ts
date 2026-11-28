@@ -813,7 +813,8 @@ export type CassaContanti = {
  *    anche i contanti già versati, con la cifra gonfiata (R08-004, R08-005).
  *
  * Adesso il conto lo fa il database in una sola lettura (`cassa_da_versare_del_fattorino`, migrazione
- * onda2_C2_1): gli ordini in contanti consegnati e non ancora rimessi, più i rimborsati coi contanti
+ * onda2_C2_1): gli ordini in contanti consegnati e non ancora rimessi — e quelli ancora in strada coi
+ * contanti già dichiarati incassati (N-003) —, più i rimborsati coi contanti
  * ancora in mano (le regole della pagina Rimesse contanti), e le giornate che il registro dice ancora
  * aperte. Una giornata che il registro tiene aperta ferma la cancellazione come prima: si ferma in più
  * casi, mai in meno. Finché la funzione non è applicata si legge il registro come prima.
@@ -825,8 +826,28 @@ function funzioneDellaCassaAssente(e: { code?: string; message?: string }): bool
   return e.code === 'PGRST202' || (e.code === '42883' && (e.message ?? '').includes(FUNZIONE_DELLA_CASSA));
 }
 
-/** La frase del rinvio: la stessa, chiunque abbia fatto il conto. */
+/**
+ * La frase del rinvio: la stessa, chiunque abbia fatto il conto.
+ *
+ * 28/11/2026 (N-005, onda 3) — Una giornata che il registro tiene aperta senza contanti in tasca (un
+ * ammanco da chiarire, una giornata mai chiusa) ferma la cancellazione, giustamente, ma la frase diceva
+ * «risultano 0,00 € di contanti … non ancora versati»: una cifra falsa come ragione. Senza contanti la
+ * frase dice quello che c'è davvero, la giornata di cassa da chiudere; la cifra compare solo quando c'è.
+ */
 function cassaDaVersare(centesimi: number, giornate: number): CassaContanti {
+  const quante = `${giornate} ${giornate === 1 ? 'giornata' : 'giornate'} di cassa`;
+  if (!(centesimi > 0)) {
+    return {
+      bloccante: true,
+      esito: 'da_versare',
+      centesimi: 0,
+      giornate,
+      motivo:
+        `Cancellazione rinviata: ${giornate === 1 ? 'risulta ancora aperta' : 'risultano ancora aperte'} ` +
+        `${quante} contanti da chiudere con l’amministrazione. ` +
+        `Appena ${giornate === 1 ? 'è chiusa' : 'sono chiuse'} la cancellazione riparte da sola.`,
+    };
+  }
   const euro = (centesimi / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return {
     bloccante: true,
@@ -835,7 +856,7 @@ function cassaDaVersare(centesimi: number, giornate: number): CassaContanti {
     giornate,
     motivo:
       `Cancellazione rinviata: risultano ${euro} € di contanti incassati alle consegne e non ancora versati ` +
-      `(${giornate} ${giornate === 1 ? 'giornata' : 'giornate'} di cassa). ` +
+      `(${quante}). ` +
       `Appena il versamento è registrato la cancellazione riparte da sola.`,
   };
 }
