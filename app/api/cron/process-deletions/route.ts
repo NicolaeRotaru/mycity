@@ -19,6 +19,7 @@ import {
   type TappaAvviso,
 } from '@/lib/cron-cancellazioni';
 import {
+  emailRisultaPartita,
   identificativoAvviso,
   recapitaAvvisi,
   rispondiAChiAspetta,
@@ -580,7 +581,10 @@ async function rispondiEntroIlTetto(
       // R03-008 — Una spiegazione arrivata per email in una notte prima non è «non partita»: fuori
       // dal conto, dal testo e dalla chiave dell'allarme. Nel pannello si scrivono tutte, come prima.
       const nonPartite: typeof rimaste = [];
-      for (const d of rimaste) if (!(await emailGiaPartita(admin, identificativoAvviso(d.chiave)))) nonPartite.push(d);
+      // R08-008 (onda 2) — Lo chiede alla libreria degli avvisi: il registro e il segno «partita» restano suoi.
+      for (const d of rimaste) {
+        if (!(await emailRisultaPartita(admin as unknown as ClienteAvvisi, identificativoAvviso(d.chiave)))) nonPartite.push(d);
+      }
       if (nonPartite.length > 0) await avvisaDelleEmailSenzaTempo(admin, nonPartite.map((d) => identificativoAvviso(d.chiave)));
       somma(await recapitaAvvisi(admin as unknown as ClienteAvvisi, rimaste, logger));
       return { avvisi, allarmiEmail, senzaTempo: nonPartite.length };
@@ -597,26 +601,12 @@ async function rispondiEntroIlTetto(
   return { avvisi, allarmiEmail, senzaTempo: 0 };
 }
 
-/**
- * 21/11/2026 (R03-008) — Il segno che lib/privacy/avvisi-a-chi-aspetta.ts scrive nel registro degli
- * invii quando l'email di un avviso è partita (lì è una costante non esportata: deve restare uguale).
+/*
+ * 28/11/2026 (R08-008, onda 2) — Qui c'era una copia del segno «partita» che la libreria degli avvisi
+ * scrive nel registro degli invii (lì è una costante privata), con la sua lettura. Se la libreria
+ * cambiava il segno o il registro, la copia smetteva di vederlo senza dirlo, e l'allarme contava
+ * «non partite» email già arrivate. Adesso si chiede a lei: `emailRisultaPartita` (R14-002).
  */
-const EMAIL_PARTITA = 'privacy.avviso_cancellazione.email_partita';
-
-/** L'email di questo avviso risulta già partita? Se il registro non si legge, no: si conta fra le non partite. */
-async function emailGiaPartita(admin: Admin, idAvviso: string): Promise<boolean> {
-  try {
-    const { data, error } = await admin
-      .from('audit_logs')
-      .select('action')
-      .eq('target_table', 'notifications')
-      .eq('target_id', idAvviso);
-    if (error || !Array.isArray(data)) return false;
-    return data.some((r) => (r as { action?: unknown }).action === EMAIL_PARTITA);
-  } catch {
-    return false;
-  }
-}
 
 /**
  * 21/11/2026 (R01-002) — Le spiegazioni rimaste senza il tempo delle email: errore nel registro

@@ -801,6 +801,45 @@ export type CassaContanti = {
   motivo: string;
 };
 
+/**
+ * 28/11/2026 (R08-004, R08-005, R08-006, onda 2) — I CONTANTI SI CONTANO DAGLI ORDINI, NON DALLA RIGA DEL GIORNO.
+ *
+ * La guardia leggeva solo il registro delle giornate: aperta se `remitted_at` è vuoto, cifra
+ * `collected_cents`, cioè TUTTO l'incassato del giorno. Due sbagli, uno per verso:
+ *
+ *  · versa alle 15, incassa ancora alle 18: la riga del giorno ha `remitted_at` pieno, i contanti delle
+ *    18 per il registro non esistono e l'account si cancellava con quei soldi in tasca (R08-006);
+ *  · giornata riaperta (`remitted_at` svuotato dopo il versamento): la frase diceva «non ancora versati»
+ *    anche i contanti già versati, con la cifra gonfiata (R08-004, R08-005).
+ *
+ * Adesso il conto lo fa il database in una sola lettura (`cassa_da_versare_del_fattorino`, migrazione
+ * onda2_C2_1): gli ordini in contanti consegnati e non ancora rimessi, più i rimborsati coi contanti
+ * ancora in mano (le regole della pagina Rimesse contanti), e le giornate che il registro dice ancora
+ * aperte. Una giornata che il registro tiene aperta ferma la cancellazione come prima: si ferma in più
+ * casi, mai in meno. Finché la funzione non è applicata si legge il registro come prima.
+ */
+const FUNZIONE_DELLA_CASSA = 'cassa_da_versare_del_fattorino';
+
+/** La funzione non c'è (ancora): PostgREST risponde PGRST202, PostgreSQL 42883 col suo nome. */
+function funzioneDellaCassaAssente(e: { code?: string; message?: string }): boolean {
+  return e.code === 'PGRST202' || (e.code === '42883' && (e.message ?? '').includes(FUNZIONE_DELLA_CASSA));
+}
+
+/** La frase del rinvio: la stessa, chiunque abbia fatto il conto. */
+function cassaDaVersare(centesimi: number, giornate: number): CassaContanti {
+  const euro = (centesimi / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return {
+    bloccante: true,
+    esito: 'da_versare',
+    centesimi,
+    giornate,
+    motivo:
+      `Cancellazione rinviata: risultano ${euro} € di contanti incassati alle consegne e non ancora versati ` +
+      `(${giornate} ${giornate === 1 ? 'giornata' : 'giornate'} di cassa). ` +
+      `Appena il versamento è registrato la cancellazione riparte da sola.`,
+  };
+}
+
 export async function contantiAncoraDaVersare(admin: Admin, userId: string): Promise<CassaContanti> {
   const nonVerificabile = (perche: string): CassaContanti => ({
     bloccante: true,
@@ -809,6 +848,25 @@ export async function contantiAncoraDaVersare(admin: Admin, userId: string): Pro
     giornate: 0,
     motivo: `Non siamo riusciti a controllare la cassa contanti, quindi la cancellazione è rinviata: ${perche}`,
   });
+
+  try {
+    const { data: conto, error: errConto } = await admin.rpc(FUNZIONE_DELLA_CASSA, { p_rider: userId });
+    if (errConto && !funzioneDellaCassaAssente(errConto)) return nonVerificabile(errConto.message);
+    if (!errConto) {
+      const c = (conto ?? null) as { centesimi?: unknown; giornate?: unknown } | null;
+      const centesimi = Number(c?.centesimi);
+      const giornate = Number(c?.giornate);
+      // Una risposta che non si legge vale quanto un registro che non si legge: ci si ferma.
+      if (!Number.isFinite(centesimi) || !Number.isInteger(giornate) || giornate < 0) {
+        return nonVerificabile('il conto della cassa non si legge');
+      }
+      if (giornate === 0) return { bloccante: false, esito: 'libera', centesimi: 0, giornate: 0, motivo: '' };
+      return cassaDaVersare(centesimi, giornate);
+    }
+    logger.warn('[cancellazione] conto della cassa dagli ordini non disponibile (migrazione da applicare): leggo il registro', { userId });
+  } catch (e) {
+    return nonVerificabile(e instanceof Error ? e.message : 'errore');
+  }
 
   let data: unknown;
   try {
@@ -836,19 +894,7 @@ export async function contantiAncoraDaVersare(admin: Admin, userId: string): Pro
   );
   if (aperte.length === 0) return { bloccante: false, esito: 'libera', centesimi: 0, giornate: 0, motivo: '' };
 
-  const centesimi = aperte.reduce((somma, r) => somma + (r.collected_cents ?? 0), 0);
-  const euro = (centesimi / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const giornate = aperte.length;
-  return {
-    bloccante: true,
-    esito: 'da_versare',
-    centesimi,
-    giornate,
-    motivo:
-      `Cancellazione rinviata: risultano ${euro} € di contanti incassati alle consegne e non ancora versati ` +
-      `(${giornate} ${giornate === 1 ? 'giornata' : 'giornate'} di cassa). ` +
-      `Appena il versamento è registrato la cancellazione riparte da sola.`,
-  };
+  return cassaDaVersare(aperte.reduce((somma, r) => somma + (r.collected_cents ?? 0), 0), aperte.length);
 }
 
 /**

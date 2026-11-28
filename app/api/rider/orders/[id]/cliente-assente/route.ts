@@ -87,6 +87,9 @@ async function handler(user: { id: string }, idGrezzo: string, profilo?: Profilo
     if (esito.motivo === 'RIMBORSO_DA_DIVIDERE') {
       return ApiErrors.conflict("Su questo pagamento c'è un rimborso da sistemare: abbiamo avvisato l'assistenza, riprova più tardi.");
     }
+    // R08-001 (onda 2) — Un 500 senza riga nel registro non lo vede nessuno (come l'annullo del cliente
+    // e dell'amministrazione): il guasto restava solo nella risposta al fattorino.
+    logger.error('[cliente-assente] annullo ordine fallito', { orderId: order.id, motivo: esito.motivo, dettaglio: esito.dettaglio });
     return ApiErrors.internal('Annullamento fallito');
   }
 

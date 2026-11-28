@@ -22,7 +22,7 @@ import { rifiutoPerFasciaPiena } from '@/lib/ordini/giri-della-fascia';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
-import type { RiserveLiberate } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
+import type { RiserveLiberateConCodici } from '@/lib/ordini/riserve-abbandonate';
 import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
 import { riusoDellaCassaAperta, type EsitoRiuso, type SessioneRiletta } from '@/lib/ordini/riuso-della-cassa-aperta';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
@@ -298,8 +298,8 @@ export const POST = conFilaPerRichiesta(withAuthRateLimit({ name: 'stripe-checko
    * dalle scorte (`pulisci`, piu' sotto); se ha liberato qualcosa, le scorte si
    * rileggono prima di contarle.
    */
-  let pulizia: Promise<RiserveLiberate> | null = null;
-  const pulisci = (): Promise<RiserveLiberate> =>
+  let pulizia: Promise<RiserveLiberateConCodici> | null = null;
+  const pulisci = (): Promise<RiserveLiberateConCodici> =>
     (pulizia ??= liberaRiserveAbbandonate(admin, {
       buyerId: user.id,
       improntaDaTenere: improntaCarrello,
@@ -748,13 +748,21 @@ export const POST = conFilaPerRichiesta(withAuthRateLimit({ name: 'stripe-checko
    * minuti la cassa nuova leggeva «Coupon non disponibile». Ogni tentativo scrive nella sua riga di
    * intento quale rivendicazione è sua; qui si chiudono solo quelle dei tentativi appena liberati,
    * mai il lucchetto di una scheda il cui pagamento non è ancora nato.
+   *
+   * 28/11/2026 (R08-007, onda 2) — Solo dove il codice è tornato davvero: se `release_coupon` è caduto
+   * (`codiceNonTornato`) l'uso resta contato, e la rivendicazione resta aperta come fanno l'avviso di
+   * Stripe (lib/stripe/webhook/carrello-scaduto.ts) e `rilasciaCoupon` qui sotto. La rilettura delle
+   * scorte resta su tutti i liberati: la merce è tornata comunque.
    */
-  if (riserveLiberate.liberati.length > 0) {
+  const rivendicazioniDaChiudere = riserveLiberate.liberati.filter(
+    (id) => !(riserveLiberate.codiceNonTornato ?? []).includes(id),
+  );
+  if (rivendicazioniDaChiudere.length > 0) {
     try {
       const { data: liberate } = await admin
         .from('pending_checkouts')
         .select('id, delivery')
-        .in('id', riserveLiberate.liberati);
+        .in('id', rivendicazioniDaChiudere);
       const sue = ((liberate ?? []) as Array<{ delivery?: { rivendicazione?: unknown } | null }>)
         .map((p) => p.delivery?.rivendicazione)
         .filter((r): r is string => typeof r === 'string' && r !== '');
