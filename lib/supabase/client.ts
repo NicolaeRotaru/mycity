@@ -44,6 +44,23 @@ function scriviCookie(name: string, value: string, o: CookieOptions = {}): void 
   document.cookie = parti.join('; ');
 }
 
+/*
+ * 28/11/2026 — L'AREA DELL'AMMINISTRATORE RESTAVA SU «CARICAMENTO…» PER SEMPRE, ANCHE DOPO L'ACCESSO.
+ *
+ * Nicola, dal telefono (Brave, 52 schede aperte): entrava con Google o con la password, il server
+ * lo riconosceva, ma la pagina girava all'infinito con «Accedi» nella barra in basso. Nei registri di
+ * Supabase, dopo l'accesso, il telefono non chiedeva più niente.
+ *
+ * La causa: le schede dello stesso sito si passano un lucchetto (Web Locks) prima di leggere la
+ * sessione. Se un'altra scheda MyCity lo tiene e non lo molla — una scheda vecchia che Android ha
+ * congelato in sottofondo —, la libreria dovrebbe aspettare 5 secondi e poi riprenderselo. Ma
+ * supabase-js 2.106.1 passa al servizio di accesso `lockAcquireTimeout: undefined`, e quel valore
+ * vuoto copre il 5000 di partenza: l'attesa diventa infinita e la pagina non parte più.
+ * Qui il tetto si scrive a mano, uguale a quello che la libreria voleva dare.
+ * Prova: tests/unit/il-lucchetto-di-un-altra-scheda-non-blocca-l-accesso.test.ts
+ */
+const TETTO_LUCCHETTO_MS = 5000;
+
 let _supabase: SupabaseClient | null = null;
 
 function getClient(): SupabaseClient {
@@ -61,6 +78,7 @@ function getClient(): SupabaseClient {
       setAll: (cookie: { name: string; value: string; options: CookieOptions }[]) =>
         cookie.forEach(({ name, value, options }) => scriviCookie(name, value, options)),
     },
+    auth: { lockAcquireTimeout: TETTO_LUCCHETTO_MS },
   });
   return _supabase;
 }
