@@ -216,6 +216,9 @@ const scarica = withAuthRateLimit(
     ordine_di_servizio_sdg: tutta((da, a) => admin.from('ordini_sdg').select('seller_id, nome_attivita, fascia, canone_centesimi, primo_mese_centesimi, visita_il, accettato_il, creato_il').eq('seller_id', userId).order('seller_id').range(da, a)),
     // 26/11/2026 — Se la persona è un agente (migrazione 865): la sua riga, cioè email, stato e date.
     agente: tutta((da, a) => admin.from('agenti').select('user_id, email, attivo, creato_il, sospeso_il').eq('user_id', userId).order('user_id').range(da, a)),
+    // 28/11/2026 — Se la persona è un agente: i clienti che ha preso e quelli a cui ha segnato lo stato (migrazione 999i).
+    clienti_presi_da_agente: tutta((da, a) => admin.from('clienti_da_visitare').select('osm, nome, prenotata_il, stato, stato_il').eq('prenotata_da', userId).order('osm').range(da, a)),
+    clienti_segnati_da_agente: tutta((da, a) => admin.from('clienti_da_visitare').select('osm, nome, stato, stato_il').eq('stato_da', userId).order('osm').range(da, a)),
     tentativi_di_pagamento: tutta((da, a) => admin.from('payment_attempts').select('*').eq('user_id', userId).order('id').range(da, a)),
     casse_aperte: tutta((da, a) => admin.from('pending_checkouts').select('*').eq('buyer_id', userId).order('id').range(da, a)),
     casse_contanti: tutta((da, a) => admin.from('cod_checkout_attempts').select('*').eq('user_id', userId).order('chiave').range(da, a)),
