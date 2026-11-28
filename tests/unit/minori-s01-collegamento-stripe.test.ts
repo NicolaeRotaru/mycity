@@ -130,6 +130,9 @@ describe('633 — un conto che le chiavi nuove non conoscono si rifà', () => {
 
 describe('633 / revisore — il conto rifatto parte non verificato', () => {
   it('salvando il conto nuovo i tre flag tornano falsi', async () => {
+    // Onda 2 (R05-009) — con la chiave vera, come il caso sopra: con una chiave di prova il conto
+    // sconosciuto non si sostituisce mai. Prima passava solo grazie ai flag del caso precedente (R11-011).
+    vi.stubEnv('STRIPE_SECRET_KEY', 'sk_live_finta');
     st.profilo = { ...st.profilo, stripe_account_id: 'acct_vecchio' };
     await chiama(collegaNegozio);
     // Il conto nuovo si è salvato IN QUESTO caso, una volta, coi tre flag spenti.
