@@ -828,7 +828,11 @@ export function disponibilitaDalPatch(
 export function tagDelPatch(tags: readonly unknown[]): string[] {
   const next: string[] = [];
   for (const raw of tags) {
-    const t = String(raw).trim().toLowerCase().replace(/,+$/, '');
+    // 27/11/2026 (R02-009) — Via anche gli spazi fra le virgole finali: «Dolci ,»
+    // diventava «dolci » al primo passaggio e «dolci» al secondo. La chat la
+    // passa una volta, il server una seconda: la scheda mostrava un doppione
+    // che il server non salvava. Adesso un passaggio o due danno lo stesso.
+    const t = String(raw).trim().toLowerCase().replace(/[\s,]+$/, '');
     if (t && !next.includes(t) && next.length < 15) next.push(t);
   }
   return next;

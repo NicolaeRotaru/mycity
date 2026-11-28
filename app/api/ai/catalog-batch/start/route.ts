@@ -46,10 +46,13 @@ const STATI_APERTI = ['submitting', 'processing', 'ready'];
 
 /**
  * 22/11/2026 (R13-001 · R13-009) — Il segno di fine dell'applicazione. La colonna
- * nasce con la migrazione 750, che entra insieme ai tipi rigenerati
- * (lib/database.types.ts) e alla scrittura del segno in /apply: finche' non c'e',
- * la lettura qui sotto cade con 42703 e l'avvio va avanti come prima. Il nome sta
- * in una costante perche' i tipi generati non lo conoscono ancora.
+ * non la crea ancora nessuna migrazione (entrera' insieme ai tipi rigenerati in
+ * lib/database.types.ts e alla scrittura del segno in /apply). Il nome sta in una
+ * costante perche' i tipi generati non lo conoscono ancora.
+ * 27/11/2026 (R02-004) — Finche' la colonna non c'e' la lettura cade con 42703:
+ * prima l'avvio andava avanti e l'attesa non scattava mai. Adesso si rilegge
+ * senza la colonna e si aspetta lo stesso, contando i 120 s dall'inizio
+ * dell'applicazione.
  */
 const COLONNA_FINE_APPLICAZIONE = 'applicazione_finita_il';
 /** Quanto dura al massimo un'applicazione: la rotta /apply ha 120 s. */
@@ -125,20 +128,26 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // un guasto di passaggio lo lascia ripetibile. Se in mezzo qui nasce un lavoro
   // nuovo, il database (640: un solo lavoro aperto per negozio) rifiuta il
   // «pronto» e il lavoro pagato resta chiuso. Finche' l'ultimo applicato non ha
-  // il segno di fine ed e' di meno di 120 s, si aspetta. Senza la colonna (la
-  // 750 non ancora applicata) si va avanti come prima.
-  const { data: applicati, error: errApplicati } = await admin
-    .from('catalog_ai_jobs')
-    .select(`id, updated_at, ${COLONNA_FINE_APPLICAZIONE}`)
-    .eq('seller_id', user.id)
-    .in('status', ['applied'])
-    .order('updated_at', { ascending: false })
-    .limit(1);
-  if (errApplicati && !COLONNA_ASSENTE.has(String(errApplicati.code ?? ''))) {
+  // il segno di fine ed e' di meno di 120 s, si aspetta. 27/11/2026 (R02-004) —
+  // Senza la colonna si rilegge senza e si aspetta lo stesso: prima si andava
+  // avanti, e l'attesa non scattava mai.
+  const leggiApplicati = (colonne: string) =>
+    admin
+      .from('catalog_ai_jobs')
+      .select(colonne)
+      .eq('seller_id', user.id)
+      .in('status', ['applied'])
+      .order('updated_at', { ascending: false })
+      .limit(1);
+  let { data: applicati, error: errApplicati } = await leggiApplicati(`id, updated_at, ${COLONNA_FINE_APPLICAZIONE}`);
+  if (errApplicati && COLONNA_ASSENTE.has(String(errApplicati.code ?? ''))) {
+    ({ data: applicati, error: errApplicati } = await leggiApplicati('id, updated_at'));
+  }
+  if (errApplicati) {
     logger.error('catalog-batch start: lettura dei lavori applicati fallita', { sellerId: user.id, status: errApplicati.code });
     return ApiErrors.badGateway('Non sono riuscito a controllare i lavori in corso. Riprova.');
   }
-  const ultimoApplicato = (errApplicati ? undefined : (applicati ?? [])[0]) as
+  const ultimoApplicato = ((applicati ?? []) as unknown[])[0] as
     | { id: string; updated_at?: string | null; applicazione_finita_il?: string | null }
     | undefined;
   if (

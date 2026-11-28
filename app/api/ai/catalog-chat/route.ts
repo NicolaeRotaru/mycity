@@ -16,6 +16,7 @@ import { getAttributesForCategory } from '@/lib/category-attributes';
 import {
   eCampoDichiarativo,
   MAX_DESCRIZIONE_PRODOTTO,
+  MAX_NOME_PRODOTTO,
   REGOLA_CAMPI_DICHIARATIVI,
   propostaPerLaChat,
   tagDelPatch,
@@ -23,6 +24,7 @@ import {
   type AiProductPatch,
   type CategoryRow,
 } from '@/lib/products/aiPatch';
+import { PRODUCT_UNITS } from '@/lib/products/schema';
 import {
   productSnapshot as snapshot,
   PRODUCT_SNAPSHOT_COLS,
@@ -215,9 +217,22 @@ function daLeggerePrimaDiApplicare(patch: AiProductPatch, prodotto: ProductRow):
  * «Descrizione aggiornata», che il server poi non scrive. La proposta torna
  * alla chat già nella forma che il server salva (stesse funzioni di
  * `resolveAiPatch`): quello che il negoziante legge è quello che entra.
+ * 27/11/2026 (R02-005) — Anche nome e
+ * unità: un nome di soli spazi compariva come «Nome → "   "» e uno di 200
+ * caratteri intero, mentre il server non scrive il primo e del secondo salva
+ * 120 caratteri; un'unità fuori elenco (o di soli spazi) compariva e il server
+ * la ignora. Stesso taglio e stesso elenco di `resolveAiPatch`.
  */
 function comeLaSalvaIlServer(proposta: AiProductPatch): AiProductPatch {
   const fuori: AiProductPatch = { ...proposta };
+  if ('name' in fuori) {
+    const nome = testoDelPatch(fuori.name, MAX_NOME_PRODOTTO);
+    if (nome) fuori.name = nome;
+    else delete fuori.name;
+  }
+  if ('unit' in fuori && !(typeof fuori.unit === 'string' && (PRODUCT_UNITS as readonly string[]).includes(fuori.unit))) {
+    delete fuori.unit;
+  }
   if ('description' in fuori) {
     const testo = testoDelPatch(fuori.description, MAX_DESCRIZIONE_PRODOTTO);
     if (testo) fuori.description = testo;

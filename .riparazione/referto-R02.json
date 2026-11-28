@@ -1,0 +1,369 @@
+{
+  "sessione": "R02",
+  "aggiornato": "2026-11-27 02:44",
+  "finita": true,
+  "testa": "22467a30ffbb5442dc23203abf8e7f280d33a155",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "22467a30ffbb5442dc23203abf8e7f280d33a155",
+    "nota": "Lanciato su 22467a30 (SHA preso con git rev-parse HEAD nello stesso comando) e aspettato: typecheck verde, lint 0 errori (122 avvisi), vitest 2339 file verdi su 2342 (14314 casi), uscita reale 1. I 4 casi rossi, tutti e soli: (1) tests/unit/la-chat-mostra-la-proposta-che-il-server-applica.test.ts riga 131 «voci scritte male negli elenchi»; (2) e (3) tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts, i due casi it.each «senza la colonna (errore 42703)» e «(errore PGRST204)»; (4) tests/unit/minori-s05-reclami-pagina.test.tsx «1823: i filtri dicono quale è attivo». Perché: sono prove comuni (usano file di altre sessioni dell onda), quindi per regola sono riportate alla base sul ramo e le aggiorna la regia all unione. Con le modifiche scritte nelle note di R02-001, R02-004 e R02-012 applicate solo nell albero e poi tolte: 17 su 17 (le prime due prove) e 8 su 8 (la terza) verdi."
+  },
+  "voci": [
+    {
+      "id": "R02-001",
+      "chiave": "ai-endpoints|nella chat assistenza il negoziante approva una descrizione nuova senza poterla leggere, e al primo messaggio l'assistente riscrive tag e descrizione senza aver visto quelli che ci sono",
+      "esito": "riparato",
+      "commit": "40df1f0c70674d32ed55e831ba52fceb7c3cfba4",
+      "file_toccati": [
+        "lib/products/prontoPerLaVendita.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-chat-proposta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-chat-proposta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 40df1f0c^ --file lib/products/prontoPerLaVendita.ts --prove tests/unit/riparazione-r02-chat-proposta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "righeDellaProposta (prontoPerLaVendita.ts:720, :748) non scrive più «Descrizione aggiornata»: mostra il testo nuovo intero, come lo salva il server, e aggiunge «Tag tolti dal prodotto: …» con i tag attuali che la proposta toglie. La metà del primo messaggio c'era già sulla base (route.ts:506 toglie tag, descrizione e caratteristiche quando nessun prodotto è aperto): la prova nuova la copre. La prova comune che importa righeDellaProposta va aggiornata dalla regista: vedi nota.",
+      "nota": "Prova comune da aggiornare sull integrazione (la tocca la regista; sul ramo R02 è riportata alla base ed è attesa rossa): tests/unit/la-chat-mostra-la-proposta-che-il-server-applica.test.ts:131, sostituire la riga `expect(righe).toEqual(['Tag → focaccia', 'Rimuovi Allergeni: NON si applica, lo decidi tu nella scheda del prodotto']);` con: `// La focaccia ha il tag «forno»: la lista nuova lo toglie, e la scheda lo nomina.` + `expect(righe).toEqual(['Tag → focaccia', 'Tag tolti dal prodotto: forno', 'Rimuovi Allergeni: NON si applica, lo decidi tu nella scheda del prodotto']);` (diff del commit 40df1f0c su quel file, 7 righe).",
+      "verificato_da": "revisore (sola lettura, modello grande): prova R02 5/5 verde e 4 rossa su estrazione della base; 30 file vicini verdi (rossa solo la prova comune attesa); 11 varianti scomode fuori deposito contro la rotta vera (descrizione da 6000 caratteri = 4000 salvati, tag null/vuoti/maiuscole/oltre 15, prodotto aperto contro non aperto, focus estraneo) più 2000 casi casuali contro resolveAiPatch; tsc ed eslint puliti. Regge. Nota: la prova del deposito usa una descrizione corta e non controlla da sola il testo intero (riparazione-r02-chat-proposta.test.ts:73,111)."
+    },
+    {
+      "id": "R02-002",
+      "chiave": "ai-endpoints|il tetto giornaliero di spesa ai in produzione non è condiviso: ogni copia del sito conta per sé",
+      "esito": "parziale",
+      "commit": "4781d1c02770738d2cd81dd65eba8d31111e11c6",
+      "file_toccati": [
+        "lib/ai/tettoSpesa.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-tetto-spesa.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-tetto-spesa.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4781d1c0^ --file lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r02-tetto-spesa.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Su una build di produzione (NODE_ENV=production; anche anteprime) il conto in memoria non vale più come tetto: se spesa_ai_di_oggi non risponde la spesa è NaN e decidiSpesaAi la tratta come spesa_sconosciuta (l'AI a pagamento si ferma, uguale per tutte le copie); se registra_spesa_ai fallisce la spesa resta da scrivere e si scrive prima della lettura dopo, una volta sola. In sviluppo e nelle prove il ripiego resta com'era. La correzione del 26/11 non era in main (tolta con revert): rifatta senza le due rotture segnalate dal collaudo (messaggio «budget esaurito» già sistemato sulla base; vercel dev e VERCEL_ENV=preview nelle prove non contano più come produzione).",
+      "nota": "Da fare per Nicola (non è codice): prima di accendere AI_NEGOZI_ACCESA applicare in produzione migrations/158_il_conto_della_spesa_ai_esiste_anche_in_produzione.sql (già esistente, idempotente: tabella ai_spend_daily + RPC spesa_ai_di_oggi/registra_spesa_ai). Senza, dopo questa correzione l'AI a pagamento in produzione risponde sempre 503 (si ferma in modo sicuro, ma non lavora). Limiti residui: una copia che si spegne prima di scrivere il resto perde quella spesa; senza Upstash le prenotazioni in volo restano per copia (lib/ai/run.ts:203-274, non di R02), sforo piccolo.",
+      "verificato_da": "revisore (sola lettura, modello grande): prova 9/9 su HEAD e 6/9 rosse sulla base; 18 varianti fuori deposito; 96 prove di tettoSpesa/decisioneTettoSpesa/run verdi anche con VERCEL=1 VERCEL_ENV=preview e con vercel dev; tsc ed eslint puliti. Parziale: il caso vero della produzione (funzioni del conto assenti) regge, resta la variante lettura ok + scrittura rotta con chiamate in parallelo.",
+      "cosa_resta": "Con la lettura del conto condiviso che funziona e la scrittura (registra_spesa_ai) rotta, una copia nuova si ferma solo dopo la prima scrittura fallita, a chiamata finita: nel frattempo la prenotazione interna lascia passare le chiamate parallele fino al tetto confrontandole col conto vecchio (misurato dal revisore: tetto 1 €, 3 copie da 200 chiamate parallele, 1,725 € spesi, conto a 0). Punti: lib/ai/tettoSpesa.ts:433-444 e :463-474 (R02), lib/ai/run.ts:267-290 (non è in nessuna scheda dell onda). Cura proposta: in produzione scrivere la stima nel conto condiviso prima della chiamata (prenotazione condivisa) e fermarsi se quella scrittura fallisce; prova con chiamate parallele (la prova di oggi, riparazione-r02-tetto-spesa.test.ts:165-176, fa una chiamata alla volta). Non fatta: tetto dei subagenti e della spesa raggiunti."
+    },
+    {
+      "id": "R02-003",
+      "chiave": "ai-endpoints|il segno di fine dell'applicazione del catalogo non lo scrive nessuno",
+      "esito": "parziale",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Controllato che non c'è una colonna esistente onesta per il segno di fine: error, batch_id, total, results, target_lang e updated_at servono già ad altro (error è mostrato al negozio, updated_at è l'inizio dell'applicazione), e status non ha un valore 'in applicazione' nel CHECK (migrazione 119). Nessuna modifica al codice: scrivere una colonna che non esiste farebbe cadere /apply.",
+      "cosa_resta": "Migrazione (onda delle migrazioni): ALTER TABLE public.catalog_ai_jobs ADD COLUMN IF NOT EXISTS applicazione_finita_il timestamptz; più lib/database.types.ts rigenerato (Row: applicazione_finita_il: string | null; Insert/Update: applicazione_finita_il?: string | null). Poi /apply (app/api/ai/catalog-batch/apply/route.ts) scriverebbe: (1) alla prenotazione, riga 131: .update({ status: 'applied', updated_at: new Date().toISOString(), applicazione_finita_il: null }); (2) prima della risposta finale, dopo il blocco if (ripetibile) (riga ~455), quando il lavoro resta 'applied' (!ripetibile): await admin.from('catalog_ai_jobs').update({ applicazione_finita_il: new Date().toISOString() }).eq('id', job.id).eq('seller_id', user.id).eq('status', 'applied'); (3) la stessa scrittura nelle due uscite anticipate (righe 164-171 e 228-235) quando rimettiPronto() torna un motivo (il lavoro resta 'applied'). La rotta di avvio legge già la colonna (COLONNA_FINE_APPLICAZIONE) e, col commit della voce sull'attesa, regge anche finché la colonna non c'è. Una prova nuova su /apply: dopo un'applicazione finita il segno c'è, e l'avvio subito dopo dà 200."
+    },
+    {
+      "id": "R02-004",
+      "chiave": "ai-endpoints|l attesa per un applicazione del catalogo ancora in corso non scatta mai: legge una colonna che nessuna migrazione crea",
+      "esito": "riparato",
+      "commit": "ae45ed5bafa0f95f0aec7c9d13bcbadacfe133c1",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/start/route.ts",
+        "tests/unit/riparazione-r02-attesa-applicazione.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-attesa-applicazione.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-attesa-applicazione.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ae45ed5b^ --file app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r02-attesa-applicazione.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Se la lettura con applicazione_finita_il cade con 42703/PGRST204, la rotta di avvio rilegge l'ultimo lavoro applicato con 'id, updated_at' e risponde 409 se ha meno di 120 s; un altro guasto della rilettura dà 502. Prima l'avvio andava avanti e l'attesa non scattava mai.",
+      "nota": "PROVA COMUNE da adeguare sull'integrazione (rossa sul ramo, atteso): tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts importa lib/funzioni-al-lancio.ts (file di R08), quindi non l'ho toccata. Modifica esatta, nel blocco it.each(['42703', 'PGRST204']): titolo 'senza la colonna (errore %s) l avvio va avanti come prima' → 'senza la colonna (errore %s) l avvio aspetta lo stesso (409)'; expect(risposta.status).toBe(200); → expect(risposta.status).toBe(409); expect(submitBatchMock).toHaveBeenCalledTimes(1); → expect(submitBatchMock).not.toHaveBeenCalled(); expect(aperti()).toHaveLength(1); → expect(aperti()).toHaveLength(0); e nel commento in testa 'e senza la colonna (la 750 non ancora applicata) l'avvio va avanti come prima.' → 'e senza la colonna l'avvio aspetta lo stesso, contando i 120 s dall'inizio dell'applicazione.'. Con questa modifica la prova è verde (6/6, provato in locale e rimesso com'era). Le altre 19 prove della rotta sono verdi. Effetto noto finché manca la colonna: dopo un'applicazione già finita, un nuovo avvio aspetta fino a 120 s dal suo inizio (è la voce del segno di fine).",
+      "verificato_da": "revisore (sola lettura): letto start/route.ts:139-150 (rilettura su 42703/PGRST204, 409 sotto i 120 s, 502 su altro guasto); controllato che la modifica in nota alla prova comune r13 la farebbe verde; 78/80 file verdi (rossi solo le 2 prove comuni attese). Regge."
+    },
+    {
+      "id": "R02-005",
+      "chiave": "ai-endpoints|nella chat assistenza la scheda da approvare mostra nome e unità come li scrive il modello, non come li salva il server",
+      "esito": "riparato",
+      "commit": "f323000a8c4dda94a385017ca208e1aa12172b8a",
+      "file_toccati": [
+        "app/api/ai/catalog-chat/route.ts",
+        "lib/products/prontoPerLaVendita.ts",
+        "tests/unit/riparazione-r02-chat-nome-unita.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-chat-nome-unita.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-chat-nome-unita.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f323000a^ --file app/api/ai/catalog-chat/route.ts,lib/products/prontoPerLaVendita.ts --prove tests/unit/riparazione-r02-chat-nome-unita.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "comeLaSalvaIlServer (rotta della chat) e righeDellaProposta (la scheda) leggono il nome con testoDelPatch(name, MAX_NOME_PRODOTTO), la stessa funzione e lo stesso taglio di resolveAiPatch, e tengono l'unità solo se è in PRODUCT_UNITS, lo stesso elenco del server: un nome di soli spazi o un'unità fuori elenco non compaiono, un nome lungo si vede a 120 caratteri.",
+      "nota": "Per l'unità il server non ha una funzione, ha il confronto con PRODUCT_UNITS (lib/products/schema.ts): uso lo stesso elenco. Non ho aggiunto una funzione nuova in aiPatch.ts perché la prova rimessa la vedrebbe come rosso di struttura. La prova di R02-001 (tests/unit/riparazione-r02-chat-proposta.test.ts) resta verde; le 26 prove che importano i file toccati sono verdi, a parte tests/unit/la-chat-mostra-la-proposta-che-il-server-applica.test.ts, rossa già prima di questo commit (è la prova comune riportata alla base con 988a2e8a).",
+      "verificato_da": "revisore (sola lettura): letto comeLaSalvaIlServer (route.ts:226-235) e righeDellaProposta (prontoPerLaVendita.ts:722,734) contro aiPatch.ts:921,938: stesso taglio del nome e stesso elenco PRODUCT_UNITS; prove di chat e scheda verdi. Regge."
+    },
+    {
+      "id": "R02-006",
+      "chiave": "ai-endpoints|i prodotti ripresi dalla via dei falliti consumano il permesso di riprovare già in selezione: se il giro li lascia fuori restano fermi altre sei ore",
+      "esito": "riparato",
+      "commit": "fcdb029bceca56f8a992c166f9d49bf9613d55fe",
+      "file_toccati": [
+        "app/api/cron/external-price-alerts/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-falliti-permesso-riprovare.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-falliti-permesso-riprovare.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fcdb029b^ --file app/api/cron/external-price-alerts/route.ts --prove tests/unit/riparazione-r02-falliti-permesso-riprovare.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In selezione i falliti stanti entrano solo in coda dopo i sani; il permesso delle sei ore (ritentoDopoErroreConsentito) si chiede nel giro subito prima della chiamata, dopo il controllo del tempo, cosi' chi resta fuori (tempo finito, modello mancante) non lo consuma. Prove esistenti del giro (6 file) verdi.",
+      "verificato_da": "revisore (sola lettura): letto fcdb029b e route.ts:90-195; il permesso si chiede dentro il giro dopo il controllo del tempo; grep dei lettori di candidates/rimasti (solo il JSON del cron); 9 file del giro prezzi verdi. Regge."
+    },
+    {
+      "id": "R02-007",
+      "chiave": "ai-endpoints|col budget ai finito il prodotto importato viene segnato in errore e resta frenato sei ore anche quando il budget torna",
+      "esito": "riparato",
+      "commit": "e0de00c38d14f15deeddadd0858e84d97faad184",
+      "file_toccati": [
+        "app/api/cron/external-price-alerts/route.ts",
+        "app/api/products/[id]/external-refresh/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-spesa-ai-non-e-errore-del-prodotto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-spesa-ai-non-e-errore-del-prodotto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e0de00c3^ --file 'app/api/cron/external-price-alerts/route.ts,app/api/products/[id]/external-refresh/route.ts' --prove tests/unit/riparazione-r02-spesa-ai-non-e-errore-del-prodotto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "AiCallError con motivo tetto_spesa o spesa_sconosciuta: in doRefresh il prodotto torna allo stato di prima del tentativo (esce anche da 'pending'), non 'error'; nel giro a orario il giro si ferma al primo e nessun prodotto viene segnato, con 'fermo' nella risposta. Un prodotto non in errore non passa dal freno delle sei ore. Prove esistenti delle due rotte (10 file) verdi.",
+      "nota": "Resta un caso di bordo non nominato dalla voce: un prodotto GIA' in errore per un guasto vero, ritentato mentre il budget e' finito, ha gia' consumato il permesso delle sei ore prima della chiamata (il freno non si puo' restituire senza toccare lib/rate-limit.ts); resta 'error' com'era.",
+      "verificato_da": "revisore (sola lettura): letto e0de00c3, external-refresh intero e AiCallError (run.ts:385-420); ritorno a statoPrima anche da pending, giro fermo al primo tetto/spesa sconosciuta, errori veri ancora error; prove verdi. Regge (il GET pubblico verificato solo leggendo il codice)."
+    },
+    {
+      "id": "R02-008",
+      "chiave": "ai-endpoints|il testo dell'allarme del tetto di spesa ai dice ancora «sceso a x € per copia» mentre in produzione ora l'ai si ferma",
+      "esito": "riparato",
+      "commit": "707c166b8a3fd68cac9769549aaa3e965b20048a",
+      "file_toccati": [
+        "lib/ai/decisioneTettoSpesa.ts",
+        "lib/ai/tettoSpesa.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-allarme-tetto-ai-ferma.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-allarme-tetto-ai-ferma.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 707c166b^ --file lib/ai/decisioneTettoSpesa.ts,lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r02-allarme-tetto-ai-ferma.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "allarmiTettoSpesaAi accetta fermoSenzaConto: se vero l'allarme dice «L'AI a pagamento e' ferma per tutte le copie finche' il conto non risponde» al posto della quota per copia. allarmiTettoSpesaAiPerIlCron lo passa con contoCondivisoObbligatorio() (la stessa regola produzione/sviluppo del commit 4781d1c0): in sviluppo il testo per copia resta. Prove esistenti del tetto (14 file) verdi.",
+      "verificato_da": "revisore (sola lettura): letto 707c166b, tettoSpesa.ts:92 e 538-590, decisioneTettoSpesa.ts:201-240, operational-alerts:769; fermoSenzaConto passato in tutti i ritorni; 33 file del tetto verdi. Regge."
+    },
+    {
+      "id": "R02-009",
+      "chiave": "ai-endpoints|nella chat assistenza un tag che finisce con spazio e virgola compare come doppione sulla scheda ma il server non lo salva",
+      "esito": "riparato",
+      "commit": "165e5d95aa977964afdeddb154a478ed2723397d",
+      "file_toccati": [
+        "lib/products/aiPatch.ts",
+        "tests/unit/riparazione-r02-chat-tag-virgola.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-chat-tag-virgola.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-chat-tag-virgola.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 165e5d95^ --file lib/products/aiPatch.ts --prove tests/unit/riparazione-r02-chat-tag-virgola.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In tagDelPatch la coda si toglie con /[\\s,]+$/ invece di /,+$/: «Dolci ,» diventa «dolci» al primo passaggio, quindi un passaggio o due danno lo stesso risultato. La chat e il server danno la stessa lista e la scheda non mostra più il doppione.",
+      "nota": "Non sta nella stessa riga di R02-005: commit separato. 45 prove che importano aiPatch.ts verdi, a parte la stessa prova comune già rossa sul ramo (la-chat-mostra-la-proposta-che-il-server-applica.test.ts, da 988a2e8a).",
+      "verificato_da": "revisore (sola lettura): prova al volo fuori deposito della regex su «Dolci ,», «,», «, ,», « , », «dolci, ,», emoji ZWJ, «a , b», vuoto: idempotente, spazi interni ed emoji intatti; 45 prove di aiPatch verdi. Regge."
+    },
+    {
+      "id": "R02-010",
+      "chiave": "ai-endpoints|il freno di sei ore sui prodotti importati in errore regge solo con upstash: senza, ogni copia del sito ripaga le chiamate ai",
+      "esito": "parziale",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Controllato: nessuna colonna di oggi porta l'ora dell'ultimo errore. products ha solo created_at ed external_synced_at (che dice «dati arrivati» e non si muove sugli errori, R04-011); external_data.fetched_at dice quando sono arrivati i dati. Nessun updated_at su products. Usarne una cambierebbe il significato: l'unica strada di codice e' una colonna nuova, quindi niente commit in quest'onda.",
+      "cosa_resta": "Migrazione (onda delle migrazioni, numero da assegnare; il 26/11 era 890, libero): ALTER TABLE public.products ADD COLUMN IF NOT EXISTS external_sync_error_at timestamptz; COMMENT ON COLUMN public.products.external_sync_error_at IS 'Ora dell''ultimo aggiornamento dei dati esterni andato in errore. Serve al freno di sei ore, uguale per tutte le copie del sito.'; — poi il codice del commit 9136d2120cadb9e1b64beb22ef2303d951b2ca0c (git show 9136d212): in lib/products/externalSync.ts ritentoDopoErroreConsentito legge external_sync_error_at e nega se piu' recente di RIPROVA_DOPO_ERRORE_MS (ripiego al contatore se la lettura fallisce); in app/api/cron/external-price-alerts/route.ts e app/api/products/[id]/external-refresh/route.ts (doRefresh) un update a parte, senza guardare l'esito, { external_sync_error_at: new Date().toISOString() } subito dopo l'update che segna 'error' (con R02-007 i fermi per spesa AI non passano piu' da li'). Aggiornare lib/database.types.ts con la colonna. Le prove del commit: tests/unit/riparazione-r03-freno-nel-database.test.ts, tests/unit/riparazione-r03-freno-scritto-negli-errori.test.ts, tests/sql/rls/riparazione-r03-freno-errore-prezzi-esterni.test.sql (da rinominare col prefisso r02).",
+      "nota": "Strada senza codice, subito (non_codice per Nicola): mettere UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN nelle variabili di produzione; con Upstash il contatore ext-sync-errore:<id> e' uno solo per tutte le copie e il freno regge gia' oggi. Il commit 9136d212 non è in locale: si legge con git fetch --depth=2 origin 9136d2120cadb9e1b64beb22ef2303d951b2ca0c."
+    },
+    {
+      "id": "R02-011",
+      "chiave": "qa-flussi|la funzione che salva prodotto e varianti in una scrittura sola esiste nel database ma non la chiama nessuno, e le prove la impediscono",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Controllato chi salva prodotto e varianti oggi: la rotta admin (app/api/admin/products/route.ts, R07) scrive il prodotto (righe 285-302) e poi le varianti con saveProductVariantsServer (riga 307, rpc 'salva_varianti' della 323); la pagina del negozio (app/seller/products/[id]/edit/page.tsx, di nessuna sessione) fa salvaProdottoDalBrowser e poi saveProductVariants (lib/products/persistVariants.ts, di nessuna sessione). public.salva_prodotto_e_varianti (709) non la chiama nessuno. Nessuno di questi file è di R02.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/salva-varianti-finta.ts",
+          "modifica": "In salvaVariantiFinta, al posto di if (nome !== 'salva_varianti') throw ...: accettare anche 'salva_prodotto_e_varianti' { p_product_id, p_prodotto, p_scorta_vista, p_varianti, p_scorte_viste }: prima client.from('products').update(p_prodotto).eq('id', p_product_id) (con .eq('stock', p_scorta_vista) se non è null; nessuna riga → { error: { code: 'P0001', message: 'scorta_cambiata' } }), poi, se p_varianti non è null, lo stesso carico delete/update/insert di 'salva_varianti' calcolato da p_varianti e p_scorte_viste come fa saveProductVariantsServer. Le altre rpc continuano a lanciare."
+        },
+        {
+          "file": "app/api/admin/products/route.ts",
+          "modifica": "Righe 285-307: al posto di admin.from('products').update(patch)... (con o senza .eq('stock', condizione)) e di saveProductVariantsServer(admin, id, variants, scorteViste) con rimettiComEra, una chiamata sola: admin.rpc('salva_prodotto_e_varianti', { p_product_id: id, p_prodotto: patch, p_scorta_vista: condizione ?? null, p_varianti: variants ?? null, p_scorte_viste: scorteViste ?? null }); 'scorta_cambiata' → 409 col messaggio di oggi; il percorso a due passi di oggi resta solo come ripiego su PGRST202 (funzione mancante)."
+        },
+        {
+          "file": "app/seller/products/[id]/edit/page.tsx",
+          "modifica": "Righe 244-258: al posto di salvaProdottoDalBrowser(...) + saveProductVariants(id, nextVariants, scorteViste) con il rientro R16-004, supabase.rpc('salva_prodotto_e_varianti', { p_product_id: id, p_prodotto: payload, p_varianti: salvaTaglie === false ? null : nextVariants, p_scorte_viste: scorteViste }); prima va deciso dove resta la traccia (origine 'venditore-modulo', campiDallAi) che oggi scrive salvaProdottoDalBrowser."
+        }
+      ],
+      "nota": "La parte della pagina del negozio porta una scelta (dove resta la traccia, che la 709 non scrive): se Nicola preferisce, la voce può diventare scelta_di_nicola solo per quel pezzo."
+    },
+    {
+      "id": "R02-012",
+      "chiave": "stati-ui|il link al reclamo nella scheda ordine porta all'elenco filtrato sui reclami aperti e non mostra quelli in esame",
+      "esito": "riparato",
+      "commit": "5b198423154d74913110de66c7d486951dd0ba09",
+      "file_toccati": [
+        "app/admin/disputes/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-reclami-da-gestire.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-reclami-da-gestire.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5b198423^ --file app/admin/disputes/page.tsx --prove tests/unit/riparazione-r02-reclami-da-gestire.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il link della scheda ordine (app/admin/orders/[id]/page.tsx:265, file non di R02) porta a /admin/disputes senza parametri, cioe' al filtro di partenza, che era «Aperto» (solo status open). Il filtro di partenza ora e' «Da gestire» (open + under_review, .in('status', ...)); i filtri per singolo stato restano. Basta la pagina: il link non va cambiato.",
+      "nota": "Prova comune: la applica la regia all unione (sul ramo è riportata alla base con 22467a30, rossa come atteso). tests/unit/minori-s05-reclami-pagina.test.tsx riga 92: `expect(premuti).toEqual(['Aperto']);` → `expect(premuti).toEqual(['Da gestire']);` (il filtro di partenza ora è «Da gestire», aperti + in valutazione). Diff: @@ -89,7 +89,7 @@ describe('pagina Reclami' …) - expect(premuti).toEqual(['Aperto']); + expect(premuti).toEqual(['Da gestire']);",
+      "verificato_da": "revisore (sola lettura): letto page.tsx:70,88-89,269 (Da gestire = open+under_review, altri filtri invariati, chiave cache per filtro); il link della scheda ordine atterra su Da gestire; prova esistente minori-s05 non indebolita. Regge."
+    },
+    {
+      "id": "R02-013",
+      "chiave": "stati-ui|dopo «aggiorna stato» il riquadro stripe usa ancora la regola vecchia (incassi e versamenti) per il messaggio di conferma",
+      "esito": "riparato",
+      "commit": "f14a7f0f3269f4f1c34930315806167ab3654323",
+      "file_toccati": [
+        "components/seller/StripeConnectButton.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-stripe-aggiorna-stato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-stripe-aggiorna-stato.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f14a7f0f^ --file components/seller/StripeConnectButton.tsx --prove tests/unit/riparazione-r02-stripe-aggiorna-stato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il messaggio dopo «Aggiorna stato» ora decide con stripePronto (components/seller/pronto-a-incassare, la regola che il riquadro usa gia' per «Pagamenti attivi»: conto collegato e versamenti attivi) sulla risposta di refresh-status, non piu' con charges_enabled && payouts_enabled. Prove esistenti del componente (5 file) verdi; tsc pulito.",
+      "verificato_da": "revisore (sola lettura): letto f14a7f0f, StripeConnectButton intero, pronto-a-incassare e refresh-status; stessa regola stripePronto del riquadro (:85 contro :123), casi versamenti spenti e risposta senza campi; prove del componente verdi. Regge."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Nella chat Assistenza il testo nuovo della descrizione e i tag tolti compaiono due volte: nella risposta della chat e nella scheda da approvare",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/ai/catalog-chat/route.ts:192",
+      "descrizione": "daLeggerePrimaDiApplicare (route.ts:192 e :515) aggiunge alla risposta della chat lo stesso testo che ora mostra la scheda (righeDellaProposta). Doppione visivo; le prove r03 ed r20 vogliono ancora il testo nella risposta."
+    },
+    {
+      "titolo": "Con il conto condiviso della spesa AI assente, la risposta all'utente dice «Riprova fra qualche minuto» per sempre",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "lib/ai/run.ts:513-514",
+      "descrizione": "Se in produzione mancano tabella e RPC della spesa AI (migrazione 158 non applicata), l'AI risponde sempre spesa_sconosciuta e il messaggio promette un nuovo tentativo a breve che non riuscirà mai. Pesa solo se si accende l'AI senza la 158."
+    },
+    {
+      "titolo": "L allarme del tetto di spesa AI in produzione dice ancora «ogni copia del sito conta per sé» prima di «l AI a pagamento è ferma per tutte le copie»",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "lib/ai/decisioneTettoSpesa.ts:232",
+      "descrizione": "Testo incoerente: in produzione nessuna copia conta per sé (l AI si ferma). Frase iniziale da adeguare al ramo fermoSenzaConto."
+    },
+    {
+      "titolo": "Nella pagina reclami dell admin il segnale «Reclami da gestire» conta solo gli aperti, mentre il filtro «Da gestire» mostra anche quelli in esame",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/admin/disputes/page.tsx:214",
+      "descrizione": "Il conteggio usa status === open; con il filtro di partenza ora su open+under_review il numero può essere più basso delle righe in elenco. Anche app/admin/today/page.tsx:163 («Reclami aperti») conta solo gli aperti."
+    },
+    {
+      "titolo": "Altri punti del sito puliscono la coda dei tag solo dalle virgole e non dagli spazi, come faceva la chat prima",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "lib/products/externalSync.ts:215",
+      "descrizione": "La regex /,+$/ resta anche in lib/products/draftFromVision.ts:178, app/api/ai/translate/route.ts:149, app/api/ai/seo/route.ts:108, app/api/vision/extract-products/route.ts:283, components/seller/ProductForm.tsx:545,834. Un tag «Dolci ,» resta «dolci» con uno spazio finale se passa da lì una volta sola; da controllare se il salvataggio poi lo ripulisce."
+    },
+    {
+      "titolo": "Nella scheda da approvare della chat Assistenza la descrizione nuova perde gli a capo e una parola lunghissima esce dal riquadro",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "components/SupportProductAssistant.tsx:462",
+      "descrizione": "La riga è resa in un semplice span senza whitespace-pre-line né break-words."
+    },
+    {
+      "titolo": "Con l AI dei negozi spenta, in produzione senza conto della spesa l utente legge «Riprova fra qualche minuto» invece di «non ancora attivi»",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "lib/ai/run.ts:537",
+      "descrizione": "runMessage controlla il tetto (run.ts:537) prima di getAnthropic (run.ts:558): sulle rotte che non controllano l interruttore all inizio (ai/translate, catalog-chat, copilot, marketplace/import-fetch, vision/extract-product, extract-products, photo-order) il messaggio è quello del servizio momentaneamente non disponibile. Uguale sulla base."
+    }
+  ],
+  "domande_per_nicola": [
+    "R02-001: nella scheda da approvare la descrizione nuova ora si legge per intera. La vuoi accorciata con «leggi tutto»? Servirebbe un <details> in components/SupportProductAssistant.tsx:459 (non è un file di R02) sulla riga «Descrizione nuova».",
+    "R02-002: in produzione, se il conto condiviso della spesa AI non risponde, ora l'AI a pagamento si ferma (anche per un guasto di pochi minuti; 3 errori di fila la mettono in pausa 5 minuti per quella copia). Va bene così, o vuoi un contatore di riserva?",
+    "R02-011: la pagina del negozio (app/seller/products/[id]/edit/page.tsx) deve passare alla funzione unica salva_prodotto_e_varianti della migrazione 709? Se sì, dove resta la traccia di chi ha cambiato cosa (origine «venditore-modulo», campi scritti dall AI), che la 709 non scrive?",
+    "R02-010: per il freno di sei ore sui prodotti importati in errore preferisci mettere subito UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN in produzione (nessun codice), o la colonna nuova products.external_sync_error_at nell onda delle migrazioni (SQL nel referto)?"
+  ],
+  "conto": {
+    "agenti": 8,
+    "nota": "8 subagenti su 8: 4 riparatori (un lotto ciascuno, modello grande) e 4 revisori di sola lettura (2 grandi per i gravi, 2 piccoli per i minori). Nessun giro di correzione: tetto raggiunto. Spesa letta con get_session alla consegna: 23,62 $.",
+    "subagenti": 8
+  },
+  "costo_usd": 23.62
+}
