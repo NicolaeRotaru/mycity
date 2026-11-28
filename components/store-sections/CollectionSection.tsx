@@ -1,5 +1,6 @@
 'use client';
 
+import { useServizi } from '@/components/hooks/useServizi';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { fetchActiveDiscounts } from '@/lib/promotions';
@@ -64,6 +65,9 @@ function ManualCollection({
    * mentre la lettura arrivava, se falliva, o quando nessun prodotto scelto era più in vendita.
    * Ora: mentre carica titolo e scheletro; vuota o in errore, la sezione non c'è.
    */
+  // 27/11/2026 — Quali sono servizi (999g): niente «+» del carrello, c'è l'etichetta «Servizio».
+  const servizi = useServizi(products.map((p) => p.id));
+
   if (ids.length === 0) return null;
   if (isLoading) {
     return (
@@ -94,6 +98,7 @@ function ManualCollection({
       images={Array.isArray(p.images) ? p.images : []}
       stock={p.stock ?? undefined}
       hasVariants={p.has_variants ?? undefined}
+      servizio={servizi.get(p.id) ?? null}
       createdAt={p.created_at}
       storeName={ctx.store.store_name ?? undefined}
       sellerId={ctx.storeId}

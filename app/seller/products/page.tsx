@@ -1,5 +1,6 @@
 'use client';
 
+import { useServizi } from '@/components/hooks/useServizi';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -110,6 +111,8 @@ export default function SellerProductsPage() {
     getNextPageParam: (ultima, tutte) => pagineSuccessiva(ultima.righe.length, tutte.length),
   });
   const products = unisciPagine((queryProducts.data?.pages ?? []).map((pagina) => pagina.righe));
+  // 27/11/2026 — Quali sono servizi (migrazione 999g): al posto della scorta si legge «Servizio».
+  const servizi = useServizi(products.map((p) => p.id));
   // Quanti ne ha davvero a catalogo: lo dice il database, non quanti ne ho letti.
   const totaleProdotti = queryProducts.data?.pages[0]?.totale ?? products.length;
 
@@ -481,9 +484,11 @@ export default function SellerProductsPage() {
                       )}
                     </td>
                     <td className={`px-4 py-3 text-right font-semibold ${
-                      (p.stock ?? 0) === 0 ? 'text-secondary-600' : (p.stock ?? 0) <= 3 ? 'text-accent-700' : 'text-ink-700'
+                      servizi.has(p.id) ? 'text-ink-700' : (p.stock ?? 0) === 0 ? 'text-secondary-600' : (p.stock ?? 0) <= 3 ? 'text-accent-700' : 'text-ink-700'
                     }`}>
-                      {bulk && p.has_variants ? (
+                      {servizi.has(p.id) ? (
+                        'Servizio'
+                      ) : bulk && p.has_variants ? (
                         <Link href={`/seller/products/${p.id}/edit`} className="text-xs font-semibold text-primary-700 underline">Taglie: dalla scheda</Link>
                       ) : bulk ? (
                         <input
@@ -584,7 +589,9 @@ export default function SellerProductsPage() {
                             className="w-20 rounded-md border border-cream-300 px-2 py-1 text-right text-sm font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
                           />
                         </label>
-                        {p.has_variants ? (
+                        {servizi.has(p.id) ? (
+                          <span className="text-xs font-semibold text-ink-600">Servizio</span>
+                        ) : p.has_variants ? (
                           <Link href={`/seller/products/${p.id}/edit`} className="text-xs font-semibold text-primary-700 underline">Scorta delle taglie: dalla scheda</Link>
                         ) : (
                         <label className="flex items-center gap-1.5 text-xs text-ink-500">
@@ -602,7 +609,7 @@ export default function SellerProductsPage() {
                     ) : (
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <span className="font-bold text-ink-900">{formatPrice(Number(p.price))}</span>
-                        <span className="text-xs text-ink-500">· {p.stock ?? 0} pz</span>
+                        <span className="text-xs text-ink-500">· {servizi.has(p.id) ? 'Servizio' : `${p.stock ?? 0} pz`}</span>
                         {vendutiIgnoti ? (
                           <span className="text-xs text-ink-400">· venduti non letti</span>
                         ) : soldByProduct[p.id] ? (

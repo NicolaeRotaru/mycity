@@ -1,5 +1,6 @@
 'use client';
 
+import { useServizi } from '@/components/hooks/useServizi';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Tag } from 'lucide-react';
@@ -70,6 +71,8 @@ export default function PromozioniPage() {
       default:              return arr;
     }
   }, [items, sort]);
+  // 27/11/2026 — Quali sono servizi (999g): niente «+» del carrello, c'è l'etichetta «Servizio».
+  const servizi = useServizi(items.map((it) => it.product_id));
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
@@ -133,6 +136,7 @@ export default function PromozioniPage() {
               discountPercent={it.discount_percent}
               stock={it.stock ?? undefined}
               hasVariants={it.has_variants ?? undefined}
+              servizio={servizi.get(it.product_id) ?? null}
               // 13/11/2026 (R15-006) — Urgenti solo le foto della prima riga (4 colonne): le altre due
               // erano già sotto la piega.
               priority={i < 4}
