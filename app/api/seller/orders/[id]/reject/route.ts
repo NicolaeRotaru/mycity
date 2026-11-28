@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { formatPriceFromCents } from '@/lib/format';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -168,7 +169,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 // l'involucro. Copiata tredici volte, e in ognuna bastava dimenticare l'`await`
 // per far arrivare `undefined` alla query. Adesso i pezzi dell'indirizzo li
 // risolve l'involucro, una volta sola, e arrivano gia' pronti nel contesto.
-export const POST = withAuthRateLimit(
+const postSenzaFila = withAuthRateLimit(
   { name: 'seller-order-reject', max: 20, windowMs: 60_000 },
   ({ req, user, params }) => handler(req, user, { id: String(params.id) }),
 );
+
+// 28/11/2026 (onda 2, R09-006 + R06-012) — Gli avvisi dell'annullo passano dalla fila della richiesta:
+// la rotta si avvolge, così le email partono una alla volta e non tutte insieme.
+export const POST = conFilaPerRichiesta(postSenzaFila);

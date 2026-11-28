@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
@@ -134,7 +135,11 @@ async function handler(user: { id: string }, idGrezzo: string, profilo?: Profilo
 }
 
 // Un fattorino ha poche consegne l'ora: 20 tocchi sono tanti anche con un telefono che ripete.
-export const POST = withAuthRateLimit(
+const postSenzaFila = withAuthRateLimit(
   { name: 'rider-cliente-assente', max: 20, windowMs: 60 * 60_000 },
   ({ user, profile, params }) => handler(user, String(params.id), profile),
 );
+
+// 28/11/2026 (onda 2, R09-006 + R06-012) — Gli avvisi dell'annullo passano dalla fila della richiesta:
+// la rotta si avvolge, così le email partono una alla volta e non tutte insieme.
+export const POST = conFilaPerRichiesta(postSenzaFila);

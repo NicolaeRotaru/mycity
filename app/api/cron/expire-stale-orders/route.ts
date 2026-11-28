@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { withCronAuth } from '@/lib/api/middleware';
 import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { refundOrder } from '@/lib/stripe/payout';
@@ -124,7 +125,7 @@ function avvisoAFineGiro(
   return { ...a, pagatoCents: comeLui ? comeLui.totalePrimaCents : a.pagatoCents, negoziRimasti: rimasti.length, rimasti };
 }
 
-export const POST = withCronAuth(async (req): Promise<NextResponse> => {
+const postSenzaFila = withCronAuth(async (req): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   // 5/11/2026 — Senza la chiave di servizio il giro risponde 503 «non configurato», non un 500 muto.
@@ -535,4 +536,8 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
 // il lavoro non sarebbe mai partito. Stesso identico handler, stesso controllo
 // del segreto: cambia solo la porta da cui si entra. Il POST resta valido
 // perché il cron esterno continua a girare finché non lo spegni.
-export const GET = POST;
+
+// 28/11/2026 (onda 2, R09-006 + R06-012) — Gli avvisi dell'annullo passano dalla fila della richiesta:
+// la rotta si avvolge, così le email partono una alla volta e non tutte insieme.
+export const POST = conFilaPerRichiesta(postSenzaFila);
+export const GET = conFilaPerRichiesta(postSenzaFila);
