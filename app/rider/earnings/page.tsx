@@ -131,11 +131,11 @@ export default function RiderEarningsPage() {
           <p className="mt-1 font-serif text-5xl font-extrabold leading-none text-ink-900">{formatPrice(totalEarned)}</p>
           <div className="mt-4 grid grid-cols-2 gap-2.5">
             <div className="rounded-md bg-white/60 px-3 py-2.5">
-              <p className="text-2xs font-bold uppercase text-ink-500">Consegne</p>
+              <p className="text-2xs font-bold uppercase tracking-label text-ink-500">Consegne</p>
               <p className="font-serif text-xl font-extrabold text-ink-900">{filtered.length}</p>
             </div>
             <div className="rounded-md bg-white/60 px-3 py-2.5">
-              <p className="text-2xs font-bold uppercase text-ink-500">Media/consegna</p>
+              <p className="text-2xs font-bold uppercase tracking-label text-ink-500">Media/consegna</p>
               <p className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(avgPerDelivery)}</p>
             </div>
           </div>

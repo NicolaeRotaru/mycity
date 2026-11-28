@@ -101,7 +101,7 @@ export default function AdminTodayPage() {
           </span>
           {on && <AlertCircle size={16} className="text-secondary-600" aria-hidden />}
         </div>
-        <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-500">{label}</p>
+        <p className="text-[11px] font-bold uppercase tracking-label text-ink-500">{label}</p>
         <p className="mt-1 text-[26px] font-extrabold leading-none text-ink-900">{value}</p>
       </div>
     );
@@ -181,7 +181,7 @@ export default function AdminTodayPage() {
                scorre di lato dentro il riquadro, come le altre del sito. */
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-cream-50 text-xs uppercase tracking-wider text-ink-600">
+                <thead className="bg-cream-50 text-xs uppercase tracking-label text-ink-600">
                   <tr>
                     <th className="px-4 py-2.5 text-left">Ordine</th>
                     <th className="px-4 py-2.5 text-left">Negozio</th>

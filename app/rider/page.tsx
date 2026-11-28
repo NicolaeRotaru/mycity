@@ -118,7 +118,7 @@ function RiquadroOnline({ online, children }: { online: boolean; children: React
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-2.5 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">{children}</p>
+    <p className="mb-2.5 text-[13px] font-bold uppercase tracking-label text-ink-700">{children}</p>
   );
 }
 
@@ -577,11 +577,12 @@ export default function RiderDashboardPage() {
           // R20-004 — «—» finché non c'è un numero (in caricamento o con la lettura caduta), non 0.
           ['Oggi', today ? formatPrice(today.earned) : '—'],
           ['Consegne', today ? String(today.count) : '—'],
-          ['Rating', rating && rating.count > 0 ? rating.avg.toFixed(1).replace('.', ',') : '—'],
+          // R11-003 — «Voto», come la testata («Non riesco a leggere il tuo voto») e il resto del sito: era «Rating».
+          ['Voto', rating && rating.count > 0 ? rating.avg.toFixed(1).replace('.', ',') : '—'],
         ].map(([label, value]) => (
           <Card key={label} variant="surface" radius="lg" padding="none" className="px-3 py-2.5 text-center">
             <p className="font-serif text-[17px] font-extrabold text-ink-900">{value}</p>
-            <p className="text-2xs font-bold uppercase tracking-[0.03em] text-ink-400">{label}</p>
+            <p className="text-2xs font-bold uppercase tracking-label text-ink-400">{label}</p>
           </Card>
         ))}
       </div>

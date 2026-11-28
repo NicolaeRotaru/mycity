@@ -10,7 +10,8 @@ import ProductGrid, { type SortOption } from './ProductGrid';
 type Props = {
   sellerId: string;
   /** Riporta il numero di prodotti visibili (post-filtro) al chiamante. */
-  onCount?: (count: number) => void;
+  /** R11-012 — `null` = «non so» (vedi ProductGrid). */
+  onCount?: (count: number | null) => void;
 };
 
 type StoreCategory = { id: string; name: string };
@@ -124,7 +125,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
         <Card variant="bordered" radius="2xl" padding="md" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Ordinamento */}
           <div>
-            <label htmlFor={idOrdina} className="block text-xs font-semibold text-ink-700 mb-1.5 uppercase tracking-wider">Ordina per</label>
+            <label htmlFor={idOrdina} className="block text-xs font-semibold text-ink-700 mb-1.5 uppercase tracking-label">Ordina per</label>
             <select
               id={idOrdina}
               value={sort}
@@ -142,7 +143,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
           {/* Categoria (solo quelle del negozio) */}
           {categories.length > 0 && (
             <div>
-              <label htmlFor={idCategoria} className="block text-xs font-semibold text-ink-700 mb-1.5 uppercase tracking-wider">Categoria</label>
+              <label htmlFor={idCategoria} className="block text-xs font-semibold text-ink-700 mb-1.5 uppercase tracking-label">Categoria</label>
               <select
                 id={idCategoria}
                 value={categoryId}
@@ -160,7 +161,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
           {/* Range prezzo */}
           <div>
             <div className="flex justify-between text-sm mb-2">
-              <span className="text-xs font-semibold text-ink-700 uppercase tracking-wider">Prezzo</span>
+              <span className="text-xs font-semibold text-ink-700 uppercase tracking-label">Prezzo</span>
               <span className="font-bold text-primary-700 text-xs">{minPrice} € – {maxPrice}{maxPrice >= 500 ? '+' : ''} €</span>
             </div>
             <input
@@ -187,7 +188,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
 
           {/* Voto minimo */}
           <div>
-            <span id={`${idBase}-voto`} className="block text-xs font-semibold text-ink-700 mb-2 uppercase tracking-wider flex items-center gap-1">
+            <span id={`${idBase}-voto`} className="block text-xs font-semibold text-ink-700 mb-2 uppercase tracking-label flex items-center gap-1">
               <Star size={11} strokeWidth={2.2} aria-hidden />
               Voto minimo
             </span>

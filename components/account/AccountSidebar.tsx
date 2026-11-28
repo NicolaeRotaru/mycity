@@ -138,7 +138,7 @@ export default function AccountSidebar() {
       <div className="flex flex-col gap-2">
         {NAV.map((sec) => (
           <div key={sec.group}>
-            <p className="mb-1 px-3 text-2xs font-bold uppercase tracking-[0.08em] text-ink-400">
+            <p className="mb-1 px-3 text-2xs font-bold uppercase tracking-label text-ink-400">
               {sec.group}
             </p>
             <ul className="flex flex-col gap-0.5">

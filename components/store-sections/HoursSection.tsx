@@ -55,7 +55,7 @@ export default function HoursSection({ ctx }: { ctx: SectionContext }) {
               <span className="flex items-center gap-2">
                 {d.label}
                 {isToday && (
-                  <span className="rounded bg-primary-50 px-1.5 py-0.5 text-2xs uppercase tracking-wider text-primary-700">
+                  <span className="rounded bg-primary-50 px-1.5 py-0.5 text-2xs uppercase tracking-label text-primary-700">
                     Oggi
                   </span>
                 )}

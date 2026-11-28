@@ -152,7 +152,7 @@ export default function AchievementsPage() {
                 </div>
                 {!isUnlocked && <Lock size={16} className="text-ink-400 shrink-0" />}
               </div>
-              <p className={`text-2xs uppercase font-bold tracking-wider mt-3 ${TIER_TEXT[a.tier]}`}>
+              <p className={`text-2xs uppercase font-bold tracking-label mt-3 ${TIER_TEXT[a.tier]}`}>
                 {TIER_META[a.tier]?.label ?? a.tier}
               </p>
             </div>

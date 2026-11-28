@@ -259,7 +259,7 @@ export default function SellerPromotionsPage() {
                       non ha mai raggiunto ends_at, e la sua data è ancora da venire. */}
                   <p className="text-xs text-ink-400">-{p.discount_percent}%{statoDellaPromo(p) === 'Scaduta' ? ` · Terminata ${new Date(p.ends_at).toLocaleDateString('it-IT', { timeZone: FUSO_PIACENZA })}` : ''}</p>
                 </div>
-                <span className="text-xs text-ink-400 uppercase tracking-wider">{statoDellaPromo(p)}</span>
+                <span className="text-xs text-ink-400 uppercase tracking-label">{statoDellaPromo(p)}</span>
               </div>
             ))}
           </div>

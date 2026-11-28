@@ -337,7 +337,7 @@ export default function AdminDisputesPage() {
 
                 {d.resolution_notes && (
                   <div className="mt-3 p-3 bg-olive-50 rounded-lg border border-olive-200">
-                    <p className="text-xs font-bold text-olive-800 uppercase tracking-wider mb-1">Risoluzione</p>
+                    <p className="text-xs font-bold text-olive-800 uppercase tracking-label mb-1">Risoluzione</p>
                     <p className="text-sm text-olive-900 whitespace-pre-line break-words [overflow-wrap:anywhere]">{d.resolution_notes}</p>
                     {d.refund_cents && (
                       <p className="text-sm font-bold text-olive-900 mt-1">Rimborso: {formatPrice(d.refund_cents / 100)}</p>

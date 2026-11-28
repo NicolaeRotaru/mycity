@@ -208,8 +208,9 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   const [filtersOpen, setFiltersOpen] = useState(false);
   // 5/11/2026 — Nel ramo hub ogni fila vuota si nasconde da sola: se lo fanno tutte, sotto i
   // bottoni delle sottocategorie la pagina restava bianca. Qui si raccolgono i conti delle file.
-  const [contiDelleFile, setContiDelleFile] = useState<Record<string, number>>({});
-  const segnaConto = useCallback((fila: string, n: number) => {
+  // R11-012 — `null` = la fila non sa il suo conto (lettura caduta, ferma al tetto): non è «vuota».
+  const [contiDelleFile, setContiDelleFile] = useState<Record<string, number | null>>({});
+  const segnaConto = useCallback((fila: string, n: number | null) => {
     setContiDelleFile((c) => (c[fila] === n ? c : { ...c, [fila]: n }));
   }, []);
   // #134 — Il pannello si dichiarava `aria-modal` e non si comportava da
@@ -318,7 +319,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
     <div className="divide-y divide-cream-100">
       <div className="pb-3">
         <label className="block">
-          <span className="block text-xs font-semibold text-ink-500 mb-1 uppercase tracking-wider">{t('sortBy')}</span>
+          <span className="block text-xs font-semibold text-ink-500 mb-1 uppercase tracking-label">{t('sortBy')}</span>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as SortOption)}
@@ -337,7 +338,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
       {/* Range prezzo */}
       <div className="py-3">
         <div className="flex justify-between items-center mb-1.5">
-          <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider">{t('price')}</span>
+          <span className="text-xs font-semibold text-ink-500 uppercase tracking-label">{t('price')}</span>
           <span className="font-bold text-primary-700 text-xs">{minPrice} € – {maxPrice}{maxPrice >= 500 ? '+' : ''} €</span>
         </div>
         <input
@@ -364,7 +365,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
 
       {/* Rating minimo */}
       <div className="py-3">
-        <span className="text-xs font-semibold text-ink-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+        <span className="text-xs font-semibold text-ink-500 mb-1.5 uppercase tracking-label flex items-center gap-1">
           <Star size={11} strokeWidth={2.2} />
           {t('minRating')}
         </span>

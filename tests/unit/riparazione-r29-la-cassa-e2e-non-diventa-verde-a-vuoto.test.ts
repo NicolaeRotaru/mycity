@@ -167,11 +167,19 @@ describe('R29-001 · ① le tre prove dell acquisto vero hanno un corpo che fa n
     };
     visita(f);
     // Le condizioni dei salti: la prima è delle pagine senza JavaScript, che c'era già; la seconda
-    // è il salto unico. Un salto in più, dentro una delle tre prove o altrove, fa rosso qui.
+    // (onda 2, R11-004) è della sola «la cassa disegna il modulo», a cui basta il database; la terza
+    // è il salto unico delle tre prove dei soldi. Un salto in più, dentro una delle tre prove o
+    // altrove, fa rosso qui.
     expect(salti, 'i salti dello spec sono cambiati: le tre prove non si spengono una per una').toEqual([
       'diagnosi.senzaJavascript, diagnosi.motivo',
+      'SENZA_DATABASE_DI_PROVA, PERCHE_SENZA_DATABASE',
       'SENZA_AMBIENTE_DI_PROVA, PERCHE',
     ]);
+    // R11-004 — Il salto della cassa disegnata guarda il database locale (e l'interruttore), e vale
+    // solo per lei: le tre prove dei soldi passano dal salto unico.
+    expect(funzione('COSA_MANCA_AL_DATABASE')).toMatch(/cosaManca\(\s*\[\s*'database'\s*\]\s*\)/);
+    expect(funzione('SENZA_DATABASE_DI_PROVA')).toMatch(/!ACCESO\s*\|\|\s*COSA_MANCA_AL_DATABASE\s*!==\s*null/);
+    expect(funzione('LA_CASSA_DISEGNATA')).toBe("'la cassa disegna il modulo con la merce riletta dal database'");
     // Il salto unico guarda tutto l'ambiente (database locale, carta, bonifico), non solo l'interruttore.
     expect(funzione('COSA_MANCA'), 'il salto unico non guarda l ambiente intero').toMatch(/cosaManca\(\s*\[\s*'database',\s*'carta',\s*'bonifico'\s*\]\s*\)/);
     expect(funzione('SENZA_AMBIENTE_DI_PROVA')).toMatch(/COSA_MANCA\s*!==\s*null/);

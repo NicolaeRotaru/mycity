@@ -596,7 +596,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         <div className="bg-gradient-to-br from-primary-500 to-secondary-600 text-white rounded-2xl p-6 shadow-warm-lg">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex-1 min-w-0">
-              <p className="text-xs uppercase tracking-widest text-primary-100 font-semibold">Codice ritiro</p>
+              <p className="text-xs uppercase tracking-label text-primary-100 font-semibold">Codice ritiro</p>
               <p className="font-mono font-extrabold text-4xl sm:text-5xl tracking-[0.3em] my-2">
                 {pickupCode!.code}
               </p>

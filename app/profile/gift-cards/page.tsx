@@ -223,7 +223,7 @@ export default function GiftCardsPage() {
           <Wallet size={24} />
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wider opacity-80">Il tuo credito MyCity</p>
+          <p className="text-xs uppercase tracking-label opacity-80">Il tuo credito MyCity</p>
           {saldoNonLetto ? (
             <>
               <p className="text-base font-semibold">Non riusciamo a leggere il tuo credito.</p>

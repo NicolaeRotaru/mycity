@@ -791,7 +791,7 @@ export default function AdminPayoutsPage() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-400">Da versare lunedì</p>
+                  <p className="text-[11px] font-bold uppercase tracking-label text-ink-400">Da versare lunedì</p>
                   <p className="font-mono text-lg font-extrabold text-olive-700">{almenoDovuto}{formatPrice(g.lunediCents / 100)}</p>
                   {(g.lunedi.trattenutaCents > 0 || g.lunedi.creditoCents > 0) && (
                     <p className="text-xs text-ink-500">
@@ -836,7 +836,7 @@ export default function AdminPayoutsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-white text-xs uppercase tracking-[0.03em] text-ink-500">
+                    <tr className="bg-white text-xs uppercase tracking-label text-ink-500">
                       <th className="px-5 py-2.5 text-left font-bold">Ordine</th>
                       <th className="px-5 py-2.5 text-left font-bold">Consegnato</th>
                       <th className="px-5 py-2.5 text-left font-bold">Metodo</th>

@@ -14,6 +14,7 @@ import { addToCart, getCart, updateQuantity, type CartItem } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
+import { scontoMostrato } from '@/lib/sconto-mostrato';
 import { LARGHEZZA_MASSIMA, sizedImage } from '@/lib/image-url';
 import { SIZES_FOTO_PRODOTTO } from '@/lib/preload-foto';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
@@ -612,8 +613,13 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const compareAtNum = compareAt != null ? Number(compareAt) : null;
   // R18-006 — Con la promozione attiva il prezzo di listino non si mostra: ci sarebbero due prezzi barrati
   // e un «Risparmi» calcolato sul pieno (come fa già la scheda delle griglie).
-  const compareValid = compareAtNum != null && compareAtNum > prezzoPieno && !(scontoPromo > 0);
-  const comparePct = compareValid ? Math.round((1 - prezzoPieno / compareAtNum) * 100) : 0;
+  // R10-004 (onda 2) — Barrato e bollino con la regola unica della scheda delle griglie
+  // (`scontoMostrato`): un listino appena sopra il prezzo (100,002 contro 100) non barra «100,00 €»
+  // accanto a «100,00 €» e non scrive «-0%»; una promo che al centesimo non cambia il prezzo non
+  // barra il pieno.
+  const sconto = scontoMostrato({ prezzo: prezzoPieno, scontoPercento: scontoPromo, prezzoDiListino: compareAtNum });
+  const compareValid = sconto.origine === 'listino' && compareAtNum != null;
+  const comparePct = sconto.percento;
   const unitRaw = (product as { unit?: string | null }).unit ?? null;
   const unitSuffix = unitRaw && unitRaw !== 'pezzo' ? (UNIT_SUFFIX[unitRaw as ProductUnit] ?? '') : '';
   // R08-005 — Per gli alimenti, accanto al prezzo il prezzo al chilo o al litro (Codice del Consumo),
@@ -914,7 +920,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             {/* Overlay badge in alto a sinistra: sconto (−N%) + "Nuovo" (parità con le
                 card), poi gli stati di stock. Impilati in colonna come nel mockup. */}
             <div className="absolute top-4 left-4 z-[2] flex flex-col gap-1.5">
-              {compareValid && <Badge variant="discount" size="md">-{comparePct}%</Badge>}
+              {compareValid && comparePct !== null && <Badge variant="discount" size="md">-{comparePct}%</Badge>}
               {isNew && !isOutOfStock && <Badge variant="new" size="md">Nuovo</Badge>}
               {isOutOfStock && <Badge variant="soldout" size="md">ESAURITO</Badge>}
               {isLowStock && !isOutOfStock && (
@@ -1103,7 +1109,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   ({formatPrice(prezzoUnitario.valore)}/{prezzoUnitario.unita === 'kg' ? 'kg' : 'L'})
                 </span>
               )}
-              {scontoPromo > 0 && (
+              {sconto.origine === 'promo' && (
                 <span className="text-lg text-ink-400 line-through">
                   <span className="sr-only">Prezzo pieno </span>{formatPrice(prezzoPieno)}
                 </span>

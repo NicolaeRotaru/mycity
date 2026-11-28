@@ -74,7 +74,7 @@ export default function ExternalDataPanel({
         <h2 className="text-sm font-bold text-ink-900 flex items-center gap-1.5">
           <Truck size={16} strokeWidth={2.2} aria-hidden /> Dati marketplace
           {marketplace && (
-            <span className="ml-1 rounded-full bg-accent-100 text-accent-700 px-2 py-0.5 text-[11px] font-semibold uppercase">
+            <span className="ml-1 rounded-full bg-accent-100 text-accent-700 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-label">
               {marketplace}
             </span>
           )}
