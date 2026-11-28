@@ -33,6 +33,20 @@ function isoDaCampo(campo: string | undefined): string | null {
 }
 
 /**
+ * 27/11/2026 — Il modulo non salva più lo sconto, ma gli eventi salvati prima lo tengono, e la
+ * pagina Eventi può mostrarlo ai clienti come «-20%» senza che la cassa lo applichi. L'elenco lo
+ * dice all'admin, evento per evento, invece di lasciarlo scoprire a un cliente.
+ */
+function AvvisoScontoRimasto({ percento }: { percento: number | null }) {
+  if (!percento) return null;
+  return (
+    <p role="note" className="mt-1 text-xs font-normal text-accent-800">
+      Ha ancora uno sconto del {percento}% salvato: la cassa non lo applica, ma ai clienti può comparire «-{percento}%».
+    </p>
+  );
+}
+
+/**
  * Admin: gestione Eventi MyCity.
  *
  * Esperti consultati:
@@ -206,7 +220,10 @@ export default function AdminEventsPage() {
               <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-500">{isError ? '—' : 'Nessun evento.'}</td></tr>
             ) : events.map((ev) => (
               <tr key={ev.id} className="hover:bg-cream-50">
-                <td className="px-4 py-3 font-semibold text-ink-900 max-w-xs break-words [overflow-wrap:anywhere]">{ev.title}</td>
+                <td className="px-4 py-3 font-semibold text-ink-900 max-w-xs break-words [overflow-wrap:anywhere]">
+                  {ev.title}
+                  <AvvisoScontoRimasto percento={ev.discount_percent} />
+                </td>
                 {/* 17/11/2026 — Inizio e fine nell'ora di Piacenza, come i campi del modulo qui sotto:
                     `toLocaleString('it-IT')` usava il fuso del computer di chi guarda. */}
                 <td className="px-4 py-3 text-ink-600">{dataEOraPiacenza(ev.starts_at)}</td>
@@ -266,6 +283,7 @@ export default function AdminEventsPage() {
             <p className="text-xs text-ink-500 mt-1">
               {dataEOraPiacenza(ev.starts_at)} → {dataEOraPiacenza(ev.ends_at)}
             </p>
+            <AvvisoScontoRimasto percento={ev.discount_percent} />
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-cream-100 flex-wrap">
               {ev.status === 'scheduled' && (
                 <button onClick={() => changeStatus.mutate({ id: ev.id, status: 'live' })} className="flex-1 min-w-[90px] inline-flex items-center justify-center gap-1 bg-secondary-50 text-secondary-700 font-semibold py-2 rounded-lg text-sm">

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
-import { recapitoPrivacy, stradaDeiDiritti, titolare } from '@/lib/legal/titolare';
+import { stradaDeiDiritti, titolare } from '@/lib/legal/titolare';
 import { GIORNI_DOCUMENTI_ISCRIZIONE_A_META, MESI_DEI_MESSAGGI_DEI_CONTATTI } from '@/lib/privacy/potature-ritenzione';
 import {
   DOVE_CHIEDIAMO_L_IBAN,
@@ -46,7 +46,7 @@ export default function PrivacyPage() {
   // casella della privacy non e' configurata, l'indirizzo scritto nel codice
   // non riceve niente: meglio mandare al modulo dei contatti, che qualcuno
   // legge davvero, che promettere una risposta che non arrivera' mai.
-  const dovePerIDiritti = recapitoPrivacy(ownerData);
+  // 27/11/2026 — E il modulo solo se arriva: tutte le sezioni leggono `stradaDeiDiritti`.
   const strada = stradaDeiDiritti(ownerData);
   return (
     <LegalLayout
@@ -288,6 +288,11 @@ export default function PrivacyPage() {
               dell'account, e le finestre arrivano a 24 ore (lib/rate-limit.ts). */}
           <li><strong>Upstash Inc.</strong> (Stati Uniti — SCC) — protezione dagli abusi: memorizza, da un minuto fino a 24 ore, contatori legati all&apos;indirizzo IP, all&apos;email usata per accedere o all&apos;identificativo dell&apos;account, per fermare chi tenta troppe richieste di fila.</li>
           <li><strong>Verifica dei documenti d&apos;identità (KYC):</strong> l&apos;esame dei documenti di Venditori e Rider è svolto internamente da MyCity. Se in futuro verrà affidato a un fornitore esterno, il suo nome comparirà qui prima che il primo documento gli venga inviato.</li>
+          {/* 27/11/2026 — La verifica del Venditore manda la sua partita IVA al servizio VIES della
+              Commissione europea (lib/kyc/providers.ts, viesVatLookup, chiamato da
+              app/api/kyc/start-check/route.ts): per una ditta individuale è un dato personale, e
+              qui non compariva. */}
+          <li><strong>Commissione europea (VIES)</strong> — non è nostro responsabile: è il servizio pubblico dell&apos;Unione europea che controlla le partite IVA nei registri degli Stati membri. Quando un Venditore avvia la verifica del proprio account, il sito manda la sua partita IVA (con il codice del paese) a VIES, che risponde se è valida e attiva e, quando lo Stato lo comunica, a nome di chi è registrata. Per una ditta individuale partita IVA e nome sono dati personali del titolare della ditta.</li>
           {/* 26/11/2026 — Diceva solo «geocoding indirizzi». Ma le mappe del sito (components/DeliveryMap.tsx,
               NearbyStoresMap.tsx, StoreLocationPicker.tsx) scaricano le tessere da tile.openstreetmap.org, e
               «Naviga» del Rider (app/rider/orders/[id]/page.tsx) apre Google Maps con la destinazione. */}
@@ -420,13 +425,30 @@ export default function PrivacyPage() {
       <LegalSection id="modifiche" heading="9. Modifiche all&apos;informativa">
         <p>
           Possiamo aggiornare questa informativa per riflettere modifiche normative o operative.
-          Le versioni precedenti restano consultabili su richiesta scrivendo{' '}
-          {dovePerIDiritti.eUnaCasella ? (
-            <>a <a href={dovePerIDiritti.href} className="text-primary-700 underline">{dovePerIDiritti.testo}</a></>
+          {/* 27/11/2026 — Proponeva il modulo dei contatti anche quando non arriva a nessuno.
+              La strada e' quella delle sezioni 1 e 5 (`stradaDeiDiritti`): il modulo solo se
+              arriva; se no la PEC, se c'e'; se no lo si dice. */}
+          {strada.recapito ? (
+            <>
+              Le versioni precedenti restano consultabili su richiesta scrivendo{' '}
+              {strada.recapito.eUnaCasella ? (
+                <>a <a href={strada.recapito.href} className="text-primary-700 underline">{strada.recapito.testo}</a></>
+              ) : (
+                <>dal <Link href={strada.recapito.href} className="text-primary-700 underline">modulo dei contatti</Link></>
+              )}
+              .
+            </>
+          ) : ownerData.pec ? (
+            <>
+              Le versioni precedenti restano consultabili su richiesta scrivendo alla PEC{' '}
+              <a href={`mailto:${ownerData.pec}`} className="text-primary-700 underline">{ownerData.pec}</a>.
+            </>
           ) : (
-            <>dal <Link href={dovePerIDiritti.href} className="text-primary-700 underline">modulo dei contatti</Link></>
+            <>
+              Le versioni precedenti restano consultabili su richiesta, ma in questo momento non
+              abbiamo un canale attivo per chiederle: è un guasto nostro, non tuo.
+            </>
           )}
-          .
         </p>
       </LegalSection>
 

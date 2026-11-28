@@ -375,6 +375,18 @@ async function contenutoAncoraOnline(
       ? 'La domanda è ancora visibile: nascondila prima di comunicare «rimosso».'
       : null;
   }
+  // 27/11/2026 (R01-007) — Una recensione segnalata come falsa si può accogliere: «rimosso» parte
+  // quando la recensione non è più pubblicata. Prima ogni recensione accolta riceveva 409, e
+  // l'esito non partiva mai. «recensione» vale per due tabelle (come nel POST qui sopra): basta
+  // che sia ancora in una delle due per fermarsi. Una lettura caduta si ferma, come sopra.
+  if (s.tipo === 'recensione') {
+    for (const tabella of ['reviews', 'store_reviews']) {
+      const { data: r, error: e } = await admin.from(tabella).select('id').eq('id', s.oggetto_id).maybeSingle();
+      if (e) return NON_VERIFICATO;
+      if (r) return 'La recensione è ancora pubblicata: toglila prima di comunicare «rimosso».';
+    }
+    return null;
+  }
   return 'Questo tipo di contenuto non si toglie da qui: l\'esito «rimosso» non può partire.';
 }
 
@@ -403,4 +415,40 @@ export const PATCH = withAdminAuth(async ({ req }) => {
     { ok: !fallito, segnalanteEmail, segnalanteNotifica, venditore },
     { status: fallito ? 502 : 200 },
   );
+});
+
+/**
+ * 27/11/2026 (R01-006) — GET /api/segnalazioni?recensione=<id> — solo amministratori.
+ *
+ * Nel pannello una recensione segnalata era solo un codice: non diceva se era di un prodotto o di
+ * un negozio, né cosa c'era scritto, e lo staff doveva cercarla a mano per decidere. Qui si legge
+ * col client di servizio (come il POST qui sopra, che cerca l'id nelle due tabelle): una
+ * recensione di un prodotto non più in vetrina, o di un negozio sospeso, la regola pubblica non la
+ * mostra, ma chi decide la deve vedere. Risponde `recensione: null` se non c'è più.
+ */
+const IdRecensione = z.string().uuid();
+
+export const GET = withAdminAuth(async ({ req }) => {
+  const id = IdRecensione.safeParse(new URL(req.url).searchParams.get('recensione'));
+  if (!id.success) return ApiErrors.invalidRequest('Recensione non valida');
+  const admin = getAdminSupabase();
+  const { data: p, error: e1 } = await admin
+    .from('reviews').select('product_id, rating, comment, created_at').eq('id', id.data).maybeSingle();
+  if (e1) return ApiErrors.internal('Recensione non letta: riprova');
+  if (p) {
+    const r = p as { product_id: string | null; rating: number; comment: string | null; created_at: string | null };
+    return NextResponse.json({
+      recensione: { di: 'prodotto', link: r.product_id ? `/product/${r.product_id}` : null, voto: r.rating, testo: r.comment, scritta: r.created_at },
+    });
+  }
+  const { data: n, error: e2 } = await admin
+    .from('store_reviews').select('store_id, rating, comment, created_at').eq('id', id.data).maybeSingle();
+  if (e2) return ApiErrors.internal('Recensione non letta: riprova');
+  if (n) {
+    const r = n as { store_id: string; rating: number; comment: string | null; created_at: string | null };
+    return NextResponse.json({
+      recensione: { di: 'negozio', link: `/store/${r.store_id}`, voto: r.rating, testo: r.comment, scritta: r.created_at },
+    });
+  }
+  return NextResponse.json({ recensione: null });
 });

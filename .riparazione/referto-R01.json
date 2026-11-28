@@ -1,0 +1,471 @@
+{
+  "sessione": "R01",
+  "aggiornato": "2026-11-27 02:45",
+  "finita": true,
+  "testa": "7877cd5594001b75529d1f848d5856932b03969f",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "rosso",
+    "testa": "7877cd5594001b75529d1f848d5856932b03969f",
+    "nota": "Su 7877cd5 typecheck e lint verdi, 2341 file di prova verdi; rossi solo i 3 casi delle prove comuni riportate alla base (la regia applica le cure all'unione, diff nelle note di R01-004, R01-005, R01-007): tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts:100 («il logo in SVG non parte nemmeno, e la frase dice cosa fare»), tests/unit/riparazione-r02-pagine-testo-grande.test.tsx:78 («/lavora-con-noi: … le righe delle posizioni si stringono»), tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts:77 («recensione accolta: da qui non si toglie, 409»). Con le prove comuni modificate, su 9068678, npm run verify era verde (2344 file)."
+  },
+  "voci": [
+    {
+      "id": "R01-002",
+      "chiave": "privacy-legale|lo sconto scritto su un evento appare ai clienti come «-20%», ma la cassa non lo applica mai",
+      "esito": "parziale",
+      "commit": "77368771a356b965feac56e2f455cd7908b6b69c",
+      "file_toccati": [
+        "app/admin/events/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-sconto-evento-avviso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-sconto-evento-avviso.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 77368771a356b965feac56e2f455cd7908b6b69c^ --file app/admin/events/page.tsx --prove tests/unit/riparazione-r01-sconto-evento-avviso.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base il modulo admin non chiede più lo sconto, salva sempre NULL e ha la nota. Mancava l'avviso per gli eventi salvati prima: ora ogni riga dell'elenco (tabella e scheda del telefono) con discount_percent > 0 dice che lo sconto salvato non è applicato dalla cassa ma ai clienti può comparire «-n%». Il dato salvato non si tocca, così resta la prova di chi ha visto lo sconto.",
+      "cosa_resta": "(1) Il badge «-n%» su /events: vedi serve_file_altrui. (2) L'archivio prima dell'azzeramento della 880 è una migrazione, non permessa in quest'onda. File proposto: migrations/879_gli_sconti_degli_eventi_si_archiviano_prima_di_toglierli.sql (879 libero, prima della 880 che non si tocca). SQL esatto: BEGIN; CREATE SCHEMA IF NOT EXISTS private; REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated; CREATE TABLE IF NOT EXISTS private.sconti_eventi_archiviati (event_id uuid PRIMARY KEY, title text NOT NULL, discount_percent int NOT NULL, status text NOT NULL, starts_at timestamptz NOT NULL, ends_at timestamptz NOT NULL, event_created_at timestamptz NOT NULL, archiviato_at timestamptz NOT NULL DEFAULT now()); ALTER TABLE private.sconti_eventi_archiviati ENABLE ROW LEVEL SECURITY; REVOKE ALL ON private.sconti_eventi_archiviati FROM PUBLIC, anon, authenticated; INSERT INTO private.sconti_eventi_archiviati (event_id, title, discount_percent, status, starts_at, ends_at, event_created_at) SELECT id, title, discount_percent, status, starts_at, ends_at, created_at FROM public.marketplace_events WHERE discount_percent IS NOT NULL ON CONFLICT (event_id) DO NOTHING; COMMIT; — event_id senza chiave esterna apposta, così la prova resta se l'evento si cancella. Va applicata PRIMA della 880. (3) Una prova SQL tests/sql/rls/riparazione-r01-…test.sql che copra gli eventi già salvati va scritta nell'onda delle migrazioni, con --sql. (4) Finché l'archivio non c'è, salvare dal pannello un evento vecchio azzera lo sconto senza traccia (app/admin/events/page.tsx:123 sulla testa, :109 sulla base; l'avviso nell'elenco non dice che salvare di nuovo l'evento cancella lo sconto).",
+      "serve_file_altrui": [
+        {
+          "file": "app/events/page.tsx",
+          "modifica": "Togliere le righe 270-274 per intero: `{ev.discount_percent ? (` / `<Badge variant=\"discount\" size=\"md\" className=\"absolute top-3 right-3 rounded-full\">` / `-{ev.discount_percent}%` / `</Badge>` / `) : null}`. Togliere anche la riga 16 `import { Badge } from '@/components/ui/Badge';` che serve solo lì. Volendo anche `discount_percent` dalla select (riga 94) e dal tipo (riga 45). Con una prova: /events disegnata con un evento discount_percent: 20 e una copertina non mostra «-20%»."
+        }
+      ],
+      "verificato_da": "revisore A (opus): parziale_ok; rilanciate la prova e 8 prove sugli eventi (62 verdi), cercati tutti i lettori di discount_percent e marketplace_events (il «-n%» resta solo in app/events/page.tsx:270-274), SQL della 879 confrontato con 034, 880, 916 e l'ordine di applicazione"
+    },
+    {
+      "id": "R01-001",
+      "chiave": "privacy-legale|il sito non dice chi c'è dietro: niente nome, sede, partita iva né pec, il titolare risulta solo «mycity»",
+      "esito": "serve_file_altrui",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base il marchio da solo e i segnaposto erano già scartati (lib/legal/titolare.ts:141-146). La correzione del buco rimasto («MyCity S.r.l.» senza partita IVA stampava una società che non esiste) era nel commit 707e2cceb065419df4cfd50d7b3c0abc85038e7f (prova rimessa: regge), ma npm run verify l'ha trovata rossa nella prova esistente tests/unit/la-pagina-contatti-dice-chi-c-e-dietro.test.tsx:49-52, che non importa file miei: tolta con il revert 90686780aba965422f6193d781234d3e7b369d30.",
+      "cosa_resta": "(1) Nicola: su Vercel produzione mettere NEXT_PUBLIC_TITOLARE_NOME, _INDIRIZZO, _PIVA, _PEC (più _EMAIL_PRIVACY, e _REA/_CAPITALE se è una società), poi ripubblicare il sito (il piede le legge nel browser). L'indirizzo è dovuto già oggi. Aprire la posizione fiscale e decidere la soglia dei 5000 € (commento in lib/legal/titolare.ts:213-214) col commercialista o il legale. (2) Dal collaudo interno sulla correzione tolta, da sistemare quando si riprende: una P.IVA segnaposto non nota («N/A», «-», «TODO», «in attesa», «IT 000 000 000 00» con spazi) fa ripassare «MyCity S.r.l.»; `nudo` (titolare.ts:146,151 del commit 707e2cc) toglie le lettere accentate, quindi «MyCity Società Cooperativa», «MyCity Società a r.l.», «MyCity Italia S.r.l.», «S.r.l. MyCity», «MyCity Ltd/SA» passano ancora. (3) Il «deploy che fallisce se manca la P.IVA» proposto dal registro è una scelta di Nicola.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/la-pagina-contatti-dice-chi-c-e-dietro.test.tsx",
+          "modifica": "riga 50, nel caso «con indirizzo e nome legale veri»: aggiungere vi.stubEnv('NEXT_PUBLIC_TITOLARE_PIVA', '<una partita IVA valida di prova>'), così «MyCity S.r.l.» resta un nome legale vero; da applicare insieme al ripristino in lib/legal/titolare.ts del commit 707e2cceb065419df4cfd50d7b3c0abc85038e7f (e della sua prova tests/unit/riparazione-r01-titolare-societa.test.ts)."
+        }
+      ],
+      "nota": "Parte non di codice: i dati veri del titolare li mette Nicola su Vercel (vedi cosa_resta).",
+      "verificato_da": "revisore A (opus): rilanciata la prova e 7 prove del titolare, trovata la prova contatti rossa (poi confermata da npm run verify), 29 varianti di nome e P.IVA, tutti i lettori di titolare()"
+    },
+    {
+      "id": "R01-009",
+      "chiave": "privacy-legale|l'informativa (versioni precedenti) e la cookie policy propongono ancora il modulo dei contatti anche quando non arriva a nessuno",
+      "esito": "riparato",
+      "commit": "95389999638ae1337e070cd40c95155b04da5f26",
+      "file_toccati": [
+        "app/privacy/page.tsx",
+        "app/cookies/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-modulo-che-non-arriva.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-modulo-che-non-arriva.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9538999^ --file app/privacy/page.tsx,app/cookies/page.tsx --prove tests/unit/riparazione-r01-modulo-che-non-arriva.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La sezione 9 dell'informativa usa ora stradaDeiDiritti come le sezioni 1 e 5: il modulo solo se arriva, se no la PEC, se no dice che oggi non c'è un canale. La cookie policy è 'use client' e nel browser non può sapere se il modulo arriva: senza casella privacy rimanda a /privacy#modifiche.",
+      "nota": "Tolto da privacy/page.tsx il recapitoPrivacy rimasto inutilizzato.",
+      "verificato_da": "revisore B (sonnet): regge; rilanciata la prova, letto il diff, controllati stradaDeiDiritti e l'ancora /privacy#modifiche"
+    },
+    {
+      "id": "R01-016",
+      "chiave": "privacy-legale|l'informativa non dice che la partita iva del venditore viene controllata nel registro europeo vies della commissione europea",
+      "esito": "riparato",
+      "commit": "21a156e995194257a6dc4f8f54c33fb75522b684",
+      "file_toccati": [
+        "app/privacy/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-vies-informativa.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-vies-informativa.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 21a156e^ --file app/privacy/page.tsx --prove tests/unit/riparazione-r01-vies-informativa.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nella sezione 4 dell'informativa c'è ora la riga «Commissione europea (VIES)»: non è nostro responsabile; quando il venditore avvia la verifica riceve la sua partita IVA col paese e risponde se è valida e a nome di chi; per una ditta individuale è un dato personale.",
+      "serve_file_altrui": [
+        {
+          "file": "docs/dpa-vendors.md",
+          "modifica": "nella sezione «## Vendor che NON processano dati personali (no DPA)», dopo la riga di OpenStreetMap, aggiungere: «- **Commissione europea (VIES)**: riceve la partita IVA del venditore (con il codice del paese) alla verifica dell'account (lib/kyc/providers.ts viesVatLookup, da app/api/kyc/start-check/route.ts). Per una ditta individuale è un dato personale; servizio pubblico dell'UE, nessun DPA. Dichiarato in app/privacy/page.tsx, sezione 4.»"
+        }
+      ],
+      "verificato_da": "revisore B (sonnet): regge; testo confrontato con viesVatLookup e col solo chiamante app/api/kyc/start-check/route.ts:121; docs/dpa-vendors.md non cita VIES"
+    },
+    {
+      "id": "R01-011",
+      "chiave": "privacy-legale|i termini sul contrassegno non dicono cosa succede quando il contante non basta a coprire il compenso del rider",
+      "esito": "riparato",
+      "commit": "0a72d0728d3e7d38b4747498f09ee2327f450175",
+      "file_toccati": [
+        "app/terms/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-termini-contante-non-basta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-termini-contante-non-basta.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0a72d07^ --file app/terms/page.tsx --prove tests/unit/riparazione-r01-termini-contante-non-basta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il paragrafo 5 dei Termini dice quello che fa il codice (compensoDalContante in lib/shipping.ts): se il contante è meno del compenso, anche zero per il credito MyCity, il rider trattiene solo quello che riceve e il resto glielo versa MyCity con un bonifico, come gli altri compensi. La prova controlla anche le cifre del codice.",
+      "verificato_da": "revisore B (sonnet): regge; frase confrontata con compensoDalContante (lib/shipping.ts:168-178) e col bonifico del residuo in lib/stripe/payout.ts"
+    },
+    {
+      "id": "R01-005",
+      "chiave": "privacy-legale|«chi siamo» e «lavora con noi» raccontano una flotta di rider, una crescita e quattro posti di lavoro che oggi non esistono",
+      "esito": "riparato",
+      "commit": "7ee0f2f46ebf91ccb5a8497ef544019816184766",
+      "file_toccati": [
+        "app/lavora-con-noi/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-lavora-senza-posti-inventati.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-lavora-senza-posti-inventati.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7ee0f2f^ --file app/lavora-con-noi/page.tsx --prove tests/unit/riparazione-r01-lavora-senza-posti-inventati.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Ripresa la cura del 26/11 (6484d56a): elenco delle posizioni vuoto, la pagina dice «Oggi non abbiamo posizioni aperte» col collegamento alla candidatura spontanea. «Chi siamo» era già riparato sulla base (app/about/page.tsx:215-216, STATS senza numeri inventati).",
+      "nota": "Adattata la prova comune tests/unit/riparazione-r02-pagine-testo-grande.test.tsx, che importa app/lavora-con-noi/page per nome: controlla tutte le righe disegnate; a elenco vuoto controlla la riga modello nel file (flex-1 min-w-[min(200px,100%)], niente min-w-[200px], Candidati con max-w-full) e ogni collegamento alla candidatura spontanea. Le altre pagine non cambiano; verde anche con la pagina della base. Pubblicare posizioni vere resta una scelta di Nicola (basta aggiungerle a JOBS). — PROVA COMUNE: la applica la regia all'unione. Riportata alla base nel ramo; diff da applicare (git diff 2ba05a74 → la cura): \ndiff --git a/tests/unit/riparazione-r02-pagine-testo-grande.test.tsx b/tests/unit/riparazione-r02-pagine-testo-grande.test.tsx\nindex 5eae33c..c58ec77 100644\n--- a/tests/unit/riparazione-r02-pagine-testo-grande.test.tsx\n+++ b/tests/unit/riparazione-r02-pagine-testo-grande.test.tsx\n@@ -4,6 +4,8 @@\n import { describe, it, expect, vi } from 'vitest';\n import { createElement } from 'react';\n import { renderToStaticMarkup } from 'react-dom/server';\n+import { readFileSync } from 'node:fs';\n+import { join } from 'node:path';\n \n /**\n  * R02-005 (onda 9, giro 2) — COL TESTO AL 200% LE PAGINE PUBBLICHE NON SCORRONO PIÙ DI LATO.\n@@ -69,13 +71,30 @@ describe('R02-005 · col testo al 200% le pagine pubbliche non scorrono di lato'\n     const didascalia = Array.from(d.querySelectorAll('span.block')).find((s) => classi(s).includes('text-sm'))!;\n     expect(classi(didascalia.parentElement)).toContain('min-w-0');\n     expect(classi(didascalia.parentElement)).toContain('[overflow-wrap:anywhere]');\n-    const spontanea = Array.from(d.querySelectorAll('a')).find((a) => a.textContent?.includes('candidatura spontanea'));\n-    expect(classi(spontanea)).toContain('max-w-full');\n-    expect(classi(spontanea)).toContain('[overflow-wrap:anywhere]');\n-    const colonna = Array.from(d.querySelectorAll('li div')).find((x) => classi(x).includes('flex-1'));\n-    expect(classi(colonna).join(' '), 'la colonna del titolo non deve chiedere 200 px fissi').not.toContain('min-w-[200px]');\n-    const candidati = Array.from(d.querySelectorAll('li a')).find((a) => a.textContent?.includes('Candidati'));\n-    expect(classi(candidati)).toContain('max-w-full');\n+    // 27/11/2026 — Ogni collegamento alla candidatura spontanea (il pulsante in fondo e, a elenco vuoto,\n+    // quello sotto «Posizioni aperte»), non solo il primo trovato.\n+    const spontanee = Array.from(d.querySelectorAll('a')).filter((a) => a.textContent?.includes('candidatura spontanea'));\n+    expect(spontanee.length).toBeGreaterThanOrEqual(1);\n+    for (const spontanea of spontanee) {\n+      expect(classi(spontanea)).toContain('max-w-full');\n+      expect(classi(spontanea)).toContain('[overflow-wrap:anywhere]');\n+    }\n+    // 27/11/2026 — Le quattro posizioni erano inventate: oggi l'elenco è vuoto. Le righe disegnate si\n+    // controllano tutte; la riga del modello si controlla anche nel file, così resta controllata per\n+    // quando Nicola aggiunge una posizione vera.\n+    const righe = Array.from(d.querySelectorAll('#posizioni li'));\n+    for (const riga of righe) {\n+      const colonna = Array.from(riga.querySelectorAll('div')).find((x) => classi(x).includes('flex-1'));\n+      expect(classi(colonna).join(' '), 'la colonna del titolo non deve chiedere 200 px fissi').not.toContain('min-w-[200px]');\n+      const candidati = Array.from(riga.querySelectorAll('a')).find((a) => a.textContent?.includes('Candidati'));\n+      expect(classi(candidati)).toContain('max-w-full');\n+    }\n+    const modello = readFileSync(join(process.cwd(), 'app', 'lavora-con-noi', 'page.tsx'), 'utf8');\n+    const riga = modello.slice(modello.indexOf('{JOBS.map('), modello.indexOf('Candidati <ArrowRight'));\n+    expect(riga, 'la riga delle posizioni deve esserci nel file').toContain('<li');\n+    expect(riga).toMatch(/className=\"flex-1 min-w-\\[min\\(200px,100%\\)\\]\"/);\n+    expect(riga, 'la colonna del titolo non deve chiedere 200 px fissi').not.toContain('min-w-[200px]');\n+    expect(riga).toMatch(/href=\\{job\\.mailto\\}\\s*className=\"[^\"]*max-w-full/);\n   });\n \n   it('/help: i tre riquadri di contatto possono stringersi e il testo va a capo', () => {",
+      "verificato_da": "revisore B (sonnet): regge; prova comune confrontata prima/dopo, non indebolita; about sulla base senza flotta né numeri inventati"
+    },
+    {
+      "id": "R01-008",
+      "chiave": "privacy-legale|«lavora con noi» promette ancora un lavoro da rider con compenso fisso e turni, e «entra nel team» rimanda a posizioni che non ci sono",
+      "esito": "gia_riparato_prima",
+      "prova": "Base 2ba05a74: app/lavora-con-noi/page.tsx:33-38 dice «Consegnare a Piacenza… Oggi non promettiamo né turni né un compenso fisso», e 40-45 «Dai una mano» manda alla candidatura spontanea: niente più «Entra nel team»/«Vedi le posizioni». `git show 2ba05a74:app/lavora-con-noi/page.tsx | grep -in 'rider\\|turni\\|ibride'` trova solo il collegamento /sign-up?role=rider e la posizione «Coordinatore flotta rider», tolta con l'altra voce di questa pagina (commit 7ee0f2f).",
+      "verificato_da": "revisore B (sonnet): regge; git show 2ba05a74:app/lavora-con-noi/page.tsx e merge-base del commit che l'aveva già chiusa"
+    },
+    {
+      "id": "R01-003",
+      "chiave": "immagini-media|le storie di storybook di storeavatar usano ancora loghi da placehold.co",
+      "esito": "riparato",
+      "commit": "a4d5e68ec303c1c2db4a67be929587d7b9451423",
+      "file_toccati": [
+        "stories/StoreAvatar.stories.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-storie-loghi-locali.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-storie-loghi-locali.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a4d5e68^ --file stories/StoreAvatar.stories.tsx --prove tests/unit/riparazione-r01-storie-loghi-locali.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "I due loghi da placehold.co sono ora /icon-192.svg e /icon-512.svg, file di public/ che Storybook già serve (staticDirs in .storybook/main.ts). La prova importa le storie e controlla che ogni logo sia locale ed esista.",
+      "verificato_da": "revisore B (sonnet): regge; nessun altro placehold.co nelle storie, staticDirs e caricatore del logo controllati"
+    },
+    {
+      "id": "R01-004",
+      "chiave": "microcopy|i messaggi di formato rifiutato elencano ancora heic e heif come caricabili",
+      "esito": "parziale",
+      "commit": "d310a4f1e2f4511689ab26d519e179261fd157d2",
+      "file_toccati": [
+        "lib/storage/carica-immagine.ts",
+        "lib/storage/casella-di-caricamento.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-formati-senza-heic.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-formati-senza-heic.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d310a4f^ --file lib/storage/carica-immagine.ts,lib/storage/casella-di-caricamento.ts --prove tests/unit/riparazione-r01-formati-senza-heic.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Un TIFF rifiutato nelle storie (come in recensioni e prodotti) riceve ora «usa una foto JPG, PNG, WEBP, GIF o AVIF»: la lista viene dalla regola del magazzino tolti HEIC/HEIF (nuova formatiDaProporre); la porta continua ad accettarli. tipiScrittiPerUmani e decidiCosaFareDelDrop/avvisoPerGliScartati ricevono l'accept vero della casella (`accetta`, facoltativo); senza, il risultato è quello di prima, giusto per VendorForm, StoreMediaManager e ImageUrlField che accettano HEIC.",
+      "cosa_resta": "friendlyError (lib/errors.ts:356) dice ancora «…AVIF, HEIC o HEIF» quando è il deposito a rifiutare: file non mio, vedi serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/errors.ts",
+          "modifica": "riga 14: importare `formatiDaProporre` al posto di `formatiLeggibili` da './storage/carica-immagine'; riga 356: `return `Formato non accettato: usa una foto ${formatiDaProporre(TIPI_IMMAGINE)}.`;`"
+        },
+        {
+          "file": "tests/unit/riparazione-r01-formati-foto.test.ts",
+          "modifica": "insieme a lib/errors.ts: nel primo caso ciclare su `TIPI_IMMAGINE.filter((t) => !/hei[cf]$/.test(t))` e aggiungere `expect(msg).not.toMatch(/HEIC|HEIF/)`; nel secondo aspettarsi 'Formato non accettato: usa una foto JPG, PNG, WEBP, GIF o AVIF.'"
+        },
+        {
+          "file": "tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts",
+          "modifica": "insieme a lib/errors.ts, riga 47: toBe('Formato non accettato: usa una foto JPG, PNG, WEBP, GIF o AVIF.')"
+        },
+        {
+          "file": "components/seller/site/GalleryFields.tsx, components/seller/site/ImageUpload.tsx",
+          "modifica": "(facoltativo, nessun effetto visibile) passare `{ postiLiberi, accetta: ACCETTA }` ad avvisoPerGliScartati e togliere il `.replace(tipiScrittiPerUmani(), …)` di avvisoDelSito"
+        }
+      ],
+      "nota": "Modificata la prova esistente tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts perché importa lib/storage/carica-immagine per nome: solo l'attesa sulla frase della porta (riga ~103), ora /usa una foto JPG, PNG, WEBP, GIF o AVIF\\./. — PROVA COMUNE: la applica la regia all'unione. Riportata alla base nel ramo; diff da applicare (git diff 2ba05a74 → la cura): \ndiff --git a/tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts b/tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts\nindex ea1098a..1687a6c 100644\n--- a/tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts\n+++ b/tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts\n@@ -96,8 +96,10 @@ describe('② la porta rifiuta prima di spedire quello che il deposito rifiutere\n     const svg = new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' }) as never;\n     await expect(\n       caricaImmagine(d.client, { file: svg, userId: UID, cartella: 'logos' }),\n-      // S06 (1605): la frase elenca tutti i formati che la porta accetta, non tre su sette.\n-    ).rejects.toThrow(/JPG, PNG, WEBP, GIF, AVIF, HEIC o HEIF/);\n+      // S06 (1605): la frase elenca i formati che la porta accetta, non tre su sette.\n+      // 27/11/2026: tolti HEIC e HEIF, che le caselle delle foto pubbliche non offrono piu'\n+      // (la porta li accetta ancora: vedi `formatiDaProporre` in lib/storage/carica-immagine.ts).\n+    ).rejects.toThrow(/usa una foto JPG, PNG, WEBP, GIF o AVIF\\./);\n     expect(\n       d.chiamate,\n       'il file partiva, saliva, e veniva respinto alla fine: il negoziante aspettava per niente',",
+      "verificato_da": "non smentita: il revisore C è stato fermato a metà dalla regia per il tetto di spesa; la guarda il collaudo indipendente"
+    },
+    {
+      "id": "R01-007",
+      "chiave": "privacy-legale|una recensione segnalata come falsa non si può accogliere né togliere",
+      "esito": "scelta_di_nicola",
+      "commit": "a9584e191e5b8a0f5dc118511636d1847bc5a8db",
+      "file_toccati": [
+        "app/api/segnalazioni/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-recensione-accolta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-recensione-accolta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a9584e191e5b8a0f5dc118511636d1847bc5a8db^ --file app/api/segnalazioni/route.ts --prove tests/unit/riparazione-r01-recensione-accolta.test.ts,tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Ripresa la cura del 26/11 (daecd9af): il PATCH manda «rimosso» per una recensione solo quando non c'è più né in reviews né in store_reviews; resta 409 se è ancora pubblicata o se la lettura cade. Adattata la prova comune riparazione-r02-segnalazione-esito-solo-se-tolto, che importa per nome app/api/segnalazioni/route.ts: pretende il 409 solo per la recensione ancora pubblicata e in più controlla che non parta nessun esito.",
+      "domanda": "Accogliere una recensione segnalata come falsa vuol dire cancellarla (sparisce anche dalla media dei voti) o nasconderla (oggi non c'è un campo per farlo)?",
+      "nota": "Il codice non lo decide: nessuna regola RLS lascia allo staff cancellare reviews/store_reviews e non c'è una colonna per nasconderle. Domanda: accogliere una recensione falsa = cancellarla o nasconderla? In app/admin/segnalazioni/page.tsx «Accolta» resta spenta per le recensioni finché Nicola non sceglie. — PROVA COMUNE: la applica la regia all'unione. Riportata alla base nel ramo; diff da applicare (git diff 2ba05a74 → la cura): \ndiff --git a/tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts b/tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts\nindex c60c2f8..df95029 100644\n--- a/tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts\n+++ b/tests/unit/riparazione-r02-segnalazione-esito-solo-se-tolto.test.ts\n@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';\n  * segnalazione «accolta» («il contenuto è stato rimosso») se il contenuto è ancora online.\n  */\n \n-const db: { segnalazione: Record<string, unknown> | null; prodotto: Record<string, unknown> | null; negozio: Record<string, unknown> | null; cade: string | null } = {\n-  segnalazione: null, prodotto: null, negozio: null, cade: null,\n+const db: { segnalazione: Record<string, unknown> | null; prodotto: Record<string, unknown> | null; negozio: Record<string, unknown> | null; recensione?: Record<string, unknown> | null; cade: string | null } = {\n+  segnalazione: null, prodotto: null, negozio: null, recensione: null, cade: null,\n };\n const comunicate: string[] = [];\n \n@@ -32,7 +32,7 @@ vi.mock('@/lib/supabase/server', () => ({\n       q.maybeSingle = async () => (db.cade === t\n         ? { data: null, error: { message: 'rete caduta' } }\n         : {\n-            data: t === 'segnalazioni' ? db.segnalazione : t === 'products' ? db.prodotto : t === 'profiles' ? db.negozio : null,\n+            data: t === 'segnalazioni' ? db.segnalazione : t === 'products' ? db.prodotto : t === 'profiles' ? db.negozio : t === 'reviews' ? (db.recensione ?? null) : null,\n             error: null,\n           });\n       return q;\n@@ -49,7 +49,7 @@ const chiama = () =>\n   }));\n \n describe('R02-003 · l esito «rimosso» parte solo se il contenuto è davvero fuori', () => {\n-  beforeEach(() => { comunicate.length = 0; db.prodotto = null; db.negozio = null; db.cade = null; });\n+  beforeEach(() => { comunicate.length = 0; db.prodotto = null; db.negozio = null; db.recensione = null; db.cade = null; });\n \n   it('prodotto accolto ma ancora in vetrina: 409, niente esito', async () => {\n     db.segnalazione = { stato: 'accolta', tipo: 'prodotto', oggetto_id: 'p-1' };\n@@ -72,9 +72,13 @@ describe('R02-003 · l esito «rimosso» parte solo se il contenuto è davvero f\n     expect(comunicate).toEqual([]);\n   });\n \n-  it('recensione accolta: da qui non si toglie, 409', async () => {\n+  // 27/11/2026 (R01-007) — Prima: «recensione accolta: da qui non si toglie, 409» per qualunque\n+  // recensione. Ora il 409 resta solo finché la recensione è pubblicata (riparazione-r01-recensione-accolta).\n+  it('recensione accolta ma ancora pubblicata: 409', async () => {\n     db.segnalazione = { stato: 'accolta', tipo: 'recensione', oggetto_id: 'r-1' };\n+    db.recensione = { id: 'r-1' };\n     expect((await chiama()).status).toBe(409);\n+    expect(comunicate).toEqual([]);\n   });\n \n   it('respinta: l esito parte senza controlli', async () => {",
+      "cosa_resta": "Dopo la scelta. Se si cancella: app/api/admin/segnalazioni/accogli/route.ts:39 accetta anche tipo 'recensione' e fa DELETE col client di servizio su reviews poi store_reviews per id, con writeAudit; poi la pagina del pannello la chiama come fa per il prodotto. Se si nasconde serve una migrazione: ALTER TABLE public.reviews ADD COLUMN nascosta_at timestamptz; ALTER TABLE public.store_reviews ADD COLUMN nascosta_at timestamptz; e le due regole di lettura pubbliche (129/709) con AND nascosta_at IS NULL; poi il controllo nella rotta guarda nascosta_at.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/admin/segnalazioni/accogli/route.ts",
+          "modifica": "solo se accogliere vuol dire cancellare: accettare tipo 'recensione' e fare DELETE da reviews poi store_reviews per id (client di servizio), con writeAudit action 'review.delete' e origine 'segnalazione-accolta'"
+        }
+      ],
+      "verificato_da": "non smentita: il revisore C è stato fermato a metà dalla regia per il tetto di spesa; la guarda il collaudo indipendente"
+    },
+    {
+      "id": "R01-006",
+      "chiave": "privacy-legale|nel pannello delle segnalazioni lo staff decide su una recensione senza vederla: nessun link e nessun testo",
+      "esito": "parziale",
+      "commit": "647960cd1b21eb760de2084fb341169abca275bb",
+      "file_toccati": [
+        "app/api/segnalazioni/route.ts",
+        "app/admin/segnalazioni/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-segnalazione-recensione-visibile.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-segnalazione-recensione-visibile.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 647960cd1b21eb760de2084fb341169abca275bb^ --file app/admin/segnalazioni/page.tsx,app/api/segnalazioni/route.ts --prove tests/unit/riparazione-r01-segnalazione-recensione-visibile.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nuova lettura GET /api/segnalazioni?recensione=<uuid>, solo con withAdminAuth e il client di servizio: cerca in reviews poi in store_reviews e dice di cosa è la recensione, voto, testo, data e link (/product/<id> o /store/<id>); se non c'è più risponde null. La scheda del pannello per tipo 'recensione' mostra tutto questo, oppure «non c'è più», oppure l'errore di lettura.",
+      "verificato_da": "non smentita: il revisore C è stato fermato a metà dalla regia per il tetto di spesa; la guarda il collaudo indipendente",
+      "cosa_resta": "Il codice copre tutta la voce, ma nessun revisore interno l'ha smentita (fermato per il tetto di spesa): nel dubbio resta parziale finché il collaudo non controlla i permessi della nuova lettura GET /api/segnalazioni?recensione=<uuid> (withAdminAuth + client di servizio)."
+    },
+    {
+      "id": "R01-013",
+      "chiave": "privacy-legale|le domande sotto i prodotti si pubblicano subito, non si possono segnalare una per una e nessuno può toglierle",
+      "esito": "parziale",
+      "commit": "7ce242a95c986072f8e7cec6ba8f987ac0c64b5b",
+      "file_toccati": [
+        "app/admin/segnalazioni/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-domanda-accolta-si-nasconde.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-domanda-accolta-si-nasconde.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7ce242a95c986072f8e7cec6ba8f987ac0c64b5b^ --file app/admin/segnalazioni/page.tsx --prove tests/unit/riparazione-r01-domanda-accolta-si-nasconde.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base c'erano già il pulsante Segnala sotto ogni domanda (components/ProductQA.tsx:313), il tipo «domanda» nella rotta (route.ts:37, migrazione 364) e il tasto «Nascondi» per l'admin sulla pagina del prodotto (ProductQA.tsx:127-135). Mancava che il pannello delle segnalazioni potesse accoglierla: ora «Accolta» su una domanda la nasconde (is_public=false, regola qa_admin_nasconde) prima di registrare la decisione; se non riesce non salva niente e l'esito non parte; se la domanda non c'è più registra la decisione.",
+      "cosa_resta": "Moderazione prima della pubblicazione e un tasto del negozio per nascondere le domande sui suoi prodotti: scelte di Nicola.",
+      "domanda": "Le domande sotto i prodotti devono aspettare un'approvazione prima di comparire? Il negozio può nascondere le domande sui propri prodotti?",
+      "verificato_da": "non smentita: il revisore C è stato fermato a metà dalla regia per il tetto di spesa; la guarda il collaudo indipendente"
+    },
+    {
+      "id": "R01-010",
+      "chiave": "privacy-legale|il venditore può rimettere in vendita da solo un prodotto tolto dopo una segnalazione accolta",
+      "esito": "parziale",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessun codice. Un blocco nella pagina non si può fare senza rompere altro: nessun campo segna «tolto dallo staff» (accogli/route.ts:45 mette solo status='draft') e il venditore non legge le segnalazioni (regola 126: solo chi segnala e l'admin). Un blocco solo nella pagina non fermerebbe il modulo prodotto, le rotte AI con la chiave di servizio né il PATCH, e chiuderebbe per sempre anche i prodotti che lo staff ha rimesso in vendita: è il «rompe_altro» del collaudo del 26/11.",
+      "cosa_resta": "Migrazione (onda delle migrazioni): ALTER TABLE public.products ADD COLUMN IF NOT EXISTS tolto_dallo_staff_at timestamptz; UPDATE public.products p SET tolto_dallo_staff_at = s.deciso_at FROM public.segnalazioni s WHERE s.tipo='prodotto' AND s.stato='accolta' AND s.oggetto_id=p.id AND p.status IS DISTINCT FROM 'available'; CREATE OR REPLACE FUNCTION public.prodotto_tolto_lo_rimette_lo_staff() RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$ BEGIN IF NEW.tolto_dallo_staff_at IS DISTINCT FROM OLD.tolto_dallo_staff_at AND NOT public.is_admin() AND current_user NOT IN ('service_role','postgres','supabase_admin') THEN RAISE EXCEPTION 'Solo lo staff toglie o rimette un prodotto dopo una segnalazione' USING ERRCODE='42501'; END IF; IF NEW.tolto_dallo_staff_at IS NOT NULL AND NEW.status = 'available' THEN RAISE EXCEPTION 'Prodotto tolto dopo una segnalazione accolta: lo rimette in vendita solo lo staff' USING ERRCODE='42501'; END IF; RETURN NEW; END $$; DROP TRIGGER IF EXISTS prodotto_tolto_lo_rimette_lo_staff ON public.products; CREATE TRIGGER prodotto_tolto_lo_rimette_lo_staff BEFORE UPDATE OF status, tolto_dallo_staff_at ON public.products FOR EACH ROW EXECUTE FUNCTION public.prodotto_tolto_lo_rimette_lo_staff(); — il trigger vale anche per le scritture con la chiave di servizio (rotte AI); lo sblocco dello staff (tolto_dallo_staff_at = NULL) dura anche dopo Disattiva/Attiva; restano scoperte le copie fatte con INSERT (Duplica, import).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/admin/segnalazioni/accogli/route.ts",
+          "modifica": "riga 45, dopo la migrazione: .update({ status: 'draft', tolto_dallo_staff_at: new Date().toISOString() })"
+        },
+        {
+          "file": "(modifica prodotto dello staff, rotta admin dei prodotti)",
+          "modifica": "rimettere in vendita = UPDATE con tolto_dallo_staff_at = NULL e status = 'available' nella stessa scrittura"
+        }
+      ],
+      "verificato_da": "non smentita: il revisore C è stato fermato a metà dalla regia per il tetto di spesa; la guarda il collaudo indipendente"
+    },
+    {
+      "id": "R01-014",
+      "chiave": "privacy-legale|l'obbligo di dichiarare allergeni e ingredienti vale solo finché la categoria principale si chiama esattamente «alimentari», e dal pannello quel nome si può cambiare",
+      "esito": "serve_file_altrui",
+      "cosa_ho_fatto": "Verificato: lib/category-attributes.ts:297-325 legge già richiede_dichiarazioni_alimentari (migrazione 363) e il trigger della 363 blocca il cambio di slug e lo spegnimento dell'obbligo sulle categorie alimentari. Nel mio file non c'è altro. Resta che il pannello non lascia mettere l'obbligo su una radice nuova, e nessun file app/ usa la colonna.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/admin/categories/route.ts",
+          "modifica": "baseFields (riga 18): aggiungere richiede_dichiarazioni_alimentari: z.boolean().optional(). POST insert (riga 81): ...(d.richiede_dichiarazioni_alimentari !== undefined ? { richiede_dichiarazioni_alimentari: d.richiede_dichiarazioni_alimentari } : {}). PATCH (dopo riga 112): if (rest.richiede_dichiarazioni_alimentari !== undefined) patch.richiede_dichiarazioni_alimentari = rest.richiede_dichiarazioni_alimentari. Righe 92/124: il 23514 del trigger della 363 ha un messaggio suo (passare error.message), non «Foto non ammessa»."
+        },
+        {
+          "file": "app/admin/categories/page.tsx",
+          "modifica": "tipo Cat (riga 24): + richiede_dichiarazioni_alimentari?: boolean | null. Riga di modifica (righe 62/67/94): casella «Alimenti: obbliga allergeni e ingredienti» inviata nel PATCH. Modulo nuova categoria (righe 113-170): stessa casella per le radici, inviata nel POST (riga 144), con l'avviso «Una categoria principale nuova nasce senza l'obbligo di allergeni e ingredienti: spuntala se ci vanno alimenti»."
+        }
+      ],
+      "verificato_da": "non smentita: il revisore C è stato fermato a metà dalla regia per il tetto di spesa; la guarda il collaudo indipendente"
+    },
+    {
+      "id": "R01-012",
+      "chiave": "privacy-legale|la bozza di chi non completa l'accesso non si cancella all'uscita dall'account o per un altro utente",
+      "esito": "parziale",
+      "commit": "4fc940b6c337f1f4f0b03fea524519676b74c005",
+      "file_toccati": [
+        "components/providers/QueryProvider.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-bozza-cassa-all-uscita.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-bozza-cassa-all-uscita.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4fc940b6c337f1f4f0b03fea524519676b74c005^ --file components/providers/QueryProvider.tsx --prove tests/unit/riparazione-r01-bozza-cassa-all-uscita.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La bozza è mc_checkout_draft (nome, telefono, indirizzo; app/checkout/page.tsx:1311). A ogni SIGNED_OUT («Esci» da qualunque tasto, o sessione finita) QueryProvider la toglie da localStorage e sessionStorage; l'ingresso di chi la aspettava non la tocca. Navbar non serve: l'ascolto di QueryProvider copre tutte le uscite. Il cambio da A a B senza uscire la mette già da parte per A (lib/account/piu-account.ts:191).",
+      "cosa_resta": "Una bozza lasciata da un ospite che non completa l'accesso passa al primo utente che entra dopo su quel browser (piu-account.ts:216, e checkout/page.tsx:528 la riprende senza guardare chi l'ha scritta né quando). Serve una scadenza nella lettura (bozzaLetta): scartare la bozza se sceltaIl è più vecchio di N minuti; N lo decide Nicola. Dal collaudo interno: la pulizia scatta solo su SIGNED_OUT; una sessione scaduta che arriva come INITIAL_SESSION vuota (lib/account/piu-account.ts:314) lascia la bozza. Le copie messe da parte al cambio account (mycity:da-parte:<id>:mc_checkout_draft, piu-account.ts:61 e 193) non le toglie nessuno, neanche dimenticaTutti (riga 180).",
+      "serve_file_altrui": [
+        {
+          "file": "app/checkout/page.tsx",
+          "modifica": "righe 528-531: scartare e togliere la bozza se bozzaLetta(...).sceltaIl è più vecchio di N minuti (N da decidere)"
+        }
+      ],
+      "verificato_da": "revisore D (sonnet): parziale_ok; rilanciata la prova, cercati tutti i signOut e i chiamanti di dopoEventoAccesso e dimenticaTutti; nessun caso in cui la bozza da tenere venga tolta"
+    },
+    {
+      "id": "R01-015",
+      "chiave": "privacy-legale|con il fornitore onfido acceso, ogni chiamata (fino a 5 l'ora) crea da onfido una nuova scheda con nome, email e data di nascita, ma senza caricare i documenti. restano schede orfane con dati personali, e alla cancellazione dell'account nessuno le toglie",
+      "esito": "parziale",
+      "commit": "e5afeff89f0157c1fcae1fd80e6096918f685945",
+      "file_toccati": [
+        "lib/kyc/providers.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-onfido-una-scheda.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-onfido-una-scheda.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e5afeff89f0157c1fcae1fd80e6096918f685945^ --file lib/kyc/providers.ts --prove tests/unit/riparazione-r01-onfido-una-scheda.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base i documenti si caricavano già prima del controllo, un tentativo fallito toglieva la scheda e una verifica PENDING non ne apriva un'altra. Ora startCheck accetta un terzo argomento facoltativo checkPrecedente: legge GET /checks/{id}, prende applicant_id e riusa quella scheda (PUT con i dati aggiornati) invece di crearne una; una scheda ripresa non si toglie se il nuovo controllo fallisce; se la scheda era sparita (404) ne crea una sola. Nuovo metodo OnfidoProvider.cancellaScheda(checkId): GET del check poi DELETE /applicants/{id}, risponde 'tolta', 'niente' o 'fallita', con traccia nel registro. Nessuna colonna nuova: basta kyc_provider_check_id che il profilo salva già.",
+      "cosa_resta": "Collegare le chiamate nei file altrui (vedi serve_file_altrui). Le schede create prima, senza id salvato, si tolgono a mano dal pannello Onfido. Dal collaudo interno: se GET /checks/{id} fallisce (5xx, 429, timeout) startCheck ignora letto:false e crea comunque una scheda nuova (lib/kyc/providers.ts:181): va fermato con ok:false come il PUT non riuscito (righe 189-191). cancellaScheda risponde 'niente' se il controllo è sparito ma la scheda può esistere ancora (providers.ts:150), senza traccia nel registro.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/kyc/types.ts",
+          "modifica": "interfaccia KycProvider: startCheck(subject: KycSubject, docs: KycDocs, checkPrecedente?: string | null): Promise<KycCheckResult>; e cancellaScheda?(checkId: string | null | undefined): Promise<'tolta' | 'niente' | 'fallita'>;"
+        },
+        {
+          "file": "app/api/kyc/start-check/route.ts",
+          "modifica": "riga 152, provider.startCheck({...}, {...}): aggiungere il terzo argomento giaInAttesa.kyc_provider_check_id ?? null"
+        },
+        {
+          "file": "lib/account/cancellazione.ts",
+          "modifica": "anonimizzaDatiSensibili (riga 630), prima dell'update che azzera i campi KYC: leggere profiles.kyc_provider_check_id e chiamare await getKycProvider().cancellaScheda?.(checkId); se risponde 'fallita' lasciare una PuliziaNonRiuscita senza bloccare la cancellazione"
+        }
+      ],
+      "verificato_da": "revisore D (sonnet): parziale_ok; rilanciate la prova e le prove KYC esistenti (105 verdi), endpoint confrontati con il resto del file; nessun rischio di cancellare la scheda sbagliata"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il registro attività scrive «***» al posto di ogni cambio di discount_percent",
+      "dimensione": "privacy-legale",
+      "severita": "minore",
+      "file": "migrations/155_il_registro_attivita_oscura_per_difetto.sql:68",
+      "descrizione": "L'elenco delle colonne mostrabili ha `discount` e `percent` da sole ma non `discount_percent`: anche i cambi di sconto delle promozioni dei negozi (seller_promotions) finiscono nel registro come «***», senza traccia dello sconto prima e dopo."
+    },
+    {
+      "titolo": "Il logo del negozio, le foto della vetrina e i campi immagine accettano ancora foto HEIC, che su Chrome e Android si vedono come un riquadro vuoto",
+      "dimensione": "immagini-media",
+      "severita": "minore",
+      "file": "components/VendorForm.tsx:230 · components/StoreMediaManager.tsx:63 · components/ImageUrlField.tsx:62 · app/orders/[id]/return/page.tsx:491",
+      "descrizione": "Usano mappaAccept/attributoAccept senza togliere HEIC/HEIF, a differenza di storie, recensioni, foto prodotto e vetrina: il file salvato non si vede sui browser che non leggono HEIC."
+    },
+    {
+      "titolo": "«Lavora con noi» descrive ancora una squadra («Team piccolo e affiatato», «Flessibilità vera») e chiede «Non trovi il ruolo giusto?» anche senza nessuna posizione aperta",
+      "dimensione": "privacy-legale",
+      "severita": "minore",
+      "file": "app/lavora-con-noi/page.tsx:48-69 e 224",
+      "descrizione": "Le carte di «Cosa offriamo» raccontano un'organizzazione che oggi non c'è; fuori dalle voci di quest'onda."
+    },
+    {
+      "titolo": "Nel pannello delle segnalazioni una domanda segnalata è solo un codice: niente testo né link al prodotto",
+      "dimensione": "privacy-legale",
+      "severita": "minore",
+      "file": "app/admin/segnalazioni/page.tsx:79-83",
+      "descrizione": "dove() restituisce null per 'domanda': per decidere lo staff deve cercare a mano in product_questions."
+    },
+    {
+      "titolo": "Dal pannello categorie un rifiuto del database su slug o obbligo alimentare dice «Foto non ammessa»",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "app/api/admin/categories/route.ts:92,124",
+      "descrizione": "Ogni 23514 diventa «Foto non ammessa dal database», anche quando a rifiutare è il trigger della 363 sullo slug o sull'obbligo di allergeni."
+    }
+  ],
+  "domande_per_nicola": [
+    "R01-002: la migrazione 880 è già applicata sul database vero? Se sì, l'archivio degli sconti degli eventi non trova più niente e gli sconti si recuperano solo da un backup.",
+    "R01-001: il deploy di produzione deve fallire finché mancano nome legale e P.IVA, come propone il registro? Oggi fermerebbe ogni messa online.",
+    "R01-007: accogliere una recensione segnalata come falsa vuol dire cancellarla o nasconderla?",
+    "R01-013: le domande sotto i prodotti si moderano prima che compaiano? Il negozio può nasconderle sui propri prodotti?",
+    "R01-012: quanti minuti deve vivere la bozza della cassa di un ospite che va all'accesso senza completarlo?"
+  ],
+  "conto": {
+    "agenti": 7,
+    "nota": "3 riparatori (opus) + 4 revisori (A e C opus, B e D sonnet); il revisore C fermato dalla regia per il tetto di spesa. Spesa vicina al tetto di 25 $.",
+    "subagenti": 7
+  },
+  "costo_usd": 23.73
+}
