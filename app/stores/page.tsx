@@ -339,7 +339,7 @@ export default function StoresPage() {
       {titoloDellaPagina}
 
       {/* Filtri */}
-      <Card radius="xl" padding="sm" className="mb-6 shadow-sm space-y-2">
+      <Card radius="xl" padding="sm" className="mb-6 shadow-warm-sm space-y-2">
         <div className="flex gap-2 flex-wrap items-center">
           <input
             type="search"

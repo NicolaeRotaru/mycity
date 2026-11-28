@@ -568,7 +568,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
           onClick={() => setFiltersOpen(true)}
           aria-label={t('filters')}
           aria-expanded={filtersOpen}
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors ${
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold shadow-warm-sm transition-colors ${
             activeFilters > 0
               ? 'bg-primary-700 text-white hover:bg-primary-800'
               : 'bg-white text-primary-700 border border-primary-200 hover:bg-primary-50'

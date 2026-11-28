@@ -23,7 +23,7 @@ type Shape = 'rounded' | 'pill';
 const VARIANTS: Record<Variant, string> = {
   primary:   'bg-primary-700 hover:bg-primary-800 text-white shadow-warm-sm',
   // CTA d'acquisto (mostarda): alta visibilità sul canvas neutro.
-  accent:    'bg-accent-400 hover:bg-accent-500 text-ink-900 shadow-sm hover:shadow-warm',
+  accent:    'bg-accent-400 hover:bg-accent-500 text-ink-900 shadow-warm-sm hover:shadow-warm',
   secondary: 'bg-white border border-cream-300 hover:bg-cream-50 text-ink-900',
   ghost:     'text-primary-700 hover:bg-primary-50',
   danger:    'bg-red-600 hover:bg-red-700 text-white',

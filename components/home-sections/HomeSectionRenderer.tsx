@@ -398,7 +398,7 @@ function HomeBlock({
               location="seller_band"
               // R01-015 — Sul telefono (fascia in colonna) il pulsante può andare a capo e non supera lo
               // schermo; da 640 px, dove la fascia è una riga, resta su una riga come prima.
-              className="inline-flex max-w-full items-center gap-2 bg-accent-500 hover:bg-accent-600 text-ink-900 px-5 py-2.5 rounded-full font-bold transition-colors shadow-lg sm:whitespace-nowrap"
+              className="inline-flex max-w-full items-center gap-2 bg-accent-500 hover:bg-accent-600 text-ink-900 px-5 py-2.5 rounded-full font-bold transition-colors shadow-warm-lg sm:whitespace-nowrap"
             >
               <Store size={18} strokeWidth={2.4} />
               {c.ctaLabel || 'Diventa venditore'}

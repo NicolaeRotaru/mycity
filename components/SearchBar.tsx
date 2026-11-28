@@ -148,7 +148,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
           onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); inputRef.current?.blur(); } }}
           placeholder={placeholder}
           autoFocus={autoFocus}
-          className="w-full bg-white border-2 border-transparent focus-visible:ring-2 focus-visible:ring-primary-700 focus:border-primary-700 focus:bg-white text-ink-900 placeholder-ink-400 rounded-full pl-11 pr-11 py-2.5 text-sm font-medium focus:outline-none transition-colors shadow-sm"
+          className="w-full bg-white border-2 border-transparent focus-visible:ring-2 focus-visible:ring-primary-700 focus:border-primary-700 focus:bg-white text-ink-900 placeholder-ink-400 rounded-full pl-11 pr-11 py-2.5 text-sm font-medium focus:outline-none transition-colors shadow-warm-sm"
         />
         {/* 6/9/2026 — Qui c'era solo un disegno di lente con `pointer-events-none`: chi la
             toccava non otteneva niente, e dentro il <form> non esisteva nessun pulsante di

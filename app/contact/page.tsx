@@ -107,7 +107,7 @@ export default function ContactPage() {
       </div>
 
       <div className={`grid gap-4 mb-10 ${piuCanali ? 'md:grid-cols-3' : 'max-w-md mx-auto'}`}>
-        <a href={mailtoContatto('info')} className="min-w-0 [overflow-wrap:anywhere] bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
+        <a href={mailtoContatto('info')} className="min-w-0 [overflow-wrap:anywhere] bg-white border border-cream-300 rounded-xl p-5 hover:shadow-warm hover:border-primary-300 transition-all">
           <div className="mb-2"><Mail size={28} className="text-primary-600" aria-hidden /></div>
           <div className="font-bold">Email</div>
           <div className="text-sm text-ink-600">{indirizzoContatto('info')}</div>
@@ -119,7 +119,7 @@ export default function ContactPage() {
           carta compare solo se il numero c'è davvero, come i dati legali nel piè di pagina.
         */}
         {whatsapp && (
-          <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="min-w-0 [overflow-wrap:anywhere] bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-green-300 transition-all">
+          <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="min-w-0 [overflow-wrap:anywhere] bg-white border border-cream-300 rounded-xl p-5 hover:shadow-warm hover:border-green-300 transition-all">
             <div className="mb-2"><MessageCircle size={28} className="text-olive-600" aria-hidden /></div>
             <div className="font-bold">WhatsApp</div>
             <div className="text-xs text-ink-500 mt-1">Lun-Ven 9–18</div>
@@ -132,7 +132,7 @@ export default function ContactPage() {
           risponde davvero.
         */}
         {telefono && (
-          <a href={`tel:${telefono.replace(/[^\d+]/g, '')}`} className="min-w-0 [overflow-wrap:anywhere] bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
+          <a href={`tel:${telefono.replace(/[^\d+]/g, '')}`} className="min-w-0 [overflow-wrap:anywhere] bg-white border border-cream-300 rounded-xl p-5 hover:shadow-warm hover:border-primary-300 transition-all">
             <div className="mb-2"><Phone size={28} className="text-primary-600" aria-hidden /></div>
             <div className="font-bold">Telefono</div>
             <div className="text-sm text-ink-600">{telefono}</div>
