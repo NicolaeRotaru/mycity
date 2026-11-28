@@ -130,6 +130,43 @@ async function resoTuttoDaUnAltro(admin: SupabaseClient, order: OrdineDaAnnullar
 }
 
 /**
+ * 28/11/2026 (onda 2, R06-011) — Il rimborso sulla carta è caduto dopo che questo annullo aveva preso il
+ * turno (CANCELED): l'ordine torna allo stato di prima, così si può riprovare. Solo se è ancora annullato
+ * e il rimborsato è quello letto da chi annulla: se nel frattempo un altro rimborso l'ha chiuso, resta
+ * chiuso. Se non torna e non l'ha chiuso nessuno, è un ordine annullato e pagato senza rimborso: lo
+ * sanno gli amministratori (come nel giro degli ordini scaduti).
+ */
+async function riportaInVitaDopoIlRimborsoCaduto(admin: SupabaseClient, order: OrdineDaAnnullare, stato: string): Promise<void> {
+  let motivo = 'la riga è cambiata nel frattempo';
+  try {
+    let q = admin
+      .from('orders')
+      .update({ delivery_status: stato, canceled_at: null })
+      .eq('id', order.id)
+      .eq('delivery_status', 'CANCELED');
+    if (order.refunded_amount_cents != null) q = q.eq('refunded_amount_cents', Number(order.refunded_amount_cents));
+    const { data, error } = await q.select('id');
+    if (!error && Array.isArray(data) && data.length > 0) return;
+    if (error) motivo = error.message;
+    else if (await resoTuttoDaUnAltro(admin, order)) return;
+  } catch (err) {
+    motivo = err instanceof Error ? err.message : String(err);
+  }
+  logger.error('[annullaERimborsa] ordine annullato e NON rimborsato: non è tornato com era', { orderId: order.id, motivo });
+  try {
+    await notifyAdmins(
+      'Ordine annullato e NON rimborsato',
+      `L'ordine #${order.id.slice(0, 6).toUpperCase()}, pagato con la carta, risulta annullato ma il rimborso non è riuscito, ` +
+        `e non sono riuscito a rimetterlo com'era (${motivo}). Chi aveva chiesto l'annullo ha letto «rimborso non riuscito»: ` +
+        'controlla su Stripe se il cliente ha avuto i suoi soldi e, se no, rimborsalo a mano.',
+      '/admin/orders',
+    );
+  } catch (err) {
+    logger.error('[annullaERimborsa] avviso agli amministratori non partito', { orderId: order.id, err });
+  }
+}
+
+/**
  * 28/11/2026 (onda 2, R06-005) — IL CREDITO MYCITY TORNA DA UNA STRADA SOLA.
  *
  * Stava dentro `annullaERimborsa`; il giro degli ordini scaduti ne aveva una copia sua, con un
@@ -346,6 +383,32 @@ export async function annullaERimborsa(
       return { ok: false, motivo: 'RIMBORSO_DA_DIVIDERE' };
     }
 
+    // 28/11/2026 (onda 2, R06-011) — IL TURNO SI PRENDE ANCHE SULLA CARTA, PRIMA DEL GIRO E DEL RIMBORSO.
+    // Sui contanti il turno è la scrittura di CANCELED condizionata sullo stato letto (R131, più sotto):
+    // qui no, e due annulli da strade diverse (il cliente e il negozio, o un doppio tocco) passavano
+    // tutti e due, rifacevano il giro del carrello, chiamavano il rimborso e, se il secondo passava,
+    // restituivano il credito MyCity con due motivi diversi (wallet_credit è idempotente solo su
+    // motivo+ordine). Adesso passa uno solo: gli altri trovano zero righe e se ne vanno senza toccare
+    // carrello né soldi (GIA_ANNULLATO, come sui contanti). Lo stesso schema del giro degli ordini
+    // scaduti (app/api/cron/expire-stale-orders): CANCELED prima, e se il rimborso cade l'ordine torna
+    // com'era. Un ordine già consegnato non si annulla (054: lo stato resta DELIVERED, lo decide
+    // refundOrder): lì il turno non si prende, e a fermare il doppio rimborso resta la prenotazione.
+    const statoLetto = order.delivery_status ?? '';
+    const turnoSuQuestoOrdine = statoLetto !== 'DELIVERED';
+    const annullatoIl = new Date().toISOString();
+    if (turnoSuQuestoOrdine) {
+      const { data: preso, error: errTurno } = await admin
+        .from('orders')
+        .update({ delivery_status: 'CANCELED', canceled_at: annullatoIl })
+        .eq('id', order.id)
+        .neq('delivery_status', 'CANCELED')
+        // Lo stato che il chiamante ha controllato: se nel frattempo è cambiato, zero righe.
+        .eq('delivery_status', statoLetto)
+        .select('id');
+      if (errTurno) return { ok: false, motivo: 'ANNULLAMENTO_FALLITO', dettaglio: errTurno.message };
+      if (!preso || preso.length === 0) return { ok: false, motivo: 'GIA_ANNULLATO' };
+    }
+
     let giro: GiroDelCarrello | null = null;
     let rimborsoUscito = false;
     try {
@@ -363,6 +426,9 @@ export async function annullaERimborsa(
         metadata: opts.metadata,
         notifyBuyer: false,
         ...(merceUscita ? { merceNonTorna: true } : {}),
+        // R06-011 — CANCELED l'ha scritto questo annullo, adesso, e la merce non l'ha rimessa nessuno: anche
+        // con un rimborso parziale di prima (lib/ordini/rimessa-a-scaffale.ts), come il giro degli scaduti.
+        ...(turnoSuQuestoOrdine ? { annullatoDaChiChiama: true } : {}),
       });
       rimborsoUscito = true;
       // refundOrder ha già impostato CANCELED + canceled_at + payment_status.
@@ -420,6 +486,9 @@ export async function annullaERimborsa(
       // 30/10/2026 (collaudo) — Il rimborso non è partito e l'ordine resta vivo: la consegna del
       // carrello torna com'era. Senza, il pane restava a 1 € di consegna e il fattorino a 0.
       if (giro) await giro.rimetti();
+      // R06-011 — E l'ordine torna allo stato di prima del turno (il carrello prima: `rimetti` confronta la
+      // riga com'era letta dal giro, cioè già CANCELED). Mai se i soldi sono usciti.
+      if (turnoSuQuestoOrdine && !rimborsoUscito) await riportaInVitaDopoIlRimborsoCaduto(admin, order, statoLetto);
       return { ok: false, motivo: 'RIMBORSO_FALLITO', dettaglio: err instanceof Error ? err.message : undefined };
     }
   }

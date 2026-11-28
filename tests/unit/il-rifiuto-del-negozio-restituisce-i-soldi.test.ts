@@ -54,7 +54,17 @@ vi.mock('@/lib/supabase/server', () => ({
       if (table === 'orders') {
         return {
           select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: stato.ordine, error: null }) }) }),
-          update: () => ({ eq: async () => ({ error: null }) }),
+          // Onda 2 (R06-011) — anche sulla carta l'annullo prende il turno con update().eq().neq().eq().select('id'):
+          // la catena va avanti e la riga presa torna indietro; la scrittura semplice resta `await update().eq()`.
+          update: () => {
+            const catena: Record<string, unknown> = {
+              eq: () => catena,
+              neq: () => catena,
+              select: async () => ({ data: [{ id: 'o1' }], error: null }),
+              then: (ok: (r: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve({ error: null }).then(ok, ko),
+            };
+            return catena;
+          },
         };
       }
       return {
