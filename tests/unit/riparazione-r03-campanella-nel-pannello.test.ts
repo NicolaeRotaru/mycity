@@ -26,6 +26,8 @@ function preparaNicola() {
   globali.__PERCORSO_FINTO__ = '/admin/orders';
   globali.__DATI_QUERY__ = (o: { queryKey: readonly unknown[] }) => {
     const k = JSON.stringify(o.queryKey);
+    // 28/11/2026 — La tendina della barra in alto legge l'elenco delle ultime: qui è vuoto.
+    if (k.includes('notifications') && k.includes('list')) return [];
     if (k.includes('notifications')) return 3;
     if (k.includes('utente') || k.includes('auth')) return { userId: 'admin-1', id: 'admin-1' };
     return undefined;
@@ -45,14 +47,21 @@ describe('R03-021 — la campanella dentro il pannello', () => {
     s.smonta();
   }, 60000);
 
-  it('la barra in alto su telefono porta alle notifiche e dice quante sono da leggere', async () => {
+  // 28/11/2026 — La barra in alto è quella bianca del negozio (Nicola): la campanella apre la tendina
+  // delle ultime notifiche, e da lì «Vedi tutte nel Centro notifiche» porta alla pagina.
+  it('la barra in alto dice quante sono da leggere e porta alle notifiche', async () => {
     preparaNicola();
     const mod = await monta('components/admin/AdminSidebar.tsx');
     const s = accendi(mod.AdminMobileTopbar as never, {});
     await attendi();
-    const [c] = campanelle();
-    expect(c, 'su telefono la campanella non c è').toBeTruthy();
-    expect(c.getAttribute('aria-label') ?? '').toMatch(/Notifiche: 3 da leggere/);
+    const bottone = document.querySelector('header button[aria-controls="pannello-notifiche-admin"]') as HTMLButtonElement | null;
+    expect(bottone, 'nella barra in alto la campanella non c è').toBeTruthy();
+    expect(bottone!.getAttribute('aria-label') ?? '').toMatch(/Notifiche: 3 da leggere/);
+    expect(bottone!.closest('header')?.className ?? '', 'la barra in alto è ancora nera').not.toMatch(/bg-ink-900/);
+    bottone!.click();
+    await attendi();
+    expect(document.getElementById('pannello-notifiche-admin'), 'la tendina non si apre').toBeTruthy();
+    expect(campanelle().length, 'dalla tendina non si arriva al Centro notifiche').toBeGreaterThan(0);
     s.smonta();
   }, 60000);
 });
