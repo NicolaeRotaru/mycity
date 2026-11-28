@@ -15,6 +15,7 @@
 import { hasConsent } from '@/lib/consent';
 import { ambienteSentry } from './ambiente';
 import { indirizzoSenzaDatiPersonali } from './indirizzo-senza-dati-personali';
+import { testoSenzaRecapiti } from './filmato-senza-dati-personali';
 
 export const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
@@ -140,6 +141,29 @@ export function ripulisciEvento(event: any): any {
     delete event.user.email;
     delete event.user.ip_address;
     delete event.user.username;
+  }
+  /**
+   * 28/11/2026 (R10-008, onda 2) — IL TESTO DELL'ERRORE USCIVA COM'ERA.
+   *
+   * Il logger oscura email e telefoni prima di passare a Sentry, ma gli errori che dal logger non
+   * passano arrivavano qui in chiaro: `onRequestError` del server (instrumentation.ts), le pagine
+   * di errore (gli error.tsx sotto app/ e app/global-error.tsx), le promesse rifiutate del browser
+   * (lib/analytics/sentry.tsx), l'edge. «Nessun ordine per mario.rossi@gmail.com» o «telefono
+   * 333 1234567 non valido» finivano nel titolo dell'errore. Qui passa ogni evento (beforeSend del
+   * server, dell'edge e del browser): il testo dell'eccezione, il messaggio e le briciole della
+   * console si ripuliscono con la stessa rete del filmato dello schermo.
+   */
+  if (Array.isArray(event.exception?.values)) {
+    for (const ex of event.exception.values) {
+      if (typeof ex?.value === 'string') ex.value = testoSenzaRecapiti(ex.value);
+    }
+  }
+  if (typeof event.message === 'string') event.message = testoSenzaRecapiti(event.message);
+  if (typeof event.logentry?.message === 'string') event.logentry.message = testoSenzaRecapiti(event.logentry.message);
+  if (Array.isArray(event.breadcrumbs)) {
+    for (const briciola of event.breadcrumbs) {
+      if (typeof briciola?.message === 'string') briciola.message = testoSenzaRecapiti(briciola.message);
+    }
   }
   return event;
 }
