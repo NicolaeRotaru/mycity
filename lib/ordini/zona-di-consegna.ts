@@ -2,9 +2,11 @@ import { RAGGIO_CONSEGNA_KM, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { haversineKm } from '@/lib/geo';
 
 /**
- * R09-005 — LA FRASE DELLA ZONA SI SCRIVE QUI, UNA VOLTA SOLA.
- * La cassa, la pagina Spedizioni, il rifiuto, la pillola della posizione, le FAQ e «Vicino a te» la
- * importano da qui: il confine vero (`RAGGIO_CONSEGNA_KM`) e le parole che lo dicono non si separano.
+ * LA FRASE DELLA ZONA SI SCRIVE QUI.
+ * La cassa, la pagina Spedizioni, il rifiuto, la pillola della posizione, le FAQ e il testo di «Vicino a te»
+ * la importano da qui: il confine vero (`RAGGIO_CONSEGNA_KM`) e le parole che lo dicono non si separano.
+ * Non è ancora «una volta sola»: i metadati di app/near/layout.tsx e di app/category/[slug]/layout.tsx
+ * (la descrizione per Google) scrivono ancora a mano «fino a N km dal negozio» e vanno portati qui.
  */
 export const CONFINE_DELLA_ZONA = `${RAGGIO_CONSEGNA_KM} km`;
 export const FINO_AL_CONFINE = `fino a ${CONFINE_DELLA_ZONA} dal negozio`;

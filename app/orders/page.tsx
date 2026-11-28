@@ -389,7 +389,7 @@ export default function OrdersPage() {
                             <Image src={sizedImage(img, 'thumb')} alt="" width={48} height={48} loader={caricatoreFotoRemote} className="h-full w-full object-cover" />
                           ) : <Package size={18} className="text-ink-400" aria-hidden />}
                         </div>
-                        <span className="absolute -top-1.5 -right-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-ink-900 px-1 text-[10px] font-bold text-white">
+                        <span className="absolute -top-1.5 -right-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-ink-900 px-1 text-2xs font-bold text-white">
                           {it.quantity}
                         </span>
                       </div>

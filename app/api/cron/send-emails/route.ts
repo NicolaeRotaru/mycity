@@ -242,6 +242,15 @@ async function chiudiLeScaduteInBlocco(supa: any): Promise<number> {
   return chiuse;
 }
 
+/** Il modello delle righe messe in coda da lib/email/client.ts quando un invio diretto non parte (stesso nome). */
+const POSTA_RIMANDATA = 'posta_rimandata';
+
+/** Oggetto e corpo di un messaggio rimandato; senza tutti e due la riga non ha niente da spedire. */
+function messaggioRimandato(dati: Record<string, unknown>): { subject: string; html: string; text?: string } | null {
+  if (typeof dati.subject !== 'string' || !dati.subject || typeof dati.html !== 'string' || !dati.html) return null;
+  return { subject: dati.subject, html: dati.html, ...(typeof dati.text === 'string' ? { text: dati.text } : {}) };
+}
+
 /**
  * 31/10/2026 — UN ACCOUNT CHE NON ESISTE PIU' NON E' UN ERRORE DI UN ATTIMO.
  *
@@ -440,7 +449,11 @@ async function processBatch(
     // Il nome di battesimo: lo scrive la persona nel proprio profilo, quindi e'
     // testo di un altro, e il template lo filtra prima di metterlo nell'HTML.
     const dati = (row.metadata ?? {}) as Record<string, unknown>;
-    const messaggio = preparaEmailCicloDiVita(row.template, {
+    // 27/11/2026 (R03-002) — Un messaggio di servizio già pronto che l'invio diretto non è riuscito a
+    // spedire («Nuovo ordine» al negozio, il rimborso che chiede l'IBAN): lo mette qui
+    // lib/email/client.ts (`rimandaA`), con oggetto e corpo nella riga.
+    const rimandata = row.template === POSTA_RIMANDATA;
+    const messaggio = rimandata ? messaggioRimandato(dati) : preparaEmailCicloDiVita(row.template, {
       name: userProfile?.full_name?.split(' ')[0],
       // R007 — I dati della riga arrivano al template. Prima passava solo il
       // nome: bastava per il benvenuto, e lasciava muti i due messaggi d'ordine.
@@ -453,13 +466,21 @@ async function processBatch(
     });
     if (!messaggio) {
       skipped++;
-      await annullaRiga(supa, row.id);
+      if (rimandata) {
+        // R03-002 (giro 2) — Una riga rimandata senza oggetto o corpo (metadata non letto: un
+        // claim_pending_emails vecchio, senza la colonna) si annulla, ma dicendolo: era un'email persa.
+        const motivo = 'posta rimandata senza oggetto o corpo nella riga (metadata non letto: claim_pending_emails senza la colonna?)';
+        logger.error('[cron] posta rimandata annullata: la riga non porta il messaggio', { id: row.id, userId: row.user_id, motivo });
+        await annullaRiga(supa, row.id, motivo);
+      } else {
+        await annullaRiga(supa, row.id);
+      }
       continue;
     }
     // Benvenuto, tutorial e i due messaggi d'ordine partono sempre: sono
     // servizio. Gli altri (promo / re-engagement / win-back) sono marketing →
     // solo con consenso.
-    const isMarketing = !TEMPLATE_DI_SERVIZIO.has(row.template);
+    const isMarketing = !rimandata && !TEMPLATE_DI_SERVIZIO.has(row.template);
     if (isMarketing && consensoIgnoto !== null) {
       rinviate++;
       await rilasciaRiga(supa, row.id, `consenso non letto: ${consensoIgnoto}`);
@@ -502,6 +523,7 @@ async function processBatch(
       subject: messaggio.subject,
       html: messaggio.html,
       text: messaggio.text,
+      ...(rimandata && typeof dati.replyTo === 'string' ? { replyTo: dati.replyTo } : {}),
       /**
        * 6/9/2026 — CHI SPEDISCE DEVE DIRE CHE MESSAGGIO STA SPEDENDO.
        *

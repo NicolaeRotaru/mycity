@@ -57,6 +57,17 @@ export type SendEmailInput = {
    * (entro 24 ore) e non lo rispedisce. Chi la passa deve darla stabile: una per riga di coda.
    */
   idempotencyKey?: string;
+  /**
+   * 27/11/2026 (R03-002) — SE NON PARTE, LA RIMANDA LA CODA.
+   *
+   * L'id (profiles.id) di chi riceve il messaggio, quando l'indirizzo è quello del suo account. Se
+   * Resend rifiuta l'invio (quota superata, chiave revocata, dominio non più verificato) o la rete
+   * cade, i tentativi qui sotto finiscono in pochi secondi: prima il messaggio spariva, e lo diceva
+   * solo un avviso agli amministratori. Adesso il messaggio già pronto entra in `email_queue` e il
+   * giro app/api/cron/send-emails lo riprova, con attesa crescente e l'allarme della coda arretrata.
+   * Solo per i messaggi di servizio, e non per la posta spenta per configurazione (`skipped`).
+   */
+  rimandaA?: string | null;
 };
 
 export type SendEmailResult =
@@ -172,6 +183,8 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   };
   const opzioni = input.idempotencyKey ? conChiaveDiIdempotenza(resend, input.idempotencyKey) : undefined;
   let lastErr = 'unknown';
+  // R03-002 — Dopo il tetto dei dieci secondi l'esito è ignoto: Resend può averla già spedita.
+  let esitoIgnoto = false;
   for (let attempt = 0; attempt < 2; attempt++) {
     /**
      * 5/11/2026 — SI RITENTA SOLO QUANDO RESEND HA DETTO «NON L'HO PRESA».
@@ -213,16 +226,54 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     } catch (err) {
       lastErr = err instanceof Error ? err.message : 'unknown';
       // Il nostro tetto dei dieci secondi: la richiesta può essere arrivata, non si rimanda.
-      ritentabile = !(err instanceof Error && err.message === TIMEOUT_INVIO);
+      esitoIgnoto = err instanceof Error && err.message === TIMEOUT_INVIO;
+      ritentabile = !esitoIgnoto;
     }
     if (!ritentabile) break;
     if (attempt === 0) await new Promise((r) => setTimeout(r, 300)); // breve backoff
   }
   logger.error('[email] invio fallito dopo retry', { message: lastErr });
+  // R03-002 (giro 2) — In coda solo un rifiuto certo o una rete caduta prima dell'invio. Dopo un
+  // timeout no: il giro la rispedirebbe con una chiave nuova, e la stessa email arriverebbe due volte.
+  if (input.rimandaA && tipo === 'transazionale' && !esitoIgnoto) await rimettiInCoda(input, input.rimandaA, lastErr);
+  else if (input.rimandaA && esitoIgnoto) logger.warn('[email] esito ignoto dopo il timeout: non si rimette in coda', { subject: input.subject });
   return { ok: false, error: lastErr };
 }
 
 const TIMEOUT_INVIO = 'invio email oltre i 10 secondi';
+
+/** Il modello della coda per un messaggio già pronto: lo stesso nome lo legge app/api/cron/send-emails/route.ts. */
+const POSTA_RIMANDATA = 'posta_rimandata';
+
+/**
+ * 27/11/2026 (R03-002) — Mette in `email_queue` un messaggio di servizio che non è partito (vedi
+ * `rimandaA`). Il destinatario è l'account: la coda legge l'indirizzo al momento di spedire, come per
+ * le altre righe. Non lancia mai: chi spedisce è il webhook di Stripe o la creazione di un ordine.
+ */
+async function rimettiInCoda(input: SendEmailInput, userId: string, motivo: string): Promise<void> {
+  try {
+    const { getAdminSupabase } = await import('@/lib/supabase/server');
+    const { error } = await getAdminSupabase().from('email_queue').insert({
+      user_id: userId,
+      template: POSTA_RIMANDATA,
+      send_at: new Date().toISOString(),
+      metadata: {
+        subject: input.subject,
+        html: input.html,
+        ...(input.text ? { text: input.text } : {}),
+        ...(input.replyTo ? { replyTo: input.replyTo } : {}),
+        motivo: motivo.slice(0, 500),
+      },
+    });
+    if (error) throw new Error(error.message);
+    logger.warn('[email] invio fallito: messaggio rimesso in coda, lo riprova il giro send-emails', { subject: input.subject });
+  } catch (err) {
+    logger.error('[email] invio fallito e messaggio NON rimesso in coda', {
+      subject: input.subject,
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
 
 type OpzioniInvio = Parameters<Resend['emails']['send']>[1];
 

@@ -35,6 +35,7 @@ vi.mock('@/components/seller/StoreHoursEditor', () => ({ default: () => null }))
 vi.mock('@/components/seller/FeaturedProductsPicker', () => ({ default: () => null }));
 
 import VendorForm from '@/components/VendorForm';
+import { personalizzazioneDaModificare } from '@/lib/store-customization';
 
 const accesi: Root[] = [];
 afterEach(() => {
@@ -43,6 +44,8 @@ afterEach(() => {
 });
 const aspetta = () => act(async () => { await new Promise((r) => setTimeout(r, 30)); });
 
+// I social passati qui sono quelli GIÀ salvati: arrivano al modulo dalla stessa lettura di «Dettagli negozio»
+// (StoreDetailsEditor), non scritti a mano nei valori di partenza. Quello che scrive il negoziante si scrive nel campo.
 async function monta(socials: Record<string, string>) {
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
   const onSubmit = vi.fn();
@@ -54,7 +57,7 @@ async function monta(socials: Record<string, string>) {
     root.render(createElement(VendorForm, {
       onSubmit,
       mode: 'branding',
-      defaultValues: { storeName: 'Pane Quotidiano', storeCustomization: { socials } },
+      defaultValues: { storeName: 'Pane Quotidiano', storeCustomization: personalizzazioneDaModificare({ socials }) },
     }));
   });
   await aspetta();
@@ -83,11 +86,19 @@ describe('R02-007 · link social incollati', () => {
     });
   });
 
-  it('un nome con spazi in Facebook: errore sotto Facebook, sezione aperta, nessun salvataggio', async () => {
-    const { radice, onSubmit } = await monta({ facebook: 'Pane Quotidiano Piacenza', website: 'www.panequotidiano.it' });
+  // 28/11/2026 (R04-010) — Il nome con spazi lo SCRIVE il negoziante in Facebook, che era vuoto: sul sito vero
+  // l'errore va sotto Facebook e la sezione si apre, ma il resto si salva (R10-010) e quel Facebook no.
+  // Prima la prova lo metteva fra i valori già salvati e pretendeva il blocco di tutto: sul sito non succede.
+  // Il blocco c'è solo per un valore nuovo sbagliato scritto sopra uno già salvato e sbagliato
+  // (riparazione-r04-social-salvato-non-blocca, dal percorso vero di StoreDetailsEditor).
+  it('un nome con spazi scritto in Facebook: errore sotto Facebook, sezione aperta, quel Facebook non si salva', async () => {
+    const { radice, onSubmit } = await monta({ website: 'www.panequotidiano.it' });
     expect(sezione(radice).open).toBe(false);
+    await act(async () => { fireEvent.change(campo(radice, 'facebook'), { target: { value: 'Pane Quotidiano Piacenza' } }); });
     await invia(radice);
-    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0].storeCustomization.socials.facebook ?? '').toBe('');
+    expect(onSubmit.mock.calls[0][0].storeCustomization.socials.website).toBe('https://www.panequotidiano.it');
     const errore = radice.querySelector('#social-facebook-errore');
     expect(errore?.textContent).toBe('Scrivi solo il nome del profilo, per esempio iltuonegozio');
     expect(campo(radice, 'facebook').getAttribute('aria-invalid')).toBe('true');

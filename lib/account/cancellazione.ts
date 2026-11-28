@@ -306,6 +306,18 @@ export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
     perche: 'nome, cellulare, indirizzo di casa, coordinate della porta e note per il fattorino',
   },
   {
+    // 27/11/2026 (R08-013) — Le segnalazioni di contenuti (DSA). migrations/126:
+    // segnalazioni.segnalante_id -> auth.users ON DELETE SET NULL: la riga resta (serve a dire cosa
+    // è stato segnalato e com'è finita), e restavano con lei l'email di contatto e il testo scritto
+    // da chi se n'è andato. Si azzerano gli stessi due campi che la potatura toglie dopo la decisione
+    // (lib/privacy/potature-ritenzione.ts): tipo, oggetto, motivo ed esito restano.
+    tabella: 'segnalazioni',
+    colonna: 'segnalante_id',
+    azzera: { email_contatto: null, dettaglio: null },
+    sopravvive: true,
+    perche: 'l\'email di contatto e il testo delle segnalazioni fatte dall\'account',
+  },
+  {
     // 26/11/2026 — Gli agenti entrati dal link d'invito (migrations/865). La chiave è
     // agenti.user_id -> auth.users ON DELETE CASCADE: la riga se ne va con la persona.
     // Si ripulisce lo stesso prima, come le altre: l'email non resta neanche un istante.
@@ -607,7 +619,14 @@ export async function togliDallaNewsletter(admin: Admin, userId: string): Promis
     }
     const emailUtente = utenteAuth?.user?.email ?? null;
     if (!emailUtente) return null;
-    const { error } = await admin.from('newsletter_subscribers').delete().ilike('email', emailUtente);
+    // 27/11/2026 (R08-003) — L'INDIRIZZO È UN INDIRIZZO, NON UN MODELLO. `ilike` legge `_` e `%` come
+    // jolly (e PostgREST legge `*` come `%`): chi cancellava mario_rossi@x.it disiscriveva anche
+    // mario.rossi@x.it. Si confronta senza maiuscole ma lettera per lettera: `\`, `%` e `_` si
+    // neutralizzano. Un indirizzo con `*` o `\` nella lista non può esserci (newsletter_subscribers_email_format,
+    // migrations/109), e `*` non si può neutralizzare: lì non c'è niente da togliere.
+    if (/[*\\]/.test(emailUtente)) return null;
+    const soloQuesta = emailUtente.replace(/[%_]/g, (jolly) => `\\${jolly}`);
+    const { error } = await admin.from('newsletter_subscribers').delete().ilike('email', soloQuesta);
     if (error) {
       logger.warn('[cancellazione] newsletter non ripulita', { userId, err: error.message });
       return nonRiuscita(error.message);

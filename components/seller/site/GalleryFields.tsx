@@ -18,6 +18,7 @@ import {
   tipiScrittiPerUmani,
 } from '@/lib/storage/casella-di-caricamento';
 import { uploadSiteImage } from './ImageUpload';
+import { acceptSenzaHeic, avvisoFotoHeic, eFotoHeic, tutteSenzaHeic } from '@/lib/immagini/heic-in-jpeg';
 
 
 /**
@@ -38,43 +39,38 @@ type Cfg = GallerySec['config'];
 type Item = Cfg['items'][number];
 
 /**
- * R21-002 — LE FOTO HEIC/HEIF DELL'IPHONE NON ENTRANO PIU' NELLA GALLERIA COSI' COME SONO.
- *
- * Il magazzino le accetta, ma nessuno le converte: il negoziante le vedeva bene dal suo iPhone e i
- * clienti su Chrome, Firefox, Edge e Android vedevano un riquadro rotto. Come per le foto prodotto
- * (`lib/products/uploadImages.ts`) si tolgono dall'elenco della casella: senza HEIC nell'`accept`
- * l'iPhone le converte da solo in JPEG, e un .heic trascinato da un PC la casella lo scarta e
- * `avvisoDelSito` dice perche'. Riconosce il tipo («…/heic»), l'estensione («.heif») e il nome del
- * file («IMG_0421.HEIC»). La stessa regola sta in `ImageUpload.tsx`: ogni casella si regge da sola.
- */
-const FORMATO_DELL_IPHONE = /[./]hei[cf]$/i;
-const FOTO_HEIC =
-  "Le foto HEIC (il formato dell'iPhone) non le carichiamo: su Chrome e sui telefoni Android si vedrebbero come un riquadro vuoto. Sceglile direttamente dall'iPhone, che le trasforma da solo in JPG, oppure salvale in JPG e riprova.";
-
-/**
  * QUELLO CHE LA CASELLA ACCETTA LO DECIDE IL MAGAZZINO, NON QUESTO FILE.
  *
  * Fino all'8/9/2026 qui c'erano tre tipi scritti a mano — JPG, PNG, WEBP — mentre il deposito ne
  * accetta sette. I quattro che mancavano comprendono HEIC e HEIF, cioe' le foto dell'iPhone: il
  * negoziante le trascinava e non succedeva niente. Calcolati una volta sola fuori dal componente
  * perche' l'oggetto non cambi identita' a ogni ridisegno.
+ *
+ * LE FOTO HEIC/HEIF NON ENTRANO PIU' NELLA GALLERIA COSI' COME SONO. Salvate com'erano, il
+ * negoziante le vedeva bene dal suo iPhone e i clienti su Chrome, Firefox, Edge e Android vedevano
+ * un riquadro rotto. La casella le lascia entrare (`ACCETTA`) perche' `tutteSenzaHeic`
+ * (`lib/immagini/heic-in-jpeg.ts`) le converta in JPEG prima di partire, o le rifiuti con una frase
+ * chiara dove il browser non le sa leggere. Il campo file invece non le chiede (`ACCEPT_DEL_CAMPO`):
+ * cosi' l'iPhone, scegliendo dalla galleria, consegna gia' un JPEG. La stessa regola sta in
+ * `ImageUpload.tsx`: ogni casella si regge da sola.
  */
-const ACCETTA = Object.fromEntries(Object.entries(mappaAccept()).filter(([tipo]) => !FORMATO_DELL_IPHONE.test(tipo)));
+const ACCETTA = mappaAccept();
+const ACCEPT_DEL_CAMPO = acceptSenzaHeic(ACCETTA);
 const PESO_MASSIMO = pesoMassimo();
+const FORMATI_DA_DIRE = (() => {
+  const formati = Object.entries(ACCETTA)
+    .filter(([tipo]) => !eFotoHeic({ type: tipo }))
+    .map(([, estensioni]) => estensioni[0].slice(1).toUpperCase());
+  return `${formati.slice(0, -1).join(', ')} o ${formati[formati.length - 1]}`;
+})();
 
 /**
- * Gli HEIC scartati hanno la loro frase; per il resto parla il cervello comune, con l'elenco dei
- * formati senza HEIC/HEIF (la sua frase li nomina, perche' il magazzino li accetta).
+ * Per gli scartati parla il cervello comune; fra i formati da proporre non nomina HEIC/HEIF, che
+ * entrano solo dove il browser li sa convertire.
  */
 function avvisoDelSito(scartati: readonly FileRejection[], postiLiberi: number): string | null {
-  const heic = scartati.filter(({ file }) => FORMATO_DELL_IPHONE.test(file?.type ?? '') || FORMATO_DELL_IPHONE.test(file?.name ?? ''));
-  const resto = avvisoPerGliScartati(scartati.filter((s) => !heic.includes(s)), { postiLiberi });
-  const formati = Object.values(ACCETTA).map((estensioni) => estensioni[0].slice(1).toUpperCase());
-  const frasi = [
-    heic.length > 0 ? FOTO_HEIC : '',
-    (resto ?? '').replace(tipiScrittiPerUmani(), `${formati.slice(0, -1).join(', ')} o ${formati[formati.length - 1]}`),
-  ].filter(Boolean);
-  return frasi.length > 0 ? frasi.join(' ') : null;
+  const avviso = avvisoPerGliScartati(scartati, { postiLiberi });
+  return avviso ? avviso.replace(tipiScrittiPerUmani(), FORMATI_DA_DIRE) : null;
 }
 
 /** Config del blocco "galleria": upload multiplo di immagini con testo alternativo. */
@@ -113,10 +109,12 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
         postiLiberi: MAX_GALLERY_ITEMS - items.length,
       });
       if (avviso) toast.error(avviso);
-      const toUpload = daCaricare;
-      if (toUpload.length === 0) return;
+      if (daCaricare.length === 0) return;
       setBusy(true);
       try {
+        const { pronte: toUpload, rifiutate } = await tutteSenzaHeic(daCaricare);
+        if (rifiutate.length > 0) toast.error(avvisoFotoHeic(rifiutate.length));
+        if (toUpload.length === 0) return;
         const urls = await Promise.all(toUpload.map(uploadSiteImage));
         const ora = ultimaSezione.current;
         ultimoOnChange.current({
@@ -181,7 +179,7 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
             isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
           } ${busy ? 'opacity-50 pointer-events-none' : ''}`}
         >
-          <input {...getInputProps({ 'aria-label': 'Aggiungi immagini alla galleria' })} />
+          <input {...getInputProps({ accept: ACCEPT_DEL_CAMPO, 'aria-label': 'Aggiungi immagini alla galleria' })} />
           {busy ? 'Caricamento…' : `Aggiungi immagini (max ${MAX_GALLERY_ITEMS})`}
         </div>
       )}

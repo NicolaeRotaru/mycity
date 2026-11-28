@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept, regolaDelSecchio, tettoInMB } from '@/lib/storage/regole-secchi';
 import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
+import { acceptSenzaHeic, avvisoFotoHeic, tutteSenzaHeic } from '@/lib/immagini/heic-in-jpeg';
 
 type Props = {
   userId: string;
@@ -39,31 +40,19 @@ const SECCHIO_RECENSIONI = 'reviews';
  * lista e il tetto arrivano dalla regola del magazzino, che e' anche quella che poi rifiuta il
  * file: il campo e la porta non possono piu' dire due cose diverse.
  */
-// R21-002 — Senza HEIC/HEIF: vedi `fotoHeic` qui sotto.
-const ACCEPT = attributoAccept(SECCHIO_RECENSIONI)
-  .split(',')
-  .filter((tipo) => !formatoDellIphone(tipo))
-  .join(',');
+// Senza HEIC/HEIF: cosi' l'iPhone, scegliendo dalla galleria, consegna gia' un JPEG.
+const ACCEPT = acceptSenzaHeic(attributoAccept(SECCHIO_RECENSIONI));
 const MAX_SIZE_MB = tettoInMB(SECCHIO_RECENSIONI);
 const MAX_BYTE = regolaDelSecchio(SECCHIO_RECENSIONI).maxByte;
 
 /**
- * R21-002 — LE FOTO HEIC/HEIF DELL'IPHONE NON SI CARICANO PIU' COSI' COME SONO.
+ * LE FOTO HEIC/HEIF DELL'IPHONE NON SI CARICANO PIU' COSI' COME SONO.
  *
- * Il magazzino le accetta, ma nessuno le converte: su Chrome, Firefox, Edge e Android la foto
- * della recensione diventava un riquadro rotto. Come per le foto prodotto
- * (`lib/products/uploadImages.ts`) si tolgono dall'elenco del campo — cosi' l'iPhone le converte
- * da solo in JPEG — e un .heic che arriva lo stesso (trascinato da un PC) si rifiuta con una
- * frase chiara. Riconosce il tipo («…/heic») e il nome del file («IMG_0421.HEIC»).
+ * Il magazzino le accetta, ma su Chrome, Firefox, Edge e Android un HEIC salvato com'e' diventava
+ * un riquadro rotto. Un .heic che arriva lo stesso (trascinato da un PC, col tipo vuoto) passa da
+ * `tutteSenzaHeic` (`lib/immagini/heic-in-jpeg.ts`): dove il browser lo sa leggere parte come JPEG,
+ * altrove si rifiuta con una frase chiara e non parte.
  */
-function formatoDellIphone(testo: string): boolean {
-  return /[./]hei[cf]$/i.test(testo);
-}
-function fotoHeic(file: File): boolean {
-  return formatoDellIphone(file.type ?? '') || formatoDellIphone(file.name ?? '');
-}
-const FOTO_HEIC =
-  "Le foto HEIC (il formato dell'iPhone) non le carichiamo: su Chrome e sui telefoni Android non si vedrebbero. Sceglile direttamente dall'iPhone, che le trasforma da solo in JPG, oppure salvale in JPG e riprova.";
 
 /** Quello che c'e' scritto dentro un errore, da qualunque parte arrivi. */
 function messaggioDi(err: unknown): string {
@@ -134,12 +123,13 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
 
     const remaining = max - files.length;
     const scelte = Array.from(input);
-    if (scelte.some(fotoHeic)) toast.error(FOTO_HEIC);
-    const toUpload = scelte.filter((f) => !fotoHeic(f)).slice(0, remaining);
 
     setUploading(true);
     const newUrls: { url: string; path: string }[] = [];
     try {
+      const { pronte, rifiutate } = await tutteSenzaHeic(scelte);
+      if (rifiutate.length > 0) toast.error(avvisoFotoHeic(rifiutate.length));
+      const toUpload = pronte.slice(0, remaining);
       for (const file of toUpload) {
         // Il tetto lo conosce la regola del magazzino, non questa schermata: qui si guarda solo
         // PRIMA, per saltare il file troppo pesante e caricare comunque gli altri. Se lo lasciassimo

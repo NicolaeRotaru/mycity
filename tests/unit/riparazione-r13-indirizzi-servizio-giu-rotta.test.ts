@@ -39,7 +39,7 @@ describe('/api/geocode: servizio giù contro nessun risultato', () => {
     expect(await res.json()).toEqual({ lat: 45.05, lng: 9.69 });
   });
 
-  for (const stato of [429, 500, 502, 503]) {
+  for (const stato of [500, 502, 503]) {
     it(`Nominatim risponde ${stato}: 503 servizio_non_disponibile`, async () => {
       vi.stubGlobal('fetch', async () => new Response('', { status: stato }));
       const res = await chiedi();
@@ -47,6 +47,15 @@ describe('/api/geocode: servizio giù contro nessun risultato', () => {
       expect(await res.json()).toEqual({ lat: null, lng: null, error: 'servizio_non_disponibile' });
     });
   }
+
+  // 27/11/2026 — «Troppe richieste» delle mappe resta un 429 (la rubrica indirizzi non lo salva come
+  // «posizione non trovata»), con lo stesso corpo del servizio giù.
+  it('Nominatim risponde 429: 429 servizio_non_disponibile', async () => {
+    vi.stubGlobal('fetch', async () => new Response('', { status: 429 }));
+    const res = await chiedi();
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({ lat: null, lng: null, error: 'servizio_non_disponibile' });
+  });
 
   it('errore di rete o tempo scaduto: 503 servizio_non_disponibile', async () => {
     vi.stubGlobal('fetch', async () => {

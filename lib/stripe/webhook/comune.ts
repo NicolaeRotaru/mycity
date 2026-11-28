@@ -263,7 +263,8 @@ export async function provaAMandare(
   invio: () => Promise<unknown>,
 ): Promise<void> {
   try {
-    await avvisaSeLaPostaNonParte(cosa, dati, await invio());
+    const esito = await invio();
+    await avvisaSeLaPostaNonParte(cosa, dati, esito);
   } catch (e) {
     logger.error(`[stripe] ${cosa} non partita: ordine pagato e destinatario non avvisato`, {
       ...dati,
