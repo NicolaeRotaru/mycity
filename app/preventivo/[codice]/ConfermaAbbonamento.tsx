@@ -7,6 +7,8 @@ import type { Abbonamento } from '@/lib/agenzia/preventivo';
 import { ETICHETTE_SERVIZI, SERVIZI_AGENZIA, SPIEGAZIONE_AL_TITOLARE, type ServizioAgenzia } from '@/lib/agenzia/servizi-scelti';
 import { FRASE_CONTANTI, PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagamento-servizi';
 import { DURATA_VISITA, GIORNO_NON_PIU_VALIDO, ORA_GIA_PRESA, type GiornoVisita } from '@/lib/agenzia/visita-sdg';
+import { PasswordInput } from '@/components/ui/Field';
+import { PASSWORD_MASSIMA, PASSWORD_MINIMA, PASSWORD_TROPPO_DEBOLE } from '@/lib/agenzia/password-dal-link';
 
 /**
  * LE TRE FASCE, IL CODICE DELL'EMAIL E L'INGRESSO — 27/11/2026 (app/preventivo/[codice]/page.tsx).
@@ -19,6 +21,10 @@ import { DURATA_VISITA, GIORNO_NON_PIU_VALIDO, ORA_GIA_PRESA, type GiornoVisita 
  *     sessione (…/accetta), e risponde con `entra`, la pagina dell'abbonamento del negozio. Fino a lì
  *     niente cambia sul negozio (secondo collaudo della sicurezza, 27/11).
  * Senza `entra` (un altro account già dentro in questo browser) entra dal link dell'email, come prima.
+ *
+ * 28/11/2026 verso le 13:30 — Nicola, iscrivendo un bar dal telefono: il pulsante dell'email vale una volta sola,
+ * poi «Accedi» chiede email e password, e il titolare una password non l'aveva mai scelta. Ora la sceglie qui,
+ * sotto l'email (almeno 8 caratteri, come la registrazione), e parte solo col codice giusto (passo 2).
  * Il testo delle fasce lo prepara il server (`fasce`).
  *
  * 27/11/2026 verso le 17:40 — Nicola: nello stesso passo il titolare sceglie giorno e ora in cui il team creativo
@@ -82,6 +88,7 @@ export default function ConfermaAbbonamento({
   const [servizi, setServizi] = useState<ServizioAgenzia[]>(serviziDelVenditore ?? []);
   const scegliServizio = (s: ServizioAgenzia) => setServizi((x) => (x.includes(s) ? x.filter((y) => y !== s) : SERVIZI_AGENZIA.filter((y) => y === s || x.includes(y))));
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [condizioni, setCondizioni] = useState(false);
   const [invio, setInvio] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
@@ -121,6 +128,11 @@ export default function ConfermaAbbonamento({
         setVisita(null);
         setFase('scelta');
       }
+      if (messaggio === PASSWORD_TROPPO_DEBOLE) {
+        // Il campo della password sta nel primo passo: si torna lì, vuoto, e si riconferma con un codice nuovo.
+        setPassword('');
+        setFase('scelta');
+      }
       return null;
     }
     return letto;
@@ -155,6 +167,10 @@ export default function ConfermaAbbonamento({
       setErrore('Scegli il giorno e l’ora in cui passiamo da te.');
       return;
     }
+    if (password.length < PASSWORD_MINIMA) {
+      setErrore(`Scegli una password di almeno ${PASSWORD_MINIMA} caratteri: ti serve per rientrare nella tua pagina.`);
+      return;
+    }
     if (!condizioni) {
       setErrore('Per continuare accetta le condizioni e l’informativa privacy.');
       return;
@@ -168,7 +184,7 @@ export default function ConfermaAbbonamento({
     setErrore(null);
     setInvio(true);
     try {
-      const r = await chiedi('accetta', { email, abbonamento: fascia, accettoCondizioni: true, codice: codiceEmail, gettone, servizi, ...(visita ? { visita } : {}) });
+      const r = await chiedi('accetta', { email, password, abbonamento: fascia, accettoCondizioni: true, codice: codiceEmail, gettone, servizi, ...(visita ? { visita } : {}) });
       if (r) {
         const dove = r.data?.url ?? r.data?.entra ?? null;
         if (dove) {
@@ -190,7 +206,7 @@ export default function ConfermaAbbonamento({
         <p className="font-semibold text-ink-900">Fatto, il {scelta.nome} è confermato.{quando ? ` Ci vediamo ${quando.charAt(0).toLowerCase()}${quando.slice(1)}.` : ''}</p>
         <p className="mt-1 text-sm text-ink-700">
           {fatto.accessoInviato
-            ? `Ti abbiamo scritto a ${email}: da lì entri nella tua pagina.`
+            ? `Ti abbiamo scritto a ${email}: da lì entri nella tua pagina. Dopo, entri da «Accedi» con questa email e la password che hai scelto.`
             : 'L’email con il link per entrare non è partita: ti scriviamo noi a breve.'}
         </p>
       </div>
@@ -377,6 +393,19 @@ export default function ConfermaAbbonamento({
           className="mt-1 w-full rounded-lg border border-surface-300 px-3 py-2"
         />
         <p className="mt-1 text-xs text-ink-500">Ti mandiamo qui un codice per entrare nella tua pagina, e il link per rientrare quando vuoi.</p>
+        <div className="mt-4">
+          <PasswordInput
+            id="password-titolare"
+            label="Scegli una password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            hint={`Almeno ${PASSWORD_MINIMA} caratteri. Con questa email e questa password rientri da «Accedi» quando vuoi.`}
+            required
+            minLength={PASSWORD_MINIMA}
+            maxLength={PASSWORD_MASSIMA}
+            autoComplete="new-password"
+          />
+        </div>
         <label className="mt-4 flex items-start gap-2 text-sm text-ink-700">
           <input type="checkbox" checked={condizioni} onChange={(e) => setCondizioni(e.target.checked)} className="mt-1" />
           <span>

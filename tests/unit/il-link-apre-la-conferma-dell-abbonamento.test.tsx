@@ -121,6 +121,17 @@ async function scriviEmail(r: HTMLElement, email: string) {
   });
 }
 
+/** 28/11/2026 — La password che il titolare sceglie sotto l'email, per rientrare da «Accedi». */
+const PASSWORD = 'pane-e-caffe-26';
+async function scriviPassword(r: HTMLElement, password: string) {
+  const campo = r.querySelector('#password-titolare') as HTMLInputElement;
+  const imposta = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  await act(async () => {
+    imposta.call(campo, password);
+    campo.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
 async function premi(el: HTMLElement) {
   await act(async () => { el.click(); });
 }
@@ -251,6 +262,7 @@ async function scriviCodice(r: HTMLElement, codice: string) {
 async function primoPasso(r: HTMLElement, ora: string | null = '10:00') {
   if (ora) await premi(oraVisita(r, ora));
   await scriviEmail(r, 'titolare@grida.it');
+  await scriviPassword(r, PASSWORD);
   // La spunta delle condizioni (28/11: sopra ci sono anche le caselle dei servizi).
   await premi(r.querySelector('input[type="checkbox"]:not([name="servizi"])') as HTMLInputElement);
   await invia(r);
@@ -276,7 +288,7 @@ describe('il titolare tocca un altro abbonamento, conferma col codice dell email
     await scriviCodice(r, '12 34 56');
     expect((r.querySelector('#codice-email') as HTMLInputElement).value).toBe('123456');
     await invia(r);
-    expect(chiamate[1]).toEqual({ url: `/api/preventivo/${CODICE}/accetta`, corpo: { email: 'titolare@grida.it', abbonamento: 'premium', accettoCondizioni: true, codice: '123456', gettone: 'gettone-firmato', servizi: ['sito_web'], visita: LUNEDI_ALLE_10 } });
+    expect(chiamate[1]).toEqual({ url: `/api/preventivo/${CODICE}/accetta`, corpo: { email: 'titolare@grida.it', password: PASSWORD, abbonamento: 'premium', accettoCondizioni: true, codice: '123456', gettone: 'gettone-firmato', servizi: ['sito_web'], visita: LUNEDI_ALLE_10 } });
     expect(vai).toHaveBeenCalledWith('/seller/abbonamento');
   });
 
@@ -286,9 +298,51 @@ describe('il titolare tocca un altro abbonamento, conferma col codice dell email
     const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
     await premi(oraVisita(r, '10:00'));
     await scriviEmail(r, 'titolare@grida.it');
+    await scriviPassword(r, PASSWORD);
     await invia(r);
     expect(posta).not.toHaveBeenCalled();
     expect(r.querySelector('[role="alert"]')?.textContent).toContain('accetta le condizioni');
+  });
+
+  // 28/11/2026 — Nicola, iscrivendo un bar: «deve anche inserire la password, così può accedere con email e password».
+  it('sotto l email c è «Scegli una password», da nuova password, e la regola resta scritta sotto', async () => {
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    const campo = r.querySelector('#password-titolare') as HTMLInputElement;
+    expect(campo).not.toBeNull();
+    expect(campo.type).toBe('password');
+    expect(campo.autocomplete).toBe('new-password');
+    expect(campo.required).toBe(true);
+    expect(r.querySelector('label[for="password-titolare"]')?.textContent).toContain('Scegli una password');
+    expect(r.textContent).toContain('Almeno 8 caratteri');
+  });
+
+  it('senza password, o con 7 caratteri, il codice non parte, e lo dice', async () => {
+    const posta = vi.fn();
+    vi.stubGlobal('fetch', posta);
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await premi(oraVisita(r, '10:00'));
+    await scriviEmail(r, 'titolare@grida.it');
+    await premi(r.querySelector('input[type="checkbox"]:not([name="servizi"])') as HTMLInputElement);
+    await invia(r);
+    expect(posta).not.toHaveBeenCalled();
+    expect(r.querySelector('[role="alert"]')?.textContent).toContain('password di almeno 8 caratteri');
+    await scriviPassword(r, '1234567');
+    await invia(r);
+    expect(posta).not.toHaveBeenCalled();
+    expect(r.querySelector('[role="alert"]')?.textContent).toContain('password di almeno 8 caratteri');
+  });
+
+  it('la password che Supabase trova troppo debole: si torna alla scelta, col campo vuoto e il messaggio', async () => {
+    const { PASSWORD_TROPPO_DEBOLE } = await import('@/lib/agenzia/password-dal-link');
+    serverFinto({ status: 409, corpo: { ok: false, error: { message: PASSWORD_TROPPO_DEBOLE } } });
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await primoPasso(r);
+    await scriviCodice(r, '123456');
+    await invia(r);
+    expect(r.querySelector('#codice-email')).toBeNull();
+    expect((r.querySelector('#password-titolare') as HTMLInputElement).value).toBe('');
+    expect(r.querySelector('[role="alert"]')?.textContent).toContain('troppo facile da indovinare');
+    expect(vai).not.toHaveBeenCalled();
   });
 
   it('un codice sbagliato: il messaggio del server, si resta sul codice e si può riprovare', async () => {

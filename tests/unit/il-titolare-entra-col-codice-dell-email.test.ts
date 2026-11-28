@@ -493,3 +493,69 @@ describe('la visita di SDG scelta nel link', () => {
     expect(db.testiAvvisi[0]).toContain('Non ha scelto il giorno della visita di SDG: chiamalo per fissarlo.');
   });
 });
+
+/**
+ * 28/11/2026 verso le 13:30 — Nicola, iscrivendo un bar dal telefono: il pulsante dell'email vale una volta sola,
+ * poi «Accedi» chiede email e password, e il titolare una password non l'aveva mai scelta. Casi (dato → atteso):
+ *  · con la password → va sull'utente del negozio insieme all'email, e l'email dice «con la password che hai scelto»;
+ *  · 7 caratteri, o 73 → 400 prima del codice, niente si accetta, l'utente non si tocca;
+ *  · senza password (pagina aperta prima di oggi) → si accetta come prima, e l'email dice «Password dimenticata?»;
+ *  · Supabase la rifiuta (weak_password, 422) → 409 col messaggio della password, il preventivo torna aperto,
+ *    nessun avviso «email già usata»;
+ *  · un errore che nomina la password ma non è weak_password → resta il percorso dell'email.
+ */
+describe('la password scelta nel link', () => {
+  const PASSWORD = 'pane-e-caffe-26';
+
+  it('va sull utente del negozio insieme all email, e l email per entrare lo dice', async () => {
+    const c = await chiediCodice();
+    const r = await conferma(c, { password: PASSWORD });
+    expect(r.status).toBe(200);
+    expect(db.utente).toEqual([{ id: GC, email: 'titolare@grida.it', email_confirm: true, ban_duration: 'none', password: PASSWORD }]);
+    expect(db.preventivo?.stato).toBe('accettato');
+    const accesso = db.posta.at(-1)!;
+    expect(String(accesso.html)).toContain('la password che hai scelto');
+    expect(String(accesso.text)).toContain('la password che hai scelto');
+    expect(String(accesso.html)).not.toContain(PASSWORD);
+  });
+
+  it.each([['7 caratteri', '1234567'], ['73 caratteri', 'a'.repeat(73)]])('%s: 400 prima del codice, niente si accetta', async (_n, password) => {
+    const c = await chiediCodice();
+    const r = await conferma(c, { password });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error.message).toMatch(/password/i);
+    expect(db.utente).toEqual([]);
+    expect(db.preventivo?.stato).toBe('aperto');
+    // La password corta non ha consumato il codice: con quella giusta si accetta.
+    const ok = await conferma(c, { password: PASSWORD });
+    expect(ok.status).toBe(200);
+  });
+
+  it('senza password (pagina aperta prima di oggi): si accetta come prima, e l email indica «Password dimenticata?»', async () => {
+    const c = await chiediCodice();
+    const r = await conferma(c);
+    expect(r.status).toBe(200);
+    expect(db.utente[0]).not.toHaveProperty('password');
+    expect(String(db.posta.at(-1)!.html)).toContain('Password dimenticata?');
+  });
+
+  it('Supabase la trova troppo debole: 409 col messaggio della password, il preventivo torna aperto, nessun avviso', async () => {
+    const { PASSWORD_TROPPO_DEBOLE } = await import('@/lib/agenzia/password-dal-link');
+    const c = await chiediCodice();
+    db.erroreUtente = { message: 'Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz, 0123456789', code: 'weak_password' };
+    const r = await conferma(c, { password: 'abcdefgh' });
+    expect(r.status).toBe(409);
+    expect((await r.json()).error.message).toBe(PASSWORD_TROPPO_DEBOLE);
+    expect(db.preventivo?.stato).toBe('aperto');
+    expect(db.avvisi).toEqual([]);
+  });
+
+  it('un errore che nomina la password ma non è weak_password resta il percorso dell email', async () => {
+    const c = await chiediCodice();
+    db.erroreUtente = { message: 'Error updating user password', code: 'unexpected_failure' };
+    const r = await conferma(c, { password: PASSWORD });
+    expect(r.status).toBe(409);
+    expect((await r.json()).error.message).not.toContain('troppo facile');
+    expect(db.preventivo?.stato).toBe('aperto');
+  });
+});

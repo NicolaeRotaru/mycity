@@ -14,6 +14,7 @@ import { chiaveDelGettone, verificaCodice } from '@/lib/agenzia/codice-dal-link'
 import { sessioneDalLink, type SessioneDalLink } from '@/lib/agenzia/entra-dal-link';
 import { richiestaDalSito } from '@/lib/agenzia/richiesta-dal-sito';
 import { GIORNO_NON_PIU_VALIDO, orarioDellaVisitaValido } from '@/lib/agenzia/visita-sdg';
+import { PASSWORD_MASSIMA, PASSWORD_MINIMA } from '@/lib/agenzia/password-dal-link';
 
 export const runtime = 'nodejs';
 
@@ -43,6 +44,11 @@ export const runtime = 'nodejs';
  * creativo di SDG passa da lui. `visita` è uno degli orari che il server propone adesso (lib/agenzia/visita-sdg.ts):
  * un orario passato, troppo vicino o inventato è rifiutato prima di guardare il codice. Si salva col preventivo.
  * Senza `visita` si accetta lo stesso (nessun giorno libero, o pagina vecchia): l'avviso a Nicola lo dice.
+ *
+ * 28/11/2026 verso le 13:30 — Nicola, iscrivendo un bar: «deve anche inserire la password, così può accedere con
+ * email e password che ha inserito nell'iscrizione». `password` (8-72 caratteri, come la registrazione; 72 è il
+ * tetto di Supabase) va sull'utente del negozio con l'email. Si controlla prima del codice, così una password
+ * corta non consuma un tentativo. Assente (pagina aperta prima di oggi): si accetta come prima.
  */
 
 const Richiesta = z.object({
@@ -57,6 +63,12 @@ const Richiesta = z.object({
   // 28/11/2026 — I servizi confermati dal titolare: li trova segnati dal venditore e li può cambiare. Almeno uno,
   // solo fra i quattro. Assenti (pagina aperta prima di oggi): restano quelli del venditore.
   servizi: z.array(z.enum(SERVIZI_AGENZIA, { message: 'Un servizio non è fra quelli previsti.' })).min(1, 'Scegli almeno un servizio.').max(SERVIZI_AGENZIA.length).optional(),
+  // 28/11/2026 — La password per rientrare da «Accedi». Facoltativa solo per le pagine aperte prima di oggi.
+  password: z
+    .string()
+    .min(PASSWORD_MINIMA, `La password deve avere almeno ${PASSWORD_MINIMA} caratteri.`)
+    .max(PASSWORD_MASSIMA, `La password può avere al massimo ${PASSWORD_MASSIMA} caratteri.`)
+    .optional(),
 });
 
 const QUARTO_D_ORA = 15 * 60_000;
@@ -87,7 +99,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
   }
   const esito = Richiesta.safeParse(corpo);
   if (!esito.success) return ApiErrors.invalidRequest(esito.error.issues[0]?.message ?? 'Dati non validi');
-  const { email, abbonamento, codice: codiceEmail, gettone, visita, servizi } = esito.data;
+  const { email, abbonamento, codice: codiceEmail, gettone, visita, servizi, password } = esito.data;
   if (visita !== undefined && !orarioDellaVisitaValido(visita, new Date())) {
     return ApiErrors.invalidRequest(GIORNO_NON_PIU_VALIDO);
   }
@@ -118,6 +130,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ codice: string
     fascia: abbonamento,
     visita,
     servizi,
+    password,
     entraSubito: puoEntrare && sessione ? sessione.entra : undefined,
   });
   if (!accettato.ok) {
