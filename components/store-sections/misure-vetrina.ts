@@ -22,5 +22,10 @@
 /** L'altezza della copertina del negozio: la stessa nell'attesa e nella pagina vera. */
 export const ALTEZZA_COPERTINA = 'h-60';
 
-/** Il contenitore della pagina negozio: stessa larghezza e stessi margini nell'attesa e dopo. */
-export const CONTENITORE_PAGINA_NEGOZIO = 'container mx-auto px-4 sm:px-6 py-6 max-w-5xl space-y-4';
+/**
+ * Il contenitore della pagina negozio: stessa larghezza e stessi margini nell'attesa e dopo.
+ * 28/11/2026 (R09-013) — max-w-7xl (1280 px), la larghezza unica del percorso d'acquisto (categorie,
+ * negozi, scheda prodotto, carrello, cassa): a max-w-5xl la vetrina era l'unica tappa più stretta,
+ * e la larghezza cambiava passando dal negozio al prodotto.
+ */
+export const CONTENITORE_PAGINA_NEGOZIO = 'container mx-auto px-4 sm:px-6 py-6 max-w-7xl space-y-4';
