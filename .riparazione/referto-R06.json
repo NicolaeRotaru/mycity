@@ -1,0 +1,363 @@
+{
+ "sessione": "R06",
+ "aggiornato": "2026-11-27 02:58",
+ "finita": true,
+ "testa": "79f5bb306c542846ba50f20e38f64bbb9fc8d672",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "rosso",
+  "testa": "79f5bb306c542846ba50f20e38f64bbb9fc8d672",
+  "nota": "Un solo rosso, atteso: tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts › «Nominatim risponde 429: 503 servizio_non_disponibile». È la prova comune riportata alla base su richiesta della regia: la correzione di R06-007 fa rispondere 429, e il diff che la allinea è nella nota di R06-007 (lo applica la regia all'unione). Tutto il resto verde: typecheck, lint, 2340 file e 14321 prove (2 saltate). Sul commit prima (d7006a5, con la prova aggiornata) il verify era verde intero. SHA preso con git rev-parse HEAD nello stesso comando."
+ },
+ "voci": [
+  {
+   "id": "R06-001",
+   "chiave": "qa-flussi|un ordine fermo su «accettato» o «ritirato dal fattorino» non fa suonare nessun allarme e non scade mai",
+   "esito": "parziale",
+   "commit": "3d92c7c",
+   "file_toccati": [
+    "app/api/cron/operational-alerts/route.ts",
+    "tests/unit/riparazione-r06-accettato-ritirato-fermi.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r06-accettato-ritirato-fermi.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r06-accettato-ritirato-fermi.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3d92c7c^ --file app/api/cron/operational-alerts/route.ts --prove tests/unit/riparazione-r06-accettato-ritirato-fermi.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_resta": "Manca la scadenza automatica dell'ordine ACCEPTED dopo la fascia: annullo con rimborso come per il NEW, oppure passaggio all'amministrazione. È una scelta di Nicola: nel codice della base non c'è una costante né un commento che la decida, e app/api/cron/expire-stale-orders/route.ts:165 e :247 guarda ancora solo NEW. Resta anche il punto debole segnato il 16/11: con una fascia, l'allarme suona alla fine della fascia e non all'ultimo ritiro utile, perché abbiamo seguito la soglia scritta nel fix del registro. Punto debole visto dal revisore: la lettura prende gli ultimi 50 ACCEPTED per accepted_at decrescente (app/api/cron/operational-alerts/route.ts:381-382); con più di 50 accettati ancora in fascia (i «Domani») quelli scaduti più vecchi restano fuori. La «regola generale» del fix (ogni stato non finale ha un tempo massimo) è coperta solo come allarme: l'ultimo caso della prova fa suonare un ordine fermo da 3 giorni in ogni stato non finale dell'elenco; un tempo massimo con scadenza per ogni stato resta legato alla scelta di Nicola.",
+   "domanda": "Un ordine accettato e mai segnato «Pronto» dopo la fine della fascia (o 2 ore senza fascia): va annullato da solo con rimborso come il NEW, o resta fermo con l'allarme finché lo decide l'amministrazione, e con quale margine dopo la fascia?",
+   "cosa_ho_fatto": "Il sorvegliante ha due allarmi nuovi, con la stessa attesa di 6 ore, la stessa campanella e la stessa email degli altri: ACCETTATO_MAI_PRONTO scatta oltre la fine della fascia, o dopo 2 ore dall'accettazione se la fascia manca (vale anche per la veloce); RITIRATO_MAI_IN_CONSEGNA scatta per un ritirato da più di 30 minuti e non annulla niente. Gli accettati si leggono dai più recenti, con i vuoti in fondo e un tetto di 50; il ritirato ha una lettura sua.",
+   "verificato_da": "revisore V1 (subagente, modello grande): rilanciata la prova; fineDellaFascia usa il fuso di Piacenza e «Domani» = giorno +1; senza fascia o ritiro in negozio → 2h; chiavi senza sovrapposizioni con RIDER_STUCK e ASSIGNED. Regge, con il punto debole del tetto di 50 scritto in cosa_resta."
+  },
+  {
+   "id": "R06-002",
+   "chiave": "qa-flussi|la posizione del negozio può finire lontano da piacenza, o restare quella vecchia, e il modulo la salva lo stesso",
+   "esito": "parziale",
+   "commit": "f7adb86ac1afed5937668bc9abf8ff7f681eb159",
+   "file_toccati": [
+    "components/StoreLocationPicker.tsx",
+    "tests/unit/riparazione-r06-negozio-senza-citta.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r06-negozio-senza-citta.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r06-negozio-senza-citta.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f7adb86^ --file components/StoreLocationPicker.tsx --prove tests/unit/riparazione-r06-negozio-senza-citta.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_resta": "Il profilo scrive store_lat e store_lng direttamente dal browser: il controllo sta solo nel browser (app/seller/profile/page.tsx:73). Serve una guardia nel database, ma in quest'onda niente migrazioni. SQL da mettere nell'onda delle migrazioni: create or replace function public.posizione_negozio_in_area() returns trigger language plpgsql set search_path = public as $$ begin if new.store_lat is not null and new.store_lng is not null and (tg_op = 'INSERT' or new.store_lat is distinct from old.store_lat or new.store_lng is distinct from old.store_lng) and not (new.store_lat between 44.93 and 45.15 and new.store_lng between 9.55 and 9.85) then raise exception 'posizione del negozio fuori da Piacenza e dintorni' using errcode = '23514'; end if; return new; end $$; create trigger profiles_posizione_negozio_in_area before insert or update of store_lat, store_lng on public.profiles for each row execute function public.posizione_negozio_in_area(); I numeri sono quelli di AREA_SERVITA (lib/ordini/zona-di-consegna.ts:88) e vanno allineati se Nicola sceglie un raggio. Il resto della voce c'era già sulla base 2ba05a7: testo cambiato rimette confermata=false, Cerca/GPS/tocco fuori area non confermano, la rotta delle mappe cerca nel riquadro, apply rifiuta fuori area (apply/route.ts:191). Il revisore ha smentito in parte la correzione: components/StoreLocationPicker.tsx:180 prende per città qualunque lettera dopo l'ultima virgola (/\\p{L}/u), quindi «Via Roma, 12/B», «Via Roma, 12 bis» e «Via Roma 12, int. 3» restano «…, Italia» senza Piacenza e possono ancora confermare la via omonima di un altro comune dentro il riquadro. Va stretta la regola (per esempio: la coda è una città solo se non comincia con un numero e non è «bis», «int.», «scala»), con quei tre casi nella prova. Non corretto per il limite di spesa.",
+   "domanda": "Nel codice non c'è nessun raggio per dove può stare un negozio: AREA_SERVITA è un riquadro che negli angoli arriva a ~17,7 km dal centro (Podenzano compreso), RAGGIO_CONSEGNA_KM=5 vale tra negozio e cliente. Il negozio può stare ovunque nel riquadro, o va limitato a un raggio dal centro di Piacenza, e quale?",
+   "cosa_ho_fatto": "Il selettore mandava solo «via, Italia» e la ricerca libera nel riquadro poteva confermare la Via Roma di Podenzano. Ora, se la città manca, cerca «…, Piacenza, Italia»; una città scritta dal negozio resta la sua.",
+   "verificato_da": "revisore V1 (subagente, modello grande): rilanciata la prova; varianti di haCitta riprodotte in node: «Via Roma, 12», «via roma 12, piacenza», «Via Roma 12 29121» giusti; «12/B», «12 bis», «int. 3» sbagliati (scritto in cosa_resta). Le parti dichiarate già sulla base reggono (apply/route.ts:191; confermata=false alla riga 290)."
+  },
+  {
+   "id": "R06-007",
+   "chiave": "api-backend|quando è il servizio delle mappe a rispondere «troppe richieste», la rotta della ricerca indirizzi risponde 200 senza coordinate e la pagina salva l'indirizzo come «posizione non trovata»",
+   "esito": "riparato",
+   "commit": "9d6dda4d9bc7db27fcb2ed596157c6627b366a67",
+   "file_toccati": [
+    "app/api/geocode/route.ts",
+    "tests/unit/riparazione-r06-mappe-troppe-richieste.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r06-mappe-troppe-richieste.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r06-mappe-troppe-richieste.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9d6dda4^ --file app/api/geocode/route.ts --prove tests/unit/riparazione-r06-mappe-troppe-richieste.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il 429 delle mappe diventava 503 e la rubrica lo leggeva come «posizione non trovata», salvando senza coordinate. Ora la rotta risponde 429 e la rubrica entra nel ramo 429 che aveva già (addresses/page.tsx:86): niente salvataggio, «riprova».",
+   "verificato_da": "revisore V2 (subagente, modello piccolo per la spesa): rilanciata la prova; gli altri chiamanti (addresses/page.tsx:86, ShippingAddressForm, picker) non salvano senza coordinate sul 429; la modifica alla prova r13 non la indebolisce",
+   "nota": "prova comune: la applica la regia all'unione. tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts usa anche file di altre sessioni ed è stata riportata alla base (commit «riporta alla base una prova comune»): con questa correzione il suo caso 429 è rosso finché non si applica questo diff:\ndiff --git a/tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts b/tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts\nindex 0fbd5af..995add3 100644\n--- a/tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts\n+++ b/tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts\n@@ -39,7 +39,7 @@ describe('/api/geocode: servizio giù contro nessun risultato', () => {\n     expect(await res.json()).toEqual({ lat: 45.05, lng: 9.69 });\n   });\n \n-  for (const stato of [429, 500, 502, 503]) {\n+  for (const stato of [500, 502, 503]) {\n     it(`Nominatim risponde ${stato}: 503 servizio_non_disponibile`, async () => {\n       vi.stubGlobal('fetch', async () => new Response('', { status: stato }));\n       const res = await chiedi();\n@@ -48,6 +48,15 @@ describe('/api/geocode: servizio giù contro nessun risultato', () => {\n     });\n   }\n \n+  // 27/11/2026 — «Troppe richieste» delle mappe resta un 429 (la rubrica indirizzi non lo salva come\n+  // «posizione non trovata»), con lo stesso corpo del servizio giù.\n+  it('Nominatim risponde 429: 429 servizio_non_disponibile', async () => {\n+    vi.stubGlobal('fetch', async () => new Response('', { status: 429 }));\n+    const res = await chiedi();\n+    expect(res.status).toBe(429);\n+    expect(await res.json()).toEqual({ lat: null, lng: null, error: 'servizio_non_disponibile' });\n+  });\n+\n   it('errore di rete o tempo scaduto: 503 servizio_non_disponibile', async () => {\n     vi.stubGlobal('fetch', async () => {\n       throw new TypeError('fetch failed');\n"
+  },
+  {
+   "id": "R06-015",
+   "chiave": "frontend-ux|il picker degli indirizzi legge il limite della rotta come «servizio che non risponde»",
+   "esito": "riparato",
+   "commit": "0e65e59af79524f7ceed871c05846c3a7d3a6f08",
+   "file_toccati": [
+    "components/StoreLocationPicker.tsx",
+    "tests/unit/riparazione-r06-picker-limite-della-rotta.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r06-picker-limite-della-rotta.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r06-picker-limite-della-rotta.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0e65e59^ --file components/StoreLocationPicker.tsx --prove tests/unit/riparazione-r06-picker-limite-della-rotta.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Nel ramo 429/5xx il selettore legge il corpo: con error='rate_limited' (limite della rotta) dice «Hai fatto troppe ricerche di indirizzi in un minuto. Riprova fra poco…»; il 429 e il 503 delle mappe restano «non risponde», così il ramo già riparato prima non cambia.",
+   "verificato_da": "revisore V2 (subagente, modello piccolo per la spesa): rilanciata la prova; corpo non JSON → .json().catch(()=>null) → testo del servizio, senza eccezioni"
+  },
+  {
+   "id": "R06-003",
+   "chiave": "qa-flussi|il fattorino in bici non può essere approvato senza patente di guida e polizza rc",
+   "esito": "gia_riparato_prima",
+   "commit": "43ad40f365889cc3aef1959333fb00baaaf1f8c4",
+   "file_toccati": [
+    "tests/unit/riparazione-r06-bici-senza-patente.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r06-bici-senza-patente.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r06-bici-senza-patente.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "prova": "lib/admin/regole-approvazione.ts:64-71 (documentiObbligatoriDelFattorino: BIKE/EBIKE chiedono solo documento e selfie; RC_OBBLIGATORIA_PER_LA_BICI=false a :57), usata a :166-167 e :211; rider_vehicle_type in COLONNE_PER_APPROVARE a :21. La falla di permessi del collaudo del 26/11 è chiusa nel deposito dalle migrazioni 991 e 994: tests/sql/rls/riparazione-s01-03.test.sql 17 controlli verdi sul Postgres locale ricostruito dalle migrazioni.",
+   "cosa_resta": "Nicola deve applicare sul database vero le migrazioni 991 e 994: finché mancano, la protezione sul cambio di mezzo dopo l'approvazione non c'è. Il comando di prova scritto nel registro esce ancora con 1 perché il suo profilo non dichiara il mezzo (senza mezzo si chiedono tutti i documenti): va aggiunto rider_vehicle_type:'BIKE' nel registro.",
+   "cosa_ho_fatto": "Controllato che la regola giusta c'è già sulla base e che la falla del collaudo del 26/11 è chiusa dalle 991/994 (prova SQL verde in locale). Aggiunta una prova che fissa tutti i mezzi: bici senza patente e polizza approvabile, scooter e auto senza patente o polizza no, scadenze, bici sospesa riattivabile, regole del negozio uguali."
+  },
+  {
+   "id": "R06-004",
+   "chiave": "qa-flussi|se il fattorino sparisce senza dichiarare i contanti, l'ordine resta in consegna per sempre e l'amministratore non può chiuderlo",
+   "esito": "parziale",
+   "commit": "b3fab5000769d46cdb6cf517fab8a61a04a4d310",
+   "file_toccati": [
+    "lib/cassa/registra-incasso.ts",
+    "tests/unit/riparazione-r06-chiudi-consegna-senza-sessione.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r06-chiudi-consegna-senza-sessione.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r06-chiudi-consegna-senza-sessione.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b3fab50^ --file lib/cassa/registra-incasso.ts --prove tests/unit/riparazione-r06-chiudi-consegna-senza-sessione.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_resta": "1) Nessuna rotta né pulsante chiama chiudiConsegnaDaAmministratore: oggi l'amministratore non può ancora chiudere l'ordine (file altrui, in serve_file_altrui). 2) Nicola deve applicare la migrazione 360 sul database (non codice). 3) PICKED_UP resta escluso per scelta del collaudo del 12/11: lì la consegna si annulla. 4) Il fix prometteva di chiudere con la stessa funzione anche l'ordine con carta, ma la 360 rifiuta tutto ciò che non è in contanti: servirebbe una migrazione nuova, nell'onda delle migrazioni: CREATE OR REPLACE FUNCTION public.admin_chiudi_consegna uguale alla 360, con «IF o.payment_method IS DISTINCT FROM 'cod' THEN … NON_IN_CONTANTI» cambiata in «IF o.payment_method IS DISTINCT FROM 'cod' AND o.payment_status IS DISTINCT FROM 'PAID' THEN …» e «v_incassava := o.cash_confirmed_at IS NULL;» in «v_incassava := o.payment_method = 'cod' AND o.cash_confirmed_at IS NULL;». Prima va provato con le prove SQL l'effetto sul pagamento del fattorino con carta. 5) La pagina Rimesse COD filtra solo DELIVERED (app/admin/cod-remittance/page.tsx:134,147) e non mostra le consegne in contanti ferme in strada: è la seconda lettura descritta in serve_file_altrui. 6) Rischio latente visto dal revisore, oggi non raggiungibile: lib/cassa/registra-incasso.ts:334 guarda solo error.code === '42501', ma anche il guardiano degli ordini (migrations/179:84,95,104,113,132) e altri trigger sollevano 42501; se uno scattasse dentro la 360, l'amministratore leggerebbe «solo un amministratore» senza riga nei log. Meglio distinguere anche il messaggio («permission denied for function»).",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/admin/chiudi-consegna/route.ts (nuovo)",
+     "modifica": "POST con withAdminAuthRateLimit({name:'admin-chiudi-consegna', max:30, windowMs:60*60_000}). Corpo zod {orderId: z.string().uuid(), incassatoCents: z.number().int().min(0).max(10_000_000).nullable(), motivo: z.string().trim().min(MOTIVO_MINIMO_CHIUSURA).max(300)}, letto con jsonRichiesta(req, TETTO_JSON) (CorpoTroppoGrande → 413). Poi esito = await chiudiConsegnaDaAmministratore(await getServerSupabase(), getAdminSupabase(), {ordineId, incassatoCents, motivo}). Se !esito.ok risponde con stato esito.stato, messaggio esito.messaggio e codice esito.motivo; altrimenti 200 {ok:true, incassoRegistrato}."
+    },
+    {
+     "file": "app/admin/cod-remittance/page.tsx",
+     "modifica": "Seconda lettura degli ordini con payment_method='cod', delivery_status='OUT_FOR_DELIVERY', rider_id non nullo, pickup_in_store=false e picked_up_at più vecchio di 3 ore, senza filtrare su cash_confirmed_at. Sezione «Consegne in contanti ferme in strada»: per ogni riga un modulo «Chiudi la consegna» (contanti precompilati con contanteDaRimettereCents, motivo di almeno 10 caratteri) che fa POST /api/admin/chiudi-consegna e poi invalida queryKeys.admin.codRemittances."
+    },
+    {
+     "file": "app/admin/orders/[id]/page.tsx",
+     "modifica": "Per un ordine cod in OUT_FOR_DELIVERY con fattorino e non ritiro in negozio, accanto ad «Annulla», un pulsante «Chiudi la consegna» con gli stessi due campi, che chiama la stessa rotta e rilegge l'ordine."
+    }
+   ],
+   "cosa_ho_fatto": "Sulla base la funzione e la 360 ci sono già (lavoro del 26/11). Nel mio file mancava solo il rifiuto per permesso negato del database (42501, per esempio una chiamata senza sessione): ora è un 403 «solo un amministratore» invece di un 500 con riga d'errore nei log.",
+   "verificato_da": "revisore V1 (subagente, modello grande): rilanciata la prova; letta la 360 (NOT_ADMIN in JSON per chi non è admin, anon escluso con REVOKE alle righe 139-140); nessun chiamante di chiudiConsegnaDaAmministratore, come atteso da cosa_resta. Regge, con il rischio latente del 42501 scritto in cosa_resta."
+  },
+  {
+   "id": "R06-008",
+   "chiave": "api-backend|doppio tocco sull annullo con la carta: il secondo dice «rimborso fallito» e manda agli amministratori un falso «carrello da sistemare a mano»",
+   "esito": "parziale",
+   "commit": "15fdcc9",
+   "file_toccati": [
+    "lib/ordini/annulla.ts",
+    "tests/unit/riparazione-r06-doppio-tocco-carta.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r06-doppio-tocco-carta.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r06-doppio-tocco-carta.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 15fdcc9^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r06-doppio-tocco-carta.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Nel catch del ramo carta: se il rimborso cade e sull'ordine risulta già reso tutto il totale, più di quanto aveva letto chi annulla, la risposta è GIA_ANNULLATO: non si scrive «rimborso fallito» e il carrello non si rimette. Un reso parziale arrivato in mezzo, o un guasto vero di Stripe, restano RIMBORSO_FALLITO.",
+   "cosa_resta": "Il revisore ha lasciato un dubbio: il secondo tocco chiama ricalcolaLaConsegnaDelGiro (lib/ordini/annulla.ts:333) prima del rimborso, e con GIA_ANNULLATO non rimette il carrello. Non è provato che quella scrittura dia gli stessi valori del primo annullo. Sulla base il carrello non veniva rimesso comunque (rimetti trovava la riga cambiata), quindi la correzione non peggiora; ma finché una prova non lo fissa la voce resta parziale.",
+   "verificato_da": "revisore V2 (subagente, modello piccolo per la spesa): rilanciata la prova, letto resoTuttoDaUnAltro (:119, reso > letto && reso >= totale); dubbio sul ricalcolo del secondo tocco, non eseguito"
+  },
+  {
+   "id": "R06-016",
+   "chiave": "pagamenti-stripe|carrello carta spostato dal freno: se dopo un negozio rifiuta, la consegna dei rimasti non si ricalcola piu'",
+   "esito": "riparato",
+   "commit": "d38708d",
+   "file_toccati": [
+    "lib/ordini/annulla.ts",
+    "tests/unit/riparazione-r06-freno-carta-rifiuto.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r06-freno-carta-rifiuto.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r06-freno-carta-rifiuto.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d38708d^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r06-freno-carta-rifiuto.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Con la carta il freno scrive solo la fascia: l'euro della veloce resta in delivery_fee_cents. In contoDelCarrello, solo per il carrello carta, se il conto non si riconosce si toglie l'euro con consegnaSenzaLaVeloce, si rifà il conto della fascia e l'euro si rimette dov'era: il rimasto ha la consegna della regola e l'euro già reso non si sposta né si rende due volte.",
+   "verificato_da": "revisore V2 (subagente, modello piccolo per la spesa): rilanciata la prova, letto il ramo nuovo di contoDelCarrello; con un solo rimasto o veloce mai pagata il ramo non scatta (letto, non eseguito)"
+  },
+  {
+   "id": "R06-010",
+   "chiave": "architettura|il codice sconto monouso guarda solo il carrello della carta, non quello in contanti",
+   "esito": "riparato",
+   "commit": "d7006a5",
+   "file_toccati": [
+    "lib/ordini/annulla.ts",
+    "tests/unit/riparazione-r06-codice-monouso-contanti.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r06-codice-monouso-contanti.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r06-codice-monouso-contanti.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d7006a5^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r06-codice-monouso-contanti.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Coi contanti, tieneIlCodice ritrova il carrello dalla riga del tentativo di cassa (cod_checkout_attempts.order_ids, letta per cliente): se un altro ordine vivo del carrello tiene il codice, il codice non torna; torna quando se ne va l'ultimo ordine.",
+   "nota": "Senza la riga in cod_checkout_attempts il codice torna come prima: è il limite della voce sul carrello in contanti senza colonna «carrello», non lavorata.",
+   "verificato_da": "revisore V2 (subagente, modello piccolo per la spesa): rilanciata la prova; tieneIlCodice esclude l'ordine stesso e i CANCELED, un fratello annullato non tiene il codice"
+  },
+  {
+   "id": "R06-011",
+   "chiave": "architettura|sul ramo carta l'annullo non prende il turno prima del rimborso: due annulli da strade diverse possono restituire il credito due volte",
+   "esito": "serve_file_altrui",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/il-rifiuto-del-negozio-restituisce-i-soldi.test.ts",
+     "modifica": "Nel finto getAdminSupabase, tabella orders, sostituire `update: () => ({ eq: async () => ({ error: null }) }),` con un update che restituisce una catena: eq e neq rimandano la catena, select('id') risponde { data: [{ id: 'o1' }], error: null }, then risponde { error: null }. Serve perché il turno nuovo in annulla.ts fa update().eq().neq().select('id'): col finto di oggi quella prova cade in 5 casi."
+    }
+   ],
+   "cosa_resta": "La correzione è scritta e verificata in locale ma non è nel ramo, perché farebbe cadere una prova altrui. Va applicata insieme alla modifica qui sopra: in lib/ordini/annulla.ts, sul ramo carta, prendere il turno con un update condizionato sullo stato prima del giro e del rimborso (consegnati esclusi), passare annullatoDaChiChiama a refundOrder, e nel catch riportare vivo l'ordine se i soldi non sono usciti; prova nuova tests/unit/riparazione-r06-turno-annullo-carta.test.ts (senza il turno cade in 3 casi sul comportamento); nella V6 di tests/unit/il-ricalcolo-dopo-un-annullo-regge-veloce-rimborso-caduto-e-annulli-insieme.test.ts (importa annulla.ts) il gancio passa da 2 a 3 e la divisione da 1600/1500 a 1800/1300, somma sempre 31 €. Con le due modifiche: 81 file, 601 prove verdi, tsc ed eslint puliti. La toppa intera (circa 15 kB) la mando alla regista nel messaggio finale.",
+   "nota": "Gli ordini con la carta oggi non portano credito MyCity (lib/stripe/webhook/ordini.ts:338-343; wallet_applied_cents lo scrive solo app/api/orders/cod/route.ts): il «credito due volte» scatta solo su ordini carta+credito, che il codice prevede ma la cassa di oggi non crea."
+  },
+  {
+   "id": "R06-009",
+   "chiave": "architettura|il carrello in contanti si ritrova solo dalla tabella contro il doppio clic: senza quella riga la regola del negozio che rifiuta non scatta e nessuno lo sa",
+   "esito": "non_fatto",
+   "nota": "limite di spesa della sessione (lotto fermato al 75%: regola della regia, tetto duro 23 $)"
+  },
+  {
+   "id": "R06-014",
+   "chiave": "frontend-ux|nella scheda ordine del negozio compaiono «il rider sta gestendo la consegna» su un ordine annullato e «il rider incassa» su uno già consegnato",
+   "esito": "non_fatto",
+   "nota": "limite di spesa della sessione (lotto fermato al 75%: regola della regia, tetto duro 23 $)"
+  },
+  {
+   "id": "R06-005",
+   "chiave": "api-backend|il cron degli ordini scaduti ricopia la logica di annullo invece di usare annullaerimborsa",
+   "esito": "non_fatto",
+   "nota": "limite di spesa della sessione (lotto fermato al 75%: regola della regia, tetto duro 23 $)"
+  },
+  {
+   "id": "R06-006",
+   "chiave": "api-backend|il giro che annulla legge al massimo 100 ordini fermi, senza un ordine: una veloce scaduta può restare fuori dal giro",
+   "esito": "non_fatto",
+   "nota": "limite di spesa della sessione (lotto fermato al 75%: regola della regia, tetto duro 23 $)"
+  },
+  {
+   "id": "R06-012",
+   "chiave": "deploy-sre|con molti ordini scaduti nello stesso giro, le email di annullo partono tutte insieme dopo la risposta",
+   "esito": "non_fatto",
+   "nota": "limite di spesa della sessione (lotto fermato al 75%: regola della regia, tetto duro 23 $)"
+  },
+  {
+   "id": "R06-013",
+   "chiave": "flussi-conversione|con la carta e il credito mycity, quando il carrello scade tutto nessuna email dice che il credito è tornato",
+   "esito": "non_fatto",
+   "nota": "limite di spesa della sessione (lotto fermato al 75%: regola della regia, tetto duro 23 $)"
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "il sorvegliante legge le consegne ferme, gli assegnati e i pronti con un tetto ma senza un ordine: oltre il tetto, quali suonano è un caso",
+   "dimensione": "api-backend",
+   "severita": "minore",
+   "file": "app/api/cron/operational-alerts/route.ts:200",
+   "descrizione": "Il punto 2 (OUT_FOR_DELIVERY) ha .limit(10) senza .order; lo stesso il punto 6 (ASSIGNED, :408) e il 5c (READY, .limit(20)). C'era già prima."
+  },
+  {
+   "titolo": "l'allarme «assegnato e fermo» misura il tempo da quando l'ordine è pronto, non da quando il fattorino è stato assegnato",
+   "dimensione": "api-backend",
+   "severita": "minore",
+   "file": "app/api/cron/operational-alerts/route.ts:401-408",
+   "descrizione": "Il punto 6 usa ready_at: un ordine pronto da tempo e assegnato da un minuto suona subito. C'era già prima."
+  },
+  {
+   "titolo": "il campo della posizione del negozio dà come esempio un indirizzo di Milano, che il selettore poi rifiuta",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "components/StoreLocationPicker.tsx:298",
+   "descrizione": "Il segnaposto dice «Es. Via Roma 1, Milano», città fuori area; basterebbe «…, Piacenza»."
+  },
+  {
+   "titolo": "quando le mappe sono giù la rubrica indirizzi salva senza coordinate e dice che l'indirizzo è sbagliato",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "app/profile/addresses/page.tsx:87-96",
+   "descrizione": "Su un 503 della rotta la rubrica salva lo stesso e mostra «Non abbiamo trovato la posizione sulla mappa: controlla via e CAP»: il servizio giù viene presentato come indirizzo sbagliato."
+  },
+  {
+   "titolo": "il limite della ricerca indirizzi è per indirizzo di rete: dietro una rete condivisa colpisce chi ne ha fatte poche",
+   "dimensione": "api-backend",
+   "severita": "minore",
+   "file": "app/api/geocode/route.ts:27",
+   "descrizione": "Il limite della rotta è per IP, non per utente o negozio."
+  },
+  {
+   "riservato": true,
+   "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+   "dimensione": "sicurezza",
+   "severita": "grave",
+   "file": "(nel referto privato)"
+  },
+  {
+   "titolo": "nel registro il comando di prova del fattorino in bici dà un falso rosso: il profilo di prova non dichiara il mezzo",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "(registro) prova della voce sul fattorino in bici",
+   "descrizione": "Senza rider_vehicle_type il codice chiede tutti i documenti per prudenza; al profilo di prova va aggiunto rider_vehicle_type:'BIKE'."
+  },
+  {
+   "titolo": "se il giro degli scaduti muore fra l'annullo e il rimborso, l'ordine resta annullato e pagato e nessuno lo cerca",
+   "dimensione": "deploy-sre",
+   "severita": "minore",
+   "file": "app/api/cron/expire-stale-orders/route.ts:233-345",
+   "descrizione": "Il giro prende il turno (CANCELED) prima del rimborso; nessun controllo periodico cerca CANCELED+PAID. Con il turno della voce sul ramo carta, lo stesso rischio varrebbe per annullaERimborsa."
+  }
+ ],
+ "domande_per_nicola": [
+  "R06-001: Un ordine accettato e mai segnato «Pronto» dopo la fine della fascia (o 2 ore senza fascia): va annullato da solo con rimborso come il NEW, o resta fermo con l'allarme finché lo decide l'amministrazione, e con quale margine dopo la fascia?",
+  "R06-002: Nel codice non c'è nessun raggio per dove può stare un negozio: AREA_SERVITA è un riquadro che negli angoli arriva a ~17,7 km dal centro (Podenzano compreso), RAGGIO_CONSEGNA_KM=5 vale tra negozio e cliente. Il negozio può stare ovunque nel riquadro, o va limitato a un raggio dal centro di Piacenza, e quale?"
+ ],
+ "conto": {
+  "agenti": 6,
+  "nota": "6 subagenti: 4 riparatori (L1, L2, L3+L4, L5 fermato per spesa) e 2 revisori (V1 sui gravi, modello grande; V2 sui minori, modello piccolo per la spesa). L6 non lavorato per spesa.",
+  "subagenti": 6
+ },
+ "costo_usd": 22.71
+}
