@@ -33,7 +33,7 @@ export function doveSiAttivaLAbbonamento(chiGuardaEUnNegozio: boolean, giaAbbona
   // 28/11/2026 — Un negozio che ha già l'abbonamento non sceglie di nuovo: va a vedere il suo. Finché non si sa
   // (lettura in corso o non riuscita, `null`) il pulsante non promette una scelta: porta alla pagina e basta.
   if (chiGuardaEUnNegozio && giaAbbonato === true) return { href: PERCORSO_ABBONAMENTO, testo: 'Vedi il tuo abbonamento' };
-  if (chiGuardaEUnNegozio && giaAbbonato === null) return { href: PERCORSO_ABBONAMENTO, testo: 'Vai alla pagina Abbonamento del tuo negozio' };
+  if (chiGuardaEUnNegozio && giaAbbonato === null) return { href: PERCORSO_ABBONAMENTO, testo: 'Vai alla pagina Abbonamento della tua attività' };
   return chiGuardaEUnNegozio
     ? { href: PERCORSO_ABBONAMENTO, testo: 'Scegli l’abbonamento dalla tua attività' }
     : { href: '/sell', testo: 'Iscrivi la tua attività per attivarlo' };
