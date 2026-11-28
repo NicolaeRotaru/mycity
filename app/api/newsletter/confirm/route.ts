@@ -32,11 +32,11 @@ export async function GET(request: Request) {
   // Sopra soglia si manda alla stessa pagina del link non valido: chi abusa non
   // costa una scrittura, e chi ha cliccato davvero vede una pagina, non un errore.
   if (!freno.allowed) {
-    return NextResponse.redirect(`${base}/?newsletter=link-non-valido`);
+    return NextResponse.redirect(`${base}/newsletter?esito=link-non-valido`);
   }
 
   if (!token || token.length > 200) {
-    return NextResponse.redirect(`${base}/?newsletter=link-non-valido`);
+    return NextResponse.redirect(`${base}/newsletter?esito=link-non-valido`);
   }
 
   const admin = getAdminSupabase();
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     .maybeSingle();
 
   if (error || !data) {
-    return NextResponse.redirect(`${base}/?newsletter=link-non-valido`);
+    return NextResponse.redirect(`${base}/newsletter?esito=link-non-valido`);
   }
-  return NextResponse.redirect(`${base}/?newsletter=confermata`);
+  return NextResponse.redirect(`${base}/newsletter?esito=confermata`);
 }
