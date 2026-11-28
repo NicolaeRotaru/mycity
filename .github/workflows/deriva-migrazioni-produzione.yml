@@ -108,6 +108,10 @@ jobs:
           # 5/11/2026 — «Saltato» non e' «passato»: senza `pg` lo script usciva 0 e il lavoro era
           # verde senza aver confrontato niente.
           SALTO_E_ERRORE: "1"
+          # 28/11/2026 (R11-005) — L'elenco delle migrazioni che la produzione non ha (solo nomi di
+          # file del deposito, gia' stampati qui sotto): serve a ricostruire il database come la
+          # produzione, piu' giu'. Lo script lo scrive solo se si e' collegato davvero.
+          MANCANTI_ESPORTA: ${{ runner.temp }}/mancanti.txt
         # 1/11/2026 (ondata 9) — Il colore rosso da solo non diceva QUALE dei
         # due guasti: «non mi collego» e «mancano migrazioni» uscivano tutti e
         # due con 1. Adesso lo script li separa (1 = non ho controllato,
@@ -142,6 +146,41 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
         run: bash tests/sql/harness/apply.sh mycity_dai_file
+
+      # 28/11/2026 (R11-005) — LE PROVE DEI PERMESSI SUL DATABASE COME LA PRODUZIONE L'HA.
+      # La CI (rls-locale) le fa girare sul database con TUTTI i file: se la produzione non ha una
+      # migrazione (la 161, per dire), il verde vale per un database che non esiste. Qui si
+      # ricostruisce saltando le migrazioni che il passo dei nomi ha trovato mancanti, e si fanno
+      # girare le stesse prove: una rossa qui e verde in CI vuol dire «produzione diversa dal
+      # deposito». Sempre e solo verso il Postgres del giro: la stringa del database vero qui non c'è.
+      - name: Ricostruisci il database come la produzione (senza le migrazioni che le mancano)
+        id: come_produzione
+        if: ${{ !cancelled() && steps.segreto.outcome == 'success' }}
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          if [ ! -f "$RUNNER_TEMP/mancanti.txt" ]; then
+            echo "::error::Non so quali migrazioni mancano in produzione (il passo dei nomi non si è collegato): il database come la produzione non si ricostruisce, e le prove dei permessi qui non girano."
+            exit 1
+          fi
+          echo "Migrazioni che la produzione non ha: $(grep -c . "$RUNNER_TEMP/mancanti.txt" || true)"
+          SALTA_MIGRAZIONI="$RUNNER_TEMP/mancanti.txt" bash tests/sql/harness/apply.sh mycity_come_produzione
+
+      - name: Le prove dei permessi sul database come la produzione
+        if: ${{ !cancelled() && steps.come_produzione.outcome == 'success' }}
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          if ! bash tests/sql/harness/run.sh mycity_come_produzione; then
+            echo "::error::Le prove dei permessi (tests/sql/rls/) sono rosse sul database ricostruito come la produzione: il verde di rls-locale in CI vale per i file, non per la produzione. Applica le migrazioni mancanti (vedi il passo dei nomi) o correggi la regola."
+            exit 1
+          fi
 
       - name: Le regole del database vero sono quelle dei file (solo i conti)
         if: ${{ !cancelled() && steps.segreto.outcome == 'success' }}
