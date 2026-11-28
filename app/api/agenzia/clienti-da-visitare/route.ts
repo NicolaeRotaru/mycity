@@ -53,6 +53,8 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
   const giro = typeof corpo.giro === 'string' && !Number.isNaN(Date.parse(corpo.giro)) ? new Date(corpo.giro).toISOString() : null;
   if (!giro) return ApiErrors.invalidRequest('Manca l’istante del giro (giro, in formato ISO).');
+  // Un giro lontano da adesso spegnerebbe o terrebbe accese le righe sbagliate (collaudo del 28/11): ±1 giorno.
+  if (Math.abs(Date.parse(giro) - Date.now()) > 24 * 3600 * 1000) return ApiErrors.invalidRequest('Il giro deve essere di oggi (giro = l’istante in cui il flusso è partito).');
   if (!Array.isArray(corpo.attivita)) return ApiErrors.invalidRequest('Manca l’elenco delle attività (attivita).');
   if (corpo.attivita.length > MASSIMO) return ApiErrors.payloadTooLarge(`Più di ${MASSIMO} attività in una volta.`);
   const { righe, scartate } = pulisciFila(corpo.attivita);

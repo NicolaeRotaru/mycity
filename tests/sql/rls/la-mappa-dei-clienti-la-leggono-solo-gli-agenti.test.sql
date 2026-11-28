@@ -67,6 +67,12 @@ BEGIN
   INSERT INTO esiti VALUES ('lo stato della tabella n8n entra per un attività nuova', r.stato = 'visitata', r.stato);
   SELECT * INTO r FROM public.clienti_da_visitare WHERE osm = 'node/9992';
   INSERT INTO esiti VALUES ('chi esce dalla fila si spegne, non si cancella', r.osm IS NOT NULL AND r.in_fila = false, coalesce(r.in_fila::text, 'sparita'));
+  -- Un reinvio vecchio non riaccende chi il giro nuovo ha spento, e non riporta indietro visto_il.
+  PERFORM public.ricevi_clienti_da_visitare('[{"osm":"node/9992","nome":"Bar che chiude"}]'::jsonb, now() - interval '20 days');
+  SELECT * INTO r FROM public.clienti_da_visitare WHERE osm = 'node/9992';
+  INSERT INTO esiti VALUES ('un reinvio vecchio non riaccende una riga spenta', r.in_fila = false, r.in_fila::text);
+  BEGIN PERFORM public.ricevi_clienti_da_visitare('[]'::jsonb, now() + interval '30 days'); INSERT INTO esiti VALUES ('un giro nel futuro si rifiuta', false, 'accettato');
+  EXCEPTION WHEN raise_exception THEN INSERT INTO esiti VALUES ('un giro nel futuro si rifiuta', true, 'rifiutato'); END;
 END $$;
 RESET ROLE;
 

@@ -126,6 +126,7 @@ export default function PaginaClienti() {
     const filtrati = t ? visibili.filter((c) => `${c.nome} ${c.tipo ?? ''} ${c.indirizzo ?? ''}`.toLowerCase().includes(t)) : visibili;
     return ordina(filtrati, ordine, io);
   }, [visibili, ordine, io, cerca]);
+  const senzaPosizione = useMemo(() => visibili.filter((c) => c.lat === null || c.lon === null).length, [visibili]);
   const scheda = useMemo(() => visibili.find((c) => c.osm === scelto) ?? null, [visibili, scelto]);
   const conti = useMemo(() => ({
     mie: visibili.filter((c) => c.presa === 'mia').length,
@@ -179,6 +180,7 @@ export default function PaginaClienti() {
       {clienti && visibili.length > 0 && vista === 'mappa' && (
         <div className="mt-4">
           <MappaClienti clienti={visibili} scelto={scelto} onScegli={setScelto} io={io} />
+          {senzaPosizione > 0 && <p className="mt-2 text-xs text-ink-600">{senzaPosizione} {senzaPosizione === 1 ? 'attività non ha' : 'attività non hanno'} la posizione: {senzaPosizione === 1 ? 'la trovi' : 'le trovi'} nella Lista.</p>}
           <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-700" aria-label="Legenda dei colori: lo stato">
             {Object.entries(COLORI).map(([k, v]) => (
               <li key={k} className="flex items-center gap-1"><span aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: v.tinta }} />{v.parola}</li>

@@ -83,7 +83,7 @@ export function perIlTelefono(r: Riga, chi: Chi, emailDi: Map<string, string> = 
     stato: statoValido(r.stato) ? r.stato : 'da_visitare',
     presa,
   };
-  if (chi.admin) c.presaDa = di ? emailDi.get(di) ?? 'un agente' : null;
+  if (chi.admin) c.presaDa = di ? (di === chi.id ? 'io' : emailDi.get(di) ?? 'un agente') : null;
   return c;
 }
 
@@ -92,7 +92,7 @@ export async function leggiClienti(db: SupabaseClient, chi: Chi): Promise<Client
   const righe: Riga[] = [];
   // PostgREST restituisce al massimo 1000 righe per volta: si legge a pagine (la fila è circa 650, ma cresce).
   for (let da = 0; da < 20000; da += 1000) {
-    const { data, error } = await db.from('clienti_da_visitare').select(COLONNE).order('punteggio', { ascending: false }).range(da, da + 999);
+    const { data, error } = await db.from('clienti_da_visitare').select(COLONNE).order('punteggio', { ascending: false, nullsFirst: false }).order('osm', { ascending: true }).range(da, da + 999);
     if (error) throw new Error(error.message);
     const pagina = (data ?? []) as Riga[];
     righe.push(...pagina);
@@ -107,6 +107,15 @@ export async function leggiClienti(db: SupabaseClient, chi: Chi): Promise<Client
     }
   }
   return righe.map((r) => perIlTelefono(r, chi, emailDi));
+}
+
+/** Per l'admin, la riga dopo un'azione con l'email di chi l'ha presa (senza, la pagina scriverebbe «un agente»). */
+async function perChi(db: SupabaseClient, r: Riga, chi: Chi): Promise<Cliente> {
+  const di = typeof r.prenotata_da === 'string' ? r.prenotata_da : null;
+  if (!chi.admin || !di || di === chi.id) return perIlTelefono(r, chi);
+  const { data } = await db.from('agenti').select('user_id, email').eq('user_id', di).maybeSingle();
+  const a = data as Riga | null;
+  return perIlTelefono(r, chi, a ? new Map([[String(a.user_id), String(a.email)]]) : new Map());
 }
 
 export type Esito = { ok: true; cliente: Cliente } | { ok: false; perche: 'non_trovato' | 'presa' | 'non_tua' };
@@ -143,7 +152,7 @@ export async function lascia(db: SupabaseClient, osm: string, chi: Chi): Promise
   if (fatte.length) return { ok: true, cliente: perIlTelefono(fatte[0], chi) };
   const r = await rileggi(db, osm);
   if (!r) return { ok: false, perche: 'non_trovato' };
-  if (!r.prenotata_da) return { ok: true, cliente: perIlTelefono(r, chi) };
+  if (!r.prenotata_da) return { ok: true, cliente: await perChi(db, r, chi) };
   return { ok: false, perche: 'non_tua' };
 }
 
@@ -155,25 +164,29 @@ export async function segnaStato(db: SupabaseClient, osm: string, stato: Stato, 
   const { data, error } = await q.select(COLONNE);
   if (error) throw new Error(error.message);
   const fatte = (data ?? []) as Riga[];
-  if (fatte.length) return { ok: true, cliente: perIlTelefono(fatte[0], chi) };
+  if (fatte.length) return { ok: true, cliente: await perChi(db, fatte[0], chi) };
   const r = await rileggi(db, osm);
   return { ok: false, perche: r ? 'non_tua' : 'non_trovato' };
 }
 
 // ── La porta di n8n ──────────────────────────────────────────────────────────
 
+// Il carattere nullo Postgres non lo accetta in un testo: uno solo farebbe fallire tutto il giro (collaudo del 28/11).
+const senzaNulli = (v: unknown) => String(v).replace(/\u0000/g, '');
 const corta = (v: unknown, n: number): string | null => {
   if (v === null || v === undefined) return null;
-  const t = Array.from(String(v).replace(/\s+/g, ' ').trim());
+  const t = Array.from(senzaNulli(v).replace(/\s+/g, ' ').trim());
   return t.length ? t.slice(0, n).join('') : null;
 };
 const lunga = (v: unknown, n: number): string | null => {
   if (v === null || v === undefined) return null;
-  const t = Array.from(String(v).trim());
+  const t = Array.from(senzaNulli(v).trim());
   return t.length ? t.slice(0, n).join('') : null;
 };
 const coordinata = (v: unknown, max: number) => { const n = Number(v); return v !== null && v !== '' && Number.isFinite(n) && Math.abs(n) <= max ? n : null; };
 const GIORNO = /^\d{4}-\d{2}-\d{2}$/;
+/** Un giorno che esiste davvero: «2026-02-30» passerebbe la forma e farebbe fallire tutto il giro. */
+const giornoVero = (s: unknown): s is string => typeof s === 'string' && GIORNO.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
 
 /** Lo stato scritto a mano nella tabella n8n, letto come lo legge il flusso 16 (solo le parole giuste). */
 export function statoDallaTabella(v: unknown): Stato | null {
@@ -206,11 +219,14 @@ export function pulisciFila(attivita: unknown): { righe: RigaInArrivo[]; scartat
     const mappa = typeof x.mappa === 'string' && x.mappa.startsWith('https://www.google.com/maps/') && x.mappa.length <= 600 ? x.mappa : null;
     const distanza = Number(x.distanza_m);
     const punti = Number(x.punteggio);
-    const settimana = typeof x.settimana === 'string' && GIORNO.test(x.settimana) ? x.settimana : null;
+    const settimana = giornoVero(x.settimana) ? x.settimana : null;
+    // La posizione vale solo intera: una riga con la sola latitudine resterebbe a metà.
+    let lat = coordinata(x.lat, 90), lon = coordinata(x.lon, 180);
+    if (lat === null || lon === null) { lat = null; lon = null; }
     perOsm.set(osm, {
       osm, nome,
       tipo: corta(x.tipo, 80), segmento: corta(x.segmento, 60), indirizzo: corta(x.indirizzo, 200), telefono: corta(x.telefono, 40),
-      sito: corta(x.sito, 300), lat: coordinata(x.lat, 90), lon: coordinata(x.lon, 180),
+      sito: corta(x.sito, 300), lat, lon,
       distanza_m: x.distanza_m !== null && x.distanza_m !== '' && Number.isFinite(distanza) && distanza >= 0 && distanza <= 100000 ? Math.round(distanza) : null,
       punteggio: x.punteggio !== null && x.punteggio !== '' && Number.isFinite(punti) && Math.abs(punti) < 99999 ? Math.round(punti * 10) / 10 : null,
       perche: corta(x.perche, 400), offerta: corta(x.offerta, 200), mappa, dossier: lunga(x.dossier, 4000), settimana,
@@ -218,6 +234,16 @@ export function pulisciFila(attivita: unknown): { righe: RigaInArrivo[]; scartat
     });
   }
   return { righe: [...perOsm.values()], scartate };
+}
+
+/**
+ * Un agente sospeso (Admin → Agenti) non entra più, e i suoi clienti tornano liberi subito: se no restano «presi»
+ * per i colleghi finché qualcuno non li libera uno per uno (collaudo del 28/11). Gli stati restano.
+ */
+export async function liberaIClientiDi(db: SupabaseClient, userId: string): Promise<number> {
+  const { data, error } = await db.from('clienti_da_visitare').update({ prenotata_da: null, prenotata_il: null }).eq('prenotata_da', userId).select('osm');
+  if (error) throw new Error(error.message);
+  return (data ?? []).length;
 }
 
 /** Quello che il flusso 16 rilegge il lunedì: chi è già proposto, preso o visitato, e il conto per il messaggio. */

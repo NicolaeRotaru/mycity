@@ -73,6 +73,8 @@ CREATE INDEX IF NOT EXISTS clienti_da_visitare_stato_da_idx ON public.clienti_da
  *  · stato_iniziale vale solo per un'attività nuova (il passaggio dalla tabella n8n): dopo, lo stato è del sito;
  *  · prenotazione e stato non si toccano mai.
  * Poi spegne (in_fila = false) quelle che in questo giro non c'erano. Restituisce quante righe ha ricevuto.
+ * Il giro deve essere vicino ad adesso (la rotta accetta solo ±1 giorno): un giro nel futuro terrebbe accese per
+ * sempre righe uscite dalla fila (collaudo del 28/11).
  * La chiama solo il server (chiave di servizio).
  */
 CREATE OR REPLACE FUNCTION public.ricevi_clienti_da_visitare(p_righe jsonb, p_giro timestamptz)
@@ -84,6 +86,7 @@ AS $$
 DECLARE n integer;
 BEGIN
   IF jsonb_typeof(p_righe) <> 'array' THEN RAISE EXCEPTION 'p_righe deve essere un elenco'; END IF;
+  IF p_giro IS NULL OR p_giro > now() + interval '1 day' THEN RAISE EXCEPTION 'giro nel futuro: %', p_giro; END IF;
   INSERT INTO public.clienti_da_visitare AS t
     (osm, nome, tipo, segmento, indirizzo, telefono, sito, lat, lon, distanza_m, punteggio, perche, offerta, mappa,
      dossier, settimana, in_fila, visto_il, stato)
@@ -103,7 +106,9 @@ BEGIN
     offerta = EXCLUDED.offerta, mappa = EXCLUDED.mappa,
     dossier = COALESCE(EXCLUDED.dossier, t.dossier),
     settimana = COALESCE(t.settimana, EXCLUDED.settimana),
-    in_fila = true, visto_il = EXCLUDED.visto_il;
+    -- Un giro più vecchio dell'ultimo visto (un reinvio) aggiorna i dati ma non riaccende e non torna indietro.
+    in_fila = CASE WHEN EXCLUDED.visto_il >= t.visto_il THEN true ELSE t.in_fila END,
+    visto_il = GREATEST(t.visto_il, EXCLUDED.visto_il);
   GET DIAGNOSTICS n = ROW_COUNT;
   UPDATE public.clienti_da_visitare SET in_fila = false WHERE visto_il < p_giro AND in_fila;
   RETURN n;

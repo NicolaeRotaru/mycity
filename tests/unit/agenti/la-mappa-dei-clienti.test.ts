@@ -161,6 +161,10 @@ describe('le prenotazioni: ognuno le sue', () => {
     expect((await tocca({ osm: "node/1' or 1=1", azione: 'prendi' })).status).toBe(400);
     expect((await tocca({ osm: 'node/99', azione: 'prendi' })).status).toBe(404);
   });
+  it('due clienti con lo stesso punteggio: le pagine si leggono in un ordine stabile (punteggio, poi osm)', () => {
+    const src = fs.readFileSync(path.join(process.cwd(), 'lib/agenti/clienti.ts'), 'utf8');
+    expect(src).toContain(".order('punteggio', { ascending: false, nullsFirst: false }).order('osm', { ascending: true }).range(");
+  });
   it('l admin vede chi ha preso cosa e può liberare', async () => {
     come(NICOLA, 'nicola@esempio.it', 'admin');
     const d = await dati(await leggi());
@@ -168,6 +172,20 @@ describe('le prenotazioni: ognuno le sue', () => {
     expect(d.clienti.find((c) => c.osm === 'node/2')!.presaDa).toBe('bruno@esempio.it');
     expect((await tocca({ osm: 'node/2', azione: 'lascia' })).status).toBe(200);
     expect(riga('node/2').prenotata_da).toBeNull();
+  });
+});
+
+describe('l agente sospeso', () => {
+  it('i suoi clienti tornano liberi, gli stati restano', async () => {
+    const { liberaIClientiDi } = await import('@/lib/agenti/clienti');
+    riga('node/2').stato = 'visitata';
+    const { getAdminSupabase } = await import('@/lib/supabase/server');
+    expect(await liberaIClientiDi(getAdminSupabase() as never, BRUNO)).toBe(1);
+    expect(riga('node/2')).toMatchObject({ prenotata_da: null, stato: 'visitata' });
+  });
+  it('Admin → Agenti → sospendi libera i suoi clienti', () => {
+    const rotta = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/agenti/route.ts'), 'utf8');
+    expect(rotta).toMatch(/if \(m\.azione === 'sospendi'\) \{\s*try \{ await liberaIClientiDi\(admin, m\.userId\)/);
   });
 });
 
@@ -179,7 +197,8 @@ describe('la porta di n8n (flusso 16)', () => {
     headers: { 'x-forwarded-proto': 'https', ...(segreto ? { 'x-mycity-segreto': segreto } : {}) },
   }));
   const S = 'segreto-di-prova-lungo-abbastanza';
-  const fila = { giro: '2026-11-30T06:10:00.000Z', attivita: [{ osm: 'node/7', nome: 'Macelleria Sette', lat: 45.051, lon: 9.69, punteggio: 110.4, distanza_m: 200, prenotata_da: ANNA, stato: 'iscritta' }] };
+  const GIRO = new Date().toISOString();
+  const fila = { giro: GIRO, attivita: [{ osm: 'node/7', nome: 'Macelleria Sette', lat: 45.051, lon: 9.69, punteggio: 110.4, distanza_m: 200, prenotata_da: ANNA, stato: 'iscritta' }] };
 
   it('senza segreto configurato resta chiusa (503); senza segreto o col segreto sbagliato: 401', async () => {
     delete process.env.N8N_CLIENTI_DA_VISITARE_SEGRETO;
@@ -198,7 +217,12 @@ describe('la porta di n8n (flusso 16)', () => {
     expect(righe[0]).toMatchObject({ osm: 'node/7', lat: 45.051, lon: 9.69, punteggio: 110.4 });
     expect(righe[0]).not.toHaveProperty('prenotata_da');
     expect(righe[0]).not.toHaveProperty('stato');
-    expect(stato.rpc[0].args.p_giro).toBe('2026-11-30T06:10:00.000Z');
+    expect(stato.rpc[0].args.p_giro).toBe(GIRO);
+  });
+  it('un giro lontano da adesso non entra: terrebbe accese o spegnerebbe le righe sbagliate', async () => {
+    expect((await manda({ ...fila, giro: '2099-01-01T00:00:00.000Z' }, S)).status).toBe(400);
+    expect((await manda({ ...fila, giro: '2026-01-01T00:00:00.000Z' }, S)).status).toBe(400);
+    expect(stato.rpc).toHaveLength(0);
   });
   it('una fila vuota non spegne la mappa', async () => {
     expect((await manda({ giro: fila.giro, attivita: [] }, S)).status).toBe(400);
@@ -218,6 +242,14 @@ describe('la porta di n8n (flusso 16)', () => {
 });
 
 describe('pulire quello che manda n8n', () => {
+  it('una data che non esiste, un carattere nullo o mezza posizione non fanno fallire il giro', () => {
+    const { righe } = pulisciFila([
+      { osm: 'node/5', nome: 'Bar\u0000 Cinque', settimana: '2026-02-30', lat: 45.05 },
+      { osm: 'node/6', nome: 'Sei', settimana: '2026-11-30', lat: 45.05, lon: 9.69 },
+    ]);
+    expect(righe[0]).toMatchObject({ nome: 'Bar Cinque', settimana: null, lat: null, lon: null });
+    expect(righe[1]).toMatchObject({ settimana: '2026-11-30', lat: 45.05, lon: 9.69 });
+  });
   it('scarta righe storte, toglie doppioni, legge lo stato della tabella n8n solo con le parole giuste', () => {
     const { righe, scartate } = pulisciFila([
       { osm: 'node/1', nome: 'A', stato_tabella: 'Sì' },
