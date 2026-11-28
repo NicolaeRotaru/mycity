@@ -117,6 +117,20 @@ describe('l\'approvazione del fattorino si scrive solo su quello che si è contr
     expect(db.profilo?.approval_status).toBe('pending');
   });
 
+  it.each([
+    ['un documento ricaricato (il selfie)', { kyc_selfie_url: 'selfie-nuovo' }],
+    ['un documento tolto (il fronte)', { kyc_id_doc_front_url: null }],
+    ['il nome di chi firma', { legal_first_name: 'Marco' }],
+    ['il codice fiscale di chi firma', { legal_fiscal_code: 'BNCMRC90A01G535Y' }],
+    ['la data di nascita', { legal_birth_date: '2010-01-01' }],
+  ])('cambiato %s dopo la lettura: 409, resta in attesa', async (_nome, cambio) => {
+    db.dopoLaLettura = cambio;
+    const r = await approva();
+    expect(r.status).toBe(409);
+    expect(db.profilo?.approval_status).toBe('pending');
+    expect(db.notifiche).toEqual([]);
+  });
+
   it('un fattorino a motore con scadenze in regola che le cambia dopo la lettura: 409', async () => {
     db.profilo = {
       ...IN_BICI, rider_vehicle_type: 'SCOOTER', rider_license_url: 'patente', rider_insurance_url: 'polizza',
