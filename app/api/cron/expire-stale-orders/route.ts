@@ -10,7 +10,7 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
-import { avvisaIlClienteDelRimborso, avvisaIlClienteDellAnnullo, avvisaIlNegozioDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine } from '@/lib/ordini/annulla';
+import { avvisaIlClienteDelRimborso, avvisaIlClienteDellAnnullo, avvisaIlNegozioDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine, restituisciIlCreditoDellOrdine } from '@/lib/ordini/annulla';
 import { ApiErrors } from '@/lib/api/responses';
 import { righePerChiChiudeAMano, type AvvisoDelCarrello, type ComeHaPagato } from '@/lib/email/annullo-nel-carrello';
 import { scriviCampanella } from '@/lib/ordini/campanella';
@@ -413,14 +413,12 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       const walletCents = Number(o.wallet_applied_cents ?? 0);
       let creditoTornato = true;
       if (walletCents > 0) {
-        const { error: wErr } = await admin.rpc('wallet_credit', {
-          p_user: o.user_id,
-          p_cents: walletCents,
-          p_reason: 'order_auto_canceled',
-          p_ref: o.id,
-        });
-        if (wErr) {
-          logger.warn('[cron] expire-stale-orders: storno wallet fallito', { id: o.id, message: wErr.message });
+        // 28/11/2026 (onda 2, R06-005) — La stessa restituzione dell'annullo (lib/ordini/annulla.ts), con i
+        // suoi tre tentativi sicuri: qui ce n'era uno solo, e un timeout lasciava il credito fermo. L'avviso
+        // agli amministratori resta quello del giro, qui sotto, insieme alla merce non tornata.
+        const nonTornatoCents = await restituisciIlCreditoDellOrdine(admin, o, 'order_auto_canceled', { avvisaGliAmministratori: false });
+        if (nonTornatoCents > 0) {
+          logger.warn('[cron] expire-stale-orders: storno wallet fallito', { id: o.id });
           creditoTornato = false;
           nonTornato.push(`il credito MyCity speso (${(walletCents / 100).toFixed(2).replace('.', ',')} €) non è tornato al cliente`);
         }
