@@ -45,7 +45,8 @@ function RenderSection({
   section: SiteSection;
   ctx: SectionContext;
   /** Notifica al contenitore tab il numero di prodotti visibili (per il badge "Prodotti · N"). */
-  onProductCount?: (count: number) => void;
+  /** R11-012 — `null` = «non so» (vedi ProductGrid). */
+  onProductCount?: (count: number | null) => void;
 }) {
   switch (section.type) {
     case 'hero':

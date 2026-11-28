@@ -33,15 +33,18 @@ function isoDaCampo(campo: string | undefined): string | null {
 }
 
 /**
- * 27/11/2026 — Il modulo non salva più lo sconto, ma gli eventi salvati prima lo tengono, e la
- * pagina Eventi può mostrarlo ai clienti come «-20%» senza che la cassa lo applichi. L'elenco lo
- * dice all'admin, evento per evento, invece di lasciarlo scoprire a un cliente.
+ * 27/11/2026 — Il modulo non salva più lo sconto, ma gli eventi salvati prima lo tengono. L'elenco lo
+ * dice all'admin, evento per evento.
+ * 28/11/2026 (R01-002, onda 2) — La pagina Eventi non mostra più il badge «-n%»; resta da sapere che
+ * risalvare l'evento cancella lo sconto salvato. In produzione la 880 li ha già tolti: si ritrovano solo
+ * da un backup di prima della 880.
  */
 function AvvisoScontoRimasto({ percento }: { percento: number | null }) {
   if (!percento) return null;
   return (
     <p role="note" className="mt-1 text-xs font-normal text-accent-800">
-      Ha ancora uno sconto del {percento}% salvato: la cassa non lo applica, ma ai clienti può comparire «-{percento}%».
+      Ha ancora uno sconto del {percento}% salvato: la cassa non lo applica e la pagina Eventi non lo mostra più.
+      Se salvi di nuovo l&apos;evento, lo sconto salvato si cancella.
     </p>
   );
 }

@@ -196,7 +196,6 @@ export default function ProductImagesField({
                 className="group"
               >
                 <div className="relative aspect-square">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={url} alt="" loading="lazy" className="w-full h-full object-cover rounded" />
                   <button
                     type="button"
@@ -207,7 +206,7 @@ export default function ProductImagesField({
                     ×
                   </button>
                   {showCoverBadge && i === 0 && (
-                    <span className="absolute top-1 left-1 inline-flex items-center gap-0.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                    <span className="absolute top-1 left-1 inline-flex items-center gap-0.5 rounded bg-black/70 px-1.5 py-0.5 text-2xs font-semibold text-white">
                       <Star size={9} strokeWidth={2.6} className="fill-white" aria-hidden /> Copertina
                     </span>
                   )}

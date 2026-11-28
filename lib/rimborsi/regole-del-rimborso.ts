@@ -454,7 +454,7 @@ export function percheIlRimborsoDelRecessoNonBasta(input: {
   if (input.importoCents >= input.interoCents) return null;
   if ((input.motivo ?? '').trim().length >= MOTIVO_MINIMO_CARATTERI) return null;
   return (
-    `Col recesso il rimborso è l'intero: ${(input.interoCents / 100).toFixed(2)} € (Cod. Cons. artt. 56-57). ` +
+    `Col recesso il rimborso è l'intero: ${formatPriceFromCents(input.interoCents)} (Cod. Cons. artt. 56-57). ` +
     'Puoi rimborsare meno solo se la merce è tornata rovinata o usata oltre la prova: scrivilo nella nota, arriva al cliente.'
   );
 }

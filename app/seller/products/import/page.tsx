@@ -144,7 +144,7 @@ function CaricamentoDaFile() {
       if (!row.name || row.name.length < 2) row.errors.push('Nome troppo corto');
       if (row.name.length > 200) row.errors.push('Nome troppo lungo (max 200)');
       if (!Number.isFinite(row.price) || row.price <= 0) row.errors.push('Prezzo non valido');
-      if (row.price > 10000) row.errors.push('Prezzo eccessivo (max €10.000)');
+      if (row.price > 10000) row.errors.push('Prezzo eccessivo (max 10.000 €)');
       if (quantita === null) {
         row.errors.push(`Quantità non valida («${get('stock')}»): scrivi un numero intero senza punti né virgole, per esempio 12`);
       }
@@ -307,7 +307,7 @@ function CaricamentoDaFile() {
                     <td className="p-2 font-medium text-ink-900 truncate max-w-xs">{r.name || '—'}</td>
                     <td className="p-2">{formatPrice(r.price)}</td>
                     <td className="p-2">{r.stock ?? '—'}</td>
-                    <td className="p-2"><code className="text-[10px] bg-cream-100 px-1 rounded">{r.category_slug}</code></td>
+                    <td className="p-2"><code className="text-2xs bg-cream-100 px-1 rounded">{r.category_slug}</code></td>
                     <td className="p-2">
                       {r.errors.length === 0 ? (
                         <span className="text-olive-700 inline-flex items-center gap-1"><CheckCircle2 size={12} /> OK</span>

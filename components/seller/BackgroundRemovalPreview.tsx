@@ -144,7 +144,6 @@ export default function BackgroundRemovalPreview({ open, url, onClose, onReplace
         <figure className="space-y-1">
           <figcaption className="text-xs font-medium text-ink-500">Prima</figcaption>
           <div className="aspect-square overflow-hidden rounded-lg border border-cream-200 bg-cream-100">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             {url && <img src={url} alt="Foto originale" className="h-full w-full object-cover" />}
           </div>
         </figure>
@@ -158,7 +157,6 @@ export default function BackgroundRemovalPreview({ open, url, onClose, onReplace
               </span>
             )}
             {state === 'ready' && resultDataUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={resultDataUrl} alt="Prodotto su sfondo bianco" className="h-full w-full object-contain" />
             )}
             {state === 'error' && (

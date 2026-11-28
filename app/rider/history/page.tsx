@@ -131,7 +131,7 @@ export default function RiderHistoryPage() {
           {orders.length} consegne completate · {formatPrice(totalEarned)} guadagnati
         </p>
         {lettura?.troncato && (
-          <p role="status" className="mt-1 text-[12px] font-semibold text-accent-800">
+          <p role="status" className="mt-1 text-xs font-semibold text-accent-800">
             Sono le tue ultime {orders.length} consegne: le più vecchie non sono contate qui.
           </p>
         )}
@@ -146,7 +146,7 @@ export default function RiderHistoryPage() {
           groups.map((g) => (
             <div key={g.key} className="mb-[18px]">
               <div className="mb-2 flex items-baseline justify-between">
-                <span className="text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">{g.label}</span>
+                <span className="text-[13px] font-bold uppercase tracking-label text-ink-700">{g.label}</span>
                 <span className="text-[13px] font-bold text-olive-700">{formatPrice(g.total)}</span>
               </div>
               <div className="flex flex-col gap-2">

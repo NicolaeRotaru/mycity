@@ -62,7 +62,7 @@ function Riquadro({ icona: Icona, titolo, nota, children }: { icona: typeof Glob
 }
 
 function DaConfermare({ testo = 'da confermare' }: { testo?: string }) {
-  return <span className="ml-1 rounded bg-amber-100 px-1 py-px text-[10px] font-semibold text-amber-800">{testo}</span>;
+  return <span className="ml-1 rounded bg-amber-100 px-1 py-px text-2xs font-semibold text-amber-800">{testo}</span>;
 }
 
 function BozzaDelSito({ nome, tipo, nascita, scheda, bozzaAd }: { nome: string; tipo: TipoAttivita; nascita: string | null; scheda?: SchedaCliente | null; bozzaAd?: BozzaSitoAd | null }) {
@@ -83,7 +83,7 @@ function BozzaDelSito({ nome, tipo, nascita, scheda, bozzaAd }: { nome: string; 
         ? 'I testi li abbiamo scritti per te con quello che sappiamo del tuo locale. Ogni testo è da confermare: li correggi tu, prima che il sito vada online.'
         : 'Una prima bozza fatta con i tuoi dati: testi e foto li completiamo insieme.'}
     >
-      <div className="overflow-hidden rounded-lg border border-cream-300 bg-white shadow-sm" style={tokenCss(firma)} data-armonia-numero={firma.numero}>
+      <div className="overflow-hidden rounded-lg border border-cream-300 bg-white shadow-warm-sm" style={tokenCss(firma)} data-armonia-numero={firma.numero}>
         {/* La barra del browser: l'indirizzo è un suggerimento, da verificare se è libero. */}
         <div className="flex items-center gap-2 border-b border-cream-200 bg-cream-100 px-3 py-1.5">
           <span className="flex gap-1" aria-hidden>
@@ -110,7 +110,7 @@ function BozzaDelSito({ nome, tipo, nascita, scheda, bozzaAd }: { nome: string; 
             </div>
           ))}
         </div>
-        <div className="flex items-center justify-between gap-2 border-t border-cream-200 bg-cream-50 px-3 py-1.5 text-[10px] text-ink-500">
+        <div className="flex items-center justify-between gap-2 border-t border-cream-200 bg-cream-50 px-3 py-1.5 text-2xs text-ink-500">
           <span className="truncate">{b.nome}</span>
           <span className="flex shrink-0 items-center gap-1.5">
             <SigilloNascosto firma={firma} dimensione={10} />
@@ -197,7 +197,7 @@ function SchedaSuMaps({ nome, tipo }: { nome: string; tipo: TipoAttivita }) {
   const sc = schedaGoogle(nome, tipo);
   return (
     <Riquadro icona={MapPin} titolo="La tua scheda su Google Maps" nota="Come ti troverà chi cerca vicino a te: un esempio fatto con i tuoi dati.">
-      <div className="rounded-lg border border-cream-300 bg-white p-3 shadow-sm">
+      <div className="rounded-lg border border-cream-300 bg-white p-3 shadow-warm-sm">
         <p className="font-semibold text-ink-900">{sc.nome}</p>
         <p className="text-xs text-ink-600">{sc.categoria}</p>
         <p className="mt-1 text-xs text-olive-700">Aperto · orari aggiornati</p>

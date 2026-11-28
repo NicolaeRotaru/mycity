@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { getAdminSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
+import { getKycProvider } from '@/lib/kyc/providers';
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
@@ -240,6 +241,17 @@ export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
     azzera: { recipient_name: null, recipient_email: null, message: null },
     sopravvive: true,
     perche: 'nome, email e messaggio di chi ha riscattato il regalo e poi ha chiesto di sparire',
+  },
+  {
+    // 28/11/2026 (R08-012) — Il buono regalo non ancora pagato: la cassa scrive qui nome, email e
+    // messaggio del destinatario invece di mandarli a Stripe (migrazione 999j). La chiave è
+    // gift_card_in_attesa.buyer_id -> auth.users ON DELETE CASCADE: la riga se ne va con chi compra.
+    // Si ripulisce lo stesso prima, come le altre.
+    tabella: 'gift_card_in_attesa',
+    colonna: 'buyer_id',
+    azzera: { recipient_name: null, recipient_email: null, message: null },
+    sopravvive: false,
+    perche: 'nome, email e messaggio del destinatario di un buono regalo non ancora pagato',
   },
   {
     /*
@@ -646,13 +658,59 @@ export async function togliDallaNewsletter(admin: Admin, userId: string): Promis
  * prima, e se poi la cancellazione dell'account non riesce almeno questi non
  * sono più lì.
  */
-export async function anonimizzaDatiSensibili(admin: Admin, userId: string): Promise<{ ok: boolean; errore?: string }> {
-  const { error } = await admin.from('profiles').update(CAMPI_KYC_DA_AZZERARE).eq('id', userId);
+export async function anonimizzaDatiSensibili(
+  admin: Admin,
+  userId: string,
+  opzioni: { tieniIdDelControllo?: boolean } = {},
+): Promise<{ ok: boolean; errore?: string }> {
+  // R01-015 — Se la scheda presso il fornitore non si è tolta, l'id del controllo resta: è l'unico
+  // filo per ritrovarla la notte dopo (vedi `togliLaSchedaDalFornitoreKyc`).
+  const campi: Record<string, unknown> = { ...CAMPI_KYC_DA_AZZERARE };
+  if (opzioni.tieniIdDelControllo) delete campi.kyc_provider_check_id;
+  const { error } = await admin.from('profiles').update(campi).eq('id', userId);
   if (error) {
     logger.warn('[cancellazione] dati di verifica identità non tutti azzerati', { userId, err: error.message });
     return { ok: false, errore: error.message };
   }
   return { ok: true };
+}
+
+/**
+ * 28/11/2026 (R01-015, onda 2) — LA SCHEDA DELLA VERIFICA D'IDENTITÀ PRESSO IL FORNITORE.
+ *
+ * Con Onfido acceso, la verifica apre da loro una scheda con nome, email, data di nascita, foto del
+ * documento e selfie. Alla cancellazione dell'account si azzerava l'id del controllo sul profilo e la
+ * scheda restava là, senza più il filo per ritrovarla. Adesso si toglie PRIMA, dall'id del controllo
+ * (`kyc_provider_check_id`), come il cliente su Stripe: se non si riesce, l'id resta sul profilo, la
+ * cancellazione si ferma al ②bis (riga che sopravvive) e la notte dopo si riprova.
+ * I fornitori senza dati fuori da noi (prova, revisione a mano) non hanno `cancellaScheda`: niente da fare.
+ */
+export async function togliLaSchedaDalFornitoreKyc(admin: Admin, userId: string): Promise<PuliziaNonRiuscita | null> {
+  const provider = getKycProvider();
+  if (typeof provider.cancellaScheda !== 'function') return null;
+  const nonRiuscita = (errore: string): PuliziaNonRiuscita => ({
+    tabella: 'scheda della verifica d\'identità presso il fornitore',
+    colonna: 'kyc_provider_check_id',
+    sopravvive: true,
+    errore,
+  });
+  try {
+    const { data, error } = await admin.from('profiles').select('kyc_provider_check_id').eq('id', userId);
+    if (error) {
+      logger.error('[cancellazione] id del controllo KYC non letto', { userId, err: error.message });
+      return nonRiuscita(`id del controllo non letto (${error.message})`);
+    }
+    const checkId = (data?.[0] as { kyc_provider_check_id?: string | null } | undefined)?.kyc_provider_check_id ?? null;
+    if (!checkId) return null;
+    const esito = await provider.cancellaScheda(checkId);
+    if (esito === 'fallita') {
+      logger.error('[cancellazione] scheda KYC presso il fornitore non tolta: si riprova', { userId, checkId });
+      return nonRiuscita('scheda non tolta dal fornitore');
+    }
+    return null;
+  } catch (e) {
+    return nonRiuscita(e instanceof Error ? e.message : 'errore');
+  }
 }
 
 /**
@@ -743,6 +801,66 @@ export type CassaContanti = {
   motivo: string;
 };
 
+/**
+ * 28/11/2026 (R08-004, R08-005, R08-006, onda 2) — I CONTANTI SI CONTANO DAGLI ORDINI, NON DALLA RIGA DEL GIORNO.
+ *
+ * La guardia leggeva solo il registro delle giornate: aperta se `remitted_at` è vuoto, cifra
+ * `collected_cents`, cioè TUTTO l'incassato del giorno. Due sbagli, uno per verso:
+ *
+ *  · versa alle 15, incassa ancora alle 18: la riga del giorno ha `remitted_at` pieno, i contanti delle
+ *    18 per il registro non esistono e l'account si cancellava con quei soldi in tasca (R08-006);
+ *  · giornata riaperta (`remitted_at` svuotato dopo il versamento): la frase diceva «non ancora versati»
+ *    anche i contanti già versati, con la cifra gonfiata (R08-004, R08-005).
+ *
+ * Adesso il conto lo fa il database in una sola lettura (`cassa_da_versare_del_fattorino`, migrazione
+ * 999n): gli ordini in contanti consegnati e non ancora rimessi — e quelli ancora in strada coi
+ * contanti già dichiarati incassati (N-003) —, più i rimborsati coi contanti
+ * ancora in mano (le regole della pagina Rimesse contanti), e le giornate che il registro dice ancora
+ * aperte. Una giornata che il registro tiene aperta ferma la cancellazione come prima: si ferma in più
+ * casi, mai in meno. Finché la funzione non è applicata si legge il registro come prima.
+ */
+const FUNZIONE_DELLA_CASSA = 'cassa_da_versare_del_fattorino';
+
+/** La funzione non c'è (ancora): PostgREST risponde PGRST202, PostgreSQL 42883 col suo nome. */
+function funzioneDellaCassaAssente(e: { code?: string; message?: string }): boolean {
+  return e.code === 'PGRST202' || (e.code === '42883' && (e.message ?? '').includes(FUNZIONE_DELLA_CASSA));
+}
+
+/**
+ * La frase del rinvio: la stessa, chiunque abbia fatto il conto.
+ *
+ * 28/11/2026 (N-005, onda 3) — Una giornata che il registro tiene aperta senza contanti in tasca (un
+ * ammanco da chiarire, una giornata mai chiusa) ferma la cancellazione, giustamente, ma la frase diceva
+ * «risultano 0,00 € di contanti … non ancora versati»: una cifra falsa come ragione. Senza contanti la
+ * frase dice quello che c'è davvero, la giornata di cassa da chiudere; la cifra compare solo quando c'è.
+ */
+function cassaDaVersare(centesimi: number, giornate: number): CassaContanti {
+  const quante = `${giornate} ${giornate === 1 ? 'giornata' : 'giornate'} di cassa`;
+  if (!(centesimi > 0)) {
+    return {
+      bloccante: true,
+      esito: 'da_versare',
+      centesimi: 0,
+      giornate,
+      motivo:
+        `Cancellazione rinviata: ${giornate === 1 ? 'risulta ancora aperta' : 'risultano ancora aperte'} ` +
+        `${quante} contanti da chiudere con l’amministrazione. ` +
+        `Appena ${giornate === 1 ? 'è chiusa' : 'sono chiuse'} la cancellazione riparte da sola.`,
+    };
+  }
+  const euro = (centesimi / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return {
+    bloccante: true,
+    esito: 'da_versare',
+    centesimi,
+    giornate,
+    motivo:
+      `Cancellazione rinviata: risultano ${euro} € di contanti incassati alle consegne e non ancora versati ` +
+      `(${quante}). ` +
+      `Appena il versamento è registrato la cancellazione riparte da sola.`,
+  };
+}
+
 export async function contantiAncoraDaVersare(admin: Admin, userId: string): Promise<CassaContanti> {
   const nonVerificabile = (perche: string): CassaContanti => ({
     bloccante: true,
@@ -751,6 +869,25 @@ export async function contantiAncoraDaVersare(admin: Admin, userId: string): Pro
     giornate: 0,
     motivo: `Non siamo riusciti a controllare la cassa contanti, quindi la cancellazione è rinviata: ${perche}`,
   });
+
+  try {
+    const { data: conto, error: errConto } = await admin.rpc(FUNZIONE_DELLA_CASSA, { p_rider: userId });
+    if (errConto && !funzioneDellaCassaAssente(errConto)) return nonVerificabile(errConto.message);
+    if (!errConto) {
+      const c = (conto ?? null) as { centesimi?: unknown; giornate?: unknown } | null;
+      const centesimi = Number(c?.centesimi);
+      const giornate = Number(c?.giornate);
+      // Una risposta che non si legge vale quanto un registro che non si legge: ci si ferma.
+      if (!Number.isFinite(centesimi) || !Number.isInteger(giornate) || giornate < 0) {
+        return nonVerificabile('il conto della cassa non si legge');
+      }
+      if (giornate === 0) return { bloccante: false, esito: 'libera', centesimi: 0, giornate: 0, motivo: '' };
+      return cassaDaVersare(centesimi, giornate);
+    }
+    logger.warn('[cancellazione] conto della cassa dagli ordini non disponibile (migrazione da applicare): leggo il registro', { userId });
+  } catch (e) {
+    return nonVerificabile(e instanceof Error ? e.message : 'errore');
+  }
 
   let data: unknown;
   try {
@@ -778,19 +915,7 @@ export async function contantiAncoraDaVersare(admin: Admin, userId: string): Pro
   );
   if (aperte.length === 0) return { bloccante: false, esito: 'libera', centesimi: 0, giornate: 0, motivo: '' };
 
-  const centesimi = aperte.reduce((somma, r) => somma + (r.collected_cents ?? 0), 0);
-  const euro = (centesimi / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const giornate = aperte.length;
-  return {
-    bloccante: true,
-    esito: 'da_versare',
-    centesimi,
-    giornate,
-    motivo:
-      `Cancellazione rinviata: risultano ${euro} € di contanti incassati alle consegne e non ancora versati ` +
-      `(${giornate} ${giornate === 1 ? 'giornata' : 'giornate'} di cassa). ` +
-      `Appena il versamento è registrato la cancellazione riparte da sola.`,
-  };
+  return cassaDaVersare(aperte.reduce((somma, r) => somma + (r.collected_cents ?? 0), 0), aperte.length);
 }
 
 /**
@@ -1049,10 +1174,13 @@ export async function cancellaAccount(
   // ② I documenti d'identità e l'IBAN non aspettano: non si vedono a video,
   // toglierli non lascia nessuno con un account a metà.
   if ((fermo = fuoriTempo())) return fermo;
-  await anonimizzaDatiSensibili(admin, userId);
+  const schedaKyc = await togliLaSchedaDalFornitoreKyc(admin, userId);
+  await anonimizzaDatiSensibili(admin, userId, { tieniIdDelControllo: !!schedaKyc });
 
   if ((fermo = fuoriTempo())) return fermo;
   const puliziaFallita = await anonimizzaTestoLibero(admin, userId);
+  // R01-015 — La scheda rimasta dal fornitore ferma la cancellazione al ②bis, come le righe che sopravvivono.
+  if (schedaKyc) puliziaFallita.push(schedaKyc);
   if ((fermo = fuoriTempo())) return fermo;
   // R24-015 — Una newsletter non ripulita ferma la cancellazione al ②bis, come le righe che sopravvivono.
   const newsletter = await togliDallaNewsletter(admin, userId);

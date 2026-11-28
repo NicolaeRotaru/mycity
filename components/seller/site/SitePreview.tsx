@@ -264,7 +264,6 @@ function BlockBody({ section, accent, storeName }: { section: SiteSection; accen
           <div className="grid grid-cols-3 gap-2">
             {(items.length > 0 ? items.slice(0, 6) : Array.from({ length: 3 }).map(() => null)).map((it, i) =>
               it ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
                 <img key={i} src={it.url} alt={it.alt ?? ''} className="aspect-square w-full rounded-lg border border-cream-200 object-cover" />
               ) : (
                 <div key={i} className="flex aspect-square items-center justify-center rounded-lg border border-cream-300 bg-cream-100" aria-hidden>

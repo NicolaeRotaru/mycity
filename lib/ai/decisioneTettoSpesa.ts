@@ -43,6 +43,8 @@
  * `next/server`. Sono funzioni pure che un test puo' ESEGUIRE, e la prova di
  * questo file gira in millisecondi senza toccare nulla.
  */
+// R09-012 — Gli importi dell'allarme in italiano: lib/format non importa niente, il file resta provabile da solo.
+import { formatPrice } from '@/lib/format';
 
 /** Come sta il conto condiviso, visto da questa copia. */
 export type ContoCondivisoStato = {
@@ -231,8 +233,8 @@ export function allarmiTettoSpesaAi(
       detail:
         `Il conto della spesa AI in comune ${da}: ogni copia del sito conta per se'. ` +
         (opzioni.fermoSenzaConto
-          ? `L'AI a pagamento e' ferma per tutte le copie finche' il conto non risponde (tetto di ${tettoEur.toFixed(2)} € al giorno). `
-          : `Il tetto di ${tettoEur.toFixed(2)} € al giorno e' sceso a ${quotaEur} € per copia per non moltiplicarsi. `) +
+          ? `L'AI a pagamento e' ferma per tutte le copie finche' il conto non risponde (tetto di ${formatPrice(tettoEur)} al giorno). `
+          : `Il tetto di ${formatPrice(tettoEur)} al giorno e' sceso a ${formatPrice(quotaEur)} per copia per non moltiplicarsi. `) +
         `Rimedio: applicare la migrazione del conto condiviso (131 / 158). Detto dal database: ${conto.motivo || 'nessun messaggio'}.`,
       url: '/admin/today',
     },

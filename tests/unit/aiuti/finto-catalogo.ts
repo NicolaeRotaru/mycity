@@ -28,7 +28,9 @@ export function fintoCatalogo(stato: StatoCatalogo) {
     if (tabella === 'categories') return { data: stato.categorie, error: null };
     if (tabella === 'catalog_ai_jobs') {
       if (d.op === 'update') {
-        stato.lavoroApplicato += 1;
+        // Onda 2 (R02-003) — Si conta solo il passaggio a «applicato»: il segno di fine
+        // dell'applicazione (`applicazione_finita_il`) e' una scrittura a parte, che non lo ripete.
+        if (d.valori?.status === 'applied') stato.lavoroApplicato += 1;
         // S10 (5/11/2026) — La rotta prenota il lavoro con un update che
         // restituisce le righe toccate: una riga = prenotato.
         return { data: [{ id: stato.lavoro?.id }], error: null };

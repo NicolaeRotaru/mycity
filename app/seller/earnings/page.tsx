@@ -314,7 +314,7 @@ export default function SellerEarningsPage() {
                       title={formatPrice(val)}
                     />
                   </div>
-                  <span className="text-[10px] text-ink-500">
+                  <span className="text-2xs text-ink-500">
                     {new Date(day).toLocaleDateString('it', { weekday: 'short' })}
                   </span>
                 </div>
@@ -396,7 +396,7 @@ export default function SellerEarningsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-cream-50 text-xs uppercase tracking-[0.03em] text-ink-500">
+                <tr className="bg-cream-50 text-xs uppercase tracking-label text-ink-500">
                   <th className="px-3 py-3 text-left font-bold sm:px-5">Ordine</th>
                   <th className="hidden px-5 py-3 text-left font-bold sm:table-cell">Data</th>
                   <th className="px-3 py-3 text-right font-bold sm:px-5">Netto</th>

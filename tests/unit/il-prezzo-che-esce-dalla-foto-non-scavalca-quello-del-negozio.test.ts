@@ -91,8 +91,8 @@ describe('il prezzo che il modello legge da una foto', () => {
 
     expect(patch.price, 'la stima della foto sostituisce il prezzo vero del negozio').toBeUndefined();
     expect(rifiutati.length, 'il prezzo sparisce senza che nessuno lo dica al negoziante').toBe(1);
-    expect(rifiutati[0]).toContain('20.00');
-    expect(rifiutati[0]).toContain('2.00');
+    expect(rifiutati[0]).toContain('20,00');
+    expect(rifiutati[0]).toContain('2,00');
   });
 
   it('creando un prodotto NUOVO dalla foto il primo prezzo passa: non c è niente da confrontare', () => {

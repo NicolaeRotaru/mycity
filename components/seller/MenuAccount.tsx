@@ -126,7 +126,9 @@ export default function MenuAccount({
             <p className="truncate text-sm font-bold">{nome}</p>
             {email && <p className="truncate text-xs text-ink-500">{email}</p>}
           </div>
-          <Link href={PERCORSO_ABBONAMENTO} className={voce}>
+          {/* R10-005 — Niente precarico: ogni precarico di /seller/… ripassa dal controllo d'accesso
+              del middleware (getUser + profiles). La richiesta parte al clic, come nella barra. */}
+          <Link href={PERCORSO_ABBONAMENTO} prefetch={false} className={voce}>
             <IconaPiano
               size={16}
               className={`shrink-0 ${etichetta.tono === 'da_sistemare' ? 'text-amber-600' : 'text-primary-700'}`}
@@ -141,7 +143,7 @@ export default function MenuAccount({
               )}
             </span>
           </Link>
-          <Link href="/seller/profile" className={voce}>
+          <Link href="/seller/profile" prefetch={false} className={voce}>
             <Settings size={16} className="shrink-0 text-ink-500" aria-hidden />
             Profilo e impostazioni
           </Link>
@@ -150,7 +152,7 @@ export default function MenuAccount({
             <CambiaAccount />
           </div>
           <div className="border-t border-cream-200">
-            <Link href="/?shop=1" className={voce}>
+            <Link href="/?shop=1" prefetch={false} className={voce}>
               <ExternalLink size={16} className="shrink-0 text-ink-500" aria-hidden />
               Vai al marketplace
             </Link>

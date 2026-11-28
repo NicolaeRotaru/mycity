@@ -161,8 +161,29 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       ? 'nel frattempo hai avviato un altro lavoro sul catalogo, e questo non può più tornare pronto da ripetere'
       : 'non sono riuscito a rimettere il lavoro pronto da ripetere';
   };
+  /**
+   * 28/11/2026 (R02-003, onda 2) — IL SEGNO DI FINE DELL'APPLICAZIONE.
+   *
+   * L'avvio di un lavoro nuovo (start/route.ts) aspetta finche' l'ultimo lavoro «applicato» non ha
+   * il segno di fine (`applicazione_finita_il`) ed e' di meno di 120 s: se un lavoro nuovo nascesse
+   * a meta' applicazione, il database (640) rifiuterebbe il ritorno a «pronto» di questo. Ma il segno
+   * non lo scriveva nessuno: ogni avvio dopo un'applicazione finita aspettava due minuti per niente.
+   * Si scrive quando il lavoro resta «applicato» per sempre (finito, o non piu' rimettibile pronto).
+   * Una scrittura a parte e senza conseguenze: senza la colonna (migrazione 999m non
+   * applicata) fallisce, e l'avvio aspetta i 120 s come prima.
+   */
+  const segnaFineApplicazione = async (): Promise<void> => {
+    const { error } = await admin
+      .from('catalog_ai_jobs')
+      .update({ applicazione_finita_il: new Date().toISOString() })
+      .eq('id', job.id)
+      .eq('seller_id', user.id)
+      .eq('status', 'applied');
+    if (error) logger.warn('catalog-batch apply: segno di fine non scritto', { jobId: job.id, status: error.code });
+  };
   if (erroreCategorie) {
     const nonRimesso = await rimettiPronto();
+    if (nonRimesso) await segnaFineApplicazione();
     return ApiErrors.unavailable(
       nonRimesso
         ? `Non riesco a leggere le categorie in questo momento e non ho cambiato niente, ma ${nonRimesso}.`
@@ -227,6 +248,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         .in('id', ids);
       if (erroreProdotti) {
         const nonRimesso = await rimettiPronto();
+        if (nonRimesso) await segnaFineApplicazione();
         return ApiErrors.unavailable(
           nonRimesso
             ? `Non riesco a leggere il catalogo in questo momento e non ho cambiato niente, ma ${nonRimesso}.`
@@ -454,6 +476,9 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       }
     }
   }
+
+  // R02-003 (onda 2) — Il lavoro resta «applicato»: l'applicazione e' finita, e l'avvio dopo non aspetta.
+  if (!ripetibile) await segnaFineApplicazione();
 
   const saltati = esiti.filter((e) => e.esito === 'saltato').length;
   if (saltati > 0) {

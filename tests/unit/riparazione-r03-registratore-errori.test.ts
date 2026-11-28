@@ -90,7 +90,13 @@ function tabella(nome: string): unknown {
   });
   return c;
 }
-vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => ({ from: (t: string) => tabella(t) }) }));
+// R05-004 (onda 2) — Il sorvegliante legge anche i bonifici di rimborso ai clienti: qui nessuno da fare.
+vi.mock('@/lib/supabase/server', () => ({
+  getAdminSupabase: () => ({
+    from: (t: string) => tabella(t),
+    rpc: async (nome: string) => (nome === 'admin_bonifici_rimborso' ? { data: [], error: null } : { data: null, error: { message: `rpc finta: ${nome}` } }),
+  }),
+}));
 
 import { logger } from '@/lib/logger';
 import { GET as salute } from '@/app/api/health/route';

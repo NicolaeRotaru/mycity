@@ -28,6 +28,7 @@ import { stornoGiaFattoPerLaContestazione, type StornoDaControllare } from './di
 import { restituisciLeQuoteParziali } from './contestazione-parziale-vinta';
 import { buonoDaRiattivareDopoLaVittoria, richiestaSulBuonoSoloAvviso } from './contestazione-buoni';
 import { spegniLaSponsorizzazioneDelPagamento } from './sponsorizzati';
+import { laContestazioneDiUnCarrelloSenzaOrdini } from './contestazione-prima-dell-ordine';
 import {
   contestazioneDiUnaParte, eUnaRichiestaDiInformazioni, promemoriaOTotale, quotaDelRimborsoSulNetto, stornatoDaQuestaContestazione,
 } from './quanto-restituire';
@@ -88,6 +89,9 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     'id, dispute_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, gross_total_cents, total_price, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost',
   );
   if (orders.length === 0) {
+    // R05-010 / R05-011 — Prima dei buoni: il pagamento può essere di un carrello il cui ordine non è ancora
+    // nato. Carrello aperto → si lancia e Stripe ripete; carrello chiuso senza ordine → avviso e basta.
+    if (await laContestazioneDiUnCarrelloSenzaOrdini(dispute, 'apertura')) return;
     // 31/10/2026 (178) — Senza ordini il pagamento contestato puo' essere quello
     // di un buono regalo: la banca si e' gia' ripresa i soldi, il buono si spegne.
     // Lo spegne il database (`gift_card_void_for_payment`, 178), una volta
@@ -136,7 +140,7 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     );
     await notifyAdmins(
       'ℹ️ La banca chiede informazioni su un pagamento',
-      `Richiesta di informazioni ${dispute.id} sull'ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${((dispute.amount ?? 0) / 100).toFixed(2)}€. Nessun soldo tolto, nessuno storno al negozio: il bonifico non ancora partito resta fermo finché la banca chiude.`,
+      `Richiesta di informazioni ${dispute.id} sull'ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${formatPriceFromCents(dispute.amount ?? 0)}. Nessun soldo tolto, nessuno storno al negozio: il bonifico non ancora partito resta fermo finché la banca chiude.`,
       '/admin/disputes',
     );
     return;
@@ -287,7 +291,7 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
   // anche se il prelievo arriva prima di `created` (due passaggi, un avviso).
   await notifyAdmins(
     '⚠️ Chargeback aperto',
-    `Contestazione bancaria su ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${((dispute.amount ?? 0) / 100).toFixed(2)}€.`,
+    `Contestazione bancaria su ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${formatPriceFromCents(dispute.amount ?? 0)}.`,
     '/admin/disputes',
     { unaVoltaPer: `chargeback-aperto:${dispute.id}` },
   );
@@ -311,7 +315,11 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
   // finto delle prove restituiva la riga intera, e il difetto non si vedeva.
   // Sono colonne della 126: dove non c'è, `findOrdersForDispute` le toglie.
   const orders = await findOrdersForDispute(dispute, 'id, seller_id, stripe_charge_id, stripe_transfer_group, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, dispute_status, delivery_status, payment_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, dispute_seller_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, dispute_rider_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
-  if (orders.length === 0) return buonoDaRiattivareDopoLaVittoria(dispute); // R11-022
+  if (orders.length === 0) {
+    // R05-010 / R05-011 — anche alla chiusura: un carrello ancora aperto non è un buono regalo.
+    if (await laContestazioneDiUnCarrelloSenzaOrdini(dispute, 'chiusura')) return;
+    return buonoDaRiattivareDopoLaVittoria(dispute); // R11-022
+  }
   const admin = getAdminSupabase();
   const ids = orders.map((o) => o.id);
 

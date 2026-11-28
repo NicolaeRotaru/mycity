@@ -57,8 +57,11 @@ const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }
       // la risposta dice la procedura vera, con le parole dei pulsanti che ci sono.
       { q: 'Cosa faccio se nessuno risponde alla consegna?',
         a: 'Aspetta qualche minuto e chiama il cliente con "Chiama". Se non risponde premi "Cliente assente — annulla la consegna": l\'ordine si annulla (con la carta il cliente riceve il rimborso intero, coi contanti non paga niente) e tu riporti la merce al negozio. Se hai un dubbio, prima "Contatta l\'assistenza".' },
+      // 28/11/2026 (N-001, onda 2) — Diceva «la piattaforma garantisce un compenso fisso per consegna»: il
+      // compenso è per giro (non per ogni ordine), coi contanti lo trattieni tu dall'incasso, e arriva
+      // solo per le consegne completate. Qui si dice com'è, coi numeri dei pagamenti.
       { q: 'Posso chiedere mancia?',
-        a: 'No, è vietato. La piattaforma garantisce un compenso fisso per consegna. I clienti possono apprezzarti con una recensione.' },
+        a: `No, è vietato. Il compenso è fisso: ${COMPENSO_GIRO} per ogni giro di consegna, più ${COMPENSO_NEGOZIO_IN_PIU} per ogni negozio in più, per le consegne completate. I clienti possono apprezzarti con una recensione.` },
     ],
   },
   {
@@ -113,7 +116,7 @@ export default function RiderHelpPage() {
         {/* FAQ accordions */}
         {TOPICS.map((topic) => (
           <section key={topic.title}>
-            <h2 className="mb-2 flex items-center gap-2 px-1 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">
+            <h2 className="mb-2 flex items-center gap-2 px-1 text-[13px] font-bold uppercase tracking-label text-ink-700">
               <topic.icon size={15} strokeWidth={2.2} aria-hidden /> {topic.title}
             </h2>
             <div className="flex flex-col gap-2">

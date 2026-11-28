@@ -18,7 +18,17 @@ import { logger } from '@/lib/logger';
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 
-export const revalidate = 300; // 5 min ISR sui metadata
+/**
+ * 28/11/2026 (R04-013) — NESSUNA CACHE DICHIARATA CHE NON C'È.
+ * Qui c'era `revalidate = 300`, ma `dynamic = 'force-dynamic'` in app/layout.tsx (la parola
+ * d'ordine degli script, vedi lì) costruisce ogni pagina a ogni visita: la cache dichiarata non
+ * contava, e chi leggeva credeva che la scheda arrivasse da una copia. E il giorno in cui quella riga
+ * verrà tolta, una copia di 300 secondi mostrerebbe prezzo, sconto e disponibilità di cinque minuti prima. Con 0 la dichiarazione dice il
+ * vero oggi e regge domani, come la vetrina (app/store/[id]/layout.tsx, R10-004). Una cache vera
+ * delle letture, come quella della home (unstable_cache), è una scelta di Nicola: quanto vecchio
+ * può essere la scheda che il cliente vede.
+ */
+export const revalidate = 0;
 
 /**
  * R10-001 — UN PRODOTTO CHE NON ESISTE RISPONDE 404, NON «TUTTO OK».
@@ -238,7 +248,6 @@ export default async function ProductLayout(
   return (
     <>
       {primaFoto && (
-        // eslint-disable-next-line @next/next/no-head-element
         // Gli attributi si prendono TUTTI da `precaricoFoto`: sceglierne a mano
         // qualcuno, o riscriverne uno, e' come si era rotto la prima volta.
         <link rel="preload" as="image" {...primaFoto} fetchPriority="high" />

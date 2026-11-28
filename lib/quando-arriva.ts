@@ -35,7 +35,7 @@
  * mettersi alle 21:40 senza aspettare le 21:40.
  */
 import { EXPRESS_ETA_LABEL } from './delivery';
-import { motivoNegozioChiuso, negozioPuoServire, romeNow } from './store-hours';
+import { motivoNegozioChiuso, negozioPuoServire, ritiroPossibile, romeNow } from './store-hours';
 
 export type Giorno = 'now' | 'today' | 'tomorrow';
 
@@ -232,7 +232,20 @@ export function motivoFasciaRifiutata(
   // cassa ha proposto la fascia: «Domani» si conta da lì, non da quando la rotta la giudica.
   // Prima il parametro c'era in `negozioPuoServire` ma da qui non scendeva a nessuno.
   const chiuso = negozi.find((n) => !negozioPuoServire(n.orari, fascia, ora, propostaIl));
-  return chiuso ? motivoNegozioChiuso(chiuso.nome ?? 'Il negozio', fascia, ora) : null;
+  return chiuso ? motivoNegozioChiuso(chiuso.nome ?? 'Il negozio', fascia, ora, chiuso.orari) : null;
+}
+
+/**
+ * R12-009 — Il no al ritiro in negozio, detto dalle due rotte che creano l'ordine (contanti e carta).
+ *
+ * Il ritiro non ha fascia e non passa da `motivoFasciaRifiutata`; ma un negozio in ferie (settimana
+ * tutta chiusa) non apre mai, e prima l'ordine col ritiro passava lo stesso. `null` = si può.
+ */
+export function motivoRitiroRifiutato(negozi: readonly { nome?: string | null; orari?: unknown }[]): string | null {
+  const chiuso = negozi.find((n) => !ritiroPossibile(n.orari));
+  return chiuso
+    ? `${chiuso.nome ?? 'Il negozio'} in questi giorni è chiuso: il ritiro in negozio non si può fare finché non riapre.`
+    : null;
 }
 
 /**

@@ -160,7 +160,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
     // comunque quella scrittura, quindi era anche codice che non funzionava.
     mutationFn: async (params: { newStatus: OrderStatus }) => {
       if (!order) throw new Error('Ordine non caricato');
-      const update: Record<string, any> = { delivery_status: params.newStatus };
+      const update: Record<string, unknown> = { delivery_status: params.newStatus };
       // 6/9/2026 — «STATO AGGIORNATO» ANCHE QUANDO IL DATABASE NON AVEVA
       // CAMBIATO NIENTE.
       //
@@ -525,7 +525,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
         {/* Card target unica con azioni Naviga / Chiama */}
         {!done && !annullato && (
           <Card variant="surface" className="mb-3.5 shadow-warm">
-            <p className="mb-1 text-xs font-bold uppercase tracking-[0.03em] text-ink-400">
+            <p className="mb-1 text-xs font-bold uppercase tracking-label text-ink-400">
               {targetIsStore ? 'Ritira al negozio' : 'Consegna al cliente'}
             </p>
             <p className="flex items-center gap-1.5 font-serif text-xl font-bold text-ink-900">

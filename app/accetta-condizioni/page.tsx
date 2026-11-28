@@ -77,7 +77,7 @@ function Contenuto() {
         ci serve per poterti dire con esattezza, un domani, che cosa avevi accettato e quando.
       </p>
       {/* 5/11/2026 — Chi li aveva già accettati riaccettava senza sapere che erano cambiati, né cosa. */}
-      <div className="mt-4 rounded-xl border border-cream-300 bg-cream-50 p-4 text-[14px] leading-relaxed text-ink-700">
+      <div className="mt-4 rounded-xl border border-cream-300 bg-cream-50 p-4 text-sm leading-relaxed text-ink-700">
         <p>
           I Termini sono cambiati: versione {VERSIONE_TERMINI}, in vigore dal {TERMINI_IN_VIGORE_DAL}. Se li
           avevi già accettati, ecco cosa cambia:
@@ -89,7 +89,7 @@ function Contenuto() {
         </ul>
       </div>
 
-      <label className="mt-6 flex items-start gap-2.5 text-[14px] leading-relaxed text-ink-800">
+      <label className="mt-6 flex items-start gap-2.5 text-sm leading-relaxed text-ink-800">
         <input
           ref={casella}
           type="checkbox"

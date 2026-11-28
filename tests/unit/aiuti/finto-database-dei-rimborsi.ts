@@ -334,6 +334,11 @@ export function creaFintoDatabase(tabelle: Record<string, Riga[]>, guasti: Guast
     from: (tabella: string) => new FintaQuery(tabella, db),
     rpc: async (nome: string, args: Record<string, unknown> = {}) => {
       db.rpc.push({ nome, args });
+      // R08-006 (onda 2) — La funzione della cassa del fattorino (migrazione 999n) qui non c'è:
+      // la guardia della cancellazione legge il registro, come prima della migrazione.
+      if (nome === 'cassa_da_versare_del_fattorino') {
+        return { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${nome}` } };
+      }
       if (nome === 'accumula_rimborso') {
         const o = ordine(args.p_order_id);
         if (!o) return { data: null, error: { code: 'P0002', message: 'accumula_rimborso: ordine inesistente' } };

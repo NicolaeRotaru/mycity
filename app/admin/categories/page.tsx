@@ -24,7 +24,12 @@ type Cat = {
   parent_id: string | null; sort_order: number | null; featured: boolean | null;
   /** Migrazione 159: senza, `select('*')` non la porta e il campo resta vuoto. */
   image_url?: string | null;
+  /** Migrazione 363: i prodotti sotto questa categoria si pubblicano solo con allergeni e ingredienti. */
+  richiede_dichiarazioni_alimentari?: boolean | null;
 };
+
+/** R01-014 (onda 2) — La casella dell'obbligo alimentare, la stessa nei due moduli. */
+const ETICHETTA_ALIMENTI = 'Alimenti: obbliga allergeni e ingredienti';
 
 /**
  * R13-004 — Niente `maxLength` sui campi brevi: il browser tagliava in silenzio quello che si
@@ -61,6 +66,8 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli
   const [sortOrder, setSortOrder] = useState(cat.sort_order ?? 0);
   const [featured, setFeatured] = useState(!!cat.featured);
   const [imageUrl, setImageUrl] = useState(cat.image_url ?? '');
+  const obbligoGiaAcceso = cat.richiede_dichiarazioni_alimentari === true;
+  const [alimenti, setAlimenti] = useState(obbligoGiaAcceso);
 
   const save = useMutation({
     mutationFn: async () => authedFetch('PATCH', {
@@ -68,6 +75,8 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli
       // Solo se è cambiata: senza la migrazione 159 la colonna non c'è e il salvataggio degli altri
       // campi deve riuscire lo stesso.
       ...(imageUrl.trim() !== (cat.image_url ?? '') ? { image_url: imageUrl.trim() } : {}),
+      // Solo se è cambiato, come la foto.
+      ...(alimenti !== obbligoGiaAcceso ? { richiede_dichiarazioni_alimentari: alimenti } : {}),
     }),
     onSuccess: () => { toast.success('Categoria aggiornata'); onDone(); },
     onError: (e: unknown) => toast.error(friendlyError(e)),
@@ -92,6 +101,14 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli
         </Select>
         <Input label="Ordine" containerClassName="w-20" type="number" min={0} value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value) || 0)} />
         <Checkbox containerClassName="mb-2.5" label="In evidenza" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
+        {/* R01-014 — Acceso, non si spegne dal pannello (lo rifiuta il database, migrazione 363). */}
+        <Checkbox
+          containerClassName="mb-2.5"
+          label={obbligoGiaAcceso ? `${ETICHETTA_ALIMENTI} (non si toglie dal pannello)` : ETICHETTA_ALIMENTI}
+          checked={alimenti}
+          disabled={obbligoGiaAcceso}
+          onChange={(e) => setAlimenti(e.target.checked)}
+        />
         <Input label="Foto della tessera (https://… o /…)" containerClassName="flex-1 min-w-[220px]" value={imageUrl} error={sopraIlTetto(imageUrl, 500)} placeholder="Vuota = gradiente del marchio" onChange={(e) => setImageUrl(e.target.value)} />
         <Button className="mb-0.5" size="sm" type="button" loading={save.isPending} onClick={() => save.mutate()}>Salva</Button>
         <button type="button" onClick={() => {
@@ -114,6 +131,7 @@ export default function AdminCategoriesPage() {
   const [newIcon, setNewIcon] = useState('');
   const [newParent, setNewParent] = useState('');
   const [newImage, setNewImage] = useState('');
+  const [newAlimenti, setNewAlimenti] = useState(false);
 
   const { data: cats = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.categories,
@@ -143,9 +161,14 @@ export default function AdminCategoriesPage() {
       await authedFetch('POST', {
         name: newName.trim(), slug: slugify(newName), icon: newIcon, parent_id: newParent || null,
         ...(newImage.trim() ? { image_url: newImage.trim() } : {}),
+        ...(newAlimenti ? { richiede_dichiarazioni_alimentari: true } : {}),
       });
     },
-    onSuccess: () => { toast.success('Categoria creata'); setNewName(''); setNewIcon(''); setNewParent(''); setNewImage(''); invalidate(); },
+    onSuccess: () => {
+      toast.success('Categoria creata');
+      setNewName(''); setNewIcon(''); setNewParent(''); setNewImage(''); setNewAlimenti(false);
+      invalidate();
+    },
     onError: (e: unknown) => toast.error(friendlyError(e)),
   });
 
@@ -166,7 +189,13 @@ export default function AdminCategoriesPage() {
           <option value="">— Principale —</option>
           {tops.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </Select>
+        <Checkbox containerClassName="mb-2.5" label={ETICHETTA_ALIMENTI} checked={newAlimenti} onChange={(e) => setNewAlimenti(e.target.checked)} />
         <Button type="submit" loading={create.isPending}><Plus size={16} aria-hidden /> Aggiungi</Button>
+        {!newParent && !newAlimenti && (
+          <p role="note" className="w-full text-xs text-ink-500">
+            Una categoria principale nuova nasce senza l&apos;obbligo di allergeni e ingredienti: spuntalo se ci vanno alimenti.
+          </p>
+        )}
       </form>
 
       {isLoading ? (

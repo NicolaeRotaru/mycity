@@ -14,8 +14,10 @@ import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { romeNow } from '@/lib/store-hours';
-import { finestraDellaFascia, motivoFasciaRifiutata } from '@/lib/quando-arriva';
-import { fasciaAlGiornoDellOrdine, giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
+import { MOTIVO_FASCIA_PIENA, motivoFasciaRifiutata, motivoRitiroRifiutato } from '@/lib/quando-arriva';
+import { eLaFasciaPienaDelDatabase, rifiutoPerFasciaPiena } from '@/lib/ordini/giri-della-fascia';
+// R09-009 — La fascia riportata al giorno della richiesta: una copia sola, condivisa con la carta.
+import { fasciaDelGiornoDellaRichiesta } from '@/lib/ordini/fascia-leggibile';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
@@ -28,7 +30,9 @@ import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/r
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
 import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
+import { COLONNA_CHIAVE_DEL_CARRELLO, conLaChiaveDelCarrello } from '@/lib/ordini/chiave-del-carrello';
 import { decisioneSuChiaveOccupata, MESSAGGIO_ORDINE_IN_CORSO } from '@/lib/ordini/tentativo';
 import { idOrdiniDelTentativo } from '@/lib/ordini/chiave-dopo-l-errore';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
@@ -50,28 +54,6 @@ import { MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI, sopraIlTettoDeiContanti } from '@/l
 // chiuso»: il messaggio giusto c'era, e si perdeva nella forma sbagliata.
 
 export const runtime = 'nodejs';
-
-/**
- * 22/11/2026 — LA FASCIA DETTA DAL GIORNO IN CUI ARRIVA LA RICHIESTA.
- *
- * L'etichetta conta il giorno da quando la cassa l'ha disegnata; la rotta la contava dal suo
- * orologio. Lunedì alle 23:59 «Domani · 9:00–11:00» è martedì: arrivata alle 00:01, la rotta la
- * giudicava (e la scriveva) per mercoledì. La cassa manda anche il giorno della fascia
- * (`delivery_date`): se cade un giorno prima di quello che dice l'etichetta letta adesso, la
- * mezzanotte è passata in viaggio, e l'etichetta si riporta a oggi con la regola della carta pagata
- * dopo mezzanotte (`fasciaAlGiornoDellOrdine`): «Domani» di ieri è «Oggi», una fascia di ieri è
- * passata (`null`). Uno scarto di più giorni è l'orologio del telefono sbagliato, non la
- * mezzanotte: non sposta niente, si giudica come prima.
- */
-function fasciaDelGiornoDellaRichiesta(fascia: string, giornoDellaFascia: string, adesso: Date): string | null {
-  const finestra = finestraDellaFascia(fascia);
-  const oggi = giornoDiPiacenza(adesso);
-  if (!finestra || !oggi || !/^\d{4}-\d{2}-\d{2}$/.test(giornoDellaFascia)) return fascia;
-  const giorniDaOggi = Math.round((Date.parse(giornoDellaFascia) - Date.parse(oggi)) / 86_400_000);
-  if (giorniDaOggi !== (finestra.giorno === 'domani' ? 0 : -1)) return fascia;
-  // Ieri a mezzogiorno (UTC): un istante del giorno in cui la cassa ha proposto la fascia.
-  return fasciaAlGiornoDellOrdine(fascia, Date.parse(oggi) - 12 * 3_600_000, adesso);
-}
 
 const ItemSchema = z.object({
   productId: z.string().uuid(),
@@ -422,7 +404,8 @@ async function conLaChiaveLiberata(risposta: NextResponse): Promise<NextResponse
  *
  * Rate limit: 30 ordini / 10 min per utente.
  */
-export const POST = withAuthRateLimit(
+// R09-006 — Una fila per richiesta per i lavori dopo la risposta (email, campanelle): vedi lib/api/fila-per-richiesta.ts.
+export const POST = conFilaPerRichiesta(withAuthRateLimit(
   { name: 'orders-cod', max: 30, windowMs: 10 * 60_000 },
   async ({ user, profile, req }): Promise<NextResponse> => {
     const purchaseBlock = assertCanPurchase(profile);
@@ -439,7 +422,7 @@ export const POST = withAuthRateLimit(
       return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
     }
 
-    // Il ritiro in negozio e' messo da parte (RITIRO_IN_NEGOZIO_ATTIVO). Il
+    // Il ritiro in negozio passa dall'interruttore (RITIRO_IN_NEGOZIO_ATTIVO, acceso dal lancio, R12-009). Spento, il
     // browser potrebbe chiederlo lo stesso — una richiesta costruita a mano,
     // o una scheda aperta da prima del rilascio. Qui si spegne, una volta
     // sola, subito dopo la convalida: cosi' ogni uso piu' sotto lo vede gia'
@@ -860,13 +843,20 @@ export const POST = withAuthRateLimit(
      * di intento (`delivery.rivendicazione`) quale rivendicazione è sua: si chiudono solo quelle delle
      * casse appena liberate, mai il lucchetto di un'altra scheda. Se la lettura non riesce, la riga
      * resta aperta come prima e il lucchetto si spegne da solo in due minuti.
+     *
+     * 28/11/2026 (R08-007, onda 2) — Solo dove il codice è tornato davvero: se `release_coupon` è
+     * caduto (`codiceNonTornato`) l'uso resta contato, e la rivendicazione resta aperta come fanno
+     * l'avviso di Stripe (lib/stripe/webhook/carrello-scaduto.ts) e la cassa con la carta.
      */
-    if (riserveLiberate.liberati.length > 0) {
+    const rivendicazioniDaChiudere = riserveLiberate.liberati.filter(
+      (id) => !(riserveLiberate.codiceNonTornato ?? []).includes(id),
+    );
+    if (rivendicazioniDaChiudere.length > 0) {
       try {
         const { data: liberate } = await admin
           .from('pending_checkouts')
           .select('id, delivery')
-          .in('id', riserveLiberate.liberati);
+          .in('id', rivendicazioniDaChiudere);
         const sue = ((liberate ?? []) as Array<{ delivery?: { rivendicazione?: unknown } | null }>)
           .map((p) => p.delivery?.rivendicazione)
           .filter((r): r is string => typeof r === 'string' && r !== '');
@@ -1044,7 +1034,11 @@ export const POST = withAuthRateLimit(
     // cassa propone «Domani»: rifiutare quell'ordine perché il negozio è chiuso
     // adesso vuol dire perdere tutti gli ordini della sera per il giorno dopo.
     const consegnaVeloce = eConsegnaVeloce({ fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore });
-    if (!body.pickupInStore) {
+    if (body.pickupInStore) {
+      // R12-009 — Il ritiro non ha fascia, ma un negozio in ferie (settimana tutta chiusa) non si ritira.
+      const noRitiro = motivoRitiroRifiutato((sellers ?? []).map((s) => ({ nome: s.store_name, orari: s.store_hours })));
+      if (noRitiro) return esciERilascia(ApiErrors.conflict(noRitiro));
+    } else {
       // 30/10/2026 (ondata 21) — Una fascia di oggi si sceglie fino a 60 minuti prima della fine
       // (scelta di Nicola). Alle 17:50 «In giornata · 15:00–18:00» vuol dire «arriva fra dieci
       // minuti»: il negozio la riceverebbe già in ritardo. La stessa regola della cassa.
@@ -1055,6 +1049,17 @@ export const POST = withAuthRateLimit(
         (sellers ?? []).map((s) => ({ nome: s.store_name, orari: s.store_hours })),
       );
       if (rifiutata) return esciERilascia(ApiErrors.conflict(rifiutata));
+      // 28/11/2026 (R07-009) — Al massimo `ORDINI_PER_FASCIA` giri per fascia anche coi contanti: la
+      // regola stava solo nella rotta della carta, spenta al lancio, e qui la fascia si riempiva senza
+      // limite. La stessa regola (lib/ordini/giri-della-fascia.ts); due invii insieme li ferma il
+      // database (migrazione 999s, `eLaFasciaPienaDelDatabase`).
+      const piena = await rifiutoPerFasciaPiena(
+        admin,
+        { fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore },
+        { cliente: user.id, indirizzo: body.delivery.address, cap: body.delivery.zip },
+        'cod',
+      );
+      if (piena) return esciERilascia(ApiErrors.conflict(piena));
     }
 
     // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso (e
@@ -1663,12 +1668,19 @@ export const POST = withAuthRateLimit(
         // coordinata che contraddice l'indirizzo scritto.
         delivery_lat: coordPerLaMappa?.lat ?? null,
         delivery_lng: coordPerLaMappa?.lng ?? null,
+        // 28/11/2026 (R06-009, R09-007; migrazione 999p) — La chiave del carrello, la stessa della
+        // riga del tentativo, scritta CON l'ordine: se la riga del tentativo non si scrive (o non c'è),
+        // l'annullo e il freno della veloce ritrovano lo stesso gli altri ordini del carrello.
+        cod_cart_key: chiaveCarrello,
       };
 
-      const { data: ordineInserito, error: orderErr } = await conRipiegoSchema(
+      const inserisci = (riga: typeof rigaOrdine) => admin.from('orders').insert(riga).select('id, created_at').single();
+      const conIRipieghiDella124 = (riga: typeof rigaOrdine, dove: string) =>
+        conRipiegoSchema(dove, () => inserisci(riga), () => inserisci(senzaCampi(riga, CAMPI_124)));
+      const { data: ordineInserito, error: orderErr } = await conLaChiaveDelCarrello(
         'orders.insert (cod)',
-        () => admin.from('orders').insert(rigaOrdine).select('id, created_at').single(),
-        () => admin.from('orders').insert(senzaCampi(rigaOrdine, CAMPI_124)).select('id, created_at').single(),
+        () => conIRipieghiDella124(rigaOrdine, 'orders.insert (cod)'),
+        () => conIRipieghiDella124(senzaCampi(rigaOrdine, [COLONNA_CHIAVE_DEL_CARRELLO]), 'orders.insert (cod, senza chiave del carrello)'),
       );
       let order = ordineInserito;
       let ripreso = false;
@@ -1786,6 +1798,11 @@ export const POST = withAuthRateLimit(
         if (eLaVeloceSenzaFattorinoLibero(orderErr)) {
           logger.warn('[cod] veloce fermata dal database: nessun fattorino libero', { userId: user.id, sellerId: g.sellerId });
           return esciERilascia(ApiErrors.conflict(VELOCE_SENZA_FATTORINO_LIBERO));
+        }
+        // R07-009 — Il database ha fermato la fascia: l'ultimo posto l'ha preso un altro invio.
+        if (eLaFasciaPienaDelDatabase(orderErr)) {
+          logger.warn('[cod] fascia piena fermata dal database', { userId: user.id, sellerId: g.sellerId });
+          return esciERilascia(ApiErrors.conflict(MOTIVO_FASCIA_PIENA));
         }
         logger.error(orderErr ?? new Error('cod-order-insert-null'), { context: 'cod-order-insert', sellerId: g.sellerId });
         return esciERilascia(ApiErrors.internal('Errore nella creazione ordine.'));
@@ -2155,4 +2172,4 @@ export const POST = withAuthRateLimit(
     // rotta. Qui rispondeva un oggetto nudo, senza `ok` e senza `data`.
     return apiSuccess({ orderIds: createdOrderIds, ordini: ordiniCreati });
   },
-);
+));

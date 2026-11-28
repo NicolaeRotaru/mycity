@@ -105,7 +105,7 @@ export default function AdminSupportChatPage() {
                   <div className="flex items-center gap-2">
                     <p className={`truncate ${unread ? 'font-bold text-ink-900' : 'font-semibold text-ink-800'}`}>{name}</p>
                     {unread && (
-                      <span className="shrink-0 bg-primary-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">
+                      <span className="shrink-0 bg-primary-600 text-white text-2xs font-bold rounded-full px-1.5 py-0.5">
                         {/* 17/11/2026 (R01-001) — il lettore di schermo diceva solo «3»: ora dice cosa sono. */}
                         <span aria-hidden="true">{c.seller_unread_count}</span>
                         <span className="sr-only">{c.seller_unread_count === 1 ? '1 messaggio non letto' : `${c.seller_unread_count} messaggi non letti`}</span>

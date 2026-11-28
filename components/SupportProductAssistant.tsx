@@ -386,7 +386,6 @@ export default function SupportProductAssistant() {
       {focused && (
         <div className="flex items-center gap-3 border-b border-cream-200 bg-cream-50 px-4 py-2">
           {focused.image ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={sizedImage(focused.image, 80)} alt="" className="h-10 w-10 rounded-lg object-cover" />
           ) : (
             <div className="h-10 w-10 rounded-lg bg-cream-200" />
@@ -433,7 +432,6 @@ export default function SupportProductAssistant() {
                 {m.images && m.images.length > 0 && (
                   <div className="mb-1.5 flex flex-wrap gap-1.5">
                     {m.images.map((url) => (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img key={url} src={sizedImage(url, 128)} alt="" className="h-16 w-16 rounded-lg object-cover" />
                     ))}
                   </div>
@@ -446,7 +444,6 @@ export default function SupportProductAssistant() {
                 <div className="rounded-xl border border-secondary-200 bg-white p-3 shadow-warm">
                   <div className="mb-2 flex items-center gap-2">
                     {m.proposal.product.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={sizedImage(m.proposal.product.image, 72)} alt="" className="h-9 w-9 rounded-lg object-cover" />
                     ) : (
                       <div className="h-9 w-9 rounded-lg bg-cream-200" />
@@ -459,7 +456,9 @@ export default function SupportProductAssistant() {
                     {righeDellaProposta(m.proposal.patch, m.proposal.product).map((line, k) => (
                       <li key={k} className="flex gap-1.5">
                         <span className="text-secondary-500">•</span>
-                        <span>{line}</span>
+                        {/* R05-013 (onda 2) — La descrizione proposta arriva intera, con i suoi a capo:
+                            senza `whitespace-pre-line` i paragrafi diventavano una riga sola. */}
+                        <span className="min-w-0 whitespace-pre-line break-words">{line}</span>
                       </li>
                     ))}
                   </ul>
@@ -541,7 +540,6 @@ export default function SupportProductAssistant() {
                 <div className="rounded-xl border border-secondary-200 bg-white p-3 shadow-warm">
                   <div className="mb-2 flex items-center gap-2">
                     {m.newDraft.imageUrls[0] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={sizedImage(m.newDraft.imageUrls[0], 96)} alt="" className="h-12 w-12 rounded-lg object-cover" />
                     ) : (
                       <div className="h-12 w-12 rounded-lg bg-cream-200" />
@@ -555,7 +553,7 @@ export default function SupportProductAssistant() {
                     </div>
                   </div>
                   {m.newDraft.draft.description && (
-                    <p className="mb-2 line-clamp-3 text-sm text-ink-600">{m.newDraft.draft.description}</p>
+                    <p className="mb-2 line-clamp-3 whitespace-pre-line break-words text-sm text-ink-600">{m.newDraft.draft.description}</p>
                   )}
                   {(() => {
                     // Solo le caratteristiche che entrano; dopo la creazione,
@@ -685,7 +683,6 @@ export default function SupportProductAssistant() {
             <div className="mb-2 flex flex-wrap gap-1.5">
               {pending.map((url) => (
                 <div key={url} className="relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={sizedImage(url, 112)} alt="" className="h-14 w-14 rounded-lg object-cover" />
                   <button
                     type="button"

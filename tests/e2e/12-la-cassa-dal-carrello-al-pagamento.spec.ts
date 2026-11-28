@@ -264,17 +264,44 @@ test.describe('l\'ordine che nasce davvero', () => {
     : `E2E_DATI_DI_PROVA e' accesa ma l'ambiente di prova non e' pronto: ${COSA_MANCA}. ` +
       'Finche\' manca, in questo giro nessun ordine nasce davvero.';
 
-  test.beforeEach(() => {
-    test.skip(SENZA_AMBIENTE_DI_PROVA, PERCHE);
+  /*
+   * 28/11/2026 (R11-004, onda 2) — LA CASSA DISEGNATA HA BISOGNO DEL SOLO DATABASE.
+   * Stava sotto il salto dell'acquisto vero: anche col lavoro «La cassa vera» acceso si saltava senza
+   * le chiavi di Stripe, che a lei non servono (e il filtro `-g` di quel lavoro non la sceglieva).
+   * Il suo salto guarda solo il database LOCALE di prova; le tre prove dei soldi restano sotto il
+   * salto unico, che guarda tutto.
+   */
+  const LA_CASSA_DISEGNATA = 'la cassa disegna il modulo con la merce riletta dal database';
+  const COSA_MANCA_AL_DATABASE = ACCESO ? cosaManca(['database']) : null;
+  const SENZA_DATABASE_DI_PROVA = !ACCESO || COSA_MANCA_AL_DATABASE !== null;
+  const PERCHE_SENZA_DATABASE = !ACCESO
+    ? 'serve un database di prova LOCALE (tests/supabase-locale/avvia.sh) e la variabile E2E_DATI_DI_PROVA: ' +
+      'la cassa rilegge dal database ogni riga del carrello prima di disegnare il modulo.'
+    : `E2E_DATI_DI_PROVA e' accesa ma il database di prova non e' pronto: ${COSA_MANCA_AL_DATABASE}.`;
+
+  // Playwright vuole il primo argomento destrutturato: `{}` sono le fixture, che qui non servono.
+  test.beforeEach(({}, prova) => {
+    if (prova.title === LA_CASSA_DISEGNATA) test.skip(SENZA_DATABASE_DI_PROVA, PERCHE_SENZA_DATABASE);
+    else test.skip(SENZA_AMBIENTE_DI_PROVA, PERCHE);
   });
 
   test('la cassa disegna il modulo con la merce riletta dal database', async ({ page }) => {
-    await seminaIlCarrello(page);
+    // R11-004 — Nel carrello va il prodotto seminato in questo giro, non gli id inventati di
+    // CARRELLO_DI_PROVA: la cassa rilegge ogni riga dal database (prezzo, scorte, negozio approvato)
+    // e toglie dal carrello quelle che non conosce («non più disponibili»). Col carrello svuotato il
+    // modulo non si disegnava, e la prova sarebbe caduta il primo giorno in cui girava.
+    const b = await preparaLaBottega();
+    const riga = { ...CARRELLO_DI_PROVA[0], id: b.prodottoId, sellerId: b.negozio.id };
+    await page.addInitScript((righe) => {
+      window.localStorage.setItem('cart', JSON.stringify(righe));
+    }, [riga]);
     await page.goto('/checkout');
-    await expect(page.getByText(CARRELLO_DI_PROVA[0].name)).toBeVisible();
-    await expect(page.getByText(/Indirizzo di consegna/i)).toBeVisible();
+    await expect(page.getByText(riga.name).first()).toBeVisible();
+    await expect(page.getByText(/Indirizzo di consegna/i).first()).toBeVisible();
     await expect(page.getByText(/contrassegno|alla consegna/i).first()).toBeVisible();
     await expect(page.getByText(/Totale/i).first()).toBeVisible();
+    // La riga è rimasta: il database l'ha riconosciuta, non l'ha tolta come «non più disponibile».
+    await expect(page.getByText(/non (?:è|sono) più disponibil/i)).toHaveCount(0);
   });
 
   /*

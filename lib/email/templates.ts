@@ -571,7 +571,10 @@ export function refundIssuedTemplate(args: {
   amount: number;
   reason?: string | null;
   modo?: 'carta' | 'credito' | 'bonifico' | 'misto';
-  /** Per i contanti: quanto torna come credito MyCity e quanto col bonifico, in euro. */
+  /**
+   * Per i contanti: quanto torna come credito MyCity e quanto col bonifico, in euro.
+   * Sulla carta (R06-013): il credito MyCity speso sull'ordine e tornato sul saldo, in euro.
+   */
   creditoEuro?: number;
   bonificoEuro?: number;
 }) {
@@ -586,17 +589,29 @@ export function refundIssuedTemplate(args: {
   const p = (testo: string) => `<p style="margin:0 0 12px;line-height:1.6">${testo}</p>`;
 
   if (modo === 'carta') {
+    // 28/11/2026 (onda 2, R06-013) — Con la carta e il credito MyCity insieme, l'ordine annullato rende
+    // anche il credito speso: «Rimborso emesso» diceva solo la carta, e quando il carrello scadeva
+    // tutto nessun'altra email lo diceva. Chi chiama passa solo il credito tornato DAVVERO.
+    const creditoTornato = Number(args.creditoEuro ?? 0) > 0 ? formatPrice(Number(args.creditoEuro)) : null;
+    const creditoUrl = `${appUrl()}/profile/gift-cards`;
+    const rigaCredito = creditoTornato
+      ? p(`Ti abbiamo restituito anche <strong>${creditoTornato}</strong> di credito MyCity che avevi usato su questo ordine: è già disponibile nel tuo profilo, alla voce <a href="${creditoUrl}" style="color:${COLORI.marchio};font-weight:600">«Gift card»</a>.`)
+      : '';
+    const testoCredito = creditoTornato
+      ? ` Ti abbiamo restituito anche ${creditoTornato} di credito MyCity che avevi usato su questo ordine: è già disponibile nel tuo profilo, alla voce «Gift card» (${creditoUrl}).`
+      : '';
     const body = `
       <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">💶 Rimborso emesso</h1>
       ${p(`Abbiamo emesso un rimborso di <strong>${importo}</strong> sul tuo ordine.`)}
       ${rigaMotivo}
       ${p('Il rimborso arriverà sulla carta che hai usato per pagare, di solito entro 5-10 giorni lavorativi: i tempi li decide la tua banca.')}
+      ${rigaCredito}
       <p style="margin:24px 0">${btn(orderUrl, 'Vedi dettaglio')}</p>
     `;
     return {
       subject: `💶 Rimborso emesso — ${importo}`,
       html: shell('Rimborso emesso', body),
-      text: `Rimborso di ${importo} emesso sulla carta che hai usato per pagare.${testoMotivo} Dettaglio: ${orderUrl}`,
+      text: `Rimborso di ${importo} emesso sulla carta che hai usato per pagare.${testoMotivo}${testoCredito} Dettaglio: ${orderUrl}`,
     };
   }
 

@@ -39,7 +39,7 @@ export default function IMieiResiPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <header>
-        <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">Account</p>
+        <p className="text-xs font-bold uppercase tracking-label text-primary-700">Account</p>
         <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900">I miei resi</h1>
         <p className="mt-1 text-sm text-ink-500">Le richieste di reso che hai fatto e a che punto sono.</p>
       </header>

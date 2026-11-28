@@ -85,14 +85,67 @@ async function buonoNatoSpento(code: string): Promise<boolean> {
  * role) e invia il codice al destinatario + conferma al buyer. Best-effort sulle
  * email; idempotente sul codice (PK).
  */
+type Destinatario = { recipientName: string | null; recipientEmail: string | null; message: string | null };
+
+/**
+ * 28/11/2026 (R08-012) — Nome, email e messaggio del destinatario.
+ *
+ * La cassa li scrive in `gift_card_in_attesa` e a Stripe manda solo l'id della
+ * riga (`attesa_id`): quei dati sono di una persona che non e' nostra cliente,
+ * e su Stripe non si cancellavano mai. Se la lettura cade si LANCIA, cosi'
+ * Stripe riprova: creare il buono senza destinatario vorrebbe dire non
+ * recapitare il regalo. Se la riga non c'e' piu' (gia' consumata da una
+ * consegna precedente, o tolta) il buono nasce lo stesso, senza destinatario:
+ * il codice arriva comunque a chi l'ha comprato.
+ * Le sessioni aperte prima di questa modifica portano ancora i tre campi nei
+ * metadati: per quelle si leggono da li'.
+ */
+async function destinatarioDelBuono(
+  admin: ReturnType<typeof getAdminSupabase>,
+  session: Stripe.Checkout.Session,
+): Promise<Destinatario> {
+  const m = session.metadata ?? {};
+  const attesaId = m.attesa_id || null;
+  if (!attesaId) {
+    return {
+      recipientName: m.recipient_name || null,
+      recipientEmail: m.recipient_email || null,
+      message: m.message || null,
+    };
+  }
+  const { data, error } = await admin
+    .from('gift_card_in_attesa')
+    .select('recipient_name, recipient_email, message')
+    .eq('id', attesaId)
+    .maybeSingle();
+  if (error) {
+    logger.error('[stripe] gift_card: destinatario non letto', { sessionId: session.id, error: error.message });
+    throw new Error(`gift_card: destinatario non letto (sessione ${session.id}): ${error.message}`);
+  }
+  if (!data) {
+    logger.warn('[stripe] gift_card: tentativo in attesa non trovato, buono senza destinatario', { sessionId: session.id });
+    return { recipientName: null, recipientEmail: null, message: null };
+  }
+  const r = data as { recipient_name: string | null; recipient_email: string | null; message: string | null };
+  return { recipientName: r.recipient_name || null, recipientEmail: r.recipient_email || null, message: r.message || null };
+}
+
+/**
+ * Il buono e' nato: la riga in attesa non serve piu'. Se non si cancella lo
+ * dice il registro, e la toglie comunque la potatura notturna.
+ */
+async function togliTentativoInAttesa(admin: ReturnType<typeof getAdminSupabase>, session: Stripe.Checkout.Session) {
+  const attesaId = session.metadata?.attesa_id;
+  if (!attesaId) return;
+  const { error } = await admin.from('gift_card_in_attesa').delete().eq('id', attesaId);
+  if (error) logger.warn('[stripe] gift_card: tentativo in attesa non tolto', { sessionId: session.id, error: error.message });
+}
+
 export async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
   const admin = getAdminSupabase();
   const m = session.metadata ?? {};
   const amountCents = parseInt(m.amount_cents ?? '0', 10);
   const buyerId = m.buyer_id || null;
-  const recipientName = m.recipient_name || null;
-  const recipientEmail = m.recipient_email || null;
-  const message = m.message || null;
 
   if (!Number.isFinite(amountCents) || amountCents <= 0) {
     // `throw`, non `return`: chi chiama interpreta il ritorno come «fatto» e
@@ -101,6 +154,8 @@ export async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
     logger.error('[stripe] gift_card senza amount valido', { sessionId: session.id });
     throw new Error(`gift_card senza importo valido (sessione ${session.id})`);
   }
+
+  const { recipientName, recipientEmail, message } = await destinatarioDelBuono(admin, session);
 
   const code = giftCardCodeForSession(session.id);
   const riga = {
@@ -146,6 +201,7 @@ export async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
     if (error.code === '23505') {
       // Webhook ri-eseguito: carta già creata (e email già inviate). No-op.
       logger.info('[stripe] gift_card già creata per questa sessione, skip', { sessionId: session.id });
+      await togliTentativoInAttesa(admin, session);
       return;
     }
     logger.error(error, { context: 'stripe-gift-card-insert', sessionId: session.id });
@@ -153,6 +209,7 @@ export async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
     // scopre e il cliente resta senza quello che ha pagato.
     throw new Error(`gift_card non creata (sessione ${session.id}): ${error.message}`);
   }
+  await togliTentativoInAttesa(admin, session);
 
   if (pagamentoSegnato && (await buonoNatoSpento(code))) {
     logger.warn('[stripe] gift_card nata annullata: codice non inviato', { sessionId: session.id });
@@ -178,6 +235,9 @@ export async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
   if (buyerEmail) {
     const t = giftCardBuyerTemplate({ code, amountEuro, recipientName });
     await avvisaSeLaPostaNonParte('email del buono regalo a chi l ha comprato', { sessionId: session.id },
-      await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text, tags: [{ name: 'template', value: 'gift_card_buyer' }] }));
+      // 28/11/2026 (R03-002) — Se non parte la rimanda la coda, solo all'indirizzo dell'account di chi l'ha comprato
+      // (customer_email = user.email al checkout). Il destinatario può non avere un account: per lui resta l'avviso.
+      await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text, tags: [{ name: 'template', value: 'gift_card_buyer' }],
+        rimandaA: buyerId && buyerEmail.toLowerCase() === session.customer_email?.toLowerCase() ? buyerId : null }));
   }
 }

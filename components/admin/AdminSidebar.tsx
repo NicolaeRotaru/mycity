@@ -57,6 +57,9 @@ const NAV: NavGroup[] = [
     { href: '/admin/segnalazioni', icon: Flag, label: 'Segnalazioni', badge: 'segnalazioni' },
     { href: '/admin/cod-remittance', icon: Banknote, label: 'Rimesse COD' },
     { href: '/admin/payouts', icon: Wallet, label: 'Payout venditori' },
+    // 28/11/2026 (R05-004, onda 2) — I bonifici di rimborso ai clienti in contanti, dove si segna «Fatto»:
+    // la pagina c'era, ma ci si arrivava solo scrivendo l'indirizzo.
+    { href: '/admin/bonifici-rimborso', icon: Banknote, label: 'Bonifici di rimborso' },
     { href: '/admin/sos', icon: Siren, label: 'SOS rider', badge: 'sos' },
   ] },
   { group: 'Crescita', items: [

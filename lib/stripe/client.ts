@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { MARKETPLACE_FEE_BPS, commissioneCents } from '@/lib/constants';
 import { VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
 import { createHash } from 'node:crypto';
+import { contoSconosciutoAStripe, eChiaveDiProva } from '@/lib/stripe/conto-di-prova';
 
 let _stripe: Stripe | null = null;
 
@@ -395,15 +396,17 @@ export async function createConnectOnboardingLink(args: {
       await stripe.accounts.retrieve(accountId);
     } catch (err) {
       const codice = (err as { code?: string; statusCode?: number }).code;
-      const stato = (err as { statusCode?: number }).statusCode;
-      if (codice !== 'resource_missing' && codice !== 'account_invalid' && stato !== 404) throw err;
-      // 26/11/2026 — MA NON DALL'ANTEPRIMA CON UNA CHIAVE DI PROVA. Una chiave di
-      // prova non conosce i conti veri: dall'anteprima collegata al database vero
-      // il conto vero del negozio risultava «sconosciuto», e al suo posto si
-      // creava e si salvava un conto di prova. Il negozio non riceveva piu' i
-      // bonifici. Qui ci si ferma e lo si dice. L'anteprima si riconosce come in
-      // chiaveStripeFuoriPosto (VERCEL_ENV === 'preview').
-      if (process.env.VERCEL_ENV === 'preview' && /^(sk|rk)_test_/.test(env.stripeSecretKey() ?? '')) {
+      if (!contoSconosciutoAStripe(err)) throw err;
+      // 26/11/2026 — MA NON CON UNA CHIAVE DI PROVA. Una chiave di prova non
+      // conosce i conti veri: dall'anteprima collegata al database vero il conto
+      // vero del negozio risultava «sconosciuto», e al suo posto si creava e si
+      // salvava un conto di prova. Il negozio non riceveva piu' i bonifici. Qui
+      // ci si ferma e lo si dice.
+      // 28/11/2026 (onda 2, R05-009) — Il freno valeva solo con VERCEL_ENV === 'preview': lo sviluppo in
+      // locale o un ambiente di prova con la chiave di prova e il database vero sostituivano il conto
+      // vero lo stesso. Adesso vale per ogni chiave di prova: un conto che lei non conosce non si
+      // sostituisce mai da sola (con una chiave vera, un conto sconosciuto si rifà come prima).
+      if (eChiaveDiProva()) {
         throw new ContoSconosciutoAllaChiaveDiProva(accountId);
       }
       logger.warn('[stripe] conto Connect del profilo sconosciuto a queste chiavi: se ne crea uno nuovo', {

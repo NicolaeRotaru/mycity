@@ -247,7 +247,6 @@ export default function AdminProductsPage() {
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded bg-cream-100 overflow-hidden shrink-0">
                         {img && (
-                          // eslint-disable-next-line @next/next/no-img-element
                           <img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />
                         )}
                       </div>
@@ -256,7 +255,7 @@ export default function AdminProductsPage() {
                           {p.name}
                         </Link>
                         {p.external_marketplace && (
-                          <span className="inline-block mt-0.5 rounded-full bg-accent-100 text-accent-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase">
+                          <span className="inline-block mt-0.5 rounded-full bg-accent-100 text-accent-700 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-label">
                             import · {p.external_marketplace}
                           </span>
                         )}

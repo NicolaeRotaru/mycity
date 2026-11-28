@@ -13,6 +13,7 @@ import {
   type Marketplace,
   type ExternalData,
   ritentoDopoErroreConsentito,
+  restituisciRitentoDopoErrore,
 } from '@/lib/products/externalSync';
 
 /**
@@ -78,6 +79,8 @@ async function doRefresh(
   sourceUrl: string,
   marketplace: string | null,
   statoPrima: string | null,
+  /** R02-010 (onda 2) — Vero se per questo tentativo si e' preso il permesso di sei ore (prodotto in errore, dal GET). */
+  permessoDiSeiOrePreso = false,
 ): Promise<{ data: ExternalData; errore?: undefined } | { data: null; errore: unknown }> {
   const admin = getAdminSupabase();
   try {
@@ -97,6 +100,8 @@ async function doRefresh(
       // Il prodotto torna com'era prima del tentativo (anche fuori da 'pending'), non in errore.
       logger.warn('external-refresh fermo per la spesa AI', { id });
       await admin.from('products').update({ external_sync_status: statoPrima }).eq('id', id);
+      // R02-010 (onda 2) — Il prodotto non e' stato ritentato: il permesso di sei ore gli torna.
+      if (permessoDiSeiOrePreso) await restituisciRitentoDopoErrore(id);
       return { data: null, errore: err };
     }
     if (modelloNonTrovato(err)) {
@@ -162,7 +167,13 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     if (claimed && claimed.length > 0) {
       // Fire-and-forget: il cliente riceve subito la cache, il fresco arriverà
       // alla prossima vista (l'app gira su processo Node persistente).
-      void doRefresh(id, row.external_source_url, row.external_marketplace, row.external_sync_status);
+      void doRefresh(
+        id,
+        row.external_source_url,
+        row.external_marketplace,
+        row.external_sync_status,
+        row.external_sync_status === 'error',
+      );
     }
   }
 

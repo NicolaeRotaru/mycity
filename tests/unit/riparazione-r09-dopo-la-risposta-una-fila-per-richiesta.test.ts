@@ -5,18 +5,21 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
+// 28/11/2026 (R09-006) — Le richieste non si simulano più sostituendo un file interno di Next
+// (`next/dist/.../work-async-storage.external`): ogni richiesta è il gestore avvolto da
+// `conFilaPerRichiesta`, come nelle rotte vere. Stessi due casi, stesse attese.
 const stato = vi.hoisted(() => ({
-  richiesta: {} as object,
   registrati: [] as Array<() => unknown>,
 }));
 
 vi.mock('next/server', () => ({ after: (fn: () => unknown) => void stato.registrati.push(fn) }));
-vi.mock('next/dist/server/app-render/work-async-storage.external', () => ({
-  workAsyncStorage: { getStore: () => stato.richiesta },
-}));
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
+
+/** Una richiesta: il suo gestore, avvolto come nelle rotte. */
+const richiesta = (gestore: () => void) => conFilaPerRichiesta(gestore)();
 
 afterEach(() => {
   stato.registrati.length = 0;
@@ -28,14 +31,16 @@ describe('R09-008 — una fila per richiesta', () => {
     vi.useFakeTimers();
     const diario: string[] = [];
 
-    stato.richiesta = {}; // richiesta A: un lavoro lento da 8 s
-    dopoLaRisposta(async () => {
-      await new Promise((r) => setTimeout(r, 8_000));
-      diario.push('A finito');
-    }, 'lavoro lento di A');
+    richiesta(() => { // richiesta A: un lavoro lento da 8 s
+      dopoLaRisposta(async () => {
+        await new Promise((r) => setTimeout(r, 8_000));
+        diario.push('A finito');
+      }, 'lavoro lento di A');
+    });
 
-    stato.richiesta = {}; // richiesta B
-    dopoLaRisposta(async () => { diario.push('B parte'); }, 'email di B');
+    richiesta(() => { // richiesta B
+      dopoLaRisposta(async () => { diario.push('B parte'); }, 'email di B');
+    });
 
     void Promise.all(stato.registrati.splice(0).map((fn) => fn()));
     await vi.advanceTimersByTimeAsync(0);
@@ -48,9 +53,10 @@ describe('R09-008 — una fila per richiesta', () => {
   it('dentro la stessa richiesta restano in fila, uno alla volta', async () => {
     vi.useFakeTimers();
     const diario: string[] = [];
-    stato.richiesta = {};
-    dopoLaRisposta(async () => { await new Promise((r) => setTimeout(r, 100)); diario.push('1'); }, 'uno');
-    dopoLaRisposta(async () => { diario.push('2'); }, 'due');
+    richiesta(() => {
+      dopoLaRisposta(async () => { await new Promise((r) => setTimeout(r, 100)); diario.push('1'); }, 'uno');
+      dopoLaRisposta(async () => { diario.push('2'); }, 'due');
+    });
     void Promise.all(stato.registrati.splice(0).map((fn) => fn()));
     await vi.advanceTimersByTimeAsync(0);
     expect(diario).toEqual([]);

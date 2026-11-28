@@ -3,6 +3,7 @@ import {
   fetchSellerPublicMap,
   negozioApprovato,
   COLONNE_NEGOZIO_IN_VETRINA,
+  type LettoreNegozi,
   type LettoreVista,
 } from '@/lib/queries/seller-public-profiles';
 import { hasConsent } from '@/lib/consent';
@@ -63,7 +64,7 @@ const COLONNE_FASCIA = 'id, name, price, images, seller_id';
  * VISITE_MINIME_PER_LA_CLASSIFICA visite: quei prodotti non si vedevano mai, e
  * la lettura (piu' quella dei negozi) era tempo e banda per niente.
  */
-export async function leggiTendenze(supa: LettoreConFunzioni): Promise<Tendenza[]> {
+export async function leggiTendenze(supa: LettoreConFunzioni, leggiNegozi?: LettoreNegozi): Promise<Tendenza[]> {
   // Top prodotti per views nelle ultime 24h: aggregazione lato DB (RPC 052)
   // invece di scaricare fino a 500 righe di product_views e contare nel browser.
   const { data: trending } = await supa.rpc('trending_product_ids_24h', { p_limit: 8 });
@@ -81,7 +82,7 @@ export async function leggiTendenze(supa: LettoreConFunzioni): Promise<Tendenza[
     .in('id', topIds)
     .eq('status', 'available');
 
-  const approvati = await conNegozioApprovato(supa, (products ?? []) as RigaFascia[], COLONNE_NEGOZIO_IN_VETRINA);
+  const approvati = await conNegozioApprovato(supa, (products ?? []) as RigaFascia[], COLONNE_NEGOZIO_IN_VETRINA, leggiNegozi);
   return approvati
     .map((p) => ({
       product_id: p.id,

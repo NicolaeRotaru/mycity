@@ -2,14 +2,18 @@ import { RAGGIO_CONSEGNA_KM, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { haversineKm } from '@/lib/geo';
 
 /**
- * LA FRASE DELLA ZONA SI SCRIVE QUI.
- * La cassa, la pagina Spedizioni, il rifiuto, la pillola della posizione, le FAQ e il testo di «Vicino a te»
- * la importano da qui: il confine vero (`RAGGIO_CONSEGNA_KM`) e le parole che lo dicono non si separano.
- * Non è ancora «una volta sola»: i metadati di app/near/layout.tsx e di app/category/[slug]/layout.tsx
- * (la descrizione per Google) scrivono ancora a mano «fino a N km dal negozio» e vanno portati qui.
+ * LA FRASE DELLA ZONA SI SCRIVE QUI, UNA VOLTA SOLA.
+ * La cassa, la pagina Spedizioni, il rifiuto, la pillola della posizione, le FAQ, il testo di «Vicino a te»,
+ * le descrizioni per Google di app/near/layout.tsx e app/category/[slug]/layout.tsx, la fascia della home
+ * (components/home-sections/HomeSectionRenderer.tsx), «Chi siamo» (app/about/page.tsx) e la pagina delle
+ * consegne dell'amministrazione la importano da qui: il confine vero (`RAGGIO_CONSEGNA_KM`) e le parole che
+ * lo dicono non si separano. 28/11/2026 (R09-004) — portate qui le ultime copie scritte a mano; la prova
+ * tests/unit/riparazione-onda2-r09-004-la-frase-della-zona-una-volta-sola.test.ts cerca le nuove.
  */
 export const CONFINE_DELLA_ZONA = `${RAGGIO_CONSEGNA_KM} km`;
 export const FINO_AL_CONFINE = `fino a ${CONFINE_DELLA_ZONA} dal negozio`;
+/** La stessa, a inizio frase: «Fino a 5 km dal negozio». */
+export const FINO_AL_CONFINE_IN_TESTA = FINO_AL_CONFINE.charAt(0).toUpperCase() + FINO_AL_CONFINE.slice(1);
 export const FRASE_DELLA_ZONA = `Consegniamo a Piacenza, ${FINO_AL_CONFINE}`;
 
 /**
@@ -59,9 +63,9 @@ export function fuoriZonaDiConsegna(opts: DoveVaLaConsegna & { pickupInStore?: b
  * Cosa si dice a chi abita fuori zona — un'offerta, non un muro.
  *
  * Il ritiro in negozio si nomina solo se è davvero acceso
- * (`RITIRO_IN_NEGOZIO_ATTIVO`): oggi è spento, e mandare qualcuno in negozio a
- * ritirare quando la cassa non glielo permette è una porta chiusa spacciata per
- * via d'uscita.
+ * (`RITIRO_IN_NEGOZIO_ATTIVO`, acceso dal lancio, R12-009): spento, mandare
+ * qualcuno in negozio a ritirare quando la cassa non glielo permette sarebbe una
+ * porta chiusa spacciata per via d'uscita.
  *
  * 28/10/2026 — Il messaggio diceva «Per ora consegniamo a Piacenza e
  * dintorni»: col confine a 5 km Podenzano, Rottofreno e Gossolengo restano

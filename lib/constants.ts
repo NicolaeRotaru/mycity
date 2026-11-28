@@ -79,10 +79,11 @@ export const VELOCITA_MEDIA_BICI_KMH = 15;
 /**
  * Sconto percentuale per ritiro in negozio.
  *
- * Vale 0 perche' il ritiro in negozio e' MESSO DA PARTE: Nicola, 20/8/2026,
- * «togli il 10% di sconto per ritira in negozio, o mettilo da parte per il
- * momento, perche non ne ho ancora parlato con i negozi di questo». Uno sconto
- * sul prezzo di un negozio non si offre prima di averglielo chiesto.
+ * Vale 0: Nicola, 20/8/2026, «togli il 10% di sconto per ritira in negozio, o
+ * mettilo da parte per il momento, perche non ne ho ancora parlato con i
+ * negozi di questo». Uno sconto sul prezzo di un negozio non si offre prima di
+ * averglielo chiesto. R12-009 — Il ritiro in negozio invece e' acceso dal lancio
+ * (`RITIRO_IN_NEGOZIO_ATTIVO`), gratis per il cliente: niente consegna, nessuno sconto.
  */
 export const PICKUP_DISCOUNT_PERCENT = 0;
 

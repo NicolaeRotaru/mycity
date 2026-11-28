@@ -26,6 +26,7 @@ import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
+import { scontoMostrato } from '@/lib/sconto-mostrato';
 import { uploadProductImages } from '@/lib/products/uploadImages';
 import {
   avvisoDopoIlPatch,
@@ -400,6 +401,20 @@ export default function ProductForm({
     [categories, currentTopId],
   );
   const topName = categories.find((c) => c.id === currentTopId)?.name;
+  /**
+   * 28/11/2026 (R04-001, onda 2) — UN ALIMENTARE NUOVO DICE LA SUA SOTTOCATEGORIA.
+   * Un pane salvato sulla sola radice «Alimentari», senza spunta del recesso, accettava «Ho
+   * cambiato idea»: nessun dato lo distingueva dalla dispensa. Il recesso dei freschi si decide
+   * dalla sottocategoria (Panificio, Salumeria, Latticini…: app/api/returns/create/route.ts),
+   * quindi in creazione la si sceglie. In modifica resta facoltativa: un prodotto già in vendita
+   * non si blocca per un campo che prima non c'era.
+   */
+  const sottocategoriaObbligatoria =
+    mode === 'create' &&
+    categories.find((c) => c.id === currentTopId)?.slug === 'alimentari' &&
+    subcategories.length > 0;
+  const mancaSottocategoria = sottocategoriaObbligatoria && currentCategoryId === currentTopId;
+  const [erroreSottocategoria, setErroreSottocategoria] = useState<string | null>(null);
 
   const { fields: attrFields, topSlug } = getAttributesForCategory(categories, currentCategoryId);
   const topCategoryLabel = topSlug ? categories.find((c) => c.slug === topSlug)?.name : undefined;
@@ -882,6 +897,13 @@ export default function ProductForm({
         document.getElementById('image-dropzone')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
         return;
       }
+      if (mancaSottocategoria) {
+        const messaggio = 'Scegli la sottocategoria: dice se il prodotto è fresco ed escluso dal recesso.';
+        setErroreSottocategoria(messaggio);
+        toast.error(messaggio);
+        document.getElementById('sottocategoria-prodotto')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
       /**
        * 22/8/2026 — UN ALIMENTARE NON SI PUBBLICA SENZA ALLERGENI.
        *
@@ -1018,8 +1040,11 @@ export default function ProductForm({
   // ---- Anteprima prezzo -----------------------------------------------------
   const priceNum = prezzoDelCampo(watch('price')) || 0;
   const cmpNum = prezzoDelCampo(watch('compareAtPrice')) || 0;
-  const hasDiscount = cmpNum > priceNum && priceNum > 0;
-  const discountPct = hasDiscount ? Math.round((1 - priceNum / cmpNum) * 100) : 0;
+  // R10-004 (onda 2) — L'anteprima segue la regola della scheda vera (`scontoMostrato`): un listino
+  // che al centesimo è uguale al prezzo non si barra, e il bollino non scrive «-0%».
+  const scontoAnteprima = scontoMostrato({ prezzo: priceNum, prezzoDiListino: cmpNum });
+  const hasDiscount = scontoAnteprima.barratoCents !== null;
+  const discountPct = scontoAnteprima.percento;
 
   const busy = submitting || uploading;
   const primaryIntent: 'publish' | 'save' = mode === 'create' ? 'publish' : 'save';
@@ -1309,11 +1334,16 @@ export default function ProductForm({
           </Select>
           {currentTopId && subcategories.length > 0 && (
             <Select
-              label="Sottocategoria (opzionale)"
+              id="sottocategoria-prodotto"
+              label={sottocategoriaObbligatoria ? 'Sottocategoria' : 'Sottocategoria (opzionale)'}
               value={currentCategoryId !== currentTopId ? currentCategoryId : ''}
-              onChange={(e) => setValue('category_id', e.target.value || currentTopId, { shouldValidate: true })}
+              onChange={(e) => {
+                setErroreSottocategoria(null);
+                setValue('category_id', e.target.value || currentTopId, { shouldValidate: true });
+              }}
+              error={mancaSottocategoria ? (erroreSottocategoria ?? undefined) : undefined}
             >
-              <option value="">— tutta «{topName}»</option>
+              <option value="">{sottocategoriaObbligatoria ? 'Seleziona...' : `— tutta «${topName}»`}</option>
               {subcategories.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
@@ -1505,7 +1535,6 @@ export default function ProductForm({
           <div className="bg-white border border-cream-300 rounded-xl overflow-hidden shadow-warm max-w-[16rem]">
             <div className="aspect-square bg-cream-100">
               {imageUrls[0] ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img src={imageUrls[0]} alt={typeof attributes.alt_text === 'string' ? attributes.alt_text : ''} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-ink-300">
@@ -1522,7 +1551,7 @@ export default function ProductForm({
                   <span className="text-xs font-normal text-ink-400">{UNIT_SUFFIX[unit]}</span>
                 </span>
                 {hasDiscount && <span className="text-xs text-ink-400 line-through">{formatPrice(cmpNum)}</span>}
-                {hasDiscount && <span className="text-xs font-bold text-secondary-600">-{discountPct}%</span>}
+                {discountPct !== null && <span className="text-xs font-bold text-secondary-600">-{discountPct}%</span>}
               </p>
             </div>
           </div>
@@ -1574,7 +1603,7 @@ export default function ProductForm({
               <button
                 type="submit"
                 disabled={busy}
-                className="flex-1 inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 disabled:opacity-40 text-white py-3 rounded-lg font-bold shadow"
+                className="flex-1 inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 disabled:opacity-40 text-white py-3 rounded-lg font-bold shadow-warm"
               >
                 <Save size={18} aria-hidden /> {submitting ? 'Salvataggio…' : 'Salva modifiche'}
               </button>

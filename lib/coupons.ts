@@ -3,6 +3,7 @@
 // Quello che è sparito è il valore di ripiego su `validateCoupon`, dove il
 // singleton finiva dentro un processo server senza che nessuno lo chiedesse.
 import { supabase } from './supabase/client';
+import { formatPrice } from '@/lib/format';
 
 /**
  * Client Supabase minimale richiesto da validateCoupon. Sia il browser client
@@ -81,7 +82,7 @@ export async function validateCoupon(
   if (subtotal < Number(coupon.min_subtotal)) {
     return {
       ok: false,
-      reason: `Spesa minima richiesta: €${Number(coupon.min_subtotal).toFixed(2)}`,
+      reason: `Spesa minima richiesta: ${formatPrice(Number(coupon.min_subtotal))}`,
     };
   }
   if (coupon.first_order_only) {

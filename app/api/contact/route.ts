@@ -16,6 +16,7 @@ import { escapeHtml } from '@/lib/html-escape';
 import { recapitoPrivacy } from '@/lib/legal/titolare';
 import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 // 13/11/2026 (R24-007) — Il traduttore italiano di Zod acceso anche qui, sul server: senza,
 // un campo mancante o del tipo sbagliato tornava al browser in inglese («Required»).
 import '@/lib/zod-i18n';
@@ -36,7 +37,10 @@ const Schema = z.object({
   captchaToken: z.string().optional(),
 });
 
-export async function POST(req: Request) {
+// R09-006 — Una fila per richiesta per i lavori dopo la risposta (email, campanelle): vedi lib/api/fila-per-richiesta.ts.
+export const POST = conFilaPerRichiesta(inviaIlContatto);
+
+async function inviaIlContatto(req: Request) {
   const ip = getClientIp(req);
   const rl = await rateLimitAsync({ key: `contact:${ip}`, max: 3, windowMs: 10 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);

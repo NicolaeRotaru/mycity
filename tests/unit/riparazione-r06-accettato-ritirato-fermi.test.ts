@@ -94,6 +94,7 @@ function tabella(nome: string): unknown {
     filtri: [] as Array<(r: Riga) => boolean>,
     ordine: null as { col: string; asc: boolean; nulliPrima: boolean } | null,
     limite: null as number | null,
+    inizio: 0,
     valori: [] as Riga[],
     modifica: {} as Riga,
     opzioni: {} as { onConflict?: string; ignoreDuplicates?: boolean },
@@ -121,7 +122,7 @@ function tabella(nome: string): unknown {
             return (a < b ? -1 : a > b ? 1 : 0) * (asc ? 1 : -1);
           });
         }
-        if (st.limite !== null) out = out.slice(0, st.limite);
+        if (st.limite !== null) out = out.slice(st.inizio, st.inizio + st.limite);
         if (st.soloConto) return { data: null, error: null, count: out.length };
         return { data: out.map((r) => ({ ...r })), error: null };
       }
@@ -184,10 +185,13 @@ function tabella(nome: string): unknown {
     or: (s: string) => { st.filtri.push(condizione(`or(${s})`)); return b; },
     order: (col: string, o?: { ascending?: boolean; nullsFirst?: boolean }) => {
       const asc = o?.ascending !== false;
-      st.ordine = { col, asc, nulliPrima: o?.nullsFirst ?? !asc };
+      // Il primo ordinamento comanda; i successivi (lo spareggio per id) qui non servono.
+      st.ordine ??= { col, asc, nulliPrima: o?.nullsFirst ?? !asc };
       return b;
     },
     limit: (n: number) => { st.limite = n; return b; },
+    // Onda 2 (R06-001) — Le letture a pagine: da `a` a `b` compresi, come PostgREST.
+    range: (a: number, z: number) => { st.inizio = a; st.limite = z - a + 1; return b; },
     then: (ok: (v: Esito) => unknown, ko?: (e: unknown) => unknown) => esegui().then(ok, ko),
   };
   return b;
@@ -197,7 +201,13 @@ function tabella(nome: string): unknown {
 
 
 vi.mock('@/lib/api/middleware', () => ({ withCronAuth: (g: (r: unknown) => unknown) => (r: unknown) => g(r) }));
-vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => ({ from: (t: string) => tabella(t) }) }));
+// R05-004 (onda 2) — Il sorvegliante legge anche i bonifici di rimborso ai clienti: qui nessuno da fare.
+vi.mock('@/lib/supabase/server', () => ({
+  getAdminSupabase: () => ({
+    from: (t: string) => tabella(t),
+    rpc: async (nome: string) => (nome === 'admin_bonifici_rimborso' ? { data: [], error: null } : { data: null, error: { message: `rpc finta: ${nome}` } }),
+  }),
+}));
 vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true, id: 'finta' })) }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 

@@ -104,7 +104,8 @@ describe('R32-012 · chi torna e conferma non resta disiscritto', () => {
     const res = await conferma(new Request(`https://mycity.test/api/newsletter/confirm?token=${encodeURIComponent(token)}`, {
       headers: { 'x-forwarded-for': '93.40.30.7' },
     }));
-    expect(res.headers.get('location')).toBe('https://mycity.test/?newsletter=confermata');
+    // R04-007 (onda 2): la conferma porta alla sua pagina, che dice l'esito (prima: la home con un parametro che nessuno leggeva).
+    expect(res.headers.get('location')).toBe('https://mycity.test/newsletter?esito=confermata');
 
     expect(tabella[0].active).toBe(true);
     expect(tabella[0].confirmed_at).toBe(ADESSO.toISOString());

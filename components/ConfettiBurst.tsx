@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 
 const COLORS = ['#C0492C', '#E8A33D', '#5A7C42', '#EE9F86', '#FBD891', '#7C8B5A'];
 
@@ -55,8 +55,8 @@ export default function ConfettiBurst({ trigger, count = 40, duration = 1200 }: 
             background: p.bg,
             animationDelay: `${p.delay}ms`,
             animationDuration: `${duration}ms`,
-            ['--end-transform' as any]: `translate(${p.tx}px, ${p.ty}px) rotate(${p.rotation}deg)`,
-          }}
+            '--end-transform': `translate(${p.tx}px, ${p.ty}px) rotate(${p.rotation}deg)`,
+          } as CSSProperties & Record<'--end-transform', string>}
         />
       ))}
     </div>

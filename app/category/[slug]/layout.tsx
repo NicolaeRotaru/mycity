@@ -2,20 +2,31 @@ import { CONSEGNA_ALL_ORA_CHE_SCEGLI } from '@/lib/promessa-consegna';
 import type { Metadata } from 'next';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 import { fraseComeArriva } from '@/lib/promesse-pubbliche';
-import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { FINO_AL_CONFINE } from '@/lib/ordini/zona-di-consegna';
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { logger } from '@/lib/logger';
 import { notFound } from 'next/navigation';
 
-export const revalidate = 600;
+/**
+ * 28/11/2026 (R04-013) — NESSUNA CACHE DICHIARATA CHE NON C'È.
+ * Qui c'era `revalidate = 600`, ma `dynamic = 'force-dynamic'` in app/layout.tsx (la parola
+ * d'ordine degli script, vedi lì) costruisce ogni pagina a ogni visita: la cache dichiarata non
+ * contava, e chi leggeva credeva che la pagina della categoria arrivasse da una copia. E il giorno in cui quella riga
+ * verrà tolta, una copia di 600 secondi mostrerebbe prodotti e prezzi di dieci minuti prima, e una categoria appena creata ancora «non trovata». Con 0 la dichiarazione dice il
+ * vero oggi e regge domani, come la vetrina (app/store/[id]/layout.tsx, R10-004). Una cache vera
+ * delle letture, come quella della home (unstable_cache), è una scelta di Nicola: quanto vecchio
+ * può essere la pagina della categoria che il cliente vede.
+ */
+export const revalidate = 0;
 
 const CATEGORY_LONG_DESC: Record<string, string> = {
   // 3/9/2026 — Prometteva «o ritiro in negozio», che alla cassa non c'e': la frase nasce
   // dall'interruttore in lib/promesse-pubbliche.ts, i minuti dal numero deciso in lib/delivery.ts.
-  alimentari: `Alimentari freschi e tipici di Piacenza. ${fraseComeArriva()}`,
+  // R12-009 — Col ritiro acceso la frase si allunga: il prefisso si accorcia per stare nei 160 caratteri.
+  alimentari: `Alimentari tipici piacentini. ${fraseComeArriva()}`,
   abbigliamento: 'Abbigliamento donna, uomo e bambino dei negozi di Piacenza. Compra online dai brand locali.',
   // 27/10/2026 (terzo giro) — Qui c’era una consegna promessa «rapida», senza confine né tempo.
-  casa: `Casa, arredamento e cucina dai negozi di Piacenza, consegnati fino a ${RAGGIO_CONSEGNA_KM} km dal negozio.`,
+  casa: `Casa, arredamento e cucina dai negozi di Piacenza, consegnati ${FINO_AL_CONFINE}.`,
   elettronica: 'Elettronica e accessori dai negozi di Piacenza. Garanzia e supporto locale.',
   libri: 'Libri, fumetti e cartoleria dei negozi di Piacenza.',
   giardino: 'Piante, semi e attrezzi per il giardino dai negozi di Piacenza.',

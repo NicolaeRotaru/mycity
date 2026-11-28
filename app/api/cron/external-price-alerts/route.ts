@@ -8,7 +8,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { AiCallError } from '@/lib/ai/run';
 import { TEMPO_TENTATIVO_AI_MS } from '@/lib/ai/client';
-import { fetchExternalSnapshot, ritentoDopoErroreConsentito } from '@/lib/products/externalSync';
+import { fetchExternalSnapshot, restituisciRitentoDopoErrore, ritentoDopoErroreConsentito } from '@/lib/products/externalSync';
 import { isStale, type ExternalData, type Marketplace } from '@/lib/products/externalSyncShared';
 import { detectExternalChange, changeMessage } from '@/lib/products/externalAlert';
 
@@ -170,6 +170,9 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
       if (err instanceof AiCallError && (err.motivo === 'tetto_spesa' || err.motivo === 'spesa_sconosciuta')) {
         fermoPerSpesa = true;
         logger.warn('external-price-alerts: giro fermo per la spesa AI', { motivo: err.motivo, productId: r.id });
+        // R02-010 (onda 2) — Il prodotto in errore non e' stato ritentato: il permesso di sei
+        // ore preso qui sopra torna suo, se no resterebbe frenato anche col budget tornato.
+        if (daFalliti.has(r.id)) await restituisciRitentoDopoErrore(r.id);
         rimasti = Math.min(coda.length - i, BATCH - presi + 1);
         break;
       }
@@ -182,6 +185,8 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
         logger.error('[ai] il fornitore non trova il modello: controllare AI_MODELLO_SMART', { feature: err.feature, productId: r.id });
         // R03-002 — Il modello manca per tutti: il giro si ferma qui. Nessun prodotto, questo
         // compreso, finisce segnato 'error' (dietro il freno di sei ore) per un guasto non suo.
+        // R02-010 (onda 2) — E il permesso di sei ore, se l'aveva preso, gli torna.
+        if (daFalliti.has(r.id)) await restituisciRitentoDopoErrore(r.id);
         rimasti = Math.min(coda.length - i - 1, BATCH - presi);
         break;
       } else {

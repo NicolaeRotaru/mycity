@@ -16,10 +16,10 @@ import { handleChargeRefunded, handleRefundUpdated } from '@/lib/stripe/webhook/
 import { handleDisputeCreated, handleDisputeClosed } from '@/lib/stripe/webhook/dispute';
 import { handleTransferReversed, handlePayoutFailed, handleAccountUpdated } from '@/lib/stripe/webhook/trasferimenti';
 import { handlePaymentIntentFailed, handlePaymentIntentSucceeded } from '@/lib/stripe/webhook/pagamenti';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 
 export const runtime = 'nodejs';
-// Stripe webhook: leggi raw body, niente parsing automatico Next
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'; // Stripe webhook: leggi raw body, niente parsing automatico Next
 
 /**
  * #12 — QUESTO FILE FA UNA COSA SOLA: SMISTA.
@@ -41,7 +41,7 @@ export const dynamic = 'force-dynamic';
  * DOPO che il gestore è riuscito, quindi un nuovo tentativo di Stripe
  * riprocessa invece di rispondere «già visto».
  */
-export async function POST(req: NextRequest) {
+export const POST = conFilaPerRichiesta(async function riceviLEvento(req: NextRequest) {
   const sig = req.headers.get('stripe-signature');
   // R77 — due indirizzi Stripe, due segreti: quello di MyCity e quello dei conti
   // dei negozi (bonifico rifiutato, versamenti bloccati). Vedi firma.ts.
@@ -245,4 +245,4 @@ export async function POST(req: NextRequest) {
     await liberaIlTurno(admin, event.id);
     return NextResponse.json({ error: 'Handler error' }, { status: 500 });
   }
-}
+});

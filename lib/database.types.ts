@@ -408,6 +408,7 @@ export interface Database {
           error: string | null;
           created_at: string;
           updated_at: string;
+          applicazione_finita_il: string | null;
         };
         Insert: {
           id?: string;
@@ -421,6 +422,7 @@ export interface Database {
           error?: string | null;
           created_at?: string;
           updated_at?: string;
+          applicazione_finita_il?: string | null;
         };
         Update: {
           id?: string;
@@ -434,6 +436,7 @@ export interface Database {
           error?: string | null;
           created_at?: string;
           updated_at?: string;
+          applicazione_finita_il?: string | null;
         };
         Relationships: [];
       };
@@ -1064,6 +1067,39 @@ export interface Database {
         };
         Relationships: [];
       };
+      gift_card_in_attesa: {
+        Row: {
+          id: string;
+          buyer_id: string;
+          chiave: string;
+          amount_cents: number;
+          recipient_name: string | null;
+          recipient_email: string | null;
+          message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          buyer_id: string;
+          chiave: string;
+          amount_cents: number;
+          recipient_name?: string | null;
+          recipient_email?: string | null;
+          message?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          buyer_id?: string;
+          chiave?: string;
+          amount_cents?: number;
+          recipient_name?: string | null;
+          recipient_email?: string | null;
+          message?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       gift_card_pending_voids: {
         Row: {
           stripe_payment_intent: string;
@@ -1670,6 +1706,7 @@ export interface Database {
           rider_payout_claimed_at: string | null;
           stock_restored_at: string | null;
           coupon_released_at: string | null;
+          cod_cart_key: string | null;
         };
         Insert: {
           id?: string;
@@ -1742,6 +1779,7 @@ export interface Database {
           rider_payout_claimed_at?: string | null;
           stock_restored_at?: string | null;
           coupon_released_at?: string | null;
+          cod_cart_key?: string | null;
         };
         Update: {
           id?: string;
@@ -1814,6 +1852,7 @@ export interface Database {
           rider_payout_claimed_at?: string | null;
           stock_restored_at?: string | null;
           coupon_released_at?: string | null;
+          cod_cart_key?: string | null;
         };
         Relationships: [];
       };
@@ -2272,6 +2311,7 @@ export interface Database {
           tipo: string;
           durata_minuti: number | null;
           dove_servizio: string | null;
+          tolto_dallo_staff_at: string | null;
         };
         Insert: {
           id?: string;
@@ -2301,6 +2341,7 @@ export interface Database {
           tipo?: string;
           durata_minuti?: number | null;
           dove_servizio?: string | null;
+          tolto_dallo_staff_at?: string | null;
         };
         Update: {
           id?: string;
@@ -2330,6 +2371,7 @@ export interface Database {
           tipo?: string;
           durata_minuti?: number | null;
           dove_servizio?: string | null;
+          tolto_dallo_staff_at?: string | null;
         };
         Relationships: [];
       };

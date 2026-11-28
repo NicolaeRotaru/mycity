@@ -19,6 +19,7 @@ import {
 } from '@/lib/ordini/recesso';
 import { scriviCampanella } from '@/lib/ordini/campanella';
 import { recessoAperto } from '@/lib/ordini/termine-del-recesso';
+import { segnaIDeperibili, type CategoriaPerIlRecesso } from '@/lib/ordini/recesso-per-categoria';
 
 export const runtime = 'nodejs';
 
@@ -40,51 +41,10 @@ const Body = z.object({
     .optional(),
 });
 
-/**
- * 26/11/2026 — IL PANE È ESCLUSO DAL RECESSO ANCHE SE IL NEGOZIO NON L'HA SPUNTATO.
- * La spunta `non_recedibile` (migrazione 180) parte spenta: un pane creato senza
- * toccarla accettava «Cambio idea» (HTTP 201). Il fatto `legale.recesso-esclusi`
- * dice che pane, dolci, salumi, latticini e gli altri freschi sono esclusi: la
- * categoria del prodotto lo sa già. Vale la categoria o uno dei suoi padri (una
- * sottocategoria del Panificio creata dal pannello resta pane). La spunta del
- * negozio resta e si somma: serve per le ordinazioni e i freschi fuori da queste.
- */
-const CATEGORIE_DEPERIBILI = new Set([
-  'panificio',
-  'alimentari-dolci',
-  'salumeria',
-  'alimentari-latticini',
-  'alimentari-pasta-fresca',
-  'frutta-verdura',
-]);
-type CategoriaPerIlRecesso = { id: string; slug: string; parent_id: string | null };
-
-/**
- * 27/11/2026 — UN FRESCO DA FRIGORIFERO È FRESCO ANCHE FUORI DALLE CATEGORIE DEI FRESCHI.
- * Il campo «Conservazione» del modulo alimentari (lib/category-attributes.ts) ha la voce
- * «Frigorifero»: è il negozio stesso a dire che il prodotto va tenuto in frigo, cioè che si
- * deteriora in fretta. Una mozzarella salvata sulla sola radice «Alimentari», senza
- * sottocategoria e senza spunta, accettava il ripensamento. Vale solo la voce esatta: «Freezer»
- * (surgelati) e «Luogo fresco e asciutto» non sono «freschi» nel fatto `legale.recesso-esclusi`.
- */
-function daFrigorifero(attributi: unknown): boolean {
-  if (!attributi || typeof attributi !== 'object') return false;
-  const c = (attributi as Record<string, unknown>).conservazione;
-  return typeof c === 'string' && c.trim().toLowerCase() === 'frigorifero';
-}
-
-function segnaIDeperibili<P extends { category_id?: unknown; attributes?: unknown }>(prodotti: P[], categorie: CategoriaPerIlRecesso[]): P[] {
-  const perId = new Map(categorie.map((c) => [c.id, c]));
-  const deperibile = (id: unknown): boolean => {
-    let cur = typeof id === 'string' ? perId.get(id) : undefined;
-    for (let passi = 0; cur && passi < 20; passi++) {
-      if (CATEGORIE_DEPERIBILI.has(cur.slug)) return true;
-      cur = cur.parent_id ? perId.get(cur.parent_id) : undefined;
-    }
-    return false;
-  };
-  return prodotti.map((p) => (deperibile(p.category_id) || daFrigorifero(p.attributes) ? { ...p, non_recedibile: true } : p));
-}
+// 28/11/2026 (R09-015, onda 2) — La regola dei prodotti esclusi dal recesso per categoria e per
+// conservazione in frigorifero vive una volta sola in lib/ordini/recesso-per-categoria.ts: la leggono
+// anche la scheda prodotto e il carrello PRIMA dell'acquisto. Qui c'era una copia, ed era già diversa
+// (aveva il frigorifero, le altre no): il negozio rifiutava un reso che la scheda non annunciava.
 
 type ClientDelCliente = Awaited<ReturnType<typeof getServerSupabase>>;
 type EsitoDelRipensamento = { rifiuto: string | null; nota: string | null } | { errore: NextResponse };
@@ -257,6 +217,20 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
     if ('errore' in esito) return esito.errore;
     if (esito.rifiuto) return ApiErrors.invalidRequest(esito.rifiuto);
     notaRecesso = esito.nota;
+  } else if (body.reason === 'OTHER') {
+    /**
+     * 28/11/2026 (R04-001, onda 2) — «ALTRO» SUL PANE ARRIVA AL NEGOZIO CON L'AVVISO.
+     * «Altro» con la nota «ho cambiato idea» su un pane passava come un reso qualsiasi, e il
+     * forno non aveva niente che gli dicesse che quel prodotto il recesso non ce l'ha. «Altro»
+     * non si rifiuta (può essere un pezzo mancante, e la garanzia vale sempre): decide il negozio,
+     * ma con la nota dei prodotti esclusi. Se la lettura cade, il reso nasce lo stesso, senza nota.
+     */
+    const esito = await esitoDelRipensamento(supa, body.orderId, body.orderItemId);
+    if (!('errore' in esito)) {
+      notaRecesso = esito.rifiuto
+        ? 'Prodotto escluso dal recesso (art. 59 Cod. Cons.): se il cliente ci ha solo ripensato, il reso non è dovuto. Per un difetto o un errore la garanzia vale sempre.'
+        : esito.nota;
+    }
   }
 
   const { data: existing } = await supa

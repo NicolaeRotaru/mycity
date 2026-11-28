@@ -156,7 +156,6 @@ export default function CameraCapture({ open, onClose, onCapture }: Props) {
       ) : (
         <div className="space-y-3">
           <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-xl bg-black">
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
             {/* Riquadro guida: bordo chiaro + alone scuro intorno */}
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -190,7 +189,7 @@ export default function CameraCapture({ open, onClose, onCapture }: Props) {
               type="button"
               onClick={capture}
               disabled={!ready}
-              className="inline-flex items-center gap-2 rounded-full bg-primary-600 px-6 py-3 font-semibold text-white shadow-md hover:bg-primary-700 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full bg-primary-600 px-6 py-3 font-semibold text-white shadow-warm hover:bg-primary-700 disabled:opacity-50"
             >
               <Camera size={20} strokeWidth={2.2} aria-hidden /> Scatta
             </button>

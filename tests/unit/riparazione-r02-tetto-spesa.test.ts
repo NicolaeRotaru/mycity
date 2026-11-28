@@ -71,14 +71,35 @@ function rispostaFinta() {
   };
 }
 
-/** Il conto condiviso finto: una casella per giorno per tutte le copie, come la tabella vera. */
+/**
+ * Il conto condiviso finto: una casella per giorno per tutte le copie, come la tabella vera.
+ * Onda 2 (R02-002): anche la prenotazione della stima (`prenota_spesa_ai` /
+ * `restituisci_spesa_ai`, migrazione 999l) e' una scrittura, e con la scrittura
+ * negata non passa. «solo-registra-negata»: la prenotazione passa e la spesa vera no.
+ */
 function contoCondivisoFinto() {
-  const stato = { caselle: {} as Record<string, number>, scrittura: 'viva' as 'viva' | 'negata' };
-  finti.rpc.mockImplementation(async (nome: string, args: { p_giorno: string; p_cents?: number }) => {
-    if (nome === 'spesa_ai_di_oggi') return { data: stato.caselle[args.p_giorno] ?? 0, error: null };
+  const stato = {
+    caselle: {} as Record<string, number>,
+    scrittura: 'viva' as 'viva' | 'negata' | 'solo-registra-negata',
+  };
+  finti.rpc.mockImplementation(async (nome: string, args: { p_giorno: string; p_cents?: number; p_tetto_cents?: number }) => {
+    const adesso = stato.caselle[args.p_giorno] ?? 0;
+    if (nome === 'spesa_ai_di_oggi') return { data: adesso, error: null };
     if (nome === 'registra_spesa_ai') {
+      if (stato.scrittura !== 'viva') return NEGATO;
+      stato.caselle[args.p_giorno] = adesso + (args.p_cents ?? 0);
+      return { data: stato.caselle[args.p_giorno], error: null };
+    }
+    if (nome === 'prenota_spesa_ai') {
       if (stato.scrittura === 'negata') return NEGATO;
-      stato.caselle[args.p_giorno] = (stato.caselle[args.p_giorno] ?? 0) + (args.p_cents ?? 0);
+      const voluti = Math.max(1, args.p_cents ?? 0);
+      if (adesso + voluti > (args.p_tetto_cents ?? 0)) return { data: -1, error: null };
+      stato.caselle[args.p_giorno] = adesso + voluti;
+      return { data: stato.caselle[args.p_giorno], error: null };
+    }
+    if (nome === 'restituisci_spesa_ai') {
+      if (stato.scrittura === 'negata') return NEGATO;
+      stato.caselle[args.p_giorno] = Math.max(0, adesso - (args.p_cents ?? 0));
       return { data: stato.caselle[args.p_giorno], error: null };
     }
     return { data: null, error: { message: 'rpc sconosciuta' } };
@@ -180,10 +201,17 @@ describe('in produzione, senza conto condiviso, nessuna copia conta per se', () 
     const conto = contoCondivisoFinto();
     const { chiama } = await unaCopiaNuova();
 
+    // Onda 2 (R02-002) — Con la scrittura negata la stima non si prenota e la chiamata non parte.
     conto.scrittura = 'negata';
-    await chiama(); // il conto si legge: la chiamata passa, ma la spesa non si scrive
+    await expect(chiama()).rejects.toMatchObject({ status: 503, motivo: 'spesa_sconosciuta' });
+    expect(finti.create).not.toHaveBeenCalled();
+    vi.setSystemTime(new Date(ADESSO.getTime() + 6 * 60_000)); // passata la pausa del circuito
+
+    // La prenotazione passa ma la spesa vera no: nel conto resta solo la stima (piccola).
+    conto.scrittura = 'solo-registra-negata';
+    const prima = await chiama(); // il conto si legge: la chiamata passa, ma la spesa non si scrive
     expect(finti.create).toHaveBeenCalledTimes(1);
-    expect(conto.caselle[OGGI] ?? 0).toBe(0);
+    expect(conto.caselle[OGGI] ?? 0).toBeLessThan(Math.ceil(prima.usage.estCostEur * 100));
 
     await expect(
       chiama(),
@@ -192,7 +220,7 @@ describe('in produzione, senza conto condiviso, nessuna copia conta per se', () 
     expect(finti.create).toHaveBeenCalledTimes(1);
 
     conto.scrittura = 'viva';
-    vi.setSystemTime(new Date(ADESSO.getTime() + 6 * 60_000)); // passata la pausa del circuito
+    vi.setSystemTime(new Date(ADESSO.getTime() + 12 * 60_000)); // passata la pausa del circuito
     await chiama();
     expect(finti.create).toHaveBeenCalledTimes(2);
     const scritte = finti.rpc.mock.calls.filter(([n]) => n === 'registra_spesa_ai').map(([, a]) => (a as { p_cents: number }).p_cents);

@@ -128,3 +128,31 @@ export function fasciaAlGiornoDellOrdine(
   const stessa = FASCE_DI_OGGI.find((f) => f.daMinuti === finestra.daMinuti && f.aMinuti === finestra.aMinuti);
   return stessa?.etichetta ?? null;
 }
+
+/**
+ * 22/11/2026 — LA FASCIA DETTA DAL GIORNO IN CUI ARRIVA LA RICHIESTA.
+ *
+ * L'etichetta conta il giorno da quando la cassa l'ha disegnata; le rotte d'ordine la contavano
+ * dal loro orologio. Lunedì alle 23:59 «Domani · 9:00–11:00» è martedì: arrivata alle 00:01, la
+ * rotta la giudicava (e la scriveva, o il webhook della carta la contava da `session.created`) per
+ * mercoledì. La cassa manda anche il giorno della fascia (`delivery_date`): se cade un giorno
+ * prima di quello che dice l'etichetta letta adesso, la mezzanotte è passata in viaggio, e
+ * l'etichetta si riporta a oggi con la regola della carta pagata dopo mezzanotte
+ * (`fasciaAlGiornoDellOrdine`): «Domani» di ieri è «Oggi», una fascia di ieri è passata (`null`).
+ * Uno scarto di più giorni è l'orologio del telefono sbagliato, non la mezzanotte: non sposta
+ * niente, si giudica come prima.
+ *
+ * 28/11/2026 (R09-009) — Una sola copia, qui: la usano la rotta dei contanti
+ * (app/api/orders/cod/route.ts) e quella della carta (app/api/stripe/checkout/route.ts), che prima
+ * se la scrivevano ciascuna a mano e potevano divergere.
+ * 🟢 Puro: l'istante d'arrivo lo passa chi chiama.
+ */
+export function fasciaDelGiornoDellaRichiesta(fascia: string, giornoDellaFascia: string, adesso: Date): string | null {
+  const finestra = finestraDellaFascia(fascia);
+  const oggi = giornoDiPiacenza(adesso);
+  if (!finestra || !oggi || !/^\d{4}-\d{2}-\d{2}$/.test(giornoDellaFascia)) return fascia;
+  const giorniDaOggi = Math.round((Date.parse(giornoDellaFascia) - Date.parse(oggi)) / 86_400_000);
+  if (giorniDaOggi !== (finestra.giorno === 'domani' ? 0 : -1)) return fascia;
+  // Ieri a mezzogiorno (UTC): un istante del giorno in cui la cassa ha proposto la fascia.
+  return fasciaAlGiornoDellOrdine(fascia, Date.parse(oggi) - 12 * 3_600_000, adesso);
+}

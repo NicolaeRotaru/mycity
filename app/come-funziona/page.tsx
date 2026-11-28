@@ -53,7 +53,7 @@ export default function ComeFunzionaPage() {
     <div>
       {/* Hero */}
       <section className="container mx-auto max-w-3xl px-4 sm:px-6 pt-10 pb-2 text-center">
-        <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary-700">
+        <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-label text-primary-700">
           Semplice e senza pensieri
         </span>
         <h1 className="mt-2 break-words font-serif text-3xl font-bold leading-[1.05] text-ink-900 md:text-5xl">

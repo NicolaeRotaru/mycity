@@ -112,6 +112,9 @@ type OrderRow = {
   }[];
 };
 
+/** R06-014 — Gli stati in cui la consegna è in mano al fattorino: da preso in carico a in strada. */
+const STATI_DEL_FATTORINO: readonly string[] = ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'];
+
 function isCod(method: string | null | undefined): boolean {
   const m = (method ?? '').toLowerCase();
   return m === 'cod' || m === 'cash';
@@ -339,7 +342,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
     // la colonna la decide lo stato d'arrivo.
     mutationFn: async (params: { newStatus: OrderStatus }) => {
       if (!order) throw new Error('Ordine non caricato');
-      const update: Record<string, any> = { delivery_status: params.newStatus };
+      const update: Record<string, unknown> = { delivery_status: params.newStatus };
       const colonnaOrario = COLONNA_ORARIO_DEL_PASSAGGIO[params.newStatus];
       if (colonnaOrario) update[colonnaOrario] = new Date().toISOString();
 
@@ -593,7 +596,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         <div className="bg-gradient-to-br from-primary-500 to-secondary-600 text-white rounded-2xl p-6 shadow-warm-lg">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex-1 min-w-0">
-              <p className="text-xs uppercase tracking-widest text-primary-100 font-semibold">Codice ritiro</p>
+              <p className="text-xs uppercase tracking-label text-primary-100 font-semibold">Codice ritiro</p>
               <p className="font-mono font-extrabold text-4xl sm:text-5xl tracking-[0.3em] my-2">
                 {pickupCode!.code}
               </p>
@@ -650,16 +653,23 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           <Clock size={16} aria-hidden className="shrink-0" /> In attesa che un fattorino prenda in carico questo ordine.
         </div>
       )}
-      {order.rider_id && order.delivery_status !== 'DELIVERED' && (
+      {/* 28/11/2026 (onda 2, R06-014) — «Sta gestendo la consegna» solo mentre la consegna è sua: su un
+          ordine annullato (il fattorino resta scritto sulla riga) diceva una consegna che non c'era più. */}
+      {order.rider_id && STATI_DEL_FATTORINO.includes(order.delivery_status) && (
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 text-sm text-primary-800 flex items-center gap-2">
           <Bike size={16} aria-hidden className="shrink-0" /> <span>Fattorino <strong>{order.rider?.full_name ?? 'assegnato'}</strong> sta gestendo la consegna.</span>
         </div>
       )}
-      {/* CONTANTI: avviso incasso al rider */}
-      {cod && order.delivery_status !== 'CANCELED' && (
+      {/* CONTANTI: avviso incasso al rider. R06-014 — Al futuro finché la consegna non è chiusa; a
+          consegna fatta al passato; mai sul ritiro in negozio, dove i contanti li prende il negozio. */}
+      {cod && !order.pickup_in_store && order.delivery_status !== 'CANCELED' && (
         <div className="bg-olive-50 border border-olive-200 rounded-xl p-4 text-sm text-olive-800 flex items-center gap-2">
           <Banknote size={16} aria-hidden className="shrink-0 text-olive-700" />
-          <span>Il fattorino incassa <strong>{formatPrice(order.total_price)}</strong> in contanti alla consegna.</span>
+          {order.delivery_status === 'DELIVERED' ? (
+            <span>Il fattorino ha incassato <strong>{formatPrice(order.total_price)}</strong> in contanti alla consegna.</span>
+          ) : (
+            <span>Il fattorino incassa <strong>{formatPrice(order.total_price)}</strong> in contanti alla consegna.</span>
+          )}
         </div>
       )}
       {/* CLIENTE + INDIRIZZO */}
@@ -684,7 +694,6 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
               <div key={it.id} className="px-6 py-3 flex items-center gap-4">
                 <div className="w-14 h-14 rounded bg-cream-100 overflow-hidden flex items-center justify-center shrink-0">
                   {img ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     (<img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />)
                   ) : <Package size={20} className="text-ink-400" aria-hidden />}
                 </div>
@@ -715,7 +724,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           <div className="flex justify-between"><span className="text-ink-600">Pagamento</span><span className="font-medium text-ink-800">{cod ? 'Contanti alla consegna' : 'Carta (online)'}</span></div>
           <div className="flex justify-between font-bold text-base pt-1 border-t border-cream-300"><span>Totale</span><span className="font-serif text-primary-800">{formatPrice(order.total_price)}</span></div>
           {!riepilogo.torna && (
-            <p className="border-t border-cream-200 pt-1 text-[12px] text-ink-500">
+            <p className="border-t border-cream-200 pt-1 text-xs text-ink-500">
               Le voci qui sopra non fanno esattamente il totale
               ({formatPrice(Math.abs(riepilogo.differenzaCentesimi) / 100)} di differenza).
               Il totale è quello scritto sull&apos;ordine.

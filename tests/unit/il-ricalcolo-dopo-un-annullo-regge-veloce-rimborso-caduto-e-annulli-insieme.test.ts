@@ -140,13 +140,16 @@ describe('il ricalcolo dopo un annullo regge la veloce, il rimborso caduto e due
       return { refundId: `re_${a.orderId}` };
     });
     // Il forno (o0) rifiuta per intero nel momento in cui la frutta (o1) ha appena letto il carrello.
+    // Onda 2 (R06-011) — la prima scrittura della frutta è il turno (CANCELED), la seconda lettura è il suo
+    // ordine, la terza il carrello: il colpo va sulla terza. Col turno preso la frutta se ne va per prima
+    // (rende i suoi 13 €) e il forno, rimasto solo, rende i suoi 18: sempre 31.
     const vero = db.from;
     let letture = 0;
     let colpo: (() => Promise<unknown>) | null = () =>
       annullaERimborsa(db as never, { ...riga('o0') } as never, { reason: 'Rifiutato dal negozio' });
     db.from = (t: string) => {
       const q = vero(t) as Record<string, unknown> & { then: (ok: (x: unknown) => unknown, ko: (e: unknown) => unknown) => unknown };
-      if (t === 'orders' && ++letture === 2 && colpo) {
+      if (t === 'orders' && ++letture === 3 && colpo) {
         const c = colpo;
         colpo = null;
         const avanti = q.then;
@@ -162,8 +165,8 @@ describe('il ricalcolo dopo un annullo regge la veloce, il rimborso caduto e due
       refundOrder.mockReset();
       refundOrder.mockImplementation(async () => ({ refundId: 're_1' }));
     }
-    expect(resi.sort()).toEqual([['o0', 1600], ['o1', 1500]]);
-    expect(1600 + 1500).toBe(addebito);
+    expect(resi.sort()).toEqual([['o0', 1800], ['o1', 1300]]);
+    expect(1800 + 1300).toBe(addebito);
   });
 
   it('V7 carta, l altro verso: il forno ha già scritto la sua consegna, la frutta annulla per intero prima che il forno passi a lei → 18 + 13 = 31 €', async () => {

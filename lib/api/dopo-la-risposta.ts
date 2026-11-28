@@ -1,5 +1,5 @@
 import { after } from 'next/server';
-import { workAsyncStorage } from 'next/dist/server/app-render/work-async-storage.external';
+import { chiaveDellaFila } from '@/lib/api/fila-per-richiesta';
 import { logger } from '@/lib/logger';
 
 /**
@@ -38,25 +38,28 @@ import { logger } from '@/lib/logger';
  * R09-008 — UNA FILA PER RICHIESTA, NON UNA PER TUTTO IL SERVER. La fila era una variabile del modulo:
  * con più richieste servite dallo stesso processo (Fluid compute) le email di una raffica di ordini
  * si mettevano in coda dietro quelle delle altre, e la richiesta con gli ultimi lavori poteva arrivare
- * al suo tetto di durata prima del suo turno. Ora ogni richiesta ha la sua fila, legata allo stato
- * della richiesta di Next (`workAsyncStorage`); fuori da una richiesta (script, prove) resta una fila sola.
+ * al suo tetto di durata prima del suo turno. Ora ogni richiesta ha la sua fila.
+ *
+ * 28/11/2026 (R09-006) — LA CHIAVE DELLA FILA NON VIENE PIÙ DA UN FILE INTERNO DI NEXT. Era lo stato
+ * della richiesta di Next (`next/dist/server/app-render/work-async-storage.external`), che Next può
+ * spostare a ogni versione. Ora la apre `conFilaPerRichiesta` (lib/api/fila-per-richiesta.ts), che
+ * avvolge il gestore della rotta con un `AsyncLocalStorage` di Node; fuori da una richiesta avvolta
+ * (script, prove) resta una fila sola.
  */
 const TETTO_DEL_TURNO_MS = 10_000;
 const SENZA_RICHIESTA = {};
 const file = new WeakMap<object, Promise<void>>();
 
-/** La chiave della fila: lo stato della richiesta in corso, o una chiave unica fuori da una richiesta. */
+/** La chiave della fila: quella della richiesta avvolta in corso, o una chiave unica fuori da una richiesta. */
 function chiaveDellaRichiesta(): object {
-  try {
-    return workAsyncStorage.getStore() ?? SENZA_RICHIESTA;
-  } catch {
-    return SENZA_RICHIESTA;
-  }
+  return chiaveDellaFila() ?? SENZA_RICHIESTA;
 }
 
 /**
  * Mette il lavoro in fila: parte quando il precedente è finito (o dopo il tetto del suo turno).
- * Esportata per chi registra da sé il suo `after()` (lib/ordini/annulla.ts): `after(() => nellaFila(lavoro))`.
+ * Esportata per chi registra da sé il suo `after()`: `after(() => nellaFila(lavoro))`. La chiave di
+ * default si legge anche dentro il callback di `after()`, perché Next lo lega al contesto della
+ * richiesta in cui è stato registrato (e la chiave nasce all'ingresso, con `conFilaPerRichiesta`).
  */
 export function nellaFila(
   lavoro: () => Promise<void>,

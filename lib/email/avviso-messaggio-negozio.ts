@@ -61,7 +61,6 @@ export type EsitoAvvisoNegozio =
 type Errore = { message?: string } | null;
 
 // Acceptable any: client Supabase senza Database type, come nel giro della coda.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function avvisaNegozioMessaggioNuovo(
   admin: any,
   args: { conversationId: string; senderId: string },

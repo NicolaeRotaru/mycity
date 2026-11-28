@@ -73,7 +73,7 @@ export default function HelpPage() {
       {/* Search-like CTA */}
       <Link
         href="/faq"
-        className="block bg-gradient-to-r from-primary-600 to-secondary-600 text-white rounded-2xl p-8 mb-10 hover:shadow-xl transition-all"
+        className="block bg-gradient-to-r from-primary-600 to-secondary-600 text-white rounded-2xl p-8 mb-10 hover:shadow-warm-xl transition-all"
       >
         <div className="text-center">
           <div className="mb-2 flex justify-center"><Search size={32} className="text-white" aria-hidden /></div>
@@ -90,7 +90,7 @@ export default function HelpPage() {
           <Link
             key={t.title}
             href={t.href}
-            className="min-w-0 [overflow-wrap:anywhere] bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all"
+            className="min-w-0 [overflow-wrap:anywhere] bg-white border border-cream-300 rounded-xl p-5 hover:shadow-warm hover:border-primary-300 transition-all"
           >
             <div className="mb-2"><Icon size={28} className="text-primary-600" aria-hidden /></div>
             <div className="font-bold text-ink-900 mb-1">{t.title}</div>

@@ -486,7 +486,7 @@ jobs:
             # E2E_DATI_DI_PROVA = 1. Si dice qui, in cima, anche quando il resto e' verde.
             echo ""
             if [ "${{ vars.E2E_DATI_DI_PROVA }}" != "1" ]; then
-              echo "⚠️ **Le tre prove dell'acquisto vero (contrassegno, rimborso, bonifico al negozio): NON girate.**"
+              echo "⚠️ **La cassa disegnata col database e le tre prove dell'acquisto vero (contrassegno, rimborso, bonifico al negozio): NON girate.**"
               echo ""
               echo "Il lavoro «La cassa vera» parte solo con la variabile del repository \`E2E_DATI_DI_PROVA\` = 1 (e, per la carta, il segreto \`STRIPE_TEST_SECRET_KEY\`): finche' manca, in questa CI nessun ordine nasce, nessun rimborso e nessun bonifico sono visti."
             else
@@ -520,6 +520,13 @@ jobs:
   #    Una chiave che non comincia con sk_test_ non arriva mai al sito.
   # Il segreto del webhook e quello dei lavori a orario sono di questo giro e
   # basta: li conosce solo il sito acceso qui dentro, che le prove firmano.
+  #
+  # 28/11/2026 (R11-004, onda 2) — Gira qui anche «la cassa disegna il modulo
+  # con la merce riletta dal database»: semina il suo prodotto nel Supabase
+  # locale, lo mette nel carrello del browser e apre /checkout. Prima non la
+  # sceglieva nessun lavoro (negli altri E2E_DATI_DI_PROVA e' spenta, e il
+  # filtro qui prendeva solo le tre prove dei soldi). Le basta il database:
+  # senza le chiavi Stripe di prova gira lo stesso, le altre tre si saltano.
   e2e-cassa-vera:
     name: La cassa vera — l'ordine nasce nel database di prova
     if: ${{ vars.E2E_DATI_DI_PROVA == '1' }}
@@ -590,9 +597,11 @@ jobs:
             sleep 1
           done
           set +e
+          # R11-004 — Nel filtro anche «la cassa disegna il modulo»: prima non la sceglieva nessun
+          # lavoro. A lei basta il Supabase locale qui sopra (niente Stripe): gira a ogni giro.
           npx playwright test tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts \
             --project=chromium --retries=0 --reporter=list,json \
-            -g "nasce e il negozio|il rimborso esiste|il bonifico al negozio"
+            -g "la cassa disegna il modulo|nasce e il negozio|il rimborso esiste|il bonifico al negozio"
           STATUS=$?
           kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true
           exit $STATUS
@@ -604,7 +613,7 @@ jobs:
         run: |
           node -e '
             const fs = require("fs");
-            const righe = ["## La cassa vera: le tre prove dell'"'"'acquisto vero", ""];
+            const righe = ["## La cassa vera: la cassa disegnata e le tre prove dell'"'"'acquisto vero", ""];
             let rapporto = null;
             try { rapporto = JSON.parse(fs.readFileSync("risultati-cassa-vera.json", "utf8")); } catch {}
             if (!rapporto) {
@@ -615,10 +624,11 @@ jobs:
               for (const sp of spec) {
                 const t = (sp.tests ?? [])[0] ?? {};
                 const motivo = (t.annotations ?? []).find((a) => a.type === "skip")?.description ?? "";
-                const segno = t.status === "expected" ? "✅ passata: l'"'"'ordine e'"'"' nato davvero" : t.status === "skipped" ? `⏭️ saltata: ${motivo}` : "❌ caduta";
+                const visto = /disegna il modulo/.test(sp.title ?? "") ? "la cassa mostra il modulo col prodotto del database" : "l’ordine è nato davvero";
+                const segno = t.status === "expected" ? `✅ passata: ${visto}` : t.status === "skipped" ? `⏭️ saltata: ${motivo}` : "❌ caduta";
                 righe.push(`- **${sp.title}** — ${segno}`);
               }
-              if (spec.length === 0) righe.push("⚠️ Nessuna delle tre prove e'"'"' stata trovata: il filtro non ha preso niente.");
+              if (spec.length === 0) righe.push("⚠️ Nessuna delle prove della cassa e'"'"' stata trovata: il filtro non ha preso niente.");
             }
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, righe.join("\n") + "\n");
           '
@@ -801,13 +811,21 @@ jobs:
   # `if:`. Il riepilogo dice quante sono passate, quali sono rosse e quali
   # saltate, col motivo.
   #
-  # PER ORA NON FERMA LA RICHIESTA: il passo ha `continue-on-error: true`,
-  # perche' una prova e' gia' rossa sul telefono (tests/e2e/03-cart-and-search
-  # .spec.ts, «search page renders with input»: prende il primo campo di
-  # ricerca, che sul telefono e' quello nascosto del computer). Il rosso si
-  # vede, col nome della prova, ma non blocca il lavoro di tutti. L'ordine:
-  # prima si ripara quella prova, poi si toglie `continue-on-error` qui sotto
-  # e il telefono diventa un controllo che ferma come gli altri.
+  # 28/11/2026 (R11-010) — ADESSO FERMA LA RICHIESTA COME GLI ALTRI. Fino a
+  # oggi il passo aveva `continue-on-error: true`, perche' una prova era gia'
+  # rossa sul telefono (tests/e2e/03-cart-and-search.spec.ts, «search page
+  # renders with input»: prendeva il primo campo di ricerca, che sul telefono
+  # e' quello nascosto del computer). La prova adesso cerca il campo per ruolo
+  # e nome, cioe' quello che si vede su quello schermo; tolto
+  # `continue-on-error`, un rosso sul telefono ferma «Main» come gli altri.
+  #
+  # 28/11/2026 (R11-010, seguito) — Al primo giro bloccante le rosse erano
+  # dodici, con una causa sola nel sito: la politica di sicurezza portava
+  # sempre `upgrade-insecure-requests`, e WebKit (a differenza di Chrome) la
+  # applica anche a http://localhost: stili e script del sito chiesti in
+  # https, pagina senza stile e senza JavaScript. Ora la regola va solo sulle
+  # pagine arrivate in https (middleware.ts, paginaArrivataInHttps; la
+  # sorveglia tests/unit/riparazione-onda2-r11-010-pagina-in-http-con-stile-e-script.test.ts).
   e2e-telefono:
     name: Prove nel browser sullo schermo di un telefono
     # Come gli altri lavori col browser: Ubuntu 24.04 fisso.
@@ -838,9 +856,6 @@ jobs:
         run: npm run build
 
       - name: Percorri il sito sullo schermo di un telefono e dichiara cosa hai provato
-        # Vedi in cima al lavoro: da togliere quando la prova rossa sul
-        # telefono e' riparata.
-        continue-on-error: true
         env:
           NEXT_PUBLIC_SUPABASE_URL: "https://prove-nel-browser-senza-database.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "chiave-finta-per-le-prove-nel-browser"
@@ -906,7 +921,6 @@ jobs:
           for (const p of saltate) righe.push(`  - \`${p.nome}\` — ${p.motivo || 'saltata senza motivo dichiarato'}`);
           righe.push('');
           righe.push(hannoGuardato > 0 ? `${hannoGuardato} prove hanno aperto il sito sullo schermo di un telefono.` : 'NESSUNA prova ha guardato niente sul telefono.');
-          righe.push('Per ora questo lavoro non ferma la richiesta: il rosso qui sopra si vede, ma non blocca.');
           if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, righe.join('\n') + '\n');
           console.log(righe.join('\n'));
 

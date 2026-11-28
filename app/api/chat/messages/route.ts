@@ -8,6 +8,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { rispostaPerErroreDatabase } from '@/lib/api/errore-database';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { avvisaNegozioMessaggioNuovo } from '@/lib/email/avviso-messaggio-negozio';
 
 export const runtime = 'nodejs';
@@ -29,7 +30,8 @@ const SendSchema = z.object({
  * si trovava zittito per colpa loro, mentre chi voleva davvero inondare la chat
  * cambiava rete. La chiave giusta è chi scrive, e la sappiamo.
  */
-export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
+// R09-006 — Una fila per richiesta per i lavori dopo la risposta (email, campanelle): vedi lib/api/fila-per-richiesta.ts.
+export const POST = conFilaPerRichiesta(withAuth(async ({ user, req }): Promise<NextResponse> => {
   const rl = await rateLimitAsync({ key: `chat:msg:${user.id}`, max: 30, windowMs: 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
@@ -56,7 +58,7 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   await avvisaChiRiceve(conversationId, user.id, body);
 
   return NextResponse.json({ id: data.id, createdAt: data.created_at }, { status: 200 });
-});
+}));
 
 /**
  * 1/11/2026 — IL NEGOZIO NON SAPEVA DI AVERE UN MESSAGGIO.

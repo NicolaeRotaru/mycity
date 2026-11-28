@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -66,6 +66,12 @@ type Profile = {
 };
 
 /** Miglior etichetta identificativa per un utente. */
+/** 28/11/2026 (R04-016) — Nella scheda il trattino vuol dire «nessuna email»: se non è arrivata, si dice. */
+function emailDaMostrare(p: Profile): string {
+  if (p.email) return p.email;
+  return p.email_non_letta ? 'non arrivata: ricarica la pagina' : '—';
+}
+
 function displayName(p: Profile): string {
   return (
     p.store_name ||
@@ -189,10 +195,6 @@ async function leggiContattiAuthOppureNull(): Promise<RigaAuth[] | null> {
   return null;
 }
 
-async function leggiContattiAuth(): Promise<RigaAuth[]> {
-  return (await leggiContattiAuthOppureNull()) ?? [];
-}
-
 /**
  * 26/11/2026 (R08-003) — LA RICERCA NON SI PORTA PIÙ A CASA TUTTE LE EMAIL.
  *
@@ -202,13 +204,21 @@ async function leggiContattiAuth(): Promise<RigaAuth[]> {
  * i contatti che corrispondono, più quelli dei profili già trovati per nome, perché anche quelle
  * righe mostrino l'email. Finché la 940 non è applicata la funzione con questi argomenti non c'è
  * (PGRST202) e si torna alla lettura di prima.
+ *
+ * 28/11/2026 (R04-016) — `null` = le email non sono arrivate. Prima tornava un elenco vuoto: i
+ * risultati della ricerca uscivano senza email e senza la riga che lo dice, che c'era solo
+ * nell'elenco dei più recenti.
  */
-async function cercaContattiAuth(termine: string, idsGiaTrovati: readonly string[]): Promise<RigaAuth[]> {
+async function cercaContattiAuth(termine: string, idsGiaTrovati: readonly string[]): Promise<RigaAuth[] | null> {
   const { data, error } = await supabase.rpc('admin_list_user_emails', { p_termine: termine, p_ids: [...idsGiaTrovati] });
   if (!error && Array.isArray(data)) return data as RigaAuth[];
-  if ((error as { code?: string } | null)?.code === 'PGRST202') return leggiContattiAuth();
-  return [];
+  if ((error as { code?: string } | null)?.code === 'PGRST202') return leggiContattiAuthOppureNull();
+  logger.warn('admin/users: email della ricerca non lette', { code: (error as { code?: string } | null)?.code });
+  return null;
 }
+
+/** Le righe senza email perché la lettura delle email non è riuscita, non perché non ce l'hanno. */
+const senzaEmailLette = (righe: Profile[]): Profile[] => righe.map((p) => ({ ...p, email_non_letta: true }));
 
 /** Attacca a ogni profilo i contatti letti da auth.users. */
 function conContattiAuth(base: Profile[], righeAuth: readonly RigaAuth[]): Profile[] {
@@ -251,7 +261,7 @@ function AdminUsersPageInner() {
       // 26/11/2026 (R08-006) — Se le email non arrivano le righe restano senza email, come prima,
       // ma ognuna lo sa: sotto i filtri compare una riga che lo dice (`emailNonLette`).
       const contatti = await leggiContattiAuthOppureNull();
-      return contatti === null ? base.map((p) => ({ ...p, email_non_letta: true })) : conContattiAuth(base, contatti);
+      return contatti === null ? senzaEmailLette(base) : conContattiAuth(base, contatti);
     },
   });
 
@@ -307,7 +317,7 @@ function AdminUsersPageInner() {
       );
 
       const contatti = await cercaContattiAuth(termine, perTesto.map((p) => p.id));
-      const idsPerContatto = idsDaContattiAuth(contatti, termine);
+      const idsPerContatto = idsDaContattiAuth(contatti ?? [], termine);
 
       // Chi combacia solo per email o telefono: si prende per identificativo, a
       // blocchi, perche' un elenco lungo di id non ci sta in un indirizzo (#93).
@@ -327,7 +337,8 @@ function AdminUsersPageInner() {
         ),
       );
 
-      const righe = conContattiAuth(unisciPerId(perTesto, perContatto), contatti);
+      const unite = unisciPerId(perTesto, perContatto);
+      const righe = contatti === null ? senzaEmailLette(unite) : conContattiAuth(unite, contatti);
       return { righe, troncato: righe.length >= TETTO_RISULTATI_RICERCA };
     },
   });
@@ -552,7 +563,7 @@ function AdminUsersPageInner() {
    * data di nascita: solo quando si apre la scheda di un fattorino, con link
    * firmati brevi, e la lettura resta a verbale.
    */
-  const { data: documentiRider, isLoading: documentiRiderInArrivo } = useQuery({
+  const { data: documentiRider, isLoading: documentiRiderInArrivo, refetch: rileggiDocumentiRider } = useQuery({
     queryKey: [...queryKeys.admin.users(), 'documenti-rider', detailId],
     enabled: !!detailId && detail?.role === 'rider',
     gcTime: 0,
@@ -602,7 +613,17 @@ function AdminUsersPageInner() {
     if (esportando) return; // due clic non fanno due file
     setEsportando(true);
     try {
-      const contatti = await leggiContattiAuth();
+      /**
+       * 28/11/2026 (R04-016) — UN FILE SENZA EMAIL NON ESCE COME SE FOSSE GIUSTO.
+       * Se le email non arrivavano il file usciva lo stesso, con la colonna «Email» vuota per tutti
+       * e «Esportati N utenti»: chi lo usa per scrivere agli iscritti crede che non ne abbiano una.
+       * Ora si ferma e lo dice. Per il risultato di una ricerca le email sono già nelle righe.
+       */
+      const contatti = ricerca ? [] : await leggiContattiAuthOppureNull();
+      if (contatti === null || (ricerca && filtered.some((p) => p.email_non_letta === true))) {
+        toast.error('Le email degli utenti non sono arrivate: il file uscirebbe senza email. Riprova fra poco.');
+        return;
+      }
       const perId = new Map(contatti.map((c) => [c.id, c]));
       const raccolta = ricerca
         ? raccoltaDallaRicerca(filtered, ricerca.troncato)
@@ -735,7 +756,8 @@ function AdminUsersPageInner() {
           <AlertTriangle size={16} strokeWidth={2.2} className="text-accent-600 shrink-0 mt-0.5" aria-hidden />
           <span>
             Le email degli utenti non sono arrivate: in questo elenco mancano anche a chi ce l&apos;ha, quindi una
-            riga senza email non vuol dire che quell&apos;utente non ne abbia una. Ricarica la pagina fra poco.
+            riga senza email non vuol dire che quell&apos;utente non ne abbia una.
+            {ricerca ? ' E la ricerca non ha potuto guardare fra le email e i telefoni degli iscritti.' : ''} Ricarica la pagina fra poco.
           </span>
         </p>
       )}
@@ -991,6 +1013,7 @@ function AdminUsersPageInner() {
           profile={detail}
           datiIdentita={datiIdentita ?? null}
           documentiRider={documentiRiderInArrivo ? undefined : (documentiRider ?? null)}
+          rinnovaLinkDocumenti={() => { void rileggiDocumentiRider(); }}
           onClose={() => setDetailId(null)}
           onApprove={() => { approve.mutate(detail.id); setDetailId(null); }}
           onReject={async () => {
@@ -1005,6 +1028,9 @@ function AdminUsersPageInner() {
   );
 }
 
+/** Il tetto del nome del negozio: lo stesso del database (migrazione 830) e dell'iscrizione. */
+const NOME_NEGOZIO_MAX = 80;
+
 function EditUserModal({
   profile, saving, onClose, onSave,
 }: {
@@ -1018,6 +1044,17 @@ function EditUserModal({
   const [storeAddress, setStoreAddress] = useState(profile.store_address ?? '');
   const [storeName, setStoreName] = useState(profile.store_name ?? '');
   const [role, setRole] = useState(profile.role);
+  /**
+   * 28/11/2026 (R04-014) — IL NOME DEL NEGOZIO HA IL SUO TETTO ANCHE QUI.
+   * Il database rifiuta un nome che nasce o cambia oltre 80 caratteri (migrazione 830): da questo
+   * modulo si scopriva solo dopo «Salva». Ora il modulo conta (in caratteri, come il database) e
+   * non salva. Un nome vecchio già oltre il tetto, non toccato, si può lasciare com'è: il database
+   * guarda il nome solo quando cambia.
+   */
+  const nomeNegozio = storeName.trim();
+  const caratteriNomeNegozio = Array.from(nomeNegozio).length;
+  const nomeNegozioTroppoLungo =
+    nomeNegozio !== (profile.store_name ?? '').trim() && caratteriNomeNegozio > NOME_NEGOZIO_MAX;
 
   const inputCls = 'w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700';
 
@@ -1038,6 +1075,10 @@ function EditUserModal({
         id="edit-user-form"
         onSubmit={(e) => {
           e.preventDefault();
+          if (nomeNegozioTroppoLungo) {
+            document.getElementById('admin-nome-negozio')?.focus();
+            return;
+          }
           onSave({
             full_name: fullName.trim() || null,
             phone: phone.trim() || null,
@@ -1051,7 +1092,7 @@ function EditUserModal({
         <div className="bg-cream-50 border border-cream-200 rounded-lg p-3 text-xs space-y-1">
           <div className="flex justify-between gap-2">
             <span className="text-ink-500">Email</span>
-            <span className="text-ink-900 font-medium break-all text-right">{profile.email ?? '—'}</span>
+            <span className="text-ink-900 font-medium break-all text-right">{emailDaMostrare(profile)}</span>
           </div>
           <div className="flex justify-between gap-2">
             <span className="text-ink-500">Email verificata</span>
@@ -1088,8 +1129,23 @@ function EditUserModal({
         <div>
           <h3 className="text-xs font-bold uppercase tracking-wide text-ink-500 mb-2">Dati negozio</h3>
           <div>
-            <label className="block text-sm font-semibold mb-1">Nome negozio</label>
-            <input value={storeName} onChange={(e) => setStoreName(e.target.value)} className={inputCls} />
+            <label htmlFor="admin-nome-negozio" className="block text-sm font-semibold mb-1">Nome negozio</label>
+            <input
+              id="admin-nome-negozio"
+              value={storeName}
+              onChange={(e) => setStoreName(e.target.value)}
+              aria-invalid={nomeNegozioTroppoLungo || undefined}
+              aria-describedby="admin-nome-negozio-tetto"
+              className={inputCls}
+            />
+            <p
+              id="admin-nome-negozio-tetto"
+              className={`mt-1 text-xs ${nomeNegozioTroppoLungo ? 'text-rose-700 font-semibold' : 'text-ink-500'}`}
+            >
+              {nomeNegozioTroppoLungo
+                ? `Il nome del negozio può avere al massimo ${NOME_NEGOZIO_MAX} caratteri: accorcialo (ora sono ${caratteriNomeNegozio}).`
+                : `${caratteriNomeNegozio}/${NOME_NEGOZIO_MAX} caratteri`}
+            </p>
           </div>
         </div>
 
@@ -1125,7 +1181,7 @@ function datoIdentita(d: DatiIdentita | null, campo: 'legal_fiscal_code' | 'busi
 }
 
 function DetailPanel({
-  profile, datiIdentita, documentiRider, onClose, onApprove, onReject,
+  profile, datiIdentita, documentiRider, rinnovaLinkDocumenti, onClose, onApprove, onReject,
 }: {
   profile: Profile;
   // #81 — Codice fiscale e partita IVA arrivano solo qui, per questo utente,
@@ -1133,6 +1189,8 @@ function DetailPanel({
   datiIdentita: DatiIdentita | null;
   /** Solo per i fattorini: undefined = in arrivo, null = lettura non riuscita. */
   documentiRider?: DatiEsameRider | null;
+  /** Solo per i fattorini: chiede link nuovi ai documenti (una lettura in più nel registro). */
+  rinnovaLinkDocumenti?: () => void;
   onClose: () => void;
   onApprove: () => void;
   onReject: () => void;
@@ -1163,6 +1221,7 @@ function DetailPanel({
         profile={profile}
         datiIdentita={datiIdentita}
         documentiRider={documentiRider}
+        rinnovaLink={rinnovaLinkDocumenti}
         onClose={onClose}
         onApprove={onApprove}
         onReject={onReject}
@@ -1188,7 +1247,7 @@ function DetailPanel({
           <button
             type="button"
             onClick={onApprove}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg bg-olive-600 hover:bg-olive-700 text-white font-bold shadow-md"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg bg-olive-600 hover:bg-olive-700 text-white font-bold shadow-warm"
           >
             <CheckCircle2 size={18} strokeWidth={2.2} aria-hidden /> Approva
           </button>
@@ -1206,7 +1265,7 @@ function DetailPanel({
           <DetailRow label="Nome e cognome">
             {[profile.legal_first_name, profile.legal_last_name].filter(Boolean).join(' ') || 'non ancora inseriti'}
           </DetailRow>
-          <DetailRow label="Email">{profile.email ?? '—'}</DetailRow>
+          <DetailRow label="Email">{emailDaMostrare(profile)}</DetailRow>
           <DetailRow label="Codice fiscale">
             <code>{datoIdentita(datiIdentita, 'legal_fiscal_code')}</code>
           </DetailRow>
@@ -1252,16 +1311,35 @@ function etichettaVeicolo(tipo: string | null | undefined): string {
   return VEICOLI[tipo] ?? tipo;
 }
 
+/**
+ * 28/11/2026 (R04-005) — I LINK AI DOCUMENTI SCADONO ANCHE A PANNELLO APERTO.
+ * La rotta firma i link per 120 secondi (app/api/kyc/documenti-rider/[id]/route.ts). Il pannello
+ * li rileggeva solo tornando sulla scheda: chi restava a guardare la patente, poi apriva la
+ * polizza, trovava la pagina d'errore del deposito. Poco prima della scadenza i link lasciano il
+ * posto a «Rinnova il link»: una lettura nuova (e una riga nel registro) solo quando la si chiede,
+ * niente rilettura a orologio.
+ */
+const LINK_DOCUMENTI_VALIDI_MS = 110_000;
+
 function PannelloFattorino({
-  profile, datiIdentita, documentiRider, onClose, onApprove, onReject,
+  profile, datiIdentita, documentiRider, rinnovaLink, onClose, onApprove, onReject,
 }: {
   profile: Profile;
   datiIdentita: DatiIdentita | null;
   documentiRider?: DatiEsameRider | null;
+  rinnovaLink?: () => void;
   onClose: () => void;
   onApprove: () => void;
   onReject: () => void;
 }) {
+  const [linkScaduti, setLinkScaduti] = useState(false);
+  useEffect(() => {
+    // Documenti nuovi (prima lettura o rinnovo): link freschi, e l'orologio riparte da qui.
+    setLinkScaduti(false);
+    if (!documentiRider?.documenti?.some((d) => d.url)) return;
+    const t = setTimeout(() => setLinkScaduti(true), LINK_DOCUMENTI_VALIDI_MS);
+    return () => clearTimeout(t);
+  }, [documentiRider]);
   const inArrivo = documentiRider === undefined;
   const esito = esameRider(documentiRider ?? null, giornoPiacenza());
   const motivi = inArrivo
@@ -1297,7 +1375,7 @@ function PannelloFattorino({
               type="button"
               onClick={onApprove}
               disabled={!puoApprovare}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg bg-olive-600 hover:bg-olive-700 text-white font-bold shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg bg-olive-600 hover:bg-olive-700 text-white font-bold shadow-warm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle2 size={18} strokeWidth={2.2} aria-hidden /> Approva
             </button>
@@ -1320,7 +1398,7 @@ function PannelloFattorino({
           <DetailRow label="Codice fiscale">
             <code>{datoIdentita(datiIdentita, 'legal_fiscal_code')}</code>
           </DetailRow>
-          <DetailRow label="Email">{profile.email ?? '—'}</DetailRow>
+          <DetailRow label="Email">{emailDaMostrare(profile)}</DetailRow>
           <DetailRow label="Telefono">{profile.phone ?? profile.auth_phone ?? '—'}</DetailRow>
           <DetailRow label="Veicolo">
             {inArrivo ? '…' : etichettaVeicolo(documentiRider?.veicolo?.tipo)}
@@ -1334,7 +1412,11 @@ function PannelloFattorino({
           {esito.documenti.map((d) => (
             <DetailRow key={d.chiave} label={d.etichetta}>
               <span className="inline-flex flex-wrap items-center gap-2">
-                {d.url ? (
+                {d.url && linkScaduti ? (
+                  <button type="button" onClick={rinnovaLink} className="text-primary-700 underline">
+                    Link scaduto: rinnova il link
+                  </button>
+                ) : d.url ? (
                   <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-primary-700 underline">
                     Apri {d.etichetta.toLowerCase()}
                   </a>

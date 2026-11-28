@@ -2650,7 +2650,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     try {
       await notifyAdmins(
         '⚠️ Storno al venditore non riuscito',
-        `Il rimborso sull'ordine ${order.id} è uscito, ma i ${(sellerShare / 100).toFixed(2)}€ di quota del negozio non sono rientrati (${recuperoNonRiuscito}). Vanno recuperati a mano.`,
+        `Il rimborso sull'ordine ${order.id} è uscito, ma i ${formatPriceFromCents(sellerShare)} di quota del negozio non sono rientrati (${recuperoNonRiuscito}). Vanno recuperati a mano.`,
         '/admin/orders',
       );
     } catch (e) {

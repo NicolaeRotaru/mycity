@@ -175,8 +175,13 @@ describe('il sorvegliante e i rinvii che abbiamo deciso noi', () => {
  * giorno in cui una delle due cambia da sola, diventa rossa.
  */
 describe('le due definizioni di «cassa aperta» dicono la stessa cosa', () => {
+  // R08-006 (onda 2) — Con la funzione della cassa (migrazione 999n) la guardia conta anche i
+  // contanti che si vedono solo dagli ordini, e si ferma in PIÙ casi di questo registro (mai in meno):
+  // lì il sorvegliante suona per un rinvio nostro, il verso rumoroso e non quello muto. Qui si confronta
+  // la regola del registro, cioè la guardia quando la funzione non c'è.
   const fintoAdmin = (righe: Array<Record<string, unknown>>) =>
     ({
+      rpc: async (nome: string) => ({ data: null, error: { code: 'PGRST202', message: `Could not find the function public.${nome}` } }),
       from: () => ({
         select: () => ({
           eq: () => Promise.resolve({ data: righe, error: null }),

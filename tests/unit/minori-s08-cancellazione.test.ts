@@ -1,25 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { fintoGiroNotturno, type Riga } from './aiuti/finto-giro-notturno';
+
 /**
  * S08 (5/11/2026) — La rotta /api/account/delete e la strada a mano.
- * Il controllo d'accesso è finto (passa l'utente); il database è un finto che
- * registra ogni scrittura con i suoi filtri.
+ * Il controllo d'accesso è finto (passa l'utente).
+ *
+ * 28/11/2026 (R09-010) — Il database è il finto unico delle prove della cancellazione
+ * (tests/unit/aiuti/finto-giro-notturno.ts): tiene le righe e APPLICA i filtri. Prima qui c'era un
+ * finto scritto a mano che rispondeva a ogni lettura con una lista fissa e registrava i filtri delle
+ * scritture: le prove guardavano «quale filtro c'era», non «quale riga è cambiata».
  */
 
 const UTENTE = { id: 'u-1', email: 'anna@example.com' };
 
-type Scrittura = { tabella: string; valori: Record<string, unknown>; filtri: Array<[string, string, unknown]> };
 const stato: {
-  profilo: { deletion_requested_at: string | null } | null;
-  erroreProfilo: { message: string } | null;
-  erroreNotifiche: { message: string } | null;
-  notifiche: Array<{ id: string; body: string; created_at: string }>;
-  scritture: Scrittura[];
+  finto: ReturnType<typeof fintoGiroNotturno>;
   email: Array<Record<string, unknown>>;
   log: Array<{ livello: string; msg: string; ctx: unknown }>;
   senzaChiave: boolean;
 } = {
-  profilo: null, erroreProfilo: null, erroreNotifiche: null, notifiche: [], scritture: [], email: [], log: [], senzaChiave: false,
+  finto: fintoGiroNotturno(), email: [], log: [], senzaChiave: false,
 };
 
 vi.mock('@/lib/api/middleware', () => ({
@@ -39,38 +40,10 @@ vi.mock('@/lib/api/dopo-la-risposta', () => ({
   dopoLaRisposta: (lavoro: () => Promise<void>) => { void lavoro(); },
 }));
 
-function adminFinto() {
-  return {
-    from(tabella: string) {
-      const filtri: Array<[string, string, unknown]> = [];
-      let valori: Record<string, unknown> | null = null;
-      const q: Record<string, unknown> = {};
-      q.select = () => q;
-      q.eq = (c: string, v: unknown) => { filtri.push(['eq', c, v]); return q; };
-      q.is = (c: string, v: unknown) => { filtri.push(['is', c, v]); return q; };
-      q.in = (c: string, v: unknown) => { filtri.push(['in', c, v]); return q; };
-      q.update = (v: Record<string, unknown>) => { valori = v; return q; };
-      q.single = async () => ({ data: stato.erroreProfilo ? null : stato.profilo, error: stato.erroreProfilo });
-      q.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {
-        if (valori) {
-          stato.scritture.push({ tabella, valori, filtri: [...filtri] });
-          return Promise.resolve({ data: null, error: null }).then(ok, ko);
-        }
-        if (tabella === 'notifications') {
-          if (stato.erroreNotifiche) return Promise.resolve({ data: null, error: stato.erroreNotifiche }).then(ok, ko);
-          const id = filtri.find((f) => f[1] === 'id')?.[2];
-          return Promise.resolve({ data: stato.notifiche.filter((n) => n.id === id), error: null }).then(ok, ko);
-        }
-        return Promise.resolve({ data: [], error: null }).then(ok, ko);
-      };
-      return q;
-    },
-  };
-}
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => {
     if (stato.senzaChiave) throw new Error('Service role Supabase non configurato');
-    return adminFinto();
+    return stato.finto.admin;
   },
 }));
 
@@ -81,12 +54,17 @@ import { chiaveAvviso } from '@/lib/cron-cancellazioni';
 const giorniFa = (g: number) => new Date(Date.now() - g * 86_400_000).toISOString();
 const chiama = (f: unknown) => (f as () => Promise<Response>)();
 
+/** Il database di partenza: il profilo di Anna, senza richiesta, e le tabelle che la rotta tocca. */
+function database(profilo: Riga = { id: UTENTE.id, deletion_requested_at: null }, altre: Record<string, Riga[]> = {}) {
+  stato.finto = fintoGiroNotturno({
+    tabelle: { profiles: [profilo], notifications: [], email_queue: [], abandoned_carts: [], ...altre },
+  });
+  return stato.finto;
+}
+const scrittureSu = (tabella: string) => stato.finto.diario.filter((v) => v.op === 'update' && v.tabella === tabella);
+
 beforeEach(() => {
-  stato.profilo = { deletion_requested_at: null };
-  stato.erroreProfilo = null;
-  stato.erroreNotifiche = null;
-  stato.notifiche = [];
-  stato.scritture = [];
+  database();
   stato.email = [];
   stato.log = [];
   stato.senzaChiave = false;
@@ -98,27 +76,49 @@ beforeEach(() => {
 
 describe('chiedere la cancellazione', () => {
   it('scheda 2040 — se la lettura del profilo cade, non si scrive niente e non si azzera la data', async () => {
-    stato.profilo = { deletion_requested_at: giorniFa(10) };
-    stato.erroreProfilo = { message: 'connessione persa' };
+    const chiesta = giorniFa(10);
+    const f = database({ id: UTENTE.id, deletion_requested_at: chiesta });
+    f.guasti.push({ tabella: 'profiles', azione: 'select', messaggio: 'connessione persa' });
     const res = await chiama(POST);
     expect(res.status).toBe(503);
-    expect(stato.scritture.filter((s) => s.tabella === 'profiles')).toHaveLength(0);
+    expect(scrittureSu('profiles')).toHaveLength(0);
+    expect(f.righe('profiles')[0].deletion_requested_at).toBe(chiesta);
   });
 
   it('scheda 2040 — la data si scrive solo se è ancora vuota', async () => {
+    // Profilo vuoto: la data si scrive.
     await chiama(POST);
-    const scrittura = stato.scritture.find((s) => s.tabella === 'profiles')!;
-    expect(scrittura.filtri).toContainEqual(['is', 'deletion_requested_at', null]);
+    await new Promise((r) => setTimeout(r, 0)); // l'avviso di questa prima richiesta parte dopo la risposta
+    expect(stato.finto.righe('profiles')[0].deletion_requested_at).toEqual(expect.any(String));
+
+    // Un'altra scheda scrive la sua data fra la lettura della rotta e la sua scrittura: quella resta.
+    const altra = giorniFa(1);
+    const scritteSopra: unknown[] = [];
+    let letture = 0;
+    const profilo: Riga = { id: UTENTE.id };
+    Object.defineProperty(profilo, 'deletion_requested_at', {
+      enumerable: true,
+      get: () => (letture++ === 0 ? null : altra),
+      set: (v: unknown) => { scritteSopra.push(v); },
+    });
+    database(profilo);
+    stato.email = [];
+    const corpo = await (await chiama(POST)).json();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(scritteSopra, 'la data dell altra scheda è stata sovrascritta').toEqual([]);
+    expect(corpo.alreadyRequested).toBe(true);
+    expect(stato.email, 'una seconda email per la stessa richiesta').toHaveLength(0);
   });
 
   it('scheda 2041 — richiesta già registrata e ferma: la risposta porta motivo, rinvio e giorni', async () => {
     const chiesta = giorniFa(10);
-    stato.profilo = { deletion_requested_at: chiesta };
-    stato.notifiche = [{
-      id: identificativoAvviso(chiaveAvviso(UTENTE.id, chiesta, 'rinviata')),
-      body: 'Cancellazione rinviata: 120,00 € da versare.',
-      created_at: giorniFa(2),
-    }];
+    database({ id: UTENTE.id, deletion_requested_at: chiesta }, {
+      notifications: [{
+        id: identificativoAvviso(chiaveAvviso(UTENTE.id, chiesta, 'rinviata')),
+        body: 'Cancellazione rinviata: 120,00 € da versare.',
+        created_at: giorniFa(2),
+      }],
+    });
     const corpo = await (await chiama(POST)).json();
     expect(corpo.alreadyRequested).toBe(true);
     expect(corpo.rinviata).toBe(true);
@@ -127,18 +127,28 @@ describe('chiedere la cancellazione', () => {
   });
 
   it('scheda 505 — dalla richiesta si chiudono le email in coda e il promemoria del carrello', async () => {
+    const ultimaAttivita = giorniFa(1);
+    const riga = (id: string, extra: Riga) => ({ id, user_id: UTENTE.id, sent_at: null, cancelled_at: null, ...extra });
+    const f = database(undefined, {
+      email_queue: [
+        riga('promo', { template: 'first_order_promo' }),
+        riga('pronto', { template: 'order_ready' }),
+        riga('consegnato', { template: 'order_delivered' }),
+        riga('gia-spedita', { template: 'first_order_promo', sent_at: giorniFa(2) }),
+        riga('di-un-altro', { template: 'first_order_promo', user_id: 'u-2' }),
+      ],
+      abandoned_carts: [{ user_id: UTENTE.id, last_activity: ultimaAttivita, recovery_email_sent_at: null }],
+    });
     await chiama(POST);
-    const coda = stato.scritture.find((s) => s.tabella === 'email_queue');
-    expect(coda?.valori).toHaveProperty('cancelled_at');
-    expect(coda?.filtri).toContainEqual(['eq', 'user_id', UTENTE.id]);
-    expect(coda?.filtri).toContainEqual(['is', 'sent_at', null]);
-    // Solo guida e promozioni: «ordine pronto» e «consegnato» restano.
-    const soloQuesti = coda?.filtri.find((f) => f[0] === 'in' && f[1] === 'template')?.[2] as string[];
-    expect(soloQuesti).toContain('first_order_promo');
-    expect(soloQuesti).not.toContain('order_ready');
-    expect(soloQuesti).not.toContain('order_delivered');
-    const carrello = stato.scritture.find((s) => s.tabella === 'abandoned_carts');
-    expect(carrello?.valori).toHaveProperty('recovery_email_sent_at');
+    const chiusa = (id: string) => f.righe('email_queue').find((r) => r.id === id)?.cancelled_at != null;
+    expect(chiusa('promo'), 'la promozione in coda parte lo stesso').toBe(true);
+    // Solo guida e promozioni: «ordine pronto» e «consegnato» restano, come le email già spedite e quelle degli altri.
+    expect(chiusa('pronto')).toBe(false);
+    expect(chiusa('consegnato')).toBe(false);
+    expect(chiusa('gia-spedita')).toBe(false);
+    expect(chiusa('di-un-altro')).toBe(false);
+    // R30-003 — Il carrello si chiude col segno «senza email»: la sua ultima attività, non l'ora di adesso.
+    expect(f.righe('abandoned_carts')[0].recovery_email_sent_at).toBe(ultimaAttivita);
   });
 
   it('scheda 222 — il titolare riceve subito l avviso col giorno e la strada per annullare', async () => {
@@ -155,19 +165,20 @@ describe('chiedere la cancellazione', () => {
 describe('lo stato della richiesta (GET)', () => {
   it('scheda 2016 — dice la tappa: un rinvio motivato o il termine di legge passato', async () => {
     const chiesta = giorniFa(40);
-    stato.profilo = { deletion_requested_at: chiesta };
-    stato.notifiche = [{
-      id: identificativoAvviso(chiaveAvviso(UTENTE.id, chiesta, 'termine-scaduto')),
-      body: 'Il termine è passato.',
-      created_at: giorniFa(1),
-    }];
+    database({ id: UTENTE.id, deletion_requested_at: chiesta }, {
+      notifications: [{
+        id: identificativoAvviso(chiaveAvviso(UTENTE.id, chiesta, 'termine-scaduto')),
+        body: 'Il termine è passato.',
+        created_at: giorniFa(1),
+      }],
+    });
     const corpo = await (await chiama(GET)).json();
     expect(corpo.tappa).toBe('termine-scaduto');
   });
 
   it('scheda 2042 — se la rilettura del motivo cade, la risposta dice «non lo so», non «nessun rinvio»', async () => {
-    stato.profilo = { deletion_requested_at: giorniFa(10) };
-    stato.erroreNotifiche = { message: 'timeout' };
+    const f = database({ id: UTENTE.id, deletion_requested_at: giorniFa(10) });
+    f.guasti.push({ tabella: 'notifications', azione: 'select', messaggio: 'timeout' });
     const corpo = await (await chiama(GET)).json();
     expect(corpo.letturaFallita).toBe(true);
     expect(corpo.rinviata).not.toBe(false);

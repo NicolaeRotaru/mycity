@@ -169,7 +169,7 @@ export default function SellerHealthScore() {
     <div className="bg-white border border-cream-300 rounded-2xl p-6 shadow-warm space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-xs uppercase tracking-wider text-ink-500 font-semibold flex items-center gap-1.5">
+          <p className="text-xs uppercase tracking-label text-ink-500 font-semibold flex items-center gap-1.5">
             <Sparkles size={14} className="text-primary-600" />
             Health Score del negozio
           </p>

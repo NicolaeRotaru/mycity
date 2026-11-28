@@ -27,6 +27,11 @@
  * string con password: NON metterla in un workflow pubblico senza secret).
  *
  * 17/11/2026 (R30-022) — Anche i permessi, a richiesta:
+ *   MANCANTI_ESPORTA=<file>  (28/11/2026, R11-005) scrive nel file le migrazioni del deposito che
+ *                            il database collegato non ha, un nome di file per riga (vuoto se non
+ *                            ne manca nessuna). E' l'elenco che SALTA_MIGRAZIONI di
+ *                            tests/sql/harness/apply.sh vuole: le prove dei permessi girano cosi'
+ *                            su un database ricostruito come la produzione, non da tutti i file.
  *   PERMESSI_ESPORTA=<file>  scrive nel file i permessi di anon e authenticated del database
  *                            a cui e' collegato (tabelle, colonne, funzioni, schema public);
  *   PERMESSI_ATTESI=<file>   li confronta con un elenco fornito nello stesso formato (per
@@ -342,6 +347,15 @@ export function esitoDelConfronto(repo, applicate) {
 }
 
 /**
+ * 28/11/2026 (R11-005) — L'elenco delle migrazioni mancanti per SALTA_MIGRAZIONI di apply.sh:
+ * un nome di file per riga, nell'ordine del deposito. Vuoto (non assente) se non ne manca nessuna.
+ * @param {{ mancanti: string[] }} esito
+ */
+export function elencoDelleMancanti(esito) {
+  return esito.mancanti.map((f) => `${f}\n`).join('');
+}
+
+/**
  * 17/11/2026 (R30-022) — I PERMESSI, NON SOLO I NOMI.
  *
  * Il confronto dei nomi non vede un permesso cambiato a mano: sul sito vero anon non legge
@@ -550,6 +564,10 @@ async function main() {
   }
 
   const esito = esitoDelConfronto(repoMigrationNames(), applicate);
+  if (process.env.MANCANTI_ESPORTA) {
+    fs.writeFileSync(process.env.MANCANTI_ESPORTA, elencoDelleMancanti(esito));
+    console.log(`📝 check-migration-drift: ${esito.mancanti.length} migrazioni mancanti scritte in ${process.env.MANCANTI_ESPORTA}.`);
+  }
   for (const riga of esito.righe) (esito.errore ? console.error : console.log)(riga);
   let codice = esito.codice;
 

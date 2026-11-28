@@ -9,7 +9,8 @@ import { createRoot, type Root } from 'react-dom/client';
  */
 
 vi.mock('next-intl', () => ({ useTranslations: () => (k: string) => k }));
-vi.mock('@/lib/analytics/sentry', () => ({ captureError: vi.fn() }));
+const captureError = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/analytics/sentry', () => ({ captureError }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -29,8 +30,11 @@ afterEach(() => {
 
 async function disegna(file: 'seller' | 'rider', dsn: string | undefined): Promise<string> {
   vi.doMock('@/lib/analytics/sentry-config', () => ({ SENTRY_DSN: dsn }));
+  // R08-002 (onda 2) — La pagina lo dice solo se il registratore conferma di aver preso l'errore:
+  // acceso conferma, spento no (captureError vero, lib/analytics/sentry.tsx).
+  captureError.mockResolvedValue(Boolean(dsn));
   const mod = file === 'seller' ? await import('@/app/seller/error') : await import('@/app/rider/error');
-  act(() => {
+  await act(async () => {
     root.render(createElement(mod.default, { error: Object.assign(new Error('x'), { digest: 'd1' }), reset: () => {} }));
   });
   return c.textContent ?? '';

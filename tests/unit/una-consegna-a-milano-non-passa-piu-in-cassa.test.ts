@@ -84,12 +84,14 @@ describe('la zona di consegna', () => {
     ).toBe(false);
   });
 
-  it('il messaggio è un offerta, e non promette il ritiro in negozio finché è spento', () => {
+  it('il messaggio è un offerta, e col ritiro acceso dal lancio (R12-009) propone il ritiro in negozio', () => {
     const detto = motivoFuoriZona('Pane Quotidiano');
     // 28/10/2026 — diceva «Piacenza e dintorni», che col confine a 5 km promette paesi rifiutati.
     expect(detto).toContain(`Per ora consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio`);
     expect(detto).toContain('Pane Quotidiano');
-    expect(detto, 'manda in negozio a ritirare mentre la cassa non lo permette').not.toContain('Puoi ritirare in negozio');
+    // R12-009 (28/11/2026) — Il ritiro è acceso dal lancio (decisione di Nicola): a chi abita fuori
+    // zona la cassa lo permette, quindi il messaggio lo propone. Spento, non lo dovrebbe dire.
+    expect(detto, 'col ritiro acceso il messaggio non propone l’alternativa che la cassa permette').toContain('Puoi ritirare in negozio');
   });
 });
 

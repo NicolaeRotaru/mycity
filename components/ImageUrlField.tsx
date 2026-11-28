@@ -118,7 +118,6 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
         <div className="mb-2 flex items-center gap-3">
           <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-cream-100 border border-cream-300 shrink-0">
             {mostraAnteprima ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
               <Image
                 src={value}
                 alt="Anteprima"

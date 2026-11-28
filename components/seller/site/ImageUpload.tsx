@@ -103,7 +103,7 @@ export function SingleImageUpload({ value, onChange }: { value: string; onChange
           <button
             type="button"
             onClick={() => onChange('')}
-            className="absolute top-2 right-2 bg-white/90 text-ink-700 hover:text-red-600 rounded-md px-2 py-1 text-xs font-medium shadow"
+            className="absolute top-2 right-2 bg-white/90 text-ink-700 hover:text-red-600 rounded-md px-2 py-1 text-xs font-medium shadow-warm"
           >
             Rimuovi
           </button>

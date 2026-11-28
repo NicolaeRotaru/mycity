@@ -107,7 +107,7 @@ export function PaymentMethodSelector({
       <legend className="sr-only">Come vuoi pagare</legend>
       {stripeAvailable && (
         <label
-          className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
+          className={`flex flex-wrap items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
             value === 'card'
               ? 'border-primary-500 bg-primary-50'
               : 'border-cream-300 bg-white hover:border-primary-200'
@@ -124,7 +124,7 @@ export function PaymentMethodSelector({
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">
             <CreditCard size={20} aria-hidden />
           </span>
-          <div className="min-w-0 flex-1 break-words">
+          <div className="min-w-0 flex-1 basis-20 break-words">
             <p className="font-bold text-ink-900">Carta di credito / debito</p>
             <p className="text-sm text-ink-600">
               Visa, Mastercard, Amex, Apple Pay, Google Pay — pagamento sicuro su Stripe.
@@ -139,7 +139,7 @@ export function PaymentMethodSelector({
       )}
 
       <label
-        className={`flex items-start gap-3 rounded-xl border-2 p-4 transition-colors ${
+        className={`flex flex-wrap items-start gap-3 rounded-xl border-2 p-4 transition-colors ${
           motivoNoContanti
             ? 'cursor-not-allowed border-cream-300 bg-cream-50'
             : value === 'cod'
@@ -160,12 +160,15 @@ export function PaymentMethodSelector({
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-olive-100 text-olive-700">
           <Banknote size={20} aria-hidden />
         </span>
-        <div className="min-w-0 flex-1 break-words">
+        <div className="min-w-0 flex-1 basis-20 break-words">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="min-w-0 font-bold text-ink-900">Contanti alla consegna</p>
-            <Badge variant="cod">Zero rischio</Badge>
+            <Badge variant="cod" className="max-w-full [overflow-wrap:anywhere]">Zero rischio</Badge>
           </div>
-          <p className="text-sm text-ink-600">Paghi al rider quando ricevi il pacco.</p>
+          {/* R12-009 — Col ritiro in negozio il rider non c'è: si paga al banco. */}
+          <p className="text-sm text-ink-600">
+            {pickupInStore ? 'Paghi in negozio quando ritiri la spesa.' : 'Paghi al rider quando ricevi il pacco.'}
+          </p>
           {motivoNoContanti && (
             <p id="motivo-no-contanti" className="mt-1 text-sm font-semibold text-secondary-800">{motivoNoContanti}</p>
           )}
@@ -173,21 +176,17 @@ export function PaymentMethodSelector({
       </label>
 
       {/*
-        RITIRO IN NEGOZIO — MESSO DA PARTE.
-        Nicola, 20/8/2026: «togli il 10% di sconto per ritira in negozio, o
-        mettilo da parte per il momento, perche non ne ho ancora parlato con i
-        negozi di questo». Uno sconto sul prezzo di un negozio non si offre
-        prima di averglielo chiesto.
-        C'era anche un secondo motivo per spegnerlo tutto e non solo lo sconto:
-        un ordine ritirato in negozio non arrivava MAI a «consegnato», perché
-        l'unico modo di chiudere un ordine è il bottone del fattorino — e su un
-        ritiro il fattorino non c'è. Il negoziante consegnava a mano e restava
-        senza incasso, per sempre.
-        Si riaccende con RITIRO_IN_NEGOZIO_ATTIVO in lib/constants.
+        RITIRO IN NEGOZIO — acceso dal lancio (R12-009, decisione di Nicola): gratis per il
+        cliente, la consegna vale zero. Lo sconto sul prezzo (PICKUP_DISCOUNT_PERCENT) resta a
+        zero finché non se ne parla coi negozi (Nicola, 20/8/2026): con lo sconto a zero il
+        bollino dice «Senza consegna», non «Sconto 0%» (e non «Gratis»: accanto a una consegna a
+        domicilio che si paga, la cassa non scrive «gratis»). Il ritiro si chiude col codice che il cliente
+        mostra al banco (confirm_pickup_by_seller, migrazioni 124 e 179).
+        L'interruttore è RITIRO_IN_NEGOZIO_ATTIVO in lib/ritiro-in-negozio.ts.
       */}
       {RITIRO_IN_NEGOZIO_ATTIVO && (
       <label
-        className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
+        className={`flex flex-wrap items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
           pickupInStore ? 'border-olive-400 bg-olive-50' : 'border-cream-300 bg-white hover:border-olive-200'
         }`}
       >
@@ -200,19 +199,23 @@ export function PaymentMethodSelector({
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-olive-100 text-olive-700">
           <Store size={20} aria-hidden />
         </span>
-        <div className="min-w-0 flex-1 break-words">
+        <div className="min-w-0 flex-1 basis-20 break-words">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-bold text-ink-900">Ritira tu in negozio — salta la fila</p>
+            <p className="min-w-0 font-bold text-ink-900">Ritira tu in negozio — salta la fila</p>
             {pickupInStore && pickupDiscount > 0 ? (
               <span className="bg-olive-600 text-white text-xs font-bold px-2 py-1 rounded shrink-0">
                 −{formatPrice(pickupDiscount)}
               </span>
-            ) : (
+            ) : pickupDiscountPercent > 0 ? (
               <Badge variant="new">Sconto {pickupDiscountPercent}%</Badge>
+            ) : (
+              <Badge variant="new">Senza consegna</Badge>
             )}
           </div>
           <p className="text-sm text-ink-600">
-            Niente spedizione, sconto subito. Vai tu al negozio quando l&apos;ordine è pronto.
+            {pickupDiscountPercent > 0
+              ? 'Niente spedizione, sconto subito. Vai tu al negozio quando l’ordine è pronto.'
+              : 'Non paghi la consegna: vai tu al negozio quando l’ordine è pronto e mostri il codice.'}
           </p>
         </div>
       </label>

@@ -51,7 +51,10 @@ describe('R02-003 · accogliere una segnalazione su un prodotto', () => {
     segnalazione = { id: ID, tipo: 'prodotto', oggetto_id: PRODOTTO };
     const res = await chiama();
     expect(res.status).toBe(200);
-    expect(scritture).toEqual([{ tabella: 'products', patch: { status: 'draft' }, id: PRODOTTO }]);
+    // R01-010 (onda 2): col segno «tolto dallo staff», che tiene il prodotto fuori finché lo staff non lo rimette.
+    expect(scritture).toEqual([
+      { tabella: 'products', patch: { status: 'draft', tolto_dallo_staff_at: expect.any(String) }, id: PRODOTTO },
+    ]);
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({ action: 'product.hide', targetId: PRODOTTO });
   });

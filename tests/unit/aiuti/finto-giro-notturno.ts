@@ -27,6 +27,7 @@ export type Voce =
 
 type Filtro =
   | { tipo: 'eq' | 'lt' | 'gt'; colonna: string; valore: unknown }
+  | { tipo: 'in'; colonna: string; valori: readonly unknown[] }
   | { tipo: 'non-nullo'; colonna: string }
   | { tipo: 'nullo'; colonna: string }
   | { tipo: 'or'; espressione: string };
@@ -51,6 +52,7 @@ function passa(riga: Riga, f: Filtro): boolean {
     });
   }
   if (f.tipo === 'non-nullo') return riga[f.colonna] != null;
+  if (f.tipo === 'in') return riga[f.colonna] != null && f.valori.includes(riga[f.colonna]);
   if (f.tipo === 'nullo') return riga[f.colonna] == null;
   const v = riga[f.colonna];
   if (v == null) return false;
@@ -94,9 +96,13 @@ class FintaQuery {
   private conta = false;
   private soloTesta = false;
 
-  /** `select('*', { count: 'exact', head: true })` — il conto senza le righe, come PostgREST. */
+  /**
+   * `select('*', { count: 'exact', head: true })` — il conto senza le righe, come PostgREST.
+   * 28/11/2026 (R09-010) — Dopo una scrittura (`update(...).eq(...).select('id')`) non la trasforma in
+   * una lettura: come PostgREST, la scrittura si fa e torna le righe toccate.
+   */
   select(_colonne?: string, opzioni?: { count?: string; head?: boolean }) {
-    this.azione = 'select';
+    if (this.azione !== 'select') return this;
     this.conta = opzioni?.count === 'exact';
     this.soloTesta = opzioni?.head === true;
     return this;
@@ -116,6 +122,8 @@ class FintaQuery {
   eq(colonna: string, valore: unknown) { this.filtri.push({ tipo: 'eq', colonna, valore }); return this; }
   lt(colonna: string, valore: unknown) { this.filtri.push({ tipo: 'lt', colonna, valore }); return this; }
   gt(colonna: string, valore: unknown) { this.filtri.push({ tipo: 'gt', colonna, valore }); return this; }
+  /** R09-010 — `.in('template', [...])`: passa la riga con la colonna in elenco (NULL non passa, come in SQL). */
+  in(colonna: string, valori: readonly unknown[]) { this.filtri.push({ tipo: 'in', colonna, valori }); return this; }
   is(colonna: string, valore: unknown) {
     this.filtri.push(valore === null ? { tipo: 'nullo', colonna } : { tipo: 'eq', colonna, valore });
     return this;
@@ -229,6 +237,11 @@ export function fintoGiroNotturno(scenario: Scenario = {}) {
     from: (tabella: string) => new FintaQuery(tabella, db, diario, errori, guasti, scenario.chiaviUniche === true),
     rpc: async (nome: string, _argomenti?: Record<string, unknown>) => {
       diario.push({ op: 'rpc', nome });
+      // R08-006 (onda 2) — Senza una risposta scritta dalla prova, la funzione della cassa (migrazione
+      // 999n) qui non c'è: la guardia della cancellazione legge il registro, come prima.
+      if (nome === 'cassa_da_versare_del_fattorino' && !scenario.rpc?.[nome]) {
+        return { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${nome}` } };
+      }
       return scenario.rpc?.[nome] ?? { data: [], error: null };
     },
     storage: {

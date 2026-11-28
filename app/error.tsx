@@ -1,13 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { captureError } from '@/lib/analytics/sentry';
-import { SENTRY_DSN } from '@/lib/analytics/sentry-config';
-
-// Senza NEXT_PUBLIC_SENTRY_DSN captureError scrive solo nella console del browser: la frase «Abbiamo
-// registrato il problema» sarebbe falsa (stessa regola delle pagine d'errore del venditore e del fattorino).
-const registratoreAcceso = () => Boolean(SENTRY_DSN);
+import { useErroreRegistrato } from '@/lib/analytics/errore-registrato';
 
 /**
  * Error boundary per route — Next.js App Router convention.
@@ -27,15 +21,14 @@ export default function PageError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    captureError(error, { digest: error.digest });
-  }, [error]);
+  // R08-002 (onda 2) — La frase «abbiamo registrato» solo se il registratore ha preso davvero l'errore.
+  const registrato = useErroreRegistrato(error);
 
   return (
     <div className="container mx-auto px-4 py-12 max-w-2xl">
       <ErrorState
         title="Qualcosa è andato storto"
-        description={registratoreAcceso() ? 'Abbiamo registrato il problema. Riprova fra un momento.' : 'Riprova fra un momento.'}
+        description={registrato ? 'Abbiamo registrato il problema. Riprova fra un momento.' : 'Riprova fra un momento.'}
         retry={reset}
         backHref="/"
         backLabel="Torna alla home"

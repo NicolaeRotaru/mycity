@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { annullaERimborsa, avvisaIlNegozioDellAnnullo, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -167,4 +168,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 // l'involucro. Copiata tredici volte, e in ognuna bastava dimenticare l'`await`
 // per far arrivare `undefined` alla query. Adesso i pezzi dell'indirizzo li
 // risolve l'involucro, una volta sola, e arrivano gia' pronti nel contesto.
-export const POST = withAdminAuth(({ req, user, params }) => handler(req, user, { id: String(params.id) }));
+const postSenzaFila = withAdminAuth(({ req, user, params }) => handler(req, user, { id: String(params.id) }));
+
+// 28/11/2026 (onda 2, R09-006 + R06-012) — Gli avvisi dell'annullo passano dalla fila della richiesta:
+// la rotta si avvolge, così le email partono una alla volta e non tutte insieme.
+export const POST = conFilaPerRichiesta(postSenzaFila);

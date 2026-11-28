@@ -199,6 +199,7 @@ export function __azzeraRipiegoSpesaAi(): void {
   _stato.dettoAlle = 0;
   _stato.permanente = false;
   _stato.motivo = '';
+  _prenotazioneAssenteDetta = 0;
 }
 
 /**
@@ -406,7 +407,9 @@ function scriviResto(): Promise<boolean> {
   _scritturaInVolo = chiamaRpc('registra_spesa_ai', { p_giorno: giorno, p_cents: cents })
     .then((totale) => {
       if (totale === null) return false;
-      _daScrivere.cents -= cents;
+      // Intanto una prenotazione restituita puo' averne gia' coperta una parte
+      // (`prenotaSpesaNelContoCondiviso`): mai sotto zero.
+      _daScrivere.cents = Math.max(0, _daScrivere.cents - cents);
       return true;
     })
     .finally(() => {
@@ -474,6 +477,123 @@ export async function aggiungiSpesaCents(cents: number, quando?: Date): Promise<
     return;
   }
   _ripiego.cents = Math.max(ripiegoCents(giorno), totale);
+}
+
+/**
+ * 28/11/2026 (R02-002, onda 2) — IN RETE LA STIMA SI SCRIVE NEL CONTO PRIMA DELLA CHIAMATA.
+ *
+ * Il controllo leggeva il conto condiviso e confrontava col tetto; la spesa vera
+ * entrava nel conto solo a chiamata finita. In mezzo ogni copia vedeva soltanto
+ * le sue chiamate in volo (Upstash a parte): tre copie che partivano insieme
+ * leggevano lo stesso numero e passavano tutte fino al tetto, e con la scrittura
+ * del conto rotta e la lettura viva una copia nuova si fermava solo dopo la
+ * prima scrittura fallita, a chiamata finita (tetto 1 €, tre copie da duecento
+ * chiamate parallele: 1,725 € spesi e il conto a zero).
+ *
+ * Adesso, in rete, prima della chiamata la stima entra nel conto del giorno con
+ * un passo solo del database che controlla il tetto e scrive (`prenota_spesa_ai`):
+ * di due copie quella che arriva seconda vede la prima. Se la scrittura non
+ * riesce l'AI a pagamento non parte (`guasto`), come quando il conto non si
+ * legge. A chiamata finita, registrata la spesa vera, la stima si toglie
+ * (`restituisci_spesa_ai`); se non si toglie il conto resta piu' alto del vero,
+ * mai piu' basso. Una spesa vera che non si e' potuta scrivere la copre la
+ * prenotazione gia' scritta: quella parte non si toglie.
+ *
+ * Senza la funzione nel database (la migrazione non ancora applicata) si torna
+ * alla strada di prima (`assente`): stessa protezione di ieri, non meno. Sul
+ * computer di chi sviluppa e nelle prove la copia e' una sola: `non_serve`.
+ */
+export type PrenotazioneNelConto =
+  | { esito: 'non_serve' }
+  | { esito: 'assente' }
+  | { esito: 'guasto' }
+  | { esito: 'tetto' }
+  | { esito: 'prenotata'; restituisci: () => Promise<void> };
+
+/** L'ultima volta che si e' detto che la funzione della prenotazione manca (un `error` all'ora). */
+let _prenotazioneAssenteDetta = 0;
+
+export async function prenotaSpesaNelContoCondiviso(
+  stimaCents: number,
+  tettoCents: number,
+  quando?: Date,
+): Promise<PrenotazioneNelConto> {
+  if (!contoCondivisoObbligatorio()) return { esito: 'non_serve' };
+  const giorno = giornoDiSpesa(quando);
+  // Anche una chiamata senza stima prenota un centesimo: in rete si parte solo
+  // se il conto condiviso accetta una scrittura.
+  const cents = Math.max(1, Math.ceil(Number.isFinite(stimaCents) ? stimaCents : 0));
+  let risposta: RispostaRpc;
+  try {
+    risposta = (await getAdminSupabase().rpc('prenota_spesa_ai', {
+      p_giorno: giorno,
+      p_cents: cents,
+      p_tetto_cents: Math.max(0, Math.floor(tettoCents)),
+    })) as unknown as RispostaRpc;
+  } catch (errore) {
+    logger.warn('[ai] prenotazione della spesa non riuscita: l AI a pagamento non parte', {
+      motivo: errore instanceof Error ? errore.message : String(errore),
+    });
+    return { esito: 'guasto' };
+  }
+  if (risposta.error) {
+    if (assenzaPermanente(risposta.error)) {
+      const adesso = Date.now();
+      if (adesso - _prenotazioneAssenteDetta >= RIPETI_ALLARME_MS) {
+        _prenotazioneAssenteDetta = adesso;
+        logger.error(
+          '[ai] la prenotazione della spesa nel conto condiviso NON ESISTE: le copie non vedono le chiamate in volo delle altre. Applicare la migrazione della prenotazione (999l).',
+          { detto_dal_database: risposta.error.message ?? '' },
+        );
+      }
+      return { esito: 'assente' };
+    }
+    logger.warn('[ai] prenotazione della spesa non riuscita: l AI a pagamento non parte', {
+      motivo: risposta.error.message ?? '',
+      codice: risposta.error.code ?? '',
+    });
+    return { esito: 'guasto' };
+  }
+  const totale = Number(risposta.data);
+  if (!Number.isFinite(totale)) return { esito: 'guasto' };
+  if (totale < 0) return { esito: 'tetto' };
+
+  let restituita = false;
+  return {
+    esito: 'prenotata',
+    restituisci: async () => {
+      if (restituita) return;
+      restituita = true;
+      let daTogliere = cents;
+      // La spesa vera che questa copia non e' riuscita a scrivere e' gia' nel
+      // conto dentro la prenotazione: quella parte resta, e non e' piu' da scrivere.
+      if (_daScrivere.cents > 0) {
+        const coperti = Math.min(daTogliere, _daScrivere.cents);
+        _daScrivere.cents -= coperti;
+        daTogliere -= coperti;
+      }
+      if (daTogliere <= 0) return;
+      try {
+        const { error } = (await getAdminSupabase().rpc('restituisci_spesa_ai', {
+          p_giorno: giorno,
+          p_cents: daTogliere,
+        })) as unknown as RispostaRpc;
+        if (error) {
+          logger.warn('[ai] prenotazione della spesa non restituita: il conto di oggi resta piu alto del vero', {
+            giorno,
+            cents: daTogliere,
+            motivo: error.message ?? '',
+          });
+        }
+      } catch (errore) {
+        logger.warn('[ai] prenotazione della spesa non restituita: il conto di oggi resta piu alto del vero', {
+          giorno,
+          cents: daTogliere,
+          motivo: errore instanceof Error ? errore.message : String(errore),
+        });
+      }
+    },
+  };
 }
 
 /**

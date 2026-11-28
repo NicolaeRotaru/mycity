@@ -17,9 +17,10 @@ const CATEGORIE_CHE_ASPETTANO = new Set(['promo', 'group', 'newsletter']);
 
 /**
  * Cron: invia le web push per le notifiche non ancora inviate (pushed_at NULL)
- * create nell'ultima ora. Ogni notifica viene processata una sola volta
- * (pushed_at marcato dopo il tentativo). Le subscription morte (404/410) vengono
- * rimosse dal sender.
+ * create nell'ultima ora. Ogni notifica viene processata una sola volta: il giro
+ * la PRENDE prima di mandarla (pushed_at da vuoto all'ora della presa, in una
+ * scrittura condizionata) e la ridà al giro dopo solo se l'invio non è andato.
+ * Le subscription morte (404/410) vengono rimosse dal sender.
  *
  * Cadenza: ogni 5 minuti. Chi la fa partire sta in `vercel.json` → `crons`.
  * Oggi il nuovo ordine aspetta questo giro: la push al negozio la manda solo lui, quindi può
@@ -93,6 +94,38 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   }
 
   /**
+   * 28/11/2026 (R03-016 · R03-015 · R08-009) — LA PRESA IN CARICO È ATOMICA.
+   *
+   * Il giro leggeva le notifiche con `pushed_at` vuoto, mandava le push e solo alla fine scriveva
+   * `pushed_at`. Due giri sovrapposti (il ritentativo di Vercel, una chiamata a mano, un giro lento
+   * che arriva al successivo: i cron durano fino a 300 secondi, la cadenza è di 5 minuti) leggevano le
+   * stesse righe e le mandavano tutte e due: «Nuovo ordine» due volte sul telefono del negozio. Lo
+   * stesso con l'invio subito della push del nuovo ordine (lib/push/subito.ts), che prende le righe
+   * guardando solo `pushed_at`: il giro le aveva già lette ma non ancora segnate, e partivano due volte.
+   *
+   * Adesso il giro le PRENDE prima di mandarle, come l'invio subito: una scrittura sola, condizionata
+   * (`pushed_at` da vuoto all'ora della presa, solo dove è ancora vuoto). Quello che torna è suo; quelle
+   * prese da un altro giro, o dall'invio subito, non tornano. Le notifiche che non partono (invio non
+   * riuscito, preferenza o iscrizioni non lette) si ridanno al giro dopo, solo se hanno ancora la sua
+   * presa, anche quando qualcosa lancia a metà.
+   */
+  const presa = new Date().toISOString();
+  const { data: prese, error: errorePresa } = await supa
+    .from('notifications')
+    .update({ pushed_at: presa })
+    .in('id', pending.map((n) => n.id))
+    .is('pushed_at', null)
+    .select('id');
+  if (errorePresa) {
+    logger.error('[cron] notifiche push non prese in carico: il giro dopo riprova', { message: errorePresa.message });
+    return ApiErrors.unavailable('notifiche non prese in carico');
+  }
+  const preseDaQui = new Set(((prese ?? []) as { id: string }[]).map((r) => r.id));
+  const giaPrese = pending.length - preseDaQui.size;
+  pending = pending.filter((n) => preseDaQui.has(n.id));
+  if (pending.length === 0) return NextResponse.json({ ok: true, sent: 0, processed: 0, giaPrese });
+
+  /**
    * 22/8/2026 — TRE VIAGGI AL DATABASE PER OGNI SINGOLA NOTIFICA.
    *
    * Il ciclo faceva tutto in fila: per ognuna delle cento notifiche una lettura
@@ -103,7 +136,8 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
    *
    * Adesso: le preferenze si leggono una volta per PERSONA (le cento notifiche
    * sono di molte meno persone), gli invii vanno a gruppi di dieci in
-   * parallelo, e le notifiche gestite si segnano con due sole scritture.
+   * parallelo, e le notifiche si prendono (sopra) e si ridanno al giro dopo
+   * (in fondo) con una scrittura sola ciascuna.
    */
   const notifiche = pending as {
     id: string; user_id: string; title: string; body: string | null;
@@ -114,125 +148,137 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   let retried = 0;
   let saltate = 0;
   let rimandate = 0;
-  const nowIso = new Date().toISOString();
-
-  // ① Le preferenze, una volta per persona+categoria invece che per notifica.
-  const chiavi = new Map<string, { user: string; categoria: string }>();
-  for (const n of notifiche) {
-    const categoria = n.category ?? 'order';
-    chiavi.set(`${n.user_id}|${categoria}`, { user: n.user_id, categoria });
-  }
-  const vuoleDavvero = new Map<string, boolean>();
-  const nonLette = new Set<string>();
-  /**
-   * 30/8/2026 (R076) — QUESTE ANDAVANO A GRUPPI DI CENTO, CIOE' SENZA TETTO.
-   *
-   * Il `Promise.all` qui sopra apriva una domanda per ogni coppia
-   * persona+categoria tutte nello stesso istante: col batch pieno sono cento
-   * chiamate contemporanee al gestore di connessioni di Supabase. Il tetto a
-   * gruppi di dieci esisteva gia', ma solo piu' sotto, per gli invii. Il
-   * momento in cui il batch e' pieno e' il picco degli ordini — lo stesso in
-   * cui sul database ci sono i clienti veri che navigano.
-   */
-  const GRUPPO = 10;
-  const daChiedere = [...chiavi.entries()];
-  for (let i = 0; i < daChiedere.length; i += GRUPPO) {
-    await Promise.all(
-      daChiedere.slice(i, i + GRUPPO).map(async ([chiave, v]) => {
-        const { data, error } = await supa.rpc('vuole_notifica', { p_user_id: v.user, p_category: v.categoria });
-        // 5/11/2026 — Preferenza non letta: le categorie che possono aspettare restano in coda
-        // (pushed_at resta vuoto, riprova il giro dopo); ordini e avvisi di servizio partono.
-        if (error) {
-          logger.warn('[cron] preferenza push non letta', { categoria: v.categoria, message: error.message });
-          if (CATEGORIE_CHE_ASPETTANO.has(v.categoria)) {
-            nonLette.add(chiave);
-            return;
-          }
-        }
-        vuoleDavvero.set(chiave, data !== false);
-      }),
-    );
-  }
-
+  // Le notifiche prese e sistemate (mandate, o scartate per scelta di chi le riceve): restano segnate.
   const daSegnare: string[] = [];
-  const daMandare = notifiche.filter((n) => {
-    const chiave = `${n.user_id}|${n.category ?? 'order'}`;
-    if (nonLette.has(chiave)) {
-      rimandate++;
-      return false;
-    }
-    if (vuoleDavvero.get(chiave) === false) {
-      // Segnata come gestita: non e' un errore, e' una scelta di chi la riceve.
-      daSegnare.push(n.id);
-      saltate++;
-      return false;
-    }
-    return true;
-  });
-
-  /**
-   * ② Le iscrizioni push: UNA lettura per tutti, non una per notifica.
-   *
-   * 30/8/2026 (R076) — `sendPushToUser` se le rileggeva da sola ogni volta, e
-   * qui la si chiama una volta per notifica: col batch pieno erano cento
-   * letture della stessa tabella dove ne basta una. Il commento in cima
-   * dichiarava risolte le PREFERENZE, non le iscrizioni: quelle erano rimaste.
-   */
-  // 5/11/2026 — Se la lettura delle iscrizioni cade non si manda e non si segna niente: riprova il
-  // giro dopo. Prima la mappa vuota diceva «nessuno iscritto» e il lotto risultava mandato.
-  let iscrizioni: Awaited<ReturnType<typeof iscrizioniPerUtenti>>;
   try {
-    iscrizioni = await iscrizioniPerUtenti(supa, [...new Set(daMandare.map((n) => n.user_id))]);
-  } catch (e) {
-    logger.error('[cron] iscrizioni push non lette: il giro dopo riprova', { message: e instanceof Error ? e.message : String(e) });
-    rimandate += daMandare.length;
-    daMandare.length = 0;
-    iscrizioni = new Map();
-  }
+    // ① Le preferenze, una volta per persona+categoria invece che per notifica.
+    const chiavi = new Map<string, { user: string; categoria: string }>();
+    for (const n of notifiche) {
+      const categoria = n.category ?? 'order';
+      chiavi.set(`${n.user_id}|${categoria}`, { user: n.user_id, categoria });
+    }
+    const vuoleDavvero = new Map<string, boolean>();
+    const nonLette = new Set<string>();
+    /**
+     * 30/8/2026 (R076) — QUESTE ANDAVANO A GRUPPI DI CENTO, CIOE' SENZA TETTO.
+     *
+     * Il `Promise.all` qui sopra apriva una domanda per ogni coppia
+     * persona+categoria tutte nello stesso istante: col batch pieno sono cento
+     * chiamate contemporanee al gestore di connessioni di Supabase. Il tetto a
+     * gruppi di dieci esisteva gia', ma solo piu' sotto, per gli invii. Il
+     * momento in cui il batch e' pieno e' il picco degli ordini — lo stesso in
+     * cui sul database ci sono i clienti veri che navigano.
+     */
+    const GRUPPO = 10;
+    const daChiedere = [...chiavi.entries()];
+    for (let i = 0; i < daChiedere.length; i += GRUPPO) {
+      await Promise.all(
+        daChiedere.slice(i, i + GRUPPO).map(async ([chiave, v]) => {
+          const { data, error } = await supa.rpc('vuole_notifica', { p_user_id: v.user, p_category: v.categoria });
+          // 5/11/2026 — Preferenza non letta: le categorie che possono aspettare restano in coda
+          // (tornano al giro dopo, vedi ④); ordini e avvisi di servizio partono.
+          if (error) {
+            logger.warn('[cron] preferenza push non letta', { categoria: v.categoria, message: error.message });
+            if (CATEGORIE_CHE_ASPETTANO.has(v.categoria)) {
+              nonLette.add(chiave);
+              return;
+            }
+          }
+          vuoleDavvero.set(chiave, data !== false);
+        }),
+      );
+    }
 
-  // ③ Gli invii, a gruppi di dieci in parallelo invece che uno per volta.
-  for (let i = 0; i < daMandare.length; i += GRUPPO) {
-    const gruppo = daMandare.slice(i, i + GRUPPO);
-    const esiti = await Promise.allSettled(
-      gruppo.map((n) =>
-        sendPushToUser(supa, n.user_id, {
-          title: n.title,
-          body: n.body ?? undefined,
-          url: n.link ?? '/',
-          tag: contrassegno(n),
-          renotify: true,
-        }, iscrizioni.get(n.user_id) ?? [], CONSEGNA_PER_CATEGORIA[n.category ?? 'order']),
-      ),
-    );
-    esiti.forEach((esito, k) => {
-      if (esito.status !== 'fulfilled') {
-        retried++;
-        return;
+    const daMandare = notifiche.filter((n) => {
+      const chiave = `${n.user_id}|${n.category ?? 'order'}`;
+      if (nonLette.has(chiave)) {
+        rimandate++;
+        return false;
       }
-      const r = esito.value;
-      sent += r.delivered;
-      // 🟠-10: si segna SOLO se almeno una push e' arrivata, o se non c'era
-      // niente da consegnare. Se c'erano iscrizioni e zero consegne e' un
-      // guasto passeggero: si ritenta al giro dopo.
-      if (r.delivered > 0 || r.total === 0) daSegnare.push(gruppo[k].id);
-      else retried++;
+      if (vuoleDavvero.get(chiave) === false) {
+        // Segnata come gestita: non e' un errore, e' una scelta di chi la riceve.
+        daSegnare.push(n.id);
+        saltate++;
+        return false;
+      }
+      return true;
     });
-  }
 
-  // ④ Una scrittura sola per tutte quelle gestite.
-  if (daSegnare.length > 0) {
-    const { error } = await supa
-      .from('notifications')
-      .update({ pushed_at: nowIso })
-      .in('id', daSegnare);
-    if (error) {
-      logger.error('[cron] push mandate ma non registrate: il prossimo giro le rimanda', {
-        quante: daSegnare.length, message: error.message,
+    /**
+     * ② Le iscrizioni push: UNA lettura per tutti, non una per notifica.
+     *
+     * 30/8/2026 (R076) — `sendPushToUser` se le rileggeva da sola ogni volta, e
+     * qui la si chiama una volta per notifica: col batch pieno erano cento
+     * letture della stessa tabella dove ne basta una. Il commento in cima
+     * dichiarava risolte le PREFERENZE, non le iscrizioni: quelle erano rimaste.
+     */
+    // 5/11/2026 — Se la lettura delle iscrizioni cade non si manda e non si segna niente: riprova il
+    // giro dopo. Prima la mappa vuota diceva «nessuno iscritto» e il lotto risultava mandato.
+    let iscrizioni: Awaited<ReturnType<typeof iscrizioniPerUtenti>>;
+    try {
+      iscrizioni = await iscrizioniPerUtenti(supa, [...new Set(daMandare.map((n) => n.user_id))]);
+    } catch (e) {
+      logger.error('[cron] iscrizioni push non lette: il giro dopo riprova', { message: e instanceof Error ? e.message : String(e) });
+      rimandate += daMandare.length;
+      daMandare.length = 0;
+      iscrizioni = new Map();
+    }
+
+    // ③ Gli invii, a gruppi di dieci in parallelo invece che uno per volta.
+    for (let i = 0; i < daMandare.length; i += GRUPPO) {
+      const gruppo = daMandare.slice(i, i + GRUPPO);
+      const esiti = await Promise.allSettled(
+        gruppo.map((n) =>
+          sendPushToUser(supa, n.user_id, {
+            title: n.title,
+            body: n.body ?? undefined,
+            url: n.link ?? '/',
+            tag: contrassegno(n),
+            renotify: true,
+          }, iscrizioni.get(n.user_id) ?? [], CONSEGNA_PER_CATEGORIA[n.category ?? 'order']),
+        ),
+      );
+      esiti.forEach((esito, k) => {
+        if (esito.status !== 'fulfilled') {
+          retried++;
+          return;
+        }
+        const r = esito.value;
+        sent += r.delivered;
+        // 🟠-10: si segna SOLO se almeno una push e' arrivata, o se non c'era
+        // niente da consegnare. Se c'erano iscrizioni e zero consegne e' un
+        // guasto passeggero: si ritenta al giro dopo.
+        if (r.delivered > 0 || r.total === 0) daSegnare.push(gruppo[k].id);
+        else retried++;
       });
     }
+  } finally {
+    // ④ Quelle gestite hanno già la presa come segno. Le altre (non partite, o rimaste a metà se
+    // qualcosa ha lanciato) tornano al giro dopo con una scrittura sola, solo se la presa è ancora
+    // la nostra: una riga segnata nel frattempo da qualcun altro non si tocca.
+    const gestite = new Set(daSegnare);
+    const daRidare = notifiche.map((n) => n.id).filter((id) => !gestite.has(id));
+    if (daRidare.length > 0) {
+      let errore: string | null = null;
+      try {
+        const { error } = await supa
+          .from('notifications')
+          .update({ pushed_at: null })
+          .in('id', daRidare)
+          .eq('pushed_at', presa);
+        if (error) errore = error.message;
+      } catch (e) {
+        errore = e instanceof Error ? e.message : String(e);
+      }
+      if (errore) {
+        logger.error('[cron] push non mandate e non ridate al giro: restano prese e non partono più', {
+          quante: daRidare.length, message: errore,
+        });
+      }
+    }
   }
 
-  return NextResponse.json({ ok: true, sent, processed: pending.length, retried, saltate, rimandate });
+  return NextResponse.json({ ok: true, sent, processed: pending.length, retried, saltate, rimandate, giaPrese });
 });
 
 export const GET = handler;

@@ -17,15 +17,17 @@ import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { romeNow } from '@/lib/store-hours';
-import { FASCE_AMMESSE, MOTIVO_FASCIA_PIENA, ORDINI_PER_FASCIA, finestraDellaFascia, motivoFasciaRifiutata } from '@/lib/quando-arriva';
+import { motivoFasciaRifiutata, motivoRitiroRifiutato } from '@/lib/quando-arriva';
+import { rifiutoPerFasciaPiena } from '@/lib/ordini/giri-della-fascia';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
-import type { RiserveLiberate } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
+import type { RiserveLiberateConCodici } from '@/lib/ordini/riserve-abbandonate';
 import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
 import { riusoDellaCassaAperta, type EsitoRiuso, type SessioneRiletta } from '@/lib/ordini/riuso-della-cassa-aperta';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
-import { fasciaAlGiornoDellOrdine, giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
+// R09-009 — La fascia riportata al giorno della richiesta: una copia sola, condivisa coi contanti.
+import { fasciaDelGiornoDellaRichiesta, giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
 import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
 import { conColonneDelServizio } from '@/lib/products/servizio';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -33,6 +35,7 @@ import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/r
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
 import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
@@ -45,85 +48,6 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 export const runtime = 'nodejs';
 
 /**
- * 26/11/2026 — QUANTI GIRI HA GIÀ LA FASCIA SCELTA (il tetto è `ORDINI_PER_FASCIA`).
- *
- * Il giorno e la finestra di una fascia si contano dal giorno in cui è stata scelta, come fanno
- * tutti i lettori di `orders.delivery_slot`: «Domani · 16:30–18:00» di un ordine nato ieri è la
- * stessa fascia di «Oggi · 16:30–18:00» scelta adesso. Si contano gli ordini non annullati, a
- * domicilio, per cliente: un carrello con più negozi sono più righe ma un giro solo, e un secondo
- * carrello dello stesso cliente nella stessa fascia va alla stessa porta (`mio`), come per la
- * veloce (migrazione 840). `null` = lettura non riuscita (cosa farne lo dice chi chiama).
- */
-type GiornoEFinestra = { giorno: string; da: number; a: number };
-
-/**
- * 27/11/2026 — LA FASCIA DETTA DAL GIORNO IN CUI ARRIVA LA RICHIESTA, ANCHE CON LA CARTA.
- *
- * La stessa regola della rotta dei contanti (app/api/orders/cod/route.ts). Lunedì alle 23:59
- * «Domani · 9:00–11:00» è martedì: arrivata alle 00:01, la rotta la giudicava (e il webhook la
- * contava da `session.created`) per mercoledì. La cassa manda il giorno della fascia
- * (`delivery_date`): se cade un giorno prima di quello che dice l'etichetta letta adesso, la
- * mezzanotte è passata in viaggio e l'etichetta si riporta a oggi (`fasciaAlGiornoDellOrdine`):
- * «Domani» di ieri è «Oggi», una fascia di ieri è passata (`null`). Uno scarto di più giorni è
- * l'orologio del telefono sbagliato: non sposta niente.
- */
-function fasciaDelGiornoDellaRichiesta(fascia: string, giornoDellaFascia: string, adesso: Date): string | null {
-  const finestra = finestraDellaFascia(fascia);
-  const oggi = giornoDiPiacenza(adesso);
-  if (!finestra || !oggi || !/^\d{4}-\d{2}-\d{2}$/.test(giornoDellaFascia)) return fascia;
-  const giorniDaOggi = Math.round((Date.parse(giornoDellaFascia) - Date.parse(oggi)) / 86_400_000);
-  if (giorniDaOggi !== (finestra.giorno === 'domani' ? 0 : -1)) return fascia;
-  // Ieri a mezzogiorno (UTC): un istante del giorno in cui la cassa ha proposto la fascia.
-  return fasciaAlGiornoDellOrdine(fascia, Date.parse(oggi) - 12 * 3_600_000, adesso);
-}
-
-function giornoEFinestra(fascia: string, sceltaIl: string | number | Date): GiornoEFinestra | null {
-  const f = finestraDellaFascia(fascia);
-  const giornoDellaScelta = giornoDiPiacenza(sceltaIl);
-  if (!f || !giornoDellaScelta) return null;
-  const giorno = new Date(Date.parse(giornoDellaScelta) + (f.giorno === 'domani' ? 86_400_000 : 0)).toISOString().slice(0, 10);
-  return { giorno, da: f.daMinuti, a: f.aMinuti };
-}
-
-async function giriNellaFascia(
-  admin: ReturnType<typeof getAdminSupabase>,
-  fascia: string,
-  clienteId: string,
-  adesso: Date,
-): Promise<{ altri: number; mio: boolean } | null> {
-  const cercata = giornoEFinestra(fascia, adesso);
-  if (!cercata) return { altri: 0, mio: false };
-  const stessaFinestra = FASCE_AMMESSE.filter((e) => {
-    const f = finestraDellaFascia(e);
-    return f !== null && f.daMinuti === cercata.da && f.aMinuti === cercata.a;
-  });
-  try {
-    const { data, error, count } = await admin
-      .from('orders')
-      .select('id, user_id, delivery_slot, created_at, pickup_in_store, delivery_status', { count: 'exact' })
-      .in('delivery_slot', stessaFinestra)
-      // Una fascia di oggi o di domani: gli ordini che la possono avere sono nati da ieri in poi.
-      .gte('created_at', new Date(adesso.getTime() - 48 * 3_600_000).toISOString());
-    if (error || !Array.isArray(data) || (typeof count === 'number' && count > data.length)) return null;
-    const giri = new Set<string>();
-    let mio = false;
-    for (const o of data as Array<{
-      id?: string; user_id?: string | null; delivery_slot?: string | null; created_at?: string | null;
-      pickup_in_store?: boolean | null; delivery_status?: string | null;
-    }>) {
-      if (o.delivery_status === 'CANCELED' || o.pickup_in_store || !o.delivery_slot || !o.created_at) continue;
-      const g = giornoEFinestra(o.delivery_slot, o.created_at);
-      if (!g || g.giorno !== cercata.giorno || g.da !== cercata.da || g.a !== cercata.a) continue;
-      if (o.user_id === clienteId) mio = true;
-      else giri.add(o.user_id ? `cliente:${o.user_id}` : `riga:${o.id}`);
-    }
-    return { altri: giri.size, mio };
-  } catch {
-    return null;
-  }
-}
-
-/**
  * 27/11/2026 — I RIFIUTI DELLA FASCIA, UNA REGOLA SOLA PER LA RICHIESTA NUOVA E PER LA PAGINA GIÀ APERTA.
  *
  * La fascia passata (o a meno di un'ora), il negozio chiuso in quella fascia e il tetto dei giri.
@@ -133,26 +57,24 @@ async function giriNellaFascia(
  */
 async function rifiutoDellaFascia(
   admin: ReturnType<typeof getAdminSupabase>,
-  body: { deliverySlot?: string | null; pickupInStore: boolean },
+  body: { deliverySlot?: string | null; pickupInStore: boolean; delivery?: { address?: string | null; zip?: string | null } },
   negozi: readonly { nome?: string | null; orari?: unknown }[],
   clienteId: string,
 ): Promise<string | null> {
-  if (body.pickupInStore) return null;
+  // R12-009 — Il ritiro non ha fascia, ma un negozio in ferie non si può ritirare.
+  if (body.pickupInStore) return motivoRitiroRifiutato(negozi);
   const rifiutata = motivoFasciaRifiutata(body.deliverySlot, negozi);
   if (rifiutata) return rifiutata;
   // 26/11/2026 — Al massimo `ORDINI_PER_FASCIA` giri per fascia (fatto `consegna.capienza`): al sesto
-  // 409. La veloce non è una fascia, e il ritiro non chiede un giro. Sta prima della pulizia, come
-  // gli altri rifiuti: un tentativo respinto non chiude le altre casse. Un conteggio non riuscito
-  // non ferma il pagamento: il tetto è morbido (il negozio accetta ogni ordine e può rifiutare
-  // quelli in più), e una lettura caduta non deve spegnere la carta; resta scritto.
-  const fascia = body.deliverySlot;
-  if (!fascia || eConsegnaVeloce({ fascia, ritiroInNegozio: false })) return null;
-  const giri = await giriNellaFascia(admin, fascia, clienteId, new Date());
-  if (giri === null) {
-    logger.warn('[stripe] giri della fascia non contati: il tetto non è stato controllato', { userId: clienteId });
-    return null;
-  }
-  return !giri.mio && giri.altri + 1 > ORDINI_PER_FASCIA ? MOTIVO_FASCIA_PIENA : null;
+  // 409. Sta prima della pulizia, come gli altri rifiuti: un tentativo respinto non chiude le altre
+  // casse. 28/11/2026 (R07-009) — La regola sta in lib/ordini/giri-della-fascia.ts, la stessa dei
+  // contanti; la porta è cliente + indirizzo.
+  return rifiutoPerFasciaPiena(
+    admin,
+    { fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore },
+    { cliente: clienteId, indirizzo: body.delivery?.address ?? null, cap: body.delivery?.zip ?? null },
+    'stripe',
+  );
 }
 
 const ItemSchema = z.object({
@@ -220,7 +142,8 @@ const Body = z.object({
  *
  * Rate limit: 30 checkout / 10 min per utente.
  */
-export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, windowMs: 10 * 60_000 }, async ({ user, profile, req }): Promise<NextResponse> => {
+// R09-006 — Una fila per richiesta per i lavori dopo la risposta (email, campanelle): vedi lib/api/fila-per-richiesta.ts.
+export const POST = conFilaPerRichiesta(withAuthRateLimit({ name: 'stripe-checkout', max: 30, windowMs: 10 * 60_000 }, async ({ user, profile, req }): Promise<NextResponse> => {
   const purchaseBlock = assertCanPurchase(profile);
   if (purchaseBlock) return purchaseBlock;
   // 31/10/2026 — Al lancio la carta è spenta (CARTA_ACCESA, scelta di Nicola): la
@@ -244,7 +167,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
   }
 
-  // Il ritiro in negozio e' messo da parte (RITIRO_IN_NEGOZIO_ATTIVO). Il
+  // Il ritiro in negozio passa dall'interruttore (RITIRO_IN_NEGOZIO_ATTIVO, acceso dal lancio, R12-009). Spento, il
   // browser potrebbe chiederlo lo stesso — una richiesta costruita a mano,
   // o una scheda aperta da prima del rilascio. Qui si spegne, una volta
   // sola, subito dopo la convalida: cosi' ogni uso piu' sotto lo vede gia'
@@ -376,8 +299,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
    * dalle scorte (`pulisci`, piu' sotto); se ha liberato qualcosa, le scorte si
    * rileggono prima di contarle.
    */
-  let pulizia: Promise<RiserveLiberate> | null = null;
-  const pulisci = (): Promise<RiserveLiberate> =>
+  let pulizia: Promise<RiserveLiberateConCodici> | null = null;
+  const pulisci = (): Promise<RiserveLiberateConCodici> =>
     (pulizia ??= liberaRiserveAbbandonate(admin, {
       buyerId: user.id,
       improntaDaTenere: improntaCarrello,
@@ -826,13 +749,21 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
    * minuti la cassa nuova leggeva «Coupon non disponibile». Ogni tentativo scrive nella sua riga di
    * intento quale rivendicazione è sua; qui si chiudono solo quelle dei tentativi appena liberati,
    * mai il lucchetto di una scheda il cui pagamento non è ancora nato.
+   *
+   * 28/11/2026 (R08-007, onda 2) — Solo dove il codice è tornato davvero: se `release_coupon` è caduto
+   * (`codiceNonTornato`) l'uso resta contato, e la rivendicazione resta aperta come fanno l'avviso di
+   * Stripe (lib/stripe/webhook/carrello-scaduto.ts) e `rilasciaCoupon` qui sotto. La rilettura delle
+   * scorte resta su tutti i liberati: la merce è tornata comunque.
    */
-  if (riserveLiberate.liberati.length > 0) {
+  const rivendicazioniDaChiudere = riserveLiberate.liberati.filter(
+    (id) => !(riserveLiberate.codiceNonTornato ?? []).includes(id),
+  );
+  if (rivendicazioniDaChiudere.length > 0) {
     try {
       const { data: liberate } = await admin
         .from('pending_checkouts')
         .select('id, delivery')
-        .in('id', riserveLiberate.liberati);
+        .in('id', rivendicazioniDaChiudere);
       const sue = ((liberate ?? []) as Array<{ delivery?: { rivendicazione?: unknown } | null }>)
         .map((p) => p.delivery?.rivendicazione)
         .filter((r): r is string => typeof r === 'string' && r !== '');
@@ -1339,4 +1270,4 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     }
     return ApiErrors.internal('Errore nella creazione del pagamento.');
   }
-});
+}));

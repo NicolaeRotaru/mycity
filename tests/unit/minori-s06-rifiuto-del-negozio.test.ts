@@ -62,6 +62,6 @@ describe('2509 — credito tornato davvero', () => {
   it('se il credito è tornato, lo dice con l\'importo', async () => {
     stato.esito = { ok: true, refundId: null };
     await rifiuta();
-    expect(String(stato.notifiche[0]?.body)).toContain('(€5.00) è tornato sul tuo saldo');
+    expect(String(stato.notifiche[0]?.body)).toContain('(5,00\u00a0€) è tornato sul tuo saldo');
   });
 });

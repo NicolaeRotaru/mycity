@@ -11,6 +11,8 @@ import { MINUTI_PER_CONFERMARE_LA_VELOCE, scadenzaAccettazione, scadenzaLeggibil
 import { ETICHETTA_ADESSO, fasceAncoraPossibili, fasceDiDomaniPossibili, fasciaFuoriTempo } from '@/lib/quando-arriva';
 import { romeNow } from '@/lib/store-hours';
 import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
+import { chiaveDelCarrelloInContanti } from '@/lib/ordini/chiave-del-carrello';
+import { eLaFasciaPienaDelDatabase, rifiutoPerFasciaPiena } from '@/lib/ordini/giri-della-fascia';
 
 /**
  * 30/10/2026 — IL SECONDO FRENO DELLA VELOCE (carta #220 approvata il 29/10; la variante B,
@@ -53,7 +55,9 @@ import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/
 const COLONNE =
   'id, user_id, seller_id, delivery_status, delivery_slot, pickup_in_store, payment_method, payment_status, ' +
   'total_price, gross_total_cents, wallet_applied_cents, shipping_cost, delivery_fee_cents, rider_fee_cents, ' +
-  'discount_amount, stripe_session_id, rider_id, created_at, refunded_amount_cents, stripe_refund_id';
+  'discount_amount, stripe_session_id, rider_id, created_at, refunded_amount_cents, stripe_refund_id, ' +
+  // N-004 (onda 3) — La porta del cliente: il tetto dei giri per fascia conta per cliente e indirizzo.
+  'delivery_address, delivery_zip';
 /**
  * Prima della migrazione 124 `gross_total_cents` non esiste: chiederla faceva fallire OGNI lettura
  * del freno, e nessuna veloce veniva mai spostata mentre l'email al negozio lo prometteva. Senza
@@ -92,6 +96,8 @@ type RigaVeloce = {
   created_at: string | null;
   refunded_amount_cents?: number | null;
   stripe_refund_id?: string | null;
+  delivery_address?: string | null;
+  delivery_zip?: string | null;
 };
 
 const centesimi = (x: unknown) => Math.round(Number(x ?? 0) * 100);
@@ -143,11 +149,18 @@ const TITOLO_NON_SPOSTATO = 'Il negozio non ha ancora confermato la consegna vel
  * La frase per il cliente quando il freno non può spostare il carrello (orari non letti, nessuna
  * fascia oggi o domani). Dice il vero: quando l'ordine si annulla da solo, senza promettere un
  * contatto che nessuno ha in agenda. L'ora è quella del giro notturno (`scadenzaAccettazione`).
+ *
+ * 28/11/2026 (N-004, onda 3) — `fascePiene`: le fasce ci sono, ma hanno già tutti i giri che i
+ * fattorini riescono a fare (`ORDINI_PER_FASCIA`). Il cliente legge perché la spesa non si sposta,
+ * non un errore del database.
  */
-export function fraseNonSpostato(scadenza: Date, adesso: Date, carta = false): string {
+export function fraseNonSpostato(scadenza: Date, adesso: Date, carta = false, fascePiene = false): string {
   const quando = scadenzaLeggibile(scadenza, adesso);
   const soldi = carta ? 'ti rendiamo tutto quello che hai pagato' : 'non paghi niente';
-  return `Il negozio non ha ancora confermato. Se non conferma entro ${quando}, l’ordine si annulla e ${soldi}.`;
+  const perche = fascePiene
+    ? ' e le fasce di consegna di oggi e di domani sono tutte piene: per questo non possiamo spostare la tua spesa in una fascia'
+    : '';
+  return `Il negozio non ha ancora confermato${perche}. Se non conferma entro ${quando}, l’ordine si annulla e ${soldi}.`;
 }
 
 export type ComeVaLEuro = 'tolto-contanti' | 'tolto-carta' | 'compresa' | 'a-mano';
@@ -208,19 +221,32 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<
       .limit(1);
     if (errT) throw new Error(`carrello dell'ordine ${o.id} non letto: ${errT.message}`);
     if (!Array.isArray(tentativi) || tentativi.length === 0) {
-      // 26/11/2026 (R09-013) — Senza la riga l'ordine si tratta da solo, ma non in silenzio.
-      await segnalaIlCarrelloSenzaRiga(admin, o);
-      return null;
+      // 28/11/2026 (R09-007, onda 2) — Senza la riga, la chiave del carrello scritta con l'ordine
+      // (migrazione 999p, lib/ordini/chiave-del-carrello.ts): stesso cliente e stessa chiave sono
+      // lo stesso carrello, con certezza, e il freno lo sposta intero come con la riga.
+      const chiave = o.user_id ? await chiaveDelCarrelloInContanti(admin, o.id, 'veloce-non-confermata') : null;
+      if (chiave) {
+        const { data, error } = await leggi('carrello-chiave', (c) =>
+          admin.from('orders').select(c).eq('user_id', o.user_id).eq('cod_cart_key', chiave));
+        if (error) throw new Error(`carrello dell'ordine ${o.id} non letto: ${error.message}`);
+        if (!Array.isArray(data) || data.length < 2) return null;
+        righe = data as unknown as RigaVeloce[];
+      } else {
+        // 26/11/2026 (R09-013) — Senza la riga (e senza la chiave) l'ordine si tratta da solo, ma non in silenzio.
+        await segnalaIlCarrelloSenzaRiga(admin, o);
+        return null;
+      }
+    } else {
+      const elenco = (tentativi[0] as { order_ids: unknown }).order_ids;
+      const ids = Array.isArray(elenco)
+        ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
+        : [];
+      if (ids.length < 2) return null;
+      const { data, error } = await leggi('carrello', (c) => admin.from('orders').select(c).in('id', ids));
+      if (error) throw new Error(`carrello dell'ordine ${o.id} non letto: ${error.message}`);
+      if (!Array.isArray(data)) return null;
+      righe = data as unknown as RigaVeloce[];
     }
-    const elenco = (tentativi[0] as { order_ids: unknown }).order_ids;
-    const ids = Array.isArray(elenco)
-      ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
-      : [];
-    if (ids.length < 2) return null;
-    const { data, error } = await leggi('carrello', (c) => admin.from('orders').select(c).in('id', ids));
-    if (error) throw new Error(`carrello dell'ordine ${o.id} non letto: ${error.message}`);
-    if (!Array.isArray(data)) return null;
-    righe = data as unknown as RigaVeloce[];
   }
   if (!righe.some((r) => r.id === o.id)) return null;
   return righe.sort((x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id));
@@ -353,7 +379,9 @@ const codiceDi = (id: string) => `#${id.slice(0, 6).toUpperCase()}`;
  */
 // 31/10/2026 (ondata 5) — `orari` = gli orari del negozio dell'ordine: con quelli l'ora detta è la chiusura,
 // la stessa del giro notturno (scadenza-accettazione.ts), non le tre ore.
-async function nonSiSposta(admin: SupabaseClient, o: RigaVeloce, adesso: Date, perche: string, orari?: unknown): Promise<EsitoDelCarrello> {
+async function nonSiSposta(
+  admin: SupabaseClient, o: RigaVeloce, adesso: Date, perche: string, orari?: unknown, fascePiene = false,
+): Promise<EsitoDelCarrello> {
   // 12/11/2026 (R09-013) — Il giorno che i lavori si riaccendono il freno trova ordini «Adesso» nati
   // giorni prima: la loro scadenza è già passata, e la frase «se non conferma entro le 13:00 di
   // venerdì 30/10…» arrivava al cliente il 20/11. Un ordine già scaduto non si scrive a nessuno:
@@ -378,9 +406,27 @@ async function nonSiSposta(admin: SupabaseClient, o: RigaVeloce, adesso: Date, p
     '/admin/orders',
     { unaVoltaPer: `veloce-ferma-${o.id}` },
   ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
-  await avvisaIlCliente(admin, o, fraseNonSpostato(scadenza, adesso, o.payment_method !== 'cod'), true);
+  await avvisaIlCliente(admin, o, fraseNonSpostato(scadenza, adesso, o.payment_method !== 'cod', fascePiene), true);
   logger.warn('[veloce-non-confermata] carrello non spostato', { orderId: o.id, perche });
   return 'a-mano';
+}
+
+/**
+ * 28/11/2026 (N-004, onda 3) — La prima fascia, fra quelle che la cassa offrirebbe adesso a questo
+ * carrello (`fasciaDopoLaVeloce` è la prima), in cui il tetto dei giri lascia entrare questa porta.
+ * Si conta con l'etichetta vista da adesso (la regola delle rotte) e si scrive contata dal giorno
+ * dell'ordine. `null` = sono tutte piene. Un conteggio non riuscito non ferma (come nelle rotte).
+ */
+async function primaFasciaConPosto(admin: SupabaseClient, o: RigaVeloce, adesso: Date, orari: unknown[]): Promise<string | null> {
+  const ora = romeNow(adesso);
+  const porta = { cliente: String(o.user_id ?? ''), indirizzo: o.delivery_address ?? null, cap: o.delivery_zip ?? null };
+  for (const vistaDaAdesso of [...fasceAncoraPossibili(ora, orari), ...fasceDiDomaniPossibili(ora, orari)]) {
+    const scritta = fasciaDalGiornoDellOrdine(vistaDaAdesso, adesso, o.created_at);
+    if (!scritta) continue;
+    const piena = await rifiutoPerFasciaPiena(admin, { fascia: vistaDaAdesso, ritiroInNegozio: false }, porta, 'veloce', adesso);
+    if (!piena) return scritta;
+  }
+  return null;
 }
 
 /** Avvisa i negozi che avevano già accettato e il fattorino assegnato: la fascia è cambiata. */
@@ -580,8 +626,24 @@ async function spostaIlCarrello(
   const vistaDaOggi = scrittaSulFratello && o.created_at ? fasciaAlGiornoDellOrdine(scrittaSulFratello, o.created_at, adesso) : null;
   const fasciaDelCarrello = vistaDaOggi && fasciaFuoriTempo(vistaDaOggi, romeNow(adesso)) === null ? scrittaSulFratello : null;
   const fasciaDelGiro = fasciaDelCarrello ? null : fasciaDopoLaVeloce(romeNow(adesso), orari);
-  const fascia = fasciaDelCarrello ?? (fasciaDelGiro ? fasciaDalGiornoDellOrdine(fasciaDelGiro, adesso, o.created_at) : null);
-  if (!fascia) return nonSiSposta(admin, o, adesso, 'né oggi né domani c’è una fascia in cui tutti i negozi del carrello siano aperti', o.seller_id ? orari[venditori.indexOf(o.seller_id)] : undefined);
+  let fascia = fasciaDelCarrello ?? (fasciaDelGiro ? fasciaDalGiornoDellOrdine(fasciaDelGiro, adesso, o.created_at) : null);
+  const orariDelNegozio = o.seller_id ? orari[venditori.indexOf(o.seller_id)] : undefined;
+  if (!fascia) return nonSiSposta(admin, o, adesso, 'né oggi né domani c’è una fascia in cui tutti i negozi del carrello siano aperti', orariDelNegozio);
+  // 28/11/2026 (N-004, onda 3) — IL TETTO DEI GIRI VALE ANCHE PER IL FRENO. La cassa e le rotte non
+  // vendono il sesto giro di una fascia (`rifiutoPerFasciaPiena`, ORDINI_PER_FASCIA); il freno spostava
+  // la veloce nella prima fascia possibile anche se era piena, e il database (999s) lo fermava
+  // con un errore crudo, oppure — prima che guardasse anche gli spostamenti — entrava il sesto giro.
+  // Adesso si conta prima: la prima fascia che la cassa offrirebbe E che ha ancora un giro libero. Il
+  // resto di un carrello già spostato a metà segue la sua fascia (stessa porta: non è un giro nuovo).
+  if (!fasciaDelCarrello) {
+    const conPosto = await primaFasciaConPosto(admin, o, adesso, orari);
+    if (conPosto) fascia = conPosto;
+    // Coi contanti nessuna fascia con posto: la spesa non si sposta, e il cliente legge perché.
+    // Con la carta il tetto non ferma l'ordine, come alla nascita (999s): resta la prima fascia.
+    else if (!carrello.some((c) => c.payment_method !== 'cod')) {
+      return nonSiSposta(admin, o, adesso, 'tutte le fasce di oggi e di domani in cui i negozi sono aperti sono piene', orariDelNegozio, true);
+    }
+  }
 
   const ordiniDelConto = carrello.map((r) => {
     const consegna = Number(r.delivery_fee_cents ?? 0);
@@ -747,6 +809,13 @@ async function spostaIlCarrello(
     const { data: righeScritte, error } = await conRipiegoSchema<Risposta>(
       'veloce-non-confermata.sposta', () => scrivi(valori), () => scrivi(senzaCampi(valori, CAMPI_124)));
     if (error) {
+      // N-004 (onda 3) — L'ultimo posto della fascia l'ha preso un altro nello stesso istante (il
+      // database ha l'ultima parola, 999s): non è un guasto. Il giro dopo ritrova l'ordine
+      // «Adesso», riconta e sceglie una fascia con posto, o dice al cliente che sono piene.
+      if (i === 0 && eLaFasciaPienaDelDatabase(error)) {
+        logger.warn('[veloce-non-confermata] fascia piena al momento di scrivere: riprovo al giro dopo', { orderId: c.id, fascia });
+        return 'riprova';
+      }
       // Sul primo ordine non si è spostato niente: si lancia, e il giro dopo lo ritrova «Adesso».
       if (i === 0) throw new Error(`ordine ${c.id}: ${error.message}`);
       // 21/11/2026 (R04-008) — Su un ordine dopo il primo non si lancia più qui: si provano anche gli

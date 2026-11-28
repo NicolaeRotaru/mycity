@@ -15,7 +15,8 @@ vi.mock('next/link', () => ({ default: ({ children }: { children?: unknown }) =>
 
 function riquadri(html: string): { etichetta: string; valore: string }[] {
   const fuori: { etichetta: string; valore: string }[] = [];
-  const re = /<span class="text-\[10px\][^"]*">([^<]*)<\/span><\/div><p class="text-\[26px\][^"]*">([^<]*)<\/p>/g;
+  // R10-014 (onda 2) — L'etichetta da 10 pixel adesso è `text-2xs`, il gradino della scala.
+  const re = /<span class="text-2xs[^"]*">([^<]*)<\/span><\/div><p class="text-\[26px\][^"]*">([^<]*)<\/p>/g;
   for (const m of html.matchAll(re)) fuori.push({ etichetta: m[1], valore: m[2].replace(/&nbsp;| /g, ' ') });
   return fuori;
 }

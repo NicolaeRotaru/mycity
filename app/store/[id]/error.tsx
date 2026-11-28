@@ -16,7 +16,7 @@ export default function StoreError({
   }, [error]);
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-12">
+    <div className="container mx-auto px-4 sm:px-6 py-12 max-w-7xl">
       <ErrorState
         title="Errore nel caricamento del negozio"
         description="Il negozio potrebbe essere stato sospeso o c'è un problema temporaneo."

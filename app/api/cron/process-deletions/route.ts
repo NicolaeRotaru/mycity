@@ -19,6 +19,7 @@ import {
   type TappaAvviso,
 } from '@/lib/cron-cancellazioni';
 import {
+  emailRisultaPartita,
   identificativoAvviso,
   recapitaAvvisi,
   rispondiAChiAspetta,
@@ -580,7 +581,10 @@ async function rispondiEntroIlTetto(
       // R03-008 — Una spiegazione arrivata per email in una notte prima non è «non partita»: fuori
       // dal conto, dal testo e dalla chiave dell'allarme. Nel pannello si scrivono tutte, come prima.
       const nonPartite: typeof rimaste = [];
-      for (const d of rimaste) if (!(await emailGiaPartita(admin, identificativoAvviso(d.chiave)))) nonPartite.push(d);
+      // R08-008 (onda 2) — Lo chiede alla libreria degli avvisi: il registro e il segno «partita» restano suoi.
+      for (const d of rimaste) {
+        if (!(await emailRisultaPartita(admin as unknown as ClienteAvvisi, identificativoAvviso(d.chiave)))) nonPartite.push(d);
+      }
       if (nonPartite.length > 0) await avvisaDelleEmailSenzaTempo(admin, nonPartite.map((d) => identificativoAvviso(d.chiave)));
       somma(await recapitaAvvisi(admin as unknown as ClienteAvvisi, rimaste, logger));
       return { avvisi, allarmiEmail, senzaTempo: nonPartite.length };
@@ -597,26 +601,12 @@ async function rispondiEntroIlTetto(
   return { avvisi, allarmiEmail, senzaTempo: 0 };
 }
 
-/**
- * 21/11/2026 (R03-008) — Il segno che lib/privacy/avvisi-a-chi-aspetta.ts scrive nel registro degli
- * invii quando l'email di un avviso è partita (lì è una costante non esportata: deve restare uguale).
+/*
+ * 28/11/2026 (R08-008, onda 2) — Qui c'era una copia del segno «partita» che la libreria degli avvisi
+ * scrive nel registro degli invii (lì è una costante privata), con la sua lettura. Se la libreria
+ * cambiava il segno o il registro, la copia smetteva di vederlo senza dirlo, e l'allarme contava
+ * «non partite» email già arrivate. Adesso si chiede a lei: `emailRisultaPartita` (R14-002).
  */
-const EMAIL_PARTITA = 'privacy.avviso_cancellazione.email_partita';
-
-/** L'email di questo avviso risulta già partita? Se il registro non si legge, no: si conta fra le non partite. */
-async function emailGiaPartita(admin: Admin, idAvviso: string): Promise<boolean> {
-  try {
-    const { data, error } = await admin
-      .from('audit_logs')
-      .select('action')
-      .eq('target_table', 'notifications')
-      .eq('target_id', idAvviso);
-    if (error || !Array.isArray(data)) return false;
-    return data.some((r) => (r as { action?: unknown }).action === EMAIL_PARTITA);
-  } catch {
-    return false;
-  }
-}
 
 /**
  * 21/11/2026 (R01-002) — Le spiegazioni rimaste senza il tempo delle email: errore nel registro
@@ -814,7 +804,7 @@ async function haAnnullatoNelFrattempo(admin: Admin, userId: string): Promise<bo
 
 async function avvisaUnaVoltaPerAvviso(
   admin: Admin,
-  avvisiFermi: Array<{ id: string; userId: string; tappa?: TappaAvviso; forsePartita?: true }>,
+  avvisiFermi: Array<{ id: string; userId: string; tappa?: TappaAvviso; forsePartita?: true; registroIlleggibile?: true }>,
 ): Promise<{ nuovi: number; nonScritti: number }> {
   const conto = { nuovi: 0, nonScritti: 0 };
   if (avvisiFermi.length === 0) return conto;
@@ -831,7 +821,7 @@ async function avvisaUnaVoltaPerAvviso(
     logger.error('[cron-deletions] nessun amministratore a cui dirlo: allarme non recapitato', { avvisiFermi: avvisiFermi.length });
     return { nuovi: 0, nonScritti: avvisiFermi.length };
   }
-  for (const { id: idAvviso, userId, tappa, forsePartita } of avvisiFermi) {
+  for (const { id: idAvviso, userId, tappa, forsePartita, registroIlleggibile } of avvisiFermi) {
     const quale =
       tappa === 'termine-scaduto'
         ? ' La spiegazione ferma è quella del termine di legge scaduto.'
@@ -856,9 +846,16 @@ async function avvisaUnaVoltaPerAvviso(
         body:
           // R09-001 — Se una notte prima l'email è stata spedita ma il registro non l'ha segnata, può
           // essere arrivata: l'allarme non può dire «non è partita».
-          (forsePartita
-            ? "Una spiegazione dell'attesa per la cancellazione non risulta partita per email: una notte prima è stata spedita ma il registro non l'ha segnata, quindi può essere arrivata. "
-            : "Una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. ") +
+          // 28/11/2026 (R08-011) — Se il registro degli invii non si è letto (o non ha preso il turno),
+          // l'email stanotte non si è tentata e non si sa niente: né se una notte prima è partita, né se
+          // è la prima notte. lib/privacy/avvisi-a-chi-aspetta.ts lo segnava già (`registroIlleggibile`,
+          // R25-005), ma qui nessuno lo leggeva e l'allarme diceva «non è partita, non è un intoppo di
+          // una notte sola» anche alla prima notte e per un'email forse già arrivata.
+          (registroIlleggibile
+            ? "Non si sa se una spiegazione dell'attesa per la cancellazione sia partita per email: il registro degli invii non si è potuto leggere, quindi stanotte l'email non è stata tentata (per non mandarla due volte). Può essere la prima notte, e un'email di una notte prima può essere arrivata. "
+            : forsePartita
+              ? "Una spiegazione dell'attesa per la cancellazione non risulta partita per email: una notte prima è stata spedita ma il registro non l'ha segnata, quindi può essere arrivata. "
+              : "Una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. ") +
           "È scritta nel pannello del sito della persona, ma chi vuole andarsene può non rientrarci più: " +
           'controlla la posta del sito oppure scrivile tu. Il giro riprova da solo ogni notte; ' +
           'questo avviso non si ripete finché la spiegazione resta ferma, e si chiude da solo quando parte. ' +

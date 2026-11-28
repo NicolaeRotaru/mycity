@@ -26,12 +26,28 @@ export type Scenario = {
   cancellazioneFallisce?: string;
   /** L'indirizzo email dell'utente, quello che serve per la newsletter. */
   email?: string;
+  /**
+   * R08-006 (onda 2) — La risposta di `cassa_da_versare_del_fattorino` (migrazione 999n). Assente:
+   * la funzione non c'è (PGRST202) e la guardia legge il registro (`cassa`), come prima della migrazione.
+   */
+  contoCassa?: { data: unknown; error: { code?: string; message: string } | null };
+};
+
+/** La risposta di PostgREST per una funzione che non esiste (migrazione non applicata). */
+export const FUNZIONE_ASSENTE = {
+  data: null,
+  error: { code: 'PGRST202', message: 'Could not find the function public.cassa_da_versare_del_fattorino(p_rider) in the schema cache' },
 };
 
 export function fintoMondo(scenario: Scenario = {}) {
   const diario: VoceDiario[] = [];
 
   const admin = {
+    async rpc(nome: string, _argomenti?: Record<string, unknown>) {
+      diario.push({ op: 'select', tabella: `rpc:${nome}` });
+      if (nome === 'cassa_da_versare_del_fattorino') return scenario.contoCassa ?? FUNZIONE_ASSENTE;
+      return { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${nome}` } };
+    },
     from(tabella: string) {
       return {
         select(_colonne: string) {

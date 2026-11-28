@@ -200,6 +200,10 @@ import { readFileSync } from 'node:fs';
 describe('2525 — il giro legge i fermi più vecchi per primi', () => {
   it('la lettura dei candidati è ordinata per nascita prima del tetto di cento', () => {
     const src = readFileSync('app/api/cron/expire-stale-orders/route.ts', 'utf8');
-    expect(src).toMatch(/\.eq\('delivery_status', 'NEW'\)\s*\.lt\('created_at', cutoff\)\s*\.order\('created_at', \{ ascending: true \}\)\s*\.limit\(100\)/);
+    // 28/11/2026 (onda 2, R06-006) — La lettura ora è a pagine da cento (`leggiPagina`), sempre dai più
+    // vecchi: il tetto di cento vale per pagina, e la prova del comportamento è
+    // tests/unit/riparazione-onda2-r06-006-la-veloce-scaduta-non-resta-fuori-dal-giro.test.ts.
+    expect(src).toMatch(/\.eq\('delivery_status', 'NEW'\)\s*\.lt\('created_at', cutoff\)\s*\.order\('created_at', \{ ascending: true \}\)/);
+    expect(src).toMatch(/const PAGINA_CANDIDATI = 100;/);
   });
 });

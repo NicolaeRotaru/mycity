@@ -201,7 +201,7 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
               /* 22/8/2026 — era 20 pixel, sotto la soglia dei 24 in cui un
                  dito prende quello che vuole. Su un telefono la «x» per
                  togliere una foto si mancava, e si finiva per aprire la foto. */
-              className="absolute -top-1.5 -right-1.5 bg-secondary-500 hover:bg-secondary-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700"
+              className="absolute -top-1.5 -right-1.5 bg-secondary-500 hover:bg-secondary-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-warm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700"
               aria-label="Rimuovi"
             >
               <X size={12} strokeWidth={2.4} />
@@ -226,7 +226,7 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
             ) : (
               <>
                 <Camera size={20} className="text-ink-400" />
-                <span className="text-[10px] text-ink-500 mt-0.5">{files.length}/{max}</span>
+                <span className="text-2xs text-ink-500 mt-0.5">{files.length}/{max}</span>
               </>
             )}
           </label>

@@ -48,6 +48,8 @@ vi.mock('@tanstack/react-query', () => ({
     cattura.queryFn = o.queryFn;
     return { data: [] };
   },
+  // R09-008 — Le sezioni della home leggono i negozi dalla cache della pagina: una cache vuota.
+  useQueryClient: () => ({ getQueryState: () => undefined, getQueryData: () => undefined, setQueryData: () => undefined }),
 }));
 vi.mock('@/lib/logger', () => ({ logger: { warn: () => {}, error: () => {}, info: () => {}, debug: () => {} } }));
 

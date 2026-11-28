@@ -45,10 +45,22 @@ export function etichettaPronto(ritiroAttivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO
   return ritiroAttivo ? 'Pronto per il ritiro' : 'Pronto per il fattorino';
 }
 
+/**
+ * R12-009 — L'etichetta di READY quando non si sa di che ordine si parla (targhetta, filtri, export).
+ *
+ * Col ritiro acceso ci sono due strade: «Pronto per il ritiro» su un ordine portato a casa rifaceva il
+ * difetto qui sopra, «Pronto per il fattorino» su un ritiro diceva il contrario. Dove l'ordine è
+ * noto si chiama `etichettaPronto(ordine.pickup_in_store)`; dove non lo è vale una frase vera per
+ * tutti e due: l'ordine è pronto in negozio.
+ */
+export function etichettaProntoGenerica(ritiroAttivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): string {
+  return ritiroAttivo ? 'Pronto in negozio' : etichettaPronto(false);
+}
+
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   NEW:              'Ordine ricevuto',
   ACCEPTED:         'In preparazione',
-  READY:            etichettaPronto(),
+  READY:            etichettaProntoGenerica(),
   ASSIGNED:         'Fattorino in arrivo',
   PICKED_UP:        'Ritirato',
   OUT_FOR_DELIVERY: 'In consegna',
@@ -87,6 +99,12 @@ export const BUYER_TIMELINE: OrderStatus[] = [
   'OUT_FOR_DELIVERY',
   'DELIVERED',
 ];
+
+/**
+ * R12-009 — I passi di un ritiro in negozio: il fattorino non c'è, il negozio chiude l'ordine col
+ * codice (`confirm_pickup_by_seller`, da READY a DELIVERED).
+ */
+export const BUYER_TIMELINE_RITIRO: OrderStatus[] = ['NEW', 'ACCEPTED', 'READY', 'DELIVERED'];
 
 export function isPastStatus(current: OrderStatus, step: OrderStatus): boolean {
   const order: OrderStatus[] = [

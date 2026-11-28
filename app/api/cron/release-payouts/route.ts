@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { formatPriceFromCents } from '@/lib/format';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
@@ -475,7 +476,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
         if (await avvisoDaMandare(admin, 'PAYOUT_COD_SALDO_INSUFFICIENTE')) {
         await notifyAdmins(
           '⚠️ Saldo Stripe insufficiente per i bonifici in contanti',
-          `Servono €${(daPagareCents / 100).toFixed(2)} per pagare ${codIds.length} ordine/i in contanti e sul saldo Stripe ce ne sono €${(disponibile / 100).toFixed(2)}. I contanti raccolti dai fattorini non entrano nel saldo Stripe: finché non si versano, questi bonifici non possono partire.`,
+          `Servono ${formatPriceFromCents(daPagareCents)} per pagare ${codIds.length} ordine/i in contanti e sul saldo Stripe ce ne sono ${formatPriceFromCents(disponibile)}. I contanti raccolti dai fattorini non entrano nel saldo Stripe: finché non si versano, questi bonifici non possono partire.`,
           '/admin/cod-remittance',
         );
         }

@@ -254,7 +254,6 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
             <div className={`absolute inset-0 bg-gradient-to-br ${grad}`} />
             {/* La foto vera, solo se c'è nel dato */}
             {foto.src && (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 // La chiave è l'indirizzo: se la foto cambia nel pannello, l'elemento rinasce pulito
                 // (senza il display:none della foto rotta di prima).

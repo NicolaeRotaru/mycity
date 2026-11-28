@@ -7,16 +7,20 @@
 /**
  * Il ritiro in negozio si puo' scegliere in cassa?
  *
- * No, per adesso: coi negozi non se n'e' ancora parlato (lo sconto per il ritiro,
- * `PICKUP_DISCOUNT_PERCENT` in lib/constants.ts, e' a zero per lo stesso motivo).
+ * Si', dal lancio (R12-009, decisione di Nicola: acceso e gratis per il cliente). Col ritiro la
+ * consegna vale zero (lib/ordini/prezzi.ts), si paga con la carta o in contanti al banco, e MyCity
+ * prende comunque la sua commissione. Lo sconto per il ritiro (`PICKUP_DISCOUNT_PERCENT` in
+ * lib/constants.ts) resta a zero: coi negozi non se n'e' parlato, e la cassa dice «Senza consegna»,
+ * non «Sconto 0%».
  *
- * 5/11/2026 — Come si chiude un ritiro: la via del venditore ESISTE. La funzione
- * `confirm_pickup_by_seller` (migrazione 124, rifatta nella 179) porta l'ordine
- * da «pronto» a «consegnato» col codice del ritiro e fa pagare il negozio; la
- * usa app/seller/orders/[id]/page.tsx. Prima qui c'era scritto che il solo modo
- * di chiudere un ordine era il bottone del fattorino: non e' piu' vero.
+ * Come si chiude un ritiro: il negozio scrive il codice che il cliente gli mostra
+ * (`confirm_pickup_by_seller`, migrazione 124 rifatta nella 179, da app/seller/orders/[id]/page.tsx).
+ * L'ordine passa a «consegnato»; se era in contanti diventa CASH_IN_STORE: il negozio ha gia' tutto
+ * in cassa e la commissione MyCity si toglie dal bonifico del lunedi' (segna_bonifico_manuale,
+ * migrazione 916; il resto va in fattura).
  *
- * Si riaccende cambiando questa riga in `true`, dopo aver controllato che le
- * migrazioni 124 e 179 siano applicate in produzione.
+ * Fuori dal codice: le migrazioni 124, 179 e 916 devono essere applicate in produzione, se no il
+ * ritiro non si chiude o la commissione non si segna (risultano applicate al controllo in sola
+ * lettura del 28/11/2026).
  */
-export const RITIRO_IN_NEGOZIO_ATTIVO = false;
+export const RITIRO_IN_NEGOZIO_ATTIVO = true;

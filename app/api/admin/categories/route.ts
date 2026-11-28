@@ -22,6 +22,10 @@ const baseFields = {
   parent_id: z.string().uuid().nullable().optional(),
   sort_order: z.number().int().min(0).max(9999).optional(),
   featured: z.boolean().optional(),
+  // 28/11/2026 (R01-014, onda 2) — L'obbligo di allergeni e ingredienti (migrazione 363) per una
+  // categoria che non si chiama «alimentari»: dal pannello non si poteva accendere su una radice nuova.
+  // Spegnerlo dove è acceso lo rifiuta il database (categoria_alimentare_non_si_spegne).
+  richiede_dichiarazioni_alimentari: z.boolean().optional(),
   // La foto della tessera in home (migrazione 159). Vuota = nessuna foto: si salva null. Il messaggio
   // è quello di fotoDiCategoria, cioè dice esattamente cosa la home accetta e cosa no.
   image_url: z
@@ -38,6 +42,18 @@ const baseFields = {
 };
 
 const createSchema = z.object(baseFields);
+
+/**
+ * R01-014 (onda 2) — Un 23514 non è sempre la foto. Il grilletto della 363 rifiuta con un messaggio
+ * scritto per chi amministra («Lo slug di «Alimentari» non si cambia: …»), e il pannello diceva
+ * «Foto non ammessa». Il messaggio scritto da noi passa com'è; quello tecnico di un vincolo resta la foto
+ * (gli unici CHECK della tabella sono quelli della foto, migrazione 159).
+ */
+function motivoDelRifiuto(error: { message?: string | null }): string {
+  const testo = String(error.message ?? '').trim();
+  if (testo && !/violates check constraint/i.test(testo)) return testo.slice(0, 300);
+  return 'Foto non ammessa dal database: https://… oppure un percorso del sito /…';
+}
 
 type ClientAdmin = ReturnType<typeof getAdminSupabase>;
 
@@ -84,17 +100,37 @@ export const POST = withAdminAuth(async ({ req, user }) => {
       // Solo se è stata mandata: senza la migrazione 159 la colonna non c'è, e una categoria senza
       // foto si deve poter creare lo stesso.
       ...(d.image_url !== undefined ? { image_url: d.image_url || null } : {}),
+      ...(d.richiede_dichiarazioni_alimentari !== undefined
+        ? { richiede_dichiarazioni_alimentari: d.richiede_dichiarazioni_alimentari }
+        : {}),
     })
     .select('id')
     .single();
   if (error) {
     if (error.code === '23505') return ApiErrors.invalidRequest('Slug già esistente');
-    if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…');
+    if (error.code === '23514') return ApiErrors.invalidRequest(motivoDelRifiuto(error));
     return ApiErrors.internal('Impossibile creare la categoria');
   }
-  await writeAudit({ actorId: user.id, action: 'category.create', targetTable: 'categories', targetId: data.id, metadata: { name: d.name, slug: d.slug } });
+  await writeAudit({
+    actorId: user.id, action: 'category.create', targetTable: 'categories', targetId: data.id,
+    metadata: { name: d.name, slug: d.slug, richiede_dichiarazioni_alimentari: d.richiede_dichiarazioni_alimentari ?? false },
+  });
   return apiSuccess({ id: data.id });
 });
+
+/**
+ * 28/11/2026 (R04-004) — IL RIFIUTO DELLA GUARDIA DEGLI ALLERGENI ARRIVA CON IL SUO MOTIVO.
+ * La guardia della migrazione 363 (`categories`, BEFORE UPDATE OR DELETE) rifiuta con 23514 e una
+ * frase scritta per chi amministra: «La categoria «Alimentari» non si cancella: da lei dipende
+ * l'obbligo di allergeni e ingredienti». La cancellazione la trasformava in «Impossibile eliminare
+ * la categoria» (500), la modifica in «Foto non ammessa dal database» (l'altro 23514, quello della
+ * foto). Ora la frase del database passa com'è; ogni altro 23514 resta com'era.
+ */
+function rifiutoDellaGuardiaAllergeni(error: { code?: string; message?: string } | null): string | null {
+  if (error?.code !== '23514') return null;
+  const frase = (error.message ?? '').trim();
+  return /allergeni e ingredienti/i.test(frase) ? frase : null;
+}
 
 export const PATCH = withAdminAuth(async ({ req, user }) => {
   let body: unknown;
@@ -111,6 +147,9 @@ export const PATCH = withAdminAuth(async ({ req, user }) => {
   if (rest.sort_order !== undefined) patch.sort_order = rest.sort_order;
   if (rest.featured !== undefined) patch.featured = rest.featured;
   if (rest.image_url !== undefined) patch.image_url = rest.image_url || null;
+  if (rest.richiede_dichiarazioni_alimentari !== undefined) {
+    patch.richiede_dichiarazioni_alimentari = rest.richiede_dichiarazioni_alimentari;
+  }
   if (Object.keys(patch).length === 0) return ApiErrors.invalidRequest('Nessun campo da aggiornare');
 
   const admin = getAdminSupabase();
@@ -120,8 +159,10 @@ export const PATCH = withAdminAuth(async ({ req, user }) => {
   }
   const { error } = await admin.from('categories').update(patch).eq('id', id);
   if (error) {
+    const guardia = rifiutoDellaGuardiaAllergeni(error);
+    if (guardia) return ApiErrors.invalidRequest(guardia);
     if (error.code === '23505') return ApiErrors.invalidRequest('Slug già esistente');
-    if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…');
+    if (error.code === '23514') return ApiErrors.invalidRequest(motivoDelRifiuto(error));
     return ApiErrors.internal('Impossibile aggiornare la categoria');
   }
   await writeAudit({ actorId: user.id, action: 'category.update', targetTable: 'categories', targetId: id, metadata: { campi: Object.keys(patch) } });
@@ -157,6 +198,8 @@ export const DELETE = withAdminAuth(async ({ req, user }) => {
   }
   const { error } = await admin.from('categories').delete().eq('id', id);
   if (error) {
+    const guardia = rifiutoDellaGuardiaAllergeni(error);
+    if (guardia) return ApiErrors.invalidRequest(guardia);
     if (error.code === '23503') return ApiErrors.invalidRequest('Categoria usata da prodotti o sottocategorie: non eliminabile');
     return ApiErrors.internal('Impossibile eliminare la categoria');
   }

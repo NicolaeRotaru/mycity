@@ -1,5 +1,5 @@
 import { logger } from '@/lib/logger';
-import { fetchSellerPublicMap, type LettoreVista } from '@/lib/queries/seller-public-profiles';
+import { fetchNomiDeiClienti, fetchSellerPublicMap, type LettoreVista } from '@/lib/queries/seller-public-profiles';
 
 /**
  * IN CHAT, IL CLIENTE VEDE L'INSEGNA DEL NEGOZIO LETTA DALLA VETRINA PUBBLICA.
@@ -51,8 +51,14 @@ const avvisiSenzaLaFunzioneDati = new Set<string>();
 
 /**
  * I nomi dei clienti che chi guarda ha davanti, per id. Se la funzione non
- * risponde (o non c'è ancora, prima della 181) la mappa è vuota e vale il
- * ripiego «Cliente»: il nome è un dettaglio, i messaggi no.
+ * risponde la mappa è vuota e vale il ripiego «Cliente»: il nome è un
+ * dettaglio, i messaggi no.
+ *
+ * 27/11/2026 — Se la funzione non c'è ancora (prima della 181) si passa al
+ * ripiego che già esiste, `fetchNomiDeiClienti`: il nome di consegna degli
+ * ordini che chi guarda legge già. Prima chat e recensioni si fermavano a
+ * «Cliente» anche per chi aveva ordinato. La funzione si chiede una volta sola
+ * per apertura: al ripiego arriva la risposta già avuta, non una seconda domanda.
  */
 export async function nomiDeiClienti(
   supa: LettoreChat,
@@ -70,8 +76,11 @@ export async function nomiDeiClienti(
     // R09-002 — Finche' manca la funzione (migrazione 181) l'avviso si scrive una volta per processo e per
     // pagina, non a ogni apertura; un guasto vero resta nel registro ogni volta.
     if (funzioneNonAncoraCreata(e)) {
-      if (avvisiSenzaLaFunzioneDati.has(etichetta)) return new Map();
-      avvisiSenzaLaFunzioneDati.add(etichetta);
+      if (!avvisiSenzaLaFunzioneDati.has(etichetta)) {
+        avvisiSenzaLaFunzioneDati.add(etichetta);
+        logger.warn(`${etichetta} nomi dei clienti senza la funzione della 181: letti dagli ordini`, e);
+      }
+      return fetchNomiDeiClienti({ from: (tabella: string) => supa.from(tabella), rpc: async () => ({ data: null, error: e }) }, unici);
     }
     logger.warn(`${etichetta} nomi dei clienti non letti: mostrati con «Cliente»`, e);
     return new Map();

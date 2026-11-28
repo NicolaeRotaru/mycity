@@ -53,6 +53,8 @@ const STATI_APERTI = ['submitting', 'processing', 'ready'];
  * prima l'avvio andava avanti e l'attesa non scattava mai. Adesso si rilegge
  * senza la colonna e si aspetta lo stesso, contando i 120 s dall'inizio
  * dell'applicazione.
+ * 28/11/2026 (R02-003, onda 2) — La colonna la crea migrations/999m e /apply la scrive
+ * quando il lavoro resta «applicato». Il ripiego qui sopra resta per il database senza la migrazione.
  */
 const COLONNA_FINE_APPLICAZIONE = 'applicazione_finita_il';
 /** Quanto dura al massimo un'applicazione: la rotta /apply ha 120 s. */

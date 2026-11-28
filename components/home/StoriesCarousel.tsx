@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { lettoreNegoziConMemoria } from '@/lib/queries/vetrina-con-memoria';
 import { supabase } from '@/lib/supabase/client';
 import { caricatoreLogoNegozio } from '@/components/StoreAvatar';
 import { queryKeys } from '@/lib/queries/keys';
@@ -107,6 +108,9 @@ async function conGliAltriNegozi<T extends { seller_id: string }>(
 export default function StoriesCarousel() {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
+  // R09-008 — I negozi passano dalla memoria condivisa con le altre sezioni della home
+  // (lib/queries/vetrina-con-memoria.ts): chi arriva dopo non rifà il giro di rete.
+  const leggiNegozi = lettoreNegoziConMemoria(useQueryClient(), supabase);
   const { data: stories = [] } = useQuery({
     queryKey: queryKeys.seller.storiesActive,
     queryFn: async (): Promise<Story[]> => {
@@ -187,7 +191,7 @@ export default function StoriesCarousel() {
       const storie = aTurnoFraINegozi(
         (righe ?? []).map(({ negozio: _negozio, created_at: _creata, ...storia }) => storia),
       );
-      const conNegozio = (await conNegozioApprovato(supabase, storie, 'id, store_name, store_logo')).slice(0, STORIE_MOSTRATE);
+      const conNegozio = (await conNegozioApprovato(supabase, storie, 'id, store_name, store_logo', leggiNegozi)).slice(0, STORIE_MOSTRATE);
       return conNegozio.map(({ profiles, ...storia }) => ({
         ...storia,
         seller: { id: profiles.id, store_name: profiles.store_name, store_logo: profiles.store_logo ?? null },
@@ -232,7 +236,7 @@ export default function StoriesCarousel() {
                 )}
               </div>
             </div>
-            <span className="text-[10px] text-ink-700 font-semibold max-w-[72px] truncate">{s.seller?.store_name ?? '—'}</span>
+            <span className="text-2xs text-ink-700 font-semibold max-w-[72px] truncate">{s.seller?.store_name ?? '—'}</span>
           </button>
         ))}
       </div>

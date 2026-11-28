@@ -35,19 +35,57 @@ async function initSentry() {
   initialized = true;
   const Sentry = await import('@sentry/nextjs').catch(() => null);
   if (!Sentry) return;
-  if ((Sentry as { getClient?: () => unknown }).getClient?.()) return; // già acceso
-  Sentry.init(opzioniSentry() as Parameters<typeof Sentry.init>[0]);
+  accendiSeSpento(Sentry);
 }
 
+type SdkSentry = typeof import('@sentry/nextjs');
 
-export async function captureError(err: unknown, context?: Record<string, any>) {
+/** Vero se il registratore ha un client acceso (senza, `captureException` butta l'evento in silenzio). */
+function acceso(Sentry: SdkSentry): boolean {
+  return Boolean((Sentry as { getClient?: () => unknown }).getClient?.());
+}
+
+/** Accende il registratore se nessuno l'ha ancora fatto. Vero se adesso è acceso. */
+function accendiSeSpento(Sentry: SdkSentry): boolean {
+  if (acceso(Sentry)) return true;
+  try {
+    Sentry.init(opzioniSentry() as Parameters<typeof Sentry.init>[0]);
+  } catch {
+    return false;
+  }
+  return acceso(Sentry);
+}
+
+/**
+ * Manda l'errore al registratore. Risponde VERO solo se l'errore è arrivato a un registratore acceso:
+ * è l'unico caso in cui una pagina può dire «abbiamo registrato il problema».
+ *
+ * 28/11/2026 (R08-002, onda 2) — L'ERRORE NEL TELEFONO CHE NON REGISTRAVA NESSUNO.
+ *
+ * Le pagine d'errore dicevano «Abbiamo registrato il problema» col solo DSN configurato. Ma l'accensione
+ * (`instrumentation-client.ts`) parte quando il pezzo dell'SDK arriva dalla rete: su un telefono lento
+ * l'errore che rompe la pagina mentre si carica arrivava qui PRIMA, e `captureException` senza un client
+ * acceso restituisce un id e non spedisce niente. E se il pezzo dell'SDK non si scarica (rete che cade,
+ * spesso la stessa che ha rotto la pagina), qui si usciva in silenzio. In tutti e due i casi la pagina
+ * diceva il falso. Adesso, se il registratore non è ancora acceso, lo si accende qui prima di consegnare;
+ * e chi chiama sa se la consegna c'è stata.
+ */
+export async function captureError(err: unknown, context?: Record<string, unknown>): Promise<boolean> {
   if (!DSN) {
     console.error('[error]', err, context);
-    return;
+    return false;
   }
   const Sentry = await import('@sentry/nextjs').catch(() => null);
-  if (!Sentry) return;
+  if (!Sentry) {
+    console.error('[error] registratore non scaricato', err, context);
+    return false;
+  }
+  if (!accendiSeSpento(Sentry)) {
+    console.error('[error] registratore non acceso', err, context);
+    return false;
+  }
   Sentry.captureException(err, { extra: context });
+  return true;
 }
 
 export async function setSentryUser(userId: string, email?: string) {

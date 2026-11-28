@@ -74,9 +74,33 @@ export const PAGINA_DEI_BONIFICI = '/admin/bonifici-rimborso';
 export const GIORNI_DI_PREAVVISO = 3;
 
 /**
+ * DA QUANDO CONTANO I 14 GIORNI DI UN RECLAMO (R05-004, onda 2, 28/11/2026).
+ *
+ * Per un reso il giorno è quello della richiesta (Codice del Consumo, art. 56). Per un bonifico nato
+ * da un reclamo la legge non lo dice, e prima il termine restava «sconosciuto»: nessun allarme lo
+ * guardava. DOMANDA APERTA A NICOLA: per un reclamo i 14 giorni partono dal giorno in cui il cliente
+ * l'ha aperto (disputes.created_at)? Finché non risponde si conta dall'apertura: è il termine più
+ * presto, quindi l'allarme non arriva mai tardi. Se dice di no, si cambia QUI in 'decisione'
+ * (disputes.resolved_at, il giorno in cui l'amministrazione l'ha chiuso a favore del cliente): la
+ * pagina dei bonifici, l'allarme del sorvegliante, l'avviso e la rotta dei reclami leggono questa.
+ * Le due date le dà `admin_bonifici_rimborso()` (migrazione 999o).
+ */
+export type PartenzaDelTermineDeiReclami = 'apertura' | 'decisione';
+export const PARTENZA_DEL_TERMINE_DEI_RECLAMI: PartenzaDelTermineDeiReclami = 'apertura';
+
+/** Il giorno da cui contano i 14 giorni di un reclamo, secondo la regola qui sopra. */
+export function partenzaDelTermineDelReclamo(
+  date: { apertoIl?: string | null; decisoIl?: string | null },
+  regola: PartenzaDelTermineDeiReclami = PARTENZA_DEL_TERMINE_DEI_RECLAMI,
+): string | null {
+  return (regola === 'decisione' ? date.decisoIl : date.apertoIl) ?? null;
+}
+
+/**
  * IL TERMINE DEL BONIFICO: 14 giorni di calendario a Piacenza dal giorno della
  * richiesta (per un reso, quando il cliente l'ha chiesto: lo stesso giorno che
- * `avanza` e `decide` passano all'avviso). Senza quel giorno il termine non si sa.
+ * `avanza` e `decide` passano all'avviso; per un reclamo, vedi
+ * PARTENZA_DEL_TERMINE_DEI_RECLAMI). Senza quel giorno il termine non si sa.
  */
 export function termineDelBonifico(chiestoIl: string | null | undefined): Date | null {
   const chiesto = chiestoIl ? new Date(chiestoIl) : null;
@@ -138,8 +162,13 @@ export function avvisoDelBonificoDaFare(a: {
   chiave?: string | null;
   /** Il credito MyCity speso sull'ordine che non torna, perché l'account non c'è più (D5). */
   creditoNonRestituitoCents?: number;
-  /** Quando il cliente ha chiesto il reso (o aperto il reclamo): da lì partono i 14 giorni. */
+  /**
+   * Il giorno da cui partono i 14 giorni: per un reso quando il cliente l'ha chiesto, per un reclamo
+   * quello che dice PARTENZA_DEL_TERMINE_DEI_RECLAMI (`partenzaDelTermineDelReclamo`).
+   */
   resoChiestoIl?: string | null;
+  /** Per un reclamo: da dove si contano i 14 giorni (di default PARTENZA_DEL_TERMINE_DEI_RECLAMI). */
+  partenzaDeiReclami?: PartenzaDelTermineDeiReclami;
   /** La casella dove arrivano le risposte dei clienti. */
   casella?: string;
   /** Adesso (di default l'orologio): per dire se il termine è già passato o vicino. */
@@ -175,7 +204,8 @@ export function avvisoDelBonificoDaFare(a: {
     const chiesto = new Date(a.resoChiestoIl);
     frasi.push(
       /^dispute_/.test(a.chiave ?? '')
-        ? `Il reclamo è stato aperto il ${data(chiesto)}: contiamo ${GIORNI_PER_RIMBORSARE} giorni da lì, quindi il termine è il ${data(termine)}.`
+        ? `Il reclamo è stato ${(a.partenzaDeiReclami ?? PARTENZA_DEL_TERMINE_DEI_RECLAMI) === 'decisione' ? 'deciso' : 'aperto'} il ${data(chiesto)}: ` +
+          `contiamo ${GIORNI_PER_RIMBORSARE} giorni da lì, quindi il termine è il ${data(termine)}.`
         : `Il reso è stato chiesto il ${data(chiesto)}: la legge dà ${GIORNI_PER_RIMBORSARE} giorni da lì, quindi il termine è il ${data(termine)}.`,
     );
     // 27/11/2026 — Un reso rimborsato quando il pacco torna indietro arriva spesso a ridosso dei 14
@@ -187,9 +217,9 @@ export function avvisoDelBonificoDaFare(a: {
     frasi.push(`Il termine non lo sappiamo: manca il giorno da cui contare i ${GIORNI_PER_RIMBORSARE} giorni. Pagalo appena hai l'IBAN.`);
   }
   // 26/11/2026 — Il «fatto» si segna sulla pagina dei bonifici, una volta sola (migrazione 910).
-  // La frase dei movimenti del conto e il link agli ordini restano finché due prove comuni li
-  // fissano (il-rimborso-dei-contanti-arriva-col-bonifico, un-reclamo-su-contanti-mai-incassati…):
-  // poi la frase si toglie e il link diventa PAGINA_DEI_BONIFICI.
+  // 28/11/2026 (R05-004, onda 2) — Il link porta lì: il testo dice «premi Fatto nella pagina Bonifici
+  // di rimborso», e il link apriva l'elenco degli ordini. La frase dei movimenti del conto resta finché
+  // la 910 non è applicata: senza, la pagina non legge i bonifici ed è l'unica guardia contro il doppio.
   frasi.push(
     `Nella causale del bonifico scrivi «${causale}». Questo avviso arriva a ogni amministratore: ` +
       "prima di pagare cerca questa causale nei movimenti del conto. Se c'è, è già pagato.",
@@ -200,7 +230,7 @@ export function avvisoDelBonificoDaFare(a: {
   );
   frasi.push('Non dargli credito MyCity al posto dei soldi.');
 
-  return { titolo: TITOLO_DEL_BONIFICO_DA_FARE, testo: frasi.join(' '), link: '/admin/orders' };
+  return { titolo: TITOLO_DEL_BONIFICO_DA_FARE, testo: frasi.join(' '), link: PAGINA_DEI_BONIFICI };
 }
 
 /** Dove arriva l'IBAN del cliente, sulla pagina dei bonifici: lo stesso che dice l'avviso. */
@@ -219,6 +249,12 @@ export type RigaDelBonifico = {
   cliente_email: string | null;
   /** Per un reso, quando è stato chiesto: da lì contano i 14 giorni. */
   chiesto_il: string | null;
+  /**
+   * Per un reclamo, quando il cliente l'ha aperto e quando è stato deciso (migrazione 999o: prima
+   * non ci sono, e il termine del reclamo resta sconosciuto). Quale conta lo dice PARTENZA_DEL_TERMINE_DEI_RECLAMI.
+   */
+  reclamo_aperto_il?: string | null;
+  reclamo_deciso_il?: string | null;
   /** DA_FARE, FATTO, o RESPINTO (dalla banca: è di nuovo da fare). */
   stato: string;
   fatto_da_nome: string | null;
@@ -242,13 +278,24 @@ export type BonificoInElenco = RigaDelBonifico & {
  * oggi, così sta dopo i passati e prima di quelli che hanno tempo. Fatti: in fondo,
  * l'ultimo per primo.
  */
+/** Il giorno da cui contano i 14 giorni di una riga: la richiesta del reso, o la data del reclamo che vale. */
+export function partenzaDelTermine(
+  r: RigaDelBonifico,
+  regola: PartenzaDelTermineDeiReclami = PARTENZA_DEL_TERMINE_DEI_RECLAMI,
+): string | null {
+  if (r.chiesto_il) return r.chiesto_il;
+  if (!/^dispute_/.test(r.chiave)) return null;
+  return partenzaDelTermineDelReclamo({ apertoIl: r.reclamo_aperto_il, decisoIl: r.reclamo_deciso_il }, regola);
+}
+
 export function elencoDeiBonifici(
   righe: ReadonlyArray<RigaDelBonifico>,
   adesso: Date,
+  regola: PartenzaDelTermineDeiReclami = PARTENZA_DEL_TERMINE_DEI_RECLAMI,
 ): { daFare: BonificoInElenco[]; fatti: BonificoInElenco[] } {
   const oggi = giornoPiu(adesso, 0).getTime();
   const tutti = righe.map((r): BonificoInElenco => {
-    const termine = termineDelBonifico(r.chiesto_il);
+    const termine = termineDelBonifico(partenzaDelTermine(r, regola));
     const urgenza = urgenzaDelTermine(termine, adesso);
     return {
       ...r,
@@ -278,8 +325,9 @@ export function elencoDeiBonifici(
 export function allarmiDeiBonifici(
   righe: ReadonlyArray<RigaDelBonifico>,
   adesso: Date,
+  regola: PartenzaDelTermineDeiReclami = PARTENZA_DEL_TERMINE_DEI_RECLAMI,
 ): Array<{ key: string; type: string; detail: string; url: string; unaVoltaAlGiorno: true }> {
-  return elencoDeiBonifici(righe, adesso)
+  return elencoDeiBonifici(righe, adesso, regola)
     .daFare.filter((b) => b.urgenza.tipo === 'vicino' || b.urgenza.tipo === 'passato')
     .map((b) => {
       const tipo = b.urgenza.tipo === 'passato' ? 'BONIFICO_RIMBORSO_SCADUTO' : 'BONIFICO_RIMBORSO_IN_SCADENZA';

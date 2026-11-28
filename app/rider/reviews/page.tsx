@@ -119,7 +119,7 @@ export default function RiderReviewsPage() {
                   <p className="font-bold text-ink-900">{stats.avg >= 4.5 ? 'Ottimo lavoro!' : 'Continua così'}</p>
                   <p className="mt-0.5 text-[13px] text-ink-600">Su {stats.count} {stats.count === 1 ? 'recensione' : 'recensioni'}.</p>
                   {lettura?.troncato && (
-                    <p role="status" className="mt-0.5 text-[12px] font-semibold text-accent-800">Sono le tue ultime {stats.count} recensioni: le più vecchie non sono contate.</p>
+                    <p role="status" className="mt-0.5 text-xs font-semibold text-accent-800">Sono le tue ultime {stats.count} recensioni: le più vecchie non sono contate.</p>
                   )}
                   {/* 5/11/2026 — Qui c'era il bollino del miglior fattorino con la media di sempre, anche su una
                       recensione sola: un titolo che non dà nessuna priorità vera. */}
@@ -173,7 +173,7 @@ export default function RiderReviewsPage() {
         {/* Tips */}
         <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 p-4 text-sm text-primary-900">
           <h3 className="mb-2 flex items-center gap-1.5 font-bold">
-            <Lightbulb size={16} strokeWidth={2.2} aria-hidden /> Come migliorare il rating
+            <Lightbulb size={16} strokeWidth={2.2} aria-hidden /> Come migliorare il voto
           </h3>
           <ul className="space-y-1 text-[13px]">
             <li>• Saluta sempre con un sorriso e mostra il volto</li>

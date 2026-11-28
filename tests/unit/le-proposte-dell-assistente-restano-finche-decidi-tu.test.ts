@@ -87,7 +87,7 @@ describe('le righe del riquadro «Da controllare»', () => {
     const secondo = pianoPatchPerIlModulo({ price: 50, attributes: { allergeni: 'glutine, latte' } }, ctx).daControllare;
     const insieme = unisciVociDaControllare(primo, secondo);
     expect(insieme.map((v) => v.id)).toEqual(['prezzo', 'proposta:allergeni']);
-    expect(insieme[0].motivo).toContain('3.50 → 50.00');
+    expect(insieme[0].motivo).toMatch(/3,50\s€ → 50,00\s€/);
     expect(insieme[1].valore).toBe('glutine, latte');
   });
 });
@@ -223,7 +223,7 @@ describe('nel modulo vero', () => {
     expect(piede, 'la frase in fondo al pannello non c e').toBeTruthy();
     expect(piede!.textContent).toContain('qui sotto');
     const sottoLaFrase = piede!.parentElement!.textContent ?? '';
-    expect(sottoLaFrase).toContain('prezzo NON applicato (3.50 → 0.35 €: oltre il 30%, va deciso a mano)');
+    expect(sottoLaFrase).toContain('prezzo NON applicato (3,50\u00a0€ → 0,35\u00a0€: oltre il 30%, va deciso a mano)');
 
     // E nel riquadro del modulo la stessa cosa resta finche' il negoziante non dice «Ho capito».
     const box = riquadro(s);

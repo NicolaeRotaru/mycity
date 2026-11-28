@@ -42,7 +42,7 @@ import {
 } from './orfani-kyc';
 
 /** Cosa risponde una scrittura del database: PostgREST non lancia, restituisce. */
-type Risposta = { error: { message: string } | null };
+type Risposta = { error: { message: string; code?: string } | null };
 
 /**
  * Quanti mesi restano i messaggi del modulo Contatti. Sta qui, una volta sola:
@@ -67,6 +67,15 @@ const MESI_DELLE_SEGNALAZIONI_DECISE = 12;
  * numero: la prova `riparazione-r21-ultimi-visti` fa girare la potatura e pretende che coincidano.
  */
 const MESI_DEGLI_ULTIMI_VISTI = 14;
+
+/**
+ * 28/11/2026 (R08-012) — Quanti giorni resta un buono regalo mai pagato in `gift_card_in_attesa`
+ * (nome, email e messaggio del destinatario). Il minimo tecnico: la sessione di pagamento di Stripe
+ * scade al massimo dopo 24 ore e Stripe riprova a consegnare l'avviso di pagamento per 3 giorni; un
+ * margine per la notte del giro. Scelta tecnica in attesa di conferma di Nicola: l'informativa
+ * (app/privacy/page.tsx) non scrive ancora un periodo per questi tentativi.
+ */
+export const GIORNI_DEI_BUONI_REGALO_NON_PAGATI = 7;
 
 /** La catena di filtri che le potature usano davvero, e nient'altro. */
 type Filtrabile = PromiseLike<Risposta> & {
@@ -481,6 +490,26 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
         .eq('balance_cents', 0)
         .lt('redeemed_at', mesi(12))
         .not('recipient_email', 'is', null)),
+    },
+    // 28/11/2026 (R08-012) — Il tentativo di comprare un buono che non e' mai stato pagato: la
+    // cassa scrive destinatario e messaggio in `gift_card_in_attesa` invece di mandarli a Stripe, e
+    // il webhook cancella la riga quando il buono nasce. Restano le righe dei pagamenti abbandonati.
+    // Finche' la migrazione 999j non e' applicata la tabella non c'e', e non c'e' niente da
+    // potare: lo si scrive nel registro invece di rendere rossa ogni notte.
+    {
+      cosa: 'gift_card_in_attesa',
+      fai: async (admin, registro) => {
+        const { error } = await admin
+          .from('gift_card_in_attesa')
+          .delete()
+          .lt('created_at', giorni(GIORNI_DEI_BUONI_REGALO_NON_PAGATI));
+        if (!error) return;
+        if (error.code === '42P01' || error.code === 'PGRST205') {
+          registro.info('[cron-deletions] gift_card_in_attesa non ancora creata (migrazione 999j)');
+          return;
+        }
+        throw new Error(error.message);
+      },
     },
   ];
 }

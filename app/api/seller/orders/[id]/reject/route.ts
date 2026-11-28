@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { formatPriceFromCents } from '@/lib/format';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -103,6 +105,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
           "L'amministrazione è già avvisata: riprova più tardi.",
       );
     }
+    // R08-001 (onda 2) — Un 500 senza riga nel registro non lo vede nessuno (come l'annullo del cliente
+    // e dell'amministrazione): il guasto restava solo nella risposta al negozio.
+    logger.error('[seller-reject] rifiuto ordine fallito', { orderId: order.id, motivo: esito.motivo, dettaglio: esito.dettaglio });
     return ApiErrors.internal('Rifiuto fallito');
   }
 
@@ -130,9 +135,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const pezzi = [
     motivo ? `Motivo: ${motivo}` : 'Il negozio non può completare il tuo ordine.',
     esito.refundId ? 'Il pagamento è stato rimborsato sulla tua carta.' : 'Nessun addebito è andato a buon fine.',
-    creditoCents > 0 ? `Il credito MyCity che avevi usato (€${(creditoCents / 100).toFixed(2)}) è tornato sul tuo saldo.` : '',
+    creditoCents > 0 ? `Il credito MyCity che avevi usato (${formatPriceFromCents(creditoCents)}) è tornato sul tuo saldo.` : '',
     creditoMancanteCents > 0
-      ? `Il credito MyCity di €${(creditoMancanteCents / 100).toFixed(2)} non è ancora tornato sul tuo saldo: lo stiamo sistemando noi, non devi fare niente.`
+      ? `Il credito MyCity di ${formatPriceFromCents(creditoMancanteCents)} non è ancora tornato sul tuo saldo: lo stiamo sistemando noi, non devi fare niente.`
       : '',
     order.coupon_code ? `Il codice sconto ${order.coupon_code} torna utilizzabile.` : '',
   ].filter(Boolean);
@@ -167,7 +172,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 // l'involucro. Copiata tredici volte, e in ognuna bastava dimenticare l'`await`
 // per far arrivare `undefined` alla query. Adesso i pezzi dell'indirizzo li
 // risolve l'involucro, una volta sola, e arrivano gia' pronti nel contesto.
-export const POST = withAuthRateLimit(
+const postSenzaFila = withAuthRateLimit(
   { name: 'seller-order-reject', max: 20, windowMs: 60_000 },
   ({ req, user, params }) => handler(req, user, { id: String(params.id) }),
 );
+
+// 28/11/2026 (onda 2, R09-006 + R06-012) — Gli avvisi dell'annullo passano dalla fila della richiesta:
+// la rotta si avvolge, così le email partono una alla volta e non tutte insieme.
+export const POST = conFilaPerRichiesta(postSenzaFila);

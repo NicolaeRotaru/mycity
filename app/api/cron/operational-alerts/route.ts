@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { formatPriceFromCents } from '@/lib/format';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { withCronAuth } from '@/lib/api/middleware';
@@ -11,6 +12,7 @@ import { lavoriFermi, type CronHeartbeat } from '@/lib/cron-health';
 import { env } from '@/lib/env';
 import { dominioDeiContatti, mittenteFuoriDominio } from '@/lib/contatti-pubblici';
 import { allarmiTettoSpesaAiPerIlCron } from '@/lib/ai/tettoSpesa';
+import { allarmiDeiBonifici, type RigaDelBonifico } from '@/lib/rimborsi/bonifici-da-fare';
 import {
   sorvegliaCancellazioni,
   type GiornataDiCassa,
@@ -98,6 +100,13 @@ async function erroriDelSitoRecenti(adesso: number): Promise<ErroriDelSito> {
 const COOLDOWN_HOURS = 6;
 // R33-002 — L'attesa degli avvisi `unaVoltaAlGiorno` (il reclamo fermo): un giorno pieno.
 const ATTESA_DI_UN_GIORNO_ORE = 24;
+
+/**
+ * R06-001 (onda 2) — Gli ordini accettati e mai pronti si leggono a pagine da cinquanta, fino a venti
+ * pagine (mille accettati): la fascia si confronta qui, non in SQL, e i primi cinquanta non bastano.
+ */
+const PAGINA_ACCETTATI = 50;
+const PAGINE_ACCETTATI = 20;
 
 export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
@@ -374,14 +383,33 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   //     accettati e si decide qui. I più RECENTI per primi (come il punto 3): finché niente li fa
   //     scadere, gli accettati dimenticati da giorni hanno già suonato e non devono tenere il posto
   //     a quello fermo da poco.
-  const { data: accettatiFermi, error: err_accettatiFermi } = await admin
-    .from('orders')
-    .select('id, created_at, accepted_at, delivery_slot, profiles!orders_seller_id_fkey(store_name)')
-    .eq('delivery_status', 'ACCEPTED')
-    .order('accepted_at', { ascending: false, nullsFirst: false })
-    .limit(50);
+  //     28/11/2026 (onda 2, R06-001) — A PAGINE, NON I PRIMI CINQUANTA. La lettura prendeva solo i
+  //     50 accettati più recenti: con più di 50 accettati ancora nei tempi (i «Domani» presi la sera,
+  //     accettati dopo) quelli con la fascia già finita, accettati prima, restavano fuori e non
+  //     suonavano mai. Ora si scorrono le pagine (sempre dai più recenti, con l'id a spareggio) fino
+  //     all'ultima o a PAGINE_ACCETTATI pagine, e decide la fascia riga per riga.
+  const leggiAccettati = (da: number) => {
+    const q = admin
+      .from('orders')
+      .select('id, created_at, accepted_at, delivery_slot, profiles!orders_seller_id_fkey(store_name)')
+      .eq('delivery_status', 'ACCEPTED')
+      .order('accepted_at', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: true });
+    return da === 0 ? q.limit(PAGINA_ACCETTATI) : q.range(da, da + PAGINA_ACCETTATI - 1);
+  };
+  const accettatiFermi: NonNullable<Awaited<ReturnType<typeof leggiAccettati>>['data']> = [];
+  let err_accettatiFermi = false;
+  for (let pagina = 0; pagina < PAGINE_ACCETTATI; pagina++) {
+    const { data: righe, error } = await leggiAccettati(pagina * PAGINA_ACCETTATI);
+    if (error) {
+      err_accettatiFermi = true;
+      break;
+    }
+    accettatiFermi.push(...(righe ?? []));
+    if ((righe ?? []).length < PAGINA_ACCETTATI) break;
+  }
   if (err_accettatiFermi) controlliSaltati.push('ordini accettati e mai pronti');
-  for (const o of accettatiFermi ?? []) {
+  for (const o of accettatiFermi) {
     const r = o as { id: string; created_at: string; accepted_at?: string | null; delivery_slot?: string | null; profiles?: { store_name?: string } | null };
     const fine = fineDellaFascia(r);
     const daQuando = new Date(r.accepted_at ?? r.created_at).getTime();
@@ -453,7 +481,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     alerts.push({
       key: `COD_MISMATCH|${mm.rider_id}|${mm.for_date}`,
       type: 'COD_MISMATCH',
-      detail: `Riconciliazione COD rider ${mm.rider_id.slice(0, 8)} del ${mm.for_date}: atteso €${(mm.expected_cents / 100).toFixed(2)} vs incassato €${(mm.collected_cents / 100).toFixed(2)}`,
+      detail: `Riconciliazione COD rider ${mm.rider_id.slice(0, 8)} del ${mm.for_date}: atteso ${formatPriceFromCents(mm.expected_cents)} vs incassato ${formatPriceFromCents(mm.collected_cents)}`,
       url: '/admin/orders',
     });
   }
@@ -825,6 +853,36 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   } catch (e) {
     logger.error('[operational-alerts] allarme del tetto di spesa AI non letto', { motivo: e instanceof Error ? e.message : String(e) });
     controlliSaltati.push('tetto di spesa AI');
+  }
+
+  /**
+   * 16) Onda 2 (R05-004) — I BONIFICI DI RIMBORSO AL CLIENTE VICINI AI 14 GIORNI, O OLTRE.
+   *
+   * La pagina /admin/bonifici-rimborso li mette in evidenza, ma solo a chi la apre: qui il sorvegliante
+   * avvisa a 3 giorni o meno dal termine e a termine passato, una volta al giorno finché il bonifico non
+   * è «Fatto» (lib/rimborsi/bonifici-da-fare.ts, `allarmiDeiBonifici`). Per i resi il termine parte dalla
+   * richiesta, per i reclami dalla data che dice PARTENZA_DEL_TERMINE_DEI_RECLAMI (migrazione 999o;
+   * senza, il reclamo ha il termine sconosciuto e resta solo in evidenza sulla pagina).
+   * La lettura è della migrazione 910: finché non è applicata la funzione non c'è (PGRST202 / 42883) e il
+   * controllo tace, come prima, senza far risultare incompleto ogni giro. Ogni altro errore è un controllo saltato.
+   */
+  try {
+    const { data, error } = await admin.rpc('admin_bonifici_rimborso');
+    if (error) {
+      const codice = (error as { code?: string }).code;
+      if (codice === 'PGRST202' || codice === '42883') {
+        logger.warn('[operational-alerts] bonifici di rimborso: migrazione 910 non ancora applicata, controllo spento');
+      } else {
+        throw new Error(error.message);
+      }
+    } else if (!Array.isArray(data)) {
+      throw new Error('bonifici di rimborso: esito non previsto');
+    } else {
+      alerts.push(...allarmiDeiBonifici(data as RigaDelBonifico[], new Date()));
+    }
+  } catch (e) {
+    logger.error('[operational-alerts] bonifici di rimborso non letti', { motivo: e instanceof Error ? e.message : String(e) });
+    controlliSaltati.push('bonifici di rimborso');
   }
 
   /**

@@ -251,7 +251,7 @@ describe('la chat del prodotto, nel modulo vero', () => {
 
     expect(testo).not.toContain('Campi aggiornati nel form');
     expect(avvisi.toast.success).not.toHaveBeenCalled();
-    expect(testo).toContain('prezzo NON applicato (3.50 → 0.35 €');
+    expect(testo).toMatch(/prezzo NON applicato \(3,50\s€ → 0,35\s€/);
     const prezzo = s.radice.querySelector('input[name="price"]') as HTMLInputElement;
     expect(Number(prezzo.value), 'il prezzo fuori banda e entrato nel campo').toBe(3.5);
     s.smonta();

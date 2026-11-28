@@ -47,6 +47,11 @@ type PayoutOrder = {
   pratica_aperta?: boolean;
   /** R05-002 — contante consegnato da quando i contanti li paga Stripe: non si versa a mano. */
   lo_paga_stripe?: boolean;
+  /**
+   * R05-002 (collaudo) — contante HELD che Stripe potrebbe pagare, ma il giorno d'inizio non si è
+   * ancora letto (lettura in corso o caduta): non si sa se versarlo, quindi non si versa.
+   */
+  stripe_incerto?: boolean;
   payout_status: string | null;
   payout_at: string | null;
   stripe_transfer_id: string | null;
@@ -75,6 +80,7 @@ const TONO: Record<GruppoDelPannello, PayoutTone> = { da_versare: 'ready', in_so
 function payoutTone(o: PayoutOrder): { tone: PayoutTone; label: string; cls: string } {
   if (bonificoStripeAppeso(o)) return { tone: 'hold', label: 'Fermo: bonifico Stripe da controllare', cls: CLASSI.in_sospeso };
   if (o.lo_paga_stripe) return { tone: 'hold', label: 'In sospeso · lo paga Stripe', cls: CLASSI.in_sospeso };
+  if (o.stripe_incerto) return { tone: 'hold', label: 'In sospeso · non so se lo paga Stripe', cls: CLASSI.in_sospeso };
   const { gruppo, etichetta } = gruppoDelPannello(o);
   const label = o.payout_status === 'PAID_MANUALLY' && o.payout_at ? `${etichetta} ${fmtDate(o.payout_at)}` : etichetta;
   return { tone: TONO[gruppo], label, cls: CLASSI[gruppo] };
@@ -95,13 +101,25 @@ function bonificoStripeAppeso(o: PayoutOrder): boolean {
  * pagati due volte. `dal` arriva dal server (/api/admin/contanti-da-stripe); `null` = li versi tu.
  */
 function loPagaStripe(o: PayoutOrder, dal: number | null): boolean {
-  if (dal === null || o.payment_method !== 'cod' || o.payout_status !== 'HELD' || !o.delivered_at) return false;
-  const consegna = Date.parse(o.delivered_at);
-  return !Number.isNaN(consegna) && consegna >= dal;
+  if (dal === null || !potrebbePagarloStripe(o)) return false;
+  return Date.parse(o.delivered_at as string) >= dal;
 }
 
-/** Fuori dal bonifico del lunedì e dal tasto: un bonifico Stripe appeso, o un contante che paga Stripe. */
-const fuoriDalBonifico = (o: PayoutOrder) => bonificoStripeAppeso(o) || o.lo_paga_stripe === true;
+/**
+ * R05-002 (collaudo) — Un contante che il giro pagherebbe con Stripe se il giorno d'inizio fosse prima della
+ * sua consegna: contanti HELD con una consegna leggibile (contantiPagabiliDaStripe, lib/stripe/payout.ts).
+ * Finché quel giorno non si è letto, questi sono incerti: versati a mano rischiano di essere pagati due volte.
+ */
+function potrebbePagarloStripe(o: PayoutOrder): boolean {
+  if (o.payment_method !== 'cod' || o.payout_status !== 'HELD' || !o.delivered_at) return false;
+  return !Number.isNaN(Date.parse(o.delivered_at));
+}
+
+/**
+ * Fuori dal bonifico del lunedì e dal tasto: un bonifico Stripe appeso, un contante che paga Stripe, o un
+ * contante che non si sa ancora se lo paga Stripe.
+ */
+const fuoriDalBonifico = (o: PayoutOrder) => bonificoStripeAppeso(o) || o.lo_paga_stripe === true || o.stripe_incerto === true;
 
 /** R05-002 — L'istante da cui i contanti li paga Stripe, o `null`. Un esito storto è un errore, non un «no». */
 async function leggiContantiDaStripe(): Promise<number | null> {
@@ -273,6 +291,17 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto, parziale = fa
 }) {
   const [stato, setStato] = useState<'pronto' | 'invio' | 'errore'>('pronto');
   const [esito, setEsito] = useState<string | null>(null);
+  // R05-002 (collaudo) — Non si sa ancora da quando i contanti li paga Stripe: un bonifico segnato adesso
+  // potrebbe includerne uno che pagherà anche il giro. Niente tasto per questo negozio finché non si sa.
+  const incerti = ordini.filter((o) => o.stripe_incerto === true);
+  if (incerti.length > 0) {
+    return (
+      <p role="status" className="mt-1.5 max-w-xs text-xs font-semibold text-secondary-700">
+        «Bonifico fatto» fermo: non so ancora se {incerti.length === 1 ? 'il contante in sospeso lo paga' : `i ${incerti.length} contanti in sospeso li paga`}{' '}
+        Stripe ({formatPrice(incerti.reduce((s, o) => s + netto(o), 0) / 100)}). Non versarli finché la pagina non lo sa.
+      </p>
+    );
+  }
   // R11-001 — si segnano gli stessi ordini di «Da versare lunedì»: quelli di questa settimana aspettano il prossimo.
   // R22-002 — con i ritiri al banco dello stesso periodo: la loro commissione si trattiene dal bonifico.
   const c = contoDelLunedi(ordini, new Date());
@@ -504,10 +533,13 @@ export default function AdminPayoutsPage() {
     },
   });
   const righeRecuperi = useMemo(() => (servonoManuali ? (recuperi.data ?? []) : []), [servonoManuali, recuperi.data]);
-  // R05-002 — Da quando i contanti li paga Stripe: la variabile la legge solo il server. Finché non si
-  // legge, la pagina resta com'era (contanti «Da versare»); se la lettura cade, lo dice.
+  // R05-002 — Da quando i contanti li paga Stripe: la variabile la legge solo il server.
+  // Collaudo — finché non c'è nessuna lettura buona (in corso, o caduta) i contanti che Stripe potrebbe
+  // pagare sono incerti: fuori da «Da versare» e dal tasto, con l'avviso. Una rilettura caduta dopo una
+  // buona tiene l'ultima lettura buona (React Query la conserva): la variabile cambia solo col rilascio.
   const daStripe = useQuery({ queryKey: ['admin', 'payouts', 'contanti-da-stripe'], queryFn: leggiContantiDaStripe, refetchInterval: 60_000 });
-  const inizioStripe = daStripe.isSuccess && typeof daStripe.data === 'number' ? daStripe.data : null;
+  const stripeNonSo = daStripe.data === undefined;
+  const inizioStripe = typeof daStripe.data === 'number' ? daStripe.data : null;
   const rileggi = () => {
     void refetch();
     // refetch() parte anche a lettura spenta: senza traccia di bonifici a mano non si chiama.
@@ -523,11 +555,17 @@ export default function AdminPayoutsPage() {
   const tagliatoChiusi = meta.chiusi ? (meta.totaleChiusi ?? 0) > TETTO_PAYOUT : tagliato;
   const orders = useMemo(() => {
     const tutti = [...letti, ...((letti as LettiPayout).chiusi ?? [])].map((o) =>
-      loPagaStripe(o, inizioStripe) ? { ...o, lo_paga_stripe: true } : o,
+      stripeNonSo && potrebbePagarloStripe(o) && !bonificoStripeAppeso(o)
+        ? { ...o, stripe_incerto: true }
+        : loPagaStripe(o, inizioStripe)
+          ? { ...o, lo_paga_stripe: true }
+          : o,
     );
     // Lo stesso ordine di prima, aperti e chiusi mescolati: il più recente in cima.
     return tutti.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
-  }, [letti, inizioStripe]);
+  }, [letti, inizioStripe, stripeNonSo]);
+  // R05-002 (collaudo) — quanto resta fuori da «Da versare» perché non si sa se lo paga Stripe.
+  const incertiCents = useMemo(() => orders.reduce((s, o) => s + (o.stripe_incerto ? netto(o) : 0), 0), [orders]);
   // Con l'elenco tagliato ogni somma è un minimo, non il totale.
   const almeno = tagliato ? 'almeno ' : '';
   const almenoDovuto = tagliatoPagabili ? 'almeno ' : '';
@@ -675,10 +713,24 @@ export default function AdminPayoutsPage() {
         </p>
       )}
 
-      {daStripe.isError && (
-        <p role="alert" className="text-sm text-secondary-700">
+      {/* R05-002 (collaudo) — senza nessuna lettura buona i contanti che Stripe potrebbe pagare non si contano e non si segnano. */}
+      {stripeNonSo && daStripe.isError && (
+        <p role="alert" className="text-sm font-semibold text-secondary-700">
           Non so da quando i contanti li paga Stripe (PAGAMENTI_CONTANTI_DA_STRIPE_DAL): se è accesa, i contanti consegnati da
-          quel giorno non vanno versati a mano. Riprova tra poco.
+          quel giorno li paga il giro e versati a mano sarebbero pagati due volte. Per questo{' '}
+          {incertiCents > 0 ? `${almeno}${formatPrice(incertiCents / 100)} di contanti restano` : 'i contanti restano'} «In sospeso»,
+          fuori da «Contanti da versare», e il tasto «Bonifico fatto» è fermo per quei negozi. Riprova tra poco.
+        </p>
+      )}
+      {stripeNonSo && !daStripe.isError && incertiCents > 0 && (
+        <p role="status" className="text-sm text-ink-600">
+          Controllo da quando i contanti li paga Stripe: intanto {almeno}{formatPrice(incertiCents / 100)} di contanti restano «In sospeso» e
+          il tasto «Bonifico fatto» aspetta.
+        </p>
+      )}
+      {!stripeNonSo && daStripe.isError && (
+        <p role="status" className="text-sm text-ink-600">
+          Non riesco a rileggere da quando i contanti li paga Stripe: uso l&apos;ultima lettura buona.
         </p>
       )}
 
@@ -739,7 +791,7 @@ export default function AdminPayoutsPage() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-400">Da versare lunedì</p>
+                  <p className="text-[11px] font-bold uppercase tracking-label text-ink-400">Da versare lunedì</p>
                   <p className="font-mono text-lg font-extrabold text-olive-700">{almenoDovuto}{formatPrice(g.lunediCents / 100)}</p>
                   {(g.lunedi.trattenutaCents > 0 || g.lunedi.creditoCents > 0) && (
                     <p className="text-xs text-ink-500">
@@ -784,7 +836,7 @@ export default function AdminPayoutsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-white text-xs uppercase tracking-[0.03em] text-ink-500">
+                    <tr className="bg-white text-xs uppercase tracking-label text-ink-500">
                       <th className="px-5 py-2.5 text-left font-bold">Ordine</th>
                       <th className="px-5 py-2.5 text-left font-bold">Consegnato</th>
                       <th className="px-5 py-2.5 text-left font-bold">Metodo</th>
@@ -817,7 +869,7 @@ export default function AdminPayoutsPage() {
                               {t.label}
                             </span>
                             {o.stripe_transfer_id && (
-                              <span className="mt-0.5 block font-mono text-[10px] text-ink-400">
+                              <span className="mt-0.5 block font-mono text-2xs text-ink-400">
                                 {o.stripe_transfer_id.slice(0, 14)}…
                               </span>
                             )}

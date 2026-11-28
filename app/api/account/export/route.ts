@@ -179,6 +179,12 @@ const scarica = withAuthRateLimit(
     punti_fedelta: tutta((da, a) => admin.from('loyalty_accounts').select('*').eq('user_id', userId).order('user_id').range(da, a)),
     punti_movimenti: tutta((da, a) => admin.from('loyalty_transactions').select('*').eq('user_id', userId).order('id').range(da, a)),
     buoni_regalo: tutta((da, a) => admin.from('gift_cards').select('*').or(`buyer_id.eq.${userId},redeemed_by.eq.${userId}`).order('code').range(da, a)),
+    // 28/11/2026 (R08-012) — Il buono comprato e non ancora pagato (migrazione 999j): destinatario e
+    // messaggio stanno qui finché il pagamento non arriva. Senza la chiave del tentativo, che è tecnica.
+    // Finché la migrazione non è applicata la tabella non c'è: lì non c'è niente di suo, e l'elenco vuoto
+    // è la verità (non una lettura caduta che renda il file «incompleto»).
+    buoni_regalo_in_attesa: tutta((da, a) => admin.from('gift_card_in_attesa').select('id, amount_cents, recipient_name, recipient_email, message, created_at').eq('buyer_id', userId).order('id').range(da, a))
+      .then((l): Lettura => (['42P01', 'PGRST205'].includes(String((l.error as { code?: unknown } | null)?.code)) ? { data: [], error: null, alTetto: false } : l)),
     domande_sui_prodotti: tutta((da, a) => admin
       .from('product_questions')
       .select('*')

@@ -2,6 +2,7 @@
 
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useId, useRef, useState } from 'react';
+import type { Map as MappaLeaflet, Marker } from 'leaflet';
 import { Search, RadioTower, Target, MapPin, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { dentroLAreaServita, FRASE_NEGOZIO_FUORI_AREA } from '@/lib/ordini/zona-di-consegna';
@@ -42,8 +43,8 @@ interface Props {
 
 const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
   const mapDivRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
+  const mapRef = useRef<MappaLeaflet | null>(null);
+  const markerRef = useRef<Marker | null>(null);
 
   const eraIlVecchioPuntoDiPartenza =
     defaultValue?.lat === VECCHIO_PUNTO_DI_PARTENZA.lat && defaultValue?.lng === VECCHIO_PUNTO_DI_PARTENZA.lng;
@@ -98,7 +99,7 @@ const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
       if (cancelled || !mapDivRef.current || mapRef.current) return;
 
       // Fix per le icone Leaflet con Next/Webpack
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
       L.Icon.Default.mergeOptions({
                 // #76 — Le icone del segnaposto arrivavano da unpkg.com, un CDN di
         // terzi: ogni persona che apriva una mappa faceva una richiesta a un
@@ -176,8 +177,13 @@ const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
       // «Via Roma 12» poteva diventare la Via Roma di Podenzano, a 10 km, e si confermava. Se la città
       // manca (dopo l'ultima virgola, come la legge lib/geocodifica.ts, o in fondo al testo) si cerca a Piacenza.
       const testo = address.trim().replace(/,\s*(italia|italy)\s*$/i, '').replace(/[\s,]+$/, '');
-      const coda = testo.includes(',') ? testo.slice(testo.lastIndexOf(',') + 1) : '';
-      const haCitta = /\d{5}|\p{L}/u.test(coda) || /piacenza(\s*\(?pc\)?)?$/i.test(testo);
+      const coda = testo.includes(',') ? testo.slice(testo.lastIndexOf(',') + 1).trim() : '';
+      // 28/11/2026 (onda 2, R06-002) — Una lettera qualunque dopo la virgola non è una città: «Via Roma,
+      // 12/B», «Via Roma, 12 bis», «Via Roma 12, int. 3» restavano «…, Italia» e potevano confermare
+      // la via omonima di un altro comune. La coda è una città se ha il CAP, oppure se ha lettere e
+      // non comincia con un numero né con «bis», «ter», «int.», «interno», «scala», «piano».
+      const codaECivico = /^\d/.test(coda) || /^(bis|ter|int\.?|interno|scala|sc\.|piano|p\.)(\s|\d|$)/i.test(coda);
+      const haCitta = /\d{5}/.test(coda) || (/\p{L}/u.test(coda) && !codaECivico) || /piacenza(\s*\(?pc\)?)?$/i.test(testo);
       // 🟠-15: geocoding via proxy server-side (UA corretto, rate-limit, timeout).
       const res = await fetch('/api/geocode', {
         method: 'POST',

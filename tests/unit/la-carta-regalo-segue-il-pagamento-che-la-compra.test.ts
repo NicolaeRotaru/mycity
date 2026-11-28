@@ -34,7 +34,10 @@ const catena = (): unknown =>
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/env', () => ({ env: new Proxy({}, { get: () => () => 'segreto-di-prova' }) }));
 vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
-vi.mock('@/lib/stripe/client', () => ({ getStripe: () => ({}) }));
+// R05-010 (onda 2) — senza ordini la contestazione guarda prima il carrello del pagamento: qui non è di un carrello.
+vi.mock('@/lib/stripe/client', () => ({
+  getStripe: () => ({ paymentIntents: { retrieve: async (id: string) => ({ id, metadata: {}, transfer_group: null }) } }),
+}));
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     from: (tabella: string) =>

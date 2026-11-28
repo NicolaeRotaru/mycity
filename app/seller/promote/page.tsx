@@ -162,7 +162,7 @@ export default function SellerPromotePage() {
       <SellerPageTitle
         eyebrow="Crescita"
         title="Sponsorizza"
-        sub="Fai apparire un tuo prodotto nel carosello «In primo piano» della ricerca. €4,99 / settimana."
+        sub="Fai apparire un tuo prodotto nel carosello «In primo piano» della ricerca. 4,99 € / settimana."
       />
 
       {/* Wizard 2 colonne: a sinistra la scelta, a destra durata + riepilogo */}

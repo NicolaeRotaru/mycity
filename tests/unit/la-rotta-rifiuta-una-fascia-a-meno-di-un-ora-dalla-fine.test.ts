@@ -7,8 +7,6 @@
  * Le date sono l'orologio di Roma (lunedì 2/11/2026, giovedì 29/10, domenica 1/11).
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   ETICHETTA_ADESSO,
   consegnaScelta,
@@ -86,12 +84,6 @@ describe('una settimana intera, minuto per minuto: ogni fascia proposta la rotta
   });
 });
 
-describe('la rotta dei contanti usa la stessa regola', () => {
-  it('controlla i 60 minuti prima degli orari dei negozi, e risponde con un 409', () => {
-    const src = readFileSync(join(process.cwd(), 'app/api/orders/cod/route.ts'), 'utf8');
-    // 30/10 (ondata 22): la regola unica (`motivoFasciaRifiutata`) fa i 60 minuti e poi gli orari.
-    const regola = src.indexOf('motivoFasciaRifiutata(');
-    expect(regola).toBeGreaterThan(-1);
-    expect(src.slice(regola)).toContain('ApiErrors.conflict(rifiutata)');
-  });
-});
+// 28/11/2026 (R04-012, onda 2) — Qui c'era un controllo che cercava `ApiErrors.conflict(rifiutata)`
+// nel sorgente della rotta. Il 409 lo prova adesso la rotta vera, fatta girare con gli orari del
+// negozio: riparazione-onda2-r04-012-contanti-409-fascia.test.ts.

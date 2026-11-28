@@ -2,6 +2,7 @@
 
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useRef } from 'react';
+import type { Layer, Map as MappaLeaflet } from 'leaflet';
 import { useRouter } from 'next/navigation';
 
 export type NearbyStore = {
@@ -38,8 +39,8 @@ const NearbyStoresMap = ({
   className = 'w-full h-[70vh] rounded-2xl border border-surface-200 z-0',
 }: Props) => {
   const divRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const layersRef = useRef<any[]>([]);
+  const mapRef = useRef<MappaLeaflet | null>(null);
+  const layersRef = useRef<Layer[]>([]);
   const router = useRouter();
 
   // Init mappa una sola volta
@@ -51,7 +52,7 @@ const NearbyStoresMap = ({
       const L = (await import('leaflet')).default;
       if (cancelled || !divRef.current || mapRef.current) return;
 
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
       L.Icon.Default.mergeOptions({
                 // #76 — Le icone del segnaposto arrivavano da unpkg.com, un CDN di
         // terzi: ogni persona che apriva una mappa faceva una richiesta a un

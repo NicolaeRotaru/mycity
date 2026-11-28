@@ -11,9 +11,9 @@ import {
   PICKUP_DISCOUNT_PERCENT,
   RITIRO_IN_NEGOZIO_ATTIVO,
   PLATFORM_DELIVERY_FEE_CENTS,
-  RAGGIO_CONSEGNA_KM,
 } from '@/lib/constants';
 import { formatPrice } from '@/lib/format';
+import { CONFINE_DELLA_ZONA } from '@/lib/ordini/zona-di-consegna';
 import { vociDellaConsegna } from '@/lib/ordini/prezzi';
 
 // 30/10/2026 — Diceva «3,00 €–4,00 €» a consegna: con la regola del 29/10 (consegna.promessa) la
@@ -89,7 +89,7 @@ export default function AdminDeliveryPage() {
           icon={MapPin}
           tone="primary"
           label="Fin dove consegniamo"
-          value={`${RAGGIO_CONSEGNA_KM} km`}
+          value={CONFINE_DELLA_ZONA}
         />
       </div>
 
@@ -132,7 +132,7 @@ export default function AdminDeliveryPage() {
               icon={MapPin}
               title="Confine della consegna"
               desc="In linea d'aria dal negozio: oltre, la cassa rifiuta l'indirizzo. Se il negozio non ha la posizione sulla vetrina o l'indirizzo non si trova sulla mappa, la cassa non può misurare e lo accetta: la distanza va guardata a mano"
-              value={`${RAGGIO_CONSEGNA_KM} km`}
+              value={CONFINE_DELLA_ZONA}
             />
             <Row
               icon={Store}
@@ -140,7 +140,13 @@ export default function AdminDeliveryPage() {
               desc={RITIRO_IN_NEGOZIO_ATTIVO
                 ? 'Il ritiro azzera la consegna'
                 : 'Messo da parte: non se n’è ancora parlato coi negozi'}
-              value={RITIRO_IN_NEGOZIO_ATTIVO ? `− ${PICKUP_DISCOUNT_PERCENT}%` : 'non attivo'}
+              value={
+                !RITIRO_IN_NEGOZIO_ATTIVO
+                  ? 'non attivo'
+                  : PICKUP_DISCOUNT_PERCENT > 0
+                    ? `− ${PICKUP_DISCOUNT_PERCENT}%`
+                    : 'gratis per il cliente'
+              }
             />
           </div>
         </div>

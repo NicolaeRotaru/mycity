@@ -13,7 +13,6 @@ import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import CollectionHeader from '@/components/CollectionHeader';
-import { Badge } from '@/components/ui/Badge';
 import { queryKeys } from '@/lib/queries/keys';
 import { fetchSellerPublicMap, type SellerPublicProfile } from '@/lib/queries/seller-public-profiles';
 import { logger } from '@/lib/logger';
@@ -42,7 +41,6 @@ type EventRow = {
   cover_image_url: string | null;
   starts_at: string;
   ends_at: string;
-  discount_percent: number | null;
   cta_label: string;
   cta_url: string | null;
   status: 'scheduled' | 'live' | 'ended' | 'cancelled';
@@ -91,7 +89,7 @@ export default function EventsPage() {
         .from('marketplace_events')
         .select(`
           id, title, description, cover_image_url, starts_at, ends_at,
-          discount_percent, cta_label, cta_url, status, sponsor_seller_id
+          cta_label, cta_url, status, sponsor_seller_id
         `)
         .in('status', ['scheduled', 'live'])
         .gt('ends_at', new Date().toISOString())
@@ -262,16 +260,15 @@ export default function EventsPage() {
                       className="object-cover"
                     />
                     {isLive && (
-                      <span className="absolute top-3 left-3 inline-flex items-center gap-1 bg-rose-600 text-white px-2 py-1 rounded-full text-[10px] font-bold tracking-wider">
+                      <span className="absolute top-3 left-3 inline-flex items-center gap-1 bg-rose-600 text-white px-2 py-1 rounded-full text-2xs font-bold tracking-wider">
                         <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                         LIVE ORA
                       </span>
                     )}
-                    {ev.discount_percent ? (
-                      <Badge variant="discount" size="md" className="absolute top-3 right-3 rounded-full">
-                        -{ev.discount_percent}%
-                      </Badge>
-                    ) : null}
+                    {/* 28/11/2026 (R01-002, onda 2) — Qui c'era «-{discount_percent}%»: nessun calcolo del
+                        prezzo legge lo sconto di un evento (lib/ordini/prezzi.ts), il cliente vedeva «-20%»
+                        e pagava il prezzo pieno. Il badge torna solo con una regola di prezzo che lo applichi
+                        (vedi migrations/880). */}
                   </div>
                 ) : null}
 

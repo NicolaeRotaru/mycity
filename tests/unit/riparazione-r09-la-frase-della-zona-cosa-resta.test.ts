@@ -14,7 +14,8 @@ describe('la frase della zona: il rifiuto la usa, e i commenti e i titoli dicono
   it('il commento in testa alla fonte non dice «una volta sola» mentre due layout la riscrivono', () => {
     const testa = FONTE.slice(0, FONTE.indexOf('export const CONFINE_DELLA_ZONA'));
     const ancoraACopie = ['app/near/layout.tsx', 'app/category/[slug]/layout.tsx']
-      .filter((f) => /km dal negozio/.test(readFileSync(f, 'utf8')));
+      // 28/11/2026 (R09-004) — Contano le righe di codice, non i commenti che raccontano la storia.
+      .filter((f) => readFileSync(f, 'utf8').split('\n').some((r) => !/^\s*(\/\/|\/\*|\*)/.test(r) && /km dal negozio/.test(r)));
     if (ancoraACopie.length > 0) {
       for (const f of ancoraACopie) expect(testa, `il commento tace la copia in ${f}`).toContain(f);
       expect(testa).not.toMatch(/SI SCRIVE QUI, UNA VOLTA SOLA/);

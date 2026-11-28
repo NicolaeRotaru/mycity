@@ -40,7 +40,7 @@ describe('changeMessage', () => {
     const d = detectExternalChange(prev(20, 'in_stock'), { price: 25, availability: 'out_of_stock' })!;
     const { title, body } = changeMessage('Cuffie Bluetooth', d);
     expect(title).toContain('Cuffie Bluetooth');
-    expect(body).toMatch(/aumentato da €20\.00 a €25\.00/);
+    expect(body).toMatch(/aumentato da 20,00\s€ a 25,00\s€/);
     expect(body).toMatch(/esaurito/);
   });
 });

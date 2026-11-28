@@ -410,7 +410,7 @@ export type SocialLink = { key: string; label: string; href: string };
  * unico fermava anche un profilo vero di Instagram o TikTok chiamato «live», «help» o «business».
  */
 const RISERVATI_FACEBOOK = new RegExp(
-  '^(?:profile\\.php|p|reel|reels|share|groups|pages|watch|people|events|photo|photo\\.php|photos|marketplace|hashtag|stories|story\\.php|permalink\\.php|pg|gaming|video|videos|media|sharer|sharer\\.php|login|login\\.php|plugins|dialog|l\\.php|ads|business|help|policies|privacy|settings|notifications|messages|friends|bookmarks|search|public|fundraisers|live|reviews|lite|home|notes|recover|places|saved|memories|jobs|offers|menu|me|pymk|find-friends|onthisday|games|latest|feed|feeds|donate|fundraiser|watchparty|about|legal|terms|careers|composer|creatorstudio|messenger|unsupportedbrowser|checkpoint|crisisresponse|community|developers|profile|story|permalink|topic|topics|directory|security|cookies|support|inbox|oauth|adsmanager|instantgames|logout|recommendations|biz|creators|tr|ajax|requests|invite|invites|groupcampaign|gamingvideo|tournaments|pokes|poke|birthdays|communities|fbreels|apps|flx|groupsbrowse|sharing|welcome|touch|zero|mobile|m|commerce|shops|workplace|oculus|fbwatch|newsroom)$',
+  '^(?:profile\\.php|p|reel|reels|share|groups|pages|watch|people|events|photo|photo\\.php|photos|marketplace|hashtag|stories|story\\.php|permalink\\.php|pg|gaming|video|videos|media|sharer|sharer\\.php|login|login\\.php|plugins|dialog|l\\.php|ads|business|help|policies|privacy|settings|notifications|messages|friends|bookmarks|search|public|fundraisers|live|reviews|lite|home|notes|recover|places|saved|memories|jobs|offers|menu|me|pymk|find-friends|onthisday|games|latest|feed|feeds|donate|fundraiser|watchparty|about|legal|terms|careers|composer|creatorstudio|messenger|unsupportedbrowser|checkpoint|crisisresponse|community|developers|profile|story|permalink|topic|topics|directory|security|cookies|support|inbox|oauth|adsmanager|instantgames|logout|recommendations|biz|creators|tr|ajax|requests|invite|invites|groupcampaign|gamingvideo|tournaments|pokes|poke|birthdays|communities|fbreels|apps|flx|groupsbrowse|sharing|welcome|touch|zero|mobile|m|commerce|shops|workplace|oculus|fbwatch|newsroom|accountscenter|reg|campaign|brandedcontent|formedia|facebookmedia|votinginformationcenter|climatescience|pagesmanager|qr|codegen|subscriptions|audiencenetwork|whitehat|transparency|privacycenter|policy|cookie|stars|professionaldashboard|groupsmanager|eventsmanager|businesssuite|metaverified|verified|appcenter|bugbounty)$',
   'i',
 );
 const RISERVATI_INSTAGRAM = /^(?:p|reel|reels|stories|explore|direct|accounts|tv|share|about|legal|developer|web)$/i;
@@ -424,8 +424,16 @@ const RISERVATI_TIKTOK = /^(?:t|tag|discover|video|music|search|share|embed|expl
  */
 const SOTTOPAGINE_DI_UN_PROFILO_FACEBOOK =
   /^(?:posts|photos|videos|about|reviews|events|mentions|reels|live|menu|shop|services|followers|friends|community|grid|map|timeline|info|photos_by|photos_of|photos_albums|photos_all|photos_stream|videos_by|videos_of|about_details|about_[a-z_]+|friends_[a-z_]+|offers|jobs|likes|following|groups|music|movies|tv|books|notes|photo|video|reviews_given|friends_mutual|sports|events_past|events_upcoming)$/i;
-function percorsoDiUnProfiloFacebook(nome: string, resto: string): boolean {
+/**
+ * 28/11/2026 (R04-011, onda 2) — L'ELENCO NON CHIUDE MAI LA CLASSE: SI GUARDA ANCHE LA CODA.
+ * Un percorso di una parola che l'elenco non conosce resta indistinguibile da un nome vero. Ma un link
+ * che porta un post, una foto o un video ha la sua coda: «?story_fbid=», «?fbid=», «?v=», «?set=»,
+ * «?id=». Il link di un profilo non la porta mai (al più «?mibextid=», «?ref=», «?sk=»).
+ */
+const CODA_DI_UN_CONTENUTO_FACEBOOK = /(?:^|&)(?:story_fbid|fbid|v|set|id|multi_permalinks|comment_id|post_id|video_id|photo_id)=/i;
+function percorsoDiUnProfiloFacebook(nome: string, resto: string, coda = ''): boolean {
   if (/\.php$/i.test(nome)) return false;
+  if (CODA_DI_UN_CONTENUTO_FACEBOOK.test(coda)) return false;
   // R07-009 — Il nome di un profilo Facebook è fatto di lettere, cifre e punti, mai del trattino basso:
   // «business_help», «coronavirus_info» e simili sono pagine di Facebook, non un nome.
   if (nome.includes('_')) return false;
@@ -438,7 +446,7 @@ type RegolaDelSocial = {
   riservati: RegExp;
   /** R13-007 — Su TikTok un profilo si scrive sempre con la @: con la @ il nome non è mai un percorso riservato. */
   arobaFaProfilo?: boolean;
-  percorsoDiUnProfilo?: (nome: string, resto: string) => boolean;
+  percorsoDiUnProfilo?: (nome: string, resto: string, coda?: string) => boolean;
 };
 
 /**
@@ -456,7 +464,8 @@ function handleDaLink(v: string | undefined, regola: RegolaDelSocial): string | 
   // R10-010 — Il link copiato dall'app porta dietro «?igsh=…» o «?hl=it»: dopo il nome del profilo
   // la coda non conta, si tiene il nome (prima ogni «?» fermava anche un profilo vero).
   const riservato = m && !(regola.arobaFaProfilo && m[1] === '@') && regola.riservati.test(m[2]);
-  if (m && (riservato || (regola.percorsoDiUnProfilo && !regola.percorsoDiUnProfilo(m[2], m[3])))) {
+  const coda = t.includes('?') ? t.slice(t.indexOf('?') + 1).split('#')[0] : '';
+  if (m && (riservato || (regola.percorsoDiUnProfilo && !regola.percorsoDiUnProfilo(m[2], m[3], coda)))) {
     return t;
   }
   return (m ? m[2] : t).replace(/^@+/, '');

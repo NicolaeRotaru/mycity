@@ -41,4 +41,15 @@ export const FRASI_ZOD = {
   // Non nominano le chiavi interne: al cliente non dicono niente.
   valoreNonValido: 'Valore non valido',
   campiInPiu: (n: number) => (n === 1 ? 'C’è un campo che non serve qui' : `Ci sono ${n} campi che non servono qui`),
+  // R07-004 (onda 2) — i casi che restavano in inglese: multipleOf, finite, startsWith/endsWith/
+  // includes, datetime/date/time, le date fuori limite. I numeri con la virgola, come si scrivono qui.
+  multiploDi: (n: number | bigint) => `Deve essere un multiplo di ${String(n).replace('.', ',')}`,
+  numeroFinito: 'Serve un numero valido',
+  iniziaCon: (testo: string) => `Deve iniziare con «${testo}»`,
+  finisceCon: (testo: string) => `Deve finire con «${testo}»`,
+  contiene: (testo: string) => `Deve contenere «${testo}»`,
+  data: 'Data non valida',
+  orario: 'Orario non valido',
+  dataDal: (giorno: string) => `La data deve essere dal ${giorno} in poi`,
+  dataFinoAl: (giorno: string) => `La data deve essere entro il ${giorno}`,
 };

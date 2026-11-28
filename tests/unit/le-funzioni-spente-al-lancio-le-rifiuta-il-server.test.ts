@@ -63,6 +63,7 @@ vi.mock('@/lib/ai/moderation', () => ({ classifyProductPolicy: async () => ({ al
 vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
 vi.mock('@/lib/captcha', () => ({ verifyTurnstileToken: async () => ({ ok: true }) }));
 
+import { fintoDatabase } from './aiuti/finto-database-dei-pagamenti';
 import { POST as compraBuono } from '@/app/api/gift-cards/checkout/route';
 import { POST as salvaDrop } from '@/app/api/admin/daily-drops/route';
 import { POST as iscriviNewsletter } from '@/app/api/newsletter/route';
@@ -103,6 +104,8 @@ describe('buoni regalo: la vendita spenta non incassa', () => {
 
   it('accesa (controprova): la sessione di pagamento parte', async () => {
     stato.buoniInVendita = true;
+    // R08-012 (onda 2): il tentativo si scrive da noi prima di Stripe (gift_card_in_attesa).
+    stato.admin = () => fintoDatabase({ gift_card_in_attesa: [] }).client;
     await compraBuono(richiesta('/api/gift-cards/checkout', ACQUISTO));
     expect(stato.create, 'con la vendita accesa il freno blocca lo stesso: misura sbagliata').toHaveBeenCalled();
   });

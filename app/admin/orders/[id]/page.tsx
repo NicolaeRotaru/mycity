@@ -26,6 +26,7 @@ import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+import { ChiudiConsegna, consegnaDaChiudereAMano } from '@/components/admin/ChiudiConsegna';
 import { queryKeys } from '@/lib/queries/keys';
 import { vistaDaQuery } from '@/lib/vista-query';
 import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
@@ -37,7 +38,7 @@ type Dettaglio = ColonneSalvo<
   | 'delivery_slot' | 'created_at' | 'accepted_at' | 'ready_at' | 'picked_up_at' | 'delivered_at'
   | 'canceled_at' | 'delivery_full_name' | 'delivery_phone' | 'delivery_address' | 'delivery_city'
   | 'delivery_zip' | 'delivery_notes' | 'refunded_amount_cents' | 'payout_status' | 'dispute_status'
-  | 'internal_dispute_status',
+  | 'internal_dispute_status' | 'rider_fee_cents' | 'cash_confirmed_at',
   { delivery_status: OrderStatus }
 > & {
   seller: Colonne<'profiles', 'store_name'> | null;
@@ -67,6 +68,7 @@ const COLONNE_DETTAGLIO = `
   accepted_at, ready_at, picked_up_at, delivered_at, canceled_at,
   delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
   refunded_amount_cents, payout_status, dispute_status, internal_dispute_status,
+  rider_fee_cents, cash_confirmed_at,
   seller:profiles!orders_seller_id_fkey ( store_name ),
   rider:profiles!orders_rider_id_fkey   ( full_name ),
   order_items ( id, quantity, unit_price, product_name )
@@ -212,6 +214,10 @@ export default function AdminOrderDetailPage() {
           >
             {annulla.isPending ? 'Annullo…' : 'Annulla ordine'}
           </button>
+        )}
+        {/* R06-004 — Il fattorino è sparito con la consegna in contanti in strada: la chiude l'amministratore. */}
+        {consegnaDaChiudereAMano(o) && (
+          <ChiudiConsegna ordine={o} onChiusa={() => { void qc.invalidateQueries({ queryKey: queryKeys.admin.orders }); }} />
         )}
       </div>
 

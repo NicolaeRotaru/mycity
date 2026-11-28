@@ -462,7 +462,7 @@ function Kpi({ icon: Icon, label, value, color, hint }: { icon: typeof Eye; labe
     <div className={`bg-white border-2 ${t.kpiBorder} rounded-xl p-4`}>
       <div className="flex items-center justify-between">
         <Icon size={18} className={t.icon} aria-hidden />
-        {hint && <span className="text-[10px] uppercase tracking-wide text-ink-400">{hint}</span>}
+        {hint && <span className="text-2xs uppercase tracking-wide text-ink-400">{hint}</span>}
       </div>
       <p className="text-2xl font-bold text-ink-900 mt-1">{value}</p>
       <p className="text-xs text-ink-500">{label}</p>

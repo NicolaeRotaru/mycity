@@ -52,7 +52,7 @@ describe('il testo dell\'allarme del tetto di spesa AI senza conto condiviso', (
     vi.stubEnv('NODE_ENV', 'development');
     const allarmi = await allarmiTettoSpesaAiPerIlCron({ tettoEur: 20, copieAttese: 4 });
     expect(allarmi).toHaveLength(1);
-    expect(allarmi[0].detail).toMatch(/sceso a 5\.00 € per copia/);
+    expect(allarmi[0].detail).toMatch(/sceso a 5,00\s€ per copia/);
     expect(allarmi[0].detail).not.toMatch(/ferma/);
   });
 });

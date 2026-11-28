@@ -22,6 +22,9 @@ vi.mock('@/lib/push/send', async (orig) => {
   };
 });
 
+import { segnateIn, tabellaNotifiche, type RigaNotifica } from './aiuti/finte-notifiche-push';
+
+/** Le notifiche rimaste segnate alla fine del giro (R03-016: il giro le prende e ridà le non partite). */
 const segnate: string[] = [];
 let pending: Array<Record<string, unknown>> = [];
 let erroreLettura = false;
@@ -31,14 +34,16 @@ vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     rpc: async () => (rpcErrore ? { data: null, error: { message: 'timeout' } } : { data: true, error: null }),
     from: (tabella: string) => {
-      const b: Record<string, unknown> = { _update: false };
+      if (tabella === 'notifications') {
+        return tabellaNotifiche(() => pending as RigaNotifica[], {
+          erroreLettura: () => (erroreLettura ? { message: 'permission denied' } : null),
+        });
+      }
+      const b: Record<string, unknown> = {};
       const sel = () => b;
       Object.assign(b, {
-        select: sel, is: sel, gte: sel, order: sel,
-        limit: async () => (erroreLettura ? { data: null, error: { message: 'permission denied' } } : { data: pending, error: null }),
-        update: () => ((b._update = true), b),
+        select: sel,
         in: async (_c: string, valori: string[]) => {
-          if (b._update) { segnate.push(...valori); return { error: null }; }
           if (tabella === 'push_subscriptions') {
             return erroreIscrizioni
               ? { data: null, error: { message: 'canceling statement due to statement timeout' } }
@@ -54,7 +59,10 @@ vi.mock('@/lib/supabase/server', () => ({
 
 async function giro() {
   const { POST } = await import('@/app/api/cron/send-push/route');
-  return (POST as unknown as (req: Request) => Promise<Response>)(new Request('http://x', { method: 'POST' }));
+  const r = await (POST as unknown as (req: Request) => Promise<Response>)(new Request('http://x', { method: 'POST' }));
+  segnate.length = 0;
+  segnate.push(...segnateIn(pending as RigaNotifica[]));
+  return r;
 }
 
 const ORDINE = '/orders/3f9a12bc-1111-4222-8333-444455556666';

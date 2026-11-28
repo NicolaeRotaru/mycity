@@ -12,7 +12,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
-import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
+import { categorieDiNotificheSpente, useNotificationsCount } from '@/components/hooks/useNotificationsCount';
 import { useUtente } from '@/components/hooks/useUtente';
 import { toneFor, formatDate } from '@/lib/notifiche-aspetto';
 
@@ -35,6 +35,9 @@ function sessioneMancante(e: unknown): boolean {
 
 /** Il marcatore del non-autenticato: una costante, cosi' il confronto non e' su una frase libera. */
 const AUTH_RICHIESTA = 'AUTH_REQUIRED';
+
+/** Finché la preferenza non è letta: promozioni e newsletter fuori, come quando non si legge. */
+const CATEGORIE_SPENTE_FINCHE_NON_SI_SA: readonly string[] = ['promo', 'newsletter'];
 
 /** Quante notifiche si leggono alla volta: «Carica altre» ne aggiunge altrettante (R22-018). */
 const PER_VOLTA = 50;
@@ -99,17 +102,13 @@ export default function NotificationsPage() {
 
   // R14-010 — Le promozioni si vedono solo a chi le ha accese (`notif_promos`), come sul campanello
   // del negozio. Finché la preferenza non si legge, o se non si legge, le promozioni restano fuori.
-  const { data: promoAccese = false } = useQuery({
-    queryKey: ['notifiche-promo-accese', userId],
+  // 28/11/2026 (R07-008, onda 2) — Non solo le promozioni: anche la newsletter e i gruppi spenti
+  // restavano nell'elenco, mentre il campanello li toglieva dal conto. Adesso l'elenco toglie le
+  // stesse categorie del campanello, con la stessa regola (`categorieDiNotificheSpente`).
+  const { data: categorieSpente = CATEGORIE_SPENTE_FINCHE_NON_SI_SA } = useQuery({
+    queryKey: ['notifiche-categorie-spente', userId],
     enabled: !!userId,
-    queryFn: async (): Promise<boolean> => {
-      const { data: righe, error: errPref } = await supabase
-        .from('profiles')
-        .select('notif_promos')
-        .eq('id', userId as string);
-      if (errPref) return false;
-      return (righe as { notif_promos?: boolean | null }[] | null)?.[0]?.notif_promos === true;
-    },
+    queryFn: () => categorieDiNotificheSpente(userId as string),
   });
 
   // Un elenco vuoto non ha niente da tenere, e non dice di chi è.
@@ -247,8 +246,9 @@ export default function NotificationsPage() {
   if (serveAccesso) return null;
 
   const lette = data ?? ultimoElenco ?? [];
-  // Il conto «ce ne sono altre» guarda le righe lette, promozioni comprese: sono quelle che chiedono il limite.
-  const notifications = promoAccese ? lette : lette.filter((n) => n.category !== 'promo');
+  // Il conto «ce ne sono altre» guarda le righe lette, categorie spente comprese: sono quelle che chiedono il limite.
+  // Una riga senza categoria è un avviso d'ordine (il valore di serie della colonna).
+  const notifications = lette.filter((n) => !categorieSpente.includes(n.category ?? 'order'));
   const hasUnread = nonLetteDelCampanello > 0 || notifications.some((n) => !n.is_read);
   // A video c'è l'elenco di prima mentre arrivano le altre: il tasto resta, fermo, e dice che carica.
   const caricaAltre = isFetching && (isPlaceholderData || !data);

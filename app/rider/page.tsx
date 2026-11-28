@@ -118,7 +118,7 @@ function RiquadroOnline({ online, children }: { online: boolean; children: React
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-2.5 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">{children}</p>
+    <p className="mb-2.5 text-[13px] font-bold uppercase tracking-label text-ink-700">{children}</p>
   );
 }
 
@@ -376,7 +376,8 @@ export default function RiderDashboardPage() {
        */
       const { data, error } = await supabase.rpc('prendi_ordine', { p_order_id: orderId });
       if (error) throw error;
-      const esito = data as { ok: boolean; id?: string; motivo?: string } | null;
+      // Onda 2 (R11-006) — `insieme`: gli altri ordini pronti dello stesso carrello presi con questo.
+      const esito = data as { ok: boolean; id?: string; motivo?: string; insieme?: unknown } | null;
       if (!esito?.ok || !esito.id) {
         // R04-007 — Già preso da un altro, o non più pronto (annullato, tornato in preparazione).
         if (esito?.motivo === 'GIA_PRESO') throw new OrdineNonPiuPrendibile('Ordine già preso da un altro rider');
@@ -395,7 +396,7 @@ export default function RiderDashboardPage() {
                 .in('delivery_status', STATI_DELLE_MIE_CONSEGNE_APERTE)
                 .maybeSingle()
             : { data: null };
-          if ((giaMio as { id?: string } | null)?.id === orderId) return { id: orderId, giaTuo: true };
+          if ((giaMio as { id?: string } | null)?.id === orderId) return { id: orderId, giaTuo: true, insieme: 0 };
           throw new OrdineNonPiuPrendibile('Questo ordine non è più disponibile: non è più tra quelli pronti da prendere');
         }
         throw new Error(
@@ -410,7 +411,7 @@ export default function RiderDashboardPage() {
               : "Non siamo riusciti a prendere l'ordine. Riprova.",
         );
       }
-      const data2 = { id: esito.id, giaTuo: false };
+      const data2 = { id: esito.id, giaTuo: false, insieme: Array.isArray(esito.insieme) ? esito.insieme.length : 0 };
 
       // #44 — Qui c'era una chiamata a `notify()` dal browser. Non ha mai
       // funzionato: la tabella delle notifiche non ha nessuna regola che
@@ -424,7 +425,15 @@ export default function RiderDashboardPage() {
       // R04-011 — Un ordine già suo non è una presa nuova: non si conta di nuovo e si dice com'è.
       if (!data.giaTuo) trackRiderOrderAccepted(data.id);
       qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
-      toast.success(data.giaTuo ? 'Questo ordine è già tuo.' : 'Ordine assegnato a te!');
+      // R11-006 — Con la stessa presa sono arrivati gli altri ordini pronti dello stesso cliente: lo si dice,
+      // o il fattorino scopre solo nell'elenco che deve passare anche da un altro negozio.
+      toast.success(
+        data.giaTuo
+          ? 'Questo ordine è già tuo.'
+          : data.insieme > 0
+            ? `Ordine assegnato a te, insieme ${data.insieme === 1 ? 'a un altro ordine pronto' : `ad altri ${data.insieme} ordini pronti`} dello stesso cliente: un giro solo.`
+            : 'Ordine assegnato a te!',
+      );
       router.push(`/rider/orders/${data.id}`);
     },
     // R04-007 — Un «Accetta» perso perché l'ordine non si può più prendere: esce subito
@@ -514,7 +523,7 @@ export default function RiderDashboardPage() {
         {statoOnlineIgnoto ? (
           <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-secondary-200 bg-secondary-50 px-5 py-[18px] text-ink-900">
             <div>
-              <p className="font-serif text-[18px] font-extrabold">Non so se sei online</p>
+              <p className="font-serif text-lg font-extrabold">Non so se sei online</p>
               <p className="mt-0.5 text-xs text-ink-600">Non riesco a leggere il tuo stato. Riprova fra un momento.</p>
             </div>
             <Button
@@ -530,13 +539,13 @@ export default function RiderDashboardPage() {
           // R04-011 — La prima lettura sta ancora arrivando: non si dice «Sei offline» e non si
           // offre l'interruttore finché lo stato non si sa.
           <Card variant="surface" radius="2xl" padding="none" aria-live="polite" className="px-5 py-[18px] text-ink-900">
-            <p className="font-serif text-[18px] font-extrabold">Controllo se sei online…</p>
+            <p className="font-serif text-lg font-extrabold">Controllo se sei online…</p>
             <p className="mt-0.5 text-xs text-ink-500">Un momento: sto leggendo il tuo stato.</p>
           </Card>
         ) : (
         <RiquadroOnline online={online}>
           <div>
-            <p className="font-serif text-[18px] font-extrabold">{online ? 'Sei online' : 'Sei offline'}</p>
+            <p className="font-serif text-lg font-extrabold">{online ? 'Sei online' : 'Sei offline'}</p>
             <p className={`mt-0.5 text-xs ${online ? 'text-white/85' : 'text-ink-500'}`}>
               {online ? 'Ricevi le consegne disponibili' : 'Vai online per iniziare'}
             </p>
@@ -568,11 +577,12 @@ export default function RiderDashboardPage() {
           // R20-004 — «—» finché non c'è un numero (in caricamento o con la lettura caduta), non 0.
           ['Oggi', today ? formatPrice(today.earned) : '—'],
           ['Consegne', today ? String(today.count) : '—'],
-          ['Rating', rating && rating.count > 0 ? rating.avg.toFixed(1).replace('.', ',') : '—'],
+          // R11-003 — «Voto», come la testata («Non riesco a leggere il tuo voto») e il resto del sito: era «Rating».
+          ['Voto', rating && rating.count > 0 ? rating.avg.toFixed(1).replace('.', ',') : '—'],
         ].map(([label, value]) => (
           <Card key={label} variant="surface" radius="lg" padding="none" className="px-3 py-2.5 text-center">
             <p className="font-serif text-[17px] font-extrabold text-ink-900">{value}</p>
-            <p className="text-[10px] font-bold uppercase tracking-[0.03em] text-ink-400">{label}</p>
+            <p className="text-2xs font-bold uppercase tracking-label text-ink-400">{label}</p>
           </Card>
         ))}
       </div>

@@ -10,7 +10,7 @@ import { eDiSdg } from '@/lib/products/sdgSeller';
 import { dettagliDelServizio } from '@/lib/products/servizio';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
-import { discountedUnitCents } from '@/lib/promotions';
+import { scontoMostrato } from '@/lib/sconto-mostrato';
 import { sizedImage } from '@/lib/image-url';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import { promessaSpedizione } from '@/lib/promesse-pubbliche';
@@ -62,24 +62,17 @@ const ProductCard = ({
 }: ProductCardProps) => {
   const eUnServizio = !!servizio;
   const dettagliServizio = servizio ? dettagliDelServizio(servizio) : null;
-  const hasDiscount = !!discountPercent && discountPercent > 0;
-  // R01-011 — Lo scontato si calcola con la funzione di carrello e cassa (`discountedUnitCents`:
-  // al centesimo, sconto fra 0 e 70). La formula a mano non arrotondava: 1,15 € al -10% la scheda
-  // scriveva 1,04 € e la cassa faceva pagare 1,03 €, e al carrello arrivava 1,035.
-  const discountedPrice = hasDiscount ? discountedUnitCents(price, discountPercent as number) / 100 : price;
-  // Prezzo pieno barrato del venditore (solo se non c'è già una promo attiva).
-  const compareValid = !hasDiscount && !!compareAtPrice && compareAtPrice > price;
-  const showStrike = hasDiscount || compareValid;
-  const bigPrice = hasDiscount ? discountedPrice : price;
-  const strikePrice = hasDiscount ? price : (compareValid ? (compareAtPrice as number) : 0);
-  const badgePct = hasDiscount
-    // R16-006 — La percentuale che il prezzo applica davvero (tetto 70 di `discountedUnitCents`):
-    // su 100 € il prezzo scontato in centesimi dice lo sconto applicato, senza ripetere il 70 qui.
-    ? Math.round(100 - discountedUnitCents(100, discountPercent as number) / 100)
-    : (compareValid ? Math.round((1 - price / (compareAtPrice as number)) * 100) : 0);
-  // R10-004 — Sotto lo 0,5% la percentuale arrotondata è 0: il bollino «-0%» e «scontato del 0 per
-  // cento» non dicono niente. Il prezzo scontato e il barrato restano; il bollino no.
-  const showBadge = showStrike && badgePct > 0;
+  // R01-011 — Lo scontato è quello di carrello e cassa (`discountedUnitCents`, al centesimo).
+  // R16-006 — La percentuale è quella che il prezzo applica davvero (tetto 70).
+  // R10-004 — Barrato e bollino seguono la regola unica di `scontoMostrato`: niente «-0%» sotto lo
+  // 0,5%, e niente prezzo barrato uguale al prezzo (1,00 € al -0,3% resta 1,00 €; un listino di
+  // 100,002 € su un prezzo di 100 €). Il listino del venditore conta solo senza promo attiva.
+  const sconto = scontoMostrato({ prezzo: price, scontoPercento: discountPercent, prezzoDiListino: compareAtPrice });
+  const showStrike = sconto.barratoCents !== null;
+  const bigPrice = sconto.origine === 'promo' ? sconto.prezzoCents / 100 : price;
+  const strikePrice = (sconto.barratoCents ?? 0) / 100;
+  const badgePct = sconto.percento ?? 0;
+  const showBadge = sconto.percento !== null;
   const rawImg = images?.[0] ?? FOTO_MANCANTE;
   const img = sizedImage(rawImg, 'card');
   const router = useRouter();

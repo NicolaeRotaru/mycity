@@ -1,4 +1,5 @@
 import { assertSafeText, UnsafeContentError } from '@/lib/ai/moderation';
+import { formatPrice } from '@/lib/format';
 import { NextResponse } from 'next/server';
 import type Anthropic from '@anthropic-ai/sdk';
 import { rateLimitAsync } from '@/lib/rate-limit';
@@ -37,7 +38,7 @@ const SYSTEM = `Sei il copilot del negozio su "MyCity Piacenza". Il venditore ti
 Hai l'elenco dei suoi prodotti (id, nome, prezzo, stato, categoria, stock). In base all'istruzione:
 - Individua i prodotti coinvolti (per categoria, stato, nome, ecc.).
 - Per ognuno costruisci una voce in "changes" con il suo "product_id" (preso ESATTAMENTE dall'elenco) e un "patch" con SOLO i campi da cambiare.
-- Per le variazioni di prezzo calcola TU il nuovo prezzo numerico per ciascun prodotto (es. -10% su €20 → 18.0), non scrivere percentuali.
+- Per le variazioni di prezzo calcola TU il nuovo prezzo numerico per ciascun prodotto (es. -10% su 20 € → 18.0), non scrivere percentuali.
 - ${REGOLA_PREZZO_AI}
 - "tags" è la lista COMPLETA desiderata del prodotto (ricostruiscila da quella attuale per aggiungere/togliere).
 - Usa "status" tra: available, draft, sold.
@@ -231,7 +232,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const list = products
     .map((p) => {
       const s = productSnapshot(p, categories);
-      return `- id=${s.id} · ${s.name} · ${s.price != null ? `€${s.price}` : 's.p.'} · ${s.status} · ${s.categoryName ?? '—'} · stock ${s.stock ?? '∞'}`;
+      return `- id=${s.id} · ${s.name} · ${s.price != null ? formatPrice(s.price) : 's.p.'} · ${s.status} · ${s.categoryName ?? '—'} · stock ${s.stock ?? '∞'}`;
     })
     .join('\n');
 

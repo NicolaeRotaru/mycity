@@ -433,7 +433,7 @@ const SignInForm = () => {
 
       <AuthAlternatives returnTo={returnTo} />
 
-      <p className="mt-6 text-[14px] text-ink-600">
+      <p className="mt-6 text-sm text-ink-600">
         Non hai un account?{' '}
         <Link href={signUpHref} className="font-bold text-primary-700 hover:underline">
           Registrati

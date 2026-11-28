@@ -103,7 +103,10 @@ describe('POST /api/cron/process-deletions', () => {
     // per turno, se no il primo `once` se lo prende la potatura dei consensi.
     scaduti = { data: [], error: null };
     rpcMock.mockImplementation(async (nome: string) =>
-      (nome === 'process_expired_deletions' ? scaduti : { data: [], error: null }));
+      (nome === 'process_expired_deletions' ? scaduti
+      // R08-006 (onda 2) — La cassa del fattorino contata dal database (migrazione 999n): niente da versare.
+      : nome === 'cassa_da_versare_del_fattorino' ? { data: { centesimi: 0, giornate: 0, ordini: 0 }, error: null }
+      : { data: [], error: null }));
     updateEqMock.mockResolvedValue({ error: null });
     deleteUserMock.mockResolvedValue({ error: null });
     selectEqMock.mockResolvedValue({ data: [], error: null });

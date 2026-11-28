@@ -276,6 +276,23 @@ export function orariImpostati(storeHours: unknown): StoreHours | null {
 }
 
 /**
+ * R12-009 — SI PUÒ PASSARE A RITIRARE?
+ *
+ * Il ritiro non ha una fascia: il cliente passa negli orari di apertura, e le rotte lo esentano dal
+ * controllo della fascia. Ma un negozio con la settimana tutta chiusa (le ferie: «Chiudi» su ogni
+ * giorno, vedi `orariImpostati`) non apre mai, e col ritiro acceso l'ordine passava lo stesso.
+ * Orari mai impostati restano «nessun blocco», come per la consegna.
+ */
+export function ritiroPossibile(storeHours: unknown): boolean {
+  const hours = orariImpostati(storeHours);
+  if (!hours) return true;
+  return DAY_KEYS.some((k) => (hours[k] ?? []).some((iv) => {
+    const [o, c] = intervalloInMinuti(iv);
+    return c > o;
+  }));
+}
+
+/**
  * IL NEGOZIO PUÒ SERVIRE QUESTO ORDINE?
  *
  * ── Il difetto che ha prodotto questa funzione ──────────────────────────────
@@ -375,10 +392,12 @@ export function ultimoRitiroDellaFascia(
 }
 
 /**
- * 31/10/2026 — Il ritiro in negozio è spento (`RITIRO_IN_NEGOZIO_ATTIVO`): la cassa non lo offre,
- * e il no della rotta non può consigliarlo. Torna da solo quando l'interruttore si riaccende.
+ * 31/10/2026 — Col ritiro in negozio spento (`RITIRO_IN_NEGOZIO_ATTIVO`) la cassa non lo offre, e il
+ * no della rotta non può consigliarlo. R12-009 — Acceso dal lancio: si consiglia, ma non a chi ha il
+ * negozio in ferie (settimana tutta chiusa, `ritiroPossibile`), dove passare non serve a niente.
  */
-const OPPURE_RITIRA = RITIRO_IN_NEGOZIO_ATTIVO ? ', oppure ritira in negozio' : '';
+const oppureRitira = (orari?: unknown) =>
+  RITIRO_IN_NEGOZIO_ATTIVO && (orari === undefined || ritiroPossibile(orari)) ? ', oppure ritira in negozio' : '';
 
 /**
  * Perché l'ordine non parte, detto alla persona.
@@ -393,7 +412,10 @@ export function motivoNegozioChiuso(
   nomeNegozio: string,
   fascia?: string | null,
   now: Date = romeNow(),
+  /** Gli orari del negozio, se si conoscono: in ferie il ritiro non si consiglia. */
+  orari?: unknown,
 ): string {
+  const OPPURE_RITIRA = oppureRitira(orari);
   const scelta = leggiFinestraConsegna(fascia);
   // 5/11/2026 — «è chiuso in quella fascia» era falso per il negozio aperto nella fascia ma che
   // apre dopo il limite del ritiro (bar 10:30-19:00, «Domani · 9:00–11:00»): la frase ora dice

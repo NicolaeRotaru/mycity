@@ -103,9 +103,13 @@ describe('e parte da una misura in cui un nome normale ci sta', () => {
   const classi = APERTURA_H1![1];
 
   it('su telefono il titolo non supera i 24 punti', () => {
-    const base = classi.match(/(?:^|\s)text-\[(\d+)px\]/);
-    expect(base, "l'<h1> non dichiara più una misura di partenza: la prova va riscritta").not.toBeNull();
-    const punti = Number(base![1]);
+    // Onda 2 (R10-014): la misura può essere scritta a mano (text-[24px]) o col gradino della scala
+    // (text-2xl = 24 px nella scala di Tailwind, tailwind.config.ts non la cambia).
+    const SCALA: Record<string, number> = { '2xs': 10, xs: 12, sm: 14, base: 16, lg: 18, xl: 20, '2xl': 24, '3xl': 30, '4xl': 36 };
+    const aMano = classi.match(/(?:^|\s)text-\[(\d+)px\]/);
+    const gradino = classi.match(/(?:^|\s)text-(2xs|xs|sm|base|lg|xl|2xl|3xl|4xl)(?=\s|$)/);
+    expect(aMano ?? gradino, "l'<h1> non dichiara più una misura di partenza: la prova va riscritta").not.toBeNull();
+    const punti = aMano ? Number(aMano[1]) : SCALA[gradino![1]];
     expect(
       punti,
       `il titolo parte da ${punti} punti: nei circa 247 che restano su un telefono da 375 ci stanno ` +

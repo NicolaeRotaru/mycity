@@ -17,7 +17,7 @@ const stato = vi.hoisted(() => ({ parametri: null as null | Record<string, any> 
 vi.mock('@/app/seller/earnings/commissione', async (orig) => ({
   ...(await orig<typeof import('@/app/seller/earnings/commissione')>()),
   ABBONAMENTO_CENTESIMI_MESE: 6000,
-  PREZZO_ABBONAMENTO_MESE: '€60',
+  PREZZO_ABBONAMENTO_MESE: '60,00 €',
 }));
 vi.mock('@/lib/funzioni-al-lancio', async (orig) => ({
   ...(await orig<typeof import('@/lib/funzioni-al-lancio')>()),
@@ -57,15 +57,15 @@ describe('R10-005 — un prezzo solo, anche per l’addebito', () => {
     expect(r.status).toBe(200);
     const riga = stato.parametri?.line_items?.[0]?.price_data;
     expect(riga?.unit_amount, 'la cassa addebita un importo scritto a mano').toBe(6000);
-    expect(riga?.product_data?.description).toContain('€60/mese');
+    expect(riga?.product_data?.description).toContain('60,00 €/mese');
   });
 
   it('il banner dice il prezzo della fonte unica', async () => {
     const { SubscriptionBanner } = await import('@/components/seller/SubscriptionBanner');
     // past_due: l'avviso si disegna subito (l'invito ad attivare aspetta di sapere se il negozio ha incassato).
     const html = renderToStaticMarkup(createElement(SubscriptionBanner, { status: 'past_due' }));
-    expect(html).toContain('€60/mese');
-    expect(html).not.toContain('€50');
+    expect(html).toContain('60,00 €/mese');
+    expect(html).not.toMatch(/€\s?50|50(?:,00)?\s?€/);
   });
 
   it('il modulo di richiesta del negozio dice il prezzo della fonte unica', async () => {

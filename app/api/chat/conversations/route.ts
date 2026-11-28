@@ -7,6 +7,7 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 
 export const runtime = 'nodejs';
 
@@ -31,7 +32,8 @@ const StartSchema = z.object({
  *
  * Risponde con { conversationId } pronto per navigare a /messages/[id].
  */
-export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
+// R09-006 — Una fila per richiesta per i lavori dopo la risposta (email, campanelle): vedi lib/api/fila-per-richiesta.ts.
+export const POST = conFilaPerRichiesta(withAuth(async ({ user, req }): Promise<NextResponse> => {
   // 188 — la chiave è la persona, non l'indirizzo di rete: chi sta su rete
   // mobile non deve essere fermato per colpa di uno sconosciuto.
   const rl = await rateLimitAsync({ key: `chat:start:${user.id}`, max: 20, windowMs: 60_000 });
@@ -141,4 +143,4 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   }
 
   return NextResponse.json({ conversationId }, { status: 200 });
-});
+}));

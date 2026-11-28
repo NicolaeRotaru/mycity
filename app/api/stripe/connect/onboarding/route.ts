@@ -6,12 +6,12 @@ import { logger } from '@/lib/logger';
 import { ContoNonSalvato, salvaIlConto } from '@/lib/stripe/salva-conto';
 import { withSellerAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { FRASE_CONTO_SCONOSCIUTO_ALLA_CHIAVE_DI_PROVA } from '@/lib/stripe/conto-di-prova';
 
 export const runtime = 'nodejs';
 
-/** Il conto di prima che la chiave di prova dell'anteprima non conosce: cosa fare, in chiaro. */
-const CONTO_SCONOSCIUTO_IN_ANTEPRIMA =
-  'In questa anteprima Stripe usa le chiavi di prova e non riconosce il conto salvato sul tuo profilo. Se stai provando con dati di prova, togli il conto dal profilo e riprova.';
+// R05-009 (onda 2) — La frase del conto che la chiave di prova non conosce sta con il freno
+// (lib/stripe/conto-di-prova.ts): il freno vale per ogni chiave di prova, non solo nell'anteprima.
 
 /**
  * Avvia onboarding Stripe Connect Express per il seller corrente.
@@ -52,12 +52,12 @@ export const POST = withSellerAuthRateLimit({ name: 'stripe-onboarding', max: 10
   } catch (err) {
     // 5/11/2026 — l'id del conto non si e' salvato: non si manda a Stripe.
     if (err instanceof ContoNonSalvato) return ApiErrors.unavailable(err.message);
-    // 26/11/2026 — In anteprima, con la chiave di prova, il conto salvato sul profilo non esiste
+    // 26/11/2026 — Con la chiave di prova il conto salvato sul profilo non esiste
     // per Stripe (lib/stripe/client.ts): si dice alla persona cosa fare, invece del solo
     // «Errore Stripe». L'id del conto resta solo nei registri.
     if ((err as { name?: unknown } | null)?.name === 'ContoSconosciutoAllaChiaveDiProva') {
       logger.warn('[stripe] connect onboarding: conto del profilo sconosciuto alla chiave di prova', err);
-      return ApiErrors.conflict(CONTO_SCONOSCIUTO_IN_ANTEPRIMA);
+      return ApiErrors.conflict(FRASE_CONTO_SCONOSCIUTO_ALLA_CHIAVE_DI_PROVA);
     }
     logger.error('[stripe] connect onboarding failed', err);
     return ApiErrors.internal('Errore Stripe');

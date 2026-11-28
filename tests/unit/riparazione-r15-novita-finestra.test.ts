@@ -43,6 +43,7 @@ describe('R15-011 finestra novità', () => {
     const griglia = readFileSync(join(process.cwd(), 'components', 'ProductGrid.tsx'), 'utf8');
     expect(pagina).toMatch(/<ProductGrid[^>]*\bsoloNovita\b/);
     expect(griglia).toMatch(/creatiDal,\s*\n\s*tetto:/);
-    expect(griglia).toMatch(/onCount\(totaleVero \?\? filtered\.length\)/);
+    // Onda 2 (R11-012): quando la lettura cade o la griglia si ferma al tetto, il conteggio dice «non so» (null).
+    expect(griglia).toMatch(/onCount\([^;]*\(totaleVero \?\? filtered\.length\)\)/);
   });
 });

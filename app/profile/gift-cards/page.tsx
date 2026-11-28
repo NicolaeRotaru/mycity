@@ -223,7 +223,7 @@ export default function GiftCardsPage() {
           <Wallet size={24} />
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wider opacity-80">Il tuo credito MyCity</p>
+          <p className="text-xs uppercase tracking-label opacity-80">Il tuo credito MyCity</p>
           {saldoNonLetto ? (
             <>
               <p className="text-base font-semibold">Non riusciamo a leggere il tuo credito.</p>
@@ -271,7 +271,7 @@ export default function GiftCardsPage() {
                       : 'bg-white text-ink-900 border-cream-300 hover:border-primary-300'
                   }`}
                 >
-                  €{a}
+                  {a} €
                 </button>
               ))}
             </div>
@@ -303,7 +303,7 @@ export default function GiftCardsPage() {
           />
 
           <div className="bg-accent-50 border border-accent-200 rounded-lg p-3 text-sm text-ink-700">
-            <p><strong>Come funziona:</strong> paghi €{amount} con carta; inviamo subito un codice al destinatario via email. Lui lo riscatta su MyCity e ottiene €{amount} di credito (valido 2 anni).</p>
+            <p><strong>Come funziona:</strong> paghi {amount} € con carta; inviamo subito un codice al destinatario via email. Lui lo riscatta su MyCity e ottiene {amount} € di credito (valido 2 anni).</p>
           </div>
 
           <Button
@@ -314,7 +314,7 @@ export default function GiftCardsPage() {
             size="lg"
             icon={Send}
           >
-            Paga €{amount} e regala
+            Paga {amount} € e regala
           </Button>
         </form>
       )}

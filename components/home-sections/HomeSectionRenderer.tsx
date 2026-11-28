@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { frasePagamento, SPIEGAZIONE_RESO } from '@/lib/promesse-pubbliche';
-import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { FINO_AL_CONFINE_IN_TESTA } from '@/lib/ordini/zona-di-consegna';
 import { FRASE_PREZZO_NEGOZI } from '@/app/seller/earnings/commissione';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -80,7 +80,7 @@ const DEFAULT_TRUST_BULLETS = [
   { Icon: HomeIcon,  color: 'primary',   t: 'Commercianti locali', d: 'Negozi di Piacenza, approvati da noi prima di entrare.' },
   // 28/10/2026 — Era la promessa dei minuti della veloce («Rider del territorio») senza un rider approvato:
   // la promessa firmata da Nicola il 26/10 è «in giornata», fino a 5 km dal negozio.
-  { Icon: Truck,     color: 'accent',    t: 'Consegna in giornata',     d: `Fino a ${RAGGIO_CONSEGNA_KM} km dal negozio, negli orari di apertura.` },
+  { Icon: Truck,     color: 'accent',    t: 'Consegna in giornata',     d: `${FINO_AL_CONFINE_IN_TESTA}, negli orari di apertura.` },
   { Icon: RotateCcw, color: 'secondary', t: 'Reso entro 14 giorni',     d: SPIEGAZIONE_RESO },
 ] as const;
 
@@ -227,7 +227,7 @@ function HomeBlock({
           <div className="container mx-auto px-4 sm:px-6">
             <div className="flex justify-between items-end mb-5 gap-4 flex-wrap">
               <div>
-                <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-label">
                   <Heart size={14} strokeWidth={2.4} />
                   {/* 5/11/2026 — La fila non riceve un ordinamento: mostra gli ultimi prodotti
                       caricati. I titoli di riserva dicevano «più amati / vanno forte / più visti». */}
@@ -319,7 +319,7 @@ function HomeBlock({
         <section className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}>
           <div className="flex justify-between items-end mb-5 gap-4 flex-wrap">
             <div>
-              <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-label">
                 <Store size={14} strokeWidth={2.4} />
                 {c.eyebrow || 'Vicino a te'}
               </span>
@@ -351,7 +351,7 @@ function HomeBlock({
         <section className="bg-gradient-to-br from-accent-100 via-accent-50 to-cream-100 border-y border-cream-300">
           <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_FASCIA} grid grid-cols-1 md:grid-cols-2 gap-8 items-center`}>
             <div>
-              <span className="inline-flex items-center gap-1.5 bg-white/80 text-primary-800 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ring-1 ring-primary-200">
+              <span className="inline-flex items-center gap-1.5 bg-white/80 text-primary-800 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-label ring-1 ring-primary-200">
                 <Mail size={14} strokeWidth={2.4} aria-hidden />
                 {/* 27/10/2026 — Qui si promettevano soldi all'iscrizione, senza nessun meccanismo dietro: via. */}
                 {c.badge || 'Newsletter'}
@@ -398,7 +398,7 @@ function HomeBlock({
               location="seller_band"
               // R01-015 — Sul telefono (fascia in colonna) il pulsante può andare a capo e non supera lo
               // schermo; da 640 px, dove la fascia è una riga, resta su una riga come prima.
-              className="inline-flex max-w-full items-center gap-2 bg-accent-500 hover:bg-accent-600 text-ink-900 px-5 py-2.5 rounded-full font-bold transition-colors shadow-lg sm:whitespace-nowrap"
+              className="inline-flex max-w-full items-center gap-2 bg-accent-500 hover:bg-accent-600 text-ink-900 px-5 py-2.5 rounded-full font-bold transition-colors shadow-warm-lg sm:whitespace-nowrap"
             >
               <Store size={18} strokeWidth={2.4} />
               {c.ctaLabel || 'Diventa venditore'}

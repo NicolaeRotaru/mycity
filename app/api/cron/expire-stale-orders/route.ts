@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { withCronAuth } from '@/lib/api/middleware';
 import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { refundOrder } from '@/lib/stripe/payout';
@@ -10,7 +11,7 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
-import { avvisaIlClienteDelRimborso, avvisaIlClienteDellAnnullo, avvisaIlNegozioDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine } from '@/lib/ordini/annulla';
+import { avvisaIlClienteDelRimborso, avvisaIlClienteDellAnnullo, avvisaIlNegozioDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine, restituisciIlCreditoDellOrdine } from '@/lib/ordini/annulla';
 import { ApiErrors } from '@/lib/api/responses';
 import { righePerChiChiudeAMano, type AvvisoDelCarrello, type ComeHaPagato } from '@/lib/email/annullo-nel-carrello';
 import { scriviCampanella } from '@/lib/ordini/campanella';
@@ -39,6 +40,14 @@ export const runtime = 'nodejs';
  * qualunque giro della cassa: una cassa ancora al lavoro non perde la sua merce.
  */
 const RISERVA_ORFANA_DOPO_MINUTI = 120;
+
+/**
+ * R06-006 — La lettura degli ordini fermi in NEW: a pagine da cento, dai più vecchi, finché non si
+ * trovano cento scaduti o non si sono lette venti pagine (duemila ordini fermi).
+ */
+const PAGINA_CANDIDATI = 100;
+const PAGINE_MASSIME = 20;
+const SCADUTI_PER_GIRO = 100;
 
 /**
  * Cron: chiude gli ordini ORFANI fermi in NEW che il venditore non ha mai
@@ -116,7 +125,7 @@ function avvisoAFineGiro(
   return { ...a, pagatoCents: comeLui ? comeLui.totalePrimaCents : a.pagatoCents, negoziRimasti: rimasti.length, rimasti };
 }
 
-export const POST = withCronAuth(async (req): Promise<NextResponse> => {
+const postSenzaFila = withCronAuth(async (req): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   // 5/11/2026 — Senza la chiave di servizio il giro risponde 503 «non configurato», non un 500 muto.
@@ -148,34 +157,70 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
 
   const cutoff = new Date().toISOString();
 
-  const { data: candidates, error } = await admin
-    .from('orders')
-    // 27/8/2026 (R121) — `coupon_code` non veniva nemmeno letto, quindi il
-    // codice sconto di un ordine che il negozio non ha mai accettato restava
-    // bruciato: il cliente perdeva il buono senza aver comprato niente.
-    // 3/9/2026 — `created_at` e `delivery_slot` non venivano nemmeno letti, e
-    // sono i due campi che dicono se l'attesa è finita davvero: senza,
-    // l'ordine della sera per domani mattina moriva alle 00:15.
-    // 16/10/2026 — `internal_dispute_status`: la pausa del carrello, se c'è un
-    // rimborso dal cruscotto ancora da dividere (più sotto).
-    // 5/11/2026 — `stripe_session_id`: il carrello, per non restituire un codice sconto che un
-    // altro ordine dello stesso carrello tiene ancora. E i più vecchi prima: senza un ordine, con
-    // più di cento ordini fermi, il database poteva rendere sempre gli stessi cento.
-    .select('id, user_id, seller_id, payment_method, payment_status, stripe_payment_intent, stripe_session_id, total_price, wallet_applied_cents, coupon_code, created_at, delivery_slot, internal_dispute_status, seller:profiles!orders_seller_id_fkey ( store_hours )')
-    .eq('delivery_status', 'NEW')
-    .lt('created_at', cutoff)
-    .order('created_at', { ascending: true })
-    .limit(100);
+  // 28/11/2026 (onda 2, R06-006) — SI LEGGE A PAGINE FINCHÉ NON SI TROVANO GLI SCADUTI.
+  // La lettura era una sola, i cento NEW più vecchi. Ma i più vecchi sono spesso ordini su una fascia
+  // ancora lontana (gli «Domani» della sera prima, i «Dopodomani»), ancora nei tempi: con cento di
+  // quelli in testa, la veloce scaduta nata dopo restava fuori dal giro, e dal giro dopo, finché i
+  // cento non si svuotavano — con la carta, il cliente addebitato senza che nessuno accettasse.
+  // Ora si scorrono le pagine (sempre dai più vecchi, con l'id a spareggio) e decide `ancoraNeiTempi`
+  // riga per riga; il giro si ferma a SCADUTI_PER_GIRO scaduti o a PAGINE_MASSIME pagine lette.
+  const leggiPagina = (da: number) => {
+    const q = admin
+      .from('orders')
+      // 27/8/2026 (R121) — `coupon_code` non veniva nemmeno letto, quindi il
+      // codice sconto di un ordine che il negozio non ha mai accettato restava
+      // bruciato: il cliente perdeva il buono senza aver comprato niente.
+      // 3/9/2026 — `created_at` e `delivery_slot` non venivano nemmeno letti, e
+      // sono i due campi che dicono se l'attesa è finita davvero: senza,
+      // l'ordine della sera per domani mattina moriva alle 00:15.
+      // 16/10/2026 — `internal_dispute_status`: la pausa del carrello, se c'è un
+      // rimborso dal cruscotto ancora da dividere (più sotto).
+      // 5/11/2026 — `stripe_session_id`: il carrello, per non restituire un codice sconto che un
+      // altro ordine dello stesso carrello tiene ancora. E i più vecchi prima.
+      .select('id, user_id, seller_id, payment_method, payment_status, stripe_payment_intent, stripe_session_id, total_price, wallet_applied_cents, coupon_code, created_at, delivery_slot, internal_dispute_status, seller:profiles!orders_seller_id_fkey ( store_hours )')
+      .eq('delivery_status', 'NEW')
+      .lt('created_at', cutoff)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true });
+    return da === 0 ? q.limit(PAGINA_CANDIDATI) : q.range(da, da + PAGINA_CANDIDATI - 1);
+  };
+  type Candidato = NonNullable<Awaited<ReturnType<typeof leggiPagina>>['data']>[number];
 
-  if (error) {
-    logger.error('[cron] expire-stale-orders: select fallita', error);
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  const candidates: Candidato[] = [];
+  let rinviati = 0;
+  for (let pagina = 0; pagina < PAGINE_MASSIME && candidates.length < SCADUTI_PER_GIRO; pagina++) {
+    const { data: righe, error } = await leggiPagina(pagina * PAGINA_CANDIDATI);
+    if (error) {
+      // La prima pagina che cade ferma il giro come prima; una successiva lascia lavorare quelle già lette.
+      if (pagina === 0) {
+        logger.error('[cron] expire-stale-orders: select fallita', error);
+        return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      }
+      logger.error('[cron] expire-stale-orders: pagina dei candidati non letta, il giro lavora quelle già lette', { pagina, message: error.message });
+      break;
+    }
+    for (const o of righe ?? []) {
+      // 3/9/2026 — L'ORDINE DELLA SERA PER DOMANI MORIVA NELLA NOTTE.
+      //
+      // Tre ore dalla nascita è la regola giusta per una consegna immediata. Per
+      // un ordine con un appuntamento — «Domani · 9:00–12:00», scelto alle 21:15
+      // perché la cassa da oggi lo accetta — vuol dire annullarlo alle 00:15, col
+      // negozio chiuso e nessuno che potesse accettarlo. Finché la fascia
+      // promessa non è passata l'ordine è ancora buono e non si tocca.
+      // 30/10/2026 (ondata 24) — Con gli orari del negozio l'ordine su una fascia scade all'ultimo
+      // ritiro possibile, non alla fine della fascia: nessuno può più ritirarlo.
+      if (ancoraNeiTempi(o, new Date(), orariDelNegozio(o))) {
+        rinviati++;
+        continue;
+      }
+      if (candidates.length < SCADUTI_PER_GIRO) candidates.push(o);
+    }
+    if ((righe ?? []).length < PAGINA_CANDIDATI) break;
   }
 
   let canceled = 0;
   let refunded = 0;
   let failed = 0;
-  let rinviati = 0;
   /** Annullati con un rimborso impossibile: restano fermi, li chiude una persona. */
   let daChiudereAMano = 0;
   /** Lasciati in coda: sul loro pagamento c'è un rimborso dal cruscotto da dividere. */
@@ -186,23 +231,9 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   // che partono a fine giro.
   const avvisiDelGiro: AvvisoDelCarrello[] = [];
   const annullatiNelGiro = new Set<string>();
-  const alCliente: Array<{ o: NonNullable<typeof candidates>[number]; perLEmail: NonNullable<typeof candidates>[number]; avviso: AvvisoDelCarrello | null; come: ComeHaPagato; isCardPaid: boolean }> = [];
+  const alCliente: Array<{ o: Candidato; perLEmail: Candidato; avviso: AvvisoDelCarrello | null; come: ComeHaPagato; isCardPaid: boolean }> = [];
 
-  for (const o of candidates ?? []) {
-    // 3/9/2026 — L'ORDINE DELLA SERA PER DOMANI MORIVA NELLA NOTTE.
-    //
-    // Tre ore dalla nascita è la regola giusta per una consegna immediata. Per
-    // un ordine con un appuntamento — «Domani · 9:00–12:00», scelto alle 21:15
-    // perché la cassa da oggi lo accetta — vuol dire annullarlo alle 00:15, col
-    // negozio chiuso e nessuno che potesse accettarlo. Finché la fascia
-    // promessa non è passata l'ordine è ancora buono e non si tocca.
-    // 30/10/2026 (ondata 24) — Con gli orari del negozio l'ordine su una fascia scade all'ultimo
-    // ritiro possibile, non alla fine della fascia: nessuno può più ritirarlo.
-    if (ancoraNeiTempi(o, new Date(), orariDelNegozio(o))) {
-      rinviati++;
-      continue;
-    }
-
+  for (const o of candidates) {
     // 16/10/2026 — Qui contava solo «PAID». Un rimborso parziale fatto dal
     // cruscotto Stripe porta l'ordine a «PARTIALLY_REFUNDED»: il giro lo
     // annullava come un contrassegno, senza rimborsare il resto. La regola è
@@ -278,6 +309,8 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     }
 
     const nonTornato: string[] = [];
+    // R06-013 — «Rimborso emesso» parte dopo lo storno del credito MyCity, per dire anche quello.
+    let rimborsoDaDire: { importoCents: number | null | undefined; motivo: string } | null = null;
     try {
       if (isCardPaid) {
         try {
@@ -295,7 +328,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
             annullatoDaChiChiama: true,
           });
           refunded++;
-          await avvisaIlClienteDelRimborso(admin, o, rimborso?.importoCents, motivoDelRimborso);
+          rimborsoDaDire = { importoCents: rimborso?.importoCents, motivo: motivoDelRimborso };
         } catch (errRimborso) {
           // 6/9/2026 — UN ORDINE CHE NON SI PUO' RIMBORSARE NON SI RIMETTE IN CODA.
           //
@@ -381,17 +414,22 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       const walletCents = Number(o.wallet_applied_cents ?? 0);
       let creditoTornato = true;
       if (walletCents > 0) {
-        const { error: wErr } = await admin.rpc('wallet_credit', {
-          p_user: o.user_id,
-          p_cents: walletCents,
-          p_reason: 'order_auto_canceled',
-          p_ref: o.id,
-        });
-        if (wErr) {
-          logger.warn('[cron] expire-stale-orders: storno wallet fallito', { id: o.id, message: wErr.message });
+        // 28/11/2026 (onda 2, R06-005) — La stessa restituzione dell'annullo (lib/ordini/annulla.ts), con i
+        // suoi tre tentativi sicuri: qui ce n'era uno solo, e un timeout lasciava il credito fermo. L'avviso
+        // agli amministratori resta quello del giro, qui sotto, insieme alla merce non tornata.
+        const nonTornatoCents = await restituisciIlCreditoDellOrdine(admin, o, 'order_auto_canceled', { avvisaGliAmministratori: false });
+        if (nonTornatoCents > 0) {
+          logger.warn('[cron] expire-stale-orders: storno wallet fallito', { id: o.id });
           creditoTornato = false;
           nonTornato.push(`il credito MyCity speso (${(walletCents / 100).toFixed(2).replace('.', ',')} €) non è tornato al cliente`);
         }
+      }
+
+      // 28/11/2026 (onda 2, R06-013) — Con la carta e il credito insieme, «Rimborso emesso» dice anche il
+      // credito tornato davvero. Prima partiva prima dello storno e diceva solo la carta; e se il carrello
+      // scadeva tutto nello stesso giro l'email di annullo non parte (R15-013): nessuno diceva del credito.
+      if (rimborsoDaDire) {
+        await avvisaIlClienteDelRimborso(admin, o, rimborsoDaDire.importoCents, rimborsoDaDire.motivo, creditoTornato ? walletCents : 0);
       }
 
       // 5/11/2026 — Merce o credito non tornati: l'ordine è già annullato e il giro non lo riprende.
@@ -498,4 +536,8 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
 // il lavoro non sarebbe mai partito. Stesso identico handler, stesso controllo
 // del segreto: cambia solo la porta da cui si entra. Il POST resta valido
 // perché il cron esterno continua a girare finché non lo spegni.
-export const GET = POST;
+
+// 28/11/2026 (onda 2, R09-006 + R06-012) — Gli avvisi dell'annullo passano dalla fila della richiesta:
+// la rotta si avvolge, così le email partono una alla volta e non tutte insieme.
+export const POST = conFilaPerRichiesta(postSenzaFila);
+export const GET = conFilaPerRichiesta(postSenzaFila);

@@ -173,6 +173,9 @@ export default function LavoraConNoiPage() {
               .
             </p>
           )}
+          {/* 28/11/2026 (N-002, onda 2) — Senza posizioni la pagina disegnava un elenco vuoto, che i lettori di
+              schermo annunciano come «elenco, 0 elementi». L'elenco c'è solo se c'è qualcosa da elencare. */}
+          {JOBS.length > 0 && (
           <ul className="flex flex-col gap-3">
             {JOBS.map((job) => (
               <li
@@ -202,9 +205,12 @@ export default function LavoraConNoiPage() {
               </li>
             ))}
           </ul>
+          )}
         </section>
 
-        {/* CTA finale */}
+        {/* CTA finale — «Non trovi il ruolo giusto?» ha senso solo se c'è un elenco di ruoli: senza posizioni
+            la candidatura spontanea è già offerta qui sopra (N-002, onda 2). */}
+        {JOBS.length > 0 && (
         <section className="pb-16">
           <div className="bg-ink-900 text-white rounded-2xl p-8 md:p-11 text-center">
             <h2 className="font-serif text-2xl md:text-3xl font-extrabold text-white mb-2 break-words hyphens-auto">
@@ -222,6 +228,7 @@ export default function LavoraConNoiPage() {
             </a>
           </div>
         </section>
+        )}
       </div>
     </div>
   );

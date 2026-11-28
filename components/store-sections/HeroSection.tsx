@@ -136,7 +136,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
             if (window.history.length > 1) router.back();
             else router.push('/stores');
           }}
-          className="absolute left-4 top-4 z-20 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-2 text-sm font-semibold text-ink-800 shadow backdrop-blur-sm transition-colors hover:bg-white"
+          className="absolute left-4 top-4 z-20 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-2 text-sm font-semibold text-ink-800 shadow-warm backdrop-blur-sm transition-colors hover:bg-white"
         >
           <ArrowLeft size={16} strokeWidth={2.2} aria-hidden /> Indietro
         </button>
@@ -147,7 +147,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
         {hasHours && (
           <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-1.5">
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold shadow ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold shadow-warm ${
                 // 3/9/2026 — «Aperto ora» era bianco su olive-500 (#7C8B5A): 3,69 contro
                 // il 4,5 che serve a un testo (WCAG 2.1 — 1.4.3, livello AA). Con olive-600
                 // (#5A7C42) sale a 4,78. È l'unica informazione della copertina che dice se
@@ -159,7 +159,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
               {openNow ? 'Aperto ora' : 'Chiuso ora'}
             </span>
             {consegna && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-olive-700 shadow backdrop-blur-sm">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-olive-700 shadow-warm backdrop-blur-sm">
                 <Truck size={13} strokeWidth={2.4} aria-hidden /> {consegna === 'oggi' ? 'Consegna oggi' : 'Consegna domani'}
               </span>
             )}
@@ -199,7 +199,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
                 e finiva mozzata. Il nome del negozio è il titolo della sua
                 pagina: si legge intero. `break-words` serve al nome tutto
                 attaccato, che senza andrebbe oltre il bordo. */}
-            <h1 className="flex flex-wrap items-center gap-2 font-serif text-[24px] font-extrabold leading-tight text-white sm:text-[34px]">
+            <h1 className="flex flex-wrap items-center gap-2 font-serif text-2xl font-extrabold leading-tight text-white sm:text-[34px]">
               <span className="min-w-0 break-words [overflow-wrap:anywhere] drop-shadow-sm">{store.store_name}</span>
               {isVerifiedStore(store) && (
                 <span className="text-white/90">

@@ -1,6 +1,7 @@
 // lib/products/economics.ts
 import { MARKETPLACE_FEE_BPS, PLATFORM_DELIVERY_FEE_CENTS, SPESA_SENZA_SUPPLEMENTO_CENTS } from '@/lib/constants';
 import { tariffaConsegnaCents } from '@/lib/ordini/prezzi';
+import { formatPrice } from '@/lib/format';
 
 /**
  * Economia del venditore su un prezzo di vendita: quanto incassa davvero dopo
@@ -84,7 +85,7 @@ export function regolaConsegnaPerAi(): string {
   const sogliaEuro = `${soglia % 100 === 0 ? soglia / 100 : (soglia / 100).toFixed(2).replace('.', ',')} €`;
   return (
     `la consegna a domicilio si paga sul CARRELLO intero, non sul singolo prodotto: ` +
-    `€${sopra.toFixed(2)} per una spesa da ${sogliaEuro} in su in questo negozio, €${sotto.toFixed(2)} sotto i ${sogliaEuro}; ` +
+    `${formatPrice(sopra)} per una spesa da ${sogliaEuro} in su in questo negozio, ${formatPrice(sotto)} sotto i ${sogliaEuro}; ` +
     `la paga l'acquirente e non incide sul netto venditore`
   );
 }

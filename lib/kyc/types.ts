@@ -27,7 +27,17 @@ export type KycCheckResult =
   | { ok: false; error: string };
 
 export interface KycProvider {
-  startCheck(subject: KycSubject, docs: KycDocs): Promise<KycCheckResult>;
+  /**
+   * `checkPrecedente`: l'id del controllo salvato nel profilo (`kyc_provider_check_id`). Il
+   * fornitore che tiene una scheda per persona la riprende invece di crearne un'altra (R01-015).
+   */
+  startCheck(subject: KycSubject, docs: KycDocs, checkPrecedente?: string | null): Promise<KycCheckResult>;
+  /**
+   * Toglie dal fornitore la scheda (dati personali, documenti, selfie) del controllo `checkId`.
+   * Solo i fornitori che tengono dati fuori da noi ce l'hanno. Non lancia: 'fallita' vuol dire
+   * che la scheda può essere ancora là (R01-015).
+   */
+  cancellaScheda?(checkId: string | null | undefined): Promise<'tolta' | 'niente' | 'fallita'>;
   /**
    * Verifica una P.IVA su Agenzia Entrate / VIES per controllo formale +
    * esistenza. Restituisce true se attiva.

@@ -2,6 +2,7 @@
 
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useRef, useState } from 'react';
+import type { Map as MappaLeaflet, Marker } from 'leaflet';
 
 export type MapPoint = {
   lat: number;
@@ -47,8 +48,8 @@ const COLOR_HEX: Record<NonNullable<MapPoint['color']>, string> = {
 
 const DeliveryMap = ({ points, className = 'w-full h-72 rounded-lg border z-0', zoom = 14 }: Props) => {
   const divRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
+  const mapRef = useRef<MappaLeaflet | null>(null);
+  const markersRef = useRef<Marker[]>([]);
   /**
    * 5/11/2026 — SUL TELEFONO LA MAPPA SI MUOVE DOPO UN TOCCO, E LO DICE.
    * Il trascinamento col dito era spento del tutto, per non rubare lo scorrimento della pagina: chi
@@ -67,7 +68,7 @@ const DeliveryMap = ({ points, className = 'w-full h-72 rounded-lg border z-0', 
       const L = (await import('leaflet')).default;
       if (cancelled || !divRef.current || mapRef.current) return;
 
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
       L.Icon.Default.mergeOptions({
                 // #76 — Le icone del segnaposto arrivavano da unpkg.com, un CDN di
         // terzi: ogni persona che apriva una mappa faceva una richiesta a un

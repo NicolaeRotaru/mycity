@@ -5,7 +5,7 @@ import { forwardRef, useImperativeHandle, useEffect, useRef } from 'react';
 declare global {
   interface Window {
     turnstile?: {
-      render: (el: HTMLElement, opts: Record<string, any>) => string;
+      render: (el: HTMLElement, opts: Record<string, unknown>) => string;
       remove: (widgetId: string) => void;
       reset: (widgetId: string) => void;
     };

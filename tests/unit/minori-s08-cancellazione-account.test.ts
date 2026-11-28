@@ -28,6 +28,9 @@ const UTENTE = '11111111-1111-4111-8111-111111111111';
 function fintoMondo(o: { contoCollegato?: string | null; storageRotto?: boolean; annotazioneRotta?: boolean } = {}) {
   const diario: string[] = [];
   const admin = {
+    // R08-006 (onda 2) — La funzione della cassa del fattorino (migrazione 999n) qui non c'è:
+    // la guardia legge il registro, come prima della migrazione.
+    rpc: async (nome: string) => ({ data: null, error: { code: 'PGRST202', message: `Could not find the function public.${nome}` } }),
     from(tabella: string) {
       return {
         select(_c: string) {
