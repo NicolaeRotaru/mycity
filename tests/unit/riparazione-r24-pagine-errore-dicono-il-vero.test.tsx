@@ -31,8 +31,11 @@ afterEach(() => {
 
 async function disegna(file: 'sito' | 'admin', dsn: string | undefined): Promise<string> {
   vi.doMock('@/lib/analytics/sentry-config', () => ({ SENTRY_DSN: dsn }));
+  // R08-002 (onda 2) — La pagina lo dice solo se il registratore conferma di aver preso l'errore:
+  // acceso conferma, spento no (captureError vero, lib/analytics/sentry.tsx).
+  captureError.mockResolvedValue(Boolean(dsn));
   const mod = file === 'sito' ? await import('@/app/error') : await import('@/app/admin/error');
-  act(() => {
+  await act(async () => {
     root.render(createElement(mod.default, { error: Object.assign(new Error('x'), { digest: 'd1' }), reset: () => {} }));
   });
   return c.textContent ?? '';
