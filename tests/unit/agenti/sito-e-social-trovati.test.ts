@@ -25,7 +25,7 @@ vi.mock('@/lib/agenti/rete', async (originale) => ({
   },
 }));
 
-const { candidatiDominio, eIlSitoDi, sitoIndicato, portaIlNome, indirizzoNellaPagina, radiceDelSito, misuraSito, indovinaSito, NON_E_UN_SITO } = await import('@/lib/agenti/sito');
+const { candidatiDominio, eIlSitoDi, provaDelSito, sitoIndicato, portaIlNome, indirizzoNellaPagina, radiceDelSito, misuraSito, indovinaSito, NON_E_UN_SITO } = await import('@/lib/agenti/sito');
 const { maiLetta } = await import('@/lib/agenti/mai-lette');
 const reteVera = await vi.importActual<typeof import('@/lib/agenti/rete')>('@/lib/agenti/rete');
 const { leggiCanaleDelVenditore } = await import('@/lib/agenti/canale-venditore');
@@ -55,12 +55,11 @@ describe('il sito indovinato', () => {
     for (const t of ['Raquel Cafè', 'Raquel Caffè', 'Raquel Café Piacenza']) expect(eIlSitoDi(pagina(t), RAQUEL, 'Piacenza'), t).toBe(true);
   });
 
-  it('con una parola distintiva sola, «Raquel – caffetteria», «Raquel Coffee» o «Raquel» valgono solo con la via e il numero del locale', () => {
+  it('con una parola distintiva sola: «Raquel» vale solo col nostro indirizzo; «Raquel Caffetteria» o «Raquel Coffee» valgono, ma col nome soltanto', () => {
     const indirizzo = 'Piazza Duomo, 23, 29121 Piacenza PC';
-    for (const t of ['Raquel - caffetteria', 'Raquel Coffee', 'Raquel']) {
-      expect(eIlSitoDi(pagina(t), RAQUEL, 'Piacenza', { indirizzo }), t).toBe(true);
-      expect(eIlSitoDi(pagina(t, 'Via Roma 5, Piacenza'), RAQUEL, 'Piacenza', { indirizzo }), `${t} con un altro indirizzo`).toBe(false);
-    }
+    for (const t of ['Raquel - caffetteria', 'Raquel Coffee', 'Raquel']) expect(provaDelSito(pagina(t), RAQUEL, 'Piacenza', { indirizzo }), t).toBe('indirizzo');
+    expect(provaDelSito(pagina('Raquel', 'Via Roma 5, Piacenza'), RAQUEL, 'Piacenza', { indirizzo })).toBe(false);
+    expect(provaDelSito(pagina('Raquel Coffee', 'Via Roma 5, Piacenza'), RAQUEL, 'Piacenza', { indirizzo })).toBe('nome');
   });
 
   it('il «Bar del Duomo» non prende il sito del Duomo né quello di un altro locale della piazza (collaudo del 28/11)', () => {
@@ -103,12 +102,47 @@ describe('il sito indovinato', () => {
 
   it('ricollaudo: la città non è una parola del nome, un indirizzo diverso è un omonimo, un altro tipo di attività non passa', () => {
     const casa = { indirizzo: 'Via Emilia Pavese, 10, 29121 Piacenza PC' };
-    expect(eIlSitoDi('<title>Bar Sport Piacenza</title><body>Bar Sport, Via Colombo 50, Piacenza</body>', 'Bar Sport', 'Piacenza', casa)).toBe(false);
-    expect(eIlSitoDi('<title>Bar Sport Piacenza</title><body>Bar Sport, Via Emilia Pavese 10, Piacenza</body>', 'Bar Sport', 'Piacenza', casa)).toBe(true);
+    // L'omonimo esatto ha lo stesso nome: conta solo come «nome» (scheda, da controllare), mai come certo.
+    expect(provaDelSito('<title>Bar Sport Piacenza</title><body>Bar Sport, Via Colombo 50, Piacenza</body>', 'Bar Sport', 'Piacenza', casa)).toBe('nome');
+    expect(provaDelSito('<title>Bar Sport Piacenza</title><body>Bar Sport, Via Emilia Pavese 10, Piacenza</body>', 'Bar Sport', 'Piacenza', casa)).toBe('indirizzo');
     expect(portaIlNome('gelateria_del_duomo_pc', 'Bar Duomo Piacenza')).toBe(false);
     expect(portaIlNome('bar_duomo_pc', 'Bar Duomo Piacenza')).toBe(true);
     expect(eIlSitoDi('<title>Fratelli Rossi Gomme</title><body>Piacenza</body>', 'Pasticceria Fratelli Rossi', 'Piacenza')).toBe(false);
     expect(eIlSitoDi('<title>Pasticceria Fratelli Rossi</title><body>Piacenza</body>', 'Pasticceria Fratelli Rossi', 'Piacenza')).toBe(true);
+  });
+
+  it('terzo collaudo: la via scritta in un altro modo è la stessa; una via che comincia con un numero non confonde il civico', () => {
+    expect(indirizzoNellaPagina('Via Mazzini 12, Piacenza', 'Via Giuseppe Mazzini, 12, 29121 Piacenza PC')).toBe(true);
+    expect(indirizzoNellaPagina('C.so Vittorio Emanuele II 120 Piacenza', 'Corso Vittorio Emanuele II, 120, 29121 Piacenza PC')).toBe(true);
+    expect(indirizzoNellaPagina('Via San Siro 5, Piacenza', 'Via S. Siro, 5, 29121 Piacenza PC')).toBe(true);
+    expect(indirizzoNellaPagina('Via IV Novembre 10, Piacenza', 'Via 4 Novembre, 10, 29121 Piacenza PC')).toBe(true);
+    expect(indirizzoNellaPagina('Via 4 Novembre 50, Piacenza', 'Via 4 Novembre, 10, 29121 Piacenza PC')).toBe(false);
+    expect(indirizzoNellaPagina('Bar Sport, Via 4 Novembre 50', 'Via 4 Novembre, 10, 29121 Piacenza PC')).toBe(false);
+    // Un sito vero che scrive anche un altro indirizzo (sede legale, parcheggio, WhatsApp) non si perde più.
+    expect(provaDelSito('<title>Bar Mazzini</title><body>Via Mazzini 12, Piacenza. Sede legale: Via Roma 1. Ordina via WhatsApp al 333 1234567</body>', 'Bar Mazzini', 'Piacenza', { indirizzo: 'Via Giuseppe Mazzini, 12, 29121 Piacenza PC' })).toBe('indirizzo');
+    expect(provaDelSito('<title>Raquel Caffè</title><body>Parcheggio in Piazza Cittadella 1, Piacenza</body>', RAQUEL, 'Piacenza', { indirizzo: 'Piazza Duomo, 23' })).toBe('nome');
+  });
+
+  it('un numero romano in fondo al nome della via non è la parola che conta («Via Papa Giovanni XXIII»)', () => {
+    expect(indirizzoNellaPagina('Via Papa Giovanni 4, Piacenza', 'Via Papa Giovanni XXIII, 4, 29121 Piacenza PC')).toBe(true);
+  });
+
+  it('nella prima scheda un sito indovinato solo dal nome è «da confermare», uno col nostro indirizzo è confermato', () => {
+    const misura = (prova) => ({ url: 'https://raquel.it/', aperto: true, https: true, titolo: 'Raquel', descrizione: null, telefonino: true, pagine: 1, funzioni: [], social: {}, piattaforma: null, anno: null, stima: 'semplice', errore: null, prova });
+    const nome = primaScheda({ letto, osm: null, misura: misura('nome'), citta: 'Piacenza', data: 'x' });
+    expect(nome.campi.find((c) => c.voce === 'Sito')?.stato).toBe('da_confermare');
+    const indirizzo = primaScheda({ letto, osm: null, misura: misura('indirizzo'), citta: 'Piacenza', data: 'x' });
+    expect(indirizzo.campi.find((c) => c.voce === 'Sito')?.stato).toBe('confermato');
+  });
+
+  it('un sito trovato solo dal nome resta nella scheda «da controllare» e non entra nel negozio', async () => {
+    rete.pagine['https://www.raquelcafe.it/'] = '<title>Raquel Caffè</title><body>Piacenza</body>';
+    const p = primaScheda({ letto, osm: null, misura: null, citta: 'Piacenza', data: 'x' });
+    const s = unisci(p, pulisci({ sito: { url: 'https://www.raquelcafe.it/', livello: 'medio', giudizio: 'x', fonte: null } }));
+    await confermaQuelloCheHaTrovatoLAd(s, { sitoUrl: 'https://www.raquelcafe.it/', pagine: [] });
+    expect(s.sito.misura?.url).toBe('https://www.raquelcafe.it/');
+    expect(s.campi.find((c) => c.voce === 'Misura del sito')?.stato).toBe('da_confermare');
+    expect(attivitaDallaScheda(s)?.sito).toBeUndefined();
   });
 
   it('il civico si legge anche «23A», «nr. 23», «23/A»; «Raquel Caffetteria» vale come «Raquel Cafè»', () => {

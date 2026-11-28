@@ -17,12 +17,12 @@ const { default: AggiungiAttivita } = await import('@/components/agenti/Aggiungi
 let root: Root | null = null;
 afterEach(() => { act(() => root?.unmount()); root = null; document.body.innerHTML = ''; vi.unstubAllGlobals(); });
 
-async function monta() {
+async function monta(extra: Record<string, unknown> = {}) {
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
   const radice = document.createElement('div');
   document.body.appendChild(radice);
   root = createRoot(radice);
-  await act(async () => { root!.render(createElement(AggiungiAttivita, { lavoro: '11111111-2222-4333-8444-555555555555', nome: 'Ora del Gusto', consigliato: 'business' })); });
+  await act(async () => { root!.render(createElement(AggiungiAttivita, { lavoro: '11111111-2222-4333-8444-555555555555', nome: 'Ora del Gusto', consigliato: 'business', ...extra })); });
   return radice;
 }
 const bottone = (r: HTMLElement, testo: string) => [...r.querySelectorAll('button')].find((b) => b.textContent === testo) as HTMLButtonElement;
@@ -35,6 +35,33 @@ const scegli = async (r: HTMLElement, valore: string, servizio: string | null = 
 };
 
 describe('il pulsante sotto la scheda', () => {
+  it('28/11: un sito trovato solo dal nome si conferma col titolare; senza conferma non parte', async () => {
+    const chiamate: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, o: { body: string }) => {
+      chiamate.push(o.body);
+      return new Response(JSON.stringify({ ok: true, data: { nuova: true, link: null, avvisato: true, fascia: 'business', sbloccata: true, giaOnline: false } }), { status: 201 });
+    }));
+    const r = await monta({ sitoDaControllare: 'https://www.raquelcafe.it/' });
+    await act(async () => { bottone(r, 'Aggiungi attività').click(); });
+    expect(r.textContent).toContain('Il sito raquelcafe.it è il loro?');
+    await scegli(r, 'business');
+    await act(async () => { bottone(r, 'Sì, aggiungi').click(); });
+    expect(JSON.parse(chiamate[0]).sitoConfermato).toBeUndefined();
+    act(() => root?.unmount()); document.body.innerHTML = '';
+    const r2 = await monta({ sitoDaControllare: 'https://www.raquelcafe.it/' });
+    await act(async () => { bottone(r2, 'Aggiungi attività').click(); });
+    await scegli(r2, 'business');
+    await act(async () => { (r2.querySelector('input[id^="sito-"]') as HTMLInputElement).click(); });
+    await act(async () => { bottone(r2, 'Sì, aggiungi').click(); });
+    expect(JSON.parse(chiamate[1]).sitoConfermato).toBe('https://www.raquelcafe.it/');
+  });
+
+  it('28/11: senza un sito da controllare la domanda non compare', async () => {
+    const r = await monta();
+    await act(async () => { bottone(r, 'Aggiungi attività').click(); });
+    expect(r.textContent).not.toContain('è il loro?');
+  });
+
   it('28/11: con l abbonamento ma senza un servizio il «Sì» resta spento; più servizi e la nota partono insieme', async () => {
     const chiamate: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, o: { body: string }) => {

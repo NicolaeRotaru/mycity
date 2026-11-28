@@ -5,6 +5,7 @@ const rete = vi.hoisted(() => ({ pagine: {} as Record<string, any> }));
 vi.mock('@/lib/agenti/rete', async (o) => ({ ...(await o()), leggiPagina: async (url: string) => {
   const p = rete.pagine[url]; return p ? { ok: true, stato: 200, url, html: p, errore: null, ms: 1 } : { ok: false, stato: null, url, html: '', errore: 'non si apre', ms: 1 }; } }));
 const { sitoIndicato } = await import('@/lib/agenti/sito');
+const { attivitaDallaScheda } = await import('@/lib/agenti/aggiungi');
 const pag = (t: string, c: string) => `<html><head><title>${t}</title></head><body>${c}</body></html>`;
 beforeEach(() => { rete.pagine = {}; });
 const casi: [string, string, string, string, string][] = [
@@ -19,5 +20,8 @@ for (const [nome, ind, dom, t, c] of casi) it(`${nome} vs ${dom}`, async () => {
   rete.pagine[`https://${dom}/`] = pag(t, `<p>${c}, Piacenza</p>`);
   const m = await sitoIndicato(dom, nome, 'Piacenza', { indirizzo: ind });
   console.log('NOMEVERO', nome, '<-', dom, '=>', m ? 'PRESO' : 'scartato');
-  expect(m).toBeNull();
+  // Decisione del 28/11 («restringi»): un omonimo trovato solo dal nome può comparire nella scheda «da controllare»,
+  // ma non conta mai come certo (prova «indirizzo»): così non entra nel negozio e non va al flusso 16.
+  if (m) expect(m.prova).toBe('nome');
+  if (m) expect(attivitaDallaScheda({ nome, citta: 'Piacenza', indirizzo: ind, tipo: null, sito: { misura: m } } as never)?.sito).toBeUndefined();
 });

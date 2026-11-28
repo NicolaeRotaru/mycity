@@ -30,7 +30,7 @@ const stato = vi.hoisted(() => ({
   portati: [] as { valori: Record<string, unknown>; filtri: Record<string, unknown> }[],
   // 28/11/2026 — Le pagine che il programma apre (finte) e gli indizi che partono per il flusso 16.
   pagine: {} as Record<string, string>,
-  indizi: [] as unknown[],
+  indizi: [] as ({ instagram?: string; google_maps?: string } | undefined)[],
 }));
 
 vi.mock('@/lib/agenti/rete', async (originale) => ({
@@ -51,7 +51,7 @@ vi.mock('@/lib/agenzia/nuova-attivita', async (originale) => ({
   attivitaGiaIscritta: async () => stato.gia,
 }));
 vi.mock('@/lib/agenzia/dopo-iscrizione', () => ({
-  avviaDopoLIscrizione: (_a: unknown, fatto: { nuova: boolean }, _x: unknown, o: { dalModulo12: boolean; indizi?: unknown }) => { if (fatto.nuova) stato.dopo.push({ dalModulo12: o.dalModulo12 }); stato.indizi.push(o.indizi); },
+  avviaDopoLIscrizione: (_a: unknown, fatto: { nuova: boolean }, _x: unknown, o: { dalModulo12: boolean; indizi?: { instagram?: string; google_maps?: string } }) => { if (fatto.nuova) stato.dopo.push({ dalModulo12: o.dalModulo12 }); stato.indizi.push(o.indizi); },
 }));
 vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: async (titolo: string, testo: string) => { if (stato.avvisoRotto) throw new Error('telegram giù'); stato.avvisi.push(titolo); stato.testiAvvisi.push(testo); } }));
 vi.mock('@/lib/agenzia/abbonamento-contanti', () => ({
@@ -140,6 +140,21 @@ describe('il pulsante «Aggiungi attività»', () => {
     await premi();
     expect(stato.iscritte[0].sito).toBe('https://www.raquelcafe.it/');
     expect(stato.indizi[0]).toEqual({ instagram: 'raquel_cafe23', google_maps: 'https://maps.app.goo.gl/abc123' });
+  });
+
+  it('un sito trovato solo dal nome entra nel negozio solo se il titolare lo conferma, e solo quello', async () => {
+    stato.pagine['https://www.raquelcafe.it/'] = '<title>Raquel Caffè</title><body>Piacenza <a href="https://www.instagram.com/raquel_cafe23/">IG</a></body>';
+    const senzaSito = { ...prima, nome: 'Raquel 💗 Cafè', indirizzo: 'Piazza Duomo, 23, 29121 Piacenza PC', sito: { misura: null } };
+    const lavoroAd = { stato: 'pronta', venditore: 'agente@esempio.it', prima: senzaSito, risultato: { sito: { url: 'https://www.raquelcafe.it/', livello: 'medio', giudizio: 'x', fonte: null } } };
+    stato.lavoro = lavoroAd;
+    await premi();
+    expect(stato.iscritte[0].sito).toBeUndefined();
+    expect(stato.indizi[0]?.instagram).toBeUndefined();
+    await premi({ lavoro: LAVORO, fascia: 'business', servizi: ['sito_web'], sitoConfermato: 'https://altro-sito.it/' });
+    expect(stato.iscritte[1].sito).toBeUndefined();
+    await premi({ lavoro: LAVORO, fascia: 'business', servizi: ['sito_web'], sitoConfermato: 'https://www.raquelcafe.it/' });
+    expect(stato.iscritte[2].sito).toBe('https://www.raquelcafe.it/');
+    expect(stato.indizi[2]?.instagram).toBe('raquel_cafe23');
   });
 
   it('un sito dell AD che non porta nome e città non arriva al negozio', async () => {

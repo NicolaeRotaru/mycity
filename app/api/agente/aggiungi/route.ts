@@ -47,7 +47,13 @@ export const maxDuration = 60;
 const Richiesta = z.object({
   lavoro: z.string().uuid('Codice del lavoro non valido.'),
   fascia: z.enum(ABBONAMENTI, { message: 'Scegli l’abbonamento che ha scelto il titolare.' }),
+  // 28/11/2026 — Il sito trovato solo dal nome che il titolare ha confermato davanti all'agente («è il nostro»).
+  sitoConfermato: z.string().trim().max(600).optional(),
 }).and(ServiziInArrivo);
+
+const stessoSito = (a: string, b: string) => {
+  try { return new URL(a).hostname.replace(/^www\./, '').toLowerCase() === new URL(b).hostname.replace(/^www\./, '').toLowerCase(); } catch { return false; }
+};
 
 /** Un lavoro dopo la risposta. Fuori da una richiesta (le prove) `after` non c'è: si lancia e basta. */
 const dopoLaRisposta = (fn: () => Promise<void>) => {
@@ -90,6 +96,11 @@ export const POST = conAgente({ name: 'agente-aggiungi', max: 20, windowMs: 60 *
     // il sito aperto dal programma all'inizio, e all'accettazione il flusso 16 ripartiva «senza sito».
     scheda = await confermaQuelloCheHaTrovatoLAd(scheda, { sitoUrl: ad.sito?.url ?? null, pagine: ad.pagine ?? null });
   }
+  // Il titolare ha confermato il sito trovato solo dal nome: vale come dato dal venditore, ma solo se è proprio quello
+  // che la scheda ha trovato adesso (il browser non può far entrare un indirizzo suo).
+  const conferma = esito.data.sitoConfermato;
+  const m = scheda.sito.misura;
+  if (conferma && m?.aperto && m.prova === 'nome' && stessoSito(conferma, m.url)) scheda = { ...scheda, sito: { ...scheda.sito, misura: { ...m, prova: 'venditore' } } };
   const attivita = attivitaDallaScheda(scheda);
   if (!attivita) return ApiErrors.invalidRequest(nomeNonValido(String(scheda.nome ?? '')) ?? 'I dati della scheda non bastano per aggiungere l’attività.');
 

@@ -51,8 +51,8 @@ describe('G1 varianti omonimi', () => {
   it('V3 «Bar Sport Roma» (Via Roma 10): l AD indica un altro Bar Sport in Via Roma 45 -> NON va preso', async () => {
     rete.pagine['https://barsportpiacenza.it/'] = pag('Bar Sport', '<p>Via Roma 45, Piacenza</p>', '<meta name="description" content="Bar Sport in Via Roma a Piacenza">');
     const m = await sitoIndicato('https://barsportpiacenza.it/', 'Bar Sport Roma', 'Piacenza', { indirizzo: 'Via Roma, 10, 29121 Piacenza PC' });
-    console.log('V3 =', m?.url);
-    expect(m).toBeNull();
+    // «restringi» (28/11): può comparire solo come «da controllare», mai come certo.
+    expect(m === null || m.prova === 'nome').toBe(true);
   });
   it('V4 «Caffè Italia Centro» con il sito della Pizzeria Italia -> no', async () => {
     rete.pagine['https://pizzeriaitalia.it/'] = pag('Pizzeria Italia Piacenza', '<p>Via Cavour 3, Piacenza</p>');
@@ -76,8 +76,8 @@ describe('G1 varianti omonimi', () => {
 
 describe('civico', () => {
   const ind = 'Piazza Duomo, 23, 29121 Piacenza PC';
-  for (const [t, atteso] of [['Piazza Duomo n. 23', true], ['Piazza Duomo, 23/A', true], ['P.zza Duomo n°23 - 29121', true], ['Piazza del Duomo 23', true], ['Piazza Duomo 230', false], ['Piazza Duomo 2', false], ['Piazza Duomo 23A', 'minore'], ['Piazza Duomo nr. 23', 'minore']] as const) {
-    it(`civico «${t}»`, () => { const r = indirizzoNellaPagina(t, ind); console.log('civico', t, '->', r); if (atteso !== 'minore') expect(r).toBe(atteso); });
+  for (const [t, atteso] of [['Piazza Duomo n. 23', true], ['Piazza Duomo, 23/A', true], ['P.zza Duomo n°23 - 29121', true], ['Piazza del Duomo 23', true], ['Piazza Duomo 230', false], ['Piazza Duomo 2', false], ['Piazza Duomo 23A', true], ['Piazza Duomo nr. 23', true]] as const) {
+    it(`civico «${t}»`, () => { expect(indirizzoNellaPagina(t, ind)).toBe(atteso); });
   }
 });
 
@@ -93,8 +93,8 @@ describe('Raquel, caso vero: niente falsi negativi', () => {
   });
   it('R3 indovinato titolo «Home», logo, indirizzo nel piede', async () => {
     rete.pagine['https://raquelcafe.it/'] = pag('Home', '<img src="logo.png" alt="Raquel Cafè"><footer>P.zza Duomo, 23 - 29121 Piacenza</footer>');
-    const m = await indovinaSito('Raquel 💗 Cafè', 'Piacenza', 1000, [], ind);
-    console.log('R3 (indovinato, Home + indirizzo) =', m?.url ?? null);
+    // Titolo «Home»: il nome non è nel titolo, quindi un sito solo indovinato non si prende (il venditore può darlo, vedi R2).
+    expect(await indovinaSito('Raquel 💗 Cafè', 'Piacenza', 1000, [], ind)).toBeNull();
   });
   it('R4 indovinato titolo «Raquel» + indirizzo nel piede', async () => {
     rete.pagine['https://raquel.it/'] = pag('Raquel', '<footer>Piazza Duomo 23, Piacenza</footer>');
@@ -102,12 +102,12 @@ describe('Raquel, caso vero: niente falsi negativi', () => {
   });
   it('R5 indovinato titolo «Raquel Caffetteria», senza indirizzo', async () => {
     rete.pagine['https://raquel.it/'] = pag('Raquel Caffetteria', '<p>Piacenza</p>');
-    console.log('R5 =', (await indovinaSito('Raquel 💗 Cafè', 'Piacenza', 1000, [], ind))?.url ?? null);
+    expect(await indovinaSito('Raquel 💗 Cafè', 'Piacenza', 1000, [], ind)).toMatchObject({ url: 'https://raquel.it/', prova: 'nome' });
   });
   it('R6 Instagram copiato dal venditore va al 16; sito del venditore su sites.google.com', async () => {
     const c = leggiCanaleDelVenditore('https://sites.google.com/view/raquelcafe/home');
-    console.log('R6 canale venditore sites.google =', JSON.stringify(c));
+    expect(c?.sito).toBe('https://sites.google.com/view/raquelcafe/home');
     rete.pagine['https://sites.google.com/view/raquelcafe/'] = pag('Raquel Cafè', '<p>Piazza Duomo 23 Piacenza</p>');
-    console.log('R6 sitoIndicato sites.google =', (await sitoIndicato('https://sites.google.com/view/raquelcafe/home', 'Raquel 💗 Cafè', 'Piacenza', { fidato: true }))?.url ?? null);
+    expect((await sitoIndicato('https://sites.google.com/view/raquelcafe/home', 'Raquel 💗 Cafè', 'Piacenza', { fidato: true }))?.url).toBe('https://sites.google.com/view/raquelcafe/');
   });
 });

@@ -119,8 +119,11 @@ export async function confermaQuelloCheHaTrovatoLAd(
     if (m?.aperto) {
       s.sito.misura = m;
       s.sito.fonte = m.url;
-      s.campi.push({ voce: 'Misura del sito', valore: rigaMisura(m), stato: 'confermato', fonte: m.url });
-      s.avvisi.push(`Il programma ha aperto il sito ${dominioDi(m.url)}: porta il nome e la città del locale (${come}).`);
+      const soloNome = m.prova === 'nome';
+      s.campi.push({ voce: 'Misura del sito', valore: rigaMisura(m), stato: soloNome ? 'da_confermare' : 'confermato', fonte: m.url });
+      s.avvisi.push(soloNome
+        ? `Il programma ha aperto il sito ${dominioDi(m.url)}: porta il nome e la città, non l'indirizzo (${come}). Controlla che sia il suo: se lo è, copialo nel campo «sito o Instagram» e il negozio lo terrà.`
+        : `Il programma ha aperto il sito ${dominioDi(m.url)}: porta il nome, la città e l'indirizzo del locale (${come}).`);
       // I profili che il sito stesso collega valgono come trovati, più di quelli visti solo dall'AD o in una pagina.
       const dalSito: [Canale, string | undefined][] = [['Instagram', m.social.instagram], ['Facebook', m.social.facebook], ['TikTok', m.social.tiktok]];
       for (const [canale, fonte] of dalSito) {

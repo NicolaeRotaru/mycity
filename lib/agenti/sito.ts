@@ -156,7 +156,7 @@ export function paroleDistintive(nome: string, citta = 'Piacenza'): string[] {
 // Gomme» non è della «Pasticceria Fratelli Rossi» (collaudi del 28/11).
 const FAMIGLIE: string[][] = [
   ['bar', 'caffe', 'cafe', 'caffetteria', 'cafeteria', 'coffee', 'bistrot', 'bistro', 'pub', 'lounge'], ['pasticceria'],
-  ['ristorante', 'trattoria', 'osteria'], ['pizzeria'], ['forno', 'panificio'], ['macelleria'], ['gelateria'], ['enoteca'],
+  ['ristorante', 'trattoria', 'osteria'], ['pizzeria'], ['forno', 'panificio'], ['macelleria'], ['gelateria'], ['enoteca', 'bottiglieria'],
   ['parrucchiere', 'salone'], ['farmacia'], ['ottica'], ['libreria'], ['boutique', 'negozio'],
   ['gomme', 'gommista', 'pneumatici'], ['officina', 'carrozzeria', 'autofficina'], ['ferramenta'], ['abbigliamento'],
   ['immobiliare'], ['assicurazioni'], ['estetica', 'estetista'], ['tabaccheria'], ['edicola'], ['fiorista', 'fiori'],
@@ -215,33 +215,39 @@ const uguaglia = (s: string) => s.replace(/\b(caffe|caffetteria|cafeteria|coffee
 
 const TIPI_DI_VIA = 'via|viale|piazza|piazzale|corso|strada|stradone|largo|vicolo|borgo|galleria|contrada|cantone|stradello';
 
-/** La via e il numero civico di un indirizzo («Piazza Duomo, 23, 29121 Piacenza PC» → { via: «duomo», civico: «23» }). */
-function viaECivico(indirizzo: string | null | undefined): { via: string; civico: string } | null {
-  const m = slug(String(indirizzo ?? '')).match(new RegExp(`^(?:${TIPI_DI_VIA})?\\s*([a-z][a-z ]*?)\\s+(?:n |nr |numero )?(\\d{1,4})[a-z]?(?: |$)`));
-  if (!m) return null;
-  const via = m[1].split(' ').filter((w) => w.length >= 3 && !ARTICOLI.has(w)).join(' ');
-  return via ? { via, civico: m[2] } : null;
+// I numeri romani fino a 49 (XXIII, XXIV, IV…): non sono la parola che distingue una via.
+const NUMERI_ROMANI = /^(?=[ivxl]+$)(?:xl|l?x{0,3})(?:ix|iv|v?i{0,3})$/;
+
+/**
+ * La via e il numero civico di un indirizzo, come lo scrive Google: «Piazza Duomo, 23, 29121 Piacenza PC» →
+ * { parola: «duomo», civico: «23» }. `parola` è l'ultima parola che conta del nome della via: così «Via Giuseppe Mazzini»
+ * e «Via Mazzini», «Via IV Novembre» e «Via 4 Novembre», «Corso Vittorio Emanuele II» e «C.so V. Emanuele II» si
+ * riconoscono (terzo collaudo del 28/11). Una via che comincia con un numero non scambia quel numero per il civico.
+ */
+function viaECivico(indirizzo: string | null | undefined): { parola: string; civico: string } | null {
+  const pezzi = String(indirizzo ?? '').split(',').map((p) => slug(p)).filter(Boolean);
+  if (!pezzi.length) return null;
+  let via = pezzi[0];
+  let civico = pezzi[1]?.match(/^(?:n |nr |numero )?(\d{1,4})(?:[a-z]| [abc])?$/)?.[1] ?? null;
+  if (!civico) {
+    const coda = via.match(/^(.*\S)\s+(?:n |nr |numero )?(\d{1,4})(?:[a-z]| [abc])?$/);
+    if (coda && /[a-z]{3,}/.test(coda[1])) { via = coda[1]; civico = coda[2]; }
+  }
+  if (!civico) return null;
+  const parole = via.split(' ').filter((w) => /^[a-z]{3,}$/.test(w) && !ARTICOLI.has(w) && !NUMERI_ROMANI.test(w) && !new RegExp(`^(?:${TIPI_DI_VIA})$`).test(w));
+  const parola = parole[parole.length - 1];
+  return parola ? { parola, civico } : null;
 }
 
 /**
- * L'indirizzo del locale scritto nella pagina: la via e il numero civico vicini («Piazza Duomo, 23» → «duomo 23»;
- * valgono anche «n. 23», «nr. 23», «23/A», «23A»). Il numero conta: il Duomo di Piacenza è al 33 della stessa piazza.
+ * L'indirizzo del locale scritto nella pagina: l'ultima parola della via e il numero civico vicini («Piazza Duomo, 23» →
+ * «duomo 23»; valgono anche «n. 23», «nr. 23», «23/A», «23A», «Emanuele II 120»). Il numero conta: il Duomo di Piacenza
+ * è al 33 della stessa piazza.
  */
 export function indirizzoNellaPagina(testoPagina: string, indirizzo: string | null | undefined): boolean {
   const nostro = viaECivico(indirizzo);
   if (!nostro) return false;
-  return new RegExp(`(^| )${nostro.via}( n| nr| numero)? ${nostro.civico}(a|b|c| a| b| c)?( |$)`).test(slug(testoPagina));
-}
-
-/** Gli indirizzi (via e civico) scritti in una pagina: «Via Colombo 50» → «colombo 50». */
-function indirizziNellaPagina(testoPagina: string): string[] {
-  const fuori: string[] = [];
-  const re = new RegExp(`(?:^| )(?:${TIPI_DI_VIA}) ((?:[a-z]+ ){0,3}?[a-z]+)(?: n| nr| numero)? (\\d{1,4})(?:[a-z]| [abc])?(?= |$)`, 'g');
-  for (const m of slug(testoPagina).matchAll(re)) {
-    const via = m[1].split(' ').filter((w) => w.length >= 3 && !ARTICOLI.has(w)).join(' ');
-    if (via) fuori.push(`${via} ${m[2]}`);
-  }
-  return fuori.slice(0, 40);
+  return new RegExp(`(^| )${nostro.parola}( [a-z0-9]+){0,2}?( n| nr| numero)? ${nostro.civico}([abc]| [abc])?( |$)`).test(slug(testoPagina));
 }
 
 /** Il testo che si legge in una pagina: senza tag, script e indirizzi dei collegamenti (un link a un profilo non è il nome). */
@@ -253,9 +259,8 @@ export type ProvaDelSito = 'venditore' | 'indirizzo' | 'nome';
 /**
  * La pagina è davvero di questa attività? Città nella pagina, niente pagina di parcheggio, e il nome:
  *  · stretto (di serie): le parole che distinguono il nome nel titolo, nella descrizione o nell'h1, e nessun altro tipo
- *    di attività nel titolo. Se la pagina scrive degli indirizzi e nessuno è il nostro, è di un omonimo (ricollaudo del
- *    28/11: un altro «Bar Sport» in Via Colombo 50). Con una parola distintiva sola serve di più: il nome intero nel titolo,
- *    oppure la via col numero civico del locale;
+ *    di attività nel titolo. Col nostro indirizzo nella pagina la prova è «indirizzo», sennò «nome». Con una parola
+ *    distintiva sola serve di più: il nome intero nel titolo, oppure la via col numero civico del locale;
  *  · `largo`: il nome come parola intera nel testo che si legge, nel testo alternativo delle immagini o nel titolo. Solo per
  *    un sito che il venditore ha copiato dalla scheda Google.
  * Restituisce la prova, o `false`.
@@ -282,8 +287,9 @@ export function provaDelSito(html: string, nome: string, citta = 'Piacenza', { l
   // Vale solo se il nome dice il tipo: «La Dolce Dispensa» può avere «pasticceria» nel titolo.
   if (delNome.length && nelTitolo.some((f) => !delNome.includes(f)) && !nelTitolo.some((f) => delNome.includes(f))) return false;
   if (indirizzoNellaPagina(visibile, indirizzo)) return 'indirizzo';
-  // La pagina scrive degli indirizzi, e nessuno è il nostro: è di un omonimo.
-  if (viaECivico(indirizzo) && indirizziNellaPagina(visibile).length) return false;
+  // Senza il nostro indirizzo la prova è il nome soltanto: il sito si mostra nella scheda «da controllare», ma non entra
+  // nel negozio e non va al flusso 16 (decisione del 28/11, «restringi»: un omonimo esatto, un altro «Bar Sport», ha lo
+  // stesso nome; scartare chi scrive un altro indirizzo faceva perdere il sito vero quando la via è scritta diversa).
   if (parole.length >= 2) return 'nome';
   return uguaglia(testa).includes(uguaglia(slug(nome))) ? 'nome' : false;
 }

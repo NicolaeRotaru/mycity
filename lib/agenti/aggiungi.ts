@@ -61,8 +61,10 @@ const nonEUnSito = (url: string) => { try { return NON_E_UN_SITO.test(new URL(ur
 
 export function attivitaDallaScheda(scheda: Scheda): NuovaAttivita | null {
   const misura = scheda.sito?.misura;
-  // 28/11/2026 — E mai un profilo o un elenco, anche se una misura vecchia lo dice aperto (collaudo).
-  const sito = misura?.aperto && /^https:\/\//i.test(misura.url) && !nonEUnSito(misura.url) ? misura.url : undefined;
+  // 28/11/2026 — E mai un profilo o un elenco, anche se una misura vecchia lo dice aperto (collaudo). E solo un sito certo:
+  // copiato dal venditore, col nostro indirizzo, o scritto sulla mappa libera. Uno riconosciuto solo dal nome può essere
+  // di un omonimo (un altro «Bar Sport»): resta nella scheda «da controllare» e non entra nel negozio («restringi»).
+  const sito = misura?.aperto && misura.prova !== 'nome' && /^https:\/\//i.test(misura.url) && !nonEUnSito(misura.url) ? misura.url : undefined;
   const tipo = tipoDaTesto(scheda.tipo);
   const dettaglio = accorciaDettaglio(scheda.tipo);
   const candidato = {

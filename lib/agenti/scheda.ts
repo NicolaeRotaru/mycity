@@ -154,7 +154,9 @@ export function primaScheda({ letto, osm, misura, citta, data, venditore = null 
     const fatti = [`${m.pagine} ${m.pagine === 1 ? 'pagina' : 'pagine'} collegate dalla home`, m.https === false ? 'non protetto (solo http)' : m.https ? 'protetto (https)' : null,
       m.telefonino ? 'pensato per il telefono' : 'non pensato per il telefono', m.piattaforma ? `fatto con ${m.piattaforma}` : null,
       m.anno ? `anno in fondo alla pagina: ${m.anno}` : null].filter(Boolean).join(' · ');
-    campi.push({ voce: 'Sito', valore: `${dominio(m.url)} — ${fatti}`, stato: 'confermato', fonte: m.url });
+    // 28/11/2026 — Un sito riconosciuto solo dal nome può essere di un omonimo: si mostra, da controllare.
+    const soloNome = m.prova === 'nome';
+    campi.push({ voce: 'Sito', valore: `${dominio(m.url)} — ${fatti}${soloNome ? ' (trovato dal nome: controlla che sia il suo; se lo è, copialo nel campo «sito o Instagram»)' : ''}`, stato: soloNome ? 'da_confermare' : 'confermato', fonte: m.url });
     if (m.funzioni.length) campi.push({ voce: 'Sul sito si trova', valore: m.funzioni.join(', '), stato: 'confermato', fonte: m.url });
     if (m.titolo) campi.push({ voce: 'Titolo del sito su Google', valore: `«${m.titolo}»`, stato: 'confermato', fonte: m.url });
   } else if (l?.sito) {
