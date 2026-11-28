@@ -4,6 +4,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * R02-005 (onda 9, giro 2) — COL TESTO AL 200% LE PAGINE PUBBLICHE NON SCORRONO PIÙ DI LATO.
@@ -69,13 +71,30 @@ describe('R02-005 · col testo al 200% le pagine pubbliche non scorrono di lato'
     const didascalia = Array.from(d.querySelectorAll('span.block')).find((s) => classi(s).includes('text-sm'))!;
     expect(classi(didascalia.parentElement)).toContain('min-w-0');
     expect(classi(didascalia.parentElement)).toContain('[overflow-wrap:anywhere]');
-    const spontanea = Array.from(d.querySelectorAll('a')).find((a) => a.textContent?.includes('candidatura spontanea'));
-    expect(classi(spontanea)).toContain('max-w-full');
-    expect(classi(spontanea)).toContain('[overflow-wrap:anywhere]');
-    const colonna = Array.from(d.querySelectorAll('li div')).find((x) => classi(x).includes('flex-1'));
-    expect(classi(colonna).join(' '), 'la colonna del titolo non deve chiedere 200 px fissi').not.toContain('min-w-[200px]');
-    const candidati = Array.from(d.querySelectorAll('li a')).find((a) => a.textContent?.includes('Candidati'));
-    expect(classi(candidati)).toContain('max-w-full');
+    // 27/11/2026 — Ogni collegamento alla candidatura spontanea (il pulsante in fondo e, a elenco vuoto,
+    // quello sotto «Posizioni aperte»), non solo il primo trovato.
+    const spontanee = Array.from(d.querySelectorAll('a')).filter((a) => a.textContent?.includes('candidatura spontanea'));
+    expect(spontanee.length).toBeGreaterThanOrEqual(1);
+    for (const spontanea of spontanee) {
+      expect(classi(spontanea)).toContain('max-w-full');
+      expect(classi(spontanea)).toContain('[overflow-wrap:anywhere]');
+    }
+    // 27/11/2026 — Le quattro posizioni erano inventate: oggi l'elenco è vuoto. Le righe disegnate si
+    // controllano tutte; la riga del modello si controlla anche nel file, così resta controllata per
+    // quando Nicola aggiunge una posizione vera.
+    const righe = Array.from(d.querySelectorAll('#posizioni li'));
+    for (const riga of righe) {
+      const colonna = Array.from(riga.querySelectorAll('div')).find((x) => classi(x).includes('flex-1'));
+      expect(classi(colonna).join(' '), 'la colonna del titolo non deve chiedere 200 px fissi').not.toContain('min-w-[200px]');
+      const candidati = Array.from(riga.querySelectorAll('a')).find((a) => a.textContent?.includes('Candidati'));
+      expect(classi(candidati)).toContain('max-w-full');
+    }
+    const modello = readFileSync(join(process.cwd(), 'app', 'lavora-con-noi', 'page.tsx'), 'utf8');
+    const riga = modello.slice(modello.indexOf('{JOBS.map('), modello.indexOf('Candidati <ArrowRight'));
+    expect(riga, 'la riga delle posizioni deve esserci nel file').toContain('<li');
+    expect(riga).toMatch(/className="flex-1 min-w-\[min\(200px,100%\)\]"/);
+    expect(riga, 'la colonna del titolo non deve chiedere 200 px fissi').not.toContain('min-w-[200px]');
+    expect(riga).toMatch(/href=\{job\.mailto\}\s*className="[^"]*max-w-full/);
   });
 
   it('/help: i tre riquadri di contatto possono stringersi e il testo va a capo', () => {
