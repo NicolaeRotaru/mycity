@@ -22,6 +22,7 @@ import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 import { fasciaAlGiornoDellOrdine } from '@/lib/ordini/fascia-leggibile';
 import { orariDeiNegozi, rimborsaLaFasciaPersa, diciAlClienteDelCarrelloRimborsato, avvisaIlClienteDelRimborsoAutomatico } from './fascia-al-pagamento';
+import { completaGliArticoliDelTentativoMorto, righeDegliArticoli } from './articoli-del-tentativo-morto';
 
 export type PendingGroup = {
   sellerId: string;
@@ -389,18 +390,17 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           .eq('seller_id', g.sellerId)
           .maybeSingle();
         if (existing?.id) {
-          // 164 — Questo ordine c'era gia': l'ha creato un tentativo
-          // precedente, che poi e' morto su un gruppo successivo. Le sue email
-          // e la sua campanella sono gia' partite. Se lo si segna come nuovo,
-          // al secondo giro il negoziante riceve una seconda «Nuovo ordine» e
-          // il cliente una seconda conferma: telefonano per capire se sono due
-          // ordini, e il cliente teme il doppio addebito.
+          // 164 — Questo ordine c'era gia': l'ha creato un tentativo precedente, morto dopo. Non e'
+          // «nuovo» (niente seconda «Nuovo ordine»: le email le decide la campanella a id fisso).
+          // R03-001 — Se quel tentativo e' morto fra l'ordine e gli articoli, gli articoli si scrivono
+          // adesso: un ordine pagato e vuoto teneva la merce che nessun annullo rimetteva.
+          const completato = await completaGliArticoliDelTentativoMorto(admin, existing.id, g);
           createdOrderIds.push({
             orderId: existing.id,
             sellerId: g.sellerId,
             totalCents: g.totalCents,
             itemsCount: g.items.reduce((s, it) => s + it.quantity, 0),
-            nuovo: false, fascia: fasciaDellOrdine, ritiro: pickupInStore, // R31-025: per la campanella
+            nuovo: completato, fascia: fasciaDellOrdine, ritiro: pickupInStore, // R31-025: per la campanella
           });
           continue;
         }
@@ -412,16 +412,8 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       throw new Error(`stripe-order-insert returned null for seller ${g.sellerId}`);
     }
 
-    // order_items
-    const orderItemsRows = g.items.map((it) => ({
-      order_id: order.id,
-      product_id: it.productId,
-      quantity: it.quantity,
-      unit_price: it.unitAmountCents / 100,
-      variant_id: it.variantId ?? null,
-      variant_label: it.variantLabel ?? null,
-    }));
-    const { error: itemsErr } = await admin.from('order_items').insert(orderItemsRows);
+    // order_items (le stesse righe che una riconsegna scrive se questo tentativo muore qui: R03-001)
+    const { error: itemsErr } = await admin.from('order_items').insert(righeDegliArticoli(order.id, g));
     if (itemsErr) {
       logger.error(itemsErr, { context: 'stripe-order-items-insert', orderId: order.id });
 
