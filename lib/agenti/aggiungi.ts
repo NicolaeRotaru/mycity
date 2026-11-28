@@ -3,6 +3,7 @@ import { env } from '@/lib/env';
 import { accorciaDettaglio, NuovaAttivitaInArrivo, type NuovaAttivita } from '@/lib/agenzia/nuova-attivita';
 import type { TipoAttivita } from '@/lib/agenzia/tipi-attivita';
 import type { Scheda } from '@/lib/agenti/scheda';
+import { NON_E_UN_SITO } from '@/lib/agenti/sito';
 import type { ServiziScelti } from '@/lib/agenzia/servizi-scelti';
 
 /**
@@ -56,9 +57,12 @@ export function stessoIndirizzo(a: string | null | undefined, b: string | null |
  * (misura `aperto`) e in https: un sito solo indovinato o non raggiungibile non va nei canali della vetrina.
  * Restituisce `null` se la scheda non basta (manca il nome) o i dati non passano lo stesso controllo del 20.
  */
+const nonEUnSito = (url: string) => { try { return NON_E_UN_SITO.test(new URL(url).hostname); } catch { return true; } };
+
 export function attivitaDallaScheda(scheda: Scheda): NuovaAttivita | null {
   const misura = scheda.sito?.misura;
-  const sito = misura?.aperto && /^https:\/\//i.test(misura.url) ? misura.url : undefined;
+  // 28/11/2026 — E mai un profilo o un elenco, anche se una misura vecchia lo dice aperto (collaudo).
+  const sito = misura?.aperto && /^https:\/\//i.test(misura.url) && !nonEUnSito(misura.url) ? misura.url : undefined;
   const tipo = tipoDaTesto(scheda.tipo);
   const dettaglio = accorciaDettaglio(scheda.tipo);
   const candidato = {

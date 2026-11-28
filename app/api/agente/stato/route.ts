@@ -11,7 +11,8 @@ import { confermaQuelloCheHaTrovatoLAd } from '@/lib/agenti/conferma-ad';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 20;
+// 28/11/2026 — Da 20 a 30 secondi: a scheda pronta il programma apre anche il sito e le pagine viste dall'AD (collaudo).
+export const maxDuration = 30;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const nessunaCache = { 'Cache-Control': 'no-store' };

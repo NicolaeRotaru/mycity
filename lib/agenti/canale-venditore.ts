@@ -38,7 +38,9 @@ export function leggiCanaleDelVenditore(grezzo: unknown): CanaleDelVenditore | n
   const t = String(grezzo ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
   if (!t) return null;
   const fuori = vuoto();
-  if (/instagram\.com\//i.test(t) || /^@[\w.]+$/.test(t) || /^[A-Za-z0-9_]{2,30}$/.test(t)) {
+  // Un nome con un punto ma senza un'estensione vera («pane.quotidiano») è un profilo Instagram, non un sito (collaudo).
+  const senzaEstensioneVera = /^[A-Za-z0-9_.]{2,30}$/.test(t) && !/\.(it|com|net|org|eu|info|biz|shop|store|online|site|cafe|bar|pizza|restaurant|menu|app|io|me|co|uk|de|fr|es|ch|at|sm|wine|club|live|page|xyz)$/i.test(t);
+  if (/instagram\.com\//i.test(t) || /^@[\w.]+$/.test(t) || /^[A-Za-z0-9_]{2,30}$/.test(t) || senzaEstensioneVera) {
     fuori.instagram = canale('instagram', t);
     return fuori.instagram ? fuori : null;
   }

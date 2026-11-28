@@ -9,6 +9,7 @@ import { lookup as dnsLookup } from 'node:dns';
 import { isIP, type LookupFunction } from 'node:net';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { maiLetta } from './mai-lette';
 
 const V4_PRIVATI: [number, number][] = [
   [0x00000000, 8], [0x0a000000, 8], [0x64400000, 10], [0x7f000000, 8], [0xa9fe0000, 16], [0xac100000, 12],
@@ -111,20 +112,34 @@ function prendi(u: URL, segnale: AbortSignal, maxByte: number): Promise<{ stato:
   });
 }
 
+/**
+ * Dove porta un rinvio, se ci si può andare: stesso controllo del primo indirizzo (niente indirizzi interni) e, dal
+ * 28/11/2026, mai verso Meta, Google o un portale (lib/agenti/mai-lette.ts). Funzione pura: la prova la usa da sola.
+ */
+export function rinvioAmmesso(dove: string, base: URL): { url: URL } | { errore: string } {
+  let assoluto: string;
+  try { assoluto = new URL(dove, base).toString(); } catch { return { errore: 'rinvio verso un indirizzo non ammesso' }; }
+  const prossimo = indirizzoSicuro(assoluto);
+  if (!prossimo) return { errore: 'rinvio verso un indirizzo non ammesso' };
+  if (maiLetta(prossimo.hostname)) return { errore: 'rinvia a una pagina di Meta, Google o di un portale' };
+  return { url: prossimo };
+}
+
 /** Apre una pagina pubblica: al massimo 4 rinvii, `maxByte` di testo, `attesaMs` in tutto. */
 export async function leggiPagina(indirizzo: string, { attesaMs = 4500, maxByte = 1_500_000 } = {}): Promise<Pagina> {
   const inizio = Date.now();
   const fine = (p: Partial<Pagina>): Pagina => ({ ok: false, stato: null, url: indirizzo, html: '', errore: null, ms: Date.now() - inizio, ...p });
   let u = indirizzoSicuro(indirizzo);
   if (!u) return fine({ errore: 'indirizzo non ammesso' });
+  if (maiLetta(u.hostname)) return fine({ errore: 'pagina di Meta, Google o di un portale: non si apre in automatico' });
   const segnale = AbortSignal.timeout(attesaMs);
   try {
     for (let giro = 0; giro < 5; giro++) {
       const r = await prendi(u, segnale, maxByte);
       if (r.stato >= 300 && r.stato < 400 && r.dove) {
-        const prossimo = indirizzoSicuro(new URL(r.dove, u).toString());
-        if (!prossimo) return fine({ url: u.toString(), stato: r.stato, errore: 'rinvio verso un indirizzo non ammesso' });
-        u = prossimo;
+        const prossimo = rinvioAmmesso(r.dove, u);
+        if ('errore' in prossimo) return fine({ url: u.toString(), stato: r.stato, errore: prossimo.errore });
+        u = prossimo.url;
         continue;
       }
       if (r.tipo && !/html|xml|text\/plain/i.test(r.tipo)) return fine({ url: u.toString(), stato: r.stato, errore: 'non è una pagina web' });

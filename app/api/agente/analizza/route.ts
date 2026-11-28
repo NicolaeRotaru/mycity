@@ -45,23 +45,23 @@ export const POST = conAgente({ name: 'agente-analizza', max: 20, windowMs: 60 *
   // insieme: 3-4 secondi in tutto. Vince il sito del venditore, se porta il nome e la città del locale.
   const [osm, indovinato, indicato] = await Promise.all([
     cercaOsm({ lat: letto.lat, lon: letto.lon, nome: letto.nome, citta, attesaMs: 3500 }),
-    indovinaSito(letto.nome, citta, 3500, profili),
-    canale?.sito && letto.nome ? sitoIndicato(canale.sito, letto.nome, citta) : Promise.resolve(null),
+    indovinaSito(letto.nome, citta, 3500, profili, letto.indirizzo),
+    canale?.sito && letto.nome ? sitoIndicato(canale.sito, letto.nome, citta, { fidato: true }) : Promise.resolve(null),
   ]);
   const nomeDallaMappa = !letto.nome ? osm.luogo?.nome ?? null : null;
-  const dalVenditore = indicato ?? (canale?.sito && nomeDallaMappa ? await sitoIndicato(canale.sito, nomeDallaMappa, citta) : null);
+  const dalVenditore = indicato ?? (canale?.sito && nomeDallaMappa ? await sitoIndicato(canale.sito, nomeDallaMappa, citta, { fidato: true }) : null);
   let misura = dalVenditore;
   const sitoNoto = osm.luogo?.sito && !NON_E_UN_SITO.test(osm.luogo.sito) ? osm.luogo.sito : null;
   if (!misura?.aperto && sitoNoto) misura = await misuraSito(sitoNoto);
   if (!misura?.aperto && indovinato) misura = indovinato;
-  else if (!misura?.aperto && nomeDallaMappa) misura = (await indovinaSito(nomeDallaMappa, citta, 3500, profili)) ?? misura;
+  else if (!misura?.aperto && nomeDallaMappa) misura = (await indovinaSito(nomeDallaMappa, citta, 3500, profili, osm.indirizzo?.testo ?? null)) ?? misura;
   // Il sito scritto dal venditore che non si apre o non è del locale resta nella scheda come indizio, mai come sito.
   const sitoNonConfermato = canale?.sito && !dalVenditore ? canale.sito : null;
   const { giorno, data } = adesso();
   const prima = primaScheda({ letto, osm, misura, citta, data, venditore: canale ? { canale, sitoNonConfermato } : null });
   if (letto.errore) prima.avvisi.push(letto.errore);
   const lavoro = randomUUID();
-  const job = { flusso: FLUSSO, compito: COMPITO, schema: SCHEMA, dati: datiPerAd({ prima, osm, misura, giorno, venditore: canale }) };
+  const job = { flusso: FLUSSO, compito: COMPITO, schema: SCHEMA, dati: datiPerAd({ prima, osm, misura, giorno, venditore: canale ? { ...canale, sito: dalVenditore ? canale.sito : null } : null }) };
   const partito = await avviaLavoro(lavoro, email, prima.nome, prima, job);
   if (!partito.ok) prima.avvisi.push(`L’AD non è partito: ${partito.errore}. Hai solo la prima scheda; riprova fra poco.`);
   return NextResponse.json({ ok: true, data: { lavoro: partito.ok ? lavoro : null, scheda: prima } }, { status: 200, headers: { 'Cache-Control': 'no-store' } });

@@ -12,6 +12,7 @@ import type { LettoDalLink } from './link';
 import type { DatiOsm } from './osm';
 import type { MisuraSito, LivelloSito } from './sito';
 import { linkDelProfilo } from './profili';
+import { indirizzoMaiLetto } from './mai-lette';
 import type { CanaleDelVenditore } from './canale-venditore';
 
 export type Stato = 'confermato' | 'da_confermare' | 'frammento' | 'non_trovato';
@@ -333,8 +334,6 @@ const CANALI = new Set(['Instagram', 'Facebook', 'TikTok']);
 /** `pagine` (28/11/2026): le pagine dei risultati che l'AD ha visto, da aprire per cercarci sito e profili (lib/agenti/conferma-ad.ts). */
 export type RispostaPulita = Partial<Omit<Scheda, 'sito'>> & { sito?: { livello?: LivelloSito; giudizio?: string | null; fonte?: string | null; url?: string | null }; pagine?: string[]; scartati: string[] };
 
-/** Pagine che il programma non apre mai in automatico: Meta, Google e i portali (regole dei flussi 12 e 26). */
-export const PAGINE_MAI_LETTE = /(^|\.)(facebook\.com|fb\.com|instagram\.com|tiktok\.com|threads\.net|whatsapp\.com|wa\.me|google\.[a-z.]+|goo\.gl|g\.page|g\.co|tripadvisor\.[a-z.]+|thefork\.[a-z.]+|lafourchette\.[a-z.]+|glovoapp\.com|glovo\.[a-z.]+)$/i;
 
 export function pulisci(grezza: unknown): RispostaPulita {
   const r = (grezza && typeof grezza === 'object' ? grezza : {}) as Record<string, unknown>;
@@ -382,7 +381,7 @@ export function pulisci(grezza: unknown): RispostaPulita {
     fonte: httpsValido(sitoR.fonte) ? sitoR.fonte : null,
     url: httpsValido(sitoR.url) ? sitoR.url : null,
   };
-  const pagine = [...new Set((Array.isArray(r.pagine_viste) ? r.pagine_viste : []).filter((u): u is string => httpsValido(u) && !PAGINE_MAI_LETTE.test(dominioDi(u))))].slice(0, 4);
+  const pagine = [...new Set((Array.isArray(r.pagine_viste) ? r.pagine_viste : []).filter((u): u is string => httpsValido(u) && !indirizzoMaiLetto(u)))].slice(0, 4);
   const rep = (r.reputazione && typeof r.reputazione === 'object' ? r.reputazione : {}) as Record<string, unknown>;
   const consigliato: IdFascia | null = eFascia(r.consigliato) ? r.consigliato : null;
   if (r.consigliato != null && !consigliato) scartati.push(`abbonamento consigliato sconosciuto («${String(r.consigliato)}»)`);

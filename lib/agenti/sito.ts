@@ -94,7 +94,9 @@ export function misuraHtml(html: string, indirizzo: string): Omit<MisuraSito, 'h
 }
 
 /** Domini che non sono «il sito» dell'attività: social, mappe, elenchi. */
-export const NON_E_UN_SITO = /(^|\.)(facebook|instagram|tiktok|youtube|google|goo|linktr|wa|whatsapp|tripadvisor|thefork|justeat|glovoapp|deliveroo|paginegialle|paginebianche|virgilio|yelp|booking|airbnb|matrimonio|sluurpy|restaurantguru|wanderlog)\.[a-z.]+$/i;
+// 28/11/2026 — Anche share.google e i giornali locali: un articolo sul locale non è il suo sito (collaudo).
+// I siti fatti con Google Sites (sites.google.com/view/…) invece sono siti dei locali.
+export const NON_E_UN_SITO = /(^|\.)(facebook|instagram|tiktok|youtube|(?<!sites\.)google|goo|linktr|wa|whatsapp|tripadvisor|thefork|justeat|glovoapp|deliveroo|paginegialle|paginebianche|virgilio|yelp|booking|airbnb|matrimonio|sluurpy|restaurantguru|wanderlog|liberta|ilpiacenza|piacenzasera|piacenza24|ilpiacenzaonline)\.[a-z.]+$|(^|\.)share\.google$/i;
 
 export async function misuraSito(indirizzo: string): Promise<MisuraSito> {
   const vuota = (url: string, errore: string): MisuraSito => ({ url, aperto: false, https: null, titolo: null, descrizione: null, telefonino: false,
@@ -112,6 +114,8 @@ export async function misuraSito(indirizzo: string): Promise<MisuraSito> {
     if (seconda.ok) { pagina = seconda; https = seconda.url.startsWith('https:'); }
   }
   if (!pagina.ok || !pagina.html) return { ...vuota(pagina.url, pagina.errore ?? 'pagina vuota'), https };
+  // 28/11/2026 — Dopo i rinvii la pagina può essere finita su un profilo o un elenco: allora non è il sito (collaudo).
+  if (NON_E_UN_SITO.test(new URL(pagina.url).hostname)) return { ...vuota(pagina.url, 'rinvia a un profilo o a un elenco, non al sito dell’attività'), https };
   return { ...misuraHtml(pagina.html, pagina.url), aperto: true, https, errore: null };
 }
 
@@ -122,7 +126,9 @@ export async function misuraSito(indirizzo: string): Promise<MisuraSito> {
 // indirizzi più probabili (ladolcedispensa.it, …), e tiene un sito solo se la pagina porta il nome
 // dell'attività E la città. Dal sito trovato escono anche i profili social che il sito stesso collega.
 
-const ARTICOLI = new Set(['la', 'il', 'lo', 'le', 'i', 'gli', 'l', 'un', 'una', 'al', 'da', 'dal', 'del', 'della']);
+// 28/11/2026 — Anche le preposizioni articolate («alla», «dell'», «dei»…): non distinguono un locale da un altro (collaudo).
+const ARTICOLI = new Set(['la', 'il', 'lo', 'le', 'i', 'gli', 'l', 'un', 'una', 'al', 'da', 'dal', 'del', 'della', 'dell', 'dello', 'dei', 'degli', 'delle',
+  'alla', 'allo', 'all', 'ai', 'agli', 'alle', 'dalla', 'dai', 'di', 'e', 'ed', 'in', 'a', 'nel', 'nella', 'sul', 'sulla']);
 // 28/11/2026 — Il Raquel 💗 Cafè: «cafe» contava come parola del nome, e un sito intitolato «Raquel Caffè» veniva
 // scartato perché «caffe» non contiene «cafe». Le grafie del caffè e del bar contano tutte come parole comuni.
 const GENERICHE = new Set(['bar', 'caffe', 'cafe', 'caffetteria', 'cafeteria', 'coffee', 'bistrot', 'bistro', 'pub', 'lounge',
@@ -130,15 +136,36 @@ const GENERICHE = new Set(['bar', 'caffe', 'cafe', 'caffetteria', 'cafeteria', '
   'macelleria', 'gelateria', 'enoteca', 'negozio', 'boutique', 'parrucchiere', 'salone', 'centro', 'studio', 'farmacia', 'ottica', 'libreria']);
 const slug = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' e ').replace(/['’`]/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
-/** Le parole che distinguono il locale nel suo nome, senza articoli e parole comuni («Raquel 💗 Cafè» → ["raquel"]). */
+/**
+ * Le parole che distinguono il locale nel suo nome, senza articoli e parole comuni («Raquel 💗 Cafè» → ["raquel"]).
+ * Un nome fatto solo di parole comuni («Caffè Bistrot», «Coffee Lounge») le tiene tutte: altrimenti non si
+ * riconoscerebbe più nessun sito, nemmeno quello scritto dal venditore (collaudo del 28/11).
+ */
 export function paroleDistintive(nome: string): string[] {
-  return slug(nome).split(' ').filter((p) => p.length >= 3 && !ARTICOLI.has(p) && !GENERICHE.has(p));
+  const tutte = slug(nome).split(' ').filter((p) => p.length >= 3 && !ARTICOLI.has(p));
+  const proprie = tutte.filter((p) => !GENERICHE.has(p));
+  return proprie.length ? proprie : tutte;
 }
 
-/** Un nome di profilo o un indirizzo porta una parola che distingue il locale? («raquel_cafe23» per «Raquel 💗 Cafè»: sì). */
+// Le famiglie dei tipi di locale: un profilo «gelateria_del_duomo» non è del «Bar del Duomo» (collaudo del 28/11).
+const FAMIGLIE: string[][] = [
+  ['bar', 'caffe', 'cafe', 'caffetteria', 'cafeteria', 'coffee', 'bistrot', 'bistro', 'pub', 'lounge'], ['pasticceria'],
+  ['ristorante', 'trattoria', 'osteria'], ['pizzeria'], ['forno', 'panificio'], ['macelleria'], ['gelateria'], ['enoteca'],
+  ['parrucchiere', 'salone'], ['farmacia'], ['ottica'], ['libreria'], ['boutique', 'negozio'],
+];
+
+/**
+ * Un nome di profilo o un dominio è di questo locale? Servono TUTTE le parole che distinguono il nome, e nessuna parola
+ * di un altro tipo di locale («raquel_cafe23» per «Raquel 💗 Cafè»: sì; «gelateriadelduomo» per «Bar del Duomo»: no;
+ * «rossi_gomme_piacenza» per «Pasticceria Fratelli Rossi»: no, manca «fratelli»).
+ */
 export function portaIlNome(testoProfilo: string, nome: string): boolean {
   const s = slug(testoProfilo.replace(/[._-]+/g, ' ')).replace(/ /g, '');
-  return paroleDistintive(nome).some((p) => p.length >= 4 && s.includes(p));
+  const distinte = paroleDistintive(nome);
+  if (!distinte.length || !distinte.every((p) => s.includes(p))) return false;
+  const delNome = new Set(slug(nome).split(' '));
+  const famiglieDelNome = FAMIGLIE.filter((f) => f.some((w) => delNome.has(w)));
+  return !FAMIGLIE.some((f) => !famiglieDelNome.includes(f) && f.some((w) => w.length >= 6 && s.includes(w)));
 }
 
 /** Il nome di un profilo social ridotto a una base per il dominio: «@raquel_cafe23» → «raquelcafe23». */
@@ -174,71 +201,114 @@ export function candidatiDominio(nome: string, citta = 'Piacenza', profili: stri
 
 const PARCHEGGIO = /dominio (in vendita|registrato|acquistato)|domain (is )?for sale|this domain|buy this domain|parked|sedo\.com|coming soon|in costruzione|under construction|website is (being )?built|default web page|it works!/i;
 
+/** «Caffè» e «Cafè» sono la stessa parola per chi scrive un titolo. */
+const uguaglia = (s: string) => s.replace(/\bcaffe\b/g, 'cafe');
+
 /**
- * La pagina è davvero di questa attività? Nome nelle parti che contano, città nella pagina, niente pagina di parcheggio.
- * `largo`: il nome si cerca in tutta la pagina e non solo nel titolo. Vale per un indirizzo che qualcuno ha già indicato
- * come il sito del locale (il venditore, l'AD, un elenco), mai per un indirizzo solo indovinato.
+ * L'indirizzo del locale scritto nella pagina: la via e il numero civico vicini («Piazza Duomo, 23» → «duomo 23»).
+ * Il numero conta: il Duomo di Piacenza è al 33 della stessa piazza.
  */
-export function eIlSitoDi(html: string, nome: string, citta = 'Piacenza', { largo = false }: { largo?: boolean } = {}): boolean {
+export function indirizzoNellaPagina(testoPagina: string, indirizzo: string | null | undefined): boolean {
+  const m = slug(String(indirizzo ?? '')).match(/^(?:via|viale|piazza|piazzale|corso|strada|stradone|largo|vicolo|borgo|galleria|contrada|cantone)?\s*([a-z][a-z ]*?)\s+(\d{1,4})(?: |$)/);
+  if (!m) return false;
+  const via = m[1].split(' ').filter((w) => w.length >= 3 && !ARTICOLI.has(w)).join(' ');
+  if (!via) return false;
+  return new RegExp(`(^| )${via}( n)? ${m[2]}( |$)`).test(slug(testoPagina));
+}
+
+/** Il testo che si legge in una pagina: senza tag, script e indirizzi dei collegamenti (un link a un profilo non è il nome). */
+const testoVisibile = (html: string) => html.slice(0, 300_000).replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]*>/g, ' ');
+
+/**
+ * La pagina è davvero di questa attività? Città nella pagina, niente pagina di parcheggio, e il nome:
+ *  · stretto (di serie): le parole che distinguono il nome nel titolo, nella descrizione o nell'h1. Se il nome ha una
+ *    parola distintiva sola («Raquel», «Duomo»), serve di più: il nome intero nel titolo («Raquel Caffè»), oppure la via
+ *    col numero civico del locale nella pagina (collaudo del 28/11: «Bar del Duomo» prendeva il sito di un altro);
+ *  · `largo`: il nome come parola intera in tutto il testo che si legge. Solo per un sito che il venditore ha copiato
+ *    dalla scheda Google, mai per uno indovinato, visto dall'AD o trovato in una pagina.
+ */
+export function eIlSitoDi(html: string, nome: string, citta = 'Piacenza', { largo = false, indirizzo = null }: { largo?: boolean; indirizzo?: string | null } = {}): boolean {
   if (!html || PARCHEGGIO.test(html.slice(0, 60_000))) return false;
   const tutto = slug(html.slice(0, 300_000));
-  // Largo: solo il testo che si legge, senza tag, script e indirizzi dei collegamenti (un link a un profilo non è il nome).
-  const testa = largo ? slug(html.slice(0, 300_000).replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]*>/g, ' ')) : slug([html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1], ...[...html.matchAll(/<meta[^>]+(?:name|property)=["'](?:description|og:site_name|og:title)["'][^>]*content=["']([^"']*)["']/gi)].map((m) => m[1]),
-    ...[...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)].map((m) => m[1].replace(/<[^>]*>/g, ' '))].filter(Boolean).join(' '));
+  if (!tutto.includes(slug(citta))) return false;
   const parole = paroleDistintive(nome);
   if (!parole.length) return false;
-  // Nel titolo basta il pezzo (un titolo «ladolcedispensa.it» vale); in tutta la pagina serve la parola intera,
-  // perché in un testo lungo «raquel» può stare dentro un'altra parola.
-  const trovate = parole.filter((p) => (largo ? new RegExp(`(^| )${p}( |$)`).test(testa) : testa.includes(p))).length;
-  const conCitta = tutto.includes(slug(citta));
-  return conCitta && trovate / parole.length >= 0.75;
+  if (largo) {
+    // Il testo che si legge, più il testo alternativo delle immagini (spesso il nome sta solo nel logo) e il titolo.
+    const alt = [...html.slice(0, 300_000).matchAll(/<img[^>]+alt=["']([^"']*)["']/gi)].map((m) => m[1]).join(' ');
+    const leggibile = slug(`${testoVisibile(html)} ${alt} ${html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? ''}`);
+    return parole.filter((p) => new RegExp(`(^| )${p}( |$)`).test(leggibile)).length / parole.length >= 0.75;
+  }
+  const testa = slug([html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1], ...[...html.matchAll(/<meta[^>]+(?:name|property)=["'](?:description|og:site_name|og:title)["'][^>]*content=["']([^"']*)["']/gi)].map((m) => m[1]),
+    ...[...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)].map((m) => m[1].replace(/<[^>]*>/g, ' '))].filter(Boolean).join(' '));
+  // Nel titolo basta il pezzo: un titolo «ladolcedispensa.it» vale.
+  if (parole.filter((p) => testa.includes(p)).length / parole.length < 0.75) return false;
+  if (parole.length >= 2) return true;
+  const intero = uguaglia(slug(nome));
+  return uguaglia(testa).includes(intero) || indirizzoNellaPagina(testoVisibile(html), indirizzo);
+}
+
+/** Una pagina aperta è ancora un sito? Dopo i rinvii può essere finita su un profilo, un elenco o un giornale. */
+const finitaAltrove = (url: string) => { try { return NON_E_UN_SITO.test(new URL(url).hostname); } catch { return true; } };
+
+/** Prova una lista di indirizzi in parallelo e tiene il primo che è davvero del locale (controllo stretto). */
+async function provaIndirizzi(candidati: string[], nome: string, citta: string, attesaMs: number, indirizzo: string | null): Promise<MisuraSito | null> {
+  const prove = await Promise.all(candidati.map(async (d, i) => {
+    const pagina = await leggiPagina(`https://${d}/`, { attesaMs, maxByte: 600_000 });
+    return pagina.ok && !finitaAltrove(pagina.url) && eIlSitoDi(pagina.html, nome, citta, { indirizzo }) ? { i, pagina } : null;
+  }));
+  const vinta = prove.filter((x): x is NonNullable<typeof x> => x !== null).sort((a, b) => a.i - b.i)[0];
+  if (!vinta) return null;
+  return { ...misuraHtml(vinta.pagina.html, vinta.pagina.url), aperto: true, https: vinta.pagina.url.startsWith('https:'), errore: null };
 }
 
 /** Prova gli indirizzi probabili in parallelo, al massimo `attesaMs`. Restituisce la misura del primo che è davvero suo. */
-export async function indovinaSito(nome: string | null, citta = 'Piacenza', attesaMs = 3500, profili: string[] = []): Promise<MisuraSito | null> {
+export async function indovinaSito(nome: string | null, citta = 'Piacenza', attesaMs = 3500, profili: string[] = [], indirizzo: string | null = null): Promise<MisuraSito | null> {
   if (!nome) return null;
   const candidati = candidatiDominio(nome, citta, profili);
-  if (!candidati.length) return null;
-  const prove = await Promise.all(candidati.map(async (d, i) => {
-    const pagina = await leggiPagina(`https://${d}/`, { attesaMs, maxByte: 600_000 });
-    return pagina.ok && eIlSitoDi(pagina.html, nome, citta) ? { i, pagina } : null;
-  }));
-  const vinta = prove.filter((x): x is NonNullable<typeof x> => x !== null).sort((a, b) => a.i - b.i)[0];
-  if (!vinta) return null;
-  return { ...misuraHtml(vinta.pagina.html, vinta.pagina.url), aperto: true, https: vinta.pagina.url.startsWith('https:'), errore: null };
+  return candidati.length ? provaIndirizzi(candidati, nome, citta, attesaMs, indirizzo) : null;
 }
 
 /** Come `indovinaSito`, ma prova solo gli indirizzi fatti dai nomi dei profili (quelli dal nome li ha già provati la prima scheda). */
-export async function indovinaSitoDaiProfili(nome: string | null, citta = 'Piacenza', profili: string[] = [], attesaMs = 3500): Promise<MisuraSito | null> {
+export async function indovinaSitoDaiProfili(nome: string | null, citta = 'Piacenza', profili: string[] = [], attesaMs = 3000, indirizzo: string | null = null): Promise<MisuraSito | null> {
   if (!nome || !profili.length) return null;
   const candidati = candidatiDominio('', citta, profili);
-  const prove = await Promise.all(candidati.map(async (d, i) => {
-    const pagina = await leggiPagina(`https://${d}/`, { attesaMs, maxByte: 600_000 });
-    return pagina.ok && eIlSitoDi(pagina.html, nome, citta) ? { i, pagina } : null;
-  }));
-  const vinta = prove.filter((x): x is NonNullable<typeof x> => x !== null).sort((a, b) => a.i - b.i)[0];
-  if (!vinta) return null;
-  return { ...misuraHtml(vinta.pagina.html, vinta.pagina.url), aperto: true, https: vinta.pagina.url.startsWith('https:'), errore: null };
+  return candidati.length ? provaIndirizzi(candidati, nome, citta, attesaMs, indirizzo) : null;
 }
 
 /**
- * Un sito che qualcuno ha indicato (il venditore, l'AD, una pagina letta da n8n): si apre, si misura e si controlla
- * che porti il nome e la città del locale (`eIlSitoDi` largo). `null` se non si apre, se è un profilo o un elenco,
- * o se non è suo: un indirizzo sbagliato non deve finire nei canali della vetrina.
+ * La pagina da cui si giudica un sito indicato: la home del dominio, non la pagina che qualcuno ha indicato (un articolo
+ * del giornale sul locale non diventa il suo sito). Per i siti fatti su Google Sites o Wix si tiene il nome del sito.
  */
-export async function sitoIndicato(indirizzo: string, nome: string | null, citta = 'Piacenza'): Promise<MisuraSito | null> {
+export function radiceDelSito(u: URL): string {
+  const h = u.hostname.toLowerCase();
+  const pezzi = u.pathname.split('/').filter(Boolean);
+  if (h === 'sites.google.com' && (pezzi[0] === 'view' || pezzi[0] === 'site') && pezzi[1]) return `https://${h}/${pezzi[0]}/${pezzi[1]}/`;
+  if (/(^|\.)wixsite\.com$/.test(h) && pezzi[0]) return `https://${h}/${pezzi[0]}/`;
+  return `https://${u.hostname}/`;
+}
+
+/**
+ * Un sito che qualcuno ha indicato (il venditore, l'AD, una pagina dei risultati): si apre la sua home, si misura e si
+ * controlla che sia del locale. `fidato` (solo il sito copiato dal venditore dalla scheda Google): il nome può stare in
+ * tutta la pagina. Per gli altri vale il controllo stretto, con l'indirizzo del locale. `null` se non si apre, se è un
+ * profilo, un elenco o un giornale, o se non è suo: un indirizzo sbagliato non deve finire nei canali della vetrina.
+ */
+export async function sitoIndicato(dove: string, nome: string | null, citta = 'Piacenza',
+  { fidato = false, indirizzo = null, attesaMs = 4500 }: { fidato?: boolean; indirizzo?: string | null; attesaMs?: number } = {}): Promise<MisuraSito | null> {
   if (!nome) return null;
   let u: URL;
-  try { u = new URL(/^https?:\/\//i.test(indirizzo) ? indirizzo : `https://${indirizzo}`); } catch { return null; }
+  try { u = new URL(/^https?:\/\//i.test(dove) ? dove : `https://${dove}`); } catch { return null; }
   if (NON_E_UN_SITO.test(u.hostname)) return null;
-  const sicuro = new URL(u.toString()); sicuro.protocol = 'https:';
-  let pagina = await leggiPagina(sicuro.toString(), { maxByte: 600_000 });
+  const casa = radiceDelSito(u);
+  let pagina = await leggiPagina(casa, { attesaMs, maxByte: 600_000 });
   let https: boolean | null = pagina.ok ? pagina.url.startsWith('https:') : null;
   if (!pagina.ok && pagina.errore === 'non si apre') {
-    const semplice = new URL(sicuro.toString()); semplice.protocol = 'http:';
-    const seconda = await leggiPagina(semplice.toString(), { attesaMs: 3000, maxByte: 600_000 });
+    const semplice = new URL(casa); semplice.protocol = 'http:';
+    const seconda = await leggiPagina(semplice.toString(), { attesaMs: Math.min(3000, attesaMs), maxByte: 600_000 });
     if (seconda.ok) { pagina = seconda; https = seconda.url.startsWith('https:'); }
   }
-  if (!pagina.ok || !pagina.html || !eIlSitoDi(pagina.html, nome, citta, { largo: true })) return null;
+  if (!pagina.ok || !pagina.html || finitaAltrove(pagina.url)) return null;
+  if (!eIlSitoDi(pagina.html, nome, citta, fidato ? { largo: true } : { indirizzo })) return null;
   return { ...misuraHtml(pagina.html, pagina.url), aperto: true, https, errore: null };
 }

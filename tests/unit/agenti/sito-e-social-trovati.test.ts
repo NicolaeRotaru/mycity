@@ -14,17 +14,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *  · il profilo Instagram arriva al flusso 16 come indizio, ma un omonimo no.
  */
 
-const rete = vi.hoisted(() => ({ pagine: {} as Record<string, string>, chieste: [] as string[] }));
+const rete = vi.hoisted(() => ({ pagine: {} as Record<string, string>, chieste: [] as string[], finale: {} as Record<string, string> }));
 vi.mock('@/lib/agenti/rete', async (originale) => ({
   ...(await originale<typeof import('@/lib/agenti/rete')>()),
   leggiPagina: async (url: string) => {
     rete.chieste.push(url);
     const html = rete.pagine[url];
-    return html ? { ok: true, stato: 200, url, html, errore: null, ms: 1 } : { ok: false, stato: null, url, html: '', errore: 'non si apre', ms: 1 };
+    // `finale`: dove la pagina finisce dopo i rinvii (come la restituisce la vera leggiPagina).
+    return html ? { ok: true, stato: 200, url: rete.finale[url] ?? url, html, errore: null, ms: 1 } : { ok: false, stato: null, url, html: '', errore: 'non si apre', ms: 1 };
   },
 }));
 
-const { candidatiDominio, eIlSitoDi, sitoIndicato, portaIlNome } = await import('@/lib/agenti/sito');
+const { candidatiDominio, eIlSitoDi, sitoIndicato, portaIlNome, indirizzoNellaPagina, radiceDelSito, misuraSito } = await import('@/lib/agenti/sito');
+const { maiLetta } = await import('@/lib/agenti/mai-lette');
+const reteVera = await vi.importActual<typeof import('@/lib/agenti/rete')>('@/lib/agenti/rete');
 const { leggiCanaleDelVenditore } = await import('@/lib/agenti/canale-venditore');
 const { primaScheda, unisci, pulisci, normalizza } = await import('@/lib/agenti/scheda');
 const { confermaQuelloCheHaTrovatoLAd, instagramPerIlFlusso, collegamentiDellaPagina } = await import('@/lib/agenti/conferma-ad');
@@ -35,7 +38,7 @@ const pagina = (titolo: string, corpo = 'Piazza Duomo 23, 29121 Piacenza') => `<
 <a href="https://www.instagram.com/raquel_cafe23/">Instagram</a></body></html>`;
 const letto = { nome: RAQUEL, indirizzo: 'Piazza Duomo, 23, 29121 Piacenza PC', lat: 45.05, lon: 9.69, idLuogo: null, link: 'https://www.google.com/maps/place/Raquel' };
 
-beforeEach(() => { rete.pagine = {}; rete.chieste = []; });
+beforeEach(() => { rete.pagine = {}; rete.chieste = []; rete.finale = {}; });
 
 describe('il sito indovinato', () => {
   it('prova il nome senza le parole comuni e i nomi dei profili, al massimo 12 indirizzi', () => {
@@ -48,8 +51,25 @@ describe('il sito indovinato', () => {
     expect(candidatiDominio('', 'Piacenza', ['raquel_cafe23'])).toContain('raquelcafe23.it');
   });
 
-  it('una pagina «Raquel Caffè», «Raquel – caffetteria», «Raquel Coffee» o solo «Raquel» è sua, se c’è la città', () => {
-    for (const t of ['Raquel Cafè', 'Raquel Caffè', 'Raquel - caffetteria', 'Raquel Coffee', 'Raquel']) expect(eIlSitoDi(pagina(t), RAQUEL, 'Piacenza'), t).toBe(true);
+  it('una pagina «Raquel Cafè» o «Raquel Caffè» è sua, se c’è la città: il nome intero sta nel titolo', () => {
+    for (const t of ['Raquel Cafè', 'Raquel Caffè', 'Raquel Café Piacenza']) expect(eIlSitoDi(pagina(t), RAQUEL, 'Piacenza'), t).toBe(true);
+  });
+
+  it('con una parola distintiva sola, «Raquel – caffetteria», «Raquel Coffee» o «Raquel» valgono solo con la via e il numero del locale', () => {
+    const indirizzo = 'Piazza Duomo, 23, 29121 Piacenza PC';
+    for (const t of ['Raquel - caffetteria', 'Raquel Coffee', 'Raquel']) {
+      expect(eIlSitoDi(pagina(t), RAQUEL, 'Piacenza', { indirizzo }), t).toBe(true);
+      expect(eIlSitoDi(pagina(t, 'Via Roma 5, Piacenza'), RAQUEL, 'Piacenza', { indirizzo }), `${t} con un altro indirizzo`).toBe(false);
+    }
+  });
+
+  it('il «Bar del Duomo» non prende il sito del Duomo né quello di un altro locale della piazza (collaudo del 28/11)', () => {
+    const indirizzo = 'Piazza Duomo, 12, 29121 Piacenza PC';
+    expect(eIlSitoDi('<title>Duomo di Piacenza</title><body>Piazza Duomo 33, Piacenza</body>', 'Bar del Duomo', 'Piacenza', { indirizzo })).toBe(false);
+    expect(eIlSitoDi('<title>Gelateria del Duomo</title><body>Piazza Duomo 4, Piacenza</body>', 'Bar del Duomo', 'Piacenza', { indirizzo })).toBe(false);
+    expect(eIlSitoDi('<title>Bar del Duomo</title><body>Piazza Duomo 12, Piacenza</body>', 'Bar del Duomo', 'Piacenza', { indirizzo })).toBe(true);
+    expect(indirizzoNellaPagina('Siamo in piazza Duomo, n. 12 a Piacenza', indirizzo)).toBe(true);
+    expect(indirizzoNellaPagina('Piazza Duomo 120, Piacenza', indirizzo)).toBe(false);
   });
 
   it('ma non quella di un’altra città, di un altro locale o di un dominio in vendita', () => {
@@ -65,10 +85,75 @@ describe('il sito indovinato', () => {
     expect(eIlSitoDi('<title>Home</title><body>Raquelita bar, Piacenza</body>', RAQUEL, 'Piacenza', { largo: true })).toBe(false);
   });
 
-  it('un nome di profilo porta il nome del locale solo se ha una parola che lo distingue', () => {
+  it('un nome di profilo o un dominio è del locale solo con tutte le parole che lo distinguono, e senza un altro tipo di locale', () => {
     expect(portaIlNome('raquel_cafe23', RAQUEL)).toBe(true);
     expect(portaIlNome('cafeteria_raquel_', RAQUEL)).toBe(true);
     expect(portaIlNome('caffe_piacenza', RAQUEL)).toBe(false);
+    expect(portaIlNome('gelateriadelduomo.it', 'Bar del Duomo')).toBe(false);
+    expect(portaIlNome('gelateria_del_duomo_pc', 'Bar del Duomo')).toBe(false);
+    expect(portaIlNome('bardelduomo.it', 'Bar del Duomo')).toBe(true);
+    expect(portaIlNome('rossi_gomme_piacenza', 'Pasticceria Fratelli Rossi')).toBe(false);
+    expect(portaIlNome('fratellirossi_pasticceria', 'Pasticceria Fratelli Rossi')).toBe(true);
+    // I casi del collaudo: una parola in comune non basta, e un altro tipo di locale non passa.
+    expect(portaIlNome('pasticceria_duomo_pc', 'Caffè del Duomo')).toBe(false);
+    expect(portaIlNome('antica_trattoria_pc', 'Antica Pasticceria Galli')).toBe(false);
+    expect(portaIlNome('antica_osteria_pc', 'Antica Pasticceria Galli')).toBe(false);
+    expect(portaIlNome('pizzeria_alla_stazione', 'Trattoria alla Pesa')).toBe(false);
+  });
+
+  it('un nome fatto solo di parole comuni si riconosce lo stesso («Caffè Bistrot», «Coffee Lounge»)', () => {
+    for (const nome of ['Caffè Bistrot', 'Coffee Lounge', 'Lounge Bar', 'Bistrot Pub']) {
+      const html = `<title>${nome} Piacenza</title><body>Via Roma 1, Piacenza</body>`;
+      expect(eIlSitoDi(html, nome, 'Piacenza'), nome).toBe(true);
+      expect(eIlSitoDi(html, nome, 'Piacenza', { largo: true }), `${nome} largo`).toBe(true);
+    }
+    expect(candidatiDominio('Caffè Bistrot', 'Piacenza')).toContain('caffebistrot.it');
+  });
+
+  it('Meta, Google e i portali non si aprono mai, nemmeno dopo un rinvio; Google Sites sì', async () => {
+    for (const h of ['www.facebook.com', 'instagram.com', 'www.google.com', 'maps.google.it', 'share.google', 'www.tripadvisor.it', 'l.facebook.com']) expect(maiLetta(h), h).toBe(true);
+    for (const h of ['sites.google.com', 'raquelcafe.it', 'wanderlog.com']) expect(maiLetta(h), h).toBe(false);
+    // Si ferma prima di collegarsi, col suo motivo (senza il controllo fallirebbe per la rete, che qui è chiusa).
+    expect((await reteVera.leggiPagina('https://www.facebook.com/raquel')).errore).toMatch(/Meta, Google o di un portale/);
+    expect(reteVera.rinvioAmmesso('https://www.facebook.com/RaquelCafe', new URL('https://raquelcafe.it/'))).toHaveProperty('errore');
+    expect(reteVera.rinvioAmmesso('https://m.facebook.com/x', new URL('https://raquelcafe.it/'))).toHaveProperty('errore');
+    expect(reteVera.rinvioAmmesso('/menu', new URL('https://raquelcafe.it/'))).toHaveProperty('url');
+  });
+
+  it('un sito si giudica dalla sua home: un articolo del giornale non diventa il sito del locale', async () => {
+    expect(radiceDelSito(new URL('https://www.liberta.it/news/2026/raquel-cafe'))).toBe('https://www.liberta.it/');
+    expect(radiceDelSito(new URL('https://sites.google.com/view/raquelcafe/menu'))).toBe('https://sites.google.com/view/raquelcafe/');
+    rete.pagine['https://www.giornale-locale.example.org/'] = '<title>Il giornale di Piacenza</title><body>Notizie da Piacenza</body>';
+    rete.pagine['https://www.giornale-locale.example.org/articolo-raquel'] = pagina('Raquel Cafè, il bar rosa');
+    expect(await sitoIndicato('https://www.giornale-locale.example.org/articolo-raquel', RAQUEL, 'Piacenza', { indirizzo: 'Piazza Duomo, 23' })).toBeNull();
+  });
+
+  it('un sito che dopo i rinvii finisce su un elenco o un profilo non vale', async () => {
+    rete.pagine['https://raquelcafe.it/'] = pagina('Raquel Cafè');
+    expect((await sitoIndicato('raquelcafe.it', RAQUEL, 'Piacenza'))?.aperto).toBe(true);
+    rete.finale['https://raquelcafe.it/'] = 'https://www.paginegialle.it/raquel-cafe';
+    expect(await sitoIndicato('raquelcafe.it', RAQUEL, 'Piacenza', { fidato: true })).toBeNull();
+  });
+
+  it('anche il sito scritto sulla mappa libera non vale se rinvia a un profilo; e un profilo non entra mai nel negozio', async () => {
+    rete.pagine['https://raquelcafe.it/'] = pagina('Raquel Cafè');
+    rete.finale['https://raquelcafe.it/'] = 'https://www.instagram.com/raquel_cafe23/';
+    expect((await misuraSito('raquelcafe.it')).aperto).toBe(false);
+    const s = primaScheda({ letto, osm: null, misura: null, citta: 'Piacenza', data: 'x' });
+    s.sito.misura = { url: 'https://www.facebook.com/raquel', aperto: true, https: true, titolo: null, descrizione: null, telefonino: true, pagine: 1, funzioni: [], social: {}, piattaforma: null, anno: null, stima: 'semplice', errore: null };
+    expect(attivitaDallaScheda(s)?.sito).toBeUndefined();
+  });
+
+  it('le preposizioni articolate non contano come parole del nome («Trattoria alla Pesa»)', () => {
+    expect(eIlSitoDi('<title>Pesa · trattoria</title><body>Via Roma 10, Piacenza</body>', 'Trattoria alla Pesa', 'Piacenza', { indirizzo: 'Via Roma, 10, Piacenza' })).toBe(true);
+  });
+
+  it('il sito visto dall’AD si giudica stretto: il nome solo nel testo, senza indirizzo, non basta', async () => {
+    rete.pagine['https://www.raquel-omonimo.it/'] = '<title>Home</title><body>Benvenuti da Raquel, Piacenza</body>';
+    const p = primaScheda({ letto, osm: null, misura: null, citta: 'Piacenza', data: 'x' });
+    const s = unisci(p, pulisci({ sito: { url: 'https://www.raquel-omonimo.it/', livello: 'medio', giudizio: 'x', fonte: null } }));
+    await confermaQuelloCheHaTrovatoLAd(s, { sitoUrl: 'https://www.raquel-omonimo.it/', pagine: [] });
+    expect(s.sito.misura?.aperto).toBeFalsy();
   });
 });
 
@@ -80,6 +165,7 @@ describe('il campo del venditore', () => {
     expect(leggiCanaleDelVenditore('https://www.facebook.com/RaquelCafe')?.facebook).toBeTruthy();
     expect(leggiCanaleDelVenditore('https://www.tiktok.com/@raquelcafe')?.tiktok).toBeTruthy();
     expect(leggiCanaleDelVenditore('www.raquelcafe.it')).toMatchObject({ sito: 'https://www.raquelcafe.it/', instagram: null });
+    expect(leggiCanaleDelVenditore('pane.quotidiano')).toMatchObject({ instagram: 'pane.quotidiano', sito: null });
   });
 
   it('un link di Google, un campo vuoto o un indirizzo con utente e password non valgono', () => {
@@ -91,11 +177,12 @@ describe('il campo del venditore', () => {
 
   it('il sito scritto dal venditore vale solo se si apre e porta il nome e la città', async () => {
     rete.pagine['https://raquelcafe.it/'] = pagina('Home', 'Raquel, caffetteria in Piazza Duomo 23 a Piacenza');
-    const m = await sitoIndicato('raquelcafe.it', RAQUEL, 'Piacenza');
+    const m = await sitoIndicato('raquelcafe.it', RAQUEL, 'Piacenza', { fidato: true });
     expect(m?.aperto).toBe(true);
+    expect(await sitoIndicato('raquelcafe.it', RAQUEL, 'Piacenza'), 'senza fidato serve il nome nel titolo o l’indirizzo').toBeNull();
     expect(m?.social.instagram).toBe('https://www.instagram.com/raquel_cafe23/');
     rete.pagine['https://altrobar.it/'] = pagina('Bar Sport', 'Via Emilia 3, Piacenza');
-    expect(await sitoIndicato('altrobar.it', RAQUEL, 'Piacenza')).toBeNull();
+    expect(await sitoIndicato('altrobar.it', RAQUEL, 'Piacenza', { fidato: true })).toBeNull();
     expect(await sitoIndicato('https://www.facebook.com/raquel', RAQUEL, 'Piacenza')).toBeNull();
   });
 
@@ -185,10 +272,14 @@ describe('dopo la risposta dell’AD', () => {
     expect(scheda.sito.misura?.url).toBe('https://raquelcafe23.it/');
   });
 
-  it('al flusso 16 va il profilo col nome del locale, non un omonimo visto solo dall’AD', () => {
-    const conNome = schedaDopoLAd({ social: [{ canale: 'Instagram', stato: 'trovato', fonte: 'https://www.instagram.com/raquel_cafe23/' }] }).scheda;
-    expect(instagramPerIlFlusso(conNome)).toBe('raquel_cafe23');
-    const omonimo = schedaDopoLAd({ social: [{ canale: 'Instagram', stato: 'trovato', fonte: 'https://www.instagram.com/caffe_del_duomo/' }] }).scheda;
-    expect(instagramPerIlFlusso(omonimo)).toBeNull();
+  it('al flusso 16 va solo un profilo sicuro (dal sito, dal venditore, dalla mappa), mai uno visto solo dall’AD', async () => {
+    const soloAd = schedaDopoLAd({ social: [{ canale: 'Instagram', stato: 'trovato', fonte: 'https://www.instagram.com/raquel_cafe23/' }] }).scheda;
+    expect(instagramPerIlFlusso(soloAd)).toBeNull();
+    rete.pagine['https://www.raquelcafe.it/'] = pagina('Raquel Caffè');
+    const { scheda, ad } = schedaDopoLAd({ sito: { url: 'https://www.raquelcafe.it/', livello: 'medio', giudizio: 'x', fonte: null } });
+    await confermaQuelloCheHaTrovatoLAd(scheda, { sitoUrl: ad.sito?.url ?? null, pagine: ad.pagine });
+    expect(instagramPerIlFlusso(scheda)).toBe('raquel_cafe23');
+    const p = primaScheda({ letto, osm: null, misura: null, citta: 'Piacenza', data: 'x', venditore: { canale: { sito: null, instagram: 'raquel_cafe23', facebook: null, tiktok: null } } });
+    expect(instagramPerIlFlusso(p)).toBe('raquel_cafe23');
   });
 });

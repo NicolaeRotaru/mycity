@@ -11,7 +11,8 @@
 // iscritto: «Aggiungi attività» ricostruiva la scheda senza aprirlo. Adesso le due porte usano questa funzione.
 // La lettura sta qui e non nel flusso 14 di n8n, che per regola non chiama la rete.
 
-import { fontiDi, PAGINE_MAI_LETTE, type Scheda, type Social } from './scheda';
+import { fontiDi, type Scheda, type Social } from './scheda';
+import { maiLetta, indirizzoMaiLetto } from './mai-lette';
 import { indovinaSitoDaiProfili, portaIlNome, sitoIndicato, NON_E_UN_SITO, type MisuraSito } from './sito';
 import { leggiPagina } from './rete';
 import { nomeDelProfilo } from './profili';
@@ -48,7 +49,7 @@ export function collegamentiDellaPagina(html: string, indirizzo: string, nome: s
       profili.add(canale === 'Instagram' ? `https://www.instagram.com/${profilo}/` : canale === 'TikTok' ? `https://www.tiktok.com/${profilo}` : `https://www.facebook.com/${profilo}`);
       continue;
     }
-    if (PAGINE_MAI_LETTE.test(h) || NON_E_UN_SITO.test(h) || !portaIlNome(h, nome)) continue;
+    if (maiLetta(h) || NON_E_UN_SITO.test(h) || !portaIlNome(h, nome)) continue;
     siti.add(`https://${u.hostname}/`);
   }
   return { siti: [...siti].slice(0, 4), profili: [...profili].slice(0, 6) };
@@ -81,9 +82,11 @@ export async function confermaQuelloCheHaTrovatoLAd(
   ad: { sitoUrl?: string | null; pagine?: string[] | null },
   { apri = sitoIndicato, daiProfili = indovinaSitoDaiProfili, leggi = leggiPagina }: { apri?: typeof sitoIndicato; daiProfili?: typeof indovinaSitoDaiProfili; leggi?: typeof leggiPagina } = {},
 ): Promise<Scheda> {
-  // 1. Le pagine viste dall'AD: al massimo 3, insieme, e mai Meta, Google o i portali.
-  const daLeggere = (ad.pagine ?? []).filter((u) => /^https:\/\//i.test(u) && !PAGINE_MAI_LETTE.test(dominioDi(u))).slice(0, 3);
-  const lette = await Promise.all(daLeggere.map((u) => leggi(u, { attesaMs: 4000, maxByte: 1_500_000 })));
+  // 1. Le pagine viste dall'AD: al massimo 3, insieme, e mai Meta, Google o i portali. Solo se manca qualcosa: il sito
+  //    non è ancora confermato, o il profilo Instagram non c'è.
+  const manca = !s.sito.misura?.aperto || !s.social.some((p) => p.canale === 'Instagram' && p.stato === 'trovato');
+  const daLeggere = manca ? (ad.pagine ?? []).filter((u) => /^https:\/\//i.test(u) && !indirizzoMaiLetto(u)).slice(0, 3) : [];
+  const lette = await Promise.all(daLeggere.map((u) => leggi(u, { attesaMs: 3000, maxByte: 1_500_000 })));
   const trovati = { siti: [] as string[], profili: [] as string[] };
   lette.forEach((p) => {
     if (!p.ok || !p.html) return;
@@ -105,11 +108,12 @@ export async function confermaQuelloCheHaTrovatoLAd(
   if (!s.sito.misura?.aperto) {
     const candidati = [...new Set([ad.sitoUrl, ...trovati.siti]
       .filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u) && !NON_E_UN_SITO.test(dominioDi(u))))].slice(0, 4);
-    const prove = await Promise.all(candidati.map((u) => apri(u, s.nome, s.citta)));
+    // Controllo stretto, con l'indirizzo del locale: un sito visto dall'AD o in una pagina può essere di un omonimo.
+    const prove = await Promise.all(candidati.map((u) => apri(u, s.nome, s.citta, { indirizzo: s.indirizzo, attesaMs: 3500 })));
     let m = prove.find((x): x is MisuraSito => !!x?.aperto) ?? null;
     let come = m ? (ad.sitoUrl && dominioDi(m.url) === dominioDi(ad.sitoUrl) ? 'l’AD l’ha visto nella ricerca' : 'è collegato da una pagina che parla del locale') : '';
     if (!m) {
-      m = await daiProfili(s.nome, s.citta, nomiDeiProfili(s));
+      m = await daiProfili(s.nome, s.citta, nomiDeiProfili(s), 3000, s.indirizzo);
       if (m?.aperto) come = 'ha lo stesso nome del profilo social';
     }
     if (m?.aperto) {
@@ -132,13 +136,12 @@ export async function confermaQuelloCheHaTrovatoLAd(
 }
 
 /**
- * Il profilo Instagram da passare al flusso 16 come indizio, o `null`. Uno visto solo dall'AD o trovato in una pagina
- * passa solo se il suo nome porta il nome del locale: un omonimo sbaglierebbe tutta l'analisi all'accettazione.
+ * Il profilo Instagram da passare al flusso 16 come indizio, o `null`. Passa solo un profilo sicuro: collegato dal sito
+ * del locale, copiato dal venditore dalla scheda Google, o scritto sulla mappa libera. Uno visto solo dall'AD o trovato
+ * in una pagina resta nella scheda, da controllare, ma non va al 16: un omonimo sbaglierebbe tutta l'analisi
+ * all'accettazione (collaudo del 28/11).
  */
 export function instagramPerIlFlusso(s: Scheda): string | null {
-  const p = s.social.find((x) => x.canale === 'Instagram' && x.stato === 'trovato' && x.fonte);
-  const nome = nomeDelProfilo(p?.fonte);
-  if (!p || !nome) return null;
-  if ((p.origine === 'ad' || p.origine === 'pagine') && !portaIlNome(nome, s.nome)) return null;
-  return nome;
+  const p = s.social.find((x) => x.canale === 'Instagram' && x.stato === 'trovato' && x.fonte && (x.origine === 'sito' || x.origine === 'venditore' || x.origine === 'mappa'));
+  return nomeDelProfilo(p?.fonte);
 }
