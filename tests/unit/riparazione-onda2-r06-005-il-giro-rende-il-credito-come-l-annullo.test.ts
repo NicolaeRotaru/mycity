@@ -52,11 +52,11 @@ describe('R06-005 · il giro degli scaduti rende il credito MyCity con la stessa
     const [ordine] = carrello(['pane'], [1500], 'cod', { creati: [SCADUTO] });
     ordine.wallet_applied_cents = 500;
     db = finto({ orders: [ordine] });
-    db.rpc = async (nome: string, args?: Record<string, unknown>) => {
+    db.rpc = (async (nome: string, args?: Record<string, unknown>) => {
       if (nome !== 'wallet_credit') return { data: null, error: null };
       chiamateCredito.push(args ?? {});
       return chiamateCredito.length === 1 ? { data: null, error: { message: 'timeout' } } : { data: null, error: null };
-    };
+    }) as never;
 
     const esito = await giro();
 
@@ -76,7 +76,7 @@ describe('R06-005 · il giro degli scaduti rende il credito MyCity con la stessa
     const [ordine] = carrello(['pane'], [1500], 'cod', { creati: [SCADUTO] });
     ordine.wallet_applied_cents = 500;
     db = finto({ orders: [ordine] });
-    db.rpc = async (nome: string) => (nome === 'wallet_credit' ? { data: null, error: { message: 'giù' } } : { data: null, error: null });
+    db.rpc = (async (nome: string) => (nome === 'wallet_credit' ? { data: null, error: { message: 'giù' } } : { data: null, error: null })) as never;
 
     const esito = await giro();
 
