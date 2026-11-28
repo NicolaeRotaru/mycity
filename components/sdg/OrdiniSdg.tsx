@@ -177,7 +177,7 @@ function SchedaOrdine({ o, chiedendo, chiedi }: { o: Ordine; chiedendo: Azione |
       >
         {o.sito && (
           <div className="mt-3 space-y-3 text-sm">
-            <p className="text-ink-700"><b>Sottotitolo:</b> {o.sito.sottotitolo} · <b>{o.sito.pagine.length} {o.sito.pagine.length === 1 ? 'pagina' : 'pagine'}</b> · bozza, non online: si pubblica solo dopo il sì del titolare e di SDG.</p>
+            <p className="text-ink-700"><b>Sottotitolo:</b> {o.sito.sottotitolo} · <b>{o.sito.pagine.length} {o.sito.pagine.length === 1 ? 'pagina' : 'pagine'}</b> · online da solo sul sito del cliente, appena l’AD l’ha scritto.</p>
             {o.sito.pagine.map((p) => (
               <div key={p.percorso} className="rounded-xl border border-ink-100 p-3">
                 <p className="font-semibold text-ink-900">{p.titolo} <span className="font-normal text-ink-500">{p.percorso}</span></p>

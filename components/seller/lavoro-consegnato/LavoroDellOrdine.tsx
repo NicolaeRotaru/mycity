@@ -1,7 +1,7 @@
 import { FASCE } from '@/lib/agenti/fasce';
 import type { LavoroDellOrdine } from '@/lib/agenzia/lavoro-dell-ordine';
 import type { ParteConsegnata } from '@/lib/agenzia/lavoro-consegnato/quale-parte';
-import { PAGINE_PER_FASCIA } from '@/lib/agenzia/sito-dell-ordine-ad';
+import { STANDARD } from '@/lib/agenzia/sito-finito/standard';
 import { paginePubbliche } from '@/lib/agenzia/sito-finito/costruisci';
 import { Elenco, LinkEsterno, SCHEDA, Sezione, giornoCorto } from './comuni';
 
@@ -57,7 +57,7 @@ export default function LavoroDellOrdineDelTitolare({ parte, ordine }: { parte: 
       {parte === 'sito' && (ordine.sito.bozza ? <IlTuoSito ordine={ordine} /> : (
         <InPreparazione
           titolo="Il tuo sito"
-          testo={`${attesa(ordine.sito.stato)} Col ${fascia} il sito ha ${PAGINE_PER_FASCIA[ordine.fascia] === 1 ? 'una pagina' : `${PAGINE_PER_FASCIA[ordine.fascia]} pagine`}. Appena è pronto va online da solo, e qui trovi il pulsante per aprirlo.`}
+          testo={`${attesa(ordine.sito.stato)} Col ${fascia} il sito ha ${(STANDARD[ordine.fascia] ?? STANDARD.base).length === 1 ? 'una pagina' : `fino a ${(STANDARD[ordine.fascia] ?? STANDARD.base).length} pagine`}. Appena è pronto va online da solo, e qui trovi il pulsante per aprirlo.`}
         />
       ))}
       {parte === 'social' && <PianoDellOrdine ordine={ordine} />}

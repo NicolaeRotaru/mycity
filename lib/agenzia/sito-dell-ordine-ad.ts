@@ -4,6 +4,9 @@ import type { Abbonamento } from './preventivo';
 import { fonteDiGoogle, fraseMostrabile } from './rapporto';
 import { haUnNomeDiPersona } from './nomi-di-persona';
 import { TETTI_FLUSSO_14, type dallaSchedaDellAgente } from './piano-completo-ad';
+import { STANDARD } from './sito-finito/standard';
+import { DISEGNI } from './sito-finito/disegni';
+import { PALETTE_NOMI, disegnoValido, type ContenutoSito, type Palette } from './sito-finito/contenuto';
 
 /**
  * LA BOZZA DEL SITO DELL'ORDINE, CHIESTA ALL'AD — 28/11/2026.
@@ -28,18 +31,24 @@ import { TETTI_FLUSSO_14, type dallaSchedaDellAgente } from './piano-completo-ad
 /** Le pagine della bozza, per fascia (FASCE.*.inPratica.sito: «Una pagina», «Più pagine», «Più pagine, aggiornato ogni mese»). */
 export const PAGINE_PER_FASCIA: Record<Abbonamento, number> = { base: 1, business: 3, premium: 5 };
 
-/** Le pagine suggerite all'AD, nell'ordine; il Base mette tutto nella pagina unica. */
-const PAGINE_SUGGERITE: Record<Abbonamento, string> = {
-  base: 'una sola pagina, «Home», con le sezioni Chi siamo, Cosa offriamo, Dove siamo, Contatti',
-  business: '«Home», «Chi siamo e cosa offriamo», «Dove siamo e contatti»',
-  premium: '«Home», «Chi siamo», «Cosa offriamo», «Novità del mese», «Dove siamo e contatti»',
-};
+export const COMPITO_SITO = `Sei l'AD digitale di MyCity. Un'attività di Piacenza ha appena confermato l'abbonamento: scrivi i contenuti del suo SITO. Il sito va online da solo appena li scrivi: lo costruisce il sito di MyCity, con la grafica, i disegni e le pagine dello standard del suo abbonamento (in «dati.abbonamento.standard» le pagine e le sezioni). Ogni testo è finito, come sul sito vero di un bel locale: il titolare lo vede online e ci dice cosa cambiare.
 
-export const COMPITO_SITO = `Sei l'AD digitale di MyCity. SDG Agenzia (il partner di MyCity per siti, social, foto e video) ha un cliente nuovo: il titolare ha appena confermato l'abbonamento. Scrivi i testi del SITO del locale. Il sito va online da solo appena lo scrivi, col nome del locale: ogni testo deve essere finito, come sul sito vero di un locale. Il titolare lo vede online e ci dice cosa cambiare.
+COSA HAI, in «dati»: il locale (nome, tipo, città, indirizzo pubblico), l'abbonamento con lo standard, la «nota_dell_agente» se c'è (un'indicazione per te, per esempio «vuole far vedere la sala per le feste»: non copiarla nel sito), e quello che hai già scritto nella scheda per il venditore (cosa ha, cosa manca, reputazione, social). Usali: non rifare la scheda.
 
-COSA HAI, in «dati»: il locale (nome, tipo, città, indirizzo pubblico), l'abbonamento con il NUMERO DI PAGINE, le pagine suggerite, la «nota_dell_agente» se c'è (un'indicazione per te, per esempio «vuole far vedere la sala per le feste»: non copiarla nel sito), e quello che hai già scritto nella scheda per il venditore (cosa ha, cosa manca, reputazione, social, cosa faremo con questa fascia). Usali: non rifare la scheda.
-
-LE PAGINE SONO UN CONTRATTO: esattamente «pagine» pagine, non di più e non di meno. Ogni pagina ha un titolo, un percorso («/», «/chi-siamo», minuscolo, senza spazi; la prima è sempre «/») e da 1 a 5 sezioni con titolo e testo.
+COSA SCRIVI, nel campo «contenuto»:
+- occhiello: da 2 a 4 parole separate da « · », in minuscolo, su cosa si fa (per esempio «colazioni · pranzi · aperitivi»).
+- titolo: il titolo della copertina, che racconta il posto in poche parole (per esempio «Il bar rosa di Piazza Duomo»), non il solo nome. Al massimo 70 caratteri.
+- sottotitolo: una o due frasi che fanno venire voglia di passare.
+- momenti_titolo, momenti_intro e momenti: ESATTAMENTE 3 schede (titolo, testo, disegno) sui momenti della giornata o sulle cose principali che si fanno lì.
+- disegno, nei momenti e nell'offerta, è uno di: tazza, cornetto, panino, calice, vino, pizza, gelato, torta, pane, fiore, borsa, forbici, stella.
+- perche: 3 motivi veri per venire (dove si trova, cosa offre, il carattere del posto).
+- locale: un titolo e da 1 a 3 paragrafi sul posto e la sua atmosfera.
+- offerta: da 2 a 6 categorie (categoria, descrizione, voci, disegno). Nelle «voci» SOLO i prodotti che sono nei dati; se non li hai, lascia la lista vuota e descrivi la categoria in generale.
+- citta: un titolo, 1 o 2 paragrafi sulla zona (fatti veri che vengono dall'indirizzo: la piazza, la via) e in «vicino» fino a 5 luoghi noti a due passi.
+- come_arrivare: una frase su dove si trova.
+- novita: SOLO nel Premium (negli altri null). Un titolo e 1 o 2 paragrafi sul mese, senza eventi né offerte inventati.
+- domande: SOLO nel Premium (negli altri []). Fino a 6 domande con risposte che conosci davvero dai dati (dove siete, cosa si trova); mai orari, prezzi o servizi che non sai.
+- palette: una di crema, rosa, verde, blu, terracotta, oro: quella che somiglia al locale (un bar rosa → rosa); senza indizi, crema.
 
 LE REGOLE, che non si rompono mai:
 - MAI prezzi, nemmeno indicativi: li scrive il titolare.
@@ -49,9 +58,8 @@ LE REGOLE, che non si rompono mai:
 - MAI nomi di persone (titolare, dipendenti, clienti): solo il nome del locale.
 - MAI dati inventati: prodotti, servizi, storia del locale solo se li hai nei dati. Se non li hai, scrivi una frase generale e vera per quel tipo di locale, senza dire che manca qualcosa, e metti fra le cose «da_confermare» cosa chiedere al titolare.
 - Mai superlativi che non si possono provare («il migliore», «l'unico»). Niente gioco (Sisal, scommesse) né tabacco.
-- Il campo «stato» di ogni sezione vale sempre «da_confermare»: serve al team, sul sito non si vede.
 
-COME SCRIVERE: italiano semplice, frasi di al massimo 25 parole, il tono del locale. Testo di una sezione: da 20 a 900 caratteri. In «da_confermare» al massimo 8 cose da chiedere al titolare alla visita (voce e perché). In «fonti» solo indirizzi https che hai davvero letto, mai pagine di Google o TripAdvisor. In «note» al massimo 4 righe per il team (foto da fare alla visita, cosa manca).
+COME SCRIVERE: italiano semplice e caldo, frasi di al massimo 25 parole, il tono del locale. Sottotitolo fuori dal contenuto: una riga per SDG, al massimo 140 caratteri. In «da_confermare» al massimo 8 cose da chiedere al titolare alla visita (voce e perché: orari, telefono, il menu vero, le foto). In «fonti» solo indirizzi https che hai davvero letto, mai pagine di Google o TripAdvisor. In «note» al massimo 4 righe per il team.
 
 In «risultato» metti l'oggetto che rispetta lo schema.`;
 
@@ -59,22 +67,23 @@ const s = { type: 'string' } as const;
 
 export const SCHEMA_SITO = {
   type: 'object',
-  required: ['sottotitolo', 'pagine', 'da_confermare', 'fonti', 'note'],
+  required: ['sottotitolo', 'contenuto', 'da_confermare', 'fonti', 'note'],
   properties: {
-    sottotitolo: { ...s, description: 'una riga sotto il nome del locale, al massimo 140 caratteri' },
-    pagine: {
-      type: 'array', minItems: 1, maxItems: 5,
-      items: {
-        type: 'object',
-        required: ['titolo', 'percorso', 'sezioni'],
-        properties: {
-          titolo: s,
-          percorso: { ...s, description: '«/» per la prima, poi «/chi-siamo» ecc.' },
-          sezioni: {
-            type: 'array', minItems: 1, maxItems: 5,
-            items: { type: 'object', required: ['titolo', 'testo', 'stato'], properties: { titolo: s, testo: s, stato: { enum: ['da_confermare'] } } },
-          },
-        },
+    sottotitolo: { ...s, description: 'una riga per SDG, al massimo 140 caratteri' },
+    contenuto: {
+      type: 'object',
+      required: ['occhiello', 'titolo', 'sottotitolo', 'momenti_titolo', 'momenti_intro', 'momenti', 'perche', 'locale', 'offerta', 'citta', 'come_arrivare', 'novita', 'domande', 'palette'],
+      properties: {
+        occhiello: s, titolo: s, sottotitolo: s, momenti_titolo: s, momenti_intro: s,
+        momenti: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'object', required: ['titolo', 'testo', 'disegno'], properties: { titolo: s, testo: s, disegno: { enum: [...DISEGNI] } } } },
+        perche: { type: 'array', maxItems: 3, items: { type: 'object', required: ['titolo', 'testo'], properties: { titolo: s, testo: s } } },
+        locale: { type: ['object', 'null'], required: ['titolo', 'paragrafi'], properties: { titolo: s, paragrafi: { type: 'array', maxItems: 3, items: s } } },
+        offerta: { type: 'array', maxItems: 6, items: { type: 'object', required: ['categoria', 'descrizione', 'voci', 'disegno'], properties: { categoria: s, descrizione: s, voci: { type: 'array', maxItems: 12, items: s }, disegno: { enum: [...DISEGNI] } } } },
+        citta: { type: ['object', 'null'], required: ['titolo', 'paragrafi', 'vicino'], properties: { titolo: s, paragrafi: { type: 'array', maxItems: 2, items: s }, vicino: { type: 'array', maxItems: 5, items: s } } },
+        come_arrivare: { type: ['string', 'null'] },
+        novita: { type: ['object', 'null'], required: ['titolo', 'paragrafi'], properties: { titolo: s, paragrafi: { type: 'array', maxItems: 2, items: s } } },
+        domande: { type: 'array', maxItems: 6, items: { type: 'object', required: ['domanda', 'risposta'], properties: { domanda: s, risposta: s } } },
+        palette: { enum: [...PALETTE_NOMI] },
       },
     },
     da_confermare: { type: 'array', maxItems: 8, items: { type: 'object', required: ['voce', 'perche'], properties: { voce: s, perche: s } } },
@@ -88,7 +97,7 @@ export function datiPerIlSito(input: { nome: string; tipo: string; citta: string
   const f = FASCE[input.fascia];
   const dati = {
     locale: { nome: input.nome.slice(0, 120), tipo: input.tipo.slice(0, 120), citta: input.citta.slice(0, 60), indirizzo: input.indirizzo ? input.indirizzo.slice(0, 200) : null },
-    abbonamento: { fascia: input.fascia, nome: f.nome, sito: f.inPratica.sito, pagine: PAGINE_PER_FASCIA[input.fascia], pagine_suggerite: PAGINE_SUGGERITE[input.fascia] },
+    abbonamento: { fascia: input.fascia, nome: f.nome, sito: f.inPratica.sito, standard: STANDARD[input.fascia].map((p) => ({ pagina: p.titolo, sezioni: p.sezioni, ...(p.facoltativa ? { facoltativa: true } : {}) })) },
     nota_dell_agente: input.nota ?? null,
     dalla_scheda_del_venditore: input.scheda,
   };
@@ -106,6 +115,8 @@ export type BozzaSitoOrdine = {
   fascia: Abbonamento;
   sottotitolo: string;
   pagine: PaginaDellaBozza[];
+  /** 28/11 pomeriggio: i contenuti nella forma dello standard per abbonamento. Senza, il sito usa `pagine`. */
+  contenuto?: ContenutoSito;
   daConfermare: { voce: string; perche: string }[];
   fonti: string[];
   note: string[];
@@ -117,17 +128,82 @@ const corto = (t: string) => t.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\
 const testo = (min: number, max: number) => z.string().transform(corto).pipe(z.string().min(min).max(max));
 const percorso = z.string().regex(/^\/[a-z0-9-]{0,40}$/);
 
+const disegno = z.string().max(20);
+const paragrafi = (max: number) => z.array(testo(10, 700)).max(max);
+const ContenutoRisposta = z.object({
+  occhiello: z.string().max(100).transform(corto),
+  titolo: testo(2, 90),
+  sottotitolo: testo(3, 260),
+  momenti_titolo: testo(2, 90),
+  momenti_intro: z.string().max(400).transform(corto),
+  momenti: z.array(z.object({ titolo: testo(2, 70), testo: testo(10, 400), disegno })).min(1).max(3),
+  perche: z.array(z.object({ titolo: testo(2, 70), testo: testo(10, 400) })).max(3),
+  locale: z.object({ titolo: testo(2, 90), paragrafi: paragrafi(3) }).nullable(),
+  offerta: z.array(z.object({ categoria: testo(2, 70), descrizione: z.string().max(400).transform(corto), voci: z.array(testo(1, 70)).max(12), disegno })).max(6),
+  citta: z.object({ titolo: testo(2, 90), paragrafi: paragrafi(2), vicino: z.array(testo(2, 70)).max(5) }).nullable(),
+  come_arrivare: z.string().max(400).transform(corto).nullable(),
+  novita: z.object({ titolo: testo(2, 90), paragrafi: paragrafi(2) }).nullable(),
+  domande: z.array(z.object({ domanda: testo(5, 160), risposta: testo(3, 400) })).max(6),
+  palette: z.string().max(20),
+});
+type ContenutoLetto = z.infer<typeof ContenutoRisposta>;
+
+/**
+ * 28/11 pomeriggio — la risposta ha il `contenuto` nella forma dello standard per abbonamento; le `pagine` del primo
+ * sito restano accettate (le risposte arrivate prima, le prove), con le loro regole. Almeno uno dei due.
+ */
 const RispostaSito = z.object({
   sottotitolo: testo(3, 140),
   pagine: z.array(z.object({
     titolo: testo(2, 60),
     percorso,
     sezioni: z.array(z.object({ titolo: testo(2, 80), testo: testo(20, 900), stato: z.literal('da_confermare') })).min(1).max(5),
-  })).min(1).max(5),
+  })).min(1).max(5).optional(),
+  contenuto: ContenutoRisposta.optional(),
   da_confermare: z.array(z.object({ voce: testo(2, 120), perche: testo(2, 300) })).max(8),
   fonti: z.array(z.string().max(500).regex(/^https:\/\/[^\s"'<>]+$/)).max(10),
   note: z.array(testo(2, 300)).max(4),
-});
+}).refine((r) => !!r.pagine || !!r.contenuto, { message: 'servono il contenuto o le pagine', path: ['contenuto'] });
+
+/** Il contenuto letto, nella forma che usa il sito. Novità e domande solo nel Premium. */
+function contenutoDalLetto(c: ContenutoLetto, fascia: Abbonamento): ContenutoSito {
+  return {
+    occhiello: c.occhiello,
+    titolo: c.titolo,
+    sottotitolo: c.sottotitolo,
+    momentiTitolo: c.momenti_titolo,
+    momentiIntro: c.momenti_intro,
+    momenti: c.momenti.map((m) => ({ titolo: m.titolo, testo: m.testo, disegno: disegnoValido(m.disegno, m.titolo) })),
+    perche: c.perche,
+    locale: c.locale && c.locale.paragrafi.length ? c.locale : null,
+    offerta: c.offerta.map((o) => ({ categoria: o.categoria, descrizione: o.descrizione, voci: o.voci, disegno: disegnoValido(o.disegno, o.categoria) })),
+    citta: c.citta,
+    comeArrivare: c.come_arrivare || null,
+    novita: fascia === 'premium' ? c.novita : null,
+    domande: fascia === 'premium' ? c.domande : [],
+    palette: (PALETTE_NOMI as string[]).includes(c.palette) ? (c.palette as Palette) : 'crema',
+  };
+}
+
+/**
+ * Dal contenuto, le pagine nella forma di prima: le legge la pagina ordini di SDG e la pagina «Sito web» del
+ * titolare. Una pagina dello standard per volta, con le sue sezioni scritte come titolo e testo.
+ */
+export function pagineDalContenuto(c: ContenutoSito, fascia: Abbonamento): PaginaDellaBozza[] {
+  const sez = (titolo: string, testo: string) => ({ titolo, testo, stato: 'da_confermare' as const });
+  const perPagina: Record<string, { titolo: string; testo: string; stato: 'da_confermare' }[]> = {
+    '/': [sez(c.titolo, c.sottotitolo), ...c.momenti.map((m) => sez(m.titolo, m.testo))],
+    '/il-locale': c.locale ? [sez(c.locale.titolo, c.locale.paragrafi.join(' '))] : [],
+    '/cosa-offriamo': c.offerta.map((o) => sez(o.categoria, [o.descrizione, o.voci.join(', ')].filter(Boolean).join(' '))),
+    '/in-citta': c.citta ? [sez(c.citta.titolo, [...c.citta.paragrafi, c.citta.vicino.join(', ')].filter(Boolean).join(' '))] : [],
+    '/novita': c.novita ? [sez(c.novita.titolo, c.novita.paragrafi.join(' '))] : [],
+    '/domande': c.domande.map((d) => sez(d.domanda, d.risposta)),
+    '/contatti': c.comeArrivare ? [sez('Come arrivare', c.comeArrivare)] : [],
+  };
+  return STANDARD[fascia]
+    .map((p) => ({ titolo: p.titolo, percorso: p.percorso, sezioni: (perPagina[p.percorso] ?? []).filter((x) => x.testo) }))
+    .filter((p) => p.sezioni.length > 0);
+}
 
 export type EsitoSito = { ok: true; sito: BozzaSitoOrdine } | { ok: false; motivo: string };
 
@@ -145,14 +221,33 @@ const VIETATI = /\b(sisal|scommess\w*|gratta e vinci|superenalotto|tabacc\w*|sig
  * nessun contatto o orario inventato, nessun dato di Google, nessun nome di persona. Altrimenti si scarta intera,
  * col motivo, e SDG può richiederla.
  */
+/** Ogni testo del contenuto che il visitatore legge: passa dalle stesse regole delle pagine. */
+function testiDelContenuto(c: ContenutoSito): string[] {
+  return [
+    c.occhiello, c.titolo, c.sottotitolo, c.momentiTitolo, c.momentiIntro,
+    ...c.momenti.flatMap((m) => [m.titolo, m.testo]),
+    ...c.perche.flatMap((m) => [m.titolo, m.testo]),
+    ...(c.locale ? [c.locale.titolo, ...c.locale.paragrafi] : []),
+    ...c.offerta.flatMap((o) => [o.categoria, o.descrizione, ...o.voci]),
+    ...(c.citta ? [c.citta.titolo, ...c.citta.paragrafi, ...c.citta.vicino] : []),
+    c.comeArrivare ?? '',
+    ...(c.novita ? [c.novita.titolo, ...c.novita.paragrafi] : []),
+    ...c.domande.flatMap((d) => [d.domanda, d.risposta]),
+  ].filter((t) => t && t.trim());
+}
+
 export function sitoDallaRisposta(grezza: unknown, fascia: Abbonamento, nomeLocale: string): EsitoSito {
   const letta = RispostaSito.safeParse(grezza);
   if (!letta.success) return { ok: false, motivo: `la bozza del sito dell’AD non ha la forma giusta (${letta.error.issues[0]?.path.join('.') || 'risposta'})` };
   const r = letta.data;
-  const attese = PAGINE_PER_FASCIA[fascia];
-  if (r.pagine.length !== attese) return { ok: false, motivo: `la bozza del sito dell’AD ha ${r.pagine.length} pagine invece di ${attese}, quante ne dà il ${FASCE[fascia].nome}` };
-  if (r.pagine[0].percorso !== '/') return { ok: false, motivo: 'la prima pagina della bozza del sito non è la home («/»)' };
-  if (new Set(r.pagine.map((p) => p.percorso)).size !== r.pagine.length) return { ok: false, motivo: 'la bozza del sito ha due pagine con lo stesso percorso' };
+  const contenuto = r.contenuto ? contenutoDalLetto(r.contenuto, fascia) : null;
+  if (!contenuto && r.pagine) {
+    const attese = PAGINE_PER_FASCIA[fascia];
+    if (r.pagine.length !== attese) return { ok: false, motivo: `la bozza del sito dell’AD ha ${r.pagine.length} pagine invece di ${attese}, quante ne dà il ${FASCE[fascia].nome}` };
+    if (r.pagine[0].percorso !== '/') return { ok: false, motivo: 'la prima pagina della bozza del sito non è la home («/»)' };
+    if (new Set(r.pagine.map((p) => p.percorso)).size !== r.pagine.length) return { ok: false, motivo: 'la bozza del sito ha due pagine con lo stesso percorso' };
+  }
+  const pagine: PaginaDellaBozza[] = contenuto ? pagineDalContenuto(contenuto, fascia) : (r.pagine ?? []).map((p) => ({ titolo: p.titolo, percorso: p.percorso, sezioni: p.sezioni.map((x) => ({ titolo: x.titolo, testo: x.testo, stato: 'da_confermare' as const })) }));
 
   // Ogni frase che il titolare legge passa dalle regole del rapporto. Il nome del locale si toglie prima del
   // controllo: «Bar 2.0» o «Pizzeria Mario Rossi» possono chiamarsi così, la regola guarda il resto del testo.
@@ -161,10 +256,11 @@ export function sitoDallaRisposta(grezza: unknown, fascia: Abbonamento, nomeLoca
   // Le lunghezze le ha già controllate lo schema: qui si guarda solo cosa dice il testo.
   const frasi: { dove: string; t: string }[] = [
     { dove: 'sottotitolo', t: r.sottotitolo },
-    ...r.pagine.flatMap((p, i) => [
+    ...pagine.flatMap((p, i) => [
       { dove: `pagina ${i + 1}`, t: p.titolo },
       ...p.sezioni.flatMap((x, j) => [{ dove: `pagina ${i + 1}, sezione ${j + 1}`, t: x.titolo }, { dove: `pagina ${i + 1}, sezione ${j + 1}`, t: x.testo }]),
     ]),
+    ...(contenuto ? testiDelContenuto(contenuto).map((t, i) => ({ dove: `contenuto ${i + 1}`, t })) : []),
     ...r.da_confermare.flatMap((d, i) => [{ dove: `da confermare ${i + 1}`, t: d.voce }, { dove: `da confermare ${i + 1}`, t: d.perche }]),
     ...r.note.map((n, i) => ({ dove: `nota ${i + 1}`, t: n })),
   ];
@@ -184,7 +280,8 @@ export function sitoDallaRisposta(grezza: unknown, fascia: Abbonamento, nomeLoca
       origine: 'ad',
       fascia,
       sottotitolo: r.sottotitolo,
-      pagine: r.pagine.map((p) => ({ titolo: p.titolo, percorso: p.percorso, sezioni: p.sezioni.map((x) => ({ titolo: x.titolo, testo: x.testo, stato: 'da_confermare' as const })) })),
+      pagine,
+      ...(contenuto ? { contenuto } : {}),
       daConfermare: r.da_confermare,
       fonti: r.fonti,
       note: r.note,

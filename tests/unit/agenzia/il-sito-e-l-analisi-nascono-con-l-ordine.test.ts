@@ -58,7 +58,8 @@ vi.mock('@/lib/supabase/server', () => ({
 const { accettaPreventivoColCodice, leggiPreventivoColCodice } = await import('@/lib/agenzia/preventivo-col-codice');
 const { getAdminSupabase } = await import('@/lib/supabase/server');
 const { VENDITORE_DEI_PIANI, COMPITO_PIANO } = await import('@/lib/agenzia/piano-completo-ad');
-const { COMPITO_SITO, PAGINE_PER_FASCIA, sitoDallaRisposta } = await import('@/lib/agenzia/sito-dell-ordine-ad');
+const { COMPITO_SITO, sitoDallaRisposta } = await import('@/lib/agenzia/sito-dell-ordine-ad');
+const { STANDARD } = await import('@/lib/agenzia/sito-finito/standard');
 const { COMPITO_ANALISI, analisiDallaRisposta, partiDaScrivere } = await import('@/lib/agenzia/analisi-dell-ordine-ad');
 const { aggiornaIlPezzo, chiediIlPezzo } = await import('@/lib/agenzia/pezzi-dell-ordine');
 const { lavoroDallOrdine } = await import('@/lib/agenzia/lavoro-dell-ordine');
@@ -125,7 +126,8 @@ beforeEach(() => {
 });
 
 describe('① all accettazione partono tre lavori, e la fascia decide', () => {
-  it.each([['base', 1], ['business', 3], ['premium', 5]] as const)('col %s partono piano, sito e analisi; il sito ha %i pagine', async (fascia, pagine) => {
+  // 28/11 pomeriggio: l'AD riceve lo standard del sito per abbonamento (lib/agenzia/sito-finito/standard.ts): 1, 5 e 7 pagine.
+  it.each([['base', 1], ['business', 5], ['premium', 7]] as const)('col %s partono piano, sito e analisi; lo standard del sito ha %i pagine', async (fascia, pagine) => {
     const esito = await accetta(fascia);
     expect(esito.ok).toBe(true);
     await aspettaILavori(3);
@@ -138,9 +140,10 @@ describe('① all accettazione partono tre lavori, e la fascia decide', () => {
       expect(JSON.stringify(a)).not.toMatch(/agente@esempio\.it|titolare@esempio\.it|2026-12-03T09/);
       expect(JSON.stringify({ compito: a.job.compito, dati: a.job.dati, schema: a.job.schema }).length).toBeLessThanOrEqual(TETTI_FLUSSO_14.richiesta);
     }
-    const datiSito = sito!.job.dati as { abbonamento: { pagine: number; fascia: string } };
-    expect(datiSito.abbonamento).toMatchObject({ fascia, pagine });
-    expect(PAGINE_PER_FASCIA[fascia]).toBe(pagine);
+    const datiSito = sito!.job.dati as { abbonamento: { fascia: string; standard: { pagina: string; sezioni: string[] }[] } };
+    expect(datiSito.abbonamento.fascia).toBe(fascia);
+    expect(datiSito.abbonamento.standard).toHaveLength(pagine);
+    expect(datiSito.abbonamento.standard.map((p) => p.pagina)).toEqual(STANDARD[fascia].map((p) => p.titolo));
     const datiAnalisi = analisi!.job.dati as { abbonamento: { parti: { parte: string }[] } };
     expect(datiAnalisi.abbonamento.parti.map((p) => p.parte)).toEqual(partiDaScrivere(fascia));
     // L'ordine sa con quale lavoro ha chiesto ognuno dei due pezzi.
@@ -360,7 +363,7 @@ describe('⑤ il pulsante «richiedi» funziona su un ordine nato prima', () => 
     // Un secondo clic non fa una seconda corsa dell'AD.
     expect(await chiediIlPezzo('b95824e3-c3a9-4315-88ce-dfdeb55e0da2', 'sito')).toEqual({ esito: 'non-serve' });
     expect(stato.avviati).toHaveLength(2);
-    expect((lavoroDi(COMPITO_SITO)!.job.dati as { abbonamento: { pagine: number } }).abbonamento.pagine).toBe(5);
+    expect((lavoroDi(COMPITO_SITO)!.job.dati as { abbonamento: { standard: unknown[] } }).abbonamento.standard).toHaveLength(7);
   });
 });
 
