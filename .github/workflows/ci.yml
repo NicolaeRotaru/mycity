@@ -818,6 +818,14 @@ jobs:
   # e' quello nascosto del computer). La prova adesso cerca il campo per ruolo
   # e nome, cioe' quello che si vede su quello schermo; tolto
   # `continue-on-error`, un rosso sul telefono ferma «Main» come gli altri.
+  #
+  # 28/11/2026 (R11-010, seguito) — Al primo giro bloccante le rosse erano
+  # dodici, con una causa sola nel sito: la politica di sicurezza portava
+  # sempre `upgrade-insecure-requests`, e WebKit (a differenza di Chrome) la
+  # applica anche a http://localhost: stili e script del sito chiesti in
+  # https, pagina senza stile e senza JavaScript. Ora la regola va solo sulle
+  # pagine arrivate in https (middleware.ts, paginaArrivataInHttps; la
+  # sorveglia tests/unit/riparazione-onda2-r11-010-pagina-in-http-con-stile-e-script.test.ts).
   e2e-telefono:
     name: Prove nel browser sullo schermo di un telefono
     # Come gli altri lavori col browser: Ubuntu 24.04 fisso.
