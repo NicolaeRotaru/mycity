@@ -50,7 +50,7 @@ export default function BannerSection({ config, ctx }: { config: SectionConfig<'
         src={sizedImage(config.imageUrl, 'hero')}
         alt={config.alt ?? ''}
         fill
-        sizes="(max-width: 768px) 100vw, 1280px"
+        sizes="(max-width: 768px) 100vw, 1200px"
         loader={caricatoreFotoRemote}
         className="object-cover"
       />

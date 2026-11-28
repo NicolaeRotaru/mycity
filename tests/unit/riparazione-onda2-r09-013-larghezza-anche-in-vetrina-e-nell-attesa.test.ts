@@ -43,7 +43,9 @@ describe('R09-013 — una larghezza sola anche in vetrina, nell’attesa e negli
     contenitori.forEach(controlla);
   });
 
-  it('il banner della vetrina chiede una foto larga quanto il contenitore (1280 px)', () => {
-    expect(leggi('components/store-sections/BannerSection.tsx')).toMatch(/sizes="\(max-width: 768px\) 100vw, 1280px"/);
+  it('il banner della vetrina, ora più largo, chiede la foto «hero» intera (1200 px), non quella da 1024', () => {
+    // Il contenitore a 7xl è largo 1232 px dentro i margini: 1200 è la misura «hero» di lib/image-url.ts,
+    // e la prova la-foto-chiesta-piu-piccola-del-riquadro vieta di dichiarare un riquadro più largo della foto.
+    expect(leggi('components/store-sections/BannerSection.tsx')).toMatch(/sizes="\(max-width: 768px\) 100vw, 1200px"/);
   });
 });
