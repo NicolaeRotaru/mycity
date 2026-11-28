@@ -126,7 +126,7 @@ export function canaleE(nome: keyof typeof CANALE_TROVATO, c: { canale: string; 
   return CANALE_TROVATO[nome].test(c.canale) || CANALE_TROVATO[nome].test(dominio);
 }
 
-function canaliDelPiano(d: DatiPerLoStandard, citta: string): Social['canali'] {
+function canaliDelPiano(d: DatiPerLoStandard): Social['canali'] {
   const f = FASCE[d.fascia];
   const video = f.video > 0 ? `, con ${f.video === 1 ? 'un video breve' : `${f.video} video brevi`} al mese` : '';
   const storie = d.fascia === 'premium' ? ' e le storie' : '';
@@ -253,7 +253,7 @@ export function socialDalPiano(piano: PianoDelMese | null | undefined, d: DatiPe
     obiettivo: `${OBIETTIVO[tipo](nome, citta)} Sono obiettivi, non promesse.${suMisura ? ` Su misura per te: ${suMisura}` : ''}`,
     a_chi_parliamo: A_CHI[tipo](nome, citta),
     tono: testoOVuoto(intestazione?.canaliETono) || null,
-    canali: canaliDelPiano({ ...d, fascia }, citta),
+    canali: canaliDelPiano({ ...d, fascia }),
     pilastri,
     quantita,
     calendario,

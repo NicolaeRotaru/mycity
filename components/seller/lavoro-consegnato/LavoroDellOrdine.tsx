@@ -20,14 +20,6 @@ import AnalisiConsegnata from './AnalisiConsegnata';
  * tecnico, mai una pagina vuota.
  */
 
-const nomeDelSito = (f: string) => {
-  try {
-    return new URL(f).hostname;
-  } catch {
-    return 'fonte';
-  }
-};
-
 export const SCRITTA_BOZZA = 'Bozza, la confermiamo insieme alla visita';
 export const SCRITTA_ONLINE = 'Il tuo sito è online';
 
