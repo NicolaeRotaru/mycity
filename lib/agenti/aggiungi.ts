@@ -3,7 +3,7 @@ import { env } from '@/lib/env';
 import { NuovaAttivitaInArrivo, type NuovaAttivita } from '@/lib/agenzia/nuova-attivita';
 import type { TipoAttivita } from '@/lib/agenzia/tipi-attivita';
 import type { Scheda } from '@/lib/agenti/scheda';
-import type { BisogniDelSito } from '@/lib/agenzia/bisogni-del-sito';
+import type { ServiziScelti } from '@/lib/agenzia/servizi-scelti';
 
 /**
  * «AGGIUNGI ATTIVITÀ» DALLA PAGINA DELL'AGENTE — 27/11/2026.
@@ -95,14 +95,15 @@ export async function segnaChiHaPortatoIlCliente(admin: SupabaseClient, idAttivi
 }
 
 /**
- * 28/11/2026 — Di cosa ha bisogno il sito, scelto dall'agente insieme all'abbonamento (migrazione 999h): va sul
- * preventivo aperto, e all'accettazione passa nell'ordine di SDG (lib/agenzia/ordine-sdg.ts). Senza la 999h le
- * colonne non ci sono: si va avanti senza, e il sito parte da «farsi trovare». Vero se è scritto.
+ * 28/11/2026 — Quali servizi gli servono, scelti dall'agente insieme all'abbonamento (migrazione 999h): vanno sul
+ * preventivo aperto, e all'accettazione passano nell'ordine di SDG (lib/agenzia/ordine-sdg.ts), dove decidono quali
+ * lavori dell'AD partono. Senza la 999h le colonne non ci sono: si va avanti senza, e valgono tutti e quattro.
+ * Vero se è scritto.
  */
-export async function segnaIBisogniDelSito(admin: SupabaseClient, idAttivita: string, b: BisogniDelSito): Promise<boolean> {
-  if (!b.bisogni.length) return false;
+export async function segnaIServiziScelti(admin: SupabaseClient, idAttivita: string, b: ServiziScelti): Promise<boolean> {
+  if (!b.servizi.length) return false;
   try {
-    const { error } = await admin.from('preventivi_con_codice').update({ bisogni_sito: b.bisogni, nota_agente: b.nota }).eq('seller_id', idAttivita).eq('stato', 'aperto');
+    const { error } = await admin.from('preventivi_con_codice').update({ servizi_scelti: b.servizi, nota_agente: b.nota }).eq('seller_id', idAttivita).eq('stato', 'aperto');
     return !error;
   } catch {
     return false;

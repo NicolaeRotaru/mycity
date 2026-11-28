@@ -1961,7 +1961,7 @@ export interface Database {
           visita_il: string | null;
           lavoro: string | null;
           agente_email: string | null;
-          bisogni_sito: string[] | null;
+          servizi_scelti: string[] | null;
           nota_agente: string | null;
         };
         Insert: {
@@ -1975,7 +1975,7 @@ export interface Database {
           visita_il?: string | null;
           lavoro?: string | null;
           agente_email?: string | null;
-          bisogni_sito?: string[] | null;
+          servizi_scelti?: string[] | null;
           nota_agente?: string | null;
         };
         Update: {
@@ -1989,7 +1989,7 @@ export interface Database {
           visita_il?: string | null;
           lavoro?: string | null;
           agente_email?: string | null;
-          bisogni_sito?: string[] | null;
+          servizi_scelti?: string[] | null;
           nota_agente?: string | null;
         };
         Relationships: [];

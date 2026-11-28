@@ -147,6 +147,16 @@ describe('titolare con l ordine di SDG (28/11)', () => {
     sito: { stato: 'pronto', bozza: { origine: 'ad', fascia: 'business', sottotitolo: 'Bar in centro', pagine: [{ titolo: 'Home', percorso: '/', sezioni: [{ titolo: 'Chi siamo', testo: 'TESTO DELLA BOZZA DEL SITO', stato: 'da_confermare' }] }], daConfermare: [{ voce: 'Orari', perche: 'li scrive il titolare' }], fonti: [], note: [], pubblicata: false } },
     analisi: { stato: 'in_preparazione', analisi: null },
   };
+  it('28/11: un servizio non scelto dall agente (qui il social) mostra la pagina di sempre, non il lavoro', async () => {
+    lavoro = json(200, { ok: true, data: { lavoro: null, ordine: { ...ordine, servizi: ['sito_web'] } } });
+    stato.slug = 'social';
+    const d = await monta();
+    await vi.waitFor(() => expect(vediPreventivo(d)).toBe(true), { timeout: 3000 });
+    expect(d.textContent).not.toContain('La colazione del sabato');
+    stato.slug = 'sito-web';
+    const d2 = await monta();
+    await vi.waitFor(() => expect(d2.textContent).toContain('TESTO DELLA BOZZA DEL SITO'), { timeout: 3000 });
+  });
   it('Analisi andata storta: «lo stiamo preparando», mai un errore tecnico né il preventivo', async () => {
     lavoro = json(200, { ok: true, data: { lavoro: null, ordine: { ...ordine, analisi: { stato: 'lo_stiamo_preparando', analisi: null } } } });
     stato.slug = 'analisi';

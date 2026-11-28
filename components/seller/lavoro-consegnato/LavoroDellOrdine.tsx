@@ -73,9 +73,6 @@ function BozzaDelSito({ ordine }: { ordine: LavoroDellOrdine }) {
         <p className="mt-1 text-sm text-ink-700">{b.sottotitolo}</p>
         <p className="mt-3"><span className="rounded-full bg-cream-200 px-2.5 py-0.5 text-[11px] font-bold text-ink-800">Non è online</span></p>
         <p className="mt-2 text-sm text-ink-700">Va online solo dopo il tuo sì e quello di SDG. Ogni testo è una proposta: lo cambiamo come vuoi tu.</p>
-        {(b.pulsanti ?? []).length > 0 && (
-          <p className="mt-2 text-sm text-ink-700"><b>I pulsanti del sito:</b> {(b.pulsanti ?? []).map((x) => x.etichetta).join(' · ')} (numeri e collegamenti li mettiamo noi).</p>
-        )}
       </section>
       {b.pagine.map((p, i) => (
         <Sezione key={p.percorso} id={`bozza-pagina-${i}`} titolo={`Pagina ${i + 1}: ${p.titolo}`}>
@@ -138,14 +135,6 @@ function AnalisiDellOrdine({ ordine }: { ordine: LavoroDellOrdine }) {
           <Elenco voci={p.frasi} />
           {p.fonti.length > 0 && (
             <p className="mt-2 text-xs text-ink-600">Fonti: {p.fonti.map((f, i) => <span key={f}>{i > 0 ? ' · ' : ''}<LinkEsterno href={f}>{nomeDelSito(f)}</LinkEsterno></span>)}</p>
-          )}
-        </Sezione>
-      ))}
-      {(a.approfondimenti ?? []).map((x) => (
-        <Sezione key={x.bisogno} id={`analisi-bisogno-${x.bisogno}`} titolo={`Più a fondo: ${x.titolo}`}>
-          <Elenco voci={x.frasi} />
-          {x.fonti.length > 0 && (
-            <p className="mt-2 text-xs text-ink-600">Fonti: {x.fonti.map((f, i) => <span key={f}>{i > 0 ? ' · ' : ''}<LinkEsterno href={f}>{nomeDelSito(f)}</LinkEsterno></span>)}</p>
           )}
         </Sezione>
       ))}

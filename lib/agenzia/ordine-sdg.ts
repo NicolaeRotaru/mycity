@@ -17,7 +17,8 @@ import { fraseVisita } from './visita';
 export { fraseVisita };
 import { COMPITO_PIANO, SCHEMA_PIANO, VENDITORE_DEI_PIANI, dallaSchedaDellAgente, datiPerIlPianoCompleto, pianoDallaRisposta } from './piano-completo-ad';
 import { PEZZI_ORDINE, chiediIlPezzo, schedaDellAgente } from './pezzi-dell-ordine';
-import { TITOLI_BISOGNI, leggiBisogni, type BisognoSito } from './bisogni-del-sito';
+import { ETICHETTE_SERVIZI, LAVORO_DEL_SERVIZIO, leggiServiziScelti, servizioScelto, type ServizioAgenzia } from './servizi-scelti';
+
 
 /**
  * L'ORDINE DI SERVIZIO CHE ARRIVA A SDG — 27/11/2026.
@@ -62,8 +63,11 @@ export type DatiAttivita = {
     perche: string | null;
     servizi: Record<string, string>;
   } | null;
-  /** 28/11/2026 — Di cosa ha bisogno il sito, scelto dall'agente col titolare (migrazione 999h, dal preventivo). */
-  bisogni?: BisognoSito[];
+  /**
+   * 28/11/2026 — Quali servizi gli servono, scelti dall'agente insieme all'abbonamento (migrazione 999h, dal
+   * preventivo). `null` o assente = la scelta non c'è (preventivo di prima): valgono tutti e quattro.
+   */
+  servizi?: ServizioAgenzia[] | null;
   /** La nota libera dell'agente: un'indicazione per l'AD e per SDG, mai un testo da pubblicare. */
   notaAgente?: string | null;
 };
@@ -149,10 +153,10 @@ async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: st
     admin.from('profiles').select('store_name, store_address, city, business_type, business_type_detail').eq('id', sellerId).maybeSingle(),
     admin.from('schede_clienti').select('scheda').eq('id_attivita', sellerId).maybeSingle(),
     admin.from('abbonamenti_servizi').select('fascia, canone_centesimi, stato, origine').eq('seller_id', sellerId),
-    // 28/11 — I bisogni del sito scelti dall'agente (999h): prima della migrazione non ci sono, e il sito parte da «farsi trovare».
-    colonneFacoltative(admin, codice, 'bisogni_sito, nota_agente'),
+    // 28/11 — I servizi scelti dall'agente (999h): prima della migrazione non ci sono, e valgono tutti e quattro.
+    colonneFacoltative(admin, codice, 'servizi_scelti, nota_agente'),
   ]);
-  const { bisogni, nota: notaAgente } = leggiBisogni(richiesta?.bisogni_sito, richiesta?.nota_agente);
+  const { servizi, nota: notaAgente } = leggiServiziScelti(richiesta?.servizi_scelti, richiesta?.nota_agente);
   const p = (profilo.data ?? {}) as { store_name?: string | null; store_address?: string | null; city?: string | null; business_type?: string | null; business_type_detail?: string | null };
   const nome = String(p.store_name ?? '').trim().slice(0, 120) || 'Attività senza nome';
   const tipo = tipoDelProfilo(p.business_type);
@@ -171,7 +175,7 @@ async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: st
     accettatoIl: riga.accettato_il ?? null,
     scheda: schedaLocale.error ? null : leggiSchedaSalvata((schedaLocale.data as { scheda?: unknown } | null)?.scheda),
   });
-  const dati: DatiAttivita = { tipo, dettaglio: p.business_type_detail ?? null, indirizzo: p.store_address ?? null, citta: p.city ?? null, dallaScheda: null, bisogni, notaAgente };
+  const dati: DatiAttivita = { tipo, dettaglio: p.business_type_detail ?? null, indirizzo: p.store_address ?? null, citta: p.city ?? null, dallaScheda: null, servizi, notaAgente };
 
   // 3) L'ordine: uno per attività. Con la chiave unica su seller_id, un secondo invio non scrive niente.
   const scritto = await admin
@@ -214,18 +218,31 @@ async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: st
       `Abbonamento ${FASCE[fascia].nome}, ${(canone / 100).toLocaleString('it-IT')} € al mese, in contanti al primo servizio.`,
       `${fraseVisita(visitaLetta)}.`,
       emailValida(chi?.agente_email) ? `Portato dall'agente ${emailValida(chi?.agente_email)}.` : 'Senza agente (preventivo nato fuori dalla pagina degli agenti).',
-      bisogni.length ? `Il sito deve servire a: ${bisogni.map((b) => TITOLI_BISOGNI[b].toLowerCase()).join(', ')}.` : 'L’agente non ha scelto i bisogni del sito: si parte da «farsi trovare».',
-      'Il piano editoriale del primo mese è già nell’ordine; quello completo, la bozza del sito e l’analisi all’avvio li prepara l’AD.',
-    ].join(' '),
+      servizi ? `Servizi scelti: ${servizi.map((x) => ETICHETTE_SERVIZI[x]).join(', ')}.` : 'L’agente non ha scelto i servizi: valgono tutti e quattro.',
+      notaAgente ? `Nota dell’agente: «${notaAgente}».` : '',
+      `L’AD prepara: ${lavoriDaChiedere(servizi).map((l) => NOME_DEL_LAVORO[l]).join(', ') || 'niente (solo foto e video, li fa la squadra alla visita)'}.`,
+    ].filter(Boolean).join(' '),
     '/seller/ordini-sdg',
     { unaVoltaPer: `ordine-sdg:${sellerId}` },
   ).catch((e: unknown) => logger.warn('[ordine-sdg] avviso a Nicola non partito', { sellerId, errore: String(e) }));
 
   // 5) Il piano completo, la bozza del sito e l'analisi all'avvio, dopo la risposta al titolare. Ognuno per conto
   //    suo: se uno non parte gli altri partono lo stesso, e nessuno lancia.
-  dopoLaRisposta(() => Promise.all([chiediIlPianoCompleto(id), ...PEZZI_ORDINE.map((pezzo) => chiediIlPezzo(id, pezzo))]).then(() => undefined));
+  //    28/11 — Solo per i servizi scelti dall'agente (Gestione social e Google → piano, Gestione sito web → sito,
+  //    Analisi di mercato → analisi); quelli non scelti non partono e non costano corse dell'AD.
+  const lavori = lavoriDaChiedere(servizi);
+  dopoLaRisposta(() => Promise.all([
+    ...(lavori.includes('piano') ? [chiediIlPianoCompleto(id)] : []),
+    ...PEZZI_ORDINE.filter((pezzo) => lavori.includes(pezzo)).map((pezzo) => chiediIlPezzo(id, pezzo)),
+  ]).then(() => undefined));
   return { ok: true, nuovo: true, id };
 }
+
+/** I lavori dell'AD per i servizi scelti (tutti e tre quando la scelta non c'è), nell'ordine piano, sito, analisi. */
+export function lavoriDaChiedere(servizi: readonly ServizioAgenzia[] | null | undefined): ('piano' | 'sito' | 'analisi')[] {
+  return (['social', 'sito_web', 'analisi'] as const).filter((id) => servizioScelto(servizi, id)).map((id) => LAVORO_DEL_SERVIZIO[id]!);
+}
+const NOME_DEL_LAVORO = { piano: 'il piano editoriale completo', sito: 'la bozza del sito', analisi: 'l’analisi di mercato all’avvio' } as const;
 
 export type EsitoRichiestaPiano = { esito: 'chiesto' | 'non-serve' | 'non-partito' | 'guasto'; dettaglio?: string };
 

@@ -7,7 +7,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { FASCE, euro } from '@/lib/agenti/fasce';
 import type { OrdineSdg, StatoPianoCompleto } from '@/lib/agenzia/ordine-sdg';
 import type { ColonnePezzi } from '@/lib/agenzia/pezzi-dell-ordine';
-import { TITOLI_BISOGNI } from '@/lib/agenzia/bisogni-del-sito';
+import { ETICHETTE_SERVIZI, servizioScelto } from '@/lib/agenzia/servizi-scelti';
 
 /**
  * GLI ORDINI DI SERVIZIO DI SDG — 27/11/2026 (migrazione 999c).
@@ -105,7 +105,7 @@ function SchedaOrdine({ o, chiedendo, chiedi }: { o: Ordine; chiedendo: Azione |
           <div><dt className="font-semibold text-ink-900">Agente</dt><dd className="break-all text-ink-700">{o.agente_email ?? 'nessuno: preventivo nato fuori dalla pagina degli agenti'}</dd></div>
           <div><dt className="font-semibold text-ink-900">Confermato il</dt><dd className="text-ink-700">{quando(o.accettato_il)}</dd></div>
           {fascia && <div className="sm:col-span-2"><dt className="font-semibold text-ink-900">Cosa comprende</dt><dd className="text-ink-700">Sito: {fascia.inPratica.sito}. Contenuti: {fascia.inPratica.piano}. Foto e video: {fascia.inPratica.foto}. Analisi: {fascia.inPratica.analisi}.</dd></div>}
-          {(d.bisogni ?? []).length > 0 && <div className="sm:col-span-2"><dt className="font-semibold text-ink-900">Di cosa ha bisogno il sito (scelto dall’agente)</dt><dd className="text-ink-700">{(d.bisogni ?? []).map((b) => TITOLI_BISOGNI[b] ?? b).join(' · ')}{d.notaAgente ? ` — nota: «${d.notaAgente}»` : ''}</dd></div>}
+          <div className="sm:col-span-2"><dt className="font-semibold text-ink-900">Servizi scelti dall’agente</dt><dd className="text-ink-700">{(d.servizi ?? []).length ? (d.servizi ?? []).map((x) => ETICHETTE_SERVIZI[x] ?? x).join(' · ') : 'tutti e quattro (scelta non fatta)'}{d.notaAgente ? ` — nota: «${d.notaAgente}»` : ''}</dd></div>
           {s?.sito && <div><dt className="font-semibold text-ink-900">Sito di oggi</dt><dd className="break-all text-ink-700">{s.sito}</dd></div>}
           {s && s.social.length > 0 && <div><dt className="font-semibold text-ink-900">Social trovati</dt><dd className="break-all text-ink-700">{s.social.map((x) => (x.fonte ? `${x.canale} (${x.fonte})` : x.canale)).join(', ')}</dd></div>}
         </dl>
@@ -128,7 +128,8 @@ function SchedaOrdine({ o, chiedendo, chiedi }: { o: Ordine; chiedendo: Azione |
           {o.piano_completo_errore ? ` — ${o.piano_completo_errore}` : ''}
           {o.piano_completo_stato === 'pronto' && o.piano_completo_il ? ` (${quando(o.piano_completo_il)})` : ''}
         </p>
-        {(o.piano_completo_stato === 'da_collegare' || o.piano_completo_stato === 'errore') && (
+        {!servizioScelto(d.servizi, 'social') && <p className="mt-1 text-sm text-ink-600">«Gestione social e Google» non è fra i servizi scelti: il piano completo non si chiede all’AD.</p>}
+        {servizioScelto(d.servizi, 'social') && (o.piano_completo_stato === 'da_collegare' || o.piano_completo_stato === 'errore') && (
           <button type="button" onClick={chiediPiano} disabled={chiedendo !== null} className="mt-2 rounded-lg border border-primary-600 px-3 py-1.5 text-sm font-semibold text-primary-700 disabled:opacity-60">
             {chiedendo === 'chiedi-piano' ? 'Chiedo…' : 'Chiedi il piano completo all’AD'}
           </button>
@@ -170,13 +171,13 @@ function SchedaOrdine({ o, chiedendo, chiedi }: { o: Ordine; chiedendo: Azione |
       </section>
 
       <SezioneLavoro
+        scelto={servizioScelto(d.servizi, 'sito_web')} servizio={ETICHETTE_SERVIZI.sito_web}
         id={`sito-${o.id}`} titolo="Bozza del sito" stato={o.sito_stato} errore={o.sito_errore} il={o.sito_il}
         pulsante="Chiedi la bozza del sito all’AD" chiedendo={chiedendo === 'chiedi-sito'} occupato={chiedendo !== null} chiedi={() => chiedi('chiedi-sito')}
       >
         {o.sito && (
           <div className="mt-3 space-y-3 text-sm">
             <p className="text-ink-700"><b>Sottotitolo:</b> {o.sito.sottotitolo} · <b>{o.sito.pagine.length} {o.sito.pagine.length === 1 ? 'pagina' : 'pagine'}</b> · bozza, non online: si pubblica solo dopo il sì del titolare e di SDG.</p>
-            {(o.sito.pulsanti ?? []).length > 0 && <p className="text-ink-700"><b>Pulsanti:</b> {(o.sito.pulsanti ?? []).map((x) => `${x.etichetta} (${x.azione})`).join(' · ')}: numeri e collegamenti li mette SDG.</p>}
             {o.sito.pagine.map((p) => (
               <div key={p.percorso} className="rounded-xl border border-ink-100 p-3">
                 <p className="font-semibold text-ink-900">{p.titolo} <span className="font-normal text-ink-500">{p.percorso}</span></p>
@@ -190,7 +191,8 @@ function SchedaOrdine({ o, chiedendo, chiedi }: { o: Ordine; chiedendo: Azione |
       </SezioneLavoro>
 
       <SezioneLavoro
-        id={`analisi-${o.id}`} titolo="Analisi del business all’avvio" stato={o.analisi_stato} errore={o.analisi_errore} il={o.analisi_il}
+        scelto={servizioScelto(d.servizi, 'analisi')} servizio={ETICHETTE_SERVIZI.analisi}
+        id={`analisi-${o.id}`} titolo="Analisi di mercato all’avvio" stato={o.analisi_stato} errore={o.analisi_errore} il={o.analisi_il}
         pulsante="Chiedi l’analisi all’AD" chiedendo={chiedendo === 'chiedi-analisi'} occupato={chiedendo !== null} chiedi={() => chiedi('chiedi-analisi')}
       >
         {o.analisi && (
@@ -202,12 +204,6 @@ function SchedaOrdine({ o, chiedendo, chiedi }: { o: Ordine; chiedendo: Azione |
                 <ul className="list-disc pl-5 text-ink-700">{p.frasi.map((f) => <li key={f}>{f}</li>)}</ul>
               </div>
             ))}
-            {(o.analisi.approfondimenti ?? []).map((a) => (
-              <div key={a.bisogno}>
-                <p className="font-semibold text-ink-900">Approfondimento: {a.titolo}</p>
-                <ul className="list-disc pl-5 text-ink-700">{a.frasi.map((f) => <li key={f}>{f}</li>)}</ul>
-              </div>
-            ))}
             <div><p className="font-semibold text-ink-900">Prime mosse</p><ul className="list-disc pl-5 text-ink-700">{o.analisi.primeMosse.map((m) => <li key={m.cosa}>{m.cosa} — {m.perche}</li>)}</ul></div>
           </div>
         )}
@@ -216,11 +212,19 @@ function SchedaOrdine({ o, chiedendo, chiedi }: { o: Ordine; chiedendo: Azione |
   );
 }
 
-function SezioneLavoro({ id, titolo, stato, errore, il, pulsante, chiedendo, occupato, chiedi, children }: {
-  id: string; titolo: string; stato: StatoPianoCompleto | undefined; errore: string | null | undefined; il: string | null | undefined;
+function SezioneLavoro({ scelto, servizio, id, titolo, stato, errore, il, pulsante, chiedendo, occupato, chiedi, children }: {
+  scelto: boolean; servizio: string; id: string; titolo: string; stato: StatoPianoCompleto | undefined; errore: string | null | undefined; il: string | null | undefined;
   pulsante: string; chiedendo: boolean; occupato: boolean; chiedi: () => void; children: ReactNode;
 }) {
   const s = stato ?? 'da_collegare';
+  if (!scelto && s !== 'pronto') {
+    return (
+      <section className="border-t border-ink-100 p-4 sm:p-5" aria-labelledby={id}>
+        <h3 id={id} className="font-serif text-lg font-bold text-ink-900">{titolo}</h3>
+        <p className="mt-1 text-sm text-ink-600">«{servizio}» non è fra i servizi scelti: non si chiede all’AD.</p>
+      </section>
+    );
+  }
   return (
     <section className="border-t border-ink-100 p-4 sm:p-5" aria-labelledby={id}>
       <h3 id={id} className="font-serif text-lg font-bold text-ink-900">{titolo}</h3>

@@ -3,7 +3,6 @@ import { FASCE } from '@/lib/agenti/fasce';
 import type { Abbonamento } from './preventivo';
 import { fonteDiGoogle, fraseMostrabile } from './rapporto';
 import { haUnNomeDiPersona } from './nomi-di-persona';
-import { AZIONI_PULSANTE, BISOGNI_SITO, NEL_SITO, PULSANTI_DEL_BISOGNO, TITOLI_BISOGNI, type AzionePulsante, type BisogniDelSito, type BisognoSito } from './bisogni-del-sito';
 import { TETTI_FLUSSO_14, type dallaSchedaDellAgente } from './piano-completo-ad';
 
 /**
@@ -16,9 +15,6 @@ import { TETTI_FLUSSO_14, type dallaSchedaDellAgente } from './piano-completo-ad
  *
  * La fascia decide le pagine (`PAGINE_PER_FASCIA`): una sola nel Base, di più nel Business e nel Premium. Sono un
  * contratto come le quantità del piano: una risposta con un numero diverso di pagine si scarta.
- * 28/11/2026, 01:10 — I BISOGNI scelti dall'agente (lib/agenzia/bisogni-del-sito.ts) decidono le sezioni e i
- * pulsanti: ogni bisogno ha almeno una sezione segnata col suo nome, e prenotazioni e vendita online hanno il loro
- * pulsante. La nota dell'agente è un'indicazione, mai un testo da pubblicare.
  *
  * Gli stessi divieti della porta di oggi (lib/agenzia/bozza-sito-ad.ts), più stretti: niente prezzi, niente
  * telefoni, email, indirizzi web, orari, nomi di persona, voti o recensioni di Google (`fraseMostrabile` del rapporto
@@ -38,11 +34,9 @@ const PAGINE_SUGGERITE: Record<Abbonamento, string> = {
 
 export const COMPITO_SITO = `Sei l'AD digitale di MyCity. SDG Agenzia (il partner di MyCity per siti, social, foto e video) ha un cliente nuovo: il titolare ha appena confermato l'abbonamento. Scrivi la BOZZA DEL SITO del locale. Il titolare la vede come bozza e la conferma con SDG alla prima visita: niente va online prima del suo sì e di quello di SDG.
 
-COSA HAI, in «dati»: il locale (nome, tipo, città, indirizzo pubblico), l'abbonamento con il NUMERO DI PAGINE, le pagine suggerite, i BISOGNI del sito scelti dall'agente col titolare (e cosa vuol dire ognuno), la nota dell'agente se c'è, e quello che hai già scritto nella scheda per il venditore (cosa ha, cosa manca, reputazione, social, cosa faremo con questa fascia). Usali: non rifare la scheda.
+COSA HAI, in «dati»: il locale (nome, tipo, città, indirizzo pubblico), l'abbonamento con il NUMERO DI PAGINE, le pagine suggerite, la «nota_dell_agente» se c'è (un'indicazione per te, per esempio «vuole far vedere la sala per le feste»: non copiarla nel sito), e quello che hai già scritto nella scheda per il venditore (cosa ha, cosa manca, reputazione, social, cosa faremo con questa fascia). Usali: non rifare la scheda.
 
 LE PAGINE SONO UN CONTRATTO: esattamente «pagine» pagine, non di più e non di meno. Ogni pagina ha un titolo, un percorso («/», «/chi-siamo», minuscolo, senza spazi; la prima è sempre «/») e da 1 a 5 sezioni con titolo e testo.
-
-I BISOGNI DECIDONO LE SEZIONI E I PULSANTI: la fascia dice quante pagine, i bisogni dicono cosa c'è dentro. Per OGNI bisogno in «dati.bisogni» almeno una sezione ha «bisogno» uguale alla sua chiave (le altre sezioni hanno «bisogno» null). In «pulsanti» metti i pulsanti del sito: se c'è «prenotazioni» almeno uno fra «chiama», «whatsapp», «chat», «prenota»; se c'è «vendere_online» il pulsante «vetrina». Le etichette sono brevi («Prenota un tavolo»); numeri e collegamenti li mette SDG. La «nota_dell_agente» è un'indicazione per te: non copiarla nel sito.
 
 LE REGOLE, che non si rompono mai:
 - MAI prezzi, nemmeno indicativi: li scrive il titolare.
@@ -61,7 +55,7 @@ const s = { type: 'string' } as const;
 
 export const SCHEMA_SITO = {
   type: 'object',
-  required: ['sottotitolo', 'pagine', 'pulsanti', 'da_confermare', 'fonti', 'note'],
+  required: ['sottotitolo', 'pagine', 'da_confermare', 'fonti', 'note'],
   properties: {
     sottotitolo: { ...s, description: 'una riga sotto il nome del locale, al massimo 140 caratteri' },
     pagine: {
@@ -74,12 +68,11 @@ export const SCHEMA_SITO = {
           percorso: { ...s, description: '«/» per la prima, poi «/chi-siamo» ecc.' },
           sezioni: {
             type: 'array', minItems: 1, maxItems: 5,
-            items: { type: 'object', required: ['titolo', 'testo', 'stato', 'bisogno'], properties: { titolo: s, testo: s, stato: { enum: ['da_confermare'] }, bisogno: { enum: [...BISOGNI_SITO, null] } } },
+            items: { type: 'object', required: ['titolo', 'testo', 'stato'], properties: { titolo: s, testo: s, stato: { enum: ['da_confermare'] } } },
           },
         },
       },
     },
-    pulsanti: { type: 'array', maxItems: 4, items: { type: 'object', required: ['etichetta', 'azione'], properties: { etichetta: s, azione: { enum: [...AZIONI_PULSANTE] } } } },
     da_confermare: { type: 'array', maxItems: 8, items: { type: 'object', required: ['voce', 'perche'], properties: { voce: s, perche: s } } },
     fonti: { type: 'array', maxItems: 10, items: s },
     note: { type: 'array', maxItems: 4, items: s },
@@ -87,14 +80,12 @@ export const SCHEMA_SITO = {
 } as const;
 
 /** I dati per l'AD: mai l'email del titolare o dell'agente, mai l'ora della visita. */
-export function datiPerIlSito(input: { nome: string; tipo: string; citta: string; indirizzo: string | null; fascia: Abbonamento; scheda: ReturnType<typeof dallaSchedaDellAgente>; bisogni?: BisogniDelSito }) {
+export function datiPerIlSito(input: { nome: string; tipo: string; citta: string; indirizzo: string | null; fascia: Abbonamento; scheda: ReturnType<typeof dallaSchedaDellAgente>; nota?: string | null }) {
   const f = FASCE[input.fascia];
-  const bisogni = input.bisogni?.bisogni.length ? input.bisogni.bisogni : (['farsi_trovare'] as BisognoSito[]);
   const dati = {
     locale: { nome: input.nome.slice(0, 120), tipo: input.tipo.slice(0, 120), citta: input.citta.slice(0, 60), indirizzo: input.indirizzo ? input.indirizzo.slice(0, 200) : null },
     abbonamento: { fascia: input.fascia, nome: f.nome, sito: f.inPratica.sito, pagine: PAGINE_PER_FASCIA[input.fascia], pagine_suggerite: PAGINE_SUGGERITE[input.fascia] },
-    bisogni: bisogni.map((b) => ({ bisogno: b, titolo: TITOLI_BISOGNI[b], nel_sito: NEL_SITO[b] })),
-    nota_dell_agente: input.bisogni?.nota ?? null,
+    nota_dell_agente: input.nota ?? null,
     dalla_scheda_del_venditore: input.scheda,
   };
   const misura = (x: unknown) => JSON.stringify({ compito: COMPITO_SITO, dati: x, schema: SCHEMA_SITO }).length;
@@ -104,16 +95,13 @@ export function datiPerIlSito(input: { nome: string; tipo: string; citta: string
 // ———————————————————————————————— la risposta dell'AD, controllata
 
 /** La bozza del sito come si salva nell'ordine (colonna `sito` della 999h) e come la vedono SDG e il titolare. */
-export type SezioneDellaBozza = { titolo: string; testo: string; stato: 'da_confermare'; bisogno?: BisognoSito | null };
+export type SezioneDellaBozza = { titolo: string; testo: string; stato: 'da_confermare' };
 export type PaginaDellaBozza = { titolo: string; percorso: string; sezioni: SezioneDellaBozza[] };
 export type BozzaSitoOrdine = {
   origine: 'ad';
   fascia: Abbonamento;
   sottotitolo: string;
   pagine: PaginaDellaBozza[];
-  /** I bisogni per cui è stata scritta (scelti dall'agente) e i pulsanti che il sito avrà: numeri e collegamenti li mette SDG. */
-  bisogni?: BisognoSito[];
-  pulsanti?: { etichetta: string; azione: AzionePulsante }[];
   daConfermare: { voce: string; perche: string }[];
   fonti: string[];
   note: string[];
@@ -130,9 +118,8 @@ const RispostaSito = z.object({
   pagine: z.array(z.object({
     titolo: testo(2, 60),
     percorso,
-    sezioni: z.array(z.object({ titolo: testo(2, 80), testo: testo(20, 900), stato: z.literal('da_confermare'), bisogno: z.enum(BISOGNI_SITO).nullable().optional() })).min(1).max(5),
+    sezioni: z.array(z.object({ titolo: testo(2, 80), testo: testo(20, 900), stato: z.literal('da_confermare') })).min(1).max(5),
   })).min(1).max(5),
-  pulsanti: z.array(z.object({ etichetta: testo(2, 40), azione: z.enum(AZIONI_PULSANTE) })).max(4).default([]),
   da_confermare: z.array(z.object({ voce: testo(2, 120), perche: testo(2, 300) })).max(8),
   fonti: z.array(z.string().max(500).regex(/^https:\/\/[^\s"'<>]+$/)).max(10),
   note: z.array(testo(2, 300)).max(4),
@@ -147,7 +134,7 @@ const VIETATI = /\b(sisal|scommess\w*|gratta e vinci|superenalotto|tabacc\w*|sig
  * nessun contatto o orario inventato, nessun dato di Google, nessun nome di persona. Altrimenti si scarta intera,
  * col motivo, e SDG può richiederla.
  */
-export function sitoDallaRisposta(grezza: unknown, fascia: Abbonamento, nomeLocale: string, bisogniScelti: readonly BisognoSito[] = []): EsitoSito {
+export function sitoDallaRisposta(grezza: unknown, fascia: Abbonamento, nomeLocale: string): EsitoSito {
   const letta = RispostaSito.safeParse(grezza);
   if (!letta.success) return { ok: false, motivo: `la bozza del sito dell’AD non ha la forma giusta (${letta.error.issues[0]?.path.join('.') || 'risposta'})` };
   const r = letta.data;
@@ -155,14 +142,6 @@ export function sitoDallaRisposta(grezza: unknown, fascia: Abbonamento, nomeLoca
   if (r.pagine.length !== attese) return { ok: false, motivo: `la bozza del sito dell’AD ha ${r.pagine.length} pagine invece di ${attese}, quante ne dà il ${FASCE[fascia].nome}` };
   if (r.pagine[0].percorso !== '/') return { ok: false, motivo: 'la prima pagina della bozza del sito non è la home («/»)' };
   if (new Set(r.pagine.map((p) => p.percorso)).size !== r.pagine.length) return { ok: false, motivo: 'la bozza del sito ha due pagine con lo stesso percorso' };
-
-  // I bisogni scelti dall'agente: ognuno ha la sua sezione, e i pulsanti che chiede.
-  const coperti = new Set(r.pagine.flatMap((p) => p.sezioni.map((x) => x.bisogno)).filter(Boolean));
-  const scoperti = bisogniScelti.filter((b) => !coperti.has(b));
-  if (scoperti.length) return { ok: false, motivo: `la bozza del sito dell’AD non ha una sezione per: ${scoperti.map((b) => TITOLI_BISOGNI[b]).join(', ')}` };
-  const azioni = new Set(r.pulsanti.map((p) => p.azione));
-  const senzaPulsante = bisogniScelti.filter((b) => PULSANTI_DEL_BISOGNO[b] && !PULSANTI_DEL_BISOGNO[b]!.some((a) => azioni.has(a)));
-  if (senzaPulsante.length) return { ok: false, motivo: `la bozza del sito dell’AD non ha il pulsante per: ${senzaPulsante.map((b) => TITOLI_BISOGNI[b]).join(', ')}` };
 
   // Ogni frase che il titolare legge passa dalle regole del rapporto. Il nome del locale si toglie prima del
   // controllo: «Bar 2.0» o «Pizzeria Mario Rossi» possono chiamarsi così, la regola guarda il resto del testo.
@@ -177,7 +156,6 @@ export function sitoDallaRisposta(grezza: unknown, fascia: Abbonamento, nomeLoca
     ]),
     ...r.da_confermare.flatMap((d, i) => [{ dove: `da confermare ${i + 1}`, t: d.voce }, { dove: `da confermare ${i + 1}`, t: d.perche }]),
     ...r.note.map((n, i) => ({ dove: `nota ${i + 1}`, t: n })),
-    ...r.pulsanti.map((p, i) => ({ dove: `pulsante ${i + 1}`, t: p.etichetta })),
   ];
   for (const f of frasi) {
     const pulita = senzaNome(f.t);
@@ -194,9 +172,7 @@ export function sitoDallaRisposta(grezza: unknown, fascia: Abbonamento, nomeLoca
       origine: 'ad',
       fascia,
       sottotitolo: r.sottotitolo,
-      pagine: r.pagine.map((p) => ({ titolo: p.titolo, percorso: p.percorso, sezioni: p.sezioni.map((x) => ({ titolo: x.titolo, testo: x.testo, stato: 'da_confermare' as const, bisogno: x.bisogno ?? null })) })),
-      bisogni: [...bisogniScelti],
-      pulsanti: r.pulsanti,
+      pagine: r.pagine.map((p) => ({ titolo: p.titolo, percorso: p.percorso, sezioni: p.sezioni.map((x) => ({ titolo: x.titolo, testo: x.testo, stato: 'da_confermare' as const })) })),
       daConfermare: r.da_confermare,
       fonti: r.fonti,
       note: r.note,

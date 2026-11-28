@@ -9,7 +9,7 @@ import type { Abbonamento } from './preventivo';
 import type { DatiAttivita, StatoPianoCompleto } from './ordine-sdg';
 import { VENDITORE_DEI_PIANI, dallaSchedaDellAgente } from './piano-completo-ad';
 import { COMPITO_SITO, SCHEMA_SITO, datiPerIlSito, sitoDallaRisposta, type BozzaSitoOrdine } from './sito-dell-ordine-ad';
-import { leggiBisogni } from './bisogni-del-sito';
+import { leggiServiziScelti } from './servizi-scelti';
 import { COMPITO_ANALISI, SCHEMA_ANALISI, analisiDallaRisposta, datiPerLAnalisi, type AnalisiAvvioOrdine } from './analisi-dell-ordine-ad';
 
 /**
@@ -113,8 +113,8 @@ export async function chiediIlPezzo(ordineId: string, pezzo: PezzoOrdine): Promi
       indirizzo: o.dati_attivita?.indirizzo ?? scheda?.indirizzo ?? null,
       fascia: o.fascia,
       scheda: dallaSchedaDellAgente(scheda, o.fascia),
-      // 28/11 — I bisogni scelti dall'agente, scritti nell'ordine dal preventivo: decidono sezioni, pulsanti e approfondimenti.
-      bisogni: leggiBisogni(o.dati_attivita?.bisogni, o.dati_attivita?.notaAgente),
+      // 28/11 — La nota dell'agente, scritta nell'ordine dal preventivo: un'indicazione, mai un testo da pubblicare.
+      nota: leggiServiziScelti(o.dati_attivita?.servizi, o.dati_attivita?.notaAgente).nota,
     };
     const job = pezzo === 'sito'
       ? { flusso: FLUSSO, compito: COMPITO_SITO, schema: SCHEMA_SITO, dati: datiPerIlSito(locale) }
@@ -149,8 +149,7 @@ export async function aggiornaIlPezzo<T extends ColonnePezzi & { id: string; fas
     const r = await leggiLavoro(lavoro);
     let cambio: Record<string, unknown> | null = null;
     if (r.stato === 'pronta' && r.venditore === VENDITORE_DEI_PIANI) {
-      const { bisogni } = leggiBisogni(o.dati_attivita?.bisogni, o.dati_attivita?.notaAgente);
-      const esito = pezzo === 'sito' ? sitoDallaRisposta(r.risultato, o.fascia, o.nome_attivita, bisogni) : analisiDallaRisposta(r.risultato, o.fascia, o.nome_attivita, bisogni);
+      const esito = pezzo === 'sito' ? sitoDallaRisposta(r.risultato, o.fascia, o.nome_attivita) : analisiDallaRisposta(r.risultato, o.fascia, o.nome_attivita);
       cambio = esito.ok
         ? { [c.dato]: 'sito' in esito ? esito.sito : esito.analisi, [c.stato]: 'pronto', [c.errore]: null, [c.il]: new Date(adesso).toISOString() }
         : { [c.stato]: 'errore', [c.errore]: esito.motivo.slice(0, 400) };

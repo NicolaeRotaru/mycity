@@ -15,15 +15,15 @@
 --   sito_il / analisi_il          quando è arrivato.
 -- La bozza del sito NON va online da sola: qui non c'è nessuna colonna che la pubblica.
 --
--- 28/11/2026, 01:10 — Nicola: il sito nasce «in base all'abbonamento ma anche al servizio di cui ha bisogno, che lo
--- selezionerà il venditore nel momento in cui seleziona l'abbonamento», e «anche l'analisi». Quindi
--- preventivi_con_codice impara:
---   bisogni_sito   di cosa ha bisogno il sito, scelto dall'agente (elenco chiuso di lib/agenzia/bisogni-del-sito.ts:
---                  farsi_trovare, menu_listino, prenotazioni, vendere_online, eventi, portfolio), almeno uno;
---   nota_agente    la nota libera dell'agente, al massimo 200 caratteri: un'indicazione per l'AD, mai un testo da
---                  pubblicare (il server rifiuta email, telefoni e indirizzi web).
+-- 28/11/2026, 01:10 e 01:25 — Nicola: il lavoro nasce «in base all'abbonamento ma anche al servizio di cui ha
+-- bisogno, che lo selezionerà il venditore nel momento in cui seleziona l'abbonamento», fra «Foto e video, Gestione
+-- social e google, Gestione sitoweb, Analisi di mercato». Quindi preventivi_con_codice impara:
+--   servizi_scelti  quali servizi gli servono, scelti dall'agente fra i quattro del listino (foto_video, sito_web,
+--                   social, analisi: lib/agenzia/servizi-scelti.ts), almeno uno;
+--   nota_agente     la nota libera dell'agente, al massimo 200 caratteri: un'indicazione per l'AD e SDG, mai un testo
+--                   da pubblicare (il server rifiuta email, telefoni e indirizzi web).
 -- Li scrive il server al «Sì, aggiungi» (app/api/agente/aggiungi); all'accettazione passano nell'ordine di SDG,
--- dentro dati_attivita (999c), e da lì nei compiti del sito e dell'analisi. La tabella resta chiusa ai browser (708).
+-- dentro dati_attivita (999c), e decidono quali lavori dell'AD partono. La tabella resta chiusa ai browser (708).
 --
 -- PERMESSI: quelli della 999c, che qui non si toccano. ordini_sdg la LEGGONO solo l'admin e l'account di SDG
 -- Agenzia, la SCRIVE solo il server con la chiave di servizio. Il titolare il SUO sito e la SUA analisi li legge
@@ -34,9 +34,9 @@
 --
 -- Si può rieseguire. NON si applica da sola: la applica Nicola, col pulsante «Migrazioni a mano». Viene dopo la 999c.
 -- Prima che entri il sito regge: l'ordine nasce come oggi, i due lavori dicono «manca la migrazione 999h».
--- REVERSIBILE (si perdono le bozze del sito e le analisi degli ordini, e i bisogni scelti dagli agenti):
---   ALTER TABLE public.preventivi_con_codice DROP CONSTRAINT IF EXISTS preventivi_con_codice_bisogni_sito_elenco;
---   ALTER TABLE public.preventivi_con_codice DROP COLUMN IF EXISTS bisogni_sito, DROP COLUMN IF EXISTS nota_agente;
+-- REVERSIBILE (si perdono le bozze del sito e le analisi degli ordini, e i servizi scelti dagli agenti):
+--   ALTER TABLE public.preventivi_con_codice DROP CONSTRAINT IF EXISTS preventivi_con_codice_servizi_scelti_elenco;
+--   ALTER TABLE public.preventivi_con_codice DROP COLUMN IF EXISTS servizi_scelti, DROP COLUMN IF EXISTS nota_agente;
 --   ALTER TABLE public.ordini_sdg DROP CONSTRAINT IF EXISTS ordini_sdg_sito_solo_pronto;
 --   ALTER TABLE public.ordini_sdg DROP CONSTRAINT IF EXISTS ordini_sdg_sito_in_corso_col_lavoro;
 --   ALTER TABLE public.ordini_sdg DROP CONSTRAINT IF EXISTS ordini_sdg_analisi_solo_pronta;
@@ -49,21 +49,21 @@
 
 BEGIN;
 
--- 0) Di cosa ha bisogno il sito, sul preventivo ------------------------------------------------------
-ALTER TABLE public.preventivi_con_codice ADD COLUMN IF NOT EXISTS bisogni_sito text[];
+-- 0) Quali servizi gli servono, sul preventivo ------------------------------------------------------
+ALTER TABLE public.preventivi_con_codice ADD COLUMN IF NOT EXISTS servizi_scelti text[];
 ALTER TABLE public.preventivi_con_codice ADD COLUMN IF NOT EXISTS nota_agente text
   CHECK (nota_agente IS NULL OR char_length(nota_agente) <= 200);
-ALTER TABLE public.preventivi_con_codice DROP CONSTRAINT IF EXISTS preventivi_con_codice_bisogni_sito_elenco;
+ALTER TABLE public.preventivi_con_codice DROP CONSTRAINT IF EXISTS preventivi_con_codice_servizi_scelti_elenco;
 ALTER TABLE public.preventivi_con_codice
-  ADD CONSTRAINT preventivi_con_codice_bisogni_sito_elenco
-  CHECK (bisogni_sito IS NULL OR (
-    cardinality(bisogni_sito) BETWEEN 1 AND 6
-    AND bisogni_sito <@ ARRAY['farsi_trovare', 'menu_listino', 'prenotazioni', 'vendere_online', 'eventi', 'portfolio']::text[]
+  ADD CONSTRAINT preventivi_con_codice_servizi_scelti_elenco
+  CHECK (servizi_scelti IS NULL OR (
+    cardinality(servizi_scelti) BETWEEN 1 AND 4
+    AND servizi_scelti <@ ARRAY['foto_video', 'sito_web', 'social', 'analisi']::text[]
   ));
-COMMENT ON COLUMN public.preventivi_con_codice.bisogni_sito IS
-  'Di cosa ha bisogno il sito, scelto dall agente col titolare al «Sì, aggiungi» (elenco chiuso). Passa nell ordine di SDG. Migrazione 999h.';
+COMMENT ON COLUMN public.preventivi_con_codice.servizi_scelti IS
+  'Quali servizi gli servono, scelti dall agente fra i quattro del listino al «Sì, aggiungi». All accettazione decidono quali lavori dell AD partono. Migrazione 999h.';
 COMMENT ON COLUMN public.preventivi_con_codice.nota_agente IS
-  'La nota libera dell agente per il sito, al massimo 200 caratteri, senza contatti: un indicazione, mai un testo da pubblicare. Migrazione 999h.';
+  'La nota libera dell agente, al massimo 200 caratteri, senza contatti: un indicazione, mai un testo da pubblicare. Migrazione 999h.';
 
 -- 1) Il sito e l'analisi nell'ordine di SDG -------------------------------------------------------
 

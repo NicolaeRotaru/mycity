@@ -5,6 +5,7 @@ import type { StatoPianoCompleto } from './ordine-sdg';
 import type { PianoDelMese } from './piano-del-primo-mese';
 import type { BozzaSitoOrdine } from './sito-dell-ordine-ad';
 import type { AnalisiAvvioOrdine } from './analisi-dell-ordine-ad';
+import { leggiServiziScelti, type ServizioAgenzia } from './servizi-scelti';
 
 /**
  * IL LAVORO DELL'ORDINE, VISTO DAL TITOLARE — 28/11/2026.
@@ -31,6 +32,8 @@ const perIlTitolare = (stato: StatoPianoCompleto | undefined, c_e: boolean): Sta
   stato === 'pronto' && c_e ? 'pronto' : stato === 'in_corso' ? 'in_preparazione' : 'lo_stiamo_preparando';
 export type LavoroDellOrdine = {
   fascia: Abbonamento;
+  /** 28/11 — I servizi scelti dall'agente: solo le loro voci del menu mostrano il lavoro. `null` = tutti. */
+  servizi: ServizioAgenzia[] | null;
   nomeAttivita: string;
   piano: { stato: StatoPerIlTitolare; piano: PianoDelMese };
   sito: { stato: StatoPerIlTitolare; bozza: BozzaSitoOrdine | null };
@@ -43,13 +46,14 @@ type Riga = {
   fascia: Abbonamento;
   piano: PianoDelMese;
   piano_completo_stato: StatoPianoCompleto;
+  dati_attivita?: { servizi?: unknown } | null;
   sito?: BozzaSitoOrdine | null;
   sito_stato?: StatoPianoCompleto;
   analisi?: AnalisiAvvioOrdine | null;
   analisi_stato?: StatoPianoCompleto;
 };
 
-const BASE = 'seller_id, nome_attivita, fascia, piano, piano_completo_stato';
+const BASE = 'seller_id, nome_attivita, fascia, piano, piano_completo_stato, dati_attivita';
 const CON_I_PEZZI = `${BASE}, sito, sito_stato, analisi, analisi_stato`;
 
 export async function lavoroDallOrdine(sellerId: string): Promise<LavoroDellOrdine | null> {
@@ -68,6 +72,8 @@ export async function lavoroDallOrdine(sellerId: string): Promise<LavoroDellOrdi
     const analisiPronta = r.analisi_stato === 'pronto' && !!r.analisi;
     return {
       fascia: r.fascia,
+      // Solo l'elenco dei servizi: la nota dell'agente e il resto di dati_attivita restano a SDG.
+      servizi: leggiServiziScelti(r.dati_attivita?.servizi, null).servizi,
       nomeAttivita: r.nome_attivita,
       piano: { stato: perIlTitolare(r.piano_completo_stato, true), piano: r.piano },
       sito: { stato: perIlTitolare(r.sito_stato, sitoPronto), bozza: sitoPronto ? (r.sito ?? null) : null },
