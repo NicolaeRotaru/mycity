@@ -40,6 +40,27 @@ function togliBozze(daTogliere: (bozza: Bozza) => boolean) {
   }
 }
 
+/**
+ * 27/11/2026 (R01-012) — LA BOZZA DELLA CASSA NON RESTA A CHI VIENE DOPO.
+ *
+ * Chi ordina da ospite lascia nome, telefono e indirizzo in `mc_checkout_draft` (app/checkout/page.tsx)
+ * prima di andare all'accesso, perché dopo l'accesso il modulo si riempia da solo. Se l'accesso non
+ * si completa, o la bozza non viene ripresa, restava nel browser anche dopo «Esci» e passava a
+ * chiunque aprisse la cassa dopo, sul tablet di casa o sul computer del negozio. All'uscita
+ * dall'account (ogni SIGNED_OUT: «Esci» o sessione finita) si toglie dalle due memorie; l'ingresso
+ * di chi la stava aspettando non la tocca.
+ */
+const BOZZA_DELLA_CASSA = 'mc_checkout_draft';
+function togliBozzaDellaCassa() {
+  for (const memoria of [() => window.localStorage, () => window.sessionStorage]) {
+    try {
+      memoria().removeItem(BOZZA_DELLA_CASSA);
+    } catch {
+      // Memoria non disponibile (navigazione privata, blocchi): niente da togliere.
+    }
+  }
+}
+
 const AVVOLTO = Symbol.for('mycity.uscita-voluta');
 
 /**
@@ -155,6 +176,7 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
         uscitaVoluta = false;
         if (voluta) contaUscitaVoluta();
         togliBozze((b) => voluta || b?.perIlRientro !== true);
+        togliBozzaDellaCassa();
       } else if (chi) {
         togliBozze((b) => b?.utente !== chi);
       }

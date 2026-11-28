@@ -204,6 +204,12 @@ export function allarmiTettoSpesaAi(
     tettoEur?: number;
     copieAttese?: number;
     tolleranzaRipiegoMinuti?: number;
+    /**
+     * 27/11/2026 — In produzione, senza conto condiviso, l'AI a pagamento si ferma del tutto
+     * (`lib/ai/tettoSpesa.ts`, `contoCondivisoObbligatorio`): non c'e' nessuna quota per copia,
+     * e l'allarme deve dire quello. In sviluppo il ripiego per copia resta.
+     */
+    fermoSenzaConto?: boolean;
   } = {},
 ): AllarmeTetto[] {
   const tettoEur = opzioni.tettoEur ?? 0;
@@ -224,7 +230,9 @@ export function allarmiTettoSpesaAi(
       type: TIPO_ALLARME_TETTO_AI,
       detail:
         `Il conto della spesa AI in comune ${da}: ogni copia del sito conta per se'. ` +
-        `Il tetto di ${tettoEur.toFixed(2)} € al giorno e' sceso a ${quotaEur} € per copia per non moltiplicarsi. ` +
+        (opzioni.fermoSenzaConto
+          ? `L'AI a pagamento e' ferma per tutte le copie finche' il conto non risponde (tetto di ${tettoEur.toFixed(2)} € al giorno). `
+          : `Il tetto di ${tettoEur.toFixed(2)} € al giorno e' sceso a ${quotaEur} € per copia per non moltiplicarsi. `) +
         `Rimedio: applicare la migrazione del conto condiviso (131 / 158). Detto dal database: ${conto.motivo || 'nessun messaggio'}.`,
       url: '/admin/today',
     },

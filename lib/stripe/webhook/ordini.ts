@@ -542,7 +542,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           deliverySlot: fasciaDellOrdine, pickupInStore, paymentMethod: 'card', // R28-010: quando arriva e come si è pagato
         });
         await provaAMandare('conferma al cliente', { orderId: created.orderId }, () =>
-          sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text }));
+          sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text, rimandaA: buyerEmail.toLowerCase() === session.customer_email?.toLowerCase() ? buyerId : null })); // R03-002: in coda solo all'indirizzo dell'account (customer_email = user.email al checkout)
       }
 
       // Anche la lettura dell'indirizzo del negozio sta nel riparo: e' una
@@ -576,7 +576,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           createdAt: new Date(),
           storeHours: orari,
         });
-        return sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
+        return sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, rimandaA: created.sellerId }); // R03-002: se non parte, la coda la rimanda
       });
     }
   }, 'avvisi post-ordine');

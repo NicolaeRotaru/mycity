@@ -102,6 +102,20 @@ import {
 export type ClientRiserve = Pick<SupabaseClient, 'from' | 'rpc'>;
 
 /**
+ * 27/11/2026 (R08-007) — Il resoconto, con i tentativi il cui codice sconto NON è tornato.
+ *
+ * Un tentativo liberato ha la merce di nuovo a scaffale; se però `release_coupon` è caduto, l'uso
+ * del codice resta contato. Chi chiama chiude la rivendicazione del codice (`coupon_redemptions`,
+ * `delivery.rivendicazione`) dei tentativi liberati: per questi la deve lasciare aperta, come fanno
+ * l'avviso di Stripe (lib/stripe/webhook/carrello-scaduto.ts) e `rilasciaCoupon` della cassa. Restano
+ * dentro `liberati` apposta: la merce è tornata davvero, e la cassa con la carta rilegge le scorte.
+ */
+export type RiserveLiberateConCodici = RiserveLiberate & {
+  /** Gli id dei tentativi liberati il cui codice sconto non è stato restituito. */
+  codiceNonTornato: string[];
+};
+
+/**
  * La chiusura vera della pagina di pagamento.
  *
  * Si carica solo quando c'è davvero una pagina da chiudere: così questo modulo
@@ -168,7 +182,7 @@ export async function liberaRiserveAbbandonate(
      */
     chiudiSessione?: (sessionId: string) => Promise<void | EsitoChiusura>;
   },
-): Promise<RiserveLiberate> {
+): Promise<RiserveLiberateConCodici> {
   // Si chiede una riga IN PIÙ del tetto apposta: è così che ci si accorge di
   // averlo superato invece di tagliare in silenzio.
   const { data, error } = await admin
@@ -191,11 +205,11 @@ export async function liberaRiserveAbbandonate(
       perche: selezione.perche,
       dettaglio: selezione.dettaglio,
     });
-    return { liberati: [], ancoraPagabili: [SESSIONE_NON_GUARDATA] };
+    return { liberati: [], ancoraPagabili: [SESSIONE_NON_GUARDATA], codiceNonTornato: [] };
   }
 
   const candidati = selezione.candidati;
-  if (candidati.length === 0) return { liberati: [], ancoraPagabili: [] };
+  if (candidati.length === 0) return { liberati: [], ancoraPagabili: [], codiceNonTornato: [] };
 
   // ① Chi ha già degli ordini non si tocca: la merce è stata venduta davvero.
   const sessioni = candidati.map((r) => r.stripe_session_id).filter((s): s is string => !!s);
@@ -211,7 +225,7 @@ export async function liberaRiserveAbbandonate(
       logger.error('[riserve] controllo ordini fallito: non libero niente e non si incassa', {
         message: errOrdini.message,
       });
-      return { liberati: [], ancoraPagabili: [SESSIONE_NON_GUARDATA] };
+      return { liberati: [], ancoraPagabili: [SESSIONE_NON_GUARDATA], codiceNonTornato: [] };
     }
     for (const o of (ordini ?? []) as Array<{ stripe_session_id?: string | null }>) {
       if (o.stripe_session_id) conOrdini.add(o.stripe_session_id);
@@ -220,6 +234,7 @@ export async function liberaRiserveAbbandonate(
 
   const liberati: string[] = [];
   const ancoraPagabili: string[] = [];
+  const codiceNonTornato: string[] = [];
   for (const riga of candidati) {
     if (riga.stripe_session_id && conOrdini.has(riga.stripe_session_id)) {
       logger.warn('[riserve] tentativo con ordini gia creati: non lo tocco', { id: riga.id });
@@ -288,7 +303,10 @@ export async function liberaRiserveAbbandonate(
 
     if (riga.coupon_code) {
       const { error: errCodice } = await admin.rpc('release_coupon', { p_code: riga.coupon_code });
-      if (errCodice) logger.warn('[riserve] codice sconto non restituito', { id: riga.id, message: errCodice.message });
+      if (errCodice) {
+        logger.warn('[riserve] codice sconto non restituito', { id: riga.id, message: errCodice.message });
+        codiceNonTornato.push(riga.id);
+      }
     }
 
     liberati.push(riga.id);
@@ -300,5 +318,5 @@ export async function liberaRiserveAbbandonate(
   if (ancoraPagabili.length > 0) {
     logger.error('[riserve] pagine di pagamento rimaste pagabili', { quante: ancoraPagabili.length });
   }
-  return { liberati, ancoraPagabili };
+  return { liberati, ancoraPagabili, codiceNonTornato };
 }

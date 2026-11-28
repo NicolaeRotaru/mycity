@@ -77,6 +77,9 @@ const ProductCard = ({
     // su 100 € il prezzo scontato in centesimi dice lo sconto applicato, senza ripetere il 70 qui.
     ? Math.round(100 - discountedUnitCents(100, discountPercent as number) / 100)
     : (compareValid ? Math.round((1 - price / (compareAtPrice as number)) * 100) : 0);
+  // R10-004 — Sotto lo 0,5% la percentuale arrotondata è 0: il bollino «-0%» e «scontato del 0 per
+  // cento» non dicono niente. Il prezzo scontato e il barrato restano; il bollino no.
+  const showBadge = showStrike && badgePct > 0;
   const rawImg = images?.[0] ?? FOTO_MANCANTE;
   const img = sizedImage(rawImg, 'card');
   const router = useRouter();
@@ -172,14 +175,14 @@ const ProductCard = ({
           name,
           eUnServizio ? 'servizio' : null,
           isOutOfStock ? 'esaurito' : null,
-          showStrike ? `scontato del ${badgePct} per cento` : null,
+          showBadge ? `scontato del ${badgePct} per cento` : null,
           isNew ? 'novità' : null,
         ].filter(Boolean).join(', ')}
         tabIndex={0}
       />
       {/* Badge in alto a sinistra */}
       <div className="pointer-events-none absolute top-2 left-2 z-10 flex flex-col gap-1" aria-hidden>
-        {showStrike && <Badge variant="discount">-{badgePct}%</Badge>}
+        {showBadge && <Badge variant="discount">-{badgePct}%</Badge>}
         {isNew && <Badge variant="new">Nuovo</Badge>}
         {eUnServizio && <Badge variant="local">Servizio</Badge>}
         {isOutOfStock && <Badge variant="soldout">Esaurito</Badge>}

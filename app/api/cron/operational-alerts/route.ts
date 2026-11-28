@@ -4,7 +4,7 @@ import { sendEmail } from '@/lib/email/client';
 import { withCronAuth } from '@/lib/api/middleware';
 import { chiamataDelCalendarioFerma, rispostaDelFermo, VARIABILE_DEL_FERMO, VALORE_CHE_ACCENDE } from '@/lib/cron/fermo-dei-lavori';
 import { escapeHtml } from '@/lib/html-escape';
-import { ORE_PER_ACCETTARE, scadenzaAccettazione } from '@/lib/ordini/scadenza-accettazione';
+import { ORE_PER_ACCETTARE, fineDellaFascia, scadenzaAccettazione } from '@/lib/ordini/scadenza-accettazione';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { lavoriFermi, type CronHeartbeat } from '@/lib/cron-health';
@@ -365,6 +365,39 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     });
   }
 
+  // 5d) R06-001 — ORDINI ACCETTATI E MAI SEGNATI «PRONTO».
+  //     Il negozio accetta di corsa e si dimentica «Pronto»: il fattorino non può prenderlo
+  //     (prendi_ordine vuole READY), nessun giro lo fa scadere, e con la carta il cliente resta
+  //     addebitato senza limite. Suona quando la fascia promessa è finita; senza una fascia
+  //     leggibile (la veloce, un ordine senza fascia) dopo 2 ore dall'accettazione, o dalla nascita
+  //     se l'ora dell'accettazione manca. La fascia non si confronta in SQL: si leggono gli
+  //     accettati e si decide qui. I più RECENTI per primi (come il punto 3): finché niente li fa
+  //     scadere, gli accettati dimenticati da giorni hanno già suonato e non devono tenere il posto
+  //     a quello fermo da poco.
+  const { data: accettatiFermi, error: err_accettatiFermi } = await admin
+    .from('orders')
+    .select('id, created_at, accepted_at, delivery_slot, profiles!orders_seller_id_fkey(store_name)')
+    .eq('delivery_status', 'ACCEPTED')
+    .order('accepted_at', { ascending: false, nullsFirst: false })
+    .limit(50);
+  if (err_accettatiFermi) controlliSaltati.push('ordini accettati e mai pronti');
+  for (const o of accettatiFermi ?? []) {
+    const r = o as { id: string; created_at: string; accepted_at?: string | null; delivery_slot?: string | null; profiles?: { store_name?: string } | null };
+    const fine = fineDellaFascia(r);
+    const daQuando = new Date(r.accepted_at ?? r.created_at).getTime();
+    const oltre = fine ? Date.now() - fine.getTime() : Date.now() - daQuando - 2 * 60 * 60_000;
+    if (!(oltre > 0)) continue;
+    const negozio = r.profiles?.store_name ?? 'unknown';
+    alerts.push({
+      key: `ACCETTATO_MAI_PRONTO|${r.id}`,
+      type: 'ACCETTATO_MAI_PRONTO',
+      detail: fine
+        ? `Ordine #${r.id.slice(0, 8)} da ${negozio}: accettato ma mai segnato «Pronto», e la fascia ${r.delivery_slot} è finita da ${Math.floor(oltre / 60_000)} min`
+        : `Ordine #${r.id.slice(0, 8)} da ${negozio}: accettato da ${Math.floor((Date.now() - daQuando) / 60_000)} min e mai segnato «Pronto»`,
+      url: `/admin/orders/${r.id}`,
+    });
+  }
+
   // 6) Consegne in-flight stallate: ASSIGNED ma non ritirato da >30min (consegna orfana)
   const thirtyMinAgo = new Date(Date.now() - 30 * 60_000).toISOString();
   const { data: stalledAssigned, error: err_stalledAssigned } = await admin
@@ -382,6 +415,28 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       type: 'DELIVERY_STALLED',
       detail: `Ordine #${id.slice(0, 8)} ASSIGNED a ${rider?.full_name ?? 'rider'} ma non ritirato da >30min`,
       url: `/admin/orders/${id}`,
+    });
+  }
+
+  // 6b) R06-001 — Ritirato dal fattorino e mai passato a «in consegna» da più di 30 minuti. La
+  //     merce è già col fattorino: solo l'allarme, nessun annullo. Lettura a parte, col suo tetto:
+  //     il punto 2 guarda OUT_FOR_DELIVERY e i suoi dieci posti restano suoi. I più recenti per primi.
+  const { data: ritiratiFermi, error: err_ritiratiFermi } = await admin
+    .from('orders')
+    .select('id, picked_up_at, profiles!orders_rider_id_fkey(full_name)')
+    .eq('delivery_status', 'PICKED_UP')
+    .lt('picked_up_at', thirtyMinAgo)
+    .order('picked_up_at', { ascending: false })
+    .limit(20);
+  if (err_ritiratiFermi) controlliSaltati.push('ordini ritirati e mai in consegna');
+  for (const o of ritiratiFermi ?? []) {
+    const r = o as { id: string; picked_up_at: string; profiles?: { full_name?: string } | null };
+    const minuti = Math.floor((Date.now() - new Date(r.picked_up_at).getTime()) / 60_000);
+    alerts.push({
+      key: `RITIRATO_MAI_IN_CONSEGNA|${r.id}`,
+      type: 'RITIRATO_MAI_IN_CONSEGNA',
+      detail: `Ordine #${r.id.slice(0, 8)} ritirato da ${r.profiles?.full_name ?? 'rider'} da ${minuti} min e mai passato a «in consegna»`,
+      url: `/admin/orders/${r.id}`,
     });
   }
 

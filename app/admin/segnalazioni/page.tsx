@@ -83,6 +83,52 @@ function dove(s: Pick<Segnalazione, 'tipo' | 'oggetto_id'>): string | null {
   return null;
 }
 
+type RecensioneSegnalata = { di: 'prodotto' | 'negozio'; link: string | null; voto: number; testo: string | null; scritta: string | null };
+
+/**
+ * 27/11/2026 (R01-006) — LO STAFF DECIDE VEDENDO LA RECENSIONE.
+ *
+ * Per una recensione c'era solo il codice: niente link, niente testo, e non si sapeva nemmeno se
+ * era di un prodotto o di un negozio (sono due tabelle). La legge la rotta delle segnalazioni,
+ * che risponde solo agli amministratori.
+ */
+function RecensioneDaDecidere({ id }: { id: string }) {
+  const lettura = useQuery({
+    queryKey: [...CHIAVE, 'recensione', id],
+    queryFn: async (): Promise<RecensioneSegnalata | null> => {
+      const r = await fetch(`/api/segnalazioni?recensione=${encodeURIComponent(id)}`);
+      if (!r.ok) throw new Error('Recensione non letta');
+      const corpo = (await r.json().catch(() => null)) as { recensione?: RecensioneSegnalata | null } | null;
+      return corpo?.recensione ?? null;
+    },
+  });
+  if (lettura.isPending) return <p className="mt-2 text-xs text-ink-500">Sto leggendo la recensione…</p>;
+  if (lettura.isError) {
+    return <p className="mt-2 text-xs text-red-700">Non sono riuscito a leggere la recensione segnalata: riprova fra poco.</p>;
+  }
+  const rec = lettura.data;
+  if (!rec) return <p className="mt-2 text-xs text-ink-500">La recensione non c&apos;è più: è già stata tolta.</p>;
+  return (
+    <div className="mt-2 rounded-lg border border-cream-200 bg-cream-50 p-2" data-recensione-segnalata={id}>
+      <p className="text-xs font-semibold text-ink-600">
+        Recensione {rec.di === 'prodotto' ? 'di un prodotto' : 'di un negozio'} · {rec.voto}/5
+        {rec.scritta ? ` · ${formatDate(rec.scritta)}` : ''}
+        {rec.link && (
+          <>
+            {' · '}
+            <Link href={rec.link} className="text-primary-700 hover:underline">
+              {rec.di === 'prodotto' ? 'apri il prodotto' : 'apri il negozio'}
+            </Link>
+          </>
+        )}
+      </p>
+      <p className="mt-1 whitespace-pre-line break-words [overflow-wrap:anywhere] text-ink-700">
+        {rec.testo?.trim() || '(senza testo: solo il voto)'}
+      </p>
+    </div>
+  );
+}
+
 function SchedaSegnalazione({ s }: { s: Segnalazione }) {
   const qc = useQueryClient();
   const [decisione, setDecisione] = useState<Decisione>(s.stato === 'ricevuta' ? 'in_esame' : (s.stato as Decisione));
@@ -90,7 +136,8 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
   const serveMotivo = decisione !== 'in_esame';
   // R02-003 — Si può accogliere solo ciò che da qui si sa togliere: il prodotto (va in bozza) e
   // il negozio (si sospende). Recensioni e messaggi non hanno ancora un'azione di rimozione.
-  const puoTogliere = s.tipo === 'prodotto' || s.tipo === 'negozio';
+  // 27/11/2026 (R01-013) — Anche la domanda sotto un prodotto: accogliere la nasconde.
+  const puoTogliere = s.tipo === 'prodotto' || s.tipo === 'negozio' || s.tipo === 'domanda';
   const motivoValido = motivazione.trim().length >= MOTIVAZIONE_MINIMA;
 
   const decidi = useMutation({
@@ -129,6 +176,27 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
             body: JSON.stringify({ action: 'suspend', reason: motivazione.trim().slice(0, 500) }),
           });
           if (!r.ok) throw new Error('Il negozio non è stato sospeso: decisione non registrata. Riprova.');
+        }
+      }
+      if (decisione === 'accolta' && s.tipo === 'domanda') {
+        // 27/11/2026 (R01-013) — Una domanda segnalata si nascondeva solo dalla pagina del prodotto,
+        // e da qui non si poteva accogliere. Ora «Accolta» la nasconde (is_public = false: la regola
+        // qa_admin_nasconde della migrazione 364) PRIMA di registrare la decisione, come per il
+        // prodotto. Zero righe toccate: se la domanda c'è ancora non è stata nascosta, e ci si
+        // ferma; se non c'è più (cancellata da chi l'ha scritta) è già fuori e si va avanti.
+        const { data: nascoste, error: erroreDomanda } = await supabase
+          .from('product_questions')
+          .update({ is_public: false })
+          .eq('id', s.oggetto_id)
+          .select('id');
+        if (erroreDomanda) throw new Error('La domanda non è stata nascosta: decisione non registrata. Riprova.');
+        if (!nascoste || nascoste.length === 0) {
+          const { data: ancora, error: erroreLettura } = await supabase
+            .from('product_questions')
+            .select('id')
+            .eq('id', s.oggetto_id)
+            .maybeSingle();
+          if (erroreLettura || ancora) throw new Error('La domanda non è stata nascosta: decisione non registrata. Riprova.');
         }
       }
       if (decisione === 'accolta' && !puoTogliere) {
@@ -195,6 +263,7 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
       </div>
       {/* R02-021 — Un link lungo incollato da chi segnala usciva dalla scheda e allargava la pagina sul telefono. */}
       {s.dettaglio && <p className="mt-2 whitespace-pre-line break-words [overflow-wrap:anywhere] text-ink-700">{s.dettaglio}</p>}
+      {s.tipo === 'recensione' && <RecensioneDaDecidere id={s.oggetto_id} />}
       <p className="mt-1 text-xs text-ink-500">
         Chi ha segnalato: {s.segnalante_id ? 'utente registrato' : 'senza account'}
         {s.email_contatto ? ` · ${s.email_contatto}` : ''}
@@ -223,6 +292,8 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
                 ? 'Accolta: il prodotto esce dalla vetrina'
                 : s.tipo === 'negozio'
                 ? 'Accolta: il negozio viene sospeso'
+                : s.tipo === 'domanda'
+                ? 'Accolta: la domanda viene nascosta'
                 : 'Accolta (non disponibile: questo contenuto non si toglie da qui)'}
             </option>
             <option value="respinta">Respinta</option>

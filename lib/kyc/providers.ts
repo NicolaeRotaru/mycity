@@ -92,7 +92,7 @@ class OnfidoProvider implements KycProvider {
    * ci riesce lo dice nel registro con l'id: una scheda orfana deve lasciare
    * una traccia per toglierla a mano.
    */
-  private async togliScheda(applicantId: string): Promise<void> {
+  private async togliScheda(applicantId: string): Promise<boolean> {
     try {
       const res = await fetch(`${ONFIDO}/applicants/${encodeURIComponent(applicantId)}`, {
         method: 'DELETE',
@@ -101,13 +101,54 @@ class OnfidoProvider implements KycProvider {
       });
       if (!res.ok && res.status !== 404) {
         logger.error('[kyc] scheda Onfido non cancellata: va tolta a mano', { applicantId, status: res.status });
+        return false;
       }
+      return true;
     } catch (err) {
       logger.error('[kyc] scheda Onfido non cancellata: va tolta a mano', {
         applicantId,
         status: err instanceof Error ? err.name : 'errore',
       });
+      return false;
     }
+  }
+
+  /**
+   * 27/11/2026 (R01-015) — La scheda di un controllo già aperto: Onfido la dice nella risposta di
+   * GET /checks/{id} (`applicant_id`), quindi basta l'id del controllo che il profilo già salva.
+   * `letto: false` vuol dire che Onfido non ha risposto; un controllo non di Onfido (manual_, mock_)
+   * non ha scheda.
+   */
+  private async schedaDelControllo(checkId: string | null | undefined): Promise<{ id: string | null; letto: boolean }> {
+    if (!checkId || checkId.startsWith('manual_') || checkId.startsWith('mock_')) return { id: null, letto: true };
+    try {
+      const res = await fetch(`${ONFIDO}/checks/${encodeURIComponent(checkId)}`, {
+        headers: this.intestazioni(false),
+        signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS),
+      });
+      if (res.status === 404) return { id: null, letto: true };
+      if (!res.ok) return { id: null, letto: false };
+      const check = await res.json().catch(() => null);
+      return { id: typeof check?.applicant_id === 'string' ? check.applicant_id : null, letto: true };
+    } catch {
+      return { id: null, letto: false };
+    }
+  }
+
+  /**
+   * 27/11/2026 (R01-015) — ALLA CHIUSURA DELL'ACCOUNT LA SCHEDA SU ONFIDO SI TOGLIE.
+   * Nome, email e data di nascita restavano da Onfido anche dopo la cancellazione dell'account.
+   * Si passa l'id del controllo salvato nel profilo (`kyc_provider_check_id`) PRIMA di azzerarlo.
+   * Non lancia mai: «fallita» lascia la traccia nel registro per toglierla a mano.
+   */
+  async cancellaScheda(checkId: string | null | undefined): Promise<'tolta' | 'niente' | 'fallita'> {
+    const scheda = await this.schedaDelControllo(checkId);
+    if (!scheda.letto) {
+      logger.error('[kyc] scheda Onfido non trovata dal controllo: va tolta a mano', { checkId });
+      return 'fallita';
+    }
+    if (!scheda.id) return 'niente';
+    return (await this.togliScheda(scheda.id)) ? 'tolta' : 'fallita';
   }
 
   /**
@@ -119,29 +160,55 @@ class OnfidoProvider implements KycProvider {
    * ogni tentativo. Adesso: scheda → documento fronte (e retro) → selfie →
    * controllo; se uno qualunque dei passi dopo la scheda fallisce, la scheda si
    * toglie. (Una verifica gia' in attesa non ne apre un'altra: start-check.)
+   *
+   * 27/11/2026 (R01-015) — UNA PERSONA, UNA SCHEDA. Dopo un controllo finito (per esempio
+   * rifiutato) ogni nuovo tentativo creava un'altra scheda con gli stessi dati personali, e le
+   * vecchie restavano su Onfido. Con l'id del controllo di prima (`checkPrecedente`, quello salvato
+   * nel profilo) si riprende la sua scheda, aggiornandone i dati (un nome corretto dopo un rifiuto
+   * deve arrivare a Onfido); se un passo dopo fallisce, una scheda ripresa NON si toglie, perché
+   * porta il controllo di prima. Senza controllo di prima, o se la scheda non c'è più, se ne crea una.
    */
-  async startCheck(subject: KycSubject, docs: KycDocs): Promise<KycCheckResult> {
+  async startCheck(subject: KycSubject, docs: KycDocs, checkPrecedente?: string | null): Promise<KycCheckResult> {
     let applicantId: string | null = null;
+    let nuova = false;
+    const persona = JSON.stringify({
+      first_name: subject.firstName ?? 'Unknown',
+      last_name: subject.lastName ?? 'Unknown',
+      email: subject.email ?? undefined,
+      dob: subject.birthDate ?? undefined,
+    });
     try {
-      const applicantRes = await fetch(`${ONFIDO}/applicants`, {
-        method: 'POST',
-        headers: this.intestazioni(),
-        body: JSON.stringify({
-          first_name: subject.firstName ?? 'Unknown',
-          last_name: subject.lastName ?? 'Unknown',
-          email: subject.email ?? undefined,
-          dob: subject.birthDate ?? undefined,
-        }),
-        // 🟠-14: timeout obbligatorio — un hang upstream non deve bloccare il
-        // worker (rate-limit KYC ~5/ora: pochi hang lo esaurirebbero).
-        signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS),
-      });
-      const applicant = await applicantRes.json();
-      if (!applicantRes.ok) {
-        return { ok: false, error: applicant?.error?.message ?? `HTTP ${applicantRes.status}` };
+      const giaAperta = (await this.schedaDelControllo(checkPrecedente)).id;
+      if (giaAperta) {
+        const aggiornata = await fetch(`${ONFIDO}/applicants/${encodeURIComponent(giaAperta)}`, {
+          method: 'PUT',
+          headers: this.intestazioni(),
+          body: persona,
+          signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS),
+        });
+        if (aggiornata.ok) applicantId = giaAperta;
+        else if (aggiornata.status !== 404) {
+          const errore = await aggiornata.json().catch(() => null);
+          return { ok: false, error: errore?.error?.message ?? `HTTP ${aggiornata.status}` };
+        }
       }
-      applicantId = typeof applicant?.id === 'string' ? applicant.id : null;
-      if (!applicantId) return { ok: false, error: 'Onfido: scheda senza id' };
+      if (!applicantId) {
+        const applicantRes = await fetch(`${ONFIDO}/applicants`, {
+          method: 'POST',
+          headers: this.intestazioni(),
+          body: persona,
+          // 🟠-14: timeout obbligatorio — un hang upstream non deve bloccare il
+          // worker (rate-limit KYC ~5/ora: pochi hang lo esaurirebbero).
+          signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS),
+        });
+        const applicant = await applicantRes.json();
+        if (!applicantRes.ok) {
+          return { ok: false, error: applicant?.error?.message ?? `HTTP ${applicantRes.status}` };
+        }
+        applicantId = typeof applicant?.id === 'string' ? applicant.id : null;
+        if (!applicantId) return { ok: false, error: 'Onfido: scheda senza id' };
+        nuova = true;
+      }
 
       const passi: Array<[string, () => Promise<string | null>]> = [
         ['documento (fronte)', () => this.carica('/documents', applicantId!, docs.idFrontUrl, { type: 'national_identity_card', side: 'front' })],
@@ -153,7 +220,7 @@ class OnfidoProvider implements KycProvider {
       for (const [nome, passo] of passi) {
         const errore = await passo();
         if (errore) {
-          await this.togliScheda(applicantId);
+          if (nuova) await this.togliScheda(applicantId);
           return { ok: false, error: `Onfido: caricamento ${nome} non riuscito: ${errore}` };
         }
       }
@@ -169,12 +236,12 @@ class OnfidoProvider implements KycProvider {
       });
       const check = await checkRes.json();
       if (!checkRes.ok) {
-        await this.togliScheda(applicantId);
+        if (nuova) await this.togliScheda(applicantId);
         return { ok: false, error: check?.error?.message ?? `HTTP ${checkRes.status}` };
       }
       return { ok: true, status: 'PENDING', providerCheckId: check.id };
     } catch (err) {
-      if (applicantId) await this.togliScheda(applicantId);
+      if (applicantId && nuova) await this.togliScheda(applicantId);
       return { ok: false, error: err instanceof Error ? err.message : 'network' };
     }
   }

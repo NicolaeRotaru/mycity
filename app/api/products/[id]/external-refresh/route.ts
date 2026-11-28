@@ -63,11 +63,21 @@ function modelloNonTrovato(err: unknown): boolean {
   return err instanceof AiCallError && err.status === 404;
 }
 
+/**
+ * 27/11/2026 — Il budget AI finito (o la spesa di oggi che non si legge) non e' colpa del
+ * prodotto: non va segnato «error», se no resta dietro il freno di sei ore anche quando il
+ * budget torna.
+ */
+function fermoPerSpesaAi(err: unknown): boolean {
+  return err instanceof AiCallError && (err.motivo === 'tetto_spesa' || err.motivo === 'spesa_sconosciuta');
+}
+
 /** Recupera lo snapshot fresco dal marketplace e lo salva. Best-effort. */
 async function doRefresh(
   id: string,
   sourceUrl: string,
   marketplace: string | null,
+  statoPrima: string | null,
 ): Promise<{ data: ExternalData; errore?: undefined } | { data: null; errore: unknown }> {
   const admin = getAdminSupabase();
   try {
@@ -83,6 +93,12 @@ async function doRefresh(
     // vuol dire «dati arrivati a quest'ora», e qui non e' arrivato niente. Il
     // freno contro i tentativi a raffica resta il cancello di 30 minuti per
     // prodotto nel GET.
+    if (fermoPerSpesaAi(err)) {
+      // Il prodotto torna com'era prima del tentativo (anche fuori da 'pending'), non in errore.
+      logger.warn('external-refresh fermo per la spesa AI', { id });
+      await admin.from('products').update({ external_sync_status: statoPrima }).eq('id', id);
+      return { data: null, errore: err };
+    }
     if (modelloNonTrovato(err)) {
       logger.error('[ai] il fornitore non trova il modello: controllare AI_MODELLO_SMART', { feature: 'marketplace-import', id });
     } else {
@@ -146,7 +162,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     if (claimed && claimed.length > 0) {
       // Fire-and-forget: il cliente riceve subito la cache, il fresco arriverà
       // alla prossima vista (l'app gira su processo Node persistente).
-      void doRefresh(id, row.external_source_url, row.external_marketplace);
+      void doRefresh(id, row.external_source_url, row.external_marketplace, row.external_sync_status);
     }
   }
 
@@ -160,7 +176,7 @@ export const POST = withAdminAuth(async ({ params }): Promise<NextResponse> => {
     const row = await loadRow(id);
     if (!row || !row.external_source_url) return ApiErrors.invalidRequest('Prodotto senza sorgente esterna');
 
-    const esito = await doRefresh(id, row.external_source_url, row.external_marketplace);
+    const esito = await doRefresh(id, row.external_source_url, row.external_marketplace, row.external_sync_status);
     if (!esito.data) {
       // R03-007 — Un 404 del fornitore non e' «riprova»: le stesse parole delle rotte AI.
       if (modelloNonTrovato(esito.errore)) return ApiErrors.unavailable('Funzione AI momentaneamente non disponibile.');
