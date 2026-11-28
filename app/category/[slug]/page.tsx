@@ -208,8 +208,9 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   const [filtersOpen, setFiltersOpen] = useState(false);
   // 5/11/2026 — Nel ramo hub ogni fila vuota si nasconde da sola: se lo fanno tutte, sotto i
   // bottoni delle sottocategorie la pagina restava bianca. Qui si raccolgono i conti delle file.
-  const [contiDelleFile, setContiDelleFile] = useState<Record<string, number>>({});
-  const segnaConto = useCallback((fila: string, n: number) => {
+  // R11-012 — `null` = la fila non sa il suo conto (lettura caduta, ferma al tetto): non è «vuota».
+  const [contiDelleFile, setContiDelleFile] = useState<Record<string, number | null>>({});
+  const segnaConto = useCallback((fila: string, n: number | null) => {
     setContiDelleFile((c) => (c[fila] === n ? c : { ...c, [fila]: n }));
   }, []);
   // #134 — Il pannello si dichiarava `aria-modal` e non si comportava da

@@ -10,7 +10,8 @@ export default function ProductGridSection({
 }: {
   ctx: SectionContext;
   /** Riporta al contenitore tab il numero di prodotti visibili (badge "Prodotti · N"). */
-  onProductCount?: (count: number) => void;
+  /** R11-012 — `null` = «non so» (vedi ProductGrid). */
+  onProductCount?: (count: number | null) => void;
 }) {
   return (
     <section>

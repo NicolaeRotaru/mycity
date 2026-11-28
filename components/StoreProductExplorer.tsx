@@ -10,7 +10,8 @@ import ProductGrid, { type SortOption } from './ProductGrid';
 type Props = {
   sellerId: string;
   /** Riporta il numero di prodotti visibili (post-filtro) al chiamante. */
-  onCount?: (count: number) => void;
+  /** R11-012 — `null` = «non so» (vedi ProductGrid). */
+  onCount?: (count: number | null) => void;
 };
 
 type StoreCategory = { id: string; name: string };

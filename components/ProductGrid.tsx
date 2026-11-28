@@ -161,8 +161,10 @@ interface Props {
   /**
    * Notifica al chiamante il numero di prodotti visibili (post-filtro client-side),
    * per la riga conteggio "N prodotti …" renderizzata fuori dalla griglia.
+   * R11-012 — `null` vuol dire «non so»: lettura caduta, o griglia ferma al tetto senza il totale
+   * del database. Chi scrive il numero lo toglie, invece di tenere quello di prima.
    */
-  onCount?: (count: number) => void;
+  onCount?: (count: number | null) => void;
   /**
    * Cap colonne della griglia (solo layout, opt-in). `'default'` (storico) scala
    * fino a 6 col su xl per la SRP; `4` cappa a 4 col per le pagine collezione/categoria.
@@ -532,9 +534,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // R04-010 — Nemmeno con zero a schermo e altre pagine da leggere (anche fermi al tetto, sopra
   // «…ma ce ne sono altre»): senza il conteggio del database lo zero non è vero.
   const contoNonSiSa = vuotaMaCeNeSonoAltre && totaleVero == null;
+  // R11-012 — «Non so» si dice: prima la griglia taceva, e chi scrive il numero (la categoria, la
+  // ricerca, le collezioni, la scheda «Prodotti» del negozio) restava sul conto di prima, magari
+  // di filtri o di un minuto diversi. Adesso con la lettura caduta o col conto che non si sa passa
+  // `null`, e il numero sparisce. Mentre carica non dice niente: il conto nuovo arriva fra poco.
   useEffect(() => {
-    if (!onCount || caricando || inErrore || totaleInAttesa || contoNonSiSa) return;
-    onCount(totaleVero ?? filtered.length);
+    if (!onCount || caricando || totaleInAttesa) return;
+    onCount(inErrore || contoNonSiSa ? null : (totaleVero ?? filtered.length));
   }, [onCount, caricando, inErrore, filtered.length, totaleVero, totaleInAttesa, contoNonSiSa]);
 
   // Funnel: emette `search_performed` (PostHog + GA4) quando una ricerca
