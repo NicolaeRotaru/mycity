@@ -826,8 +826,28 @@ function funzioneDellaCassaAssente(e: { code?: string; message?: string }): bool
   return e.code === 'PGRST202' || (e.code === '42883' && (e.message ?? '').includes(FUNZIONE_DELLA_CASSA));
 }
 
-/** La frase del rinvio: la stessa, chiunque abbia fatto il conto. */
+/**
+ * La frase del rinvio: la stessa, chiunque abbia fatto il conto.
+ *
+ * 28/11/2026 (N-005, onda 3) — Una giornata che il registro tiene aperta senza contanti in tasca (un
+ * ammanco da chiarire, una giornata mai chiusa) ferma la cancellazione, giustamente, ma la frase diceva
+ * «risultano 0,00 € di contanti … non ancora versati»: una cifra falsa come ragione. Senza contanti la
+ * frase dice quello che c'è davvero, la giornata di cassa da chiudere; la cifra compare solo quando c'è.
+ */
 function cassaDaVersare(centesimi: number, giornate: number): CassaContanti {
+  const quante = `${giornate} ${giornate === 1 ? 'giornata' : 'giornate'} di cassa`;
+  if (!(centesimi > 0)) {
+    return {
+      bloccante: true,
+      esito: 'da_versare',
+      centesimi: 0,
+      giornate,
+      motivo:
+        `Cancellazione rinviata: ${giornate === 1 ? 'risulta ancora aperta' : 'risultano ancora aperte'} ` +
+        `${quante} contanti da chiudere con l’amministrazione. ` +
+        `Appena ${giornate === 1 ? 'è chiusa' : 'sono chiuse'} la cancellazione riparte da sola.`,
+    };
+  }
   const euro = (centesimi / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return {
     bloccante: true,
@@ -836,7 +856,7 @@ function cassaDaVersare(centesimi: number, giornate: number): CassaContanti {
     giornate,
     motivo:
       `Cancellazione rinviata: risultano ${euro} € di contanti incassati alle consegne e non ancora versati ` +
-      `(${giornate} ${giornate === 1 ? 'giornata' : 'giornate'} di cassa). ` +
+      `(${quante}). ` +
       `Appena il versamento è registrato la cancellazione riparte da sola.`,
   };
 }
