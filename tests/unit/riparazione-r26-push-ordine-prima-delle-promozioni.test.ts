@@ -18,34 +18,24 @@ vi.mock('@/lib/push/send', () => ({
     return { delivered: 1, total: 1 };
   },
 }));
+import { segnateIn, tabellaNotifiche, type RigaNotifica } from './aiuti/finte-notifiche-push';
+
+// 28/11/2026 (R03-016) — Il giro prende le notifiche prima di mandarle e ridà quelle non partite: le
+// righe stanno in memoria (aiuti/finte-notifiche-push.ts, che sa anche l'`or` delle urgenti) e
+// «segnate» è quello che resta con `pushed_at` pieno alla fine del giro.
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     rpc: async () => ({ data: true, error: null }),
-    from: (tabella: string) => {
-      const b: Record<string, unknown> = { _update: false, _senzaAttese: false };
-      const sel = () => b;
-      Object.assign(b, {
-        select: sel, is: sel, gte: sel, order: sel,
-        or: (s: string) => { b._senzaAttese = s.includes('not.in'); return b; },
-        limit: async (n: number) => {
-          const righe = tutte.filter((r) => !b._senzaAttese || !['promo', 'group', 'newsletter'].includes(String(r.category)));
-          return { data: righe.slice(0, n), error: null };
-        },
-        update: () => ((b._update = true), b),
-        in: async (_c: string, valori: string[]) => {
-          if (b._update) { segnate.push(...valori); return { error: null }; }
-          if (tabella === 'push_subscriptions') return { data: valori.map((u) => ({ id: `s-${u}`, user_id: u, endpoint: 'e', p256dh: 'p', auth: 'a' })), error: null };
-          return { data: [], error: null };
-        },
-      });
-      return b;
-    },
+    from: () => tabellaNotifiche(() => tutte as RigaNotifica[]),
   }),
 }));
 
 async function giro() {
   const { POST } = await import('@/app/api/cron/send-push/route');
-  return (POST as unknown as (req: Request) => Promise<Response>)(new Request('http://x', { method: 'POST' }));
+  const r = await (POST as unknown as (req: Request) => Promise<Response>)(new Request('http://x', { method: 'POST' }));
+  segnate.length = 0;
+  segnate.push(...segnateIn(tutte as RigaNotifica[]));
+  return r;
 }
 
 beforeEach(() => { inviate.length = 0; segnate.length = 0; tutte = []; });

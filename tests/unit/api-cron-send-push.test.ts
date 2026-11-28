@@ -27,49 +27,29 @@ vi.mock('@/lib/env', () => ({
   requireSupabaseService: () => ({ url: 'https://x.supabase.co', key: 'svc' }),
 }));
 
+import { segnateIn, tabellaNotifiche, type RigaNotifica } from './aiuti/finte-notifiche-push';
+
+/** Le notifiche rimaste segnate (`pushed_at` pieno) alla fine del giro. */
 const marked: string[] = [];
 const pending: Array<{ id: string; user_id: string; title: string; body: string | null; link: string | null; category?: string }> = [];
 /** Risposta della funzione che dice se la persona vuole quella categoria. */
 let vuoleNotifica: boolean = true;
 
+// 28/11/2026 (R03-016) — Il giro prende le notifiche prima di mandarle e ridà quelle non partite:
+// il finto tiene le righe in memoria (aiuti/finte-notifiche-push.ts) e «marcate» è lo stato finale.
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     rpc: (_nome: string) => Promise.resolve({ data: vuoleNotifica, error: null }),
-    from: () => {
-      const b: Record<string, unknown> = {
-        _update: false,
-        select: () => b,
-        is: () => b,
-        gte: () => b,
-        order: () => b,
-        limit: () => Promise.resolve({ data: pending, error: null }),
-        update: () => ((b._update = true), b),
-        // 22/8/2026 — il giro segna le notifiche gestite con UNA scrittura
-        // sola invece di una per notifica: il finto deve saper rispondere
-        // anche a quella.
-        in: (_c: string, valori: string[]) => {
-          if (b._update) {
-            for (const v of valori) marked.push(v);
-            return Promise.resolve({ error: null });
-          }
-          return b;
-        },
-        eq: (_c: string, v: string) => {
-          if (b._update) {
-            marked.push(v);
-            return Promise.resolve({ error: null });
-          }
-          return b;
-        },
-      };
-      return b;
-    },
+    from: () => tabellaNotifiche(() => pending as RigaNotifica[]),
   }),
 }));
 
 async function run() {
   const { POST } = await import('@/app/api/cron/send-push/route');
-  return (POST as unknown as (req: Request) => Promise<Response>)(new Request('http://x', { method: 'POST' }));
+  const res = await (POST as unknown as (req: Request) => Promise<Response>)(new Request('http://x', { method: 'POST' }));
+  marked.length = 0;
+  marked.push(...segnateIn(pending as RigaNotifica[]));
+  return res;
 }
 
 beforeEach(() => {
@@ -103,7 +83,7 @@ describe('cron send-push (audit 🟠-10)', () => {
     pending.push({ id: 'n3', user_id: 'u3', title: 'T', body: null, link: null });
     pushResult.delivered = 0;
     pushResult.total = 0;
-    const res = await run();
+    await run();
     expect(marked).toEqual(['n3']);
   });
 });
