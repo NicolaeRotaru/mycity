@@ -154,3 +154,46 @@ describe('sulla strada della carta la posta spenta avvisa gli amministratori', (
     expect(dellaPostaSpenta()).toHaveLength(0);
   });
 });
+
+/**
+ * Collaudo — il rimborso (lib/stripe/webhook/rimborsi.ts) e il buono regalo (giftcard.ts) passano
+ * l'esito di `sendEmail` direttamente ad `avvisaSeLaPostaNonParte`, senza `provaAMandare`: per loro la
+ * campanella della posta spenta nasce solo qui. La cassa con la carta la suona anche da comune.ts
+ * (R03-003), quindi i casi sopra restano verdi anche senza questa riparazione; questi no.
+ */
+describe('anche rimborso e buono regalo, con la posta spenta, avvisano gli amministratori', () => {
+  async function avvisa(cosa: string, dati: Record<string, unknown>) {
+    const { sendEmail } = await import('@/lib/email/client');
+    const { avvisaSeLaPostaNonParte } = await import('@/lib/stripe/webhook/posta-non-partita');
+    const esito = await sendEmail({ to: 'cliente@test.it', subject: 'Prova', html: '<p>prova</p>', text: 'prova' });
+    await avvisaSeLaPostaNonParte(cosa, dati, esito);
+  }
+
+  it('email di rimborso senza RESEND_API_KEY sul sito vero: una campanella per l ordine', async () => {
+    vi.stubEnv('VERCEL_ENV', 'production');
+    vi.stubEnv('RESEND_API_KEY', '');
+    vi.stubEnv('RESEND_FROM', 'ordini@mycity.example');
+    await avvisa('email di rimborso al cliente', { orderId: 'ordine-rimborsato-1' });
+    expect(alServizioDiPosta).toHaveLength(0);
+    expect(dellaPostaSpenta(), 'il rimborso con la posta spenta non avvisava nessuno').toHaveLength(1);
+    expect(dellaPostaSpenta()[0].body).toContain('RESEND_API_KEY');
+    expect(dellaPostaSpenta()[0].body).toContain('#ordine-r');
+  });
+
+  it('buono regalo senza RESEND_FROM sul sito vero: una campanella per la sessione, anche ripetuta', async () => {
+    vi.stubEnv('VERCEL_ENV', 'production');
+    vi.stubEnv('RESEND_API_KEY', 're_prova');
+    vi.stubEnv('RESEND_FROM', '');
+    await avvisa('email del buono regalo al destinatario', { sessionId: 'cs_buono_1' });
+    await avvisa('email del buono regalo al destinatario', { sessionId: 'cs_buono_1' });
+    expect(dellaPostaSpenta()).toHaveLength(1);
+    expect(dellaPostaSpenta()[0].body).toContain('RESEND_FROM');
+  });
+
+  it('in anteprima il buono regalo senza posta non suona', async () => {
+    vi.stubEnv('VERCEL_ENV', 'preview');
+    vi.stubEnv('RESEND_API_KEY', '');
+    await avvisa('email del buono regalo al destinatario', { sessionId: 'cs_buono_2' });
+    expect(dellaPostaSpenta()).toHaveLength(0);
+  });
+});
