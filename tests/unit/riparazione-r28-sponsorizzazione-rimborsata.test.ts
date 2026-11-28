@@ -21,6 +21,8 @@ vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => stato.db.clien
 vi.mock('@/lib/stripe/client', () => ({
   isStripeConfigured: () => true,
   getStripe: () => ({
+    // R05-010 (onda 2) — senza ordini la contestazione guarda prima il carrello del pagamento: qui non è di un carrello.
+    paymentIntents: { retrieve: async (id: string) => ({ id, metadata: {}, transfer_group: null }) },
     checkout: {
       sessions: {
         list: async (p: { payment_intent?: string }) => ({ data: p.payment_intent === 'pi_vetrina' ? [{ id: 'cs_vetrina' }] : [] }),
