@@ -47,7 +47,6 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 import { prezziDelCarrello, vociDellaConsegna, type IngressiPrezzo } from '@/lib/ordini/prezzi';
-import { calcolaTotali } from '@/components/checkout/useTotaliCarrello';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { COMPENSO_RIDER_CENTS } from '@/lib/constants';
@@ -161,15 +160,10 @@ describe('la consegna è una sola per tutto il carrello', () => {
             const sotto = merci.filter((m) => m < 1000).length;
             const attesa = 300 + (merci.length - 1) * 100 + sotto * 100 + (consegnaVeloce && sotto === 0 ? 100 : 0);
             if (server.grandDeliveryFeeCents !== attesa) errori.push(`${merci.join('+')} veloce=${consegnaVeloce}: ${server.grandDeliveryFeeCents} invece di ${attesa}`);
-            const schermo = calcolaTotali({
-              gruppi: merci.map((m, k) => ({ sellerId: `negozio-${k}`, subtotalEuro: m / 100, storeLat: null, storeLng: null })),
-              consegnaLat: null, consegnaLng: null, pickupInStore: false, couponSpedizioneGratis: false,
-              couponScontoEuro: 0, consegnaVeloce, creditoDisponibileEuro: 0,
-            }).centesimi;
-            schermo.gruppi.forEach((s, k) => {
-              if (s.deliveryFeeCents !== server.gruppi[k].deliveryFeeCents) errori.push(`schermo diverso ${merci.join('+')}`);
-            });
+            // R09-005 — Lo schermo è il riepilogo della cassa (`riepilogoDaMostrare`), non la vecchia copia
+            // `calcolaTotali` che nessuna pagina usava.
             const cassa = riepilogoDaMostrare({ ...i, usaCredito: false, creditoDisponibileCents: 0 });
+            if (Math.round(cassa.feeConsegna * 100) !== server.grandDeliveryFeeCents) errori.push(`schermo diverso ${merci.join('+')}`);
             if (Math.round(cassa.totale * 100) !== server.grandTotalCents) errori.push(`riepilogo diverso ${merci.join('+')}`);
           }
         }
