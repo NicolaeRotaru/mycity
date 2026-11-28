@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act, createElement, type ReactNode } from 'react';
-import { disegna } from './aiuti/cabina-admin';
+import { disegna, contantiDaStripeVuota } from './aiuti/cabina-admin';
 
 /**
  * R22-001 — I contanti vecchi ancora da versare non spariscono dal pannello dei bonifici quando gli
@@ -111,6 +111,8 @@ vi.mock('next-intl', () => ({ useTranslations: () => (k: string) => k, useLocale
 
 let chiudi: (() => void) | null = null;
 beforeEach(() => {
+  // R05-002 (onda 2) — senza la risposta del server i contanti restano «In sospeso»: qui la variabile è vuota.
+  vi.stubGlobal('fetch', contantiDaStripeVuota);
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-11-23T08:00:00Z'));
   stato.chiamate = [];

@@ -83,12 +83,15 @@ describe('dall anteprima un conto gia salvato non lo sostituisce un conto creato
     expect(esito.accountId).toBe('acct_nuovo');
   });
 
-  it('controprova: fuori dall anteprima (sviluppo locale), con la chiave di prova un conto sconosciuto si rifa come prima', async () => {
+  // Onda 2 (R05-009) — Qui c'era la controprova opposta: fuori dall'anteprima, con la chiave di prova, un conto
+  // sconosciuto si rifaceva. Era il difetto: lo sviluppo in locale (o un ambiente di prova) col database vero
+  // sostituiva il conto vero del negozio. Il freno adesso vale per ogni chiave di prova
+  // (tests/unit/riparazione-onda2-r05-009-freno-del-conto-di-prova.test.ts).
+  it('fuori dall anteprima (sviluppo locale), con la chiave di prova, il conto sconosciuto non si sostituisce lo stesso', async () => {
     vi.stubEnv('VERCEL_ENV', undefined);
-    const esito = await collega('acct_di_un_altro_conto_di_prova');
-    expect(st.creati).toBe(1);
-    expect(st.salvati).toEqual(['acct_nuovo']);
-    expect(esito.accountId).toBe('acct_nuovo');
+    await expect(collega('acct_di_un_altro_conto_di_prova')).rejects.toThrow(/chiave di prova/);
+    expect(st.creati).toBe(0);
+    expect(st.salvati).toEqual([]);
   });
 
   it('controprova: sul sito vero, con la chiave vera, un conto sconosciuto si rifa come prima', async () => {

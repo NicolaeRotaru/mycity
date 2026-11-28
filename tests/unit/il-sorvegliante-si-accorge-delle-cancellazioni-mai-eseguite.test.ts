@@ -113,7 +113,11 @@ vi.mock('@/lib/api/middleware', () => ({
   withCronAuth: (gestore: (req: unknown) => unknown) => (req: unknown) => gestore(req),
 }));
 vi.mock('@/lib/supabase/server', () => ({
-  getAdminSupabase: () => ({ from: (tabella: string) => fintaTabella(tabella) }),
+  // R05-004 (onda 2) — Il sorvegliante legge anche i bonifici di rimborso ai clienti: qui nessuno da fare.
+  getAdminSupabase: () => ({
+    from: (tabella: string) => fintaTabella(tabella),
+    rpc: async (nome: string) => (nome === 'admin_bonifici_rimborso' ? { data: [], error: null } : { data: null, error: { message: `rpc finta: ${nome}` } }),
+  }),
 }));
 vi.mock('@/lib/email/client', () => ({
   sendEmail: vi.fn(async () => ({ ok: true, id: 'finta' })),

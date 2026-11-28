@@ -118,7 +118,8 @@ describe('R71 — i contanti tornano col bonifico, mai come credito', () => {
     const [avviso] = avvisi();
     expect(avvisi()).toHaveLength(1);
     expect(avviso.title).toBe('💶 Bonifico di rimborso da fare');
-    expect(avviso.link).toBe('/admin/orders');
+    // R05-004 (onda 2) — Il link porta dove si segna «Fatto», come dice il testo.
+    expect(avviso.link).toBe('/admin/bonifici-rimborso');
     const testo = String(avviso.body);
     // La cifra come la legge chi paga: «40,00 €», non «40.00€».
     expect(testo).toContain(`Bonifico di ${formatPriceFromCents(4000)} da fare al cliente dell'ordine ${NUMERO}`);

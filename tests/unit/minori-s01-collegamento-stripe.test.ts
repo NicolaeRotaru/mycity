@@ -111,6 +111,9 @@ describe('2067 — l id del conto si salva prima del link', () => {
 
 describe('633 — un conto che le chiavi nuove non conoscono si rifà', () => {
   it('«No such account» sul conto del profilo: nasce un conto nuovo e si salva', async () => {
+    // Onda 2 (R05-009) — con la chiave vera: con una chiave di prova il conto sconosciuto non si sostituisce
+    // mai (lib/stripe/conto-di-prova.ts), dovunque giri.
+    vi.stubEnv('STRIPE_SECRET_KEY', 'sk_live_finta');
     st.profilo = { ...st.profilo, stripe_account_id: 'acct_vecchio' };
     const r = await chiama(collegaNegozio);
     expect(r.status).toBe(200);

@@ -334,6 +334,9 @@ describe('R05-002 — quanto versare a ogni negozio il lunedì', () => {
     const host = await apri();
 
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('Non so da quando i contanti li paga Stripe');
-    expect(daVersareLunedi(host)).toMatch(/^40,00/);
+    // Onda 2 (collaudo) — senza sapere da quando paga Stripe, nessun contante HELD è «Da versare» e il tasto è fermo:
+    // prima qui c'era 40,00, cioè anche i 30,00 che il giro avrebbe pagato con Stripe.
+    expect(daVersareLunedi(host)).toMatch(/^0,00/);
+    expect(Array.from(host.querySelectorAll('button')).some((b) => b.textContent?.includes('Bonifico fatto'))).toBe(false);
   });
 });

@@ -17,6 +17,7 @@ import { eConsegnaVeloce } from '@/lib/ordini/consegna-veloce';
 // la migrazione 124: senza ripiego, prima della 124 la lettura falliva intera e la regola del negozio
 // che rifiuta non scattava (rimborso pieno, senza che nessuno lo sapesse).
 import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
+import { chiaveDelCarrelloInContanti } from '@/lib/ordini/chiave-del-carrello';
 import {
   htmlDelCarrello,
   righeDelCarrello,
@@ -126,6 +127,43 @@ async function resoTuttoDaUnAltro(admin: SupabaseClient, order: OrdineDaAnnullar
     return reso > Number(order.refunded_amount_cents ?? 0) && reso >= Math.round(Number(adesso.total_price ?? 0) * 100);
   } catch {
     return false;
+  }
+}
+
+/**
+ * 28/11/2026 (onda 2, R06-011) — Il rimborso sulla carta è caduto dopo che questo annullo aveva preso il
+ * turno (CANCELED): l'ordine torna allo stato di prima, così si può riprovare. Solo se è ancora annullato
+ * e il rimborsato è quello letto da chi annulla: se nel frattempo un altro rimborso l'ha chiuso, resta
+ * chiuso. Se non torna e non l'ha chiuso nessuno, è un ordine annullato e pagato senza rimborso: lo
+ * sanno gli amministratori (come nel giro degli ordini scaduti).
+ */
+async function riportaInVitaDopoIlRimborsoCaduto(admin: SupabaseClient, order: OrdineDaAnnullare, stato: string): Promise<void> {
+  let motivo = 'la riga è cambiata nel frattempo';
+  try {
+    let q = admin
+      .from('orders')
+      .update({ delivery_status: stato, canceled_at: null })
+      .eq('id', order.id)
+      .eq('delivery_status', 'CANCELED');
+    if (order.refunded_amount_cents != null) q = q.eq('refunded_amount_cents', Number(order.refunded_amount_cents));
+    const { data, error } = await q.select('id');
+    if (!error && Array.isArray(data) && data.length > 0) return;
+    if (error) motivo = error.message;
+    else if (await resoTuttoDaUnAltro(admin, order)) return;
+  } catch (err) {
+    motivo = err instanceof Error ? err.message : String(err);
+  }
+  logger.error('[annullaERimborsa] ordine annullato e NON rimborsato: non è tornato com era', { orderId: order.id, motivo });
+  try {
+    await notifyAdmins(
+      'Ordine annullato e NON rimborsato',
+      `L'ordine #${order.id.slice(0, 6).toUpperCase()}, pagato con la carta, risulta annullato ma il rimborso non è riuscito, ` +
+        `e non sono riuscito a rimetterlo com'era (${motivo}). Chi aveva chiesto l'annullo ha letto «rimborso non riuscito»: ` +
+        'controlla su Stripe se il cliente ha avuto i suoi soldi e, se no, rimborsalo a mano.',
+      '/admin/orders',
+    );
+  } catch (err) {
+    logger.error('[annullaERimborsa] avviso agli amministratori non partito', { orderId: order.id, err });
   }
 }
 
@@ -346,6 +384,32 @@ export async function annullaERimborsa(
       return { ok: false, motivo: 'RIMBORSO_DA_DIVIDERE' };
     }
 
+    // 28/11/2026 (onda 2, R06-011) — IL TURNO SI PRENDE ANCHE SULLA CARTA, PRIMA DEL GIRO E DEL RIMBORSO.
+    // Sui contanti il turno è la scrittura di CANCELED condizionata sullo stato letto (R131, più sotto):
+    // qui no, e due annulli da strade diverse (il cliente e il negozio, o un doppio tocco) passavano
+    // tutti e due, rifacevano il giro del carrello, chiamavano il rimborso e, se il secondo passava,
+    // restituivano il credito MyCity con due motivi diversi (wallet_credit è idempotente solo su
+    // motivo+ordine). Adesso passa uno solo: gli altri trovano zero righe e se ne vanno senza toccare
+    // carrello né soldi (GIA_ANNULLATO, come sui contanti). Lo stesso schema del giro degli ordini
+    // scaduti (app/api/cron/expire-stale-orders): CANCELED prima, e se il rimborso cade l'ordine torna
+    // com'era. Un ordine già consegnato non si annulla (054: lo stato resta DELIVERED, lo decide
+    // refundOrder): lì il turno non si prende, e a fermare il doppio rimborso resta la prenotazione.
+    const statoLetto = order.delivery_status ?? '';
+    const turnoSuQuestoOrdine = statoLetto !== 'DELIVERED';
+    const annullatoIl = new Date().toISOString();
+    if (turnoSuQuestoOrdine) {
+      const { data: preso, error: errTurno } = await admin
+        .from('orders')
+        .update({ delivery_status: 'CANCELED', canceled_at: annullatoIl })
+        .eq('id', order.id)
+        .neq('delivery_status', 'CANCELED')
+        // Lo stato che il chiamante ha controllato: se nel frattempo è cambiato, zero righe.
+        .eq('delivery_status', statoLetto)
+        .select('id');
+      if (errTurno) return { ok: false, motivo: 'ANNULLAMENTO_FALLITO', dettaglio: errTurno.message };
+      if (!preso || preso.length === 0) return { ok: false, motivo: 'GIA_ANNULLATO' };
+    }
+
     let giro: GiroDelCarrello | null = null;
     let rimborsoUscito = false;
     try {
@@ -363,6 +427,9 @@ export async function annullaERimborsa(
         metadata: opts.metadata,
         notifyBuyer: false,
         ...(merceUscita ? { merceNonTorna: true } : {}),
+        // R06-011 — CANCELED l'ha scritto questo annullo, adesso, e la merce non l'ha rimessa nessuno: anche
+        // con un rimborso parziale di prima (lib/ordini/rimessa-a-scaffale.ts), come il giro degli scaduti.
+        ...(turnoSuQuestoOrdine ? { annullatoDaChiChiama: true } : {}),
       });
       rimborsoUscito = true;
       // refundOrder ha già impostato CANCELED + canceled_at + payment_status.
@@ -420,6 +487,9 @@ export async function annullaERimborsa(
       // 30/10/2026 (collaudo) — Il rimborso non è partito e l'ordine resta vivo: la consegna del
       // carrello torna com'era. Senza, il pane restava a 1 € di consegna e il fattorino a 0.
       if (giro) await giro.rimetti();
+      // R06-011 — E l'ordine torna allo stato di prima del turno (il carrello prima: `rimetti` confronta la
+      // riga com'era letta dal giro, cioè già CANCELED). Mai se i soldi sono usciti.
+      if (turnoSuQuestoOrdine && !rimborsoUscito) await riportaInVitaDopoIlRimborsoCaduto(admin, order, statoLetto);
       return { ok: false, motivo: 'RIMBORSO_FALLITO', dettaglio: err instanceof Error ? err.message : undefined };
     }
   }
@@ -937,7 +1007,11 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
     .contains('order_ids', JSON.stringify([{ id: o.id }]))
     .limit(1);
   if (errT || !Array.isArray(tentativi) || tentativi.length === 0) {
-    // 21/11/2026 (R04-007) — Senza la riga non si sposta niente, ma non in silenzio.
+    // 28/11/2026 (R06-009, onda 2) — Senza la riga, la chiave del carrello scritta con l'ordine
+    // (migrazione onda2_E1_2): la regola del negozio che rifiuta scatta lo stesso.
+    const dallaChiave = await carrelloDallaChiave(admin, o);
+    if (dallaChiave !== undefined) return dallaChiave;
+    // 21/11/2026 (R04-007) — Senza la riga (e senza la chiave) non si sposta niente, ma non in silenzio.
     await segnalaIlCarrelloSenzaRiga(admin, o, !!errT);
     return null;
   }
@@ -950,6 +1024,33 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
   if (error || !Array.isArray(data)) return null;
   const righe = data as unknown as RigaDelGiro[];
   return ids.map((id) => righe.find((r) => r.id === id)).filter((r): r is RigaDelGiro => !!r);
+}
+
+/**
+ * 28/11/2026 (R06-009, onda 2) — IL CARRELLO IN CONTANTI DALLA CHIAVE SCRITTA SULL'ORDINE.
+ *
+ * Il carrello in contanti si ritrovava solo dalla riga del tentativo di cassa, che la rotta della
+ * cassa scrive dopo gli ordini, a parte. Ora ogni ordine porta la chiave del suo carrello
+ * (`orders.cod_cart_key`, scritta nella stessa insert: lib/ordini/chiave-del-carrello.ts). Gli ordini
+ * con la stessa chiave e lo stesso cliente sono lo stesso carrello, con certezza: non è un indovinare
+ * dai minuti (la regola della regista resta: due carrelli diversi non si uniscono mai).
+ *
+ * undefined: l'ordine non ha la chiave (nato prima della migrazione, o colonna che non c'è ancora),
+ * e chi chiama fa come prima. null: carrello di un ordine solo, o lettura caduta (la consegna resta
+ * com'è, rimborso pieno, e resta l'errore nel registro).
+ */
+async function carrelloDallaChiave(admin: SupabaseClient, o: RigaDelGiro): Promise<RigaDelGiro[] | null | undefined> {
+  const chiave = await chiaveDelCarrelloInContanti(admin, o.id, 'ricalcolaLaConsegnaDelGiro');
+  if (!chiave) return undefined;
+  const { data, error } = await leggiIlGiro('carrello-contanti-chiave', (c) =>
+    admin.from('orders').select(c).eq('user_id', o.user_id).eq('cod_cart_key', chiave));
+  if (error || !Array.isArray(data)) {
+    logger.error('[ricalcolaLaConsegnaDelGiro] carrello in contanti non letto dalla chiave: consegna NON rifatta', { orderId: o.id });
+    return null;
+  }
+  const righe = data as unknown as RigaDelGiro[];
+  if (righe.length < 2 || !righe.some((r) => r.id === o.id)) return null;
+  return righe.sort((x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id));
 }
 
 /**
@@ -1485,7 +1586,16 @@ async function fratelliInContanti(admin: SupabaseClient, order: { id: string; us
     logger.warn('[annullaERimborsa] carrello in contanti non letto: il codice torna come prima', { orderId: order.id, err: error.message });
     return null;
   }
-  if (!Array.isArray(data) || data.length === 0) return null;
+  if (!Array.isArray(data) || data.length === 0) {
+    // 28/11/2026 (R06-009, onda 2) — Senza la riga, gli ordini con la stessa chiave del carrello.
+    const chiave = await chiaveDelCarrelloInContanti(admin, order.id, 'annullaERimborsa');
+    if (!chiave) return null;
+    const { data: stessi, error: errStessi } = await admin
+      .from('orders').select('id').eq('user_id', order.user_id).eq('cod_cart_key', chiave).neq('id', order.id);
+    if (errStessi || !Array.isArray(stessi)) return null;
+    const fratelli = (stessi as Array<{ id: string }>).map((r) => r.id).filter(Boolean);
+    return fratelli.length > 0 ? fratelli : null;
+  }
   const elenco = (data[0] as { order_ids: unknown }).order_ids;
   const ids = Array.isArray(elenco)
     ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter((id) => !!id && id !== order.id)

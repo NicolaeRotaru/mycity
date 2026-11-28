@@ -13,6 +13,7 @@ import { vistaDaQuery } from '@/lib/vista-query';
 import {
   GIORNI_DI_PREAVVISO,
   GIORNI_PER_RIMBORSARE,
+  PARTENZA_DEL_TERMINE_DEI_RECLAMI,
   chiEQuando,
   doveArrivaLIban,
   elencoDeiBonifici,
@@ -178,7 +179,8 @@ export default function AdminBonificiRimborsoPage() {
       <div className="flex items-start gap-2.5 rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 text-sm text-ink-600">
         <Info size={16} className="mt-0.5 shrink-0 text-ink-400" aria-hidden />
         <p>
-          La legge dà {GIORNI_PER_RIMBORSARE} giorni dalla richiesta del reso: un bonifico va in evidenza quando ne mancano{' '}
+          La legge dà {GIORNI_PER_RIMBORSARE} giorni dalla richiesta del reso; per un reclamo li contiamo dal giorno in cui{' '}
+          {PARTENZA_DEL_TERMINE_DEI_RECLAMI === 'decisione' ? 'è stato deciso' : 'il cliente l’ha aperto'}. Un bonifico va in evidenza quando ne mancano{' '}
           {GIORNI_DI_PREAVVISO} o meno, o il termine è passato. «Fatto» si segna una volta sola: se un altro amministratore
           l&apos;ha già fatto, te lo dice. Se la banca lo respinge, premi «Respinto dalla banca» fra i fatti: torna qui sopra.
         </p>

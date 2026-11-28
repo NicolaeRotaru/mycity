@@ -32,6 +32,7 @@ import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
+import { COLONNA_CHIAVE_DEL_CARRELLO, conLaChiaveDelCarrello } from '@/lib/ordini/chiave-del-carrello';
 import { decisioneSuChiaveOccupata, MESSAGGIO_ORDINE_IN_CORSO } from '@/lib/ordini/tentativo';
 import { idOrdiniDelTentativo } from '@/lib/ordini/chiave-dopo-l-errore';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
@@ -1663,12 +1664,19 @@ export const POST = conFilaPerRichiesta(withAuthRateLimit(
         // coordinata che contraddice l'indirizzo scritto.
         delivery_lat: coordPerLaMappa?.lat ?? null,
         delivery_lng: coordPerLaMappa?.lng ?? null,
+        // 28/11/2026 (R06-009, R09-007; migrazione onda2_E1_2) — La chiave del carrello, la stessa della
+        // riga del tentativo, scritta CON l'ordine: se la riga del tentativo non si scrive (o non c'è),
+        // l'annullo e il freno della veloce ritrovano lo stesso gli altri ordini del carrello.
+        cod_cart_key: chiaveCarrello,
       };
 
-      const { data: ordineInserito, error: orderErr } = await conRipiegoSchema(
+      const inserisci = (riga: typeof rigaOrdine) => admin.from('orders').insert(riga).select('id, created_at').single();
+      const conIRipieghiDella124 = (riga: typeof rigaOrdine, dove: string) =>
+        conRipiegoSchema(dove, () => inserisci(riga), () => inserisci(senzaCampi(riga, CAMPI_124)));
+      const { data: ordineInserito, error: orderErr } = await conLaChiaveDelCarrello(
         'orders.insert (cod)',
-        () => admin.from('orders').insert(rigaOrdine).select('id, created_at').single(),
-        () => admin.from('orders').insert(senzaCampi(rigaOrdine, CAMPI_124)).select('id, created_at').single(),
+        () => conIRipieghiDella124(rigaOrdine, 'orders.insert (cod)'),
+        () => conIRipieghiDella124(senzaCampi(rigaOrdine, [COLONNA_CHIAVE_DEL_CARRELLO]), 'orders.insert (cod, senza chiave del carrello)'),
       );
       let order = ordineInserito;
       let ripreso = false;

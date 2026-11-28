@@ -135,3 +135,16 @@ export function paginaPer(indirizzo: string): { file: string; params: Record<str
   };
   return cerca(join(process.cwd(), 'app'), 0, {});
 }
+
+/**
+ * R05-002 (onda 2) — La pagina dei bonifici chiede al server da quando i contanti li paga Stripe
+ * (/api/admin/contanti-da-stripe) e, senza una risposta buona, tiene «In sospeso» i contanti da versare.
+ * Le prove che non parlano di Stripe rispondono «variabile vuota» (`dal: null`): i contanti li versa Nicola.
+ */
+export async function contantiDaStripeVuota(input: unknown): Promise<Response> {
+  const indirizzo = new URL(String(input), 'http://cabina.test');
+  if (indirizzo.pathname === '/api/admin/contanti-da-stripe') {
+    return new Response(JSON.stringify({ ok: true, data: { dal: null } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
+  return new Response(JSON.stringify({ ok: false, error: 'non trovata' }), { status: 404 });
+}

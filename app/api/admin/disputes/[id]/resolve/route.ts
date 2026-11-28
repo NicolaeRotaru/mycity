@@ -8,7 +8,7 @@ import {
   RimborsoInAttesaDellaDivisione,
   refundOrder,
 } from '@/lib/stripe/payout';
-import { bonificoDaFinire } from '@/lib/rimborsi/bonifici-da-fare';
+import { bonificoDaFinire, partenzaDelTermineDelReclamo } from '@/lib/rimborsi/bonifici-da-fare';
 import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -106,7 +106,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const admin = getAdminSupabase();
   const { data: dispute, error } = await admin
     .from('disputes')
-    .select('id, status, order_id, opener_id, against_id, refund_cents')
+    .select('id, status, order_id, opener_id, against_id, refund_cents, created_at')
     .eq('id', params.id)
     .single();
 
@@ -328,6 +328,12 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         notifyBuyer: true,
         // R71 — Su un ordine in contanti refundOrder registra il bonifico da fare
         // sull'ordine e lo annuncia agli amministratori: qui non c'e' altro da scrivere.
+        // 28/11/2026 (R05-004, onda 2) — L'avviso del bonifico dice il termine dei 14 giorni anche per
+        // un reclamo: da dove si contano lo decide PARTENZA_DEL_TERMINE_DEI_RECLAMI (domanda a Nicola).
+        resoChiestoIl: partenzaDelTermineDelReclamo({
+          apertoIl: (dispute as { created_at?: string | null }).created_at ?? null,
+          decisoIl: new Date().toISOString(),
+        }),
       });
       refundId = res.refundId;
       rimborsoEmesso = true;

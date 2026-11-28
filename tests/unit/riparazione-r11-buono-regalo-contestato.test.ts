@@ -14,7 +14,10 @@ const stato = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
-vi.mock('@/lib/stripe/client', () => ({ getStripe: () => ({}) }));
+// R05-010 (onda 2) — senza ordini la contestazione guarda prima il carrello del pagamento: qui non è di un carrello.
+vi.mock('@/lib/stripe/client', () => ({
+  getStripe: () => ({ paymentIntents: { retrieve: async (id: string) => ({ id, metadata: {}, transfer_group: null }) } }),
+}));
 vi.mock('@/lib/stripe/webhook/comune', () => ({
   findOrdersForDispute: async () => [],
   notifyAdmins: vi.fn(async (titolo: string) => {
