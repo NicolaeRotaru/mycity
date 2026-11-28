@@ -39,9 +39,16 @@ describe('R03-003 — carta con la posta spenta: gli amministratori lo sanno', (
   it('controprova: fuori produzione, email partita o saltata per un altro motivo: nessuna campanella', async () => {
     await provaAMandare('avviso al negozio', { orderId: ORDINE }, async () => ({ ok: true, id: 'em_1' }));
     await provaAMandare('avviso al negozio', { orderId: ORDINE }, async () => ({ ok: false, skipped: true, reason: 'link di disiscrizione non firmabile' }));
-    await provaAMandare('avviso di bonifico rifiutato al negozio', { payoutId: 'po_1' }, async () => SPENTA);
     vi.stubEnv('VERCEL_ENV', 'preview');
     await provaAMandare('avviso al negozio', { orderId: ORDINE }, async () => SPENTA);
+    await provaAMandare('avviso di bonifico rifiutato al negozio', { payoutId: 'po_1' }, async () => SPENTA);
     expect(avvisi()).toHaveLength(0);
+  });
+
+  it('fuori da un ordine (bonifico rifiutato), con la posta spenta sul sito vero: una campanella sola (come R11-002)', async () => {
+    await provaAMandare('avviso di bonifico rifiutato al negozio', { payoutId: 'po_1' }, async () => SPENTA);
+    await provaAMandare('avviso di bonifico rifiutato al negozio', { payoutId: 'po_1' }, async () => SPENTA);
+    expect(avvisi()).toHaveLength(1);
+    expect(String(avvisi()[0].body)).toContain('RESEND_API_KEY');
   });
 });

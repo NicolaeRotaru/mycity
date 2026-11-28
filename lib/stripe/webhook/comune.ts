@@ -265,40 +265,11 @@ export async function provaAMandare(
   try {
     const esito = await invio();
     await avvisaSeLaPostaNonParte(cosa, dati, esito);
-    await avvisaSeLaPostaESpenta(dati, esito);
   } catch (e) {
     logger.error(`[stripe] ${cosa} non partita: ordine pagato e destinatario non avvisato`, {
       ...dati,
       message: e instanceof Error ? e.message : 'errore',
     });
-  }
-}
-
-/**
- * 27/11/2026 (R03-003) — CON LA CARTA, LA POSTA SPENTA NON FA PIÙ NASCERE GLI ORDINI IN SILENZIO.
- *
- * Come la cassa in contanti (app/api/orders/cod/route.ts, `avvisaSeLaPostaESpenta`): senza
- * RESEND_API_KEY o RESEND_FROM sul sito vero `sendEmail` risponde «skipped», e l'avviso della posta
- * rifiutata salta apposta questi casi. Sul sito vero parte la campanella agli amministratori, una volta
- * per ordine (la stessa chiave della cassa). La cura resta la variabile su Vercel (Production).
- */
-async function avvisaSeLaPostaESpenta(dati: Record<string, unknown>, esito: unknown): Promise<void> {
-  const ordine = dati.orderId;
-  if (process.env.VERCEL_ENV !== 'production' || typeof ordine !== 'string') return;
-  const e = esito as { skipped?: unknown; reason?: unknown } | null | undefined;
-  const motivo = String(e?.reason ?? '');
-  if (e?.skipped !== true || !/RESEND_(API_KEY|FROM)/.test(motivo)) return;
-  try {
-    await notifyAdmins(
-      '📭 Ordine senza email: la posta del sito è spenta',
-      `L'ordine con carta #${ordine.slice(0, 8)} è pagato, ma la posta non è partita (${motivo}): ` +
-        'il negozio non ha ricevuto «Nuovo ordine» e il cliente nessuna conferma. Avvisa tu il negozio; ' +
-        'la posta si riaccende mettendo la variabile su Vercel (Production).',
-      `/admin/orders/${ordine}`,
-      { unaVoltaPer: `posta-spenta:${ordine}` },
-    );
-  } catch (err) {
-    logger.error('[stripe] campanella della posta spenta non partita', { orderId: ordine, message: err instanceof Error ? err.message : String(err) });
   }
 }
 
