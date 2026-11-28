@@ -527,6 +527,10 @@ export default function CheckoutPage() {
       // comunque appena viene ripresa, come prima.
       const raw = localStorage.getItem('mc_checkout_draft') ?? sessionStorage.getItem('mc_checkout_draft');
       if (!raw) return;
+      // Si toglie dal browser appena letta, PRIMA di capirla: una bozza illeggibile (JSON rotto o
+      // di forma sbagliata) usciva prima della cancellazione e restava lì coi dati dell'ospite.
+      localStorage.removeItem('mc_checkout_draft');
+      sessionStorage.removeItem('mc_checkout_draft');
       // R03-025 — con l'orologio: «Domani» salvato ieri sera è «Oggi», una fascia passata non torna.
       const bozza = bozzaLetta(JSON.parse(raw), new Date());
       if (!bozza) return;
@@ -550,9 +554,6 @@ export default function CheckoutPage() {
       if (oggi) setSlotTodayTime(oggi);
       const domani = fasciaDaRimettere('tomorrow', bozza.fasciaDomani, adesso, orariNegozi);
       if (domani) setSlotTomorrowTime(domani);
-
-      localStorage.removeItem('mc_checkout_draft');
-      sessionStorage.removeItem('mc_checkout_draft');
     } catch { /* noop */ }
   }, []);
 
@@ -1422,7 +1423,7 @@ export default function CheckoutPage() {
    */
   if (vistaCarrello.mostraScheletro) {
     return (
-      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-6xl pb-28 lg:pb-8">
+      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl pb-28 lg:pb-8">
         <Link
           href="/cart"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-600 hover:text-ink-900 mb-1"
@@ -1457,7 +1458,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-8 max-w-6xl pb-28 lg:pb-8">
+    <div className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl pb-28 lg:pb-8">
       {/* Back-to-cart + H1 serif visibile */}
       <Link
         href="/cart"

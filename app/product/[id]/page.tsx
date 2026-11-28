@@ -18,6 +18,7 @@ import { LARGHEZZA_MASSIMA, sizedImage } from '@/lib/image-url';
 import { SIZES_FOTO_PRODOTTO } from '@/lib/preload-foto';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import { fraseResoDelProdotto, frasePagamento, promessaSpedizione } from '@/lib/promesse-pubbliche';
+import { esclusiAncheDallaCategoria } from '@/lib/ordini/recesso-per-categoria';
 import { sopraIlTettoDeiContanti } from '@/lib/ordini/tetto-dei-contanti';
 import { vociDellaConsegna } from '@/lib/ordini/prezzi';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -217,7 +218,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const { data: rigaDelRecesso = null } = useQuery({
     queryKey: ['product', id, 'recesso'],
     queryFn: async () => {
-      const { data } = await supabase.from('products').select('*').eq('id', id).maybeSingle();
+      const { data: letta } = await supabase.from('products').select('*').eq('id', id).maybeSingle();
+      // R09-015 — Anche il pane escluso per categoria (non solo con la spunta): la regola dei resi.
+      const [data = null] = letta ? await esclusiAncheDallaCategoria(supabase, [letta as { category_id?: unknown }]) : [];
       return { non_recedibile: (data as { non_recedibile?: unknown } | null)?.non_recedibile === true };
     },
   });
@@ -497,7 +500,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-pulse">
           <div className="bg-cream-200 h-96 rounded-xl" />
           <div className="space-y-3">
@@ -833,7 +836,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // un prezzo che nei risultati può mancare.
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-6">
+    <div className="container mx-auto px-4 sm:px-6 py-6 max-w-7xl">
       <Breadcrumb className="mb-4" items={[
         { label: 'Home', href: '/' },
         ...(product.categories?.name && product.categories?.slug
@@ -970,7 +973,6 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 largo il 95% dello schermo: su un portatile fine si vedeva la foto di prima,
                 solo piu' grande e piu' morbida. Qui si chiede la larghezza massima che il
                 sito considera sensata. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={zoomFallito === sizedImage(images[activeImg], LARGHEZZA_MASSIMA) ? FOTO_MANCANTE : sizedImage(images[activeImg], LARGHEZZA_MASSIMA)}
               alt={activeImg === 0 ? altPrimaFoto : `${product.name} — foto ${activeImg + 1}`}

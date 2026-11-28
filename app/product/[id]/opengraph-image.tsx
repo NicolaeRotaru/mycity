@@ -82,7 +82,6 @@ export default async function ProductOG({ params }: { params: { id: string } }) 
           padding: 40,
         }}>
           {photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={photo}
               alt=""

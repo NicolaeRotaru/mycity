@@ -1,0 +1,496 @@
+{
+  "sessione": "R09",
+  "aggiornato": "2026-11-27 02:20",
+  "finita": true,
+  "testa": "0e8ebc22beaf6de20925628764c0cde22236a0c4",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "0e8ebc22beaf6de20925628764c0cde22236a0c4",
+    "nota": "typecheck 0, lint 0 errori (120 avvisi), vitest 2340+ file verdi"
+  },
+  "voci": [
+    {
+      "id": "R09-014",
+      "chiave": "privacy-legale|una bozza della cassa che non si legge resta nel browser",
+      "esito": "riparato",
+      "commit": "1c317a3",
+      "file_toccati": [
+        "app/checkout/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-bozza-illeggibile.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-bozza-illeggibile.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1c317a3^ --file app/checkout/page.tsx --prove tests/unit/riparazione-r09-bozza-illeggibile.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La bozza ora si toglie da localStorage e da sessionStorage appena letta, prima di JSON.parse e di bozzaLetta. Prima un JSON rotto finiva nel catch, e una bozza di forma sbagliata usciva con return prima della cancellazione. La prova monta la cassa vera con cinque bozze illeggibili, che alla base fanno cinque casi rossi, più la controprova di una bozza buona.",
+      "verificato_da": "revisore A (modello grande): alla base 5 rossi e 3 verdi; bozza buona ripristinata con e senza StrictMode; 84 verdi nelle altre prove della bozza. Caso marginale: illeggibile in localStorage cancella anche la buona in sessionStorage."
+    },
+    {
+      "id": "R09-016",
+      "chiave": "privacy-legale|il campo città della cassa è testo libero",
+      "esito": "scelta_di_nicola",
+      "domanda": "Quali comuni, con i loro CAP, deve accettare il campo città della cassa? Nel codice la zona è solo il raggio di 5 km e il riquadro AREA_SERVITA (lib/ordini/zona-di-consegna.ts). Un elenco di comuni ammessi non esiste: COMUNI in lib/agenti/link.ts serve solo a leggere i nomi delle schede negozio e arriva fino a Bobbio e Fiorenzuola.",
+      "verificato_da": "revisore A (modello grande): grep in lib, app, components, supabase, migrations, seeds per comuni, CAP 29xxx e tabelle di zona: nessun elenco di comuni ammessi."
+    },
+    {
+      "id": "R09-015",
+      "chiave": "privacy-legale|prima dell'acquisto la scheda prodotto e il carrello dicono «escluso dal recesso» solo con la spunta, non per il pane escluso per categoria",
+      "esito": "parziale",
+      "commit": "54b42da",
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "app/cart/page.tsx",
+        "lib/ordini/recesso-per-categoria.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-recesso-per-categoria-scheda.test.ts",
+        "tests/unit/riparazione-r09-recesso-per-categoria-carrello.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-recesso-per-categoria-scheda.test.ts tests/unit/riparazione-r09-recesso-per-categoria-carrello.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 54b42da^ --file app/product/[id]/page.tsx,app/cart/page.tsx,lib/ordini/recesso-per-categoria.ts --prove tests/unit/riparazione-r09-recesso-per-categoria-scheda.test.ts,tests/unit/riparazione-r09-recesso-per-categoria-carrello.test.ts --json",
+        "nota": "Le due pagine riportate alla base diventano rosse sul comportamento. L'uscita 3 viene solo dal file nuovo importato dalle pagine. Controllo fatto a mano: con il difetto rimesso nell'aiutante (esclusiAncheDallaCategoria restituisce i prodotti senza toccarli) i due casi «IL CASO CHE ROMPEVA» diventano rossi con AssertionError, quindi sul comportamento."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La scheda prodotto (nella lettura del recesso) e il carrello (nella lettura per il reso) leggono anche le categorie e segnano come escluso il pane e i freschi, anche se il prodotto sta in una sottocategoria. Se la lettura delle categorie cade, vale la spunta. La regola sta in un aiutante nuovo, lib/ordini/recesso-per-categoria.ts.",
+      "cosa_resta": "La regola della rotta dei resi non era esportata e la rotta non è mia: l'aiutante ne è una copia fedele. Le copie restano due finché la rotta non importa la regola dall'aiutante. Finché le copie sono due, se divergono le prove restano verdi (il revisore ha tolto una categoria dall'aiutante: verde). Il carrello fa una lettura in più, in serie, prima di scorte e zona (app/cart/page.tsx:331-345).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/returns/create/route.ts",
+          "modifica": "Togliere le righe 43-73 (il commento, CATEGORIE_DEPERIBILI, il tipo CategoriaPerIlRecesso e la funzione segnaIDeperibili) e aggiungere import { segnaIDeperibili, type CategoriaPerIlRecesso } from '@/lib/ordini/recesso-per-categoria'. La riga che usa segnaIDeperibili (~192) resta uguale."
+        }
+      ],
+      "verificato_da": "revisore A (modello grande): aiutante identico alla regola della rotta dei resi; con l'aiutante guastato o senza giro sui padri 2 rossi per AssertionError; 706 verdi su carrello e scheda."
+    },
+    {
+      "id": "R09-005",
+      "chiave": "architettura|il conto del carrello ha una seconda copia che nessuna pagina usa, e la prova «lo schermo fa lo stesso conto del server» controlla proprio quella",
+      "esito": "parziale",
+      "commit": "",
+      "file_toccati": [],
+      "prova": "Verificato sulla base: tests/unit/lo-schermo-e-il-server-fanno-lo-stesso-conto.test.ts:2 controlla già riepilogoDaMostrare, cioè il conto che la pagina usa davvero (app/checkout/page.tsx:826). useTotaliCarrello non lo importa nessun file di produzione, solo due prove comuni che importano anche lib/stripe/client, che è di un'altra sessione.",
+      "cosa_resta": "Prima le due modifiche in serve_file_altrui, poi si cancella components/checkout/useTotaliCarrello.ts (file di R09, nell'onda dopo). Il controllo della CI sui moduli orfani va in .github/workflows/ci.yml, che non è di R09. Per le due rotte AI serve la decisione di Nicola.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/la-consegna-costa-3-o-4-euro-per-negozio.test.ts",
+          "modifica": "Togliere la riga 4 (l'import di calcolaTotali), le righe 74-83 (const schermo = calcolaTotali({...}).centesimi;) e le righe 104-105 (const s = schermo.gruppi[k]; e il push «schermo diverso»). Il confronto con il server resta su cassa, cioè riepilogoDaMostrare, alla riga ~107."
+        },
+        {
+          "file": "tests/unit/la-consegna-e-una-sola-per-tutto-il-carrello.test.ts",
+          "modifica": "Togliere la riga 50 (l'import di calcolaTotali) e le righe 164-171 (const schermo = calcolaTotali(...).centesimi; e schermo.gruppi.forEach(...)). Resta il confronto di cassa con il server alle righe 172-173."
+        }
+      ],
+      "domanda": "Le rotte /api/ai/answer-qa e /api/ai/reviews-summary non le chiama nessuna pagina: le colleghiamo a una pagina o le togliamo?",
+      "verificato_da": "revisore C (sonnet): riepilogoDaMostrare usato in checkout/page.tsx:826 e controllato dalla prova; useTotaliCarrello importato solo dalle 2 prove (righe 4/74 e 50/164); nessun chiamante delle due rotte AI."
+    },
+    {
+      "id": "R09-002",
+      "chiave": "architettura|una prova sul webhook di stripe controlla l'ordine delle righe cercando una parola, e basta togliere uno spazio per ingannarla",
+      "esito": "gia_riparato_prima",
+      "commit": "",
+      "file_toccati": [],
+      "prova": "I tre punti della nota del 26/11 li ha chiusi il commit 55e47c0, già nella base. (1) tests/unit/riparazione-r09-la-prova-del-webhook-non-si-inganna.test.ts non lancia più vitest figli: esegue marcatureDellaRotta su otto copie guastate della rotta, tra cui alla riga 69 «dentro un case, prima del suo gestore». (2) tests/unit/webhook-diviso-per-mestiere.test.ts:94 e :110-112 contano anche la chiave calcolata, la forma breve { processed } e l'assegnazione riga.processed = true. (3) A :145, dentro lo switch, la marcatura vale solo se subito dopo c'è return o break. npx vitest run dei due file: 15 verdi. Contro-prova: togliendo dalla prova la forma breve e la condizione return/break, due casi della guardia diventano rossi.",
+      "verificato_da": "revisore C (sonnet): rilanciate le due prove (15 verdi); un aiutante importato che marca prima dello switch fa 61 casi rossi. Lacuna dichiarata: una chiamata che marca senza oggetto con processed."
+    },
+    {
+      "id": "R09-012",
+      "chiave": "microcopy|in tanti punti l'euro è ancora scritto all'inglese: «€12.50», «€0 – €500+», «€ 2,50»",
+      "esito": "parziale",
+      "commit": "",
+      "file_toccati": [],
+      "prova": "Nei miei otto file il difetto è già chiuso sulla base: il grep -nE \"€\\s?\\$\\{|€\\s?[0-9]|€\\{|toFixed\\(2\\)\" su lib/format.ts, app/product/[id]/opengraph-image.tsx, components/ShareCartButton.tsx, app/profile/loyalty/page.tsx, messages/it.json, app/shipping/page.tsx, components/home-sections/HomeSectionRenderer.tsx e lib/email/templates.ts non trova niente fuori dai commenti. tests/unit/riparazione-r09-euro-all-italiana.test.ts è verde.",
+      "prova_comando": "grep -rnE \"€\\s?\\$\\{|€\\s?[0-9]|€\\{|toFixed\\(2\\)\" app components lib messages --include=*.ts --include=*.tsx --include=*.json",
+      "cosa_resta": "74 righe del grep, in circa 50 file che non sono di R09. Molte sono toFixed su un numero (valori di input, CSV), non un prezzo scritto male.",
+      "serve_file_altrui": [
+        {
+          "file": "app/search/page.tsx",
+          "modifica": "Riga 295: €{minPrezzoInCorso} – €{maxPrezzoInCorso} diventa {minPrezzoInCorso} € – {maxPrezzoInCorso} € (il «+» resta in fondo)."
+        },
+        {
+          "file": "app/category/[slug]/page.tsx",
+          "modifica": "Riga 341: €{minPrice} – €{maxPrice} diventa {minPrice} € – {maxPrice} €."
+        },
+        {
+          "file": "components/StoreProductExplorer.tsx",
+          "modifica": "Riga 164: €{minPrice} - €{maxPrice} diventa {minPrice} € – {maxPrice} €."
+        },
+        {
+          "file": "app/api/seller/orders/[id]/reject/route.ts",
+          "modifica": "Righe 133 e 135: €${(x / 100).toFixed(2)} diventa ${formatPriceFromCents(x)}, importato da @/lib/format."
+        },
+        {
+          "file": "lib/coupons.ts",
+          "modifica": "Riga 84: €${Number(coupon.min_subtotal).toFixed(2)} diventa ${formatPrice(Number(coupon.min_subtotal))}."
+        },
+        {
+          "file": "app/profile/page.tsx, components/WelcomeCreditBanner.tsx, app/sign-up/page.tsx, app/profile/referral/page.tsx",
+          "modifica": "«€5» diventa «5 €» alle righe 142 · 92 · 235-236 · 93, 110, 111, 197."
+        },
+        {
+          "file": "app/profile/gift-cards/page.tsx, app/api/gift-cards/checkout/route.ts",
+          "modifica": "€{a} e €{amount} diventano {a} € e {amount} € (righe 274, 306, 317); €${body.amountEuro} diventa ${body.amountEuro} € (righe 78 e 80)."
+        },
+        {
+          "file": "app/seller/earnings/commissione.ts, app/seller/promote/page.tsx, app/seller/products/ai-batch/page.tsx, app/seller/products/import/page.tsx, lib/products/economics.ts",
+          "modifica": "Riga 95: formatPrice(ABBONAMENTO_CENTESIMI_MESE / 100). Riga 165: «4,99 €». Riga 309: {formatPrice(imported.suggested_price)}. Riga 147: «max 10.000 €». Riga 87: formatPrice(sopra) e formatPrice(sotto)."
+        },
+        {
+          "file": "app/api/cron/operational-alerts/route.ts:401, app/api/cron/release-payouts/route.ts:478, app/api/rider/cash-confirm/route.ts:283, lib/stripe/webhook/ordini.ts:191, lib/products/externalAlert.ts:55, app/api/ai/improve-product/route.ts:317, app/api/ai/catalog-chat/route.ts:433,444, app/api/ai/copilot/route.ts:234",
+          "modifica": "Testi interni per amministratori o per il modello, meno urgenti: €${(c / 100).toFixed(2)} diventa formatPriceFromCents(c)."
+        }
+      ],
+      "verificato_da": "revisore C (sonnet): grep dichiarato più due allargati sugli 8 file: solo commenti; in it.json solo «30 €»/«{min} €»; prova euro-all-italiana 5 verdi."
+    },
+    {
+      "id": "R09-007",
+      "chiave": "architettura|anche il freno della veloce trova il carrello in contanti solo dalla riga di cod_checkout_attempts",
+      "esito": "parziale",
+      "commit": "",
+      "file_toccati": [],
+      "prova": "Sulla base, lib/ordini/veloce-non-confermata.ts:197-216 trova il carrello in contanti solo dalla riga di cod_checkout_attempts. Gli ordini non hanno una colonna di carrello: lib/database.types.ts ha solo stripe_session_id e stripe_transfer_group. La rotta dei contanti usa chiaveCarrello solo per la riga del tentativo e per le statistiche.",
+      "cosa_resta": "Serve una chiave del carrello sugli ordini, cioè una migrazione (onda delle migrazioni). Poi la rotta dei contanti deve scriverla e il freno deve leggerla quando la riga manca.",
+      "nota": "SQL esatto (fascia R09, per esempio migrations/1080_ordini_chiave_del_carrello.sql): ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS cod_cart_key text; COMMENT ON COLUMN public.orders.cod_cart_key IS 'La chiave del carrello in contanti (cod_checkout_attempts.chiave): ritrova gli ordini dello stesso carrello anche senza la riga del tentativo.'; CREATE INDEX IF NOT EXISTS orders_cod_cart_key_idx ON public.orders (user_id, cod_cart_key) WHERE cod_cart_key IS NOT NULL; UPDATE public.orders o SET cod_cart_key = a.chiave FROM public.cod_checkout_attempts a, jsonb_array_elements(a.order_ids) e WHERE o.cod_cart_key IS NULL AND o.user_id = a.user_id AND o.id::text = COALESCE(e->>'id', e #>> '{}'); NOTIFY pgrst, 'reload schema'; — Dopo la migrazione, in lib/ordini/veloce-non-confermata.ts (ordiniDelCarrello): senza la riga, leggere gli ordini con .eq('user_id', o.user_id).eq('cod_cart_key', o.cod_cart_key) quando cod_cart_key c'è.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "Nella rigaOrdine inserita (~riga 1667) aggiungere cod_cart_key: chiaveCarrello, mettendo la colonna tra i campi tolti prima della migrazione (come per CAMPI_124 con senzaCampi)."
+        }
+      ],
+      "verificato_da": "revisore C (sonnet): orders senza cod_cart_key in lib/database.types.ts; cod_checkout_attempts (migrazione 122) ha chiave, user_id, order_ids jsonb; numero 1080 libero; SQL coerente."
+    },
+    {
+      "id": "R09-009",
+      "chiave": "architettura|una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "file_toccati": [],
+      "prova": "lib/store-hours.ts:243 conta «domani» da propostaIl, e negozioPuoServire lo passa. tests/unit/riparazione-r03-fascia-domani-proposta.test.ts, con l'orologio finto da lunedì 23:59 a martedì 00:01, è verde. Contro-prova: rimettendo now.getDay() al posto di propostaIl, il caso diventa rosso.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/stripe/checkout/route.ts",
+          "modifica": "(1) Nello schema del corpo aggiungere delivery_date: z.string().max(40).optional().nullable(). La cassa lo manda già (app/checkout/page.tsx:1162), ma oggi lo schema lo scarta. (2) Dopo la riga 200 e prima di `const supa` aggiungere: if (!body.pickupInStore && body.deliverySlot && body.delivery_date) { const riportata = fasciaDelGiornoDellaRichiesta(body.deliverySlot, body.delivery_date, new Date()); if (riportata === null) return ApiErrors.conflict('La fascia che hai scelto è già passata. Scegline una ancora disponibile, oppure ordina per domani.'); body.deliverySlot = riportata; }. Così «Domani» di ieri arriva come «Oggi», sia a motivoFasciaRifiutata sia alla sessione Stripe: il webhook, che rilegge la fascia da session.created dopo mezzanotte, la tiene sul giorno giusto."
+        },
+        {
+          "file": "app/api/orders/cod/route.ts e lib/ordini/fascia-leggibile.ts",
+          "modifica": "Per non duplicarla, spostare fasciaDelGiornoDellaRichiesta (app/api/orders/cod/route.ts:52-72) in lib/ordini/fascia-leggibile.ts (senza proprietario in quest'onda), esportarla e importarla in tutte e due le rotte."
+        }
+      ],
+      "verificato_da": "revisore C (sonnet): prova r03-fascia-domani-proposta verde; store-hours.ts:243 usa propostaIl; la rotta della carta non legge delivery_date e chiama motivoFasciaRifiutata senza propostaIl (:588)."
+    },
+    {
+      "id": "R09-003",
+      "chiave": "architettura|il commento e la prova dicono che la bozza della cassa scade, ma la scadenza è stata tolta",
+      "esito": "serve_file_altrui",
+      "cosa_ho_fatto": "Il commit f733fd9 aveva cambiato il titolo nella prova comune e aggiunto una prova doppia; guardia-ramo dichiara comune quella prova (usa anche un aiutante delle prove di un'altra sessione), quindi il commit f2150d2 la riporta com'era in 2ba05a74 e toglie la prova doppia.",
+      "verificato_da": "revisore B (sonnet): letti import e commento (page.tsx:1309) e lib/bozza-checkout.ts, rilanciate le prove della bozza; la prova R09 nuova duplicava quella del 26/11, tolta.",
+      "prova": "Il commento sopra salvaLaBozzaPerAccesso in app/checkout/page.tsx dice già sulla base «la bozza non ha una scadenza», e lib/bozza-checkout.ts non conosce scadenze: tests/unit/riparazione-r09-la-bozza-della-cassa-non-scade.test.ts è verde. Resta solo il titolo di un caso nella prova comune.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts",
+          "modifica": "Riga 18: il titolo «il salvataggio passa da bozzaDaSalvare (con la scadenza) ed è lo stesso di «Ordina»» diventa «il salvataggio passa da bozzaDaSalvare (che segna quando è stata scelta, senza scadenza) ed è lo stesso di «Ordina»». Nient'altro."
+        }
+      ]
+    },
+    {
+      "id": "R09-004",
+      "chiave": "architettura|la frase della zona vive in quattro posti (cassa, spedizioni, rifiuto, tendina della posizione) piu' faq e «vicino a te»: le tiene allineate solo una prova",
+      "esito": "parziale",
+      "commit": "23d5a7bfc3a2560883237dd36414bbcded746465",
+      "file_toccati": [
+        "lib/ordini/zona-di-consegna.ts",
+        "tests/unit/riparazione-r09-la-frase-della-zona-ha-una-fonte-sola.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-la-frase-della-zona-cosa-resta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-la-frase-della-zona-cosa-resta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 23d5a7b^ --file lib/ordini/zona-di-consegna.ts,tests/unit/riparazione-r09-la-frase-della-zona-ha-una-fonte-sola.test.ts --prove tests/unit/riparazione-r09-la-frase-della-zona-cosa-resta.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base i miei file importano già la fonte (FINO_AL_CONFINE, FRASE_DELLA_ZONA, CONFINE_DELLA_ZONA in lib/ordini/zona-di-consegna.ts) e il rifiuto (motivoFuoriZona) la usa. Sistemato il commento in testa alla fonte: non dice più «una volta sola» e nomina i due layout che la riscrivono a mano. Il titolo della prova R09 dice «altri cinque posti», come l'elenco. Nuova prova: il rifiuto e la frase della cassa nascono dalla stessa fonte, il commento non tace le copie ancora presenti, il titolo conta i posti dell'elenco.",
+      "cosa_resta": "Nei file di R09 resta una copia scritta a mano: components/home-sections/HomeSectionRenderer.tsx:83 («Fino a ${RAGGIO_CONSEGNA_KM} km dal negozio, negli orari di apertura.»), che la prova non vede (cerca solo «fino a» minuscolo e il file non è nel suo elenco): non chiusa per il tetto di spesa della sessione, va nel giro dopo insieme al commento di lib/ordini/zona-di-consegna.ts:4-9, che deve nominare anche HomeSectionRenderer e app/about/page.tsx:32. Fuori da R09: le due copie nei metadati qui sotto e app/about/page.tsx:32 («${RAGGIO_CONSEGNA_KM} km»). app/shipping/page.tsx:137 non è una copia: usa CONFINE_DELLA_ZONA.",
+      "serve_file_altrui": [
+        {
+          "file": "app/near/layout.tsx",
+          "modifica": "Riga 7: sostituire `const CONSEGNA = `con consegna fino a ${RAGGIO_CONSEGNA_KM} km dal negozio`;` con `const CONSEGNA = `con consegna ${FINO_AL_CONFINE}`;` e importare `FINO_AL_CONFINE` da '@/lib/ordini/zona-di-consegna' al posto di RAGGIO_CONSEGNA_KM (se non serve altrove)."
+        },
+        {
+          "file": "app/category/[slug]/layout.tsx",
+          "modifica": "Riga 18 (voce `casa`): sostituire `consegnati fino a ${RAGGIO_CONSEGNA_KM} km dal negozio.` con `consegnati ${FINO_AL_CONFINE}.` e importare `FINO_AL_CONFINE` da '@/lib/ordini/zona-di-consegna'. Fatto questo, in lib/ordini/zona-di-consegna.ts togliere dal commento in testa il periodo «Non è ancora «una volta sola»…»: la prova nuova lo esige solo finché le due copie esistono."
+        },
+        {
+          "file": "app/about/page.tsx",
+          "modifica": "Riga 32: la frase con `${RAGGIO_CONSEGNA_KM} km` va presa da FINO_AL_CONFINE o FRASE_DELLA_ZONA di '@/lib/ordini/zona-di-consegna'."
+        }
+      ],
+      "verificato_da": "revisore B (sonnet): grep su app, components, lib, messages; trovata la copia in HomeSectionRenderer.tsx:83 (file di R09) e in app/about/page.tsx:32; shipping:137 usa la fonte."
+    },
+    {
+      "id": "R09-011",
+      "chiave": "layout-responsive|alla cassa, col testo del telefono al massimo, la scheda «contanti alla consegna» esce dallo schermo e la pagina scorre di lato",
+      "esito": "gia_riparato_prima",
+      "prova": "components/checkout/PaymentMethodSelector.tsx:106 `<fieldset className=\"min-w-0 …\">`; :127 e :163 `min-w-0 flex-1 break-words` sui contenuti delle schede; :164-165 e :203-204 riga titolo con `flex-wrap` e titolo `min-w-0`; app/checkout/page.tsx:1602 la scheda del credito ha `min-w-0 flex-1 break-words`. Il commit 3f2e14a della riparazione del 26/11 ha già chiuso il difetto, e tests/unit/riparazione-r26-col-testo-grande-la-scheda-contanti-resta-nello-schermo.test.ts (5 casi) è verde sulla base.",
+      "nota": "Residuo non di R09, dichiarato nel commento di quella prova: a 320 px col testo al 200% resta largo il bollino «Zero rischio». Il Badge sta in components/ui/Badge.tsx, che non è di R09.",
+      "verificato_da": "revisore C (sonnet): prova r26 col testo grande (5 verdi) rilanciata, classi presenti; righe corrette. Playwright non provato."
+    },
+    {
+      "id": "R09-013",
+      "chiave": "navigazione-gerarchia|la larghezza del contenuto cambia tre volte lungo il percorso d'acquisto",
+      "esito": "parziale",
+      "commit": "a3fc8fc5fa862704fae2b2ae299cf3a7e89ae88d",
+      "file_toccati": [
+        "app/cart/page.tsx",
+        "app/checkout/page.tsx",
+        "app/product/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-larghezza-del-percorso-d-acquisto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-larghezza-del-percorso-d-acquisto.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a3fc8fc^ --file app/cart/page.tsx,app/checkout/page.tsx,app/product/[id]/page.tsx --prove tests/unit/riparazione-r09-larghezza-del-percorso-d-acquisto.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Larghezza unica del percorso: max-w-7xl (1280 px, come --container-max) con margine px-4 sm:px-6. Sulla base: categorie e negozi 7xl, cassa 6xl, vetrina del negozio 5xl, carrello e scheda prodotto senza tetto. Portati cassa (6xl in 7xl), carrello e scheda prodotto (aggiunto 7xl) alla stessa misura, e lo scheletro della scheda prodotto da px-6 a px-4 sm:px-6. Categorie e negozi erano già a posto. Nuova prova di sorgente: ogni contenitore principale delle cinque pagine ha max-w-7xl come unico max-w e il margine comune. Le 148 prove che leggono queste pagine sono verdi, nessuna modificata.",
+      "cosa_resta": "La vetrina del negozio è ancora a max-w-5xl (costante non di R09); lo scheletro e le pagine d'errore del prodotto e del negozio non hanno max-w-7xl (file non di R09). Gli stati vuoti di carrello e cassa (max-w-2xl) sono stretti di proposito, ma senza px-4 non hanno margine sul telefono: fuori da questa voce.",
+      "serve_file_altrui": [
+        {
+          "file": "components/store-sections/misure-vetrina.ts",
+          "modifica": "Riga 26: `CONTENITORE_PAGINA_NEGOZIO = 'container mx-auto px-4 sm:px-6 py-6 max-w-7xl space-y-4'` (max-w-5xl diventa max-w-7xl). La usano app/store/[id]/page.tsx, app/store/[id]/[slug]/page.tsx e lo scheletro ScheletroNegozio.tsx. Va controllata tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts (riga 147 vieta `container mx-auto px-4 py-6 max-w-5xl`: dovrebbe restare verde)."
+        },
+        {
+          "file": "app/product/[id]/loading.tsx",
+          "modifica": "Riga 18: `container mx-auto px-4 sm:px-6 py-8` diventa `container mx-auto px-4 sm:px-6 py-8 max-w-7xl` (lo scheletro oggi da 2xl in su è largo 1536 px contro i 1280 della pagina)."
+        },
+        {
+          "file": "app/product/[id]/error.tsx",
+          "modifica": "Riga 19: aggiungere max-w-7xl al contenitore `container mx-auto …`."
+        },
+        {
+          "file": "app/store/[id]/error.tsx",
+          "modifica": "Riga 19: aggiungere max-w-7xl al contenitore `container mx-auto …` (insieme alla costante della vetrina)."
+        }
+      ],
+      "verificato_da": "revisore B (sonnet): rilanciata la prova (5 verdi), cercati i max-w nelle cinque pagine, letti loading.tsx ed error.tsx accanto e le prove che citano max-w-5xl."
+    },
+    {
+      "id": "R09-001",
+      "chiave": "architettura|la regola che vieta i tipi «qualunque» non è accesa: 46 sono passati, e 40 permessi di saltare il controllo non saltano niente",
+      "esito": "parziale",
+      "commit": "491c92a4d1fbc22bc7f812094856c503b9dcab4f",
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "app/product/[id]/opengraph-image.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-direttive-morte-nei-file-della-scheda-prodotto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-direttive-morte-nei-file-della-scheda-prodotto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 491c92a^ --file app/product/[id]/page.tsx,app/product/[id]/opengraph-image.tsx --prove tests/unit/riparazione-r09-direttive-morte-nei-file-della-scheda-prodotto.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base no-explicit-any è già a error per tutti i .ts/.tsx tranne i 16 file dell'elenco override a warn, e reportUnusedDisableDirectives: true è già in .eslintrc.json (a livello avviso; il lint esce 0). Tolte le due direttive morte nei file di R09 (app/product/[id]/page.tsx:976 e opengraph-image.tsx:85, per @next/next/no-img-element, regola spenta in .eslintrc.json). Nuova prova con l'API di ESLint.",
+      "cosa_resta": "Misurato sulla base con eslint su app components lib. (a) 29 direttive morte in file non di R09: finché ci sono, --report-unused-disable-directives a errore nello script lint renderebbe rosso il lint su file altrui. (b) 36 any a warn in 16 file, nessuno di R09: quando saranno tipizzati si toglie da .eslintrc.json l'override a warn.",
+      "serve_file_altrui": [
+        {
+          "file": "app/admin/products/page.tsx",
+          "modifica": "Togliere la direttiva eslint-disable morta alla riga 197 (no-img-element)."
+        },
+        {
+          "file": "app/product/[id]/layout.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 241 (no-head-element)."
+        },
+        {
+          "file": "app/seller/orders/[id]/page.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 687 (no-img-element). Il file porta anche 1 any."
+        },
+        {
+          "file": "app/seller/products/ai-batch/page.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 303 (no-img-element)."
+        },
+        {
+          "file": "app/store/[id]/opengraph-image.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 63 (no-img-element)."
+        },
+        {
+          "file": "components/CategoryShowcase.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 257."
+        },
+        {
+          "file": "components/ImageUrlField.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 113."
+        },
+        {
+          "file": "components/StoreListRow.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 92."
+        },
+        {
+          "file": "components/StoreMediaManager.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 166."
+        },
+        {
+          "file": "components/StorePreviewCard.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 149."
+        },
+        {
+          "file": "components/SupportProductAssistant.tsx",
+          "modifica": "Togliere le 5 direttive morte alle righe 389, 436, 449, 544, 688."
+        },
+        {
+          "file": "components/account/AccountSidebar.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 116."
+        },
+        {
+          "file": "components/seller/BackgroundRemovalPreview.tsx",
+          "modifica": "Togliere le 2 direttive morte alle righe 147 e 161."
+        },
+        {
+          "file": "components/seller/BarcodeScanner.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 130 (jsx-a11y/media-has-caption)."
+        },
+        {
+          "file": "components/seller/BulkPhotoCreate.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 287."
+        },
+        {
+          "file": "components/seller/CameraCapture.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 159 (media-has-caption)."
+        },
+        {
+          "file": "components/seller/ProductForm.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 1423."
+        },
+        {
+          "file": "components/seller/ProductImagesField.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 199."
+        },
+        {
+          "file": "components/seller/ReturnRequestCard.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 268."
+        },
+        {
+          "file": "components/seller/site/SitePreview.tsx",
+          "modifica": "Togliere la direttiva morta alla riga 267."
+        },
+        {
+          "file": "lib/agenti/aggiungi.ts",
+          "modifica": "Togliere la direttiva morta alla riga 65 (no-control-regex)."
+        },
+        {
+          "file": "lib/email/avviso-messaggio-negozio.ts",
+          "modifica": "Togliere la direttiva morta alla riga 64 (no-explicit-any). Il file porta anche 1 any."
+        },
+        {
+          "file": "package.json",
+          "modifica": "Dopo le righe sopra: nello script lint aggiungere --report-unused-disable-directives (severità errore)."
+        },
+        {
+          "file": "(any a warn, 36 in 16 file)",
+          "modifica": "Tipizzare gli any e poi togliere da .eslintrc.json l'override a warn. Per file: app/api/cron/send-emails/route.ts 10; lib/analytics/sentry-config.ts 6; components/DeliveryMap.tsx 3; components/NearbyStoresMap.tsx 3; components/StoreLocationPicker.tsx 3; uno ciascuno in app/orders/[id]/return/page.tsx, app/rider/orders/[id]/page.tsx, app/seller/orders/[id]/page.tsx, components/ConfettiBurst.tsx, components/Turnstile.tsx, lib/analytics/riconcilia-consenso.ts, lib/analytics/sentry.tsx, lib/analytics/server.ts, lib/coupons.ts, lib/email/avviso-messaggio-negozio.ts, lib/ordini/rivendica-il-codice-sconto.ts."
+        }
+      ],
+      "verificato_da": "revisore B (sonnet): eslint --report-unused-disable-directives su app, components, lib: 27 direttive morte in 22 file più le 2 tolte, 36 any in 16 file; righe dell'elenco giuste."
+    },
+    {
+      "id": "R09-006",
+      "chiave": "architettura|la fila per richiesta delle email si appoggia a un file interno di next.js",
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Correzione tentata nel commit d7e3261 (lib/api/dopo-la-risposta.ts con un AsyncLocalStorage proprio al posto del file interno di Next, più la prova R09 del 26/11 adattata e due prove nuove), poi tolta dal ramo col commit 0e8ebc2.",
+      "nota": "Due motivi. (1) La prova esistente tests/unit/riparazione-r09-dopo-la-risposta-una-fila-per-richiesta.test.ts è comune (usa anche lib/logger.ts, di un'altra sessione) e, com'è in 2ba05a74, diventa rossa con la correzione (2 casi su 2): la cambia solo la regista. La modifica che serviva: togliere il vi.mock di next/dist/server/app-render/work-async-storage.external e simulare le due richieste con AsyncResource, stessi due casi e stesse attese (il testo esatto è nel commit d7e3261). (2) Il revisore ha trovato un passo indietro latente in d7e3261: il JSDoc (lib/api/dopo-la-risposta.ts:62) indica after(() => nellaFila(lavoro)); dentro after() Next lega ogni callback al suo contesto, quindi con la chiave di default ogni lavoro apre una fila sua e due lavori della stessa richiesta non stanno più in fila (alla base sì). Oggi nessuno chiama nellaFila da fuori. Quindi d7e3261 NON va applicato così: prima nellaFila deve prendere la chiave quando il lavoro si registra (nel flusso della richiesta), non quando gira dentro after().",
+      "verificato_da": "revisore A (modello grande): server http vero, 30 richieste anche keep-alive, Node 22 con async-context-frame: nessuna chiave condivisa tra richieste; trovato il caso di nellaFila dentro after()."
+    },
+    {
+      "id": "R09-008",
+      "chiave": "architettura|in home ogni sezione chiede di nuovo alla vetrina lo stesso negozio, e ogni fascia compare un giro di rete più tardi",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "serve_file_altrui": [
+        {
+          "file": "components/home/DropOfDay.tsx",
+          "modifica": "Alla riga ~91 la lettura `conNegozioApprovato(supabase, [letto.product], 'id, store_name')` va dentro la useQuery o un `queryClient.fetchQuery` con chiave `['vetrina-negozio', <colonne>, <seller_id>]` e `staleTime: 3 * 60_000` (la memoria a tempo sta nei chiamanti)."
+        },
+        {
+          "file": "components/home/StoriesCarousel.tsx",
+          "modifica": "Riga ~190, `conNegozioApprovato(supabase, storie, 'id, store_name, store_logo')`: stessa cosa, con fetchQuery su chiave per colonne e id e staleTime 3 minuti."
+        },
+        {
+          "file": "components/home/TrendingNow.tsx e lib/queries/fasce-prodotti.ts",
+          "modifica": "leggiTendenze (che TrendingNow chiama) legge i negozi alla riga 84 di lib/queries/fasce-prodotti.ts: farla passare da un lettore con la cache del chiamante (parametro opzionale leggiNegozi, invariata se non passato) con la chiave condivisa ['vetrina-negozio', <colonne>, <id>] e staleTime 3 minuti. Lo stesso vale per gli altri chiamanti dello stesso file: leggiSimili (riga 136), leggiSponsorizzati (riga 187) e le righe 243, 280, 328."
+        },
+        {
+          "file": "lib/queries/negozio-del-mese.ts",
+          "modifica": "Riga 47: usare la stessa chiave condivisa per i negozi. ShopOfMonthHero ha già staleTime di un'ora sull'intera lettura (riga 36): lì serve solo condividere la chiave con le altre sezioni, non una memoria nuova."
+        }
+      ],
+      "cosa_resta": "L'unione delle domande in volo per lo stesso negozio è già nel file (solo browser). Restano la memoria a tempo tra sezioni che arrivano in momenti diversi (compete ai chiamanti con la cache di React Query: gli 8 casi rossi del 26/11 lo provano) e la memoria per richiesta lato server.",
+      "nota": "React cache() non usato: package.json ha react ^18.2.0, dove cache non esiste, e il file è importato anche da componenti 'use client' (DropOfDay, StoriesCarousel). Anche lato server non servirebbe: ogni chiamante crea il suo client e i suoi array, quindi gli argomenti non sono mai identici. File non cambiato.",
+      "verificato_da": "revisore B (sonnet): react installato 18.3.1 (niente cache), il file è importato da DropOfDay e StoriesCarousel ('use client'); righe dei chiamanti controllate, corrette quelle sbagliate."
+    },
+    {
+      "id": "R09-010",
+      "chiave": "architettura|un altro finto scritto a mano risponde alle letture degli avvisi nelle prove della cancellazione",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/minori-s08-cancellazione.test.ts",
+          "modifica": "Righe 42-68: togliere adminFinto() scritto a mano (i q.select/eq/is/in/update/single/then con ramo tabella === 'notifications' e stato.notifiche) e usare il finto unico tests/unit/aiuti/finto-giro-notturno.ts: fintoGiroNotturno({ tabelle: { profiles: [...], notifications: [...] } }), passando il suo `.admin` come getAdminSupabase del vi.mock('@/lib/supabase/server'), e leggendo le scritture da righe('profiles') e dal diario. erroreProfilo ed erroreNotifiche diventano guasti del finto (Guasto, riga 69: oggi solo azioni select/insert, va allargato a update). Il finto oggi NON ha .in(), che la rotta usa (app/api/account/delete/route.ts:158): va aggiunto al finto prima (il finto non è di R09)."
+        }
+      ],
+      "nota": "La prova non importa e non legge per nome nessun file di R09: nomina '@/lib/api/dopo-la-risposta' solo dentro un vi.mock e importa app/api/account/delete/route, lib/privacy/avvisi-a-chi-aspetta e lib/cron-cancellazioni, nessuno di R09. È comune, quindi non toccata.",
+      "verificato_da": "revisore B (sonnet): letti import e vi.mock della prova (importa rotta e moduli non di R09: comune), le esportazioni e i filtri di finto-giro-notturno.ts; corrette API e .in() mancante."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Una fascia «domani» proposta ieri e giudicata oggi conta il ritiro da mezzanotte, non da adesso",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "lib/store-hours.ts:243",
+      "descrizione": "finestraDelRitiro restituisce da: 0 anche quando il domani di propostaIl è già oggi: il paletto della fascia di oggi (conta solo la parte di finestra che resta) non vale. Oggi non pesa, perché la richiesta arriva alla rotta in pochi secondi. Peserebbe se una rotta passasse propostaIl con un ritardo lungo."
+    },
+    {
+      "titolo": "Il commento della frase del reso dice che l'esclusione per categoria è ancora da decidere",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "lib/promesse-pubbliche.ts:340-343",
+      "descrizione": "Il commento dice «quali categorie sono escluse è una decisione ancora da prendere», ma la regola esiste già (CATEGORIE_DEPERIBILI, ora in lib/ordini/recesso-per-categoria.ts)."
+    }
+  ],
+  "domande_per_nicola": [
+    "R09-016: quali comuni, con i loro CAP, deve accettare il campo città della cassa? (oggi la zona è solo il raggio di 5 km)",
+    "R09-005: le rotte /api/ai/answer-qa e /api/ai/reviews-summary non le chiama nessuna pagina: le colleghiamo a una pagina o le togliamo?"
+  ],
+  "conto": {
+    "agenti": 5,
+    "nota": "lotto 1 (modello grande), lotto 2 (sonnet), 3 revisori (1 grande, 2 sonnet); giro di correzione saltato per il tetto di spesa (17,35 $ su 19 $ di tetto duro)",
+    "subagenti": 5
+  },
+  "costo_usd": 17.77
+}

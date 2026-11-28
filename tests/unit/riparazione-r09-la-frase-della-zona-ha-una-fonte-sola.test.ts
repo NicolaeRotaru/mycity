@@ -16,7 +16,7 @@ const ALTRI = [
 ];
 
 describe('R09-005 — la frase della zona ha una fonte sola', () => {
-  it('«km dal negozio» è scritto solo nella fonte, in nessuno degli altri sei posti', () => {
+  it('«km dal negozio» è scritto solo nella fonte, in nessuno degli altri cinque posti', () => {
     expect(readFileSync(FONTE, 'utf8')).toMatch(/fino a .{1,40} dal negozio/);
     const rifiuto = readFileSync(FONTE, 'utf8').split('export function motivoFuoriZona')[1] ?? '';
     expect(rifiuto, 'il rifiuto riscrive il confine invece di usare la frase comune').not.toMatch(/RAGGIO_CONSEGNA_KM|km dal negozio/);
