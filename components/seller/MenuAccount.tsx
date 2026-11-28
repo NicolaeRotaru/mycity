@@ -24,8 +24,10 @@ import { etichettaPiano, type TonoPiano } from '@/lib/agenzia/etichetta-piano';
  */
 
 /** Il piano del negozio, letto una volta: lo usano il menu, la barra in alto e il Profilo. */
-export function usePianoDelNegozio() {
-  const { data } = useQuery({ queryKey: CHIAVE_PREVENTIVO, queryFn: leggiPreventivoAgenzia, retry: false });
+export function usePianoDelNegozio(attiva = true) {
+  // 28/11/2026 — `attiva` falso per chi non ha ancora mandato la richiesta, è sospeso o rifiutato: il server
+  // gli risponde 403 (withSellerAnchePendingRateLimit), e la lettura partirebbe a vuoto a ogni pagina (collaudo).
+  const { data } = useQuery({ queryKey: CHIAVE_PREVENTIVO, queryFn: leggiPreventivoAgenzia, retry: false, enabled: attiva });
   return { attivo: data?.attivo ?? null, etichetta: etichettaPiano(data?.attivo, data != null) };
 }
 
@@ -43,6 +45,7 @@ export default function MenuAccount({
   email,
   compatto,
   conProfilo = true,
+  conAbbonamento = true,
   onEsci,
 }: {
   nome: string;
@@ -51,6 +54,11 @@ export default function MenuAccount({
   compatto: boolean;
   /** 28/11/2026 — Il Profilo si apre solo da negozio approvato: prima la voce porterebbe alla pagina d'attesa. */
   conProfilo?: boolean;
+  /**
+   * 28/11/2026 — Chi non ha mandato la richiesta, è sospeso o rifiutato non apre la pagina Abbonamento: il layout gli
+   * ridisegna la sua schermata d'attesa (collaudo). Per lui la voce non c'è e il piano non si legge.
+   */
+  conAbbonamento?: boolean;
   onEsci: () => void;
 }) {
   const pathname = usePathname() ?? '';
@@ -58,7 +66,7 @@ export default function MenuAccount({
   const contenitoreRef = useRef<HTMLDivElement>(null);
   const pannelloRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const { etichetta } = usePianoDelNegozio();
+  const { etichetta } = usePianoDelNegozio(conAbbonamento);
 
   // Esc chiude, il fuoco entra nel menu e alla chiusura torna sul pulsante (regola della casa:
   // nessun pannello sovrapposto scritto a mano, vedi components/hooks/useBottomSheetA11y.ts).
@@ -131,6 +139,7 @@ export default function MenuAccount({
           </div>
           {/* R10-005 — Niente precarico: ogni precarico di /seller/… ripassa dal controllo d'accesso
               del middleware (getUser + profiles). La richiesta parte al clic, come nella barra. */}
+          {conAbbonamento && (
           <Link href={PERCORSO_ABBONAMENTO} prefetch={false} className={voce}>
             <IconaPiano
               size={16}
@@ -146,6 +155,7 @@ export default function MenuAccount({
               )}
             </span>
           </Link>
+          )}
           {conProfilo && (
             <Link href="/seller/profile" prefetch={false} className={voce}>
               <Settings size={16} className="shrink-0 text-ink-500" aria-hidden />

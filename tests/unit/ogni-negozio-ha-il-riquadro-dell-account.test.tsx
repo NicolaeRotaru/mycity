@@ -25,7 +25,13 @@ vi.mock('next/link', async () => {
   return { default: ({ href, children, prefetch: _p, ...r }: Record<string, unknown>) => ce('a', { href: String(href), ...r }, children as never) };
 });
 vi.mock('@tanstack/react-query', () => ({
-  useQuery: (o: { queryKey: unknown[] }) => ({ data: o.queryKey.includes('list') ? [] : o.queryKey.includes('preventivo-agenzia') ? { attivo: { fascia: 'business', stato: 'active', rinnovoIl: null } } : 0 }),
+  // Una lettura spenta (`enabled: false`) non ha dati, come nel react-query vero.
+  useQuery: (o: { queryKey: unknown[]; enabled?: boolean }) => ({
+    data: o.enabled === false ? undefined
+      : o.queryKey.includes('list') ? []
+      : o.queryKey.includes('preventivo-agenzia') ? { attivo: { fascia: 'business', stato: 'active', rinnovoIl: null } }
+      : 0,
+  }),
   useQueryClient: () => ({ invalidateQueries: async () => undefined }),
 }));
 vi.mock('@/lib/supabase/client', () => ({ supabase: { auth: { signOut: async () => ({}) }, from: () => ({}) } }));
@@ -78,6 +84,15 @@ describe('il negozio che non ha ancora mandato la richiesta (o sospeso, o rifiut
     expect(vociDelMenu(div)).toEqual([]);
     expect(div.querySelector('form[role="search"]')).toBeNull();
     expect(div.querySelector('a[href="/seller/products/new"]')).toBeNull();
+    // Dal collaudo del 28/11: la pagina Abbonamento per lui è un vicolo cieco (il layout ridisegna la sua schermata),
+    // e il server gli rifiuta la lettura del piano. Il riquadro si apre, senza quella voce e senza la lettura.
+    const riquadro = div.querySelector('button[aria-controls="menu-account-venditore"]')!;
+    expect(riquadro.textContent).toContain('Venditore');
+    await clic(riquadro);
+    const menu = div.querySelector('#menu-account-venditore')!;
+    expect(menu, 'il riquadro non si apre').toBeTruthy();
+    expect(menu.querySelector('a[href="/seller/abbonamento"]')).toBeNull();
+    expect(menu.textContent).toContain('Esci');
     act(() => root.unmount());
   });
 });

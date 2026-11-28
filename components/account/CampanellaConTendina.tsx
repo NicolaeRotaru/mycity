@@ -160,7 +160,8 @@ function NotifPopover({
   // All'apertura si rilegge anche il numero delle non lette: la lista è appena letta, il numero no
   // (si aggiorna ogni due minuti), e i due non devono dire cose diverse (collaudo del 25/11).
   useEffect(() => {
-    void qc.invalidateQueries({ queryKey: [...queryKeys.notifications.count, 'seller-bell'] });
+    // 28/11/2026 — Tutti i conti, non solo il suo: nell'admin il piede della barra laterale ne ha un altro (collaudo).
+    void qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
   }, [qc]);
 
   return (
@@ -176,7 +177,7 @@ function NotifPopover({
         role="dialog"
         aria-modal="true"
         aria-label="Notifiche"
-        className="absolute right-0 top-[calc(100%+10px)] z-modal w-[360px] max-w-[88vw] overflow-hidden rounded-xl border border-cream-200 bg-surface-0 text-ink-900 shadow-warm-xl"
+        className="absolute right-0 top-[calc(100%+10px)] z-modal w-[360px] max-w-[calc(100vw-5rem)] overflow-hidden rounded-xl border border-cream-200 bg-surface-0 text-ink-900 shadow-warm-xl"
       >
         <div className="flex items-center justify-between border-b border-cream-200 px-4 py-3">
           <span className="font-serif text-base font-bold">Notifiche</span>
@@ -283,14 +284,21 @@ export default function CampanellaConTendina({
   userId,
   idPannello = 'pannello-notifiche-venditore',
   etichettaConConto = false,
+  conto,
 }: {
   userId: string | null;
   idPannello?: string;
   etichettaConConto?: boolean;
+  /**
+   * Il conto delle non lette, se la barra ne ha già uno: nell'admin è quello di `useNotificationsCount`, lo stesso
+   * del piede della barra laterale, così i due numeri non si contraddicono (collaudo del 28/11).
+   */
+  conto?: number;
 }) {
   const [aperta, setAperta] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const nonLette = useNotifUnread(userId);
+  const contoProprio = useNotifUnread(conto === undefined ? userId : null);
+  const nonLette = conto ?? contoProprio;
   const etichetta = etichettaConConto && nonLette > 0 ? `Notifiche: ${nonLette > 99 ? '99+' : nonLette} da leggere` : 'Notifiche';
   return (
     <div className="relative">

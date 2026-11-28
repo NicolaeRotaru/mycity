@@ -298,6 +298,8 @@ export function AdminMobileTopbar() {
   const pathname = usePathname() ?? '';
   const { name, initials, handleSignOut, profileId } = useAdminIdentity();
   const badges = useAdminBadgeCounts();
+  // Lo stesso conto del piede della barra laterale: i due numeri non si contraddicono (collaudo del 28/11).
+  const nonLette = useNotificationsCount();
   const [open, setOpen] = useState(false);
   const cassettoRef = useRef<HTMLDivElement>(null);
   const pulsanteRef = useRef<HTMLButtonElement>(null);
@@ -328,7 +330,7 @@ export function AdminMobileTopbar() {
         </button>
 
         <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
-          <CampanellaConTendina userId={profileId} idPannello="pannello-notifiche-admin" etichettaConConto />
+          <CampanellaConTendina userId={profileId} idPannello="pannello-notifiche-admin" etichettaConConto conto={nonLette} />
           {/* Le iniziali, come il negozio: sul computer nome e ruolo stanno in fondo alla barra laterale. */}
           <Link href="/profile" className="flex items-center gap-2 md:hidden" title={`${name} · Admin`} aria-label={`Il tuo account: ${name}, Admin`}>
             <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-primary-700 text-sm font-bold text-white">

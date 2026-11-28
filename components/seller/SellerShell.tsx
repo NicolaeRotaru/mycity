@@ -208,7 +208,7 @@ export default function SellerShell({ children, menu = 'completo' }: { children:
   const conProdotti = menu !== 'solo_account';
   // Copilot e AI Studio sono strumenti del negozio approvato (`PERCORSI_SOLO_DA_APPROVATO`).
   const conCopilot = AI_NEGOZI_ACCESA && completo;
-  const { etichetta: piano } = usePianoDelNegozio();
+  const { etichetta: piano } = usePianoDelNegozio(menu !== 'solo_account');
 
   const storeName = profile?.store_name || profile?.full_name || profile?.email || userEmail || 'Negozio';
   const initials =
@@ -337,7 +337,8 @@ export default function SellerShell({ children, menu = 'completo' }: { children:
         </div>
         )}
 
-        {/* Nav */}
+        {/* Nav — senza voci (menu `solo_account`) resta solo lo spazio che spinge il riquadro dell'account in fondo. */}
+        {nav.length === 0 ? <div className="flex-1" aria-hidden /> : (
         <nav className={`flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-2 ${collapsed ? 'lg:px-2' : ''}`}>
           {nav.map((sec) => (
             <div key={sec.group} className="mb-1.5">
@@ -389,6 +390,7 @@ export default function SellerShell({ children, menu = 'completo' }: { children:
             </div>
           ))}
         </nav>
+        )}
 
         {/* Footer: il negozio e il suo piano, come su Claude (24/11/2026). Il menu che si apre porta
             all'abbonamento, al Profilo, al marketplace e all'uscita. */}
@@ -399,6 +401,7 @@ export default function SellerShell({ children, menu = 'completo' }: { children:
             email={profile?.email || userEmail || null}
             compatto={collapsed}
             conProfilo={completo}
+            conAbbonamento={menu !== 'solo_account'}
             onEsci={handleSignOut}
           />
         </div>
