@@ -28,6 +28,14 @@ const stato = vi.hoisted(() => ({
   esitoSblocco: { esito: 'sbloccata', fascia: 'business' } as Record<string, unknown>,
   testiAvvisi: [] as string[],
   portati: [] as { valori: Record<string, unknown>; filtri: Record<string, unknown> }[],
+  // 28/11/2026 — Le pagine che il programma apre (finte) e gli indizi che partono per il flusso 16.
+  pagine: {} as Record<string, string>,
+  indizi: [] as ({ instagram?: string; google_maps?: string } | undefined)[],
+}));
+
+vi.mock('@/lib/agenti/rete', async (originale) => ({
+  ...(await originale<typeof import('@/lib/agenti/rete')>()),
+  leggiPagina: async (url: string) => (stato.pagine[url] ? { ok: true, stato: 200, url, html: stato.pagine[url], errore: null, ms: 1 } : { ok: false, stato: null, url, html: '', errore: 'non si apre', ms: 1 }),
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -43,7 +51,7 @@ vi.mock('@/lib/agenzia/nuova-attivita', async (originale) => ({
   attivitaGiaIscritta: async () => stato.gia,
 }));
 vi.mock('@/lib/agenzia/dopo-iscrizione', () => ({
-  avviaDopoLIscrizione: (_a: unknown, fatto: { nuova: boolean }, _x: unknown, o: { dalModulo12: boolean }) => { if (fatto.nuova) stato.dopo.push({ dalModulo12: o.dalModulo12 }); },
+  avviaDopoLIscrizione: (_a: unknown, fatto: { nuova: boolean }, _x: unknown, o: { dalModulo12: boolean; indizi?: { instagram?: string; google_maps?: string } }) => { if (fatto.nuova) stato.dopo.push({ dalModulo12: o.dalModulo12 }); stato.indizi.push(o.indizi); },
 }));
 vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: async (titolo: string, testo: string) => { if (stato.avvisoRotto) throw new Error('telegram giù'); stato.avvisi.push(titolo); stato.testiAvvisi.push(testo); } }));
 vi.mock('@/lib/agenzia/abbonamento-contanti', () => ({
@@ -98,6 +106,8 @@ beforeEach(() => {
   stato.scelte = [];
   stato.esitoSblocco = { esito: 'sbloccata', fascia: 'business' };
   stato.portati = [];
+  stato.pagine = {};
+  stato.indizi = [];
 });
 
 describe('il pulsante «Aggiungi attività»', () => {
@@ -121,6 +131,37 @@ describe('il pulsante «Aggiungi attività»', () => {
     stato.lavoro = { stato: 'pronta', venditore: 'agente@esempio.it', risultato: {}, prima: { ...prima, sito: { misura: { ...prima.sito.misura, url: 'http://oradelgusto.it' } } } };
     await premi();
     expect(stato.iscritte[1].sito).toBeUndefined();
+  });
+
+  it('il sito e il profilo trovati dall AD si aprono, e arrivano al negozio e al flusso 16 (Raquel Cafè, 28/11)', async () => {
+    stato.pagine['https://www.raquelcafe.it/'] = '<title>Raquel Caffè</title><body>Piazza Duomo 23, Piacenza <a href="https://www.instagram.com/raquel_cafe23/">IG</a></body>';
+    const senzaSito = { ...prima, nome: 'Raquel 💗 Cafè', indirizzo: 'Piazza Duomo, 23, 29121 Piacenza PC', linkMaps: 'https://maps.app.goo.gl/abc123', sito: { misura: null } };
+    stato.lavoro = { stato: 'pronta', venditore: 'agente@esempio.it', prima: senzaSito, risultato: { sito: { url: 'https://www.raquelcafe.it/', livello: 'medio', giudizio: 'x', fonte: null } } };
+    await premi();
+    expect(stato.iscritte[0].sito).toBe('https://www.raquelcafe.it/');
+    expect(stato.indizi[0]).toEqual({ instagram: 'raquel_cafe23', google_maps: 'https://maps.app.goo.gl/abc123' });
+  });
+
+  it('un sito trovato solo dal nome entra nel negozio solo se il titolare lo conferma, e solo quello', async () => {
+    stato.pagine['https://www.raquelcafe.it/'] = '<title>Raquel Caffè</title><body>Piacenza <a href="https://www.instagram.com/raquel_cafe23/">IG</a></body>';
+    const senzaSito = { ...prima, nome: 'Raquel 💗 Cafè', indirizzo: 'Piazza Duomo, 23, 29121 Piacenza PC', sito: { misura: null } };
+    const lavoroAd = { stato: 'pronta', venditore: 'agente@esempio.it', prima: senzaSito, risultato: { sito: { url: 'https://www.raquelcafe.it/', livello: 'medio', giudizio: 'x', fonte: null } } };
+    stato.lavoro = lavoroAd;
+    await premi();
+    expect(stato.iscritte[0].sito).toBeUndefined();
+    expect(stato.indizi[0]?.instagram).toBeUndefined();
+    await premi({ lavoro: LAVORO, fascia: 'business', servizi: ['sito_web'], sitoConfermato: 'https://altro-sito.it/' });
+    expect(stato.iscritte[1].sito).toBeUndefined();
+    await premi({ lavoro: LAVORO, fascia: 'business', servizi: ['sito_web'], sitoConfermato: 'https://www.raquelcafe.it/' });
+    expect(stato.iscritte[2].sito).toBe('https://www.raquelcafe.it/');
+    expect(stato.indizi[2]?.instagram).toBe('raquel_cafe23');
+  });
+
+  it('un sito dell AD che non porta nome e città non arriva al negozio', async () => {
+    stato.pagine['https://omonimo.it/'] = '<title>Raquel Caffè</title><body>Torino</body>';
+    stato.lavoro = { stato: 'pronta', venditore: 'agente@esempio.it', prima: { ...prima, nome: 'Raquel 💗 Cafè', sito: { misura: null } }, risultato: { sito: { url: 'https://omonimo.it/', livello: 'medio', giudizio: 'x', fonte: null } } };
+    await premi();
+    expect(stato.iscritte[0].sito).toBeUndefined();
   });
 
   it('la scheda di un altro agente non si aggiunge; l admin sì', async () => {

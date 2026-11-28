@@ -31,6 +31,8 @@ import { ETICHETTE_SERVIZI, ServiziInArrivo } from '@/lib/agenzia/servizi-scelti
 
 import { attivitaGiaIscritta, iscriviAttivita } from '@/lib/agenzia/nuova-attivita';
 import { avviaDopoLIscrizione } from '@/lib/agenzia/dopo-iscrizione';
+import { instagramDelTitolare, schedaGoogleDelTitolare } from '@/lib/agenzia/indizi-del-titolare';
+import { confermaQuelloCheHaTrovatoLAd, instagramPerIlFlusso } from '@/lib/agenti/conferma-ad';
 import { ABBONAMENTI, FASCE } from '@/lib/agenzia/preventivo';
 import { sbloccaInContanti, sbloccoRiuscito, segnaLaSceltaSulPreventivo } from '@/lib/agenzia/abbonamento-contanti';
 
@@ -45,7 +47,13 @@ export const maxDuration = 60;
 const Richiesta = z.object({
   lavoro: z.string().uuid('Codice del lavoro non valido.'),
   fascia: z.enum(ABBONAMENTI, { message: 'Scegli l’abbonamento che ha scelto il titolare.' }),
+  // 28/11/2026 — Il sito trovato solo dal nome che il titolare ha confermato davanti all'agente («è il nostro»).
+  sitoConfermato: z.string().trim().max(600).optional(),
 }).and(ServiziInArrivo);
+
+const stessoSito = (a: string, b: string) => {
+  try { return new URL(a).hostname.replace(/^www\./, '').toLowerCase() === new URL(b).hostname.replace(/^www\./, '').toLowerCase(); } catch { return false; }
+};
 
 /** Un lavoro dopo la risposta. Fuori da una richiesta (le prove) `after` non c'è: si lancia e basta. */
 const dopoLaRisposta = (fn: () => Promise<void>) => {
@@ -84,7 +92,15 @@ export const POST = conAgente({ name: 'agente-aggiungi', max: 20, windowMs: 60 *
     const ad = pulisci(r.risultato);
     scheda = unisci(prima, ad, r.avvisi ?? []);
     if (!scheda.indirizzo && typeof ad.indirizzo === 'string' && ad.indirizzo.trim()) scheda = { ...scheda, indirizzo: ad.indirizzo.trim() };
+    // 28/11/2026 — Il sito trovato dall'AD (o in una pagina che l'AD ha visto) si apre anche qui: prima arrivava al negozio solo
+    // il sito aperto dal programma all'inizio, e all'accettazione il flusso 16 ripartiva «senza sito».
+    scheda = await confermaQuelloCheHaTrovatoLAd(scheda, { sitoUrl: ad.sito?.url ?? null, pagine: ad.pagine ?? null });
   }
+  // Il titolare ha confermato il sito trovato solo dal nome: vale come dato dal venditore, ma solo se è proprio quello
+  // che la scheda ha trovato adesso (il browser non può far entrare un indirizzo suo).
+  const conferma = esito.data.sitoConfermato;
+  const m = scheda.sito.misura;
+  if (conferma && m?.aperto && m.prova === 'nome' && stessoSito(conferma, m.url)) scheda = { ...scheda, sito: { ...scheda.sito, misura: { ...m, prova: 'venditore' } } };
   const attivita = attivitaDallaScheda(scheda);
   if (!attivita) return ApiErrors.invalidRequest(nomeNonValido(String(scheda.nome ?? '')) ?? 'I dati della scheda non bastano per aggiungere l’attività.');
 
@@ -119,7 +135,11 @@ export const POST = conAgente({ name: 'agente-aggiungi', max: 20, windowMs: 60 *
   logger.info('[agente-aggiungi] attività aggiunta', { id: fatto.id, nuova: fatto.nuova, conLink: Boolean(link), fascia, sblocco: sblocco.esito });
 
   // 3. Gli stessi passi del modulo 12, e l'avviso a Nicola (una volta per attività).
-  avviaDopoLIscrizione(admin, fatto, attivita, { dalModulo12: false, dopo: dopoLaRisposta });
+  // 28/11/2026 — Il profilo Instagram e il link della scheda Google vanno al flusso 16 come indizi, come quelli del modulo /sell.
+  const instagram = instagramDelTitolare(instagramPerIlFlusso(scheda));
+  const googleMaps = schedaGoogleDelTitolare(scheda.linkMaps);
+  const indizi = { ...(instagram ? { instagram } : {}), ...(googleMaps ? { google_maps: googleMaps } : {}) };
+  avviaDopoLIscrizione(admin, fatto, attivita, { dalModulo12: false, dopo: dopoLaRisposta, indizi });
   let avvisato = false;
   const nomeFascia = FASCE[fascia].nome;
   const fasciaCambiata = sblocco.esito === 'cambiata';

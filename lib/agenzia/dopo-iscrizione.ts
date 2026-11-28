@@ -3,6 +3,7 @@ import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
 import { inviaNuovaAttivitaAlFlusso } from '@/lib/agenzia/nuovo-cliente-n8n';
 import { analizzaSitoDopoLaRisposta } from '@/lib/agenzia/sito-pagespeed';
 import type { NuovaAttivita } from '@/lib/agenzia/nuova-attivita';
+import type { IndiziDelTitolare } from '@/lib/agenzia/indizi-del-titolare';
 
 /**
  * QUELLO CHE PARTE DOPO L'ISCRIZIONE DI UN'ATTIVITÀ — 27/11/2026.
@@ -15,12 +16,13 @@ import type { NuovaAttivita } from '@/lib/agenzia/nuova-attivita';
  *    aperta, bozze dei tre abbonamenti). Una seconda pressione non la rimanda.
  * `dopo` lancia un lavoro dopo la risposta (`after` di Next); fuori da una richiesta, come nelle prove, lo lancia e basta.
  * `dalModulo12` dice al 16 se l'attività è già nella scheda Clienti dell'agenzia (il modulo 12 la scrive lui).
+ * `indizi` (28/11/2026): il profilo Instagram e la scheda Google trovati dalla scheda del venditore, per il 16.
  */
 export function avviaDopoLIscrizione(
   admin: SupabaseClient,
   fatto: { id: string; nuova: boolean; sito: string | null },
   a: NuovaAttivita,
-  opzioni: { dalModulo12: boolean; dopo: (fn: () => Promise<void>) => void },
+  opzioni: { dalModulo12: boolean; dopo: (fn: () => Promise<void>) => void; indizi?: IndiziDelTitolare | null },
 ): void {
   if (fatto.sito) analizzaSitoDopoLaRisposta(admin, fatto.id, fatto.sito, opzioni.dopo);
   if (!fatto.nuova) return;
@@ -35,6 +37,7 @@ export function avviaDopoLIscrizione(
       descrizione: null,
       sito: fatto.sito ?? null,
       dalModulo12: opzioni.dalModulo12,
+      indizi: opzioni.indizi ?? null,
     });
   };
   opzioni.dopo(lavoro);

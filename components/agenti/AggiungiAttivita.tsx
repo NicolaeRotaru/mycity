@@ -40,12 +40,15 @@ export const paginaDiSdg = (lavoro: string) => `/agente/tocca-a-sdg?lavoro=${enc
 
 const c = (nomi: string) => nomi.split(/\s+/).filter(Boolean).map((n) => ag[n] ?? st[n] ?? n).join(' ');
 
-export default function AggiungiAttivita({ lavoro, nome, consigliato = null, vai }: { lavoro: string; nome: string; consigliato?: IdFascia | null; vai?: (indirizzo: string) => void }) {
+// 28/11/2026 — `sitoDaControllare`: il sito che la scheda ha trovato solo dal nome. Il venditore, davanti al titolare, può
+// confermare che è il loro: allora entra nel negozio (decisione «restringi»: da solo non entra, può essere di un omonimo).
+export default function AggiungiAttivita({ lavoro, nome, consigliato = null, vai, sitoDaControllare = null }: { lavoro: string; nome: string; consigliato?: IdFascia | null; vai?: (indirizzo: string) => void; sitoDaControllare?: string | null }) {
   const [fase, setFase] = useState<Fase>('pronto');
   const [attesa, setAttesa] = useState<Attesa>('controllo');
   const [fascia, setFascia] = useState<IdFascia | null>(null);
   const [servizi, setServizi] = useState<ServizioAgenzia[]>([]);
   const [nota, setNota] = useState('');
+  const [sitoSuo, setSitoSuo] = useState(false);
   const pronto = !!fascia && servizi.length > 0;
   const scegli = (b: ServizioAgenzia) => setServizi((x) => (x.includes(b) ? x.filter((y) => y !== b) : [...x, b]));
   const [sbloccata, setSbloccata] = useState(false);
@@ -62,7 +65,7 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null, vai
     setFase('invio');
     setErrore(null);
     try {
-      const r = await fetch('/api/agente/aggiungi', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lavoro, fascia, servizi, ...(nota.trim() ? { nota: nota.trim() } : {}) }) });
+      const r = await fetch('/api/agente/aggiungi', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lavoro, fascia, servizi, ...(nota.trim() ? { nota: nota.trim() } : {}), ...(sitoSuo && sitoDaControllare ? { sitoConfermato: sitoDaControllare } : {}) }) });
       const d = (await r.json().catch(() => null)) as { ok?: boolean; data?: { link?: string | null; nuova?: boolean; avvisato?: boolean; avvisoDovuto?: boolean; sbloccata?: boolean; giaOnline?: boolean }; error?: { message?: string } } | null;
       if (!r.ok || !d?.ok) {
         setErrore(d?.error?.message ?? 'Non sono riuscito ad aggiungere l’attività. Riprova fra poco.');
@@ -183,6 +186,13 @@ export default function AggiungiAttivita({ lavoro, nome, consigliato = null, vai
           <textarea id={`nota-${lavoro}`} value={nota} maxLength={NOTA_MASSIMA} rows={2} onChange={(e) => setNota(e.target.value)} placeholder="Per esempio: vuole far vedere la sala per le feste" />
           <span className={c('nota')}>{nota.length}/{NOTA_MASSIMA} · niente telefoni o email: sono indicazioni, non dati del titolare.</span>
         </fieldset>
+        {sitoDaControllare && (
+          <label className={c('fascia')} htmlFor={`sito-${lavoro}`}>
+            <input id={`sito-${lavoro}`} type="checkbox" checked={sitoSuo} onChange={(e) => setSitoSuo(e.target.checked)} disabled={fase === 'invio'} />
+            <span><b>Il sito {sitoDaControllare.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')} è il loro?</b></span>
+            <span className={c('nota')}>La scheda l’ha trovato dal nome. Chiedilo al titolare: se è il loro, lo colleghiamo alla sua vetrina.</span>
+          </label>
+        )}
         {!pronto && <p className={c('nota')}>{!fascia ? 'Scegli l’abbonamento' : 'Scegli almeno un servizio di cui ha bisogno'} per andare avanti.</p>}
         <div className={c('azioni')}>
           <button type="button" className={c('bottone')} onClick={aggiungi} disabled={fase === 'invio' || !pronto}>{fase === 'invio' ? 'Aggiungo…' : 'Sì, aggiungi'}</button>

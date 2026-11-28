@@ -6,12 +6,13 @@ import { NextResponse } from 'next/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { conAgente } from '@/lib/agenti/rotta';
 import { leggiLavoro } from '@/lib/agenti/n8n';
-import { pulisci, unisci, fontiDi, normalizza } from '@/lib/agenti/scheda';
-import { misuraSito, NON_E_UN_SITO } from '@/lib/agenti/sito';
+import { pulisci, unisci, normalizza } from '@/lib/agenti/scheda';
+import { confermaQuelloCheHaTrovatoLAd } from '@/lib/agenti/conferma-ad';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 20;
+// 28/11/2026 — Da 20 a 30 secondi: a scheda pronta il programma apre anche il sito e le pagine viste dall'AD (collaudo).
+export const maxDuration = 30;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const nessunaCache = { 'Cache-Control': 'no-store' };
@@ -30,13 +31,7 @@ export const GET = conAgente({ name: 'agente-stato', max: 400, windowMs: 60 * 60
   const ad = pulisci(r.risultato);
   const scheda = unisci(prima, ad, r.avvisi ?? []);
   if (r.secondi) scheda.avvisi.unshift(`L’AD ha risposto in ${r.secondi} secondi.`);
-  if (!prima.sito.misura?.aperto && ad.sito?.url && !NON_E_UN_SITO.test(ad.sito.url)) {
-    const m = await misuraSito(ad.sito.url);
-    if (m.aperto) {
-      scheda.sito.misura = m;
-      scheda.campi.push({ voce: 'Misura del sito', valore: `${m.pagine} ${m.pagine === 1 ? 'pagina' : 'pagine'} collegate dalla home · ${m.https === false ? 'non protetto (solo http)' : 'protetto (https)'} · ${m.telefonino ? 'pensato per il telefono' : 'non pensato per il telefono'}${m.piattaforma ? ` · fatto con ${m.piattaforma}` : ''}${m.funzioni.length ? ` · ${m.funzioni.join(', ')}` : ''}`, stato: 'confermato', fonte: m.url });
-      scheda.fonti = fontiDi(scheda);
-    }
-  }
+  // 28/11/2026 — Il programma apre il sito che l'AD ha visto e le pagine dei risultati che ha visto (lib/agenti/conferma-ad.ts).
+  await confermaQuelloCheHaTrovatoLAd(scheda, { sitoUrl: ad.sito?.url ?? null, pagine: ad.pagine ?? null });
   return NextResponse.json({ ok: true, data: { stato: 'pronta', scheda } }, { headers: nessunaCache });
 });

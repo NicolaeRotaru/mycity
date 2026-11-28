@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Scheda from '@/components/agenti/Scheda';
 import AggiungiAttivita from '@/components/agenti/AggiungiAttivita';
+import { sitoDaConfermare } from '@/lib/agenti/scheda';
 import st from '@/components/agenti/scheda.module.css';
 import type { Scheda as TScheda } from '@/lib/agenti/scheda';
 
@@ -42,6 +43,8 @@ async function chiediLeMie(): Promise<{ email: string | null; schede: Ultima[]; 
 
 export default function PaginaAgente() {
   const [testo, setTesto] = useState('');
+  // 28/11/2026 — Facoltativo: il sito o il profilo che il venditore vede sulla scheda Google (Raquel 💗 Cafè: sito non trovato).
+  const [canale, setCanale] = useState('');
   const [fase, setFase] = useState<Fase>('pronto');
   const [errore, setErrore] = useState<string | null>(null);
   const [scheda, setScheda] = useState<TScheda | null>(null);
@@ -104,7 +107,7 @@ export default function PaginaAgente() {
     ferma(); setErrore(null); setScheda(null); setLavoro(null); setFase('leggo');
     inizio.current = Date.now(); setSecondi(0);
     try {
-      const r = await fetch('/api/agente/analizza', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ testo }) });
+      const r = await fetch('/api/agente/analizza', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ testo, ...(canale.trim() ? { canale: canale.trim() } : {}) }) });
       if (r.status === 401) { location.href = ALL_ACCESSO; return; }
       const d = await leggi<{ lavoro: string | null; scheda: TScheda }>(r);
       if (!r.ok || !d?.data) { setFase('errore'); setErrore(d?.error?.message ?? 'Qualcosa non va: riprova.'); return; }
@@ -149,6 +152,11 @@ export default function PaginaAgente() {
             <button type="submit" className={c('bottone')} disabled={fase === 'leggo' || !testo.trim()}>{fase === 'leggo' ? 'Leggo…' : 'Analizza'}</button>
           </div>
           <p className={c('nota')}>Su Google Maps: apri l’attività → «Condividi» → «Copia link». Va bene anche scrivere il nome e la città.</p>
+          {/* 28/11/2026 — Armonia, un passo: lo spazio sopra il campo nuovo è un numero di Fibonacci (13 px, `mt-f2`). */}
+          <label htmlFor="canale" className="mt-f2 block">Sito o Instagram, se li vedi sulla scheda Google (facoltativo)</label>
+          <input id="canale" className={c('campo')} type="text" inputMode="url" autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={300}
+            placeholder="www.illocale.it  oppure  @illocale" value={canale} onChange={(e) => setCanale(e.target.value)} />
+          <p className={c('nota')}>Sulla scheda Google tocca «Sito web» o il profilo social e copia l’indirizzo: così la scheda li trova di sicuro.</p>
           {errore && <p className={c('errore')} role="alert">{errore}</p>}
           {/* 27/11/2026 — Le attività che hanno confermato: la pagina «Adesso tocca a SDG» si riapre da qui. */}
           {confermate.length > 0 && fase === 'pronto' && (
@@ -174,7 +182,7 @@ export default function PaginaAgente() {
         <div id="scheda">{scheda && <Scheda s={scheda} />}</div>
         {/* 27/11/2026 — Il secondo momento con un clic (Nicola): quando il titolare dice sì, nasce il preventivo. */}
         {/* Solo a scheda finita: prima il tipo e l'indirizzo spesso mancano (collaudo del 27/11). */}
-        {scheda && lavoro && fase === 'fatto' && <AggiungiAttivita key={lavoro} lavoro={lavoro} nome={scheda.nome} consigliato={scheda.consigliato} />}
+        {scheda && lavoro && fase === 'fatto' && <AggiungiAttivita key={lavoro} lavoro={lavoro} nome={scheda.nome} consigliato={scheda.consigliato} sitoDaControllare={sitoDaConfermare(scheda)} />}
         {fase === 'fatto' && lavoro && <p className={c('nota')}>La trovi fra «Le tue ultime schede», anche da un altro telefono dove entri col tuo account.</p>}
       </div>
     </div>

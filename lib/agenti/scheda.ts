@@ -11,13 +11,17 @@ import { CONDIZIONI, FASCE, ID_FASCE, PAGAMENTO, eFascia, type IdFascia } from '
 import type { LettoDalLink } from './link';
 import type { DatiOsm } from './osm';
 import type { MisuraSito, LivelloSito } from './sito';
+import { linkDelProfilo } from './profili';
+import { indirizzoMaiLetto } from './mai-lette';
+import type { CanaleDelVenditore } from './canale-venditore';
 
 export type Stato = 'confermato' | 'da_confermare' | 'frammento' | 'non_trovato';
 export const STATI: Record<Stato, string> = { confermato: 'Confermato', da_confermare: 'Da confermare', frammento: 'Solo un indizio', non_trovato: 'Non trovato' };
 const FORZA: Record<Stato, number> = { confermato: 3, da_confermare: 2, frammento: 1, non_trovato: 0 };
 
 export type Campo = { voce: string; valore: string | null; stato: Stato; fonte: string | null };
-export type Social = { canale: string; stato: 'trovato' | 'non_trovato'; livello: string | null; giudizio: string | null; fonte: string | null; origine?: 'sito' | 'mappa' | 'ad' | 'google' };
+// 28/11/2026 — `venditore`: copiato dal venditore dalla scheda Google; `pagine`: trovato da n8n nelle pagine che l'AD ha visto.
+export type Social = { canale: string; stato: 'trovato' | 'non_trovato'; livello: string | null; giudizio: string | null; fonte: string | null; origine?: 'sito' | 'mappa' | 'ad' | 'google' | 'venditore' | 'pagine' };
 export type Concorrente = { nome: string; tipo: string | null; distanza: number; fonte: string };
 /**
  * Cosa faremo per QUESTO negozio con una fascia (Nicola, 26/11/2026: «dentro ogni abbonamento deve esserci la
@@ -59,6 +63,20 @@ export type Scheda = {
 };
 
 // ———————————————————————————————— attrezzi
+
+/**
+ * 28/11/2026 — Il sito certo della scheda (aperto, e non riconosciuto solo dal nome), o `null`. Lo usano l'ordine a SDG e
+ * chi decide cosa entra nel negozio: un sito trovato solo dal nome può essere di un omonimo («restringi»).
+ */
+export function sitoCerto(m: MisuraSito | null | undefined): string | null {
+  return m?.aperto && m.prova !== 'nome' && /^https?:\/\//i.test(m.url) ? m.url : null;
+}
+
+/** Il sito trovato solo dal nome, in https, che il venditore può far confermare al titolare; altrimenti `null`. */
+export function sitoDaConfermare(s: Pick<Scheda, 'sito'>): string | null {
+  const m = s.sito?.misura;
+  return m?.aperto && m.prova === 'nome' && /^https:\/\//i.test(m.url) ? m.url : null;
+}
 
 export const httpsValido = (u: unknown): u is string => typeof u === 'string' && u.length <= 600 && /^https:\/\/[^\s"'<>]+$/.test(u);
 /** Una pagina aperta davvero dal programma: va bene anche in http (il sito di un negozio può non essere protetto). */
@@ -127,7 +145,11 @@ export const ATTENZIONE_FISSE = [
 
 // ———————————————————————————————— 1. la prima scheda, dal programma
 
-export function primaScheda({ letto, osm, misura, citta, data }: { letto: LettoDalLink; osm: DatiOsm | null; misura: MisuraSito | null; citta: string; data: string }): Scheda {
+export function primaScheda({ letto, osm, misura, citta, data, venditore = null }: {
+  letto: LettoDalLink; osm: DatiOsm | null; misura: MisuraSito | null; citta: string; data: string;
+  /** 28/11/2026 — Quello che il venditore ha copiato dalla scheda Google, e se il sito che ha scritto non si è potuto confermare. */
+  venditore?: { canale: CanaleDelVenditore | null; sitoNonConfermato?: string | null } | null;
+}): Scheda {
   const nome = letto.nome || osm?.luogo?.nome || 'Attività senza nome';
   const campi: Campo[] = [];
   const linkMaps = httpsValido(letto.link) ? letto.link : null;
@@ -146,22 +168,40 @@ export function primaScheda({ letto, osm, misura, citta, data }: { letto: LettoD
     const fatti = [`${m.pagine} ${m.pagine === 1 ? 'pagina' : 'pagine'} collegate dalla home`, m.https === false ? 'non protetto (solo http)' : m.https ? 'protetto (https)' : null,
       m.telefonino ? 'pensato per il telefono' : 'non pensato per il telefono', m.piattaforma ? `fatto con ${m.piattaforma}` : null,
       m.anno ? `anno in fondo alla pagina: ${m.anno}` : null].filter(Boolean).join(' · ');
-    campi.push({ voce: 'Sito', valore: `${dominio(m.url)} — ${fatti}`, stato: 'confermato', fonte: m.url });
+    // 28/11/2026 — Un sito riconosciuto solo dal nome può essere di un omonimo: si mostra, da controllare.
+    const soloNome = m.prova === 'nome';
+    campi.push({ voce: 'Sito', valore: `${dominio(m.url)} — ${fatti}${soloNome ? ' (trovato dal nome: controlla che sia il suo; se lo è, copialo nel campo «sito o Instagram»)' : ''}`, stato: soloNome ? 'da_confermare' : 'confermato', fonte: m.url });
     if (m.funzioni.length) campi.push({ voce: 'Sul sito si trova', valore: m.funzioni.join(', '), stato: 'confermato', fonte: m.url });
     if (m.titolo) campi.push({ voce: 'Titolo del sito su Google', valore: `«${m.titolo}»`, stato: 'confermato', fonte: m.url });
   } else if (l?.sito) {
     campi.push({ voce: 'Sito', valore: `${l.sito} (scritto sulla mappa libera; non si apre da qui${misura?.errore ? `: ${misura.errore}` : ''})`, stato: 'frammento', fonte: l.fonte });
   }
+  if (venditore?.sitoNonConfermato) {
+    campi.push({ voce: 'Sito scritto da te', valore: `${venditore.sitoNonConfermato} (non si apre, oppure la pagina non porta il nome e la città del locale: controllalo)`, stato: 'frammento', fonte: null });
+  }
   // I profili: prima quelli collegati dal sito stesso (confermati), poi quelli della mappa libera, solo se il
   // link porta davvero a quel social (sulla mappa chiunque può scrivere qualunque indirizzo).
   const DOMINI: Record<string, string> = { Instagram: 'instagram.com', Facebook: 'facebook.com', TikTok: 'tiktok.com' };
+  // 28/11/2026 (collaudo) — Un sito riconosciuto solo dal nome può essere di un omonimo: i suoi profili non scavalcano
+  // quello della mappa libera, e nemmeno quello copiato dal venditore (più sotto).
+  const sitoCerto = !!sitoAperto && sitoAperto.prova !== 'nome';
   const profilo = (canale: string, daSito?: string, daOsm?: string | null) => {
-    if (daSito && sitoAperto) social.push({ canale, stato: 'trovato', livello: 'da vedere', giudizio: 'Il sito dell’attività porta a questo profilo. Ritmo e video li guarda l’AD.', fonte: daSito, origine: 'sito' });
-    else if (daOsm && httpsValido(daOsm) && dominioDi(daOsm) === DOMINI[canale]) social.push({ canale, stato: 'trovato', livello: 'da vedere', giudizio: 'Profilo scritto sulla mappa libera: da controllare.', fonte: daOsm, origine: 'mappa' });
+    const dallaMappa = daOsm && httpsValido(daOsm) && dominioDi(daOsm) === DOMINI[canale] ? daOsm : null;
+    if (daSito && sitoCerto) social.push({ canale, stato: 'trovato', livello: 'da vedere', giudizio: 'Il sito dell’attività porta a questo profilo. Ritmo e video li guarda l’AD.', fonte: daSito, origine: 'sito' });
+    else if (dallaMappa) social.push({ canale, stato: 'trovato', livello: 'da vedere', giudizio: 'Profilo scritto sulla mappa libera: da controllare.', fonte: dallaMappa, origine: 'mappa' });
+    else if (daSito && sitoAperto) social.push({ canale, stato: 'trovato', livello: 'da vedere', giudizio: 'Il sito trovato dal nome porta a questo profilo: da controllare, come il sito.', fonte: daSito, origine: 'sito' });
   };
   profilo('Instagram', sitoAperto?.social.instagram, l?.instagram);
   profilo('Facebook', sitoAperto?.social.facebook, l?.facebook);
   profilo('TikTok', sitoAperto?.social.tiktok, null);
+  // Il profilo copiato dal venditore dalla scheda Google: vale come trovato, se il sito non ne collega già uno.
+  const dalVenditore: [string, 'Instagram' | 'Facebook' | 'TikTok'][] = [[venditore?.canale?.instagram ?? '', 'Instagram'], [venditore?.canale?.facebook ?? '', 'Facebook'], [venditore?.canale?.tiktok ?? '', 'TikTok']];
+  for (const [nomeProfilo, canale] of dalVenditore) {
+    if (!nomeProfilo || (sitoCerto && social.some((p) => p.canale === canale && p.origine === 'sito'))) continue;
+    const i = social.findIndex((p) => p.canale === canale);
+    const voce: Social = { canale, stato: 'trovato', livello: 'da vedere', giudizio: 'L’hai copiato tu dalla scheda Google. Ritmo e video li guarda l’AD.', fonte: linkDelProfilo(canale, nomeProfilo), origine: 'venditore' };
+    if (i < 0) social.push(voce); else social[i] = voce;
+  }
   social.push({ canale: 'Scheda Google Maps', stato: 'trovato', livello: 'da vedere', origine: 'google',
     giudizio: 'C’è: è il link che hai incollato. Voto, numero di recensioni, foto e orari guardali dal telefono prima di entrare.', fonte: linkMaps });
   const tipo = l?.tipo ?? null;
@@ -312,7 +352,9 @@ const STATI_AMMESSI = new Set<Stato>(['confermato', 'da_confermare', 'frammento'
 const LIVELLI_SITO = new Set(['nessuno', 'semplice', 'medio', 'pregio']);
 const CANALI = new Set(['Instagram', 'Facebook', 'TikTok']);
 
-export type RispostaPulita = Partial<Omit<Scheda, 'sito'>> & { sito?: { livello?: LivelloSito; giudizio?: string | null; fonte?: string | null; url?: string | null }; scartati: string[] };
+/** `pagine` (28/11/2026): le pagine dei risultati che l'AD ha visto, da aprire per cercarci sito e profili (lib/agenti/conferma-ad.ts). */
+export type RispostaPulita = Partial<Omit<Scheda, 'sito'>> & { sito?: { livello?: LivelloSito; giudizio?: string | null; fonte?: string | null; url?: string | null }; pagine?: string[]; scartati: string[] };
+
 
 export function pulisci(grezza: unknown): RispostaPulita {
   const r = (grezza && typeof grezza === 'object' ? grezza : {}) as Record<string, unknown>;
@@ -360,6 +402,7 @@ export function pulisci(grezza: unknown): RispostaPulita {
     fonte: httpsValido(sitoR.fonte) ? sitoR.fonte : null,
     url: httpsValido(sitoR.url) ? sitoR.url : null,
   };
+  const pagine = [...new Set((Array.isArray(r.pagine_viste) ? r.pagine_viste : []).filter((u): u is string => httpsValido(u) && !indirizzoMaiLetto(u)))].slice(0, 4);
   const rep = (r.reputazione && typeof r.reputazione === 'object' ? r.reputazione : {}) as Record<string, unknown>;
   const consigliato: IdFascia | null = eFascia(r.consigliato) ? r.consigliato : null;
   if (r.consigliato != null && !consigliato) scartati.push(`abbonamento consigliato sconosciuto («${String(r.consigliato)}»)`);
@@ -383,6 +426,7 @@ export function pulisci(grezza: unknown): RispostaPulita {
     migliorare: testi(r.migliorare, 5, 'da migliorare', true),
     reputazione: { sintesi: testo(rep.sintesi, 'reputazione', 500), positivi: testi(rep.positivi, 4, 'reputazione'), negativi: testi(rep.negativi, 4, 'reputazione') },
     sito,
+    pagine,
     potenziale: testi(r.potenziale, 5, 'potenziale', true),
     offerta, obiezioni,
     domande: testi(r.domande, 7, 'domande'),
@@ -418,7 +462,12 @@ export function unisci(prima: Scheda, adGrezzo: RispostaPulita, avvisiAd: string
     const i = s.social.findIndex((x) => x.canale === p.canale);
     const google = s.social.findIndex((x) => x.canale === 'Scheda Google Maps');
     if (i < 0) s.social.splice(google < 0 ? s.social.length : google, 0, p);
-    else if (p.stato === 'trovato') s.social[i] = { ...p, fonte: p.fonte ?? s.social[i].fonte, origine: s.social[i].origine === 'sito' ? 'sito' : 'ad' };
+    // Il profilo del sito o quello copiato dal venditore resta suo: l'AD aggiunge solo il giudizio.
+    else if (p.stato === 'trovato') {
+      // Anche quello della mappa libera (collaudo del 28/11): un profilo dell'AD non lo scavalca.
+      const tieni = s.social[i].origine === 'sito' || s.social[i].origine === 'venditore' || s.social[i].origine === 'mappa';
+      s.social[i] = { ...p, fonte: tieni ? s.social[i].fonte : p.fonte ?? s.social[i].fonte, origine: tieni ? s.social[i].origine : 'ad' };
+    }
     // «non trovato» dall'AD non cancella un profilo che il programma ha visto.
   }
   // Il programma ha aperto il sito: se l'AD dice che non c'è, ha visto solo gli estratti della ricerca.
@@ -427,9 +476,9 @@ export function unisci(prima: Scheda, adGrezzo: RispostaPulita, avvisiAd: string
     s.avvisi.push('L’AD non aveva visto il sito che il programma ha aperto: vale la misura del programma.');
     ad = { ...ad, sito: { ...ad.sito, livello: undefined, giudizio: null } };
   }
-  const profiliDalSito = prima.social.filter((p) => p.stato === 'trovato' && p.origine === 'sito').map((p) => p.canale.toLowerCase());
+  const profiliDalSito = prima.social.filter((p) => p.stato === 'trovato' && (p.origine === 'sito' || p.origine === 'venditore')).map((p) => p.canale.toLowerCase());
   const nonHa = (ad.non_ha ?? []).filter((x) => {
-    if (profiliDalSito.length && (/social|profil/i.test(x) || profiliDalSito.some((c) => x.toLowerCase().includes(c)))) { s.avvisi.push(`Tolto da «Non ha»: «${x}» (il sito dell’attività collega i suoi profili).`); return false; }
+    if (profiliDalSito.length && (/social|profil/i.test(x) || profiliDalSito.some((c) => x.toLowerCase().includes(c)))) { s.avvisi.push(`Tolto da «Non ha»: «${x}» (i profili ci sono: li collega il sito dell’attività o li ha copiati il venditore).`); return false; }
     if (sitoVisto && /\bsito\b/i.test(x) && /(trovat|in rete|nessun|non ha)/i.test(x)) { s.avvisi.push(`Tolto da «Non ha»: «${x}» (il programma ha aperto il sito).`); return false; }
     return true;
   });

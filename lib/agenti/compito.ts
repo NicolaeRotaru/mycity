@@ -7,6 +7,7 @@ import { FASCE, ID_FASCE, euro } from './fasce';
 import type { Scheda } from './scheda';
 import type { DatiOsm } from './osm';
 import type { MisuraSito } from './sito';
+import type { CanaleDelVenditore } from './canale-venditore';
 
 export const FLUSSO = '14 · Scheda per il venditore';
 
@@ -22,7 +23,7 @@ export const COMPITO = `Sei l'AD digitale di MyCity. Un venditore di SDG Agenzia
 
 FAI PRESTO: il venditore aspetta fuori dalla porta. Lancia tutte le ricerche insieme, all'inizio, al massimo 6. Apri una pagina solo se serve davvero, al massimo 2: prima il sito ufficiale, se lo trovi. Poi scrivi subito. Rispetta i massimi dello schema: liste corte, frasi corte.
 
-COSA HAI GIÀ, in «dati»: il nome e l'indirizzo letti dal link Google Maps del venditore, quello che dice la mappa libera (OpenStreetMap), i concorrenti vicini contati sulla mappa libera, e la misura del sito fatta dal programma (se il sito è noto). Non ricercare quello che c'è già: usalo. La scheda Google la scrive il programma: tu non scrivere la voce «Scheda Google Maps».
+COSA HAI GIÀ, in «dati»: il nome e l'indirizzo letti dal link Google Maps del venditore, quello che dice la mappa libera (OpenStreetMap), i concorrenti vicini contati sulla mappa libera, la misura del sito fatta dal programma (se il sito è noto), e in «dal_venditore» il sito o il profilo che il venditore ha copiato dalla scheda Google, se l'ha fatto. Non ricercare quello che c'è già: usalo. La scheda Google la scrive il programma: tu non scrivere la voce «Scheda Google Maps».
 
 LE RICERCHE: falle SEMPRE tutte e quattro, insieme, nella prima risposta, e SEMPRE con WebSearch in modalità «extended», mai «standard». La modalità standard non vede i piccoli negozi italiani: nella prova del 28/11 su 10 attività di Piacenza non ha trovato niente per 6 su 7, mentre la «extended» ha trovato telefono, orari, profili e storia.
 1. «<nome> <via> <città>»: gli elenchi (PagineGialle, Virgilio, PagineBianche), il sito ufficiale, il telefono, gli orari, cosa vende, da quando c'è, se fa consegne o prenotazioni;
@@ -32,6 +33,10 @@ LE RICERCHE: falle SEMPRE tutte e quattro, insieme, nella prima risposta, e SEMP
 Poi, se servono, al massimo 2 ricerche in più: la stampa locale (Libertà, Il Piacenza, PiacenzaSera, Piacenza24), TikTok, gli omonimi da non confondere.
 
 IL SITO TROVATO VA IN «sito.url»: se una ricerca o un elenco mostra l'indirizzo del sito ufficiale, mettilo SEMPRE in «sito.url», anche se non l'hai aperto. Il programma lo apre e lo misura da solo: se resta solo dentro una frase, la misura non si fa.
+
+I PROFILI VISTI NEGLI ESTRATTI VANNO IN «social»: se un estratto, un elenco o una guida mostra un profilo Instagram, Facebook o TikTok (un indirizzo instagram.com/…, facebook.com/…, tiktok.com/@…, o un nome @…) che porta il nome del locale, mettilo con stato «trovato», la fonte è l'indirizzo del profilo (per esempio https://www.instagram.com/nome_del_profilo/), e nel giudizio scrivi «visto solo in un estratto». Non scartarlo come omonimo perché il nome è simile ad altri: scartalo solo se l'estratto dice un'altra città o un altro indirizzo. Il programma lo controlla. Prova del 28/11: il Raquel 💗 Cafè di Piazza Duomo è uscito «Instagram non trovato», ma una guida di viaggio citava il suo profilo.
+
+LE PAGINE VISTE VANNO IN «pagine_viste»: gli indirizzi (al massimo 6) delle pagine dei risultati che parlano di QUESTO locale, come elenchi, guide e giornali, anche se non le hai aperte. Mai pagine di Google, Facebook, Instagram o Tripadvisor. Il programma le apre e ci cerca il sito e i profili del locale.
 
 CHIUSA, TRASFERITA O CON UN ALTRO NOME: guardalo in ogni risultato. Se un elenco o una pagina dice «chiuso definitivamente», «cessata attività», un altro indirizzo o un altro nome per questa attività, scrivilo come prima voce di «in_30_secondi» e di «attenzione», con la fonte in «campi». Se può essere chiusa, in «perche_consigliato» scrivi che il consiglio vale solo se il venditore la trova aperta.
 
@@ -102,6 +107,8 @@ export const SCHEMA = {
         livello: { enum: ['debole', 'attivo', 'forte', 'da vedere', 'nessuno'] }, post_al_mese: { type: ['number', 'null'] }, video: { type: ['boolean', 'null'] }, giudizio: sn, fonte: sn,
       } },
     },
+    // 28/11/2026 — Facoltativo: le pagine dei risultati che parlano del locale, che n8n apre per cercare sito e profili.
+    pagine_viste: { type: 'array', maxItems: 6, items: { type: 'string' } },
     potenziale: lista(4),
     offerta: { type: 'array', maxItems: 4, items: { type: 'object', required: ['servizio', 'perche'], properties: { servizio: s, perche: s } } },
     domande: lista(6),
@@ -122,7 +129,7 @@ export const SCHEMA = {
  * I dati per l'AD: solo quello che serve, senza l'identificativo del lavoro né l'ora, così due venditori che
  * analizzano lo stesso negozio lo stesso giorno ricevono la risposta già pronta (la memoria di «Chiedi all'AD»).
  */
-export function datiPerAd({ prima, osm, misura, giorno }: { prima: Scheda; osm: DatiOsm | null; misura: MisuraSito | null; giorno: string }) {
+export function datiPerAd({ prima, osm, misura, giorno, venditore = null }: { prima: Scheda; osm: DatiOsm | null; misura: MisuraSito | null; giorno: string; venditore?: CanaleDelVenditore | null }) {
   const l = osm?.luogo;
   return {
     oggi: giorno,
@@ -136,5 +143,7 @@ export function datiPerAd({ prima, osm, misura, giorno }: { prima: Scheda; osm: 
       piattaforma: misura.piattaforma, anno_in_fondo: misura.anno, funzioni: misura.funzioni, titolo: misura.titolo, descrizione: misura.descrizione,
       profili_collegati: misura.social, stima_del_programma: misura.stima,
     } : misura ? { indirizzo: misura.url, non_si_apre: misura.errore } : null,
+    // 28/11/2026 — Quello che il venditore ha copiato dalla scheda Google: è vero, l'ha visto lui.
+    dal_venditore: venditore ? { sito: venditore.sito, instagram: venditore.instagram, facebook: venditore.facebook, tiktok: venditore.tiktok } : null,
   };
 }
