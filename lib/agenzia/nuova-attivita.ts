@@ -43,6 +43,34 @@ export function emailDiSistema(a: Pick<NuovaAttivita, 'nome' | 'citta'>): string
   return `${base}-${impronta}.preventivo@${DOMINIO_DI_SISTEMA}`;
 }
 
+/** Quanto può essere lungo il tipo descritto: il vincolo `profiles_business_type_detail_check` della migrazione 703. */
+export const MAX_DETTAGLIO = 60;
+
+/** Le parole che non chiudono una frase: un taglio che finisce su «e» o «di» si accorcia ancora di una parola. */
+const CODA_SOSPESA = /[\s,;:.\-–—/(]+$|\s+(?:e|ed|o|di|da|in|con|per|del|della|dei|delle|degli|al|alla)$/i;
+
+/**
+ * Il tipo descritto («Bar, caffetteria e pasticceria…») accorciato a quello che il database accetta, tagliato
+ * fra due parole; `undefined` se è vuoto.
+ *
+ * 28/11/2026 03:13 — Nicola, dalla pagina dell'agente: «Non sono riuscito ad aggiungere l'attività». La scheda
+ * dell'AD descriveva il tipo con più di 60 caratteri, il codice ne lasciava passare 80 e il database ne
+ * accetta 60: ogni «Aggiungi attività» falliva sul vincolo, sempre, e «riprova fra poco» non poteva
+ * servire. Il tipo descritto è una didascalia: meglio corto che un negozio che non nasce.
+ */
+export function accorciaDettaglio(t: string | null | undefined): string | undefined {
+  const s = String(t ?? '').replace(/\s+/g, ' ').trim();
+  if (!s) return undefined;
+  // Il database conta i caratteri, non le unità UTF-16: un'emoji vale uno, e non si spezza a metà.
+  const caratteri = Array.from(s);
+  if (caratteri.length <= MAX_DETTAGLIO) return s;
+  const taglio = caratteri.slice(0, MAX_DETTAGLIO + 1).join('');
+  const spazio = taglio.lastIndexOf(' ');
+  let corto = spazio >= MAX_DETTAGLIO / 2 ? taglio.slice(0, spazio) : caratteri.slice(0, MAX_DETTAGLIO).join('');
+  for (let i = 0; i < 3 && CODA_SOSPESA.test(corto); i += 1) corto = corto.replace(CODA_SOSPESA, '');
+  return corto.trim() || caratteri.slice(0, MAX_DETTAGLIO).join('');
+}
+
 /** Il codice del link: 256 bit casuali, come la migrazione 708. */
 export const nuovoCodice = (): string => randomBytes(32).toString('hex');
 
@@ -209,7 +237,8 @@ export async function iscriviAttivita(admin: SupabaseClient, a: NuovaAttivita): 
   // 27/11/2026 (collaudo) — Il tipo si scrive alla nascita, o quando chi iscrive lo sa: un secondo invio senza
   // tipo (il pulsante dell'agente, il modulo 12 rimandato) non cancella più quello scritto prima.
   if (a.tipo_attivita || nuova) valori.business_type = a.tipo_attivita ?? 'negozio';
-  if (a.dettaglio || nuova) valori.business_type_detail = a.dettaglio || null;
+  // 28/11/2026 — Accorciato a 60 caratteri, come vuole il database: chi iscrive ne può mandare fino a 80.
+  if (a.dettaglio || nuova) valori.business_type_detail = accorciaDettaglio(a.dettaglio) ?? null;
   if (a.indirizzo) valori.store_address = a.citta && !a.indirizzo.toLowerCase().includes(a.citta.toLowerCase()) ? `${a.indirizzo}, ${a.citta}` : a.indirizzo;
   if (a.citta) valori.city = a.citta;
   // Il sito va nei canali della vetrina solo se è un indirizzo pubblico https, e solo alla nascita del
