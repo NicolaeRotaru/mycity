@@ -72,12 +72,11 @@ vi.mock('@/lib/shipping', () => ({
 vi.mock('@/lib/shipping-coordinate', () => ({
   coordinateDaIndirizziSalvati: vi.fn(async () => null),
 }));
-// 3/9/2026 — la rotta adesso decide con `negozioPuoServire`, che guarda la fascia
-// scelta e non solo l'orologio (l'ordine serale per domani non si rifiuta piu').
-vi.mock('@/lib/store-hours', () => ({
-  negozioPuoServire: vi.fn(() => true),
-  motivoNegozioChiuso: vi.fn((n: string) => `${n} è chiuso in questo momento.`),
-}));
+// R10-011 (onda 2, 28/11/2026) — Qui c'era un finto di '@/lib/store-hours' che rispondeva «può
+// sempre servire» per ogni negozio e ogni fascia: la prova passava anche con la regola degli orari
+// rotta. Adesso gira la regola vera: i negozi finti hanno `store_hours: null` (orari mai scritti,
+// nessun blocco), e l'ultimo caso chiude il forno per ferie e si aspetta il no della rotta.
+const orariFinti = vi.hoisted(() => ({ forno: null as unknown }));
 vi.mock('@/lib/promotions', () => ({
   fetchActiveDiscounts: vi.fn(async () => new Map()),
   discountedUnitCents: vi.fn((prezzo: number) => Math.round(prezzo * 100)),
@@ -106,7 +105,7 @@ vi.mock('@/lib/supabase/server', () => {
     { id: '22222222-2222-2222-2222-222222222222', seller_id: 'bbbbbbbb-0000-0000-0000-000000000002', name: 'Fiori', price: 8, stock: 10, has_variants: false, images: [], status: 'available' },
   ];
   const venditori = [
-    { id: 'aaaaaaaa-0000-0000-0000-000000000001', store_name: 'Forno', full_name: null, store_lat: 45.05, store_lng: 9.69, store_hours: null, email: 'a@b.it', role: 'seller', is_approved: true },
+    { id: 'aaaaaaaa-0000-0000-0000-000000000001', store_name: 'Forno', full_name: null, store_lat: 45.05, store_lng: 9.69, get store_hours() { return orariFinti.forno; }, email: 'a@b.it', role: 'seller', is_approved: true },
     { id: 'bbbbbbbb-0000-0000-0000-000000000002', store_name: 'Fiorista', full_name: null, store_lat: 45.06, store_lng: 9.70, store_hours: null, email: 'c@d.it', role: 'seller', is_approved: true },
   ];
 
@@ -266,6 +265,7 @@ beforeEach(() => {
   riservaFallisceAllaChiamata = 0;
   tentativi.clear();
   cronologia.length = 0;
+  orariFinti.forno = null;
   vi.resetModules();
 });
 
@@ -301,5 +301,13 @@ describe('la chiave del tentativo in contanti', () => {
     const res = await esegui();
     expect(res.status).toBe(200);
     expect(inseriti.length).toBe(2);
+  });
+
+  it('R10-011 — gli orari sono quelli veri: col forno chiuso per ferie la fascia di domani si rifiuta', async () => {
+    orariFinti.forno = { sun: [], mon: [], tue: [], wed: [], thu: [], fri: [], sat: [] };
+    const res = await esegui('chiave-ferie');
+    expect(res.status, 'col finto «può sempre servire» l’ordine verso un negozio chiuso passava').toBe(409);
+    expect(JSON.stringify(await res.json())).toContain('Forno');
+    expect(inseriti.length, 'nessun ordine verso un negozio chiuso').toBe(0);
   });
 });
