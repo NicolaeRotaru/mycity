@@ -30,7 +30,7 @@ const NON_UN_PROFILO = /^\/(sharer|share|intent|plugins|dialog|tr|p|reel|reels|e
  * I collegamenti di una pagina che parlano del locale: siti con il nome del locale nel dominio, e profili social.
  * Funzione pura: le prove la usano con pagine finte.
  */
-export function collegamentiDellaPagina(html: string, indirizzo: string, nome: string): { siti: string[]; profili: string[] } {
+export function collegamentiDellaPagina(html: string, indirizzo: string, nome: string, citta = 'Piacenza'): { siti: string[]; profili: string[] } {
   const siti = new Set<string>();
   const profili = new Set<string>();
   const casa = dominioDi(indirizzo);
@@ -49,7 +49,7 @@ export function collegamentiDellaPagina(html: string, indirizzo: string, nome: s
       profili.add(canale === 'Instagram' ? `https://www.instagram.com/${profilo}/` : canale === 'TikTok' ? `https://www.tiktok.com/${profilo}` : `https://www.facebook.com/${profilo}`);
       continue;
     }
-    if (maiLetta(h) || NON_E_UN_SITO.test(h) || !portaIlNome(h, nome)) continue;
+    if (maiLetta(h) || NON_E_UN_SITO.test(h) || !portaIlNome(h, nome, citta)) continue;
     siti.add(`https://${u.hostname}/`);
   }
   return { siti: [...siti].slice(0, 4), profili: [...profili].slice(0, 6) };
@@ -90,7 +90,7 @@ export async function confermaQuelloCheHaTrovatoLAd(
   const trovati = { siti: [] as string[], profili: [] as string[] };
   lette.forEach((p) => {
     if (!p.ok || !p.html) return;
-    const c = collegamentiDellaPagina(p.html, p.url, s.nome);
+    const c = collegamentiDellaPagina(p.html, p.url, s.nome, s.citta);
     trovati.siti.push(...c.siti);
     trovati.profili.push(...c.profili);
   });
@@ -99,7 +99,7 @@ export async function confermaQuelloCheHaTrovatoLAd(
   for (const fonte of [...new Set(trovati.profili)]) {
     const canale = canaleDi(fonte);
     if (!canale) continue;
-    if (!portaIlNome(new URL(fonte).pathname, s.nome)) continue;
+    if (!portaIlNome(new URL(fonte).pathname, s.nome, s.citta)) continue;
     if (s.social.some((p) => p.canale === canale && p.stato === 'trovato')) continue;
     mettiProfilo(s, { canale, stato: 'trovato', livello: 'da vedere', giudizio: 'Trovato in una pagina che parla del locale: controlla che sia il suo.', fonte, origine: 'pagine' });
   }
@@ -142,6 +142,9 @@ export async function confermaQuelloCheHaTrovatoLAd(
  * all'accettazione (collaudo del 28/11).
  */
 export function instagramPerIlFlusso(s: Scheda): string | null {
-  const p = s.social.find((x) => x.canale === 'Instagram' && x.stato === 'trovato' && x.fonte && (x.origine === 'sito' || x.origine === 'venditore' || x.origine === 'mappa'));
+  // Il profilo collegato da un sito riconosciuto solo dal nome no: quel sito può essere di un omonimo (ricollaudo del 28/11).
+  const sitoSicuro = s.sito.misura?.prova !== 'nome';
+  const p = s.social.find((x) => x.canale === 'Instagram' && x.stato === 'trovato' && x.fonte
+    && ((x.origine === 'sito' && sitoSicuro) || x.origine === 'venditore' || x.origine === 'mappa'));
   return nomeDelProfilo(p?.fonte);
 }

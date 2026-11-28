@@ -25,7 +25,7 @@ vi.mock('@/lib/agenti/rete', async (originale) => ({
   },
 }));
 
-const { candidatiDominio, eIlSitoDi, sitoIndicato, portaIlNome, indirizzoNellaPagina, radiceDelSito, misuraSito } = await import('@/lib/agenti/sito');
+const { candidatiDominio, eIlSitoDi, sitoIndicato, portaIlNome, indirizzoNellaPagina, radiceDelSito, misuraSito, indovinaSito, NON_E_UN_SITO } = await import('@/lib/agenti/sito');
 const { maiLetta } = await import('@/lib/agenti/mai-lette');
 const reteVera = await vi.importActual<typeof import('@/lib/agenti/rete')>('@/lib/agenti/rete');
 const { leggiCanaleDelVenditore } = await import('@/lib/agenti/canale-venditore');
@@ -99,6 +99,51 @@ describe('il sito indovinato', () => {
     expect(portaIlNome('antica_trattoria_pc', 'Antica Pasticceria Galli')).toBe(false);
     expect(portaIlNome('antica_osteria_pc', 'Antica Pasticceria Galli')).toBe(false);
     expect(portaIlNome('pizzeria_alla_stazione', 'Trattoria alla Pesa')).toBe(false);
+  });
+
+  it('ricollaudo: la città non è una parola del nome, un indirizzo diverso è un omonimo, un altro tipo di attività non passa', () => {
+    const casa = { indirizzo: 'Via Emilia Pavese, 10, 29121 Piacenza PC' };
+    expect(eIlSitoDi('<title>Bar Sport Piacenza</title><body>Bar Sport, Via Colombo 50, Piacenza</body>', 'Bar Sport', 'Piacenza', casa)).toBe(false);
+    expect(eIlSitoDi('<title>Bar Sport Piacenza</title><body>Bar Sport, Via Emilia Pavese 10, Piacenza</body>', 'Bar Sport', 'Piacenza', casa)).toBe(true);
+    expect(portaIlNome('gelateria_del_duomo_pc', 'Bar Duomo Piacenza')).toBe(false);
+    expect(portaIlNome('bar_duomo_pc', 'Bar Duomo Piacenza')).toBe(true);
+    expect(eIlSitoDi('<title>Fratelli Rossi Gomme</title><body>Piacenza</body>', 'Pasticceria Fratelli Rossi', 'Piacenza')).toBe(false);
+    expect(eIlSitoDi('<title>Pasticceria Fratelli Rossi</title><body>Piacenza</body>', 'Pasticceria Fratelli Rossi', 'Piacenza')).toBe(true);
+  });
+
+  it('il civico si legge anche «23A», «nr. 23», «23/A»; «Raquel Caffetteria» vale come «Raquel Cafè»', () => {
+    const indirizzo = 'Piazza Duomo, 23, 29121 Piacenza PC';
+    for (const civico of ['23A', 'nr. 23', '23/A', 'n° 23']) expect(indirizzoNellaPagina(`Piazza Duomo ${civico}, Piacenza`, indirizzo), civico).toBe(true);
+    expect(indirizzoNellaPagina('Piazza Duomo 230, Piacenza', indirizzo)).toBe(false);
+    expect(eIlSitoDi('<title>Raquel Caffetteria</title><body>Piacenza</body>', RAQUEL, 'Piacenza')).toBe(true);
+  });
+
+  it('fra due siti indovinati vince quello che porta il nostro indirizzo', async () => {
+    rete.pagine['https://raquelcafe.it/'] = '<title>Raquel Cafè</title><body>Piacenza</body>';
+    rete.pagine['https://raquel.it/'] = '<title>Raquel</title><body>Piazza Duomo 23, Piacenza</body>';
+    const m = await indovinaSito(RAQUEL, 'Piacenza', 3500, [], 'Piazza Duomo, 23, 29121 Piacenza PC');
+    expect(m).toMatchObject({ url: 'https://raquel.it/', prova: 'indirizzo' });
+  });
+
+  it('un sito fatto con Google Sites è un sito, non un elenco', async () => {
+    expect(NON_E_UN_SITO.test('sites.google.com')).toBe(false);
+    expect(NON_E_UN_SITO.test('www.google.com')).toBe(true);
+    rete.pagine['https://sites.google.com/view/raquelcafe/'] = '<title>Raquel Cafè</title><body>Piazza Duomo 23, Piacenza</body>';
+    expect((await sitoIndicato('https://sites.google.com/view/raquelcafe/home', RAQUEL, 'Piacenza', { fidato: true }))?.url).toBe('https://sites.google.com/view/raquelcafe/');
+  });
+
+  it('il venditore può dare un sito fatto con Google Sites; un link di Google Maps no', () => {
+    expect(leggiCanaleDelVenditore('https://sites.google.com/view/raquelcafe/home')?.sito).toBe('https://sites.google.com/view/raquelcafe/home');
+    expect(leggiCanaleDelVenditore('https://www.google.com/maps/place/x')).toBeNull();
+  });
+
+  it('un sito riconosciuto solo dal nome non manda al flusso 16 l’Instagram che collega', async () => {
+    rete.pagine['https://www.raquelcafe.it/'] = '<title>Raquel Caffè</title><body>Piacenza <a href="https://www.instagram.com/raquel_cafe23/">IG</a></body>';
+    const p = primaScheda({ letto, osm: null, misura: null, citta: 'Piacenza', data: 'x' });
+    const s = unisci(p, pulisci({ sito: { url: 'https://www.raquelcafe.it/', livello: 'medio', giudizio: 'x', fonte: null } }));
+    await confermaQuelloCheHaTrovatoLAd(s, { sitoUrl: 'https://www.raquelcafe.it/', pagine: [] });
+    expect(s.sito.misura?.prova).toBe('nome');
+    expect(instagramPerIlFlusso(s)).toBeNull();
   });
 
   it('un nome fatto solo di parole comuni si riconosce lo stesso («Caffè Bistrot», «Coffee Lounge»)', () => {

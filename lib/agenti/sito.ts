@@ -22,6 +22,8 @@ export type MisuraSito = {
   anno: number | null;
   stima: LivelloSito;
   errore: string | null;
+  /** 28/11/2026 — Con che prova il sito è del locale (vedi `provaDelSito`); assente per il sito scritto sulla mappa libera. */
+  prova?: ProvaDelSito;
 };
 
 const testo = (s: string | undefined | null, max = 200) => {
@@ -93,10 +95,11 @@ export function misuraHtml(html: string, indirizzo: string): Omit<MisuraSito, 'h
   return { url: base?.toString() ?? indirizzo, titolo, descrizione, telefonino, pagine, funzioni, social, piattaforma, anno, stima };
 }
 
-/** Domini che non sono «il sito» dell'attività: social, mappe, elenchi. */
 // 28/11/2026 — Anche share.google e i giornali locali: un articolo sul locale non è il suo sito (collaudo).
 // I siti fatti con Google Sites (sites.google.com/view/…) invece sono siti dei locali.
-export const NON_E_UN_SITO = /(^|\.)(facebook|instagram|tiktok|youtube|(?<!sites\.)google|goo|linktr|wa|whatsapp|tripadvisor|thefork|justeat|glovoapp|deliveroo|paginegialle|paginebianche|virgilio|yelp|booking|airbnb|matrimonio|sluurpy|restaurantguru|wanderlog|liberta|ilpiacenza|piacenzasera|piacenza24|ilpiacenzaonline)\.[a-z.]+$|(^|\.)share\.google$/i;
+const ELENCHI_E_PROFILI = /(^|\.)(facebook|instagram|tiktok|youtube|google|goo|linktr|wa|whatsapp|tripadvisor|thefork|justeat|glovoapp|deliveroo|paginegialle|paginebianche|virgilio|yelp|booking|airbnb|matrimonio|sluurpy|restaurantguru|wanderlog|liberta|ilpiacenza|piacenzasera|piacenza24|ilpiacenzaonline)\.[a-z.]+$|(^|\.)share\.google$/i;
+/** Domini che non sono «il sito» dell'attività: social, mappe, elenchi, giornali. Google Sites (sites.google.com) invece sì. */
+export const NON_E_UN_SITO = { test: (host: string): boolean => String(host ?? '').toLowerCase().replace(/^www\./, '') !== 'sites.google.com' && ELENCHI_E_PROFILI.test(String(host ?? '')) };
 
 export async function misuraSito(indirizzo: string): Promise<MisuraSito> {
   const vuota = (url: string, errore: string): MisuraSito => ({ url, aperto: false, https: null, titolo: null, descrizione: null, telefonino: false,
@@ -137,35 +140,41 @@ const GENERICHE = new Set(['bar', 'caffe', 'cafe', 'caffetteria', 'cafeteria', '
 const slug = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' e ').replace(/['’`]/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /**
- * Le parole che distinguono il locale nel suo nome, senza articoli e parole comuni («Raquel 💗 Cafè» → ["raquel"]).
+ * Le parole che distinguono il locale nel suo nome, senza articoli, parole comuni e la città («Raquel 💗 Cafè» → ["raquel"];
+ * «Bar Duomo Piacenza» → ["duomo"]: la città non distingue niente, ricollaudo del 28/11).
  * Un nome fatto solo di parole comuni («Caffè Bistrot», «Coffee Lounge») le tiene tutte: altrimenti non si
  * riconoscerebbe più nessun sito, nemmeno quello scritto dal venditore (collaudo del 28/11).
  */
-export function paroleDistintive(nome: string): string[] {
+export function paroleDistintive(nome: string, citta = 'Piacenza'): string[] {
+  const dellaCitta = new Set([...slug(citta).split(' '), 'piacenza', 'piacentino', 'piacentina']);
   const tutte = slug(nome).split(' ').filter((p) => p.length >= 3 && !ARTICOLI.has(p));
-  const proprie = tutte.filter((p) => !GENERICHE.has(p));
+  const proprie = tutte.filter((p) => !GENERICHE.has(p) && !dellaCitta.has(p));
   return proprie.length ? proprie : tutte;
 }
 
-// Le famiglie dei tipi di locale: un profilo «gelateria_del_duomo» non è del «Bar del Duomo» (collaudo del 28/11).
+// Le famiglie dei tipi di attività: un profilo «gelateria_del_duomo» non è del «Bar del Duomo», un sito «Fratelli Rossi
+// Gomme» non è della «Pasticceria Fratelli Rossi» (collaudi del 28/11).
 const FAMIGLIE: string[][] = [
   ['bar', 'caffe', 'cafe', 'caffetteria', 'cafeteria', 'coffee', 'bistrot', 'bistro', 'pub', 'lounge'], ['pasticceria'],
   ['ristorante', 'trattoria', 'osteria'], ['pizzeria'], ['forno', 'panificio'], ['macelleria'], ['gelateria'], ['enoteca'],
   ['parrucchiere', 'salone'], ['farmacia'], ['ottica'], ['libreria'], ['boutique', 'negozio'],
+  ['gomme', 'gommista', 'pneumatici'], ['officina', 'carrozzeria', 'autofficina'], ['ferramenta'], ['abbigliamento'],
+  ['immobiliare'], ['assicurazioni'], ['estetica', 'estetista'], ['tabaccheria'], ['edicola'], ['fiorista', 'fiori'],
+  ['lavanderia'], ['palestra'], ['hotel', 'albergo'],
 ];
+const famiglieIn = (parole: Set<string>) => FAMIGLIE.filter((f) => f.some((w) => parole.has(w)));
 
 /**
  * Un nome di profilo o un dominio è di questo locale? Servono TUTTE le parole che distinguono il nome, e nessuna parola
- * di un altro tipo di locale («raquel_cafe23» per «Raquel 💗 Cafè»: sì; «gelateriadelduomo» per «Bar del Duomo»: no;
+ * di un altro tipo di attività («raquel_cafe23» per «Raquel 💗 Cafè»: sì; «gelateriadelduomo» per «Bar del Duomo»: no;
  * «rossi_gomme_piacenza» per «Pasticceria Fratelli Rossi»: no, manca «fratelli»).
  */
-export function portaIlNome(testoProfilo: string, nome: string): boolean {
+export function portaIlNome(testoProfilo: string, nome: string, citta = 'Piacenza'): boolean {
   const s = slug(testoProfilo.replace(/[._-]+/g, ' ')).replace(/ /g, '');
-  const distinte = paroleDistintive(nome);
+  const distinte = paroleDistintive(nome, citta);
   if (!distinte.length || !distinte.every((p) => s.includes(p))) return false;
-  const delNome = new Set(slug(nome).split(' '));
-  const famiglieDelNome = FAMIGLIE.filter((f) => f.some((w) => delNome.has(w)));
-  return !FAMIGLIE.some((f) => !famiglieDelNome.includes(f) && f.some((w) => w.length >= 6 && s.includes(w)));
+  const delNome = famiglieIn(new Set(slug(nome).split(' ')));
+  return !FAMIGLIE.some((f) => !delNome.includes(f) && f.some((w) => w.length >= 5 && s.includes(w)));
 }
 
 /** Il nome di un profilo social ridotto a una base per il dominio: «@raquel_cafe23» → «raquelcafe23». */
@@ -201,51 +210,87 @@ export function candidatiDominio(nome: string, citta = 'Piacenza', profili: stri
 
 const PARCHEGGIO = /dominio (in vendita|registrato|acquistato)|domain (is )?for sale|this domain|buy this domain|parked|sedo\.com|coming soon|in costruzione|under construction|website is (being )?built|default web page|it works!/i;
 
-/** «Caffè» e «Cafè» sono la stessa parola per chi scrive un titolo. */
-const uguaglia = (s: string) => s.replace(/\bcaffe\b/g, 'cafe');
+/** «Caffè», «Cafè», «Caffetteria», «Coffee» sono la stessa parola per chi scrive un titolo. */
+const uguaglia = (s: string) => s.replace(/\b(caffe|caffetteria|cafeteria|coffee)\b/g, 'cafe');
+
+const TIPI_DI_VIA = 'via|viale|piazza|piazzale|corso|strada|stradone|largo|vicolo|borgo|galleria|contrada|cantone|stradello';
+
+/** La via e il numero civico di un indirizzo («Piazza Duomo, 23, 29121 Piacenza PC» → { via: «duomo», civico: «23» }). */
+function viaECivico(indirizzo: string | null | undefined): { via: string; civico: string } | null {
+  const m = slug(String(indirizzo ?? '')).match(new RegExp(`^(?:${TIPI_DI_VIA})?\\s*([a-z][a-z ]*?)\\s+(?:n |nr |numero )?(\\d{1,4})[a-z]?(?: |$)`));
+  if (!m) return null;
+  const via = m[1].split(' ').filter((w) => w.length >= 3 && !ARTICOLI.has(w)).join(' ');
+  return via ? { via, civico: m[2] } : null;
+}
 
 /**
- * L'indirizzo del locale scritto nella pagina: la via e il numero civico vicini («Piazza Duomo, 23» → «duomo 23»).
- * Il numero conta: il Duomo di Piacenza è al 33 della stessa piazza.
+ * L'indirizzo del locale scritto nella pagina: la via e il numero civico vicini («Piazza Duomo, 23» → «duomo 23»;
+ * valgono anche «n. 23», «nr. 23», «23/A», «23A»). Il numero conta: il Duomo di Piacenza è al 33 della stessa piazza.
  */
 export function indirizzoNellaPagina(testoPagina: string, indirizzo: string | null | undefined): boolean {
-  const m = slug(String(indirizzo ?? '')).match(/^(?:via|viale|piazza|piazzale|corso|strada|stradone|largo|vicolo|borgo|galleria|contrada|cantone)?\s*([a-z][a-z ]*?)\s+(\d{1,4})(?: |$)/);
-  if (!m) return false;
-  const via = m[1].split(' ').filter((w) => w.length >= 3 && !ARTICOLI.has(w)).join(' ');
-  if (!via) return false;
-  return new RegExp(`(^| )${via}( n)? ${m[2]}( |$)`).test(slug(testoPagina));
+  const nostro = viaECivico(indirizzo);
+  if (!nostro) return false;
+  return new RegExp(`(^| )${nostro.via}( n| nr| numero)? ${nostro.civico}(a|b|c| a| b| c)?( |$)`).test(slug(testoPagina));
+}
+
+/** Gli indirizzi (via e civico) scritti in una pagina: «Via Colombo 50» → «colombo 50». */
+function indirizziNellaPagina(testoPagina: string): string[] {
+  const fuori: string[] = [];
+  const re = new RegExp(`(?:^| )(?:${TIPI_DI_VIA}) ((?:[a-z]+ ){0,3}?[a-z]+)(?: n| nr| numero)? (\\d{1,4})(?:[a-z]| [abc])?(?= |$)`, 'g');
+  for (const m of slug(testoPagina).matchAll(re)) {
+    const via = m[1].split(' ').filter((w) => w.length >= 3 && !ARTICOLI.has(w)).join(' ');
+    if (via) fuori.push(`${via} ${m[2]}`);
+  }
+  return fuori.slice(0, 40);
 }
 
 /** Il testo che si legge in una pagina: senza tag, script e indirizzi dei collegamenti (un link a un profilo non è il nome). */
 const testoVisibile = (html: string) => html.slice(0, 300_000).replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]*>/g, ' ');
 
+/** Con che prova una pagina è del locale: l'ha data il venditore, porta il nostro indirizzo, o solo il nome. */
+export type ProvaDelSito = 'venditore' | 'indirizzo' | 'nome';
+
 /**
  * La pagina è davvero di questa attività? Città nella pagina, niente pagina di parcheggio, e il nome:
- *  · stretto (di serie): le parole che distinguono il nome nel titolo, nella descrizione o nell'h1. Se il nome ha una
- *    parola distintiva sola («Raquel», «Duomo»), serve di più: il nome intero nel titolo («Raquel Caffè»), oppure la via
- *    col numero civico del locale nella pagina (collaudo del 28/11: «Bar del Duomo» prendeva il sito di un altro);
- *  · `largo`: il nome come parola intera in tutto il testo che si legge. Solo per un sito che il venditore ha copiato
- *    dalla scheda Google, mai per uno indovinato, visto dall'AD o trovato in una pagina.
+ *  · stretto (di serie): le parole che distinguono il nome nel titolo, nella descrizione o nell'h1, e nessun altro tipo
+ *    di attività nel titolo. Se la pagina scrive degli indirizzi e nessuno è il nostro, è di un omonimo (ricollaudo del
+ *    28/11: un altro «Bar Sport» in Via Colombo 50). Con una parola distintiva sola serve di più: il nome intero nel titolo,
+ *    oppure la via col numero civico del locale;
+ *  · `largo`: il nome come parola intera nel testo che si legge, nel testo alternativo delle immagini o nel titolo. Solo per
+ *    un sito che il venditore ha copiato dalla scheda Google.
+ * Restituisce la prova, o `false`.
  */
-export function eIlSitoDi(html: string, nome: string, citta = 'Piacenza', { largo = false, indirizzo = null }: { largo?: boolean; indirizzo?: string | null } = {}): boolean {
+export function provaDelSito(html: string, nome: string, citta = 'Piacenza', { largo = false, indirizzo = null }: { largo?: boolean; indirizzo?: string | null } = {}): ProvaDelSito | false {
   if (!html || PARCHEGGIO.test(html.slice(0, 60_000))) return false;
   const tutto = slug(html.slice(0, 300_000));
   if (!tutto.includes(slug(citta))) return false;
-  const parole = paroleDistintive(nome);
+  const parole = paroleDistintive(nome, citta);
   if (!parole.length) return false;
+  const visibile = testoVisibile(html);
   if (largo) {
-    // Il testo che si legge, più il testo alternativo delle immagini (spesso il nome sta solo nel logo) e il titolo.
     const alt = [...html.slice(0, 300_000).matchAll(/<img[^>]+alt=["']([^"']*)["']/gi)].map((m) => m[1]).join(' ');
-    const leggibile = slug(`${testoVisibile(html)} ${alt} ${html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? ''}`);
-    return parole.filter((p) => new RegExp(`(^| )${p}( |$)`).test(leggibile)).length / parole.length >= 0.75;
+    const leggibile = slug(`${visibile} ${alt} ${html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? ''}`);
+    return parole.filter((p) => new RegExp(`(^| )${p}( |$)`).test(leggibile)).length / parole.length >= 0.75 ? 'venditore' : false;
   }
   const testa = slug([html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1], ...[...html.matchAll(/<meta[^>]+(?:name|property)=["'](?:description|og:site_name|og:title)["'][^>]*content=["']([^"']*)["']/gi)].map((m) => m[1]),
     ...[...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)].map((m) => m[1].replace(/<[^>]*>/g, ' '))].filter(Boolean).join(' '));
   // Nel titolo basta il pezzo: un titolo «ladolcedispensa.it» vale.
   if (parole.filter((p) => testa.includes(p)).length / parole.length < 0.75) return false;
-  if (parole.length >= 2) return true;
-  const intero = uguaglia(slug(nome));
-  return uguaglia(testa).includes(intero) || indirizzoNellaPagina(testoVisibile(html), indirizzo);
+  // Un altro tipo di attività nel titolo («Fratelli Rossi Gomme» per la «Pasticceria Fratelli Rossi»).
+  const delNome = famiglieIn(new Set(slug(nome).split(' ')));
+  const nelTitolo = famiglieIn(new Set(testa.split(' ')));
+  // Vale solo se il nome dice il tipo: «La Dolce Dispensa» può avere «pasticceria» nel titolo.
+  if (delNome.length && nelTitolo.some((f) => !delNome.includes(f)) && !nelTitolo.some((f) => delNome.includes(f))) return false;
+  if (indirizzoNellaPagina(visibile, indirizzo)) return 'indirizzo';
+  // La pagina scrive degli indirizzi, e nessuno è il nostro: è di un omonimo.
+  if (viaECivico(indirizzo) && indirizziNellaPagina(visibile).length) return false;
+  if (parole.length >= 2) return 'nome';
+  return uguaglia(testa).includes(uguaglia(slug(nome))) ? 'nome' : false;
+}
+
+/** La pagina è davvero di questa attività? (vedi `provaDelSito`) */
+export function eIlSitoDi(html: string, nome: string, citta = 'Piacenza', opzioni: { largo?: boolean; indirizzo?: string | null } = {}): boolean {
+  return provaDelSito(html, nome, citta, opzioni) !== false;
 }
 
 /** Una pagina aperta è ancora un sito? Dopo i rinvii può essere finita su un profilo, un elenco o un giornale. */
@@ -255,11 +300,13 @@ const finitaAltrove = (url: string) => { try { return NON_E_UN_SITO.test(new URL
 async function provaIndirizzi(candidati: string[], nome: string, citta: string, attesaMs: number, indirizzo: string | null): Promise<MisuraSito | null> {
   const prove = await Promise.all(candidati.map(async (d, i) => {
     const pagina = await leggiPagina(`https://${d}/`, { attesaMs, maxByte: 600_000 });
-    return pagina.ok && !finitaAltrove(pagina.url) && eIlSitoDi(pagina.html, nome, citta, { indirizzo }) ? { i, pagina } : null;
+    const prova = pagina.ok && !finitaAltrove(pagina.url) ? provaDelSito(pagina.html, nome, citta, { indirizzo }) : false;
+    return prova ? { i, pagina, prova } : null;
   }));
-  const vinta = prove.filter((x): x is NonNullable<typeof x> => x !== null).sort((a, b) => a.i - b.i)[0];
+  // Prima chi porta il nostro indirizzo, poi l'ordine dei più probabili.
+  const vinta = prove.filter((x): x is NonNullable<typeof x> => x !== null).sort((a, b) => (a.prova === 'indirizzo' ? 0 : 1) - (b.prova === 'indirizzo' ? 0 : 1) || a.i - b.i)[0];
   if (!vinta) return null;
-  return { ...misuraHtml(vinta.pagina.html, vinta.pagina.url), aperto: true, https: vinta.pagina.url.startsWith('https:'), errore: null };
+  return { ...misuraHtml(vinta.pagina.html, vinta.pagina.url), aperto: true, https: vinta.pagina.url.startsWith('https:'), errore: null, prova: vinta.prova };
 }
 
 /** Prova gli indirizzi probabili in parallelo, al massimo `attesaMs`. Restituisce la misura del primo che è davvero suo. */
@@ -309,6 +356,7 @@ export async function sitoIndicato(dove: string, nome: string | null, citta = 'P
     if (seconda.ok) { pagina = seconda; https = seconda.url.startsWith('https:'); }
   }
   if (!pagina.ok || !pagina.html || finitaAltrove(pagina.url)) return null;
-  if (!eIlSitoDi(pagina.html, nome, citta, fidato ? { largo: true } : { indirizzo })) return null;
-  return { ...misuraHtml(pagina.html, pagina.url), aperto: true, https, errore: null };
+  const prova = provaDelSito(pagina.html, nome, citta, fidato ? { largo: true } : { indirizzo });
+  if (!prova) return null;
+  return { ...misuraHtml(pagina.html, pagina.url), aperto: true, https, errore: null, prova };
 }

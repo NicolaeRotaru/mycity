@@ -56,7 +56,8 @@ export function leggiCanaleDelVenditore(grezzo: unknown): CanaleDelVenditore | n
   let u: URL;
   try { u = new URL(conSchema); } catch { return null; }
   if (!/^https?:$/.test(u.protocol) || !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(u.hostname) || u.username || u.password) return null;
-  if (DI_GOOGLE.test(u.hostname)) return null;
+  // Un link di Google non è il sito; un sito fatto con Google Sites (sites.google.com/view/…) sì (ricollaudo del 28/11).
+  if (DI_GOOGLE.test(u.hostname) && u.hostname.toLowerCase() !== 'sites.google.com') return null;
   fuori.sito = u.toString();
   return fuori;
 }
