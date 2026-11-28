@@ -184,9 +184,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   const attesoCents = typeof pending.total_cents === 'number' ? pending.total_cents : null;
   const incassatoCents = session.amount_total ?? null;
   if (attesoCents !== null && incassatoCents !== null && Math.abs(incassatoCents - attesoCents) > 1) {
-    logger.error('[stripe] incasso diverso dal preventivo: ordini non creati', {
-      pendingCheckoutId, attesoCents, incassatoCents,
-    });
+    logger.error('[stripe] incasso diverso dal preventivo: ordini non creati', { pendingCheckoutId, attesoCents, incassatoCents });
     await notifyAdmins(
       '⚠️ Incasso diverso dal preventivo',
       `Sul carrello ${pendingCheckoutId} Stripe ha incassato ${formatPriceFromCents(incassatoCents)} ma il preventivo era ${formatPriceFromCents(attesoCents)}. Nessun ordine creato: va guardato a mano.`,
