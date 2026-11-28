@@ -1,0 +1,228 @@
+{
+  "sessione": "R03",
+  "aggiornato": "2026-11-27 02:15",
+  "finita": true,
+  "testa": "de496d2aaa28e9772471c1e366778a1a151c5c8b",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "de496d2aaa28e9772471c1e366778a1a151c5c8b",
+    "nota": "typecheck + lint + test: 2339 file di prova, 14295 prove passate, 1 saltata già sulla base; 504 s"
+  },
+  "voci": [
+    {
+      "id": "R03-001",
+      "chiave": "api-backend|la funzione che muore fra l'ordine e gli articoli lascia la merce riservata senza nessuno che la liberi",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: tetto di questa sessione (25 $). La regia ha deciso di riprenderla nel giro dopo. Indizio del 26/11: reserve_stock parte prima di orders.insert e di order_items, e il ripristino legge solo order_items; senza migrazioni (una riserva scritta) è probabile solo un parziale."
+    },
+    {
+      "id": "R03-002",
+      "chiave": "api-backend|se l'email «nuovo ordine» al negozio non parte, nessuno se ne accorge e nessuno la rimanda",
+      "esito": "parziale",
+      "commit": "de496d2aaa28e9772471c1e366778a1a151c5c8b",
+      "file_toccati": [
+        "app/api/cron/send-emails/route.ts",
+        "app/api/orders/cod/route.ts",
+        "lib/email/client.ts",
+        "lib/stripe/payout.ts",
+        "lib/stripe/webhook/ordini.ts",
+        "lib/stripe/webhook/rimborsi.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-posta-rimandata.test.ts",
+        "tests/unit/riparazione-r03-posta-rimandata-carta.test.ts",
+        "tests/unit/riparazione-r03-posta-rimandata-contanti.test.ts",
+        "tests/unit/riparazione-r03-posta-rimandata-giro2.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-posta-rimandata.test.ts tests/unit/riparazione-r03-posta-rimandata-carta.test.ts tests/unit/riparazione-r03-posta-rimandata-contanti.test.ts tests/unit/riparazione-r03-posta-rimandata-giro2.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base de496d2a^ --file lib/email/client.ts,app/api/cron/send-emails/route.ts,lib/stripe/webhook/rimborsi.ts,lib/stripe/webhook/ordini.ts,app/api/orders/cod/route.ts --prove tests/unit/riparazione-r03-posta-rimandata.test.ts,tests/unit/riparazione-r03-posta-rimandata-carta.test.ts,tests/unit/riparazione-r03-posta-rimandata-contanti.test.ts,tests/unit/riparazione-r03-posta-rimandata-giro2.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Giro 1 (65a9208d): sendEmail accetta rimandaA (l'account di chi riceve). Se Resend rifiuta o la rete cade, il messaggio già pronto entra in email_queue col modello posta_rimandata, e il giro send-emails lo spedisce all'indirizzo dell'account come posta di servizio, con i suoi tentativi ad attesa crescente. Lo usano «Nuovo ordine» al negozio (carta e contanti) e il rimborso al cliente che chiede l'IBAN. Giro 2 (de496d2a), dopo il collaudo S1: con l'esito ignoto del timeout di 10 secondi il messaggio non entra più in coda, così non ci sono doppioni. Una riga senza metadata si annulla scrivendo il motivo in last_error e in logger.error. Entrano in coda anche il rimborso dal cruscotto (rimborsi.ts) e la conferma al cliente, con carta (ordini.ts, solo se l'indirizzo è quello dell'account) e in contanti (cod/route.ts).",
+      "cosa_resta": "lib/stripe/webhook/fascia-al-pagamento.ts:168 e lib/stripe/webhook/giftcard.ts:174/181 non vanno in coda: il destinatario può non avere un account, ed email_queue vuole user_id NOT NULL (lì resta l'avviso agli amministratori). Il giro send-emails gira solo con LAVORI_A_ORARIO=accesi (lib/cron/fermo-dei-lavori.ts): lo decide Nicola.",
+      "verificato_da": "S1 (subagente di smentita, opus) sul giro 1: insert e presa di posta_rimandata come service_role su Postgres locale ricostruito dalle migrazioni del disco (nessun CHECK su template, la presa restituisce metadata); giro send-emails solo per il servizio, senza anelli; skipped non in coda; prova-rimessa uscita 0 sui 5 file; 312+39 file di prove verdi. Ha trovato il doppione dopo il timeout, l'annullo muto e le strade non in coda, corretti nel giro 2. Il giro 2 non è stato ricontrollato da una seconda smentita, per la spesa: l'ha controllato solo la sua prova rimessa (uscita 0) e 318 file di prove verdi."
+    },
+    {
+      "id": "R03-003",
+      "chiave": "deploy-sre|sul sito vero manca la chiave della posta: il negozio non riceverà l'email del nuovo ordine e il cliente nessuna conferma",
+      "esito": "parziale",
+      "commit": "136d25ae",
+      "file_toccati": [
+        "lib/stripe/webhook/comune.ts",
+        "tests/unit/riparazione-r03-posta-spenta-carta.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-posta-spenta-carta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-posta-spenta-carta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 136d25ae^ --file lib/stripe/webhook/comune.ts --prove tests/unit/riparazione-r03-posta-spenta-carta.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sul sito vero, se l'email dell'ordine con carta non parte perché manca RESEND_API_KEY o RESEND_FROM, provaAMandare avvisa gli amministratori con una campanella, una volta per ordine, come fa già la cassa in contanti. /api/health ha già fra le ENV_IMPORTANTI RESEND_API_KEY, RESEND_FROM e SUPPORT_EMAIL.",
+      "cosa_resta": "Per Nicola, su Vercel → Production: creare RESEND_API_KEY (Sensitive), RESEND_FROM (mittente del dominio verificato su Resend) e SUPPORT_EMAIL (una casella letta davvero). Poi ripubblicare e fare un ordine di prova, controllando che arrivino l'email «Nuovo ordine» al negozio e la conferma al cliente.",
+      "verificato_da": "S1 (subagente di smentita, opus): prova R03 rilanciata; prova-rimessa uscita 0 su 136d25ae (comune.ts); varianti col sendEmail vero in produzione (chiave assente con 2 ordini = 2 campanelle, RESEND_FROM assente, rifiuto vero di Resend senza campanella, invio che lancia); 312 file di prove che importano i file toccati verdi; tsc pulito. Nessun difetto."
+    },
+    {
+      "id": "R03-004",
+      "chiave": "pagamenti-stripe|dopo un guasto, chiudere il reso con i passi normali registra due volte lo stesso rimborso, e al negozio la sua parte viene tolta due volte",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: tetto di questa sessione (25 $). La regia ha deciso di riprenderla nel giro dopo. Il 26/11 il tentativo in refundOrder è stato tolto: tre varianti peggiori della base (ripresa fra segno e credito oltre metà ordine, rimborso pieno con «importo rimborso non valido», seconda chiamata con la stessa chiave dopo il segno). Vanno usate come prove."
+    },
+    {
+      "id": "R03-005",
+      "chiave": "pagamenti-stripe|la pagina guadagni, con i soli contanti, dice al negozio commissione zero e soldi mai versati",
+      "esito": "riparato",
+      "insieme_a": [
+        "R03-006"
+      ],
+      "commit": "6aec188e249c47c0326aa0712022df5e96740df6",
+      "file_toccati": [
+        "app/seller/earnings/page.tsx",
+        "tests/unit/riparazione-r03-guadagni-coi-soli-contanti.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-guadagni-coi-soli-contanti.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-guadagni-coi-soli-contanti.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6aec188e^ --file app/seller/earnings/page.tsx --prove tests/unit/riparazione-r03-guadagni-coi-soli-contanti.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base c'erano già lordo, commissione e netto dei contanti, il grafico, lo storico e il bonifico a mano segnato e contato come versato (R17-001, migrazione 916). Ho tolto il tasto «Collega conto» di Stripe dal riquadro dei bonifici quando la carta è spenta. Sotto la commissione ora si dice che il netto è senza consegna e spedizione. La prova calcola su contrassegni nei loro stati e disegna la pagina: commissione −6,00 €, 18,00 € già versati, «Pagato 23 nov» nello storico, nessun rimando a Stripe.",
+      "verificato_da": "S2 (subagente di smentita, opus): sonda temporanea su riepilogoNegozio della base in 9 stati dei contanti (AWAITING_REMITTANCE/HELD/PROCESSING/PAID_MANUALLY/TRANSFERRED/REFUNDED/REVERSED), regge; prova R03 rossa sia con page.tsx come sulla base sia togliendo solo la frase; la frase è vera (client.ts:522-533); 18 file di prove che importano earnings/negozio, 135/135 verdi."
+    },
+    {
+      "id": "R03-006",
+      "chiave": "pagamenti-stripe|il bonifico del lunedì al negozio non si può segnare: i soldi dei contanti restano «in attesa» per sempre, sia per il negozio sia per nicola",
+      "esito": "gia_riparato_prima",
+      "insieme_a": [
+        "R03-005"
+      ],
+      "prova": "migrations/916_il_bonifico_fatto_ai_negozi_resta_scritto.sql: :56-64 aggiunge PAID_MANUALLY a orders_payout_status_check, :124 crea public.segna_bonifico_manuale, :155 controlla is_admin(), :312-315 REVOKE/GRANT solo ad authenticated; app/admin/payouts/page.tsx:273 chiama rpc('segna_bonifico_manuale'); lib/guadagni/negozio.ts:93 (STATI_VERSATI) conta PAID_MANUALLY come versato; lib/stripe/payout.ts:230 paga solo HELD/PENDING_SELLER_ONBOARDING. Comando sul Postgres locale: tests/sql/harness/apply.sh mycity_r03_l2 (256 migrazioni, 0 fallite) && psql -X -v ON_ERROR_STOP=1 -d mycity_r03_l2 -f tests/sql/rls/riparazione-r22-pagato-a-mano.test.sql (4/4) e -f tests/sql/rls/riparazione-r22-bonifico-fatto.test.sql (25/25), uscita 0. Che la 916 sia applicata al database vero lo decide Nicola.",
+      "verificato_da": "S2 (subagente di smentita, opus): DB locale ricostruito (256/256 migrazioni), PAID_MANUALLY ammesso, segna_bonifico_manuale eseguibile da authenticated e non da anon, con is_admin(); prove SQL r22 bonifico-fatto, pagato-a-mano e bonifico-cancelli verdi; il tasto admin (admin/payouts/page.tsx:273-278) combacia con la firma; lo stato arriva al negozio (negozio.ts:95) e al pannello (negozio.ts:250-251)."
+    },
+    {
+      "id": "R03-007",
+      "chiave": "pagamenti-stripe|rimborso parziale mentre il bonifico stripe al negozio è in partenza (processing): la quota risulta ripresa ma non rientra mai",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: dopo le smentite S1/S2 la spesa era 15,03 $, sopra la soglia di 14 $ concordata con la regia per aprire L3/L4; al 70% (17,5 $) non si aprono lotti nuovi. Da riassegnare."
+    },
+    {
+      "id": "R03-008",
+      "chiave": "pagamenti-stripe|un rimborso arrivato dopo il bonifico del lunedì non viene mai ripreso al negozio",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: dopo le smentite S1/S2 la spesa era 15,03 $, sopra la soglia di 14 $ concordata con la regia per aprire L3/L4; al 70% (17,5 $) non si aprono lotti nuovi. Da riassegnare. Da guardare insieme: il difetto nuovo sull avviso «togli X € dal prossimo bonifico» per gli ordini HELD dopo la 916 (nuovi_difetti_visti) e lo stato PAID_MANUALLY sovrascritto da REFUNDED."
+    },
+    {
+      "id": "R03-009",
+      "chiave": "pagamenti-stripe|un rimborso dopo il bonifico a mano al negozio fa sparire i soldi da recuperare",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: dopo le smentite S1/S2 la spesa era 15,03 $, sopra la soglia di 14 $ concordata con la regia per aprire L3/L4; al 70% (17,5 $) non si aprono lotti nuovi. Da riassegnare. Stesso meccanismo della voce sorella sul rimborso dopo il bonifico del lunedì (lib/stripe/payout.ts:1186): vanno lavorate insieme, come approvato dalla regia."
+    },
+    {
+      "id": "R03-010",
+      "chiave": "pagamenti-stripe|se il cliente viene rimborsato prima che il suo ordine nasca, l'ordine nasce lo stesso come pagato e il negozio viene pagato",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: tetto di questa sessione (25 $). La regia ha deciso di riprenderla nel giro dopo. Resta la finestra del carrello già pagato a metà, descritta nella nota del 26/11."
+    },
+    {
+      "id": "R03-011",
+      "chiave": "api-backend|cancellazione utente e annullo ordine dell'amministrazione rispondono 500 senza scrivere nel registro",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la regia non ha approvato il lotto dei minori (L5) in questa sessione, per la spesa. Da riassegnare."
+    },
+    {
+      "id": "R03-012",
+      "chiave": "api-backend|il tetto della notte lascia indietro gli account nell'ordine della rpc, non dal più vecchio: chi è già oltre il mese può essere rimandato ogni notte, senza avviso del termine",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la regia non ha approvato il lotto dei minori (L5) in questa sessione, per la spesa. Da riassegnare."
+    },
+    {
+      "id": "R03-013",
+      "chiave": "api-backend|il tetto di tempo della notte non è rigido: l'ultimo account preso può sforare, e la cancellazione di un account non ha un limite di tempo suo",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la regia non ha approvato il lotto dei minori (L5) in questa sessione, per la spesa. Da riassegnare."
+    },
+    {
+      "id": "R03-014",
+      "chiave": "api-backend|un account preso poco prima del tetto del ciclo non ha un tempo suo",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la regia non ha approvato il lotto dei minori (L5) in questa sessione, per la spesa. Da riassegnare."
+    },
+    {
+      "id": "R03-015",
+      "chiave": "api-backend|il giro delle notifiche push può mandare due volte se due giri si sovrappongono (ritentativo di vercel o chiamata a mano)",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la regia non ha approvato il lotto dei minori (L5) in questa sessione, per la spesa. Da riassegnare."
+    },
+    {
+      "id": "R03-016",
+      "chiave": "api-backend|le notifiche push partono due volte se due giri del cron si sovrappongono: la presa in carico non è atomica",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la regia non ha approvato il lotto dei minori (L5) in questa sessione, per la spesa. Da riassegnare."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Su un rimborso in contanti con l ordine HELD parte l avviso «togli X € dal prossimo bonifico», ma dopo la 916 HELD vuol dire non ancora pagato: il negozio può perdere la quota due volte",
+      "dimensione": "pagamenti-stripe",
+      "severita": "grave",
+      "file": "lib/stripe/payout.ts:2536",
+      "descrizione": "L avviso agli amministratori (payout.ts:1800-1815 e :2536) è stato scritto quando HELD voleva dire «già pagato a mano». Con la migrazione 916 HELD vuol dire non ancora pagato, e la 916 non mette nel bonifico gli ordini con un rimborso. L avviso può far togliere la quota da un ordine mai pagato. Da verificare."
+    },
+    {
+      "titolo": "Commenti diventati falsi dopo la 916: dicono ancora che il sito non sa segnare un bonifico a mano",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/payout.ts:238-239",
+      "descrizione": "Stessa cosa in app/api/cron/release-payouts/route.ts:391-392. Riguarda solo i commenti."
+    },
+    {
+      "titolo": "La commissione dovuta sui ritiri pagati al banco non tiene conto del credito MyCity usato dal cliente",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/guadagni/negozio.ts",
+      "descrizione": "riepilogoContanti: commissioneDovutaCents somma solo la commissione; per la 916 MyCity deve al negozio «credito − commissione». Da verificare."
+    },
+    {
+      "titolo": "Ordine pagato a mano e poi rimborsato: la pagina Guadagni dice «0,00 € già versati · 18,00 € tornati indietro», ma il negozio ha ricevuto 18 € e niente è tornato",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/payout.ts:1189",
+      "descrizione": "refundOrder scrive seller_payout_reversed_cents e sovrascrive PAID_MANUALLY con REFUNDED (payout.ts:2280): il segno «Pagato» si perde e i versati scendono (con un rimborso parziale di 10 € legge 9 € versati invece di 18). La somma sta in contanti_da_recuperare. Da guardare insieme alle voci del rimborso dopo il bonifico del lunedì e a mano di questa scheda (non lavorate in quest onda)."
+    },
+    {
+      "titolo": "Ritiro pagato al banco compensato nel bonifico: il riquadro dei contanti dice ancora «te la chiediamo noi» e «già versati» conta 18 € mentre sull IBAN ne arrivano 16",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/guadagni/negozio.ts:190",
+      "descrizione": "riepilogoContanti ignora payout_at (negozio.ts:190, :194; page.tsx:347-352) dopo la compensazione della migrazione 916:269-271, 293-295."
+    }
+  ],
+  "domande_per_nicola": [
+    "Su Vercel → Production servono RESEND_API_KEY (Sensitive), RESEND_FROM (mittente del dominio verificato su Resend) e SUPPORT_EMAIL (una casella letta davvero); poi ripubblicare e fare un ordine di prova (R03-003).",
+    "La posta rimandata (R03-002) parte solo se il giro send-emails gira: oggi è fermo finché LAVORI_A_ORARIO non è «accesi» (lib/cron/fermo-dei-lavori.ts). Quando lo accendi?",
+    "La migrazione 916 (bonifico a mano dei contanti, PAID_MANUALLY) è applicata al database vero? La voce del bonifico del lunedì è chiusa nel codice solo se lo è."
+  ],
+  "conto": {
+    "agenti": 5,
+    "nota": "L1 (opus), S1 (opus), L2 (opus), S2 (opus), correzione di R03-002 (opus). Spesa misurata col mio id: 17,13 $ prima del verify. costo_usd = usage.cost_usd di get_session alle 02:15 (il valore era fermo all aggiornamento delle 01:51 del server).",
+    "subagenti": 5
+  },
+  "costo_usd": 17.13
+}

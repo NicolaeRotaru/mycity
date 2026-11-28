@@ -278,7 +278,8 @@ export default function SellerEarningsPage() {
         <Stat
           label="Commissione MyCity"
           value={'− ' + formatPrice(feeCents / 100)}
-          hint={`Già tolta: a te ${formatPrice(nettoCents / 100)} netti`}
+          // Il netto è sui prodotti: consegna e spedizione vanno al fattorino, quindi lordo − commissione non lo dà.
+          hint={`Già tolta: a te ${formatPrice(nettoCents / 100)} netti, senza consegna e spedizione`}
           tone="secondary"
         />
         <Stat
@@ -376,7 +377,8 @@ export default function SellerEarningsPage() {
             </p>
           </div>
           <div className="flex flex-col items-stretch gap-2 sm:items-end">
-            <StripeConnectButton />
+            {/* Con la carta spenta i contanti arrivano col bonifico sull'IBAN: niente «Collega conto» Stripe. */}
+            {CARTA_ACCESA && <StripeConnectButton />}
             {CARTA_ACCESA && <StripeDashboardButton />}
           </div>
         </div>
