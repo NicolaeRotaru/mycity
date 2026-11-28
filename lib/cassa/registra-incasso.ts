@@ -308,6 +308,11 @@ function funzioneDellaChiusuraMancante(e: { code?: string; message?: string }): 
   return e.code === 'PGRST202' || (e.code === '42883' && (e.message ?? '').includes(FUNZIONE_DELLA_CHIUSURA));
 }
 
+/** Chi chiama non può eseguire la funzione (anon): PostgreSQL 42501 «permission denied for function …». */
+function permessoNegatoSullaFunzione(e: { code?: string; message?: string }): boolean {
+  return e.code === '42501' && /permission denied for function/i.test(e.message ?? '');
+}
+
 function eMotivoDellaChiusura(r: unknown): r is MotivoChiusuraRifiutata {
   return typeof r === 'string' && (r === 'WRONG_STATUS' || Object.prototype.hasOwnProperty.call(RIFIUTI_DELLA_CHIUSURA, r));
 }
@@ -331,7 +336,10 @@ export async function chiudiConsegnaDaAmministratore(
   if (error) {
     if (funzioneDellaChiusuraMancante(error)) return rifiutoDellaChiusura('FUNZIONE_ASSENTE');
     // Senza sessione (anon) la 360 non si può nemmeno chiamare: è un «non sei amministratore», non un guasto.
-    if (error.code === '42501') return rifiutoDellaChiusura('NOT_ADMIN');
+    // 28/11/2026 (onda 2, R06-004) — Solo il permesso negato SULLA FUNZIONE: anche il guardiano degli
+    // ordini (migrazione 179) e altri trigger alzano 42501, e dentro la 360 sarebbero un guasto vero,
+    // da scrivere nel registro, non un «solo un amministratore» muto.
+    if (permessoNegatoSullaFunzione(error)) return rifiutoDellaChiusura('NOT_ADMIN');
     logger.error('[admin] chiusura della consegna non riuscita', { orderId: richiesta.ordineId, message: error.message });
     return rifiutoDellaChiusura('ERRORE');
   }
