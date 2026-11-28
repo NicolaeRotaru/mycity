@@ -13,6 +13,7 @@ import { sbloccaInContanti, sbloccoRiuscito } from '@/lib/agenzia/abbonamento-co
 import { ORA_GIA_PRESA, scriviVisita } from '@/lib/agenzia/visita-sdg';
 import { creaOrdineSdg } from '@/lib/agenzia/ordine-sdg';
 import { ETICHETTE_SERVIZI, leggiServiziScelti, type ServizioAgenzia } from '@/lib/agenzia/servizi-scelti';
+import { fraseDellaPasswordRifiutata } from '@/lib/agenzia/password-dal-link';
 
 /**
  * IL PREVENTIVO COL LINK COL CODICE — 24/11/2026.
@@ -52,6 +53,12 @@ import { ETICHETTE_SERVIZI, leggiServiziScelti, type ServizioAgenzia } from '@/l
  * chiama con lib/agenzia/visita-sdg.ts) si salva sul preventivo nella stessa scrittura che lo prende
  * (`visita_il`, migrazione 999b): se l'ora l'ha appena presa un'altra attività, niente si accetta e il titolare
  * ne sceglie un'altra. Senza la 999b nel database si accetta lo stesso e il giorno arriva a Nicola nell'avviso.
+ *
+ * 28/11/2026 verso le 13:30 — Nicola, iscrivendo un bar: il pulsante dell'email vale una volta sola, poi «Accedi»
+ * chiede email e password, e il titolare una password non l'aveva mai scelta: restava fuori. Ora la sceglie nel
+ * link, insieme all'email (`password`, già controllata da chi chiama), e va sull'utente nella stessa scrittura
+ * dell'email. Se Supabase la trova troppo debole, niente si accetta: il preventivo torna aperto, il titolare legge
+ * il motivo (rubata, corta, semplice) e ne sceglie un'altra. Assente (pagina aperta prima di oggi): si accetta come prima, e si rientra dall'email.
  *
  * 28/11/2026 verso le 01:40 — Nicola: i servizi li sceglie il venditore in anticipo, «però lo deve poter fare
  * anche» il cliente. Il link mostra i servizi segnati dal venditore (`serviziScelti`), il titolare li può cambiare
@@ -103,7 +110,7 @@ export async function leggiPreventivoColCodice(codice: string): Promise<Preventi
 
 export type EsitoAccettazione =
   | { ok: true; sellerId: string; accessoInviato: boolean; entrato: boolean }
-  | { ok: false; motivo: 'GIA_ACCETTATO' | 'CHIUSO' | 'EMAIL_GIA_USATA' | 'ORA_PRESA' | 'GUASTO'; messaggio: string };
+  | { ok: false; motivo: 'GIA_ACCETTATO' | 'CHIUSO' | 'EMAIL_GIA_USATA' | 'PASSWORD_DEBOLE' | 'ORA_PRESA' | 'GUASTO'; messaggio: string };
 
 /**
  * La colonna della visita non c'è ancora (migrazione 999b non applicata): PostgREST o Postgres. Solo allora si
@@ -112,6 +119,14 @@ export type EsitoAccettazione =
 function colonnaVisitaMancante(e: { code?: string; message?: string }): boolean {
   if (e.code === '23505') return false;
   return e.code === 'PGRST204' || e.code === '42703' || /visita_il/.test(e.message ?? '') && /column|colonna|schema/i.test(e.message ?? '');
+}
+
+/**
+ * Supabase ha rifiutato la password, non l'email? Risponde 422 col codice `weak_password` (troppo corta, o
+ * fuori dalle regole del progetto). Solo il codice conta: la parola «password» nel messaggio non basta.
+ */
+function passwordRifiutata(errore: { code?: string; message?: string; name?: string }): boolean {
+  return errore.code === 'weak_password' || errore.name === 'AuthWeakPasswordError';
 }
 
 /** Cosa legge il titolare quando la sua email ha già un altro account su MyCity. */
@@ -152,6 +167,8 @@ export async function accettaPreventivoColCodice(input: {
   visita?: string;
   /** 28/11 — I servizi confermati dal titolare (già controllati da chi chiama). Assenti: restano quelli del venditore. */
   servizi?: ServizioAgenzia[];
+  /** 28/11 — La password scelta nel link (già controllata da chi chiama). Assente: si rientra dall'email. */
+  password?: string;
   /** Apre la sessione del titolare col gettone monouso; vero se è entrato. Assente: entra dall'email. */
   entraSubito?: (gettone: string) => Promise<boolean>;
 }): Promise<EsitoAccettazione> {
@@ -192,7 +209,13 @@ export async function accettaPreventivoColCodice(input: {
   }
 
   // 1) L'email del titolare sull'utente dell'attività, che si sblocca.
-  const utente = await admin.auth.admin.updateUserById(id, { email, email_confirm: true, ban_duration: 'none' });
+  // 28/11 — Con la password scelta nel link, nella stessa scrittura: da domani il titolare entra da «Accedi».
+  const utente = await admin.auth.admin.updateUserById(id, {
+    email,
+    email_confirm: true,
+    ban_duration: 'none',
+    ...(input.password ? { password: input.password } : {}),
+  });
   if (utente.error) {
     // Il preventivo torna aperto: il titolare può riprovare con un'altra email.
     // La scelta dell'agente (se c'era) torna com'era: il link riapre il preventivo su quella fascia.
@@ -201,6 +224,26 @@ export async function accettaPreventivoColCodice(input: {
     const riapertura = await admin.from('preventivi_con_codice').update(visitaSalvata ? { ...indietro, visita_il: null } : indietro).eq('codice', codice);
     const riaperto = !riapertura.error;
     if (!riaperto) logger.error('[preventivo-codice] preventivo non riaperto dopo l email non collegata', { sellerId: id, message: riapertura.error?.message });
+    // 28/11 — La password troppo debole non è un'email già usata: il titolare ne sceglie un'altra e riconferma.
+    if (input.password && passwordRifiutata(utente.error as { code?: string; message?: string; name?: string })) {
+      logger.warn('[preventivo-codice] password rifiutata da Supabase', { sellerId: id, riaperto });
+      if (!riaperto) {
+        // Doppio guasto (collaudo del 28/11): il titolare legge «scrivici», ma senza questo avviso nessuno lo sa.
+        await notifyAdmins(
+          `${preventivo.nomeAttivita} non è riuscito ad accettare il preventivo`,
+          'Supabase ha rifiutato la password scelta dal titolare, e il preventivo NON è tornato aperto (risulta accettato ma senza email): riaprilo a mano, poi chiamalo.',
+          '/admin/preventivi',
+          { unaVoltaPer: `preventivo-password-rifiutata:${id}` },
+        ).catch((e: unknown) => logger.warn('[preventivo-codice] avviso password rifiutata non partito', { sellerId: id, errore: String(e) }));
+      }
+      return {
+        ok: false,
+        motivo: 'PASSWORD_DEBOLE',
+        messaggio: riaperto
+          ? fraseDellaPasswordRifiutata(utente.error as { message?: unknown; code?: unknown; reasons?: unknown })
+          : 'Non sono riuscito a salvare la password. Scrivici e lo sistemiamo noi.',
+      };
+    }
     // 27/11/2026 23:34 — Nicola, su Luna Rossa: codice giusto, e la pagina diceva solo «non sono riuscito a
     // collegare questa email». L'email aveva già un account da cliente. Supabase non lo dice col suo codice:
     // risponde 500 «Error updating user» (dentro, il doppione sull'indice unico delle email), quindi la parola
@@ -309,7 +352,12 @@ export async function accettaPreventivoColCodice(input: {
     const link = await admin.auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: `${env.appUrl()}${PERCORSO_ABBONAMENTO}` } });
     const azione = (link.data as { properties?: { action_link?: string } } | null)?.properties?.action_link;
     if (link.error || !azione) throw new Error(link.error?.message ?? 'link senza indirizzo');
-    const posta = accessoDopoIlPreventivoTemplate({ negozio: preventivo.nomeAttivita, link: azione, visita: visita ? scriviVisita(visita) : null });
+    const posta = accessoDopoIlPreventivoTemplate({
+      negozio: preventivo.nomeAttivita,
+      link: azione,
+      visita: visita ? scriviVisita(visita) : null,
+      conPassword: Boolean(input.password),
+    });
     const inviata = await sendEmail({ to: email, ...posta });
     accessoInviato = inviata.ok;
     if (!inviata.ok) logger.warn('[preventivo-codice] email di accesso non partita', { sellerId: id });

@@ -1151,7 +1151,7 @@ export function codiceDelPreventivoTemplate(args: { negozio: string; codice: str
  * questo link per entrare (lib/agenzia/preventivo-col-codice.ts). Il link è di Supabase e vale una
  * volta sola; dopo, entra con «Accedi» e la stessa email.
  */
-export function accessoDopoIlPreventivoTemplate(args: { negozio: string; link: string; visita?: string | null }) {
+export function accessoDopoIlPreventivoTemplate(args: { negozio: string; link: string; visita?: string | null; conPassword?: boolean }) {
   const negozio = escapeHtml(args.negozio);
   // 27/11/2026 — Il giorno in cui SDG passa dal titolare, scelto nel link (lib/agenzia/visita-sdg.ts).
   const visita = args.visita ? escapeHtml(args.visita) : null;
@@ -1162,12 +1162,17 @@ export function accessoDopoIlPreventivoTemplate(args: { negozio: string; link: s
     <p style="margin:0 0 12px;line-height:1.6">${PAGAMENTO_ONLINE_SERVIZI ? "Se non hai ancora pagato l'abbonamento, lo paghi dallo stesso link del preventivo che ti abbiamo mandato." : visita ? "L'abbonamento, per ora, si paga in contanti, di persona." : "L'abbonamento, per ora, si paga in contanti, di persona: ti contattiamo noi per fissare l'inizio."}</p>
     <p style="margin:0 0 12px;line-height:1.6">I dati che abbiamo trovato in rete li vedi con la loro fonte: in pubblico va solo quello che confermi tu. Prezzi e allergeni li scrivi sempre tu.</p>
     <p style="margin:24px 0">${btn(args.link, 'Entra nel tuo account')}</p>
-    <p style="margin:0 0 12px;line-height:1.6;font-size:13px">Il pulsante vale una volta sola. Dopo, entri da «Accedi» con questa email.</p>
+    <p style="margin:0 0 12px;line-height:1.6;font-size:13px">${
+      // 28/11/2026 — Senza la password scelta nel link, «Accedi» non lo faceva entrare: gli si dice la strada vera.
+      args.conPassword
+        ? 'Il pulsante vale una volta sola. Dopo, entri da «Accedi» con questa email e la password che hai scelto.'
+        : 'Il pulsante vale una volta sola. Dopo, entri da «Accedi» con questa email: la prima volta tocca «Password dimenticata?» e ne scegli una.'
+    }</p>
   `;
   return {
     subject: `${args.negozio}: entra nel tuo account MyCity`,
     html: shell('Entra nel tuo account', body),
-    text: `Hai accettato il preventivo dei servizi di MyCity.${args.visita ? ` Ci vediamo ${args.visita}: il team creativo di SDG passa da te per il piano dei contenuti, le foto e i video.` : ''} Entra nel tuo account da qui (vale una volta sola): ${args.link}`,
+    text: `Hai accettato il preventivo dei servizi di MyCity.${args.visita ? ` Ci vediamo ${args.visita}: il team creativo di SDG passa da te per il piano dei contenuti, le foto e i video.` : ''} Entra nel tuo account da qui (vale una volta sola): ${args.link} ${args.conPassword ? 'Dopo, entri da «Accedi» con questa email e la password che hai scelto.' : 'Dopo, entri da «Accedi» con questa email: la prima volta tocca «Password dimenticata?» e ne scegli una.'}`,
   };
 }
 
