@@ -84,6 +84,9 @@ const stato = vi.hoisted(() => {
     // La funzione del database che salva le varianti in una transazione sola (migrazione 323):
     // qui risponde quello che decide la prova, e se cade non scrive niente.
     rpc: async (nome: string) => {
+      // 27/11/2026 — La funzione che salva prodotto e varianti in una transazione non c'è in questo
+      // finto, come in un database senza la migrazione: la rotta torna ai due passi che la prova guarda.
+      if (nome === 'salva_prodotto_e_varianti') return { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${nome} in the schema cache` } };
       if (nome !== 'salva_varianti') throw new Error(`rpc inattesa: ${nome}`);
       return { data: null, error: s.esitoVarianti };
     },
