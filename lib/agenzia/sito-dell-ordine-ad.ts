@@ -127,6 +127,13 @@ const RispostaSito = z.object({
 
 export type EsitoSito = { ok: true; sito: BozzaSitoOrdine } | { ok: false; motivo: string };
 
+/**
+ * Collaudo 28/11/2026 — Un orario di apertura («dalle 7:00 alle 20:00», «Orario: lun-sab 7-20», «alle ore 8»): il
+ * sito non lo ha mai passato all'AD, quindi è inventato. `fraseMostrabile` guarda prezzi e contatti, non gli orari.
+ * «Orari: da confermare col titolare», senza cifre, resta.
+ */
+export const ORARIO = /\b([01]?\d|2[0-3])[:.][0-5]\d\b|\b(dalle|alle)\s+(ore\s+)?([01]?\d|2[0-3])\b|\bore\s+([01]?\d|2[0-3])\b|\borari[oa]?\b[^.]*\d/i;
+
 const VIETATI = /\b(sisal|scommess\w*|gratta e vinci|superenalotto|tabacc\w*|sigarett\w*|sigar[oi])\b/i;
 
 /**
@@ -162,6 +169,7 @@ export function sitoDallaRisposta(grezza: unknown, fascia: Abbonamento, nomeLoca
     if (!fraseMostrabile(pulita, 1, 10_000) || haUnNomeDiPersona(pulita)) {
       return { ok: false, motivo: `la bozza del sito dell’AD ha un prezzo, un contatto, un orario, un indirizzo web, un nome di persona o un dato di Google (${f.dove})` };
     }
+    if (ORARIO.test(pulita)) return { ok: false, motivo: `la bozza del sito dell’AD ha un orario di apertura, che non le abbiamo dato (${f.dove})` };
     if (VIETATI.test(pulita)) return { ok: false, motivo: `la bozza del sito dell’AD nomina gioco o tabacco (${f.dove})` };
   }
   if (r.fonti.some(fonteDiGoogle)) return { ok: false, motivo: 'la bozza del sito dell’AD cita una pagina di Google o TripAdvisor come fonte' };

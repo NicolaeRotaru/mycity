@@ -48,6 +48,14 @@ export const SPIEGAZIONE_SERVIZI: Record<ServizioAgenzia, string> = {
   analisi: 'il rapporto sulla sua attività e sulla sua zona',
 };
 
+/** La stessa cosa detta al titolare, nella pagina del link. */
+export const SPIEGAZIONE_AL_TITOLARE: Record<ServizioAgenzia, string> = {
+  foto_video: 'la squadra passa da te per foto e video',
+  sito_web: 'la bozza del tuo sito, con le pagine del tuo abbonamento',
+  social: 'il piano dei post del primo mese e la tua scheda Google',
+  analisi: 'il rapporto sulla tua attività e sulla tua zona',
+};
+
 export const NOTA_MASSIMA = 200;
 
 /** Una nota con un contatto (email, telefono, indirizzo web) non si salva: sono dati di persone, non indicazioni. */

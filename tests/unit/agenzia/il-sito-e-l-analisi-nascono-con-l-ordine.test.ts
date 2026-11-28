@@ -82,10 +82,10 @@ function preparaDb() {
   return db;
 }
 
-async function accetta(fascia: 'base' | 'business' | 'premium') {
+async function accetta(fascia: 'base' | 'business' | 'premium', servizi?: ('foto_video' | 'sito_web' | 'social' | 'analisi')[]) {
   stato.db.tabelle.preventivi_con_codice[0].fascia_scelta = fascia;
   const preventivo = await leggiPreventivoColCodice(CODICE);
-  return accettaPreventivoColCodice({ preventivo: preventivo!, codice: CODICE, email: 'titolare@esempio.it', fascia, visita: VISITA });
+  return accettaPreventivoColCodice({ preventivo: preventivo!, codice: CODICE, email: 'titolare@esempio.it', fascia, visita: VISITA, servizi });
 }
 
 /** Aspetta che i lavori dopo la risposta abbiano finito di partire. */
@@ -425,5 +425,39 @@ describe('⑥ partono solo i lavori dei servizi scelti dall agente', () => {
     expect(parteDellOrdine('social', visto)).toBeNull();
     expect(parteDellOrdine('analisi', visto)).toBeNull();
     expect(parteDellOrdine('foto_video', visto)).toBeNull();
+  });
+});
+
+// 28/11/2026, 01:40 — Nicola: i servizi li segna il venditore, ma il cliente li può cambiare nel link. All'accettazione
+// valgono quelli confermati dal cliente.
+describe('⑦ valgono i servizi confermati dal cliente, non quelli del venditore', () => {
+  it('il venditore segna «Gestione sito web», il cliente conferma social e analisi: partono piano e analisi, non il sito', async () => {
+    Object.assign(stato.db.tabelle.preventivi_con_codice[0], { servizi_scelti: ['sito_web'] });
+    const letto = await leggiPreventivoColCodice(CODICE);
+    expect(letto?.serviziScelti).toEqual(['sito_web']);
+    expect((await accetta('business', ['analisi', 'social'])).ok).toBe(true);
+    await aspettaILavori(2);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(stato.avviati.map((a) => a.job.compito).sort()).toEqual([COMPITO_PIANO, COMPITO_ANALISI].sort());
+    expect(stato.db.tabelle.preventivi_con_codice[0].servizi_scelti).toEqual(['social', 'analisi']);
+    expect(ordini()[0].dati_attivita).toMatchObject({ servizi: ['social', 'analisi'] });
+    const testo = vi.mocked(notifyAdmins).mock.calls.map((c) => String(c[1])).join(' ');
+    expect(testo).toMatch(/Servizi confermati: Gestione social e Google, Analisi di mercato/);
+  });
+
+  it('se la pagina non manda i servizi (aperta prima di oggi) restano quelli del venditore', async () => {
+    Object.assign(stato.db.tabelle.preventivi_con_codice[0], { servizi_scelti: ['sito_web'] });
+    expect((await accetta('business')).ok).toBe(true);
+    await aspettaILavori(1);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(stato.avviati.map((a) => a.job.compito)).toEqual([COMPITO_SITO]);
+  });
+
+  it('prima della 999h il link si apre e l accettazione va: la colonna dei servizi non c è', async () => {
+    stato.db.colonneMancanti = { preventivi_con_codice: ['servizi_scelti', 'nota_agente'] };
+    const letto = await leggiPreventivoColCodice(CODICE);
+    expect(letto?.serviziScelti).toBeNull();
+    expect((await accetta('base', ['sito_web'])).ok).toBe(true);
+    expect(stato.db.tabelle.preventivi_con_codice[0].stato).toBe('accettato');
   });
 });

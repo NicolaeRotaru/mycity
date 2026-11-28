@@ -75,8 +75,10 @@ export async function lavoroDallOrdine(sellerId: string): Promise<LavoroDellOrdi
       // Solo l'elenco dei servizi: la nota dell'agente e il resto di dati_attivita restano a SDG.
       servizi: leggiServiziScelti(r.dati_attivita?.servizi, null).servizi,
       nomeAttivita: r.nome_attivita,
-      piano: { stato: perIlTitolare(r.piano_completo_stato, true), piano: r.piano },
-      sito: { stato: perIlTitolare(r.sito_stato, sitoPronto), bozza: sitoPronto ? (r.sito ?? null) : null },
+      // Collaudo 28/11/2026 — Le «note» del piano e della bozza sono righe dell'AD per il team (cosa preparare alla
+      // visita, cosa manca): restano a SDG, al titolare non si mandano nemmeno nella risposta.
+      piano: { stato: perIlTitolare(r.piano_completo_stato, true), piano: r.piano ? { ...r.piano, note: [] } : r.piano },
+      sito: { stato: perIlTitolare(r.sito_stato, sitoPronto), bozza: sitoPronto && r.sito ? { ...r.sito, note: [] } : null },
       analisi: { stato: perIlTitolare(r.analisi_stato, analisiPronta), analisi: analisiPronta ? (r.analisi ?? null) : null },
     };
   } catch (e) {

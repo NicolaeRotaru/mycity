@@ -3,6 +3,8 @@ import { FASCE } from '@/lib/agenti/fasce';
 import type { Scheda } from '@/lib/agenti/scheda';
 import type { Abbonamento } from './preventivo';
 import { TIPI_CONTENUTO, type ContenutoDelPiano, type PianoDelMese } from './piano-del-primo-mese';
+import { fraseMostrabile } from './rapporto';
+import { haUnNomeDiPersona } from './nomi-di-persona';
 
 /**
  * IL PIANO COMPLETO, CHIESTO ALL'AD — 27/11/2026.
@@ -174,6 +176,22 @@ export function pianoDallaRisposta(grezza: unknown, partenza: PianoDelMese, fasc
   const pulito = (t: string) => { const x = t.replace(/#[\p{L}\p{N}_]+/gu, ' ').toLowerCase(); return nome.length >= 2 ? x.split(nome).join(' ') : x; };
   if (r.contenuti.some((c) => VIETATI.test(pulito(`${c.tema} ${c.didascalia}`)))) return { ok: false, motivo: 'il piano dell’AD nomina gioco o tabacco, che non si pubblicizzano' };
   if (/@[a-z0-9-]+\.[a-z]{2,}/i.test(JSON.stringify(r))) return { ok: false, motivo: 'il piano dell’AD contiene un indirizzo email' };
+  // Collaudo 28/11/2026 — Il piano dell'AD ora lo vede il titolare nella sua pagina (lib/agenzia/lavoro-dell-ordine.ts)
+  // senza che SDG lo abbia controllato prima: passa dalle stesse regole del sito e dell'analisi dell'ordine (niente
+  // prezzi, telefoni, indirizzi web, «@profili», voti o recensioni di Google, nomi di persona). Gli orari no: un
+  // evento in città («dalle 8 alle 13») si può scrivere. Hashtag e nome del locale si tolgono prima del controllo.
+  const nomeRe = nome.length >= 2 ? new RegExp(nome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi') : null;
+  // Gli orari («alle 21.00») si tolgono prima: per la regola dei prezzi «21.00» sembra un prezzo. Nell'intestazione si
+  // tolgono anche i profili del locale («@caffe_di_piacenza» in canali e tono): sono suoi, non persone citate.
+  const mostrabile = (t: string | null, intestazione = false) => {
+    let senza = (t ?? '').replace(/#[\p{L}\p{N}_]+/gu, ' ').replace(/\b\d{1,2}[.:]\d{2}\b/g, ' ');
+    if (intestazione) senza = senza.replace(/[@＠][\p{L}\d_.]+/gu, ' ');
+    const x = (nomeRe ? senza.split(nomeRe).join(' il locale ') : senza).replace(/\s+/g, ' ').trim();
+    return !x || (!!fraseMostrabile(x, 1, 10_000) && !haUnNomeDiPersona(x));
+  };
+  const daControllare = [...r.note, ...r.contenuti.flatMap((c) => [c.tema, c.didascalia, c.cosa_riprendere, c.in_citta])];
+  const intestazione = [r.intestazione.canali_e_tono, r.intestazione.hashtag, r.intestazione.prima_di_pubblicare];
+  if (!daControllare.every((t) => mostrabile(t)) || !intestazione.every((t) => mostrabile(t, true))) return { ok: false, motivo: 'il piano dell’AD ha un prezzo, un contatto, un indirizzo web, un nome di persona o un dato di Google' };
 
   const contenuti: ContenutoDelPiano[] = [...r.contenuti]
     .sort((a, b) => (a.data === b.data ? a.ora.localeCompare(b.ora) : a.data.localeCompare(b.data)))
