@@ -1,4 +1,5 @@
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
+import { getServerSupabase } from '@/lib/supabase/server';
 
 /**
  * Client Supabase per l'autenticazione dentro una rotta server, uno per
@@ -29,7 +30,11 @@ export const authServer = {
     password: string,
     options?: { captchaToken?: string; emailRedirectTo?: string; data?: Record<string, unknown> },
   ) {
-    const client = clientPerRichiesta();
+    // 27/11/2026 — Il client anonimo usa il flusso implicito: il link di conferma porta la
+    // sessione nel frammento #, che /auth/callback (solo ?code=) non vede. Come /sign-up, qui
+    // si usa il flusso PKCE: il link torna con ?code= e il verificatore resta nei cookie del
+    // browser che si è registrato, dove /auth/callback lo legge.
+    const client = await getServerSupabase();
     return await client.auth.signUp({
       email,
       password,

@@ -1,0 +1,318 @@
+{
+  "sessione": "R07",
+  "aggiornato": "2026-11-27 02:20",
+  "finita": true,
+  "testa": "598568c68cca965f0db65657c0fafc401df56139",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "598568c68cca965f0db65657c0fafc401df56139",
+    "nota": "typecheck, lint, test: 2338 file passati, 1 saltato; 14331 prove passate"
+  },
+  "voci": [
+    {
+      "id": "R07-001",
+      "chiave": "sicurezza-auth|il gettone anti-robot si consuma due volte: accendendo il captcha su supabase, accesso e iscrizione con email si rompono",
+      "esito": "gia_riparato_prima",
+      "prova": "app/api/auth/signin/route.ts:61 legge CAPTCHA_SU_SUPABASE_ACCESO e :99-104 verifica il gettone sul server solo se la variabile è spenta, poi :107 lo passa a Supabase (:111 traduce captcha_failed); app/api/auth/signup/route.ts:73 e :110-115 fanno lo stesso (commit edabc20, già nella base); app/sign-up/page.tsx:160-175 lo spende una volta sola. npx vitest run tests/unit/riparazione-r07-captcha-una-volta.test.ts tests/unit/riparazione-r28-registrazione-dal-server.test.ts --reporter=dot → 16 verdi; con il doppio uso rimesso in signin (riga 99 → if (true)) la r07-captcha-una-volta va rossa (2 su 10).",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-captcha-una-volta.test.ts tests/unit/riparazione-r28-registrazione-dal-server.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Controllato che accesso, rotta di iscrizione e iscrizione dal browser spendono già il gettone una volta sola: nessuna modifica. Nota per Nicola: CAPTCHA_SU_SUPABASE_ACCESO=1 su Vercel va messo insieme all'accensione del CAPTCHA su Supabase, né prima né dopo.",
+      "verificato_da": "capo squadra R07: ricontrollate le righe con grep (signin :61/:100/:107/:111, signup :73/:111/:120/:126), edabc20 antenato di HEAD, vitest 2 file 16 verdi"
+    },
+    {
+      "id": "R07-002",
+      "chiave": "immagini-media|le prove di sviluppo seminano 240 foto di prodotto da placehold.co",
+      "esito": "non_fatto",
+      "nota": "Lotto 4 non aperto: al 70% del limite di spesa (17,86 $ su 25 $) la regia ha fermato i lotti nuovi."
+    },
+    {
+      "id": "R07-003",
+      "chiave": "layout-responsive|a 320 px col testo al 200% il bollino «zero rischio» della cassa esce ancora di 18 px",
+      "esito": "non_fatto",
+      "nota": "Lotto 4 non aperto: al 70% del limite di spesa (17,86 $ su 25 $) la regia ha fermato i lotti nuovi."
+    },
+    {
+      "id": "R07-004",
+      "chiave": "microcopy|alcuni errori di zod restano in inglese: discriminatedunion, multipleof, finite, startswith, datetime",
+      "esito": "non_fatto",
+      "nota": "Lotto 4 non aperto: al 70% del limite di spesa (17,86 $ su 25 $) la regia ha fermato i lotti nuovi."
+    },
+    {
+      "id": "R07-005",
+      "chiave": "qa-flussi|il salvataggio di prodotto e varianti non è una scrittura sola: resta una finestra di millisecondi",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La funzione public.salva_prodotto_e_varianti esiste già (migrazioni 405 e 709). La correzione della rotta è scritta e provata nel commit ddefb86 (con le varianti la PATCH chiama la funzione, torna ai due passi solo con PGRST202 o 42883 che la nomina, scorta_*_cambiata → gli stessi 409; prova tests/unit/riparazione-r07-prodotto-e-varianti-insieme.test.ts, rimessa regge). L'ho annullata in cf15ed6: rende rossa la prova comune la-porta-del-catalogo, che usa l'aiutante tests/unit/aiuti/salva-varianti-finta.ts della voce R02-011 di quest'onda (la funzione esiste ma non la chiama nessuno, e le prove la impediscono). Dopo quella voce si riprende con git cherry-pick ddefb86.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/salva-varianti-finta.ts (oppure tests/unit/la-porta-del-catalogo-non-scrive-una-scorta-che-nel-frattempo-e-cambiata.test.ts)",
+          "modifica": "L'aiutante deve conoscere salva_prodotto_e_varianti. In alternativa la prova la-porta, in rpc(nome, carico), deve rispondere a quella funzione come un database senza migrazione: if (nome === 'salva_prodotto_e_varianti') return Promise.resolve({ data: null, error: { code: 'PGRST202', message: `Could not find the function public.${nome} in the schema cache` } }); prima di return salvaVariantiFinta(this as never)(nome, carico);. Poi git cherry-pick ddefb86, che porta anche le stesse 3 righe nelle prove r03-traccia-taglie-admin, r03-taglie-stessa-posizione e r16-salvataggio-tutto-o-niente."
+        },
+        {
+          "file": "app/seller/products/[id]/edit/page.tsx",
+          "modifica": "Con le varianti salvare con supabase.rpc('salva_prodotto_e_varianti', { p_product_id, p_prodotto, p_scorta_vista, p_varianti: [{id?, options, label, stock}], p_scorte_viste }) (SECURITY INVOKER, controlla il proprietario); tornare al percorso di oggi solo con PGRST202, o 42883 che nomina la funzione; tradurre scorta_*_cambiata nei messaggi di oggi."
+        }
+      ],
+      "cosa_resta": "Il POST di creazione resta in due passi: la funzione lavora solo su un prodotto che esiste già.",
+      "verificato_da": "capo squadra: con la prova la-porta come nella base, la rotta di ddefb86 la rende rossa (1 su 7, «IL CASO CHE ROMPEVA»); per questo è annullata e girata."
+    },
+    {
+      "id": "R07-006",
+      "chiave": "qa-flussi|il collegamento del negozio a stripe e il bonifico manuale non hanno nessuna prova",
+      "esito": "parziale",
+      "commit": "3ac5617d83792619d3d056cbc2b95d278fa74e0b",
+      "file_toccati": [
+        "tests/unit/riparazione-r07-stripe-connect-ruoli.test.ts",
+        "tests/unit/riparazione-r07-bonifico-a-mano-cancelli.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-stripe-connect-ruoli.test.ts",
+        "tests/unit/riparazione-r07-bonifico-a-mano-cancelli.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-stripe-connect-ruoli.test.ts tests/unit/riparazione-r07-bonifico-a-mano-cancelli.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "mutanti": [
+        {
+          "comando": "sed -i 's/withSellerAuthRateLimit/withAuthRateLimit/g' app/api/stripe/connect/login/route.ts && npx vitest run tests/unit/riparazione-r07-stripe-connect-ruoli.test.ts tests/unit/riparazione-r07-bonifico-a-mano-cancelli.test.ts --reporter=dot; git checkout -- app/api/stripe/connect/login/route.ts",
+          "riga_cambiata": "app/api/stripe/connect/login/route.ts:5,21 withSellerAuthRateLimit → withAuthRateLimit",
+          "uscita": 1
+        },
+        {
+          "riga_cambiata": "onboarding/route.ts:7,25 withSellerAuthRateLimit → withAuthRateLimit",
+          "uscita": 1
+        },
+        {
+          "riga_cambiata": "onboarding/route.ts:36 approval_status !== 'approved' → false",
+          "uscita": 1
+        },
+        {
+          "riga_cambiata": "rider-onboarding/route.ts:27 controllo del ruolo → if (false)",
+          "uscita": 1
+        },
+        {
+          "riga_cambiata": "refresh-status/route.ts:29 .eq('id', user.id) tolta",
+          "uscita": 1
+        },
+        {
+          "riga_cambiata": "payout/route.ts:57 withInternalAuth tolto",
+          "uscita": 1
+        },
+        {
+          "riga_cambiata": "payout/route.ts:67 percheNonSiPaga(...) → null",
+          "uscita": 1
+        },
+        {
+          "riga_cambiata": "altri 14 mutanti su login, onboarding, rider-onboarding, refresh-status e payout (cancelli, filtri, scritture), tutti con uscita 1",
+          "uscita": 1
+        }
+      ],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Due prove nuove (24 e 13 casi) con gli involucri di autenticazione veri, Stripe e database finti: le quattro rotte del collegamento (ruolo, 401/403/404/409/500/503, profilo proprio, riga giusta, percorso buono) e il bonifico manuale col vero releaseOrderPayout (segreto interno, ogni cancello, due chiamate insieme = un bonifico). Il 403 del login ora dipende dal ruolo: col mutante withAuthRateLimit la prova diventa rossa, la vecchia r06 no. Codice delle rotte non cambiato.",
+      "verificato_da": "non collaudata da un revisore indipendente: al 70% del limite di spesa la regia ha chiesto di chiudere senza revisori nuovi. Controllo del capo squadra: npm run verify verde su 598568c (comprende la prova) e prova rimessa del riparatore.",
+      "cosa_resta": "Niente nel codice. È una voce di sole prove, quindi la prova rimessa non si può applicare: non c'è una correzione da togliere. Al suo posto ci sono 21 mutanti a mano, tutti rossi, con il metodo approvato dalla regia l'1:17 del 27/11. Resta solo che la regia o Nicola la promuovano a riparato, perché per valida-referto un riparato vuole la rimessa con uscita 0."
+    },
+    {
+      "id": "R07-007",
+      "chiave": "qa-flussi|il campanello del sito conta ancora gruppi e aggiornamenti d'ordine di chi li ha spenti",
+      "esito": "non_fatto",
+      "nota": "Lotto 4 non aperto: al 70% del limite di spesa (17,86 $ su 25 $) la regia ha fermato i lotti nuovi."
+    },
+    {
+      "id": "R07-008",
+      "chiave": "qa-flussi|il campanello del sito e la lista delle notifiche contano ancora le promozioni (e le newsletter) di chi le ha spente",
+      "esito": "non_fatto",
+      "nota": "Lotto 4 non aperto: al 70% del limite di spesa (17,86 $ su 25 $) la regia ha fermato i lotti nuovi."
+    },
+    {
+      "id": "R07-009",
+      "chiave": "qa-flussi|la cassa accetta ordini senza limite nella stessa fascia oraria, mentre il tetto deciso è 5",
+      "esito": "parziale",
+      "file_toccati": [],
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Fermata dallo stop di spesa, senza commit. Sulla base il tetto c'è solo nella rotta della carta (app/api/stripe/checkout/route.ts:66-99 e :595-604).",
+      "cosa_resta": "Nella base mancano la rotta dei contanti, il numero modificabile dal pannello, la fascia spenta in cassa e il lucchetto: la nota del 26/11 li elenca come ancora da fare. Restano poi le fasce che si sovrappongono con etichette diverse, il cliente con un altro indirizzo, logger.error e la domanda sulle pagine della carta. In lib/quando-arriva.ts servono fasciaNelCalendario(etichetta, sceltaIl) con giornoLocale, fasceSiSovrappongono(a, b) (stesso giorno e daA < aB && daB < aA) ed etichetteCheSiSovrappongono(etichetta).",
+      "nota": "Il lucchetto vuole una migrazione (un trigger come la 840 su orders per fascia), che in quest'onda non si fa: SQL non scritto per lo stop.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/stripe/checkout/route.ts",
+          "modifica": "In giriNellaFascia, :74-77 stessaFinestra = etichetteCheSiSovrappongono(fascia), e a :91 'continue' se !fasceSiSovrappongono({etichetta: fascia, sceltaIl: adesso}, {etichetta: o.delivery_slot, sceltaIl: o.created_at}); :95 il giro è «mio» solo con lo stesso user_id E lo stesso delivery_address+delivery_zip (aggiungere le colonne alla select di :80); :602 logger.warn → logger.error."
+        },
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "Prima dell'insert dell'ordine (verso :1640) lo stesso conteggio della carta: giriNellaFascia in un modulo comune e, se non è ritiro in negozio né consegna veloce, 409 MOTIVO_FASCIA_PIENA quando !mio && altri+1 > ORDINI_PER_FASCIA."
+        }
+      ],
+      "domanda": "Le pagine della carta ancora da pagare non contano come giri e il webhook non ricontrolla: si contano le pagine aperte, o si rimborsa al webhook quando la fascia si è riempita nel frattempo?"
+    },
+    {
+      "id": "R07-010",
+      "chiave": "qa-flussi|la contestazione parziale vinta si fida della chiave anti-doppione di stripe, che vale 24 ore, mentre stripe ripete l'evento per 3 giorni",
+      "esito": "riparato",
+      "commit": "61d847b9ffbbbabc2fca788bbc0f0a08d9c7dd92",
+      "file_toccati": [
+        "lib/stripe/webhook/contestazione-parziale-vinta.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-restituzione-dopo-tre-giorni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-restituzione-dopo-tre-giorni.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 61d847b^ --file lib/stripe/webhook/contestazione-parziale-vinta.ts --prove tests/unit/riparazione-r07-restituzione-dopo-tre-giorni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima di creare il bonifico di restituzione si cerca su Stripe (transfers.list del gruppo) un bonifico con kind=dispute_won_restore per la stessa contestazione e lo stesso ordine, e se c'è si riusa invece di affidarsi alla chiave di 24 ore. Se l'elenco di Stripe non risponde resta la chiave, come prima: un evento ripetuto oltre le 24 ore proprio in quel momento resta scoperto. Prova: lo stesso evento due giorni dopo fa un solo bonifico.",
+      "verificato_da": "non collaudata da un revisore indipendente: al 70% del limite di spesa la regia ha chiesto di chiudere senza revisori nuovi. Controllo del capo squadra: npm run verify verde su 598568c (comprende la prova) e prova rimessa del riparatore."
+    },
+    {
+      "id": "R07-011",
+      "chiave": "qa-flussi|l'aiutante attendi() può dire «sospeso per sempre» per un import solo lento, e il permesso permettisospeso vale per l'ultima accendi",
+      "esito": "non_fatto",
+      "nota": "Lotto 4 non aperto per il limite di spesa. Il file tests/unit/aiuti/schermo.ts non è nella lista di R07: l'esito previsto è serve_file_altrui, ma la modifica esatta non è stata scritta."
+    },
+    {
+      "id": "R07-012",
+      "chiave": "sicurezza-auth|col captcha acceso su supabase il cambio password fallirebbe sempre, con l'errore letto come «password non corretta»",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nella base la rotta è già a posto: accetta il gettone, lo passa a Supabase e non legge più captcha_failed come «password non corretta» (app/api/account/cambia-password/route.ts:48,119,125-129, commit 36b16db; prova esistente tests/unit/riparazione-r28-cambio-password-captcha.test.ts verde, 3/3). Il cambio fallirebbe ancora sempre perché la pagina del profilo non manda nessun gettone: nessun commit.",
+      "cosa_resta": "La pagina del profilo deve montare il riquadro anti-robot e mandare il gettone.",
+      "serve_file_altrui": [
+        {
+          "file": "app/profile/settings/page.tsx",
+          "modifica": "1) import Turnstile, { type ManopolaAntiBot } from '@/components/Turnstile'; e const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''; 2) accanto a changingPwd (:168): const [captchaPwd, setCaptchaPwd] = useState(''); const antiBotPwd = useRef<ManopolaAntiBot>(null); 3) in handleChangePassword (:283), dopo il controllo perchePasswordNonCambiabile: if (TURNSTILE_SITE_KEY && !captchaPwd) { toast.error('Completa il controllo anti-robot'); return; } 4) body (:314): JSON.stringify({ passwordAttuale: currentPassword, nuovaPassword: newPassword, captchaToken: captchaPwd || undefined }); 5) nel finally (:325), perché il gettone vale una volta sola: setCaptchaPwd(''); antiBotPwd.current?.reset(); 6) nel <form onSubmit={handleChangePassword}> (:610), prima del bottone submit (:635): {TURNSTILE_SITE_KEY && (<div className=\"flex justify-center\"><Turnstile ref={antiBotPwd} siteKey={TURNSTILE_SITE_KEY} onVerify={setCaptchaPwd} onExpire={() => setCaptchaPwd('')} /></div>)}, come in app/reset-password/page.tsx:350. Col commutatore spento Supabase ignora il gettone: coerente con app/api/auth/signin."
+        }
+      ],
+      "verificato_da": "qa: verificate route.ts:48,119,125-129 e app/profile/settings/page.tsx:314 (nessun riquadro, nessun gettone); con GoTrue attuale il gettone mancante dà captcha_failed e la rotta risponde con la frase anti-robot, quindi la metà «letta come password non corretta» è chiusa nella base. Trovata un'alternativa dentro la rotta che salta il CAPTCHA, girata a Nicola come domanda.",
+      "nota": "Alternativa trovata dal collaudo, tutta dentro app/api/account/cambia-password/route.ts: GoTrue salta il CAPTCHA quando l'Authorization porta un ruolo da amministratore (middleware.go:254). Se la verifica della password attuale (route.ts:115, oggi creaClientAnonimo()) usasse un client nuovo per richiesta con la chiave di servizio e senza sessione salvata, il cambio funzionerebbe senza il gettone della pagina. Il prezzo: quella verifica resterebbe senza CAPTCHA (la rotta è già autenticata e frenata a 5 tentativi ogni 15 minuti). Non applicata: è un compromesso di sicurezza, lo decide Nicola."
+    },
+    {
+      "id": "R07-013",
+      "chiave": "sicurezza-auth|annullando un ordine già pagato in contanti, chi amministra legge una frase mozzata e un'istruzione che non si può eseguire",
+      "esito": "riparato",
+      "commit": "7934395f560392f6cf596f583f4d75cbb4b48b87",
+      "file_toccati": [
+        "app/api/admin/orders/[id]/cancel/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-annullo-contanti-chi-apre-il-reclamo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-annullo-contanti-chi-apre-il-reclamo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7934395^ --file app/api/admin/orders/[id]/cancel/route.ts --prove tests/unit/riparazione-r07-annullo-contanti-chi-apre-il-reclamo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "I due testi della rotta (ordine in contanti consegnato, contanti già incassati) chiedevano a chi amministra di aprire un reclamo, che app/api/disputes/route.ts:62 permette solo al cliente. Ora sono frasi intere col passo vero: il cliente apre il reclamo dalla pagina dell'ordine, chi amministra lo chiude in Reclami (/admin/disputes) col rimborso.",
+      "verificato_da": "non collaudata da un revisore indipendente: al 70% del limite di spesa la regia ha chiesto di chiudere senza revisori nuovi. Controllo del capo squadra: npm run verify verde su 598568c (comprende la prova) e prova rimessa del riparatore."
+    },
+    {
+      "id": "R07-014",
+      "chiave": "sicurezza-auth|col captcha acceso su supabase il reinvio della mail di conferma fallirebbe: resend parte senza gettone",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nella base lib/auth/conferma-email.ts accetta già captchaToken e lo passa a resend (:259,:270, commit 6f3bb56; prova esistente tests/unit/riparazione-r23-captcha-reinvio-conferma.test.ts verde). L'unico chiamante non lo passa: nessun commit. Con la correzione della voce sul messaggio del gettone mancante, l'errore di questo reinvio non promette più un gettone rigenerato.",
+      "cosa_resta": "La pagina di verifica dell'email deve avere il riquadro anti-robot e passare il gettone.",
+      "serve_file_altrui": [
+        {
+          "file": "app/auth/verify-email/page.tsx",
+          "modifica": "1) import { Suspense, useEffect, useRef, useState } from 'react'; import Turnstile, { type ManopolaAntiBot } from '@/components/Turnstile'; const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''; 2) stato: const [captchaToken, setCaptchaToken] = useState(''); const antiBot = useRef<ManopolaAntiBot>(null); 3) in resend(), dopo il controllo puoReinviare: if (TURNSTILE_SITE_KEY && !captchaToken) { setEsito({ esito: 'errore', messaggio: 'Completa il controllo anti-robot qui sotto.' }); return; } 4) riga 74: rimandaLinkDiConferma(supabase, { email: vista.emailPerIlReinvio, base, returnTo, captchaToken: captchaToken || undefined }); 5) nel finally: setCaptchaToken(''); antiBot.current?.reset(); 6) nel <form onSubmit={resend}> (:127), prima del bottone submit (:149): {TURNSTILE_SITE_KEY && (<div className=\"flex justify-center\"><Turnstile ref={antiBot} siteKey={TURNSTILE_SITE_KEY} onVerify={setCaptchaToken} onExpire={() => setCaptchaToken('')} /></div>)}."
+        }
+      ],
+      "verificato_da": "qa: verificate conferma-email.ts:259/270 e verify-email/page.tsx:74; rimandaLinkDiConferma gira nel browser con il client della pagina: senza riquadro non c'è gettone, e la chiave di servizio nel browser non si può usare; una cura senza la pagina vorrebbe una rotta server nuova, fuori territorio."
+    },
+    {
+      "id": "R07-015",
+      "chiave": "sicurezza-auth|senza il gettone anti-robot la pagina dice che il gettone «è stato rigenerato», anche quando il riquadro non si è caricato",
+      "esito": "riparato",
+      "commit": "9f4c028",
+      "file_toccati": [
+        "lib/errors.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-gettone-mancante-non-rigenerato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-gettone-mancante-non-rigenerato.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9f4c028^ --file lib/errors.ts --prove tests/unit/riparazione-r07-gettone-mancante-non-rigenerato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "traduciErroreAuth riconosce i testi del gettone mancante o non verificabile («captcha verification process failed», «no captcha response», «captcha_token», «missing-input-response», «CAPTCHA mancante») e per questi dice che il controllo anti-robot non si è potuto completare, invece di un gettone rigenerato. Il gettone rifiutato (timeout-or-duplicate) resta com'era. Su richiesta del collaudo la prova copre anche il testo di GoTrue di oggi («captcha protection: request disallowed (no captcha_token found)», commit 598568c): togliendo captcha_token| dalla regex di lib/errors.ts:99 diventa rossa (1 su 8).",
+      "verificato_da": "qa: rilanciate la prova e la rimessa (regge); 23 testi del gettone, sia mancante sia speso (timeout-or-duplicate, invalid-input-response, CAPTCHA non valido, Verifica CAPTCHA fallita), passati in traduciErroreAuth; letto il sorgente di GoTrue per i testi veri; tolta a turno ogni alternativa della regex; 38 prove importatrici verdi. Chiesto un rinforzo: la prova non conteneva il testo GoTrue di oggi («no captcha_token found»)."
+    },
+    {
+      "id": "R07-016",
+      "chiave": "sicurezza-auth|la registrazione fatta da un server manderebbe link di conferma che non fanno entrare",
+      "esito": "riparato",
+      "commit": "bbe7165",
+      "file_toccati": [
+        "lib/supabase/auth-server.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-registrazione-server-link-col-codice.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-registrazione-server-link-col-codice.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bbe7165^ --file lib/supabase/auth-server.ts --prove tests/unit/riparazione-r07-registrazione-server-link-col-codice.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "authServer.signUp usa getServerSupabase() (@supabase/ssr, flusso PKCE, verificatore nei cookie della risposta) come la pagina /sign-up: il link di conferma torna a /auth/callback con ?code= e non col frammento #. signIn resta sul client anonimo; gettone, emailRedirectTo e dati dell'iscrizione arrivano ancora a Supabase.",
+      "verificato_da": "qa: rilanciate la prova e la rimessa (regge); provata la rotta app/api/auth/signup con auth-server e getServerSupabase veri (next/headers finto): 201 e cookie del verificatore scritto, captcha_failed→400, weak_password→400, cookies() che lancia→500 gestito; mutanti PKCE senza cookie e captchaToken tolto: rossi; suite unitaria (2334 file) e tsc verdi."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Su /reset-password un errore del controllo anti-robot finisce in «Qualcosa non ha funzionato» senza dire del controllo",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "lib/auth/errori-nuova-password.ts:60-63",
+      "descrizione": "Un errore captcha (gettone mancante, riquadro senza onError a app/reset-password/page.tsx:350) è tradotto in «Qualcosa non ha funzionato. Riprova, oppure richiedi un nuovo link» e scritto con logger.error, senza nominare il controllo anti-robot."
+    },
+    {
+      "titolo": "«Password dimenticata?» parte anche senza gettone quando il riquadro anti-robot non si è caricato",
+      "dimensione": "sicurezza-auth",
+      "severita": "minore",
+      "file": "app/sign-in/page.tsx:309-316",
+      "descrizione": "L'invio dell'accesso blocca la richiesta senza gettone (:193), il recupero password no: la richiesta parte lo stesso e con il CAPTCHA acceso su Supabase fallisce."
+    },
+    {
+      "titolo": "La creazione di un prodotto con varianti dal pannello resta in due scritture",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/api/admin/products/route.ts (POST)",
+      "descrizione": "La funzione salva_prodotto_e_varianti lavora solo su un prodotto che esiste già: la creazione scrive prima il prodotto e poi le varianti."
+    }
+  ],
+  "domande_per_nicola": [
+    "R07-012, cambio password col CAPTCHA acceso su Supabase: preferisci il riquadro anti-robot nella pagina del profilo (modifica a app/profile/settings/page.tsx, descritta nel referto), oppure che la rotta verifichi la password attuale con la chiave di servizio, che salta il CAPTCHA? La rotta è già autenticata e frenata a 5 tentativi ogni 15 minuti.",
+    "R07-009: le pagine della carta ancora da pagare non contano come giri della fascia e il webhook non ricontrolla. Si contano le pagine aperte, o si rimborsa al webhook quando la fascia si è riempita nel frattempo?"
+  ],
+  "conto": {
+    "agenti": 5,
+    "nota": "5 subagenti su 8 (3 riparatori, 1 collaudo; quello del lotto 1 ha solo verificato). Costo letto: 19,63 $ prima della chiusura. Lotto 4 e il collaudo del lotto 3 non fatti per il limite di spesa. costo_usd letto con get_session alle 01:54, ultimo aggiornamento disponibile: il dato arriva in ritardo, e la spesa vera alla consegna è più alta.",
+    "subagenti": 5
+  },
+  "costo_usd": 19.63
+}
