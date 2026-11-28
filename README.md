@@ -58,6 +58,8 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 # Cloudflare Turnstile (CAPTCHA)
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=0x4xxx
 TURNSTILE_SECRET_KEY=0x4xxx
+# 1 solo insieme al CAPTCHA acceso su Supabase (vedi .env.example)
+CAPTCHA_SU_SUPABASE_ACCESO=
 
 # Push notifications (VAPID)
 NEXT_PUBLIC_VAPID_PUBLIC_KEY=Bxx
@@ -182,7 +184,7 @@ Quando aggiungi una nuova migration:
 - ✅ Service role key SOLO in API routes (mai client)
 - ✅ Stripe webhook signature verificato
 - ✅ CSP completa in `next.config.js`
-- ✅ Turnstile CAPTCHA su signup
+- ⚠️ Turnstile CAPTCHA: le rotte del server (`/api/auth/signin`, `/api/auth/signup`) lo verificano con siteverify; per l'iscrizione da `/sign-up`, il recupero password e il reinvio del link lo verifica Supabase, che va configurato col suo CAPTCHA (Turnstile) insieme a `CAPTCHA_SU_SUPABASE_ACCESO=1` (vedi `.env.example`)
 - ✅ Honeypot anti-bot
 - ✅ Rate limit su API LLM
 - ✅ Cookie consent GDPR (Consent Mode v2)

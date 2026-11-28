@@ -27,6 +27,7 @@ import { Input, Select } from '@/components/ui/Field';
 // cinque comandi che si annunciavano tutti come «interruttore». Adesso ha una
 // casa sua, e il nome ce l'ha (components/ui/Toggle.tsx).
 import { Toggle } from '@/components/ui/Toggle';
+import Turnstile, { type ManopolaAntiBot } from '@/components/Turnstile';
 import { pezziDelMotivo } from '@/lib/testo/pezzi-del-motivo';
 
 type Tab = 'account' | 'password' | 'notifications' | 'privacy' | 'danger';
@@ -132,6 +133,8 @@ function terminePassato(p: { effectiveAt: string; daysRemaining: number }): bool
   return Number.isFinite(quando) && quando <= Date.now();
 }
 
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
+
 export default function SettingsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('account');
@@ -167,6 +170,9 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changingPwd, setChangingPwd] = useState(false);
+  // Il gettone anti-robot della verifica della password attuale: la rotta lo passa a Supabase.
+  const [captchaPwd, setCaptchaPwd] = useState('');
+  const antiBotPwd = useRef<ManopolaAntiBot>(null);
 
   // New email
   const [newEmail, setNewEmail] = useState('');
@@ -312,7 +318,11 @@ export default function SettingsPage() {
           'content-type': 'application/json',
           ...(session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ passwordAttuale: currentPassword, nuovaPassword: newPassword }),
+        body: JSON.stringify({
+          passwordAttuale: currentPassword,
+          nuovaPassword: newPassword,
+          ...(captchaPwd ? { captchaToken: captchaPwd } : {}),
+        }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -326,6 +336,11 @@ export default function SettingsPage() {
       return;
     } finally {
       setChangingPwd(false);
+      // Speso o no, il prossimo tentativo vuole un gettone nuovo.
+      if (captchaPwd) {
+        setCaptchaPwd('');
+        antiBotPwd.current?.reset();
+      }
     }
     setCurrentPassword('');
     setNewPassword('');
@@ -635,6 +650,14 @@ export default function SettingsPage() {
                   autoComplete="new-password"
                   minLength={8}
                 />
+                {TURNSTILE_SITE_KEY && (
+                  <Turnstile
+                    ref={antiBotPwd}
+                    siteKey={TURNSTILE_SITE_KEY}
+                    onVerify={setCaptchaPwd}
+                    onExpire={() => setCaptchaPwd('')}
+                  />
+                )}
                 <Button
                   type="submit"
                   loading={changingPwd}

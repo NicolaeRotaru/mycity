@@ -1,12 +1,13 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { safeInternalPath } from '@/lib/safe-redirect';
 import { Mail } from 'lucide-react';
 import { supabase, auth } from '@/lib/supabase/client';
 import { useTranslations } from 'next-intl';
+import Turnstile, { type ManopolaAntiBot } from '@/components/Turnstile';
 import {
   leggiEmailDaConfermare,
   memoriaDellaScheda,
@@ -25,6 +26,8 @@ import {
  * un campo. «Esci» compare solo a chi e' davvero entrato.
  * La logica sta in `lib/auth/conferma-email.ts`.
  */
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
+
 function VerifyEmailInner() {
   const tStates = useTranslations('states');
   // #112 — Chi si stava registrando dal checkout deve poter tornare al suo
@@ -40,6 +43,9 @@ function VerifyEmailInner() {
   const [verified, setVerified] = useState<boolean>(false);
   const [resending, setResending] = useState(false);
   const [esito, setEsito] = useState<EsitoReinvio | null>(null);
+  // Il gettone anti-robot del reinvio: va con la richiesta a Supabase e vale una volta sola.
+  const [captchaToken, setCaptchaToken] = useState('');
+  const antiBot = useRef<ManopolaAntiBot>(null);
   // 12/11/2026 (R12-017) — «Reinvia» si spegneva solo durante l'invio: chi lo
   // ripremeva subito prendeva il freno di Supabase e un messaggio rosso. Dopo un
   // invio, o dopo il freno, resta spento col conto alla rovescia.
@@ -71,13 +77,23 @@ function VerifyEmailInner() {
     setEsito(null);
     try {
       const base = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-      const risposta = await rimandaLinkDiConferma(supabase, { email: vista.emailPerIlReinvio, base, returnTo });
+      const risposta = await rimandaLinkDiConferma(supabase, {
+        email: vista.emailPerIlReinvio,
+        base,
+        returnTo,
+        captchaToken: captchaToken || null,
+      });
       setEsito(risposta);
       if (risposta.attesaSecondi) setAttesa(risposta.attesaSecondi);
     } catch {
       setEsito({ esito: 'errore', messaggio: 'Non siamo riusciti a mandare l’email. Riprova tra qualche minuto.' });
     } finally {
       setResending(false);
+      // Speso o no, per il prossimo reinvio serve un gettone nuovo.
+      if (captchaToken) {
+        setCaptchaToken('');
+        antiBot.current?.reset();
+      }
     }
   }
 
@@ -143,6 +159,16 @@ function VerifyEmailInner() {
                 <p className="mt-1 text-xs text-ink-500">
                   Se l&apos;avevi scritta sbagliata quando ti sei registrato, registrati di nuovo con quella giusta.
                 </p>
+              </div>
+            )}
+            {TURNSTILE_SITE_KEY && (
+              <div className="flex justify-center">
+                <Turnstile
+                  ref={antiBot}
+                  siteKey={TURNSTILE_SITE_KEY}
+                  onVerify={setCaptchaToken}
+                  onExpire={() => setCaptchaToken('')}
+                />
               </div>
             )}
             <button
