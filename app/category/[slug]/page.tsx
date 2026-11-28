@@ -338,7 +338,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
       <div className="py-3">
         <div className="flex justify-between items-center mb-1.5">
           <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider">{t('price')}</span>
-          <span className="font-bold text-primary-700 text-xs">€{minPrice} – €{maxPrice}{maxPrice >= 500 ? '+' : ''}</span>
+          <span className="font-bold text-primary-700 text-xs">{minPrice} € – {maxPrice}{maxPrice >= 500 ? '+' : ''} €</span>
         </div>
         <input
           type="range"

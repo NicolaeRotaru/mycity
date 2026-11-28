@@ -63,7 +63,6 @@ export function attivitaDallaScheda(scheda: Scheda): NuovaAttivita | null {
   const candidato = {
     tipo: 'nuova-attivita' as const,
     origine: 'agente',
-    // eslint-disable-next-line no-control-regex
     nome: String(scheda.nome ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80),
     ...(tipo ? { tipo_attivita: tipo } : {}),
     ...(scheda.tipo ? { dettaglio: scheda.tipo.trim().slice(0, 80) } : {}),

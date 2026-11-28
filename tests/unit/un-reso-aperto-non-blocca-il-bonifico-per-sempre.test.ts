@@ -171,7 +171,7 @@ describe('le tappe non si saltano', () => {
 
     expect(res.status, 'esce piu di quello che il cliente ha pagato').toBe(400);
     expect(refundOrderMock).not.toHaveBeenCalled();
-    expect((await res.json()).error.message).toContain('5.00');
+    expect((await res.json()).error.message).toContain('5,00');
   });
 
   it('due schede aperte sullo stesso reso: la seconda non lo fa avanzare di nuovo', async () => {

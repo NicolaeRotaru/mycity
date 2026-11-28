@@ -136,7 +136,7 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     );
     await notifyAdmins(
       'ℹ️ La banca chiede informazioni su un pagamento',
-      `Richiesta di informazioni ${dispute.id} sull'ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${((dispute.amount ?? 0) / 100).toFixed(2)}€. Nessun soldo tolto, nessuno storno al negozio: il bonifico non ancora partito resta fermo finché la banca chiude.`,
+      `Richiesta di informazioni ${dispute.id} sull'ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${formatPriceFromCents(dispute.amount ?? 0)}. Nessun soldo tolto, nessuno storno al negozio: il bonifico non ancora partito resta fermo finché la banca chiude.`,
       '/admin/disputes',
     );
     return;
@@ -287,7 +287,7 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
   // anche se il prelievo arriva prima di `created` (due passaggi, un avviso).
   await notifyAdmins(
     '⚠️ Chargeback aperto',
-    `Contestazione bancaria su ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${((dispute.amount ?? 0) / 100).toFixed(2)}€.`,
+    `Contestazione bancaria su ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${formatPriceFromCents(dispute.amount ?? 0)}.`,
     '/admin/disputes',
     { unaVoltaPer: `chargeback-aperto:${dispute.id}` },
   );

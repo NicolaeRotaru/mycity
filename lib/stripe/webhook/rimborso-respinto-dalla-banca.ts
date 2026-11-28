@@ -117,7 +117,7 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
       }
       await notifyAdmins(
         '⚠️ Rimborso senza ordine respinto dalla banca',
-        `La banca ha respinto il rimborso ${refund.id} da ${((refund.amount ?? 0) / 100).toFixed(2)} € su un pagamento senza ordine` +
+        `La banca ha respinto il rimborso ${refund.id} da ${formatPriceFromCents(refund.amount ?? 0)} su un pagamento senza ordine` +
           (m.motivo ? ` (${m.motivo})` : '') +
           (carrello ? `, carrello ${carrello}` : '') +
           (cliente ? `, cliente ${cliente}` : '') +

@@ -339,7 +339,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
     // la colonna la decide lo stato d'arrivo.
     mutationFn: async (params: { newStatus: OrderStatus }) => {
       if (!order) throw new Error('Ordine non caricato');
-      const update: Record<string, any> = { delivery_status: params.newStatus };
+      const update: Record<string, unknown> = { delivery_status: params.newStatus };
       const colonnaOrario = COLONNA_ORARIO_DEL_PASSAGGIO[params.newStatus];
       if (colonnaOrario) update[colonnaOrario] = new Date().toISOString();
 
@@ -684,7 +684,6 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
               <div key={it.id} className="px-6 py-3 flex items-center gap-4">
                 <div className="w-14 h-14 rounded bg-cream-100 overflow-hidden flex items-center justify-center shrink-0">
                   {img ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     (<img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />)
                   ) : <Package size={20} className="text-ink-400" aria-hidden />}
                 </div>

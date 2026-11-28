@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint --ext .js,.mjs,.cjs,.jsx,.ts,.mts,.cts,.tsx --cache --cache-location .next/cache/eslint/ app components lib",
+    "lint": "eslint --ext .js,.mjs,.cjs,.jsx,.ts,.mts,.cts,.tsx --report-unused-disable-directives --cache --cache-location .next/cache/eslint/ app components lib",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

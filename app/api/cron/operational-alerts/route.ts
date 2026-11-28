@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { formatPriceFromCents } from '@/lib/format';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { withCronAuth } from '@/lib/api/middleware';
@@ -453,7 +454,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     alerts.push({
       key: `COD_MISMATCH|${mm.rider_id}|${mm.for_date}`,
       type: 'COD_MISMATCH',
-      detail: `Riconciliazione COD rider ${mm.rider_id.slice(0, 8)} del ${mm.for_date}: atteso €${(mm.expected_cents / 100).toFixed(2)} vs incassato €${(mm.collected_cents / 100).toFixed(2)}`,
+      detail: `Riconciliazione COD rider ${mm.rider_id.slice(0, 8)} del ${mm.for_date}: atteso ${formatPriceFromCents(mm.expected_cents)} vs incassato ${formatPriceFromCents(mm.collected_cents)}`,
       url: '/admin/orders',
     });
   }

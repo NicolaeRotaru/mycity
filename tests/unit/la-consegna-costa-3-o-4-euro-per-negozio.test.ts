@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { prezziDelCarrello, type IngressiPrezzo } from '@/lib/ordini/prezzi';
-import { calcolaTotali } from '@/components/checkout/useTotaliCarrello';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { COMPENSO_RIDER_CENTS } from '@/lib/constants';
@@ -71,16 +70,6 @@ describe('la consegna costa 3 € con la fascia, 4 € sotto i 10 € o con la v
             const merci = b === null ? [c] : [c, b];
             const i = ing(merci, { consegnaVeloce: veloce, couponSpedizioneGratis: codice });
             const server = prezziDelCarrello(i);
-            const schermo = calcolaTotali({
-              gruppi: merci.map((m, k) => ({ sellerId: `negozio-${k}`, subtotalEuro: m / 100, storeLat: null, storeLng: null })),
-              consegnaLat: null,
-              consegnaLng: null,
-              pickupInStore: false,
-              couponSpedizioneGratis: codice,
-              couponScontoEuro: 0,
-              consegnaVeloce: veloce,
-              creditoDisponibileEuro: 0,
-            }).centesimi;
             const cassa = riepilogoDaMostrare({ ...i, usaCredito: false, creditoDisponibileCents: 0 });
             casi++;
             server.gruppi.forEach((g, k) => {
@@ -101,10 +90,11 @@ describe('la consegna costa 3 € con la fascia, 4 € sotto i 10 € o con la v
               const sotto = merci.filter((m) => m < 1000).length;
               const attesa = (k === primo ? 300 + (veloce && sotto === 0 ? 100 : 0) : 100) + (merci[k] < 1000 ? 100 : 0);
               if (!codice && g.deliveryFeeCents !== attesa) errori.push(`consegna ${g.deliveryFeeCents} invece di ${attesa}: ${caso}`);
-              const s = schermo.gruppi[k];
-              if (s.deliveryFeeCents !== g.deliveryFeeCents || s.totalCents !== g.totalCents) errori.push(`schermo diverso: ${caso}`);
             });
+            // R09-005 — Lo schermo è il riepilogo della cassa (`riepilogoDaMostrare`), non la vecchia copia
+            // `calcolaTotali` che nessuna pagina usava: la consegna e il totale mostrati sono quelli addebitati.
             if (Math.round(cassa.totale * 100) !== server.grandTotalCents) errori.push(`riepilogo diverso: ${merci.join('+')}`);
+            if (Math.round(cassa.feeConsegna * 100) !== server.grandDeliveryFeeCents) errori.push(`consegna a schermo diversa: ${merci.join('+')}`);
           }
         }
       }

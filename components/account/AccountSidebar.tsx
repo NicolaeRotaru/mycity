@@ -112,7 +112,6 @@ export default function AccountSidebar() {
       <div className="rounded-xl border border-cream-300 bg-white p-4">
         <div className="flex items-center gap-3">
           {logo ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={logoNegozio(logo, 48)}
               alt=""

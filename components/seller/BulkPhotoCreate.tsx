@@ -284,7 +284,6 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
               <div className="flex shrink-0 gap-1">
                 {p.image_indexes.slice(0, 2).map((i) => (
                   previews[i] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       key={i}
                       src={previews[i]}

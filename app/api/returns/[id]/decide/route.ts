@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { formatPriceFromCents } from '@/lib/format';
 import { z } from 'zod';
 import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { isStripeConfigured } from '@/lib/stripe/client';
@@ -140,7 +141,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     const residuoCent = rimborsabile.massimoCents;
     if (body.refundAmountCents! > residuoCent) {
       return ApiErrors.invalidRequest(
-        `Il rimborso non può superare quello che resta dell ordine: al massimo ${(residuoCent / 100).toFixed(2)} €.`,
+        `Il rimborso non può superare quello che resta dell ordine: al massimo ${formatPriceFromCents(residuoCent)}.`,
       );
     }
     /**

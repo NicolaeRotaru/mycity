@@ -25,7 +25,8 @@ import type { RiserveLiberate } from '@/lib/ordini/ordine-in-contanti-puo-nascer
 import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
 import { riusoDellaCassaAperta, type EsitoRiuso, type SessioneRiletta } from '@/lib/ordini/riuso-della-cassa-aperta';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
-import { fasciaAlGiornoDellOrdine, giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
+// R09-009 — La fascia riportata al giorno della richiesta: una copia sola, condivisa coi contanti.
+import { fasciaDelGiornoDellaRichiesta, giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
 import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
 import { conColonneDelServizio } from '@/lib/products/servizio';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -33,6 +34,7 @@ import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/r
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
 import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
@@ -55,27 +57,6 @@ export const runtime = 'nodejs';
  * veloce (migrazione 840). `null` = lettura non riuscita (cosa farne lo dice chi chiama).
  */
 type GiornoEFinestra = { giorno: string; da: number; a: number };
-
-/**
- * 27/11/2026 — LA FASCIA DETTA DAL GIORNO IN CUI ARRIVA LA RICHIESTA, ANCHE CON LA CARTA.
- *
- * La stessa regola della rotta dei contanti (app/api/orders/cod/route.ts). Lunedì alle 23:59
- * «Domani · 9:00–11:00» è martedì: arrivata alle 00:01, la rotta la giudicava (e il webhook la
- * contava da `session.created`) per mercoledì. La cassa manda il giorno della fascia
- * (`delivery_date`): se cade un giorno prima di quello che dice l'etichetta letta adesso, la
- * mezzanotte è passata in viaggio e l'etichetta si riporta a oggi (`fasciaAlGiornoDellOrdine`):
- * «Domani» di ieri è «Oggi», una fascia di ieri è passata (`null`). Uno scarto di più giorni è
- * l'orologio del telefono sbagliato: non sposta niente.
- */
-function fasciaDelGiornoDellaRichiesta(fascia: string, giornoDellaFascia: string, adesso: Date): string | null {
-  const finestra = finestraDellaFascia(fascia);
-  const oggi = giornoDiPiacenza(adesso);
-  if (!finestra || !oggi || !/^\d{4}-\d{2}-\d{2}$/.test(giornoDellaFascia)) return fascia;
-  const giorniDaOggi = Math.round((Date.parse(giornoDellaFascia) - Date.parse(oggi)) / 86_400_000);
-  if (giorniDaOggi !== (finestra.giorno === 'domani' ? 0 : -1)) return fascia;
-  // Ieri a mezzogiorno (UTC): un istante del giorno in cui la cassa ha proposto la fascia.
-  return fasciaAlGiornoDellOrdine(fascia, Date.parse(oggi) - 12 * 3_600_000, adesso);
-}
 
 function giornoEFinestra(fascia: string, sceltaIl: string | number | Date): GiornoEFinestra | null {
   const f = finestraDellaFascia(fascia);
@@ -220,7 +201,8 @@ const Body = z.object({
  *
  * Rate limit: 30 checkout / 10 min per utente.
  */
-export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, windowMs: 10 * 60_000 }, async ({ user, profile, req }): Promise<NextResponse> => {
+// R09-006 — Una fila per richiesta per i lavori dopo la risposta (email, campanelle): vedi lib/api/fila-per-richiesta.ts.
+export const POST = conFilaPerRichiesta(withAuthRateLimit({ name: 'stripe-checkout', max: 30, windowMs: 10 * 60_000 }, async ({ user, profile, req }): Promise<NextResponse> => {
   const purchaseBlock = assertCanPurchase(profile);
   if (purchaseBlock) return purchaseBlock;
   // 31/10/2026 — Al lancio la carta è spenta (CARTA_ACCESA, scelta di Nicola): la
@@ -1339,4 +1321,4 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     }
     return ApiErrors.internal('Errore nella creazione del pagamento.');
   }
-});
+}));

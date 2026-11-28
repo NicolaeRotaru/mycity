@@ -80,6 +80,24 @@ function conColonneIndispensabili(select: string): string {
 }
 
 /**
+ * Le colonne che una domanda alla vetrina chiede davvero, in un ordine fisso: «id, store_name» e
+ * «store_name, id, is_approved» sono la stessa domanda. È la chiave delle domande in volo qui sotto
+ * e della memoria nei chiamanti (lib/queries/vetrina-con-memoria.ts, R09-008).
+ */
+export function colonneDellaDomanda(select: string): string {
+  return [...new Set(conColonneIndispensabili(select).split(',').map((c) => c.trim()))].sort().join(',');
+}
+
+/**
+ * R09-008 — Chi legge i negozi della vetrina per un chiamante: per difetto `fetchSellerPublicMap`;
+ * le sezioni della home passano quello con la memoria di React Query (lib/queries/vetrina-con-memoria.ts).
+ */
+export type LettoreNegozi = (
+  sellerIds: Array<string | null | undefined>,
+  select: string,
+) => Promise<Map<string, SellerPublicProfile>>;
+
+/**
  * 12/11/2026 (R06-009) — LE DOMANDE IN VOLO PER LO STESSO NEGOZIO SI UNISCONO.
  *
  * In home ogni sezione (Drop del giorno, storie, Ordina di nuovo, fasce,
@@ -123,7 +141,7 @@ export async function fetchSellerPublicMap(
   // all'ordine: «id, store_name» (Drop del giorno, Ordina di nuovo) e «id, store_name, is_approved»
   // (le fasce) diventano la stessa domanda (`conColonneIndispensabili` aggiunge is_approved a tutte),
   // e si uniscono. Colonne diverse restano domande diverse.
-  const colonne = [...new Set(conColonneIndispensabili(select).split(',').map((c) => c.trim()))].sort().join(',');
+  const colonne = colonneDellaDomanda(select);
   const chiave = (id: string) => `${colonne}|${id}`;
   const daChiedere = unique.filter((id) => !voli.has(chiave(id)));
   if (daChiedere.length > 0) {
@@ -222,9 +240,11 @@ export async function conNegozioApprovato<T extends { seller_id?: string | null 
   supabase: LettoreVista,
   rows: T[],
   select = COLONNE_NEGOZIO_IN_VETRINA,
+  leggiNegozi?: LettoreNegozi,
 ): Promise<Array<T & { profiles: SellerPublicProfile }>> {
   if (rows.length === 0) return [];
-  const negozi = await fetchSellerPublicMap(supabase, rows.map((r) => r.seller_id), select);
+  const ids = rows.map((r) => r.seller_id);
+  const negozi = await (leggiNegozi ? leggiNegozi(ids, select) : fetchSellerPublicMap(supabase, ids, select));
   return attachSellerProfiles(rows, negozi).filter(
     (r): r is T & { profiles: SellerPublicProfile } => negozioApprovato(r.profiles),
   );

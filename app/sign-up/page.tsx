@@ -244,8 +244,8 @@ function SignUpInner() {
           <span>
             <strong>Sei stato invitato!</strong> Codice <span className="font-mono font-bold">{refCode}</span> applicato.{' '}
             {role === 'buyer'
-              ? <>Come nuovo acquirente ricevi <strong>100 punti di benvenuto</strong> (valgono €5 di credito).</>
-              : <>Chi ti ha invitato riceverà €5 di credito quando riceverai il tuo primo ordine.</>}
+              ? <>Come nuovo acquirente ricevi <strong>100 punti di benvenuto</strong> (valgono 5 € di credito).</>
+              : <>Chi ti ha invitato riceverà 5 € di credito quando riceverai il tuo primo ordine.</>}
           </span>
         </div>
       )}

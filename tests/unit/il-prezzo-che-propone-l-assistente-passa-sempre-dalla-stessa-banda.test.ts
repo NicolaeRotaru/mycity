@@ -74,8 +74,8 @@ describe('la banda del 30% sul prezzo proposto dall assistente', () => {
 
   it('il rifiuto dice quale prezzo c era e quale e stato proposto', () => {
     const { rifiutati } = patchAiPerIlForm({ price: 2 }, { prezzoAttuale: 20 });
-    expect(rifiutati[0]).toContain('20.00');
-    expect(rifiutati[0]).toContain('2.00');
+    expect(rifiutati[0]).toContain('20,00');
+    expect(rifiutati[0]).toContain('2,00');
   });
 
   it('su un prodotto nuovo, senza prezzo di partenza, la banda non si inventa niente', () => {

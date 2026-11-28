@@ -1531,7 +1531,6 @@ export default function ProductForm({
           <div className="bg-white border border-cream-300 rounded-xl overflow-hidden shadow-warm max-w-[16rem]">
             <div className="aspect-square bg-cream-100">
               {imageUrls[0] ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img src={imageUrls[0]} alt={typeof attributes.alt_text === 'string' ? attributes.alt_text : ''} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-ink-300">

@@ -146,7 +146,6 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
             {thumbs.map((p) => (
               <div key={p.id} className="aspect-square overflow-hidden rounded-lg bg-cream-100">
                 {p.images?.[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={sizedImage(p.images[0], 'thumb')}
                     alt={p.name}

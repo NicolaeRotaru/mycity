@@ -161,7 +161,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
           <div>
             <div className="flex justify-between text-sm mb-2">
               <span className="text-xs font-semibold text-ink-700 uppercase tracking-wider">Prezzo</span>
-              <span className="font-bold text-primary-700 text-xs">€{minPrice} - €{maxPrice}{maxPrice >= 500 ? '+' : ''}</span>
+              <span className="font-bold text-primary-700 text-xs">{minPrice} € – {maxPrice}{maxPrice >= 500 ? '+' : ''} €</span>
             </div>
             <input
               type="range"

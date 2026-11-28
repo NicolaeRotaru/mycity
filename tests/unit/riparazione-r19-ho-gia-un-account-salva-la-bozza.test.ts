@@ -15,7 +15,7 @@ describe('R19-004 · «Ho già un account» salva la bozza prima di uscire', () 
     expect(m).not.toBeNull();
     expect(m![1]).toMatch(/onClick=\{salvaLaBozzaPerAccesso\}/);
   });
-  it('il salvataggio passa da bozzaDaSalvare (con la scadenza) ed è lo stesso di «Ordina»', () => {
+  it('il salvataggio passa da bozzaDaSalvare (che segna quando è stata scelta, senza scadenza) ed è lo stesso di «Ordina»', () => {
     const i = src.indexOf('const salvaLaBozzaPerAccesso');
     expect(i).toBeGreaterThan(0);
     expect(src.slice(i, i + 700)).toMatch(/localStorage\.setItem\('mc_checkout_draft', JSON\.stringify\(bozzaDaSalvare\(/);

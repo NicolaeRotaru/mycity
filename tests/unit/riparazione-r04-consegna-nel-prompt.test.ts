@@ -43,10 +43,10 @@ describe('la consegna nel prompt di «Migliora»', () => {
     it(`pagnotta a ${prezzo ?? 'nessun prezzo'}: niente cifra di consegna per prodotto, si dice la regola del carrello`, async () => {
       await chiedi(prezzo);
       const testo = JSON.stringify(runMessageMock.mock.calls[0][0].messages);
-      expect(testo).not.toMatch(/Fee di consegna a domicilio: €/);
+      expect(testo).not.toMatch(/Fee di consegna a domicilio/);
       expect(testo).toMatch(/si paga sul CARRELLO intero/);
-      expect(testo).toMatch(/€3\.00 per una spesa da 10 € in su/);
-      expect(testo).toMatch(/€4\.00 sotto i 10 €/);
+      expect(testo).toMatch(/3,00\s€ per una spesa da 10 € in su/);
+      expect(testo).toMatch(/4,00\s€ sotto i 10 €/);
     });
   }
 });

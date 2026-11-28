@@ -77,7 +77,7 @@ async function diceIlPrezzoFirmato(t: string, dove: string) {
   expect(t, `${dove}: promette un prezzo che il negozio poi non trova`).not.toMatch(VIETATO);
   expect(t, `${dove}: manca il canone firmato`).toContain(canone);
   expect(t, `${dove}: manca la commissione firmata`).toContain(commissione);
-  if (!acceso) expect(t, `${dove}: chiede 50 € al mese con l'abbonamento spento`).not.toMatch(/€\s?50\s?\/\s?mese|50\s?€\s?al mese/i);
+  if (!acceso) expect(t, `${dove}: chiede 50 € al mese con l'abbonamento spento`).not.toMatch(/€\s?50\s?\/\s?mese|50(?:,00)?\s?€\s?(?:\/\s?mese|al mese)/i);
 }
 
 describe('ai negozi diciamo un prezzo solo', () => {

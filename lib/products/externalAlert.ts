@@ -1,5 +1,6 @@
 // lib/products/externalAlert.ts
 import type { Availability, ExternalData } from '@/lib/products/externalSyncShared';
+import { formatPrice } from '@/lib/format';
 
 /**
  * Logica pura per gli alert sui prodotti importati: confronta lo snapshot
@@ -52,7 +53,7 @@ export function changeMessage(productName: string, d: ExternalDelta): { title: s
   const parts: string[] = [];
   if (d.priceChanged && d.oldPrice != null && d.newPrice != null) {
     const dir = d.newPrice > d.oldPrice ? 'aumentato' : 'sceso';
-    parts.push(`prezzo alla fonte ${dir} da €${d.oldPrice.toFixed(2)} a €${d.newPrice.toFixed(2)}`);
+    parts.push(`prezzo alla fonte ${dir} da ${formatPrice(d.oldPrice)} a ${formatPrice(d.newPrice)}`);
   }
   if (d.availabilityChanged) {
     parts.push(

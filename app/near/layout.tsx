@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
-import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { FINO_AL_CONFINE } from '@/lib/ordini/zona-di-consegna';
 
 // 27/10/2026 (terzo giro) — La descrizione per Google e per le condivisioni prometteva «consegna
 // locale rapida», senza un confine e senza un tempo: la pagina dice «fino a N km dal negozio», e
 // la descrizione dice lo stesso, dalla stessa costante della cassa.
-const CONSEGNA = `con consegna fino a ${RAGGIO_CONSEGNA_KM} km dal negozio`;
+// R09-004 — Le parole del confine vengono dalla fonte della frase della zona, non riscritte qui.
+const CONSEGNA = `con consegna ${FINO_AL_CONFINE}`;
 
 export const metadata: Metadata = {
   title: 'Vicino a te — Negozi e prodotti a Piacenza · MyCity',

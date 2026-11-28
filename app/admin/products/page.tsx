@@ -247,7 +247,6 @@ export default function AdminProductsPage() {
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded bg-cream-100 overflow-hidden shrink-0">
                         {img && (
-                          // eslint-disable-next-line @next/next/no-img-element
                           <img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />
                         )}
                       </div>

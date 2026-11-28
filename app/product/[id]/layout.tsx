@@ -248,7 +248,6 @@ export default async function ProductLayout(
   return (
     <>
       {primaFoto && (
-        // eslint-disable-next-line @next/next/no-head-element
         // Gli attributi si prendono TUTTI da `precaricoFoto`: sceglierne a mano
         // qualcuno, o riscriverne uno, e' come si era rotto la prima volta.
         <link rel="preload" as="image" {...primaFoto} fetchPriority="high" />

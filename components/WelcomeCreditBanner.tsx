@@ -89,7 +89,7 @@ export default function WelcomeCreditBanner() {
       <div className="container mx-auto px-4 sm:px-6 py-3 flex items-center gap-3 justify-center text-sm sm:text-base">
         <Gift size={20} strokeWidth={2.4} className="shrink-0 text-accent-300" />
         <p className="text-center">
-          <strong>Benvenuto!</strong> Hai <strong>€5 di sconto</strong>{' '}
+          <strong>Benvenuto!</strong> Hai <strong>5 € di sconto</strong>{' '}
           {/* 5/11/2026 — Qui c'era «scade tra N giorni»: nel database il bonus non ha nessuna
               scadenza, i 7 giorni vivono solo in questo componente (per quanto mostrare la
               striscia). Una scadenza che non esiste non si promette. */}

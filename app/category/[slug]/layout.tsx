@@ -2,7 +2,7 @@ import { CONSEGNA_ALL_ORA_CHE_SCEGLI } from '@/lib/promessa-consegna';
 import type { Metadata } from 'next';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 import { fraseComeArriva } from '@/lib/promesse-pubbliche';
-import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { FINO_AL_CONFINE } from '@/lib/ordini/zona-di-consegna';
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { logger } from '@/lib/logger';
 import { notFound } from 'next/navigation';
@@ -25,7 +25,7 @@ const CATEGORY_LONG_DESC: Record<string, string> = {
   alimentari: `Alimentari freschi e tipici di Piacenza. ${fraseComeArriva()}`,
   abbigliamento: 'Abbigliamento donna, uomo e bambino dei negozi di Piacenza. Compra online dai brand locali.',
   // 27/10/2026 (terzo giro) — Qui c’era una consegna promessa «rapida», senza confine né tempo.
-  casa: `Casa, arredamento e cucina dai negozi di Piacenza, consegnati fino a ${RAGGIO_CONSEGNA_KM} km dal negozio.`,
+  casa: `Casa, arredamento e cucina dai negozi di Piacenza, consegnati ${FINO_AL_CONFINE}.`,
   elettronica: 'Elettronica e accessori dai negozi di Piacenza. Garanzia e supporto locale.',
   libri: 'Libri, fumetti e cartoleria dei negozi di Piacenza.',
   giardino: 'Piante, semi e attrezzi per il giardino dai negozi di Piacenza.',

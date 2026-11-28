@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { lettoreNegoziConMemoria } from '@/lib/queries/vetrina-con-memoria';
 import { TrendingUp, ArrowRight, Flame, ShoppingBag, Eye } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
@@ -40,12 +41,15 @@ export function classificaVera(items: readonly Trending[]): Trending[] {
  * visite qui sopra, il riquadro non c'è.
  */
 export default function TrendingNow() {
+  // R09-008 — I negozi passano dalla memoria condivisa con le altre sezioni della home
+  // (lib/queries/vetrina-con-memoria.ts): chi arriva dopo non rifà il giro di rete.
+  const leggiNegozi = lettoreNegoziConMemoria(useQueryClient(), supabase);
   const { data: items = [], isLoading } = useQuery({
     queryKey: queryKeys.home.trendingNow,
     // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il
     // negozio a `profiles`, che dopo la migrazione 161 un cliente non legge piu', e la
     // fascia restava vuota per tutti tranne il negoziante e l'amministratore.
-    queryFn: (): Promise<Trending[]> => leggiTendenze(supabase),
+    queryFn: (): Promise<Trending[]> => leggiTendenze(supabase, leggiNegozi),
     refetchInterval: 5 * 60_000, // ogni 5 minuti
   });
 

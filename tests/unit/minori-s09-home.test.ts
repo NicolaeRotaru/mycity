@@ -89,7 +89,8 @@ describe('1740 — il carosello taglia a 30 dopo aver tolto le storie dei non-ne
   it('legge più storie, filtra i negozi approvati e solo poi taglia', () => {
     const src = leggi('components/home/StoriesCarousel.tsx');
     expect(src).toMatch(/\.limit\(STORIE_LETTE\)/);
-    expect(src).toMatch(/conNegozioApprovato\(supabase, storie, 'id, store_name, store_logo'\)\)\.slice\(0, STORIE_MOSTRATE\)/);
+    // R09-008 — il lettore con la memoria della home (`leggiNegozi`) non cambia l'ordine: filtro, poi taglio.
+    expect(src).toMatch(/conNegozioApprovato\(supabase, storie, 'id, store_name, store_logo'(?:, leggiNegozi)?\)\)\.slice\(0, STORIE_MOSTRATE\)/);
   });
 });
 

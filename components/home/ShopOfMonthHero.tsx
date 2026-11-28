@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { lettoreNegoziConMemoria } from '@/lib/queries/vetrina-con-memoria';
 import { Crown, ArrowRight, Vote } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { logoNegozio, sizedImage } from '@/lib/image-url';
@@ -27,12 +28,15 @@ import { leggiNegozioDelMese, type NegozioDelMese } from '@/lib/queries/negozio-
  */
 export default function ShopOfMonthHero() {
   type Pick = NegozioDelMese;
+  // R09-008 — I negozi passano dalla memoria condivisa con le altre sezioni della home
+  // (lib/queries/vetrina-con-memoria.ts): chi arriva dopo non rifà il giro di rete.
+  const leggiNegozi = lettoreNegoziConMemoria(useQueryClient(), supabase);
   const { data: pick, isLoading } = useQuery<Pick | null>({
     queryKey: queryKeys.shopOfMonth.current,
     // #211 — Il mese e' quello di Piacenza, non di Greenwich.
     // 15/10/2026 (R3) — La lettura vive in lib/queries/negozio-del-mese.ts: agganciava il
     // negozio a `profiles`, e dopo la migrazione 161 questo riquadro spariva per ogni cliente.
-    queryFn: (): Promise<Pick | null> => leggiNegozioDelMese(supabase, primoDelMesePiacenza()),
+    queryFn: (): Promise<Pick | null> => leggiNegozioDelMese(supabase, primoDelMesePiacenza(), leggiNegozi),
     staleTime: 60 * 60 * 1000, // 1h, il pick non cambia spesso
   });
 

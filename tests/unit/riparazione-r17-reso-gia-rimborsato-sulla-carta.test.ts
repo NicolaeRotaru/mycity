@@ -206,7 +206,7 @@ describe('R17-004 — il reso già rimborsato per intero sulla carta si chiude c
     finto.utente = 'negozio';
     const troppo = await passo('r-nuovo', { stato: 'REFUNDED', refundAmountCents: 2000 });
     expect(troppo.status).toBe(400);
-    expect((await troppo.json()).error.message).toContain('10.00');
+    expect((await troppo.json()).error.message).toContain('10,00');
     expect(finto.creati, 'nessun rimborso nuovo').toEqual([]);
     expect(finto.db.tabelle.returns.find((r) => r.id === 'r-nuovo')!.status).toBe('RECEIVED');
   });
