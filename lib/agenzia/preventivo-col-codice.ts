@@ -12,6 +12,7 @@ import { pagamentoOnlineAttivo } from '@/lib/agenzia/pagamento-servizi';
 import { sbloccaInContanti, sbloccoRiuscito } from '@/lib/agenzia/abbonamento-contanti';
 import { ORA_GIA_PRESA, scriviVisita } from '@/lib/agenzia/visita-sdg';
 import { creaOrdineSdg } from '@/lib/agenzia/ordine-sdg';
+import { ETICHETTE_SERVIZI, leggiServiziScelti, type ServizioAgenzia } from '@/lib/agenzia/servizi-scelti';
 
 /**
  * IL PREVENTIVO COL LINK COL CODICE — 24/11/2026.
@@ -51,6 +52,13 @@ import { creaOrdineSdg } from '@/lib/agenzia/ordine-sdg';
  * chiama con lib/agenzia/visita-sdg.ts) si salva sul preventivo nella stessa scrittura che lo prende
  * (`visita_il`, migrazione 999b): se l'ora l'ha appena presa un'altra attività, niente si accetta e il titolare
  * ne sceglie un'altra. Senza la 999b nel database si accetta lo stesso e il giorno arriva a Nicola nell'avviso.
+ *
+ * 28/11/2026 verso le 01:40 — Nicola: i servizi li sceglie il venditore in anticipo, «però lo deve poter fare
+ * anche» il cliente. Il link mostra i servizi segnati dal venditore (`serviziScelti`), il titolare li può cambiare
+ * e all'accettazione valgono quelli confermati da lui (`servizi`, già controllati da chi chiama): si scrivono sul
+ * preventivo prima che nasca l'ordine (lib/agenzia/ordine-sdg.ts), e all'ordine si passano anche direttamente
+ * (collaudo 28/11): se la scrittura non riesce (o manca la 999h) valgono lo stesso quelli confermati dal titolare,
+ * non quelli del venditore riletti dal preventivo. Senza scelta di nessuno valgono tutti e quattro.
  */
 
 export const CODICE_VALIDO = /^[0-9a-f]{64}$/;
@@ -60,6 +68,8 @@ export type PreventivoColCodice = {
   stato: 'aperto' | 'accettato' | 'chiuso';
   fasciaScelta: Abbonamento | null;
   nomeAttivita: string;
+  /** 28/11 — I servizi segnati dal venditore (999h), o `null` se non li ha segnati o la colonna non c'è. */
+  serviziScelti?: ServizioAgenzia[] | null;
 };
 
 /** Il preventivo di un codice, o `null` se il codice non è nella forma giusta o non esiste. */
@@ -80,7 +90,15 @@ export async function leggiPreventivoColCodice(codice: string): Promise<Preventi
     profiles: { store_name: string | null } | { store_name: string | null }[];
   };
   const profilo = Array.isArray(riga.profiles) ? riga.profiles[0] : riga.profiles;
-  return { sellerId: riga.seller_id, stato: riga.stato, fasciaScelta: riga.fascia_scelta, nomeAttivita: String(profilo?.store_name ?? '').trim() || 'La tua attività' };
+  // I servizi segnati dal venditore, a parte: prima della 999h la colonna non c'è e il link deve aprirsi lo stesso.
+  let serviziScelti: ServizioAgenzia[] | null = null;
+  try {
+    const s = await admin.from('preventivi_con_codice').select('servizi_scelti').eq('codice', codice).maybeSingle();
+    if (!s.error) serviziScelti = leggiServiziScelti((s.data as { servizi_scelti?: unknown } | null)?.servizi_scelti, null).servizi;
+  } catch {
+    serviziScelti = null;
+  }
+  return { sellerId: riga.seller_id, stato: riga.stato, fasciaScelta: riga.fascia_scelta, nomeAttivita: String(profilo?.store_name ?? '').trim() || 'La tua attività', serviziScelti };
 }
 
 export type EsitoAccettazione =
@@ -132,10 +150,13 @@ export async function accettaPreventivoColCodice(input: {
   fascia: Abbonamento;
   /** L'inizio della visita di SDG scelto dal titolare (ISO, già controllato da chi chiama). */
   visita?: string;
+  /** 28/11 — I servizi confermati dal titolare (già controllati da chi chiama). Assenti: restano quelli del venditore. */
+  servizi?: ServizioAgenzia[];
   /** Apre la sessione del titolare col gettone monouso; vero se è entrato. Assente: entra dall'email. */
   entraSubito?: (gettone: string) => Promise<boolean>;
 }): Promise<EsitoAccettazione> {
   const { preventivo, codice, email, fascia, visita } = input;
+  const servizi = input.servizi?.length ? leggiServiziScelti(input.servizi, null).servizi : null;
   if (preventivo.stato === 'accettato') {
     return { ok: false, motivo: 'GIA_ACCETTATO', messaggio: 'Questo preventivo è già stato accettato: controlla la tua email per entrare.' };
   }
@@ -227,6 +248,14 @@ export async function accettaPreventivoColCodice(input: {
   if (profilo.error) logger.error('[preventivo-codice] profilo non compilato', { sellerId: id, message: profilo.error.message });
   const profiloCompilato = !profilo.error;
 
+  // 1-bis) 28/11 — I servizi confermati dal titolare vanno sul preventivo prima che nasca l'ordine. Prima della 999h
+  // la colonna non c'è: si va avanti, e all'ordine arrivano lo stesso (creaOrdineSdg qui sotto).
+  const serviziValidi = servizi ?? preventivo.serviziScelti ?? null;
+  if (servizi) {
+    const scritti = await admin.from('preventivi_con_codice').update({ servizi_scelti: servizi }).eq('codice', codice).then((r) => r, (e: unknown) => ({ error: { message: String(e) } }));
+    if (scritti.error) logger.warn('[preventivo-codice] servizi confermati non scritti: controlla la migrazione 999h', { sellerId: id, message: scritti.error.message });
+  }
+
   // 2-bis) Con il pagamento online spento, la pagina del negozio si sblocca nella fascia accettata: i contanti
   // si ritirano al primo servizio. Con il pagamento online acceso la sblocca il webhook di Stripe, come prima.
   const sblocco = pagamentoOnlineAttivo() ? null : await sbloccaInContanti(admin, id, fascia);
@@ -239,6 +268,7 @@ export async function accettaPreventivoColCodice(input: {
     `${preventivo.nomeAttivita} ha accettato il preventivo`,
     [
       `Abbonamento ${FASCE[fascia].nome}. Email data dal titolare: ${email} — controlla col titolare che sia la sua.`,
+      serviziValidi ? `Servizi confermati: ${serviziValidi.map((x) => ETICHETTE_SERVIZI[x]).join(', ')}.` : 'Servizi: tutti e quattro (nessuna scelta).',
       ...(visita
         ? [`Il team di SDG passa da lui ${scriviVisita(visita)} (piano editoriale, foto e video)${visitaSalvata ? '.' : ': ATTENZIONE, il giorno NON è salvato nel database (manca la migrazione 999b), segnalo a mano a SDG.'}`]
         : ['Non ha scelto il giorno della visita di SDG: chiamalo per fissarlo.']),
@@ -257,7 +287,9 @@ export async function accettaPreventivoColCodice(input: {
     '/admin/preventivi',
     { unaVoltaPer: `preventivo-codice:${id}` },
   ).catch((e: unknown) => logger.warn('[preventivo-codice] avviso a Nicola non partito', { sellerId: id, errore: String(e) }));
-  await creaOrdineSdg({ sellerId: id, codice, fascia, visitaIl: visita ?? null }); // 27/11/2026 — L'ordine di servizio arriva a SDG (lib/agenzia/ordine-sdg.ts): non lancia mai.
+  // 27/11/2026 — L'ordine di servizio arriva a SDG (lib/agenzia/ordine-sdg.ts): non lancia mai. Collaudo 28/11: i
+  // servizi confermati passano anche qui, così valgono loro anche se la scrittura qui sopra non è riuscita.
+  await creaOrdineSdg({ sellerId: id, codice, fascia, visitaIl: visita ?? null, servizi });
 
   // 4) Il titolare entra subito, se chi chiama lo sa fare. Se non riesce, resta l'email qui sotto.
   let entrato = false;

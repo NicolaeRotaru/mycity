@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Check } from 'lucide-react';
 import type { Abbonamento } from '@/lib/agenzia/preventivo';
+import { ETICHETTE_SERVIZI, SERVIZI_AGENZIA, SPIEGAZIONE_AL_TITOLARE, type ServizioAgenzia } from '@/lib/agenzia/servizi-scelti';
 import { FRASE_CONTANTI, PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagamento-servizi';
 import { DURATA_VISITA, GIORNO_NON_PIU_VALIDO, ORA_GIA_PRESA, type GiornoVisita } from '@/lib/agenzia/visita-sdg';
 
@@ -59,6 +60,7 @@ export default function ConfermaAbbonamento({
   segnata,
   dalVenditore,
   giorni,
+  serviziDelVenditore = null,
 }: {
   codice: string;
   fasce: FasciaDaConfermare[];
@@ -70,8 +72,15 @@ export default function ConfermaAbbonamento({
   dalVenditore: boolean;
   /** I giorni e le ore in cui SDG può passare, già senza quelli pieni. */
   giorni: GiornoVisita[];
+  /**
+   * 28/11/2026 — I servizi segnati dal venditore (Nicola: «lo deve poter fare in anticipo anche il venditore»): il
+   * titolare li trova già segnati e li può cambiare. `null` = nessuno segnato: li sceglie da sé.
+   */
+  serviziDelVenditore?: ServizioAgenzia[] | null;
 }) {
   const [fascia, setFascia] = useState<Abbonamento>(iniziale);
+  const [servizi, setServizi] = useState<ServizioAgenzia[]>(serviziDelVenditore ?? []);
+  const scegliServizio = (s: ServizioAgenzia) => setServizi((x) => (x.includes(s) ? x.filter((y) => y !== s) : SERVIZI_AGENZIA.filter((y) => y === s || x.includes(y))));
   const [email, setEmail] = useState('');
   const [condizioni, setCondizioni] = useState(false);
   const [invio, setInvio] = useState(false);
@@ -138,6 +147,10 @@ export default function ConfermaAbbonamento({
   async function conferma(e: React.FormEvent) {
     e.preventDefault();
     setErrore(null);
+    if (servizi.length === 0) {
+      setErrore('Scegli almeno un servizio di cui hai bisogno.');
+      return;
+    }
     if (cePosto && !visita) {
       setErrore('Scegli il giorno e l’ora in cui passiamo da te.');
       return;
@@ -155,7 +168,7 @@ export default function ConfermaAbbonamento({
     setErrore(null);
     setInvio(true);
     try {
-      const r = await chiedi('accetta', { email, abbonamento: fascia, accettoCondizioni: true, codice: codiceEmail, gettone, ...(visita ? { visita } : {}) });
+      const r = await chiedi('accetta', { email, abbonamento: fascia, accettoCondizioni: true, codice: codiceEmail, gettone, servizi, ...(visita ? { visita } : {}) });
       if (r) {
         const dove = r.data?.url ?? r.data?.entra ?? null;
         if (dove) {
@@ -267,6 +280,22 @@ export default function ConfermaAbbonamento({
               </label>
             );
           })}
+        </div>
+      </fieldset>
+
+      <fieldset className="mx-auto mt-6 max-w-xl rounded-2xl border-2 border-cream-300 bg-surface-0 p-5" aria-describedby="servizi-cosa">
+        <legend className="px-1 text-lg font-bold text-ink-900">Di quali servizi hai bisogno?</legend>
+        <p id="servizi-cosa" className="text-sm text-ink-700">
+          {serviziDelVenditore?.length ? 'Li trovi segnati come li hai scelti col nostro venditore: puoi cambiarli. ' : 'Puoi sceglierne più di uno. '}
+          Prepariamo subito quelli che scegli. Il prezzo dell’abbonamento non cambia.
+        </p>
+        <div className="mt-3 space-y-2">
+          {SERVIZI_AGENZIA.map((s) => (
+            <label key={s} data-servizio={s} className="flex cursor-pointer items-start gap-2 text-sm text-ink-800">
+              <input type="checkbox" name="servizi" value={s} checked={servizi.includes(s)} onChange={() => scegliServizio(s)} className="mt-1" />
+              <span><strong className="text-ink-900">{ETICHETTE_SERVIZI[s]}</strong> · {SPIEGAZIONE_AL_TITOLARE[s]}</span>
+            </label>
+          ))}
         </div>
       </fieldset>
 

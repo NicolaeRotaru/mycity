@@ -115,7 +115,8 @@ describe('il menu: «Servizi» è il secondo gruppo, coi servizi in alto', () =>
     expect(indice('Prodotti')).toBeGreaterThan(-1);
     expect(indice('Servizi')).toBeGreaterThan(indice('Prodotti'));
     expect(indice('Crescita')).toBeGreaterThan(indice('Servizi'));
-    const voci = ['Foto e video', 'Sito web', 'Gestione social', 'Analisi del business'].map(indice);
+    // 28/11/2026 — I nomi delle voci come li ha scritti Nicola.
+    const voci = ['Foto e video', 'Gestione sito web', 'Gestione social e Google', 'Analisi di mercato'].map(indice);
     expect(voci.every((i) => i > indice('Servizi') && i < indice('Crescita')), `voci: ${voci}`).toBe(true);
     expect([...voci].sort((a, b) => a - b)).toEqual(voci);
     expect(testi).not.toContain('Il tuo preventivo');
