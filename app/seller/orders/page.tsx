@@ -21,6 +21,9 @@ import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
 import { LETTURA_ORDINI_DEL_NEGOZIO, rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
+import { useProfile } from '@/components/hooks/useProfile';
+import { eDiSdg } from '@/lib/products/sdgSeller';
+import OrdiniSdg from '@/components/sdg/OrdiniSdg';
 
 /**
  * 30/10/2026 (ondata 24) — Gli orari del negozio, letti insieme all'ordine (`seller:profiles(store_hours)`):
@@ -87,7 +90,24 @@ function isCod(method: string | null | undefined): boolean {
   return m === 'cod' || m === 'cash';
 }
 
+/**
+ * 28/11/2026 — SDG AGENZIA APRIVA «ORDINI» E NON TROVAVA I SUOI ORDINI.
+ *
+ * Nicola, alle 00:51: «dentro Agenzia SDG non ho trovato dentro la pagina ordini nessun ordine».
+ * Gli ordini di SDG sono ordini di servizio (tabella `ordini_sdg`), non ordini dei prodotti: per
+ * l'account di SDG questa pagina mostra direttamente il loro elenco, lo stesso di /seller/ordini-sdg.
+ * Così ci arrivano tutti gli ingressi a «Ordini»: il riquadro della dashboard, il pulsante in alto,
+ * il menu dell'account e la barra in basso. Per SDG la tabella `orders` non si legge mai: finché non
+ * si sa chi è, la pagina aspetta, e la lista dei prodotti si monta solo per gli altri negozi.
+ */
 export default function SellerOrdersPage() {
+  const { profile, isLoading } = useProfile();
+  if (isLoading) return <LoadingState />;
+  if (eDiSdg(profile?.id)) return <OrdiniSdg />;
+  return <OrdiniDeiProdotti />;
+}
+
+function OrdiniDeiProdotti() {
   /**
    * 22/8/2026 — QUESTA PAGINA RISCARICAVA TUTTA LA STORIA DEL NEGOZIO OGNI
    * TRENTA SECONDI.

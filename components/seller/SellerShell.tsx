@@ -22,6 +22,7 @@ import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { VOCI_SERVIZI } from '@/components/seller/servizi-nel-menu';
 import MenuAccount, { usePianoDelNegozio } from '@/components/seller/MenuAccount';
 import { toneFor, formatDate } from '@/lib/notifiche-aspetto';
+import { eDiSdg } from '@/lib/products/sdgSeller';
 
 type NavItem = { href: string; icon: LucideIcon; label: string; badge?: 'todo' };
 type NavGroup = { group: string; items: NavItem[] };
@@ -64,6 +65,25 @@ const NAV: NavGroup[] = [
   ] },
 ];
 
+/**
+ * 28/11/2026 — SDG AGENZIA APRIVA «ORDINI» E LEGGEVA «NESSUN ORDINE».
+ *
+ * Nicola, alle 00:36: entrato come SDG Agenzia, la voce «Ordini» diceva «Nessun ordine», e alle 00:34
+ * era nato un ordine di servizio vero. Gli ordini di SDG non sono ordini di prodotti: stanno nella
+ * tabella `ordini_sdg` e si leggono in /seller/ordini-sdg, a cui il menu non portava. Per l'account
+ * di SDG la voce porta lì e si chiama «Ordini di servizio»; per tutti gli altri negozi non cambia
+ * niente. Il pallino dei «da fare» conta gli ordini dei prodotti, e SDG non ne ha: per lui non c'è.
+ */
+const VOCE_ORDINI_DI_SERVIZIO: NavItem = { href: '/seller/ordini-sdg', icon: Receipt, label: 'Ordini di servizio' };
+
+function menuDelNegozio(sellerId: string | null | undefined): NavGroup[] {
+  if (!eDiSdg(sellerId)) return NAV;
+  return NAV.map((sec) => ({
+    ...sec,
+    items: sec.items.map((n) => (n.href === '/seller/orders' ? VOCE_ORDINI_DI_SERVIZIO : n)),
+  }));
+}
+
 const COPILOT_HREF = '/seller/products/ai-batch';
 
 function isActive(pathname: string, href: string): boolean {
@@ -71,6 +91,8 @@ function isActive(pathname: string, href: string): boolean {
     // Dashboard attivo anche sulla root /seller (redirect verso la dashboard).
     return pathname === '/seller/dashboard' || pathname === '/seller';
   }
+  // Per SDG anche «Ordini» (/seller/orders) mostra gli ordini di servizio: la sua voce resta accesa.
+  if (href === VOCE_ORDINI_DI_SERVIZIO.href && pathname === '/seller/orders') return true;
   // Tiene attiva solo la voce più specifica: products non resta attivo su
   // products/ai-batch (che ha la sua voce AI Studio).
   if (href === '/seller/products') {
@@ -396,7 +418,10 @@ export default function SellerShell({ children }: { children: React.ReactNode })
   useBottomSheetA11y(navOpen && !desktop, menuRef, hamburgerRef, () => setNavOpen(false));
 
   // L'identità arriva dal profilo già condiviso: due chiamate di rete al minuto in meno (R075).
-  const todo = useSellerTodoCount(profile?.id ?? null);
+  // SDG non ha ordini di prodotti: il conteggio non parte, e la sua voce non ha il pallino.
+  const sdg = eDiSdg(profile?.id);
+  const nav = menuDelNegozio(profile?.id);
+  const todo = useSellerTodoCount(sdg ? null : profile?.id ?? null);
   const notifUnread = useNotifUnread(profile?.id ?? null);
   const { etichetta: piano } = usePianoDelNegozio();
 
@@ -528,7 +553,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
 
         {/* Nav */}
         <nav className={`flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-2 ${collapsed ? 'lg:px-2' : ''}`}>
-          {NAV.map((sec) => (
+          {nav.map((sec) => (
             <div key={sec.group} className="mb-1.5">
               {!collapsed && (
                 <p className="mx-3 mb-1 mt-1.5 text-2xs font-bold uppercase tracking-label text-white/40">
