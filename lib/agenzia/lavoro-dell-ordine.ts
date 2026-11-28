@@ -6,6 +6,7 @@ import type { PianoDelMese } from './piano-del-primo-mese';
 import type { BozzaSitoOrdine } from './sito-dell-ordine-ad';
 import type { AnalisiAvvioOrdine } from './analisi-dell-ordine-ad';
 import { leggiServiziScelti, servizioScelto, type ServizioAgenzia } from './servizi-scelti';
+import { TIPI_ATTIVITA, type TipoAttivita } from './tipi-attivita';
 import { percorsoDelSito } from './sito-finito/indirizzo';
 import { env } from '@/lib/env';
 
@@ -44,7 +45,40 @@ export type LavoroDellOrdine = {
    */
   sito: { stato: StatoPerIlTitolare; bozza: BozzaSitoOrdine | null; indirizzo: string | null };
   analisi: { stato: StatoPerIlTitolare; analisi: AnalisiAvvioOrdine | null };
+  /**
+   * 28/11/2026 — Quello che serve allo standard della Gestione social (lib/agenzia/social-standard.ts) per cucire il
+   * piano sul cliente: tipo, città, i profili pubblici trovati dall'analisi e la frase su misura del suo preventivo.
+   * Solo questi quattro: la nota dell'agente e il resto di dati_attivita restano a SDG.
+   */
+  perLoStandard?: DatiDelClientePerIlPiano;
 };
+
+export type DatiDelClientePerIlPiano = {
+  tipo: TipoAttivita | null;
+  citta: string | null;
+  canaliTrovati: { canale: string; fonte: string | null }[] | null;
+  suMisura: string | null;
+};
+
+/** I quattro dati per lo standard, letti da dati_attivita con le stesse misure con cui li scrive l'ordine. */
+export function datiDelClientePerIlPiano(dati: unknown): DatiDelClientePerIlPiano {
+  const d = (dati && typeof dati === 'object' ? dati : {}) as { tipo?: unknown; citta?: unknown; dallaScheda?: unknown };
+  const scheda = (d.dallaScheda && typeof d.dallaScheda === 'object' ? d.dallaScheda : null) as { social?: unknown; servizi?: unknown } | null;
+  const testo = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+  const canali = scheda && Array.isArray(scheda.social)
+    ? scheda.social
+      .filter((c): c is { canale: string; fonte?: unknown } => !!c && typeof c === 'object' && typeof (c as { canale?: unknown }).canale === 'string')
+      .slice(0, 5)
+      .map((c) => ({ canale: c.canale.slice(0, 40), fonte: typeof c.fonte === 'string' && /^https:\/\/[^\s"'<>]+$/.test(c.fonte) ? c.fonte.slice(0, 300) : null }))
+    : null;
+  const servizi = scheda?.servizi && typeof scheda.servizi === 'object' ? (scheda.servizi as Record<string, unknown>) : null;
+  return {
+    tipo: typeof d.tipo === 'string' && (TIPI_ATTIVITA as readonly string[]).includes(d.tipo) ? (d.tipo as TipoAttivita) : null,
+    citta: testo(d.citta, 60),
+    canaliTrovati: canali,
+    suMisura: testo(servizi?.social, 360),
+  };
+}
 
 type Riga = {
   seller_id: string;
@@ -88,6 +122,7 @@ export async function lavoroDallOrdine(sellerId: string): Promise<LavoroDellOrdi
       piano: { stato: perIlTitolare(r.piano_completo_stato, true), piano: r.piano ? { ...r.piano, note: [] } : r.piano },
       sito: { stato: perIlTitolare(r.sito_stato, sitoPronto), bozza: sitoPronto && r.sito ? { ...r.sito, note: [] } : null, indirizzo: percorso ? `${env.appUrl()}${percorso}` : null },
       analisi: { stato: perIlTitolare(r.analisi_stato, analisiPronta), analisi: analisiPronta ? (r.analisi ?? null) : null },
+      perLoStandard: datiDelClientePerIlPiano(r.dati_attivita),
     };
   } catch (e) {
     logger.warn('[lavoro-dell-ordine] lettura non riuscita', { errore: String(e) });

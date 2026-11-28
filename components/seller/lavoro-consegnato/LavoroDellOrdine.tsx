@@ -3,7 +3,9 @@ import type { LavoroDellOrdine } from '@/lib/agenzia/lavoro-dell-ordine';
 import type { ParteConsegnata } from '@/lib/agenzia/lavoro-consegnato/quale-parte';
 import { PAGINE_PER_FASCIA } from '@/lib/agenzia/sito-dell-ordine-ad';
 import { paginePubbliche } from '@/lib/agenzia/sito-finito/costruisci';
-import { Elenco, LinkEsterno, SCHEDA, Sezione, giornoCorto } from './comuni';
+import { socialDalPiano } from '@/lib/agenzia/social-standard';
+import { Elenco, LinkEsterno, SCHEDA, Sezione } from './comuni';
+import PianoEditorialeConsegnato from './PianoEditorialeConsegnato';
 
 /**
  * IL LAVORO NATO CON L'ORDINE, NELLA ZONA «SERVIZI» DEL TITOLARE — 28/11/2026.
@@ -116,31 +118,19 @@ function IlTuoSito({ ordine }: { ordine: LavoroDellOrdine }) {
   );
 }
 
+/**
+ * 28/11/2026 — Il piano del cliente nella forma standard, quella della Gestione social di SDG (Nicola: «usala come
+ * standard, personalizzata in base al cliente e all'abbonamento»). La forma la calcola lib/agenzia/social-standard.ts
+ * dal piano dell'ordine e dai dati del cliente; la disegna la stessa pagina del piano di SDG.
+ */
 function PianoDellOrdine({ ordine }: { ordine: LavoroDellOrdine }) {
   const p = ordine.piano.piano;
-  return (
-    <>
-      <section className={`mb-4 ${SCHEDA}`} aria-labelledby="piano-ordine">
-        <h2 id="piano-ordine" className="text-xl font-bold text-ink-900">Il piano editoriale, {p?.periodo?.titolo ?? 'primo mese'}</h2>
-        <p className="mt-1 text-sm text-ink-600">{ordine.piano.stato === 'pronto' ? 'Versione completa' : `Prima versione. Quella completa: ${attesa(ordine.piano.stato).toLowerCase()}`} · {p?.contenuti?.length ?? 0} contenuti</p>
-        {p?.intestazione && (
-          <dl className="mt-3 grid gap-1 text-sm text-ink-700">
-            <div><dt className="inline font-semibold text-ink-900">Canali e tono: </dt><dd className="inline">{p.intestazione.canaliETono}</dd></div>
-            <div><dt className="inline font-semibold text-ink-900">Prima di pubblicare: </dt><dd className="inline">{p.intestazione.primaDiPubblicare}</dd></div>
-          </dl>
-        )}
-      </section>
-      <ul className="space-y-3">
-        {(p?.contenuti ?? []).map((c, i) => (
-          <li key={`${c.data}-${i}`} className={SCHEDA}>
-            <p className="text-sm font-semibold text-ink-900">{giornoCorto(c.data)} · {c.ora} · {c.tipo}</p>
-            <p className="mt-1 font-semibold text-ink-900">{c.tema}</p>
-            <p className="mt-1 text-sm text-ink-700">{c.didascalia}</p>
-          </li>
-        ))}
-      </ul>
-    </>
-  );
+  const social = socialDalPiano(p, { nome: ordine.nomeAttivita, fascia: ordine.fascia, ...(ordine.perLoStandard ?? {}) });
+  const avviso = ordine.piano.stato === 'pronto'
+    ? 'Versione completa, scritta per la tua attività.'
+    : `Prima versione, con gli esempi per il tuo tipo di attività. Quella completa: ${attesa(ordine.piano.stato).toLowerCase()}`;
+  // L’intestazione (la fascia, «bozza») la mette già la pagina del lavoro dell’ordine, sopra.
+  return <PianoEditorialeConsegnato social={social} intestazione={null} avviso={avviso} />;
 }
 
 function AnalisiDellOrdine({ ordine }: { ordine: LavoroDellOrdine }) {
