@@ -94,6 +94,10 @@ export function traduciErroreAuth(msg: string): string | null {
   // Il gettone anti-bot vale una volta sola: dopo un tentativo andato male il server
   // lo rifiuta, e il messaggio grezzo parla di captcha su una schermata dove non c'e'
   // niente da premere.
+  // 27/11/2026 — Senza gettone (il riquadro non si è caricato, o la pagina non ne ha uno)
+  // non c'è niente di rigenerato da ripremere: lo si dice, e si dice cosa fare.
+  if (/no captcha response|captcha_token|captcha verification process failed|missing-input-response|captcha mancante/.test(m))
+    return 'Il controllo anti-robot non si è potuto completare, quindi la richiesta non è partita. Ricarica la pagina e riprova.';
   if (m.includes('captcha') || m.includes('turnstile'))
     return 'Il controllo anti-bot è scaduto: è stato rigenerato, premi di nuovo.';
   if (m.includes('invalid login credentials')) return 'Email o password non corrette';

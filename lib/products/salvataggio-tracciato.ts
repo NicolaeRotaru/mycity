@@ -37,6 +37,7 @@
  * cercare parole nel sorgente.
  */
 
+import { COLONNE_DEL_SERVIZIO, DOVE_SI_FA, MESSAGGIO_SERVIZI_NON_ANCORA_ATTIVI, mancanoLeColonneDelServizio } from '@/lib/products/servizio';
 import type { AuditAction } from '@/lib/audit';
 import type { CategoryRow } from '@/lib/products/aiPatch';
 import {
@@ -108,6 +109,15 @@ export const SCORTA_CONFERMATA = 'stock_confermato';
  */
 export const COLONNA_DEL_RECESSO = 'non_recedibile';
 
+/**
+ * 27/11/2026 — TIPO, DURATA E «DOVE SI FA» (migrazione 999g) SI SCRIVONO, MA NON SI RILEGGONO.
+ *
+ * Stessa ragione del recesso: prima della 999g le colonne non ci sono, e rileggerle per nome
+ * fermerebbe ogni salvataggio di ogni prodotto. Il modulo le manda solo per un servizio, o per
+ * un servizio che torna prodotto (lib/products/schema.ts, `buildProductPayload`).
+ */
+type ColonnaDelServizio = (typeof COLONNE_DEL_SERVIZIO)[number];
+
 /** Le colonne da rileggere prima di scrivere, per sapere com'era. */
 export const COLONNE_DA_RILEGGERE = ['id', 'seller_id', ...COLONNE_DEL_VENDITORE].join(', ');
 
@@ -127,6 +137,14 @@ export function colonneAmmesse(corpo: unknown): Record<string, unknown> {
   if (dentro[SCORTA_CONFERMATA] === true) pulito[SCORTA_CONFERMATA] = true;
   const recesso = dentro[COLONNA_DEL_RECESSO];
   if (typeof recesso === 'boolean') pulito[COLONNA_DEL_RECESSO] = recesso;
+  // 27/11/2026 — Le colonne del servizio, solo con valori che il database accetta (999g).
+  if (dentro.tipo === 'prodotto' || dentro.tipo === 'servizio') pulito.tipo = dentro.tipo;
+  if (dentro.durata_minuti === null || (typeof dentro.durata_minuti === 'number' && Number.isInteger(dentro.durata_minuti))) {
+    pulito.durata_minuti = dentro.durata_minuti;
+  }
+  if (dentro.dove_servizio === null || (typeof dentro.dove_servizio === 'string' && (DOVE_SI_FA as readonly string[]).includes(dentro.dove_servizio))) {
+    pulito.dove_servizio = dentro.dove_servizio;
+  }
   return pulito;
 }
 
@@ -162,8 +180,8 @@ function stessoValore(a: unknown, b: unknown): boolean {
 export function campiCambiati(
   prima: Record<string, unknown>,
   dopo: Record<string, unknown>,
-): Array<ColonnaDelVenditore | typeof COLONNA_DEL_RECESSO> {
-  const cambiati: Array<ColonnaDelVenditore | typeof COLONNA_DEL_RECESSO> = [];
+): Array<ColonnaDelVenditore | typeof COLONNA_DEL_RECESSO | ColonnaDelServizio> {
+  const cambiati: Array<ColonnaDelVenditore | typeof COLONNA_DEL_RECESSO | ColonnaDelServizio> = [];
   for (const colonna of COLONNE_DEL_VENDITORE) {
     if (!(colonna in dopo)) continue;
     if (!stessoValore(prima[colonna], dopo[colonna])) cambiati.push(colonna);
@@ -171,6 +189,10 @@ export function campiCambiati(
   // Il recesso non si rilegge (vedi sopra): nel registro va il valore nuovo.
   if (COLONNA_DEL_RECESSO in dopo && !stessoValore(prima[COLONNA_DEL_RECESSO], dopo[COLONNA_DEL_RECESSO])) {
     cambiati.push(COLONNA_DEL_RECESSO);
+  }
+  // Nemmeno le colonne del servizio si rileggono: nel registro va il valore nuovo.
+  for (const colonna of COLONNE_DEL_SERVIZIO) {
+    if (colonna in dopo && !stessoValore(prima[colonna], dopo[colonna])) cambiati.push(colonna);
   }
   return cambiati;
 }
@@ -512,9 +534,12 @@ export async function salvaProdottoTracciato(opts: {
     .update(daScrivere)
     .eq('id', opts.prodottoId)
     .eq('seller_id', opts.attoreId);
+  // 27/11/2026 — Un servizio salvato prima della 999g: si dice al negoziante con parole sue.
+  const servizioNonAncoraAttivo = (error: unknown) =>
+    mancanoLeColonneDelServizio(error) ? new DaCompletare(MESSAGGIO_SERVIZI_NON_ANCORA_ATTIVI, ['tipo']) : error;
   if (condizione === undefined) {
     const { error } = await scrittura;
-    if (error) throw error;
+    if (error) throw servizioNonAncoraAttivo(error);
   } else {
     // Fra la rilettura e la scrittura passano millisecondi, ma un ordine ci sta:
     // la condizione va nella scrittura stessa, e una riga non trovata vuol dire
@@ -522,7 +547,7 @@ export async function salvaProdottoTracciato(opts: {
     const condizionata = scrittura.eq('stock', condizione);
     if (!condizionata.select) throw new Error('Il client del catalogo non sa rileggere la riga scritta.');
     const { data, error } = await condizionata.select('id');
-    if (error) throw error;
+    if (error) throw servizioNonAncoraAttivo(error);
     if (!data || data.length === 0) throw new ScortaCambiata(condizione, undefined);
   }
 

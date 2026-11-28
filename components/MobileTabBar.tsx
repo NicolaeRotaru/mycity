@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { User } from 'lucide-react';
-import { supabase } from '@/lib/supabase/client';
+import { esciEVaiAllAccesso } from '@/lib/auth/uscita';
 import { useProfile } from './hooks/useProfile';
 import { useCartCount } from './hooks/useCartCount';
 import { useMessagesUnread } from './hooks/useMessagesUnread';
@@ -107,9 +107,7 @@ export default function MobileTabBar() {
     'utente';
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/sign-in');
-    router.refresh();
+    await esciEVaiAllAccesso(router);
   };
 
   // R12-003 — L'altezza di questa barra (bordo, py-2, icona, gap-0.5, etichetta) è sommata con le

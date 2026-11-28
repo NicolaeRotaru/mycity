@@ -121,7 +121,7 @@ describe('il guscio della demo (le pagine restano, il link non ci porta più: 27
     const menu = r.querySelector('aside[aria-label="Menu della demo"]')!;
     const dashboard = [...menu.querySelectorAll(`a[href="/preventivo/${CODICE}"]`)].find((a) => a.textContent?.includes('Dashboard'));
     expect(dashboard?.getAttribute('aria-current')).toBe('page');
-    for (const voce of ['Foto e video', 'Sito web', 'Gestione social', 'Analisi del business']) {
+    for (const voce of ['Foto e video', 'Gestione sito web', 'Gestione social e Google', 'Analisi di mercato']) {
       expect([...menu.querySelectorAll('a')].some((a) => a.textContent?.includes(voce)), voce).toBe(true);
     }
     for (const chiusa of ['Ordini', 'Prodotti', 'Promozioni', 'Clienti', 'Messaggi', 'Guadagni']) {

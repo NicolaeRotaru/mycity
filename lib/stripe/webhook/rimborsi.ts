@@ -414,7 +414,8 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
       reason: refundReason,
     });
     // R03-003 — un rifiuto della posta non lancia: si legge l'esito.
+    // R03-002 — L'indirizzo è quello dell'account (getUserById qui sopra): se Resend rifiuta, la coda la rimanda a lui.
     await avvisaSeLaPostaNonParte('email di rimborso al cliente', { orderId: firstOrder.id },
-      await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text }));
+      await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text, rimandaA: firstOrder.user_id }));
   }
 }

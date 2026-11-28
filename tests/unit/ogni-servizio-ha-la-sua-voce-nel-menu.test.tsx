@@ -86,8 +86,9 @@ describe('il menu del venditore', () => {
       expect(r.querySelector(`a[href="${href}"]`), `manca la voce ${href}`).not.toBeNull();
     }
     expect(r.textContent).toContain('Foto e video');
-    expect(r.textContent).toContain('Gestione social');
-    expect(r.textContent).toContain('Sito web');
+    // 28/11/2026 — I nomi delle voci come li ha scritti Nicola.
+    expect(r.textContent).toContain('Gestione social e Google');
+    expect(r.textContent).toContain('Gestione sito web');
     expect(r.textContent).not.toContain('Scheda Google');
     expect(r.textContent).not.toContain('Logo e grafica'); // tolto il 23/11
     expect(r.textContent).not.toContain('Il tuo preventivo');

@@ -3,6 +3,7 @@
 // 30/8/2026 (R164) — la copia sul server sta in un file suo: prima era privata
 // qui dentro e nessuna prova poteva guardarla lavorare.
 import { syncAbandonedCart } from '@/lib/cart-sync';
+import { eServizio } from '@/lib/products/servizio';
 import { eDiSdg } from '@/lib/products/sdgSeller';
 
 export type CartItem = {
@@ -154,10 +155,15 @@ function avvisaTetto(nome?: string) {
   );
 }
 
-export const addToCart = (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => {
+export const addToCart = (
+  itemConTipo: Omit<CartItem, 'quantity'> & { quantity?: number; tipo?: string | null },
+) => {
   // 24/11/2026 — Gli abbonamenti di SDG Agenzia non entrano nel carrello: si attivano dal
   // preventivo (lib/products/sdgSeller.ts). Anche le casse li rifiutano, sul server.
-  if (eDiSdg(item.sellerId)) return;
+  // 27/11/2026 — Nemmeno un servizio, quando chi chiama sa che lo è: si prenota scrivendo al
+  // negozio (lib/products/servizio.ts). Il `tipo` non si salva nella riga del carrello.
+  const { tipo, ...item } = itemConTipo;
+  if (eDiSdg(item.sellerId) || eServizio({ tipo })) return;
   const cart = getCart();
   const existing = cart.find((c) => sameLine(c, item));
   const qty = item.quantity ?? 1;

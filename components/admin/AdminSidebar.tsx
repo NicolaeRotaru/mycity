@@ -13,8 +13,10 @@ import {
   type LucideIcon,
   UserPlus,
   ClipboardList,
+  Globe,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { esciEVaiAllAccesso } from '@/lib/auth/uscita';
 import { useProfile } from '@/components/hooks/useProfile';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { useBranding } from '@/components/hooks/useBranding';
@@ -43,6 +45,8 @@ const NAV: NavGroup[] = [
     { href: '/admin/agenti', icon: UserPlus, label: 'Agenti' },
     // 27/11/2026 — Gli ordini di servizio che arrivano a SDG quando il titolare conferma (migrazione 999c).
     { href: '/admin/ordini-sdg', icon: ClipboardList, label: 'Ordini di SDG' },
+    // 27/11/2026 — Quello che ogni cliente vede alle voci dei servizi (Nicola: «vederlo da Admin»).
+    { href: '/admin/lavoro-consegnato', icon: Globe, label: 'Lavoro dei clienti' },
     // 24/11/2026 — I negozi che aspettano la bozza del sito scritta dall'AD nel suo giro.
     { href: '/admin/bozze-sito', icon: FileText, label: 'Bozze del sito' },
   ] },
@@ -256,9 +260,7 @@ function useAdminIdentity() {
   const initials =
     name.trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase() || 'A';
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/sign-in');
-    router.refresh();
+    await esciEVaiAllAccesso(router);
   };
   return { name, initials, handleSignOut };
 }

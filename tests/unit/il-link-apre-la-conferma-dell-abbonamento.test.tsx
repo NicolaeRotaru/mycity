@@ -36,7 +36,7 @@ import { createRoot, type Root } from 'react-dom/client';
 const CODICE = 'b'.repeat(64);
 
 const stato = vi.hoisted(() => ({
-  pc: null as null | { sellerId: string; stato: 'aperto' | 'accettato' | 'chiuso'; fasciaScelta: string | null; nomeAttivita: string },
+  pc: null as null | { sellerId: string; stato: 'aperto' | 'accettato' | 'chiuso'; fasciaScelta: string | null; nomeAttivita: string; serviziScelti?: string[] | null },
   preventivo: null as unknown,
   /** Le ore della visita già prese da altre attività (lette da preventivi_con_codice.visita_il). */
   presi: [] as string[],
@@ -137,7 +137,8 @@ const vai = vi.fn();
 
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  stato.pc = { sellerId: 'gc-1', stato: 'aperto', fasciaScelta: 'business', nomeAttivita: 'Grida Caffè' };
+  // 28/11/2026 — Il venditore ha segnato anche i servizi (Gestione sito web), come fa adesso col «Sì, aggiungi».
+  stato.pc = { sellerId: 'gc-1', stato: 'aperto', fasciaScelta: 'business', nomeAttivita: 'Grida Caffè', serviziScelti: ['sito_web'] };
   stato.preventivo = vetrina();
   stato.presi = [];
   // Si finge solo l'orologio: i giri di setTimeout delle prove restano veri.
@@ -250,7 +251,8 @@ async function scriviCodice(r: HTMLElement, codice: string) {
 async function primoPasso(r: HTMLElement, ora: string | null = '10:00') {
   if (ora) await premi(oraVisita(r, ora));
   await scriviEmail(r, 'titolare@grida.it');
-  await premi(r.querySelector('input[type="checkbox"]') as HTMLInputElement);
+  // La spunta delle condizioni (28/11: sopra ci sono anche le caselle dei servizi).
+  await premi(r.querySelector('input[type="checkbox"]:not([name="servizi"])') as HTMLInputElement);
   await invia(r);
 }
 
@@ -274,7 +276,7 @@ describe('il titolare tocca un altro abbonamento, conferma col codice dell email
     await scriviCodice(r, '12 34 56');
     expect((r.querySelector('#codice-email') as HTMLInputElement).value).toBe('123456');
     await invia(r);
-    expect(chiamate[1]).toEqual({ url: `/api/preventivo/${CODICE}/accetta`, corpo: { email: 'titolare@grida.it', abbonamento: 'premium', accettoCondizioni: true, codice: '123456', gettone: 'gettone-firmato', visita: LUNEDI_ALLE_10 } });
+    expect(chiamate[1]).toEqual({ url: `/api/preventivo/${CODICE}/accetta`, corpo: { email: 'titolare@grida.it', abbonamento: 'premium', accettoCondizioni: true, codice: '123456', gettone: 'gettone-firmato', servizi: ['sito_web'], visita: LUNEDI_ALLE_10 } });
     expect(vai).toHaveBeenCalledWith('/seller/abbonamento');
   });
 
@@ -468,5 +470,43 @@ describe('il titolare sceglie quando passa SDG', () => {
     await invia(r);
     expect(chiamate.at(-1)?.corpo).not.toHaveProperty('visita');
     expect(vai).toHaveBeenCalledWith('/seller/abbonamento');
+  });
+});
+
+// 28/11/2026, 01:40 — Nicola: i servizi li segna il venditore «però lo deve poter fare anche» il cliente. Nel link il
+// titolare li trova segnati e li può cambiare; senza nessun servizio non si conferma.
+describe('il titolare vede i servizi segnati dal venditore e li può cambiare (28/11)', () => {
+  const casella = (r: HTMLElement, s: string) => r.querySelector(`[data-servizio="${s}"] input`) as HTMLInputElement;
+  it('trova segnato il servizio del venditore, ne aggiunge due e lo toglie: la conferma manda i suoi', async () => {
+    const chiamate = serverFinto({ status: 200, corpo: { ok: true, data: { url: null, entra: null, accessoInviato: true } } });
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    expect(r.textContent).toContain('Di quali servizi hai bisogno?');
+    expect(r.textContent).toContain('Li trovi segnati come li hai scelti col nostro venditore');
+    expect(casella(r, 'sito_web').checked).toBe(true);
+    expect(casella(r, 'analisi').checked).toBe(false);
+    await premi(casella(r, 'analisi'));
+    await premi(casella(r, 'social'));
+    await premi(casella(r, 'sito_web'));
+    expect(casella(r, 'sito_web').checked).toBe(false);
+    await primoPasso(r);
+    await scriviCodice(r, '123456');
+    await invia(r);
+    expect(chiamate[1]?.corpo).toMatchObject({ servizi: ['social', 'analisi'] });
+  });
+
+  it('se toglie tutti i servizi non parte niente, e lo dice', async () => {
+    const chiamate = serverFinto({ status: 200, corpo: { ok: true, data: { url: null, entra: null, accessoInviato: true } } });
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    await premi(casella(r, 'sito_web'));
+    await primoPasso(r);
+    expect(chiamate).toHaveLength(0);
+    expect(r.querySelector('[role="alert"]')?.textContent).toContain('Scegli almeno un servizio');
+  });
+
+  it('se il venditore non ha segnato niente (link vecchi) il titolare li sceglie da sé', async () => {
+    stato.pc = { sellerId: 'gc-1', stato: 'aperto', fasciaScelta: 'business', nomeAttivita: 'Grida Caffè', serviziScelti: null };
+    const r = await monta(await ConfermaDalLink({ params: params(), searchParams: cerca() }));
+    expect(['foto_video', 'sito_web', 'social', 'analisi'].some((s) => casella(r, s).checked)).toBe(false);
+    expect(r.textContent).not.toContain('Li trovi segnati');
   });
 });

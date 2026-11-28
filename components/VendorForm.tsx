@@ -18,6 +18,7 @@ import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import { fileColTipoGiusto, mappaAccept, tipiScrittiPerUmani } from '@/lib/storage/casella-di-caricamento';
+import { acceptSenzaHeic, avvisoFotoHeic, senzaHeic } from '@/lib/immagini/heic-in-jpeg';
 import type { StoreHours } from '@/lib/store-hours';
 import { MAX_TAGLINE, campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
@@ -231,10 +232,17 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       );
     },
     onDrop: async (files) => {
-      const file = files[0];
-      if (!file) return;
+      const scelta = files[0];
+      if (!scelta) return;
       setUploadingLogo(true);
       try {
+        // Un logo HEIC salvato com'e' su Chrome e Android resta un riquadro rotto: qui diventa
+        // JPEG, o non parte (`lib/immagini/heic-in-jpeg.ts`).
+        const file = await senzaHeic(scelta);
+        if (!file) {
+          toast.error(avvisoFotoHeic());
+          return;
+        }
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Non autenticato');
         // Primo segmento = user.id: richiesto dalle RLS Storage del bucket `products`
@@ -310,9 +318,13 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
         // R21-012 — Un valore GIA' salvato che il negoziante non ha toccato non blocca il resto, anche se le
         // regole di oggi lo rifiuterebbero (un sito salvato con «ftp://»): per il controllo si lascia vuoto,
         // poi si rimette com'era. Un valore NUOVO sbagliato resta rifiutato come prima.
-        // Solo il sito: per i social con nome (Instagram, Facebook, TikTok) un valore salvato e rifiutato resta fermo come prima.
+        // R04-010 — Vale per ogni campo, non solo per il sito: un Instagram, Facebook o TikTok salvato che le
+        // regole di oggi rifiutano bloccava nome, logo e colore finché non lo si correggeva.
+        // R04-009 — Si confronta la forma corretta di tutti e due: dopo il primo «Salva» il campo mostra il
+        // valore già corretto («https://…») e non è più uguale, lettera per lettera, a quello salvato.
+        const salvatiCorretti = (normalizzaSocials(defaultValues?.storeCustomization?.socials) ?? {}) as Record<string, string | undefined>;
         const nonToccati = Object.keys(sociali).filter(
-          (k) => k === 'website' && !!salvati[k] && ((custom.socials as Record<string, string | undefined> | undefined)?.[k] ?? '') === salvati[k],
+          (k) => !!salvati[k] && ((corretta.socials as Record<string, string | undefined> | undefined)?.[k] ?? '') === salvatiCorretti[k],
         );
         const conISocialDiPrima: StoreCustomization = {
           ...corretta,
@@ -336,14 +348,19 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
         // Un campo che prima era vuoto non «resta com'era»: semplicemente non si salva.
         // Con due campi diversi (uno vuoto, uno già salvato) la frase si divide per gruppo.
         const vuoti = chiavi.filter((k) => !salvati[k]);
-        const rimasti = chiavi.filter((k) => !!salvati[k]);
+        const rimasti = chiavi.filter((k) => !!salvati[k] && !nonToccati.includes(k));
         const fraseVuoti = vuoti.length > 0
           ? `${vuoti.map(nomeDi).join(', ')} ${vuoti.length > 1 ? 'non si sono salvati' : 'non si è salvato'}`
           : '';
         const fraseRimasti = rimasti.length > 0
           ? `${rimasti.map(nomeDi).join(', ')} ${rimasti.length > 1 ? "sono rimasti com'erano" : "è rimasto com'era"}`
           : '';
-        const cheFine = [fraseVuoti, fraseRimasti].filter(Boolean).join(', ');
+        // R04-010 — Un valore già salvato che le regole di oggi rifiutano resta, ma il negoziante deve sapere
+        // che così non va: «è rimasto com'era» da solo sembrava dire che era tutto a posto.
+        const fraseDaCorreggere = nonToccati.length > 0
+          ? `${nonToccati.map(nomeDi).join(', ')} ${nonToccati.length > 1 ? "sono rimasti com'erano ma vanno corretti" : "è rimasto com'era ma va corretto"}`
+          : '';
+        const cheFine = [fraseVuoti, fraseRimasti, fraseDaCorreggere].filter(Boolean).join(', ');
         socialNonSalvati = true;
         setCustomError(`${campo}: ${primo.message}`);
         avvisoASalvataggioRiuscito.current = `${campo}: ${primo.message} Il resto è salvato; ${cheFine}.`;
@@ -396,7 +413,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
                   isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
                 } ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}
               >
-                <input {...getInputProps({ id: idLogo, 'aria-label': 'Carica il logo del negozio' })} />
+                <input {...getInputProps({ id: idLogo, accept: acceptSenzaHeic(mappaAccept()), 'aria-label': 'Carica il logo del negozio' })} />
                 {uploadingLogo ? (
                   <LoadingState variant="inline" />
                 ) : logoUrl ? (

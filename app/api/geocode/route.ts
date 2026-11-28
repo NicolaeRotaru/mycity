@@ -16,8 +16,8 @@ export const runtime = 'nodejs';
  *  - nessun rate-limit né timeout né fallback.
  * Qui centralizziamo: User-Agent corretto, timeout, rate-limit per IP, e una
  * risposta minimale { lat, lng }. «Nessun risultato» è 200 con { lat: null, lng: null };
- * se invece Nominatim è giù, limitato o lento (429, 5xx, rete, tempo scaduto) rispondiamo 503
- * con { lat: null, lng: null, error: 'servizio_non_disponibile' }: i chiamanti che leggono solo
+ * se invece Nominatim è giù o lento (5xx, rete, tempo scaduto) rispondiamo 503 (429 se è Nominatim
+ * a dire «troppe richieste») con { lat: null, lng: null, error: 'servizio_non_disponibile' }: i chiamanti che leggono solo
  * lat/lng proseguono senza coord come prima, chi lo vuole può dire «riprova fra poco».
  */
 const SERVIZIO_NON_DISPONIBILE = { lat: null, lng: null, error: 'servizio_non_disponibile' };
@@ -43,7 +43,10 @@ export async function POST(req: Request) {
   if (esito.esito === 'servizio_giu') {
     if (esito.status != null) logger.warn('[geocode] Nominatim ha risposto con un errore', { status: esito.status });
     else logger.warn('[geocode] Nominatim non raggiungibile', { qlen: q.length });
-    return NextResponse.json(SERVIZIO_NON_DISPONIBILE, { status: 503 });
+    // 27/11/2026 — «Troppe richieste» delle mappe resta un 429: la rubrica indirizzi lo legge come
+    // «riprova fra poco» e non salva l'indirizzo come «posizione non trovata». L'errore resta quello
+    // del servizio, non `rate_limited`, che è il freno di questa rotta (le troppe ricerche di chi cerca).
+    return NextResponse.json(SERVIZIO_NON_DISPONIBILE, { status: esito.status === 429 ? 429 : 503 });
   }
   if (esito.esito === 'nessuno') return NextResponse.json({ lat: null, lng: null });
   // 26/11/2026 — Anche il nome del posto trovato: il negozio che cerca «Via Roma 12» legge sotto il

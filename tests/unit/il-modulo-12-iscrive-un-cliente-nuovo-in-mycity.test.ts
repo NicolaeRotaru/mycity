@@ -71,6 +71,10 @@ vi.mock('@/lib/supabase/server', () => ({
           // scritte davvero (con ignoreDuplicates, nessuna se la riga c'era già).
           let esito: { error: { message: string } | null; data: unknown[] };
           if (tabella === 'profiles' && db.rompiProfilo > 0) { db.rompiProfilo -= 1; esito = { error: { message: 'connessione persa' }, data: [] }; }
+          // Come il vincolo della migrazione 703 (profiles_business_type_detail_check): oltre 60 caratteri il database rifiuta.
+          else if (tabella === 'profiles' && typeof riga.business_type_detail === 'string' && Array.from(riga.business_type_detail).length > 60) {
+            esito = { error: { message: 'new row for relation "profiles" violates check constraint "profiles_business_type_detail_check"' }, data: [] };
+          }
           else if (tabella === 'profiles') { db.profili.set(String(riga.id), { ...db.profili.get(String(riga.id)), ...riga }); esito = { error: null, data: [riga] }; }
           else if (tabella === 'preventivi_con_codice' && db.rompiLink > 0) { db.rompiLink -= 1; esito = { error: { message: 'connessione persa' }, data: [] }; }
           else if (tabella === 'preventivi_con_codice') {
@@ -244,6 +248,20 @@ describe('il negozio nasce come Ora del Gusto', () => {
     void _via;
     expect((await chiama(senzaTipo)).status).toBe(200);
     expect(db.profili.get(a.id_attivita)!.business_type).toBe('bar');
+  });
+
+  // 28/11/2026 03:13 — Nicola, dalla pagina dell'agente: «Non sono riuscito ad aggiungere l'attività». Il tipo
+  // descritto passava fino a 80 caratteri e il database ne accetta 60: il negozio non nasceva mai.
+  it('un tipo descritto più lungo di 60 caratteri non ferma l iscrizione: si accorcia fra due parole', async () => {
+    const lungo = 'Bar, caffetteria e pasticceria artigianale con gelateria e cucina'; // 65 caratteri
+    expect(lungo.length).toBeGreaterThan(60);
+    const r = await chiama({ ...BAR, dettaglio: lungo });
+    expect(r.status).toBe(201);
+    const { id_attivita } = (await r.json()) as { id_attivita: string };
+    const scritto = String(db.profili.get(id_attivita)!.business_type_detail);
+    expect(scritto.length).toBeLessThanOrEqual(60);
+    expect(lungo.startsWith(scritto)).toBe(true);
+    expect(scritto).toBe('Bar, caffetteria e pasticceria artigianale con gelateria');
   });
 
   it('col sito pubblico lo scrive nei canali della vetrina; un indirizzo non https lo scarta', async () => {

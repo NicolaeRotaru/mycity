@@ -6,7 +6,7 @@ import FotoConRipiego from '@/components/ui/FotoConRipiego';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Heart, Banknote, Bike, RotateCcw, Store, ShoppingCart, Ban, Check, Flame, Package, ShieldCheck, Star, Image as ImageIcon } from 'lucide-react';
+import { Heart, Banknote, Bike, MessageCircle, RotateCcw, Store, ShoppingCart, Ban, Check, Flame, Package, ShieldCheck, Star, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 import { domandaProdotto, negozioDellaSchedaOperativo } from '@/lib/queries/catalogo';
@@ -18,6 +18,7 @@ import { LARGHEZZA_MASSIMA, sizedImage } from '@/lib/image-url';
 import { SIZES_FOTO_PRODOTTO } from '@/lib/preload-foto';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import { fraseResoDelProdotto, frasePagamento, promessaSpedizione } from '@/lib/promesse-pubbliche';
+import { esclusiAncheDallaCategoria } from '@/lib/ordini/recesso-per-categoria';
 import { sopraIlTettoDeiContanti } from '@/lib/ordini/tetto-dei-contanti';
 import { vociDellaConsegna } from '@/lib/ordini/prezzi';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -39,6 +40,7 @@ import RecentlyViewed from '@/components/RecentlyViewed';
 import StickyAddToCart from '@/components/StickyAddToCart';
 import { AttivaAbbonamento } from '@/components/products/AttivaAbbonamento';
 import { eDiSdg } from '@/lib/products/sdgSeller';
+import { dettagliDelServizio, eServizio, ETICHETTA_PRENOTA, ETICHETTA_PRENOTA_CORTA } from '@/lib/products/servizio';
 import QuandoSiVede from '@/components/QuandoSiVede';
 import SimilarProducts from '@/components/SimilarProducts';
 import ActivePromoBadge from '@/components/ActivePromoBadge';
@@ -214,13 +216,30 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // prima della 180 la colonna non c'e', la riga arriva senza e vale la frase
   // generale (FRASE_RESO di lib/promesse-pubbliche, che nomina gli esclusi); cosi'
   // anche se la lettura cade. La frase si sceglie la', mai una copia qui.
-  const { data: rigaDelRecesso = null } = useQuery({
+  const { data: rigaDelRecesso = null, isPending: tipoInLettura } = useQuery({
     queryKey: ['product', id, 'recesso'],
+    // 27/11/2026 — Finché questa lettura non risponde non si sa se è un servizio, e il carrello
+    // aspetta: un solo nuovo tentativo, per non tenerlo spento a lungo se cade.
+    retry: 1,
     queryFn: async () => {
-      const { data } = await supabase.from('products').select('*').eq('id', id).maybeSingle();
-      return { non_recedibile: (data as { non_recedibile?: unknown } | null)?.non_recedibile === true };
+      const { data: letta } = await supabase.from('products').select('*').eq('id', id).maybeSingle();
+      const riga = letta as { tipo?: unknown; durata_minuti?: unknown; dove_servizio?: unknown } | null;
+      // R09-015 — Anche il pane escluso per categoria (non solo con la spunta): la regola dei resi.
+      const [data = null] = letta ? await esclusiAncheDallaCategoria(supabase, [letta as { category_id?: unknown }]) : [];
+      // 27/11/2026 — Con la stessa lettura (`*`, che regge anche prima della 999g) arriva il `tipo`:
+      // senza la colonna la riga non lo porta, e l'annuncio resta un prodotto.
+      return {
+        non_recedibile: (data as { non_recedibile?: unknown } | null)?.non_recedibile === true,
+        tipo: riga?.tipo === 'servizio' ? 'servizio' : 'prodotto',
+        durata_minuti: riga?.durata_minuti ?? null,
+        dove_servizio: riga?.dove_servizio ?? null,
+      };
     },
   });
+  // 27/11/2026 — Un servizio (migrazione 999g) non si compra col carrello: si prenota scrivendo al negozio.
+  // Gli abbonamenti di SDG sono servizi (999g) ma hanno il loro percorso (AttivaAbbonamento), che vince.
+  const eUnServizio = eServizio(rigaDelRecesso) && !eDiSdg(product?.seller_id);
+  const dettagliServizio = eUnServizio && rigaDelRecesso ? dettagliDelServizio(rigaDelRecesso) : null;
   const fraseReso = fraseResoDelProdotto(rigaDelRecesso);
 
   const { data: variants = [], isError: variantiInErrore, refetch: rileggiVarianti } = useQuery({
@@ -497,7 +516,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-pulse">
           <div className="bg-cream-200 h-96 rounded-xl" />
           <div className="space-y-3">
@@ -642,7 +661,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const isOutOfStock = stock === 0 || tutteLeVariantiEsaurite;
   // 24/11/2026 — I prodotti di SDG Agenzia sono abbonamenti: niente carrello, si attivano dal preventivo.
   const eAbbonamentoSdg = eDiSdg(product.seller_id);
-  const canAdd = !eAbbonamentoSdg && !isOutOfStock && !needsVariantChoice && !combinazioneMancante && mayPurchase;
+  const canAdd = !eAbbonamentoSdg && !eUnServizio && !tipoInLettura && !isOutOfStock && !needsVariantChoice && !combinazioneMancante && mayPurchase;
 
   // 5/11/2026 — La descrizione della foto che il negozio scrive per chi non vede (`alt_text`)
   // non arrivava a nessuno: si toglieva dalla griglia «perché già usata come testo alternativo»,
@@ -725,6 +744,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     : 'Apri il marketplace dal pulsante «Vai al marketplace» nella dashboard negozio.';
 
   const handleAdd = () => {
+    // 27/11/2026 — Un abbonamento o un servizio non entrano nel carrello, qualunque pulsante li chiami.
+    if (eAbbonamentoSdg || eUnServizio || tipoInLettura) return;
     if (!mayPurchase) {
       toast.error(purchaseBlockedMessage);
       return;
@@ -780,6 +801,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
   const handleBuyNow = () => {
     if (inPartenza) return;
+    if (eAbbonamentoSdg || eUnServizio || tipoInLettura) return;
     if (!mayPurchase) {
       toast.error(purchaseBlockedMessage);
       return;
@@ -833,7 +855,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // un prezzo che nei risultati può mancare.
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-6">
+    <div className="container mx-auto px-4 sm:px-6 py-6 max-w-7xl">
       <Breadcrumb className="mb-4" items={[
         { label: 'Home', href: '/' },
         ...(product.categories?.name && product.categories?.slug
@@ -970,7 +992,6 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 largo il 95% dello schermo: su un portatile fine si vedeva la foto di prima,
                 solo piu' grande e piu' morbida. Qui si chiede la larghezza massima che il
                 sito considera sensata. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={zoomFallito === sizedImage(images[activeImg], LARGHEZZA_MASSIMA) ? FOTO_MANCANTE : sizedImage(images[activeImg], LARGHEZZA_MASSIMA)}
               alt={activeImg === 0 ? altPrimaFoto : `${product.name} — foto ${activeImg + 1}`}
@@ -1095,7 +1116,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               )}
               <span className="text-sm text-ink-400">IVA inclusa</span>
             </div>
-            {conditionLabel && (
+            {eUnServizio && (
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary-700">
+                Servizio{dettagliServizio ? ` · ${dettagliServizio}` : ''}
+              </span>
+            )}
+            {conditionLabel && !eUnServizio && (
               <span className="inline-flex w-fit items-center rounded-full bg-cream-100 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
                 Condizione: {conditionLabel}
               </span>
@@ -1112,6 +1138,16 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             {/* Card rassicurazione consolidata (mockup 50-product): ETA consegna +
                 pagamento alla consegna + reso, in un unico riquadro olive. Le righe
                 dinamiche restano tali (DeliveryCutoff conserva la sua logica). */}
+            {/* 27/11/2026 — Per un servizio consegna, pagamento alla consegna e reso non valgono: si
+                prenota scrivendo al negozio, e il resto si concorda con lui. */}
+            {eUnServizio ? (
+            <div className="flex flex-col gap-2 rounded-lg bg-olive-50 border border-olive-200 px-3.5 py-3">
+              <span className="inline-flex items-center gap-2 text-sm text-olive-800">
+                <MessageCircle size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
+                <span>Si prenota scrivendo al negozio: giorno, ora e pagamento li concordi con lui.</span>
+              </span>
+            </div>
+            ) : (
             <div className="flex flex-col gap-2 rounded-lg bg-olive-50 border border-olive-200 px-3.5 py-3">
               {/* Consegna: marketplace esterno se importato, altrimenti la regola della cassa */}
               <DeliveryCutoff
@@ -1150,6 +1186,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 {fraseReso}
               </span>
             </div>
+            )}
 
             {/* 27/10/2026 (terzo giro) — Qui c'era la riga di `FreeShippingProgress`: «Consegna a casa 3,00 €
                 per negozio», subito sotto «Consegna MyCity 3,00 € per negozio» del riquadro qui sopra.
@@ -1340,6 +1377,18 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <div className="text-2xl font-extrabold font-serif text-ink-900">{formatPrice(price)}</div>
             {eAbbonamentoSdg ? (
               <AttivaAbbonamento chiGuardaEUnNegozio={isSeller} />
+            ) : eUnServizio ? (
+              <>
+                {dettagliServizio && <p className="text-xs text-ink-600">Servizio · {dettagliServizio}</p>}
+                {(sellerProfile?.id ?? product.seller_id) ? (
+                  <ContactSellerButton
+                    id="prenota-servizio"
+                    sellerId={sellerProfile?.id ?? product.seller_id}
+                    className="w-full"
+                    label={ETICHETTA_PRENOTA}
+                  />
+                ) : null}
+              </>
             ) : (
             <>
             {consegnaSenzaCosto && (
@@ -1431,7 +1480,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             </>
             )}
 
-            {(sellerProfile?.id ?? product.seller_id) && (
+            {!eUnServizio && (sellerProfile?.id ?? product.seller_id) && (
               <ContactSellerButton
                 sellerId={sellerProfile?.id ?? product.seller_id}
                 className="w-full"
@@ -1442,10 +1491,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <div className="pt-3 border-t border-surface-200 space-y-1.5 text-xs text-ink-500">
               {eAbbonamentoSdg ? (
                 <p className="flex items-center gap-1.5"><Package size={13} className="shrink-0" aria-hidden /> Venduto da <strong className="text-ink-700">MyCity</strong> · lo realizza {product.profiles?.store_name}</p>
+              ) : eUnServizio ? (
+              <p className="flex items-center gap-1.5"><Package size={13} className="shrink-0" aria-hidden /> Servizio di <strong className="text-ink-700">{product.profiles?.store_name}</strong></p>
               ) : (
               <p className="flex items-center gap-1.5"><Package size={13} className="shrink-0" aria-hidden /> Venduto da <strong className="text-ink-700">{product.profiles?.store_name}</strong> · consegna MyCity</p>
               )}
-              {contantiSuTutteEDue && (
+              {contantiSuTutteEDue && !eUnServizio && (
                 <p className="flex items-center gap-1.5"><ShieldCheck size={13} className="shrink-0" aria-hidden /> Compri sicuro: paghi solo quando arriva.</p>
               )}
             </div>
@@ -1765,7 +1816,17 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       </section>
 
       {/* Sticky CTA mobile — con stepper quantità, "{qty}×{price}" e totale */}
-      {!eAbbonamentoSdg && (
+      {/* 27/11/2026 — Per un servizio la barra in fondo non aggiunge al carrello: porta a «Prenota». */}
+      {!eAbbonamentoSdg && eUnServizio && (
+      <StickyAddToCart
+        price={price}
+        bersaglio="prenota-servizio"
+        available
+        onAdd={() => document.getElementById('prenota-servizio')?.click()}
+        etichette={{ corta: ETICHETTA_PRENOTA_CORTA, intera: ETICHETTA_PRENOTA }}
+      />
+      )}
+      {!eAbbonamentoSdg && !eUnServizio && (
       <StickyAddToCart
         price={price}
         // R02-012 — Con la promo attiva la barra riceve anche il pieno e lo barra accanto, come il

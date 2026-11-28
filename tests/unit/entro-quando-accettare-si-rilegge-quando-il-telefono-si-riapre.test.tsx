@@ -43,6 +43,9 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
   return { ...vero, useQuery: cattura, useInfiniteQuery: cattura };
 });
 
+// Dal 28/11/2026 la lista ordini chiede prima chi è il negozio (per SDG Agenzia mostra gli ordini di servizio).
+vi.mock('@/components/hooks/useProfile', () => ({ useProfile: () => ({ profile: { id: 'negozio-1' }, isLoading: false }) }));
+
 // React 18 nei test non ha `use`: la pagina del dettaglio lo usa solo per leggere i parametri.
 vi.mock('react', async (importOriginal) => {
   const vero = await importOriginal<typeof import('react')>();

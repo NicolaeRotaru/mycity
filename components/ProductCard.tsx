@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Flame, Heart, Plus, Truck } from 'lucide-react';
 import { addToCart } from '@/lib/cart';
 import { eDiSdg } from '@/lib/products/sdgSeller';
+import { dettagliDelServizio } from '@/lib/products/servizio';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { discountedUnitCents } from '@/lib/promotions';
@@ -42,6 +43,11 @@ interface ProductCardProps {
   hasVariants?: boolean;
   /** true per le prime immagini above-the-fold (LCP): eager + fetchPriority alta. */
   priority?: boolean;
+  /**
+   * 27/11/2026 — L'annuncio è un servizio (migrazione 999g): niente «+» del carrello, al suo
+   * posto l'etichetta «Servizio» con durata e «dove si fa». Si prenota dalla scheda.
+   */
+  servizio?: { durata_minuti?: number | null; dove_servizio?: string | null } | null;
 }
 
 /**
@@ -52,8 +58,10 @@ interface ProductCardProps {
  */
 const ProductCard = ({
   id, name, price, images,
-  stock, createdAt, storeName, sellerId, discountPercent, compareAtPrice, hasVariants, priority,
+  stock, createdAt, storeName, sellerId, discountPercent, compareAtPrice, hasVariants, priority, servizio,
 }: ProductCardProps) => {
+  const eUnServizio = !!servizio;
+  const dettagliServizio = servizio ? dettagliDelServizio(servizio) : null;
   const hasDiscount = !!discountPercent && discountPercent > 0;
   // R01-011 — Lo scontato si calcola con la funzione di carrello e cassa (`discountedUnitCents`:
   // al centesimo, sconto fra 0 e 70). La formula a mano non arrotondava: 1,15 € al -10% la scheda
@@ -69,6 +77,9 @@ const ProductCard = ({
     // su 100 € il prezzo scontato in centesimi dice lo sconto applicato, senza ripetere il 70 qui.
     ? Math.round(100 - discountedUnitCents(100, discountPercent as number) / 100)
     : (compareValid ? Math.round((1 - price / (compareAtPrice as number)) * 100) : 0);
+  // R10-004 — Sotto lo 0,5% la percentuale arrotondata è 0: il bollino «-0%» e «scontato del 0 per
+  // cento» non dicono niente. Il prezzo scontato e il barrato restano; il bollino no.
+  const showBadge = showStrike && badgePct > 0;
   const rawImg = images?.[0] ?? FOTO_MANCANTE;
   const img = sizedImage(rawImg, 'card');
   const router = useRouter();
@@ -92,7 +103,8 @@ const ProductCard = ({
     // clic sul «+» non faceva assolutamente niente, e il cliente lo ripeteva
     // due o tre volte prima di rinunciare. La taglia va scelta: si va lì.
     // 24/11/2026 — Un abbonamento di SDG non va nel carrello: la sua pagina dice come si attiva.
-    if (hasVariants || eDiSdg(sellerId)) {
+    // 27/11/2026 — Nemmeno un servizio: si prenota scrivendo al negozio, dalla scheda.
+    if (hasVariants || eDiSdg(sellerId) || eUnServizio) {
       router.push(`/product/${id}`);
       return;
     }
@@ -133,7 +145,8 @@ const ProductCard = ({
     setIsNew(age < NEW_PRODUCT_DAYS);
   }, [createdAt]);
   const isLowStock = stock !== undefined && stock > 0 && stock <= LOW_STOCK_THRESHOLD;
-  const isOutOfStock = stock === 0;
+  // 27/11/2026 — Un servizio non ha scorta: non è mai «esaurito».
+  const isOutOfStock = stock === 0 && !eUnServizio;
   // La frase della vetrina nasce dalla cifra che si paga in cassa. Sopra la soglia la spedizione del
   // negozio è gratis davvero, ma la consegna a domicilio si paga lo stesso su ogni ordine: il badge
   // diceva «Sped. gratis» e taceva quei soldi, che comparivano per la prima volta nel carrello.
@@ -160,16 +173,18 @@ const ProductCard = ({
         // zittire l'informazione, è metterla nel nome del link.
         aria-label={[
           name,
+          eUnServizio ? 'servizio' : null,
           isOutOfStock ? 'esaurito' : null,
-          showStrike ? `scontato del ${badgePct} per cento` : null,
+          showBadge ? `scontato del ${badgePct} per cento` : null,
           isNew ? 'novità' : null,
         ].filter(Boolean).join(', ')}
         tabIndex={0}
       />
       {/* Badge in alto a sinistra */}
       <div className="pointer-events-none absolute top-2 left-2 z-10 flex flex-col gap-1" aria-hidden>
-        {showStrike && <Badge variant="discount">-{badgePct}%</Badge>}
+        {showBadge && <Badge variant="discount">-{badgePct}%</Badge>}
         {isNew && <Badge variant="new">Nuovo</Badge>}
+        {eUnServizio && <Badge variant="local">Servizio</Badge>}
         {isOutOfStock && <Badge variant="soldout">Esaurito</Badge>}
       </div>
 
@@ -251,7 +266,9 @@ const ProductCard = ({
         </h3>
 
         <div className="mt-auto pt-1">
-          {(consegnaSenzaCosto || (isLowStock && !isOutOfStock)) && (
+          {eUnServizio ? (
+            dettagliServizio && <p className="mb-1 truncate text-xs text-ink-600">{dettagliServizio}</p>
+          ) : (consegnaSenzaCosto || (isLowStock && !isOutOfStock)) && (
             <div className="mb-1 flex flex-wrap items-center gap-1">
               {isLowStock && !isOutOfStock && (
                 <Badge variant="lowstocksoft" icon={Flame}>
@@ -291,6 +308,7 @@ const ProductCard = ({
             </div>
             {/* Il «+» è un contorno, non un quadrato pieno: il colore pieno resta al prezzo, che è
                 quello che si vuole leggere per primo. L'area di tocco non cambia (h-11 w-11). */}
+            {!eUnServizio && (
             <button
               type="button"
               onClick={handleAdd}
@@ -300,6 +318,7 @@ const ProductCard = ({
             >
               <Plus size={18} strokeWidth={2.6} aria-hidden />
             </button>
+            )}
           </div>
         </div>
       </div>

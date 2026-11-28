@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import { esciEVaiAllAccesso } from '@/lib/auth/uscita';
 import { useProfile } from './hooks/useProfile';
 import { useCartCount } from './hooks/useCartCount';
 import { useNotificationsCount } from './hooks/useNotificationsCount';
@@ -198,9 +199,7 @@ export default function Navbar() {
     await scollegaQuestoDispositivo((endpoint) =>
       supabase.from('push_subscriptions').delete().eq('endpoint', endpoint),
     );
-    await supabase.auth.signOut();
-    router.push('/sign-in');
-    router.refresh();
+    await esciEVaiAllAccesso(router);
   };
 
   /**

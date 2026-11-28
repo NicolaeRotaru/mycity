@@ -128,7 +128,12 @@ describe('la rotta della chat restituisce la proposta che il server saprebbe app
     });
     expect(patch.attributes_remove).toEqual(['allergeni']);
     expect(patch.tags).toEqual(['focaccia']);
-    expect(righe).toEqual(['Tag → focaccia', 'Rimuovi Allergeni: NON si applica, lo decidi tu nella scheda del prodotto']);
+    // La focaccia ha il tag «forno»: la lista nuova lo toglie, e la scheda lo nomina.
+    expect(righe).toEqual([
+      'Tag → focaccia',
+      'Tag tolti dal prodotto: forno',
+      'Rimuovi Allergeni: NON si applica, lo decidi tu nella scheda del prodotto',
+    ]);
   });
 
   it('campi singoli scritti male (terzo collaudo): la scheda si disegna, e quei campi non entrano nella proposta', async () => {

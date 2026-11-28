@@ -14,6 +14,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
+import { acceptSenzaHeic, avvisoFotoHeic, senzaHeic } from '@/lib/immagini/heic-in-jpeg';
 import { recessoAperto, ultimoGiornoDelRecesso } from '@/lib/ordini/termine-del-recesso';
 import { MOTIVO_RIPENSAMENTO } from '@/lib/ordini/recesso';
 import { nomeDellaRigaOrdine, type RigaOrdine } from '@/lib/ordini/riga-ordine';
@@ -97,31 +98,47 @@ export default function NewReturnPage() {
     })();
   }, [params.id, tentativo]);
 
+  const righe: RigaDaRendere[] = Array.isArray(order?.order_items) ? (order.order_items as RigaDaRendere[]) : [];
+  const serveSceltaArticolo = righe.length > 1;
+  const articoloMancante = serveSceltaArticolo && !cosaRendo;
+  const articoloScelto = serveSceltaArticolo && cosaRendo && cosaRendo !== TUTTO_L_ORDINE ? cosaRendo : undefined;
+
   // 12/11/2026 (R07-002) — «Ho cambiato idea» non vale quando tutti i prodotti
   // dell'ordine sono esclusi dal recesso (pane, freschi, su ordinazione). Il server
   // lo rifiutava già: la pagina lo accettava, e il cliente lo scopriva solo dopo aver
   // compilato tutto. Appena il cliente sceglie quel motivo, la pagina chiede l'esito
-  // al server (/api/returns/ripensamento), che legge come returns/create: il client
-  // del cliente non vede i prodotti tolti dalla vetrina dopo l'ordine (il pane segnato
-  // esaurito la sera) e li avrebbe contati come recedibili. Se c'è un rifiuto la scelta
-  // si toglie, si spegne e la pagina dice perché. Se la domanda cade, la pagina non
-  // decide al buio: lascia la scelta e il server risponde all'invio.
-  const [rifiutoRipensamento, setRifiutoRipensamento] = useState<string | null>(null);
-  const [ripensamentoChiesto, setRipensamentoChiesto] = useState(false);
+  // al server, che legge i prodotti col servizio: il client del cliente non vede i
+  // prodotti tolti dalla vetrina dopo l'ordine (il pane segnato esaurito la sera) e li
+  // avrebbe contati come recedibili. Se c'è un rifiuto la scelta si toglie, si spegne
+  // e la pagina dice perché. Se la domanda cade, la pagina non decide al buio: lascia
+  // la scelta e il server risponde all'invio.
+  // 27/11/2026 — La domanda va a /api/returns/create (GET), la stessa funzione che
+  // decide l'invio: /api/returns/ripensamento guardava solo la spunta del negozio, e su
+  // un pane del Panificio non spuntato la pagina offriva il motivo che l'invio
+  // rifiutava. E si chiede per la riga scelta: nell'ordine misto il pane da solo è
+  // escluso, il miele no. Cambiando riga si chiede di nuovo.
+  const chiaveRipensamento = order?.id ? `${order.id}|${articoloScelto ?? ''}` : null;
+  const [esitoRipensamento, setEsitoRipensamento] = useState<{ chiave: string; rifiuto: string | null } | null>(null);
+  const [ripensamentoChiestoPer, setRipensamentoChiestoPer] = useState<string | null>(null);
+  const rifiutoRipensamento =
+    esitoRipensamento && esitoRipensamento.chiave === chiaveRipensamento ? esitoRipensamento.rifiuto : null;
   useEffect(() => {
-    if (!order?.id || reason !== MOTIVO_RIPENSAMENTO || ripensamentoChiesto) return;
-    setRipensamentoChiesto(true);
+    if (!chiaveRipensamento || reason !== MOTIVO_RIPENSAMENTO || ripensamentoChiestoPer === chiaveRipensamento) return;
+    setRipensamentoChiestoPer(chiaveRipensamento);
+    const chiave = chiaveRipensamento;
+    const domanda = new URLSearchParams({ orderId: String(order.id) });
+    if (articoloScelto) domanda.set('orderItemId', articoloScelto);
     (async () => {
       try {
-        const r = await fetch(`/api/returns/ripensamento?orderId=${encodeURIComponent(order.id)}`);
+        const r = await fetch(`/api/returns/create?${domanda.toString()}`);
         if (!r.ok) return;
         const json = (await r.json()) as { rifiuto?: string | null };
-        setRifiutoRipensamento(typeof json.rifiuto === 'string' ? json.rifiuto : null);
+        setEsitoRipensamento({ chiave, rifiuto: typeof json.rifiuto === 'string' ? json.rifiuto : null });
       } catch {
         /* domanda non riuscita: decide il server all'invio */
       }
     })();
-  }, [order?.id, reason, ripensamentoChiesto]);
+  }, [chiaveRipensamento, order?.id, articoloScelto, reason, ripensamentoChiestoPer]);
   useEffect(() => {
     if (rifiutoRipensamento && reason === MOTIVO_RIPENSAMENTO) setReason('');
   }, [rifiutoRipensamento, reason]);
@@ -158,9 +175,16 @@ export default function NewReturnPage() {
     }
   }
 
-  async function uploadPhoto(file: File) {
+  async function uploadPhoto(scelta: File) {
     setUploading(true);
     try {
+      // Una foto HEIC salvata com'e' su Chrome e Android (anche dal negozio che valuta il reso)
+      // resta un riquadro rotto: qui diventa JPEG, o non parte (`lib/immagini/heic-in-jpeg.ts`).
+      const file = await senzaHeic(scelta);
+      if (!file) {
+        toast.error(avvisoFotoHeic());
+        return;
+      }
       // Il percorso lo costruisce la porta unica: la regola del secchio pubblico pretende che il
       // primo livello sia l'identita' di chi carica, e da qui quel livello non si vede piu'.
       const { data: { user } } = await supabase.auth.getUser();
@@ -183,10 +207,6 @@ export default function NewReturnPage() {
     }
   }
 
-  const righe: RigaDaRendere[] = Array.isArray(order?.order_items) ? (order.order_items as RigaDaRendere[]) : [];
-  const serveSceltaArticolo = righe.length > 1;
-  const articoloMancante = serveSceltaArticolo && !cosaRendo;
-
   async function submit() {
     // 5/11/2026 — Con la foto ancora in caricamento il reso partiva senza, e dopo non si poteva
     // più aggiungere. Senza motivo non parte niente.
@@ -198,7 +218,7 @@ export default function NewReturnPage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           orderId: params.id,
-          orderItemId: serveSceltaArticolo && cosaRendo !== TUTTO_L_ORDINE ? cosaRendo : undefined,
+          orderItemId: articoloScelto,
           reason,
           notes: notes || undefined,
           photoUrls: photos,
@@ -488,7 +508,7 @@ export default function NewReturnPage() {
                    rotto scattata con l'iPhone non la vedeva nemmeno comparire nella finestra di
                    scelta: il file c'era, il campo lo nascondeva. La lista arriva dalla stessa
                    regola che poi rifiuta il file. */
-                accept={attributoAccept()}
+                accept={acceptSenzaHeic(attributoAccept())}
                 className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

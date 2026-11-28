@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 /**
  * R07-002 (12/11/2026) — la pagina del reso offriva «Ho cambiato idea» anche su un
  * ordine di solo pane. Il server lo rifiuta (art. 59 Cod. Cons.): la pagina ora
- * appena si sceglie quel motivo chiede l'esito al server (/api/returns/ripensamento), toglie e spegne la scelta e dice perché.
+ * appena si sceglie quel motivo chiede l'esito al server (/api/returns/create, da R04-001), toglie e spegne la scelta e dice perché.
  * Su un ordine misto la scelta resta; se la domanda cade, decide il server all'invio.
  */
 const stato = vi.hoisted(() => ({ risposta: null as null | { status: number; corpo: unknown }, chiamate: [] as string[] }));
@@ -79,7 +79,8 @@ describe('R07-002 · «Ho cambiato idea» non si offre su un ordine di soli escl
     await monta();
     await scegliRipensamento();
     expect(ripensamento().checked).toBe(false);
-    expect(stato.chiamate.some((u) => u.startsWith('/api/returns/ripensamento?orderId=o1'))).toBe(true);
+    // R04-001: la domanda va alla rotta che decide l'invio (prima /api/returns/ripensamento, che guardava solo la spunta).
+    expect(stato.chiamate.some((u) => u.startsWith('/api/returns/create?orderId=o1'))).toBe(true);
     expect(ripensamento().disabled).toBe(true);
     expect(c.textContent).toMatch(/art\. 59/);
     expect((c.querySelector('input[type=radio][value=DAMAGED]') as HTMLInputElement).disabled).toBe(false);

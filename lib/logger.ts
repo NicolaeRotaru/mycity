@@ -64,8 +64,13 @@ const DATI_NEL_TESTO: Array<[forma: RegExp, sostituto: string]> = [
   // dopo il prefisso del cellulare (3xx) o del fisso (0…) le cifre restanti possono avere uno spazio,
   // un punto o un trattino fra l'una e l'altra; il numero di cifre resta quello di un telefono. Una
   // data «05.11.2026» (gg.mm.aaaa) non è un fisso, e resta leggibile.
+  // R10-008 — Altre forme di tutti i giorni uscivano in chiaro: il prefisso fra parentesi
+  // («(0523) 123456»), la barra dopo il prefisso («0523/123456», com'è scritto il fisso di tanti
+  // negozi), il link «tel:+39…» (i due punti dopo una lettera) e lo spazio codificato di un
+  // indirizzo («%20333…»). La barra vale solo subito dopo il prefisso: una data «05/11/2026» non
+  // ha la forma, e un percorso «/ordini/0523123456» resta leggibile come prima.
   [
-    /(^|[^\w/:-])(?:(?:\+|00)39[ .-]?|\+)?(?:3\d{2}(?:[ .-]?\d){6,7}|(?!0\d[.-]\d{2}[.-]\d{4}(?![\w/:-]))0\d{1,3}(?:[ .-]?\d){6,8})(?![\w/:-])/g,
+    /(^|[^\w/:-]|[A-Za-z]:|%20)(?:(?:\+|00)39[ .-]?|\+)?\(?(?:3\d{2}\)?\/?(?:[ .-]?\d){6,7}|(?!0\d[./-]\d{2}[./-]\d{4}(?![\w/:-]))0\d{1,3}\)?\/?(?:[ .-]?\d){6,8})(?![\w/:-])/g,
     '$1[redacted]',
   ],
 ];

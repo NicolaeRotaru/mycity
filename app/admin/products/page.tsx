@@ -17,6 +17,7 @@ import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
+import { filtroNomeONegozio, modelloIlike } from '@/lib/admin/ricerca-prodotti';
 
 /**
  * 30/8/2026 (R004) — I nomi delle colonne li controlla il compilatore.
@@ -41,6 +42,15 @@ type Row = ColonneSalvo<
  * taglierebbe in silenzio. Arrivati qui l'elenco puo' essere piu' lungo, e la pagina lo dice.
  */
 const TETTO_PRODOTTI = 1000;
+
+/** Quanti prodotti mostra al massimo la ricerca nel database: oltre, la pagina dice quanti ne ha trovati. */
+const TETTO_RICERCA = 200;
+
+/**
+ * Quanti negozi entrano al massimo nel filtro della ricerca: i loro identificativi viaggiano
+ * nell'indirizzo, che ha un limite. Oltre, la pagina dice che la ricerca dei negozi è parziale.
+ */
+const TETTO_NEGOZI = 100;
 
 export default function AdminProductsPage() {
   const qc = useQueryClient();
@@ -86,34 +96,52 @@ export default function AdminProductsPage() {
 
   const tagliato = Math.max(totale, letti.length) > TETTO_PRODOTTI;
   const products = letti.slice(0, TETTO_PRODOTTI);
-  const cercaNelDatabase = tagliato && search.trim().length >= 2;
-  const { data: trovatiNelDatabase } = useQuery({
-    queryKey: [...queryKeys.admin.products, 'ricerca', search.trim()],
+  const termine = search.trim();
+  const cercaNelDatabase = tagliato && termine.length >= 2;
+  // R05-005 (collaudo K03) — Il campo dice «prodotto o negozio», ma qui si cercava solo il nome del
+  // prodotto: cercando un negozio, i suoi prodotti oltre i primi mille non uscivano. Adesso il
+  // database cerca anche il negozio (lib/admin/ricerca-prodotti.ts): prima i negozi col testo nel
+  // nome, poi i prodotti col testo nel nome OPPURE di quei negozi. Quanti ne ha trovati lo conta il
+  // database: se sono più di quelli mostrati, o se la ricerca cade, la pagina lo dice.
+  const ricerca = useQuery({
+    queryKey: [...queryKeys.admin.products, 'ricerca', termine],
     enabled: cercaNelDatabase,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const negozi = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('store_name', modelloIlike(termine))
+        .limit(TETTO_NEGOZI + 1);
+      if (negozi.error) throw negozi.error;
+      const idsNegozi = (negozi.data ?? []).map((n) => n.id);
+      const { data, error, count } = await supabase
         .from('products')
         .select(`
           id, name, price, stock, status, images, external_marketplace, external_synced_at,
           seller:profiles!products_seller_id_fkey ( store_name ),
           categories ( name )
-        `)
-        .ilike('name', `%${search.trim().replace(/[%_]/g, '')}%`)
+        `, { count: 'exact' })
+        .or(filtroNomeONegozio(termine, idsNegozi.slice(0, TETTO_NEGOZI)))
         .order('created_at', { ascending: false })
-        .limit(200);
+        .limit(TETTO_RICERCA);
       if (error) throw error;
-      return (data ?? []) as unknown as Row[];
+      const righe = (data ?? []) as unknown as Row[];
+      return {
+        righe,
+        trovati: typeof count === 'number' ? count : righe.length,
+        troppiNegozi: idsNegozi.length > TETTO_NEGOZI,
+      };
     },
   });
-  // Dal controllo qa: i trovati nel database (per nome) si AGGIUNGONO a quelli già letti, che restano
-  // cercabili anche per nome del negozio come prima.
-  const daFiltrare =
-    cercaNelDatabase && trovatiNelDatabase
-      ? [...trovatiNelDatabase, ...products.filter((p) => !trovatiNelDatabase.some((t) => t.id === p.id))]
-      : products;
+  const trovatiNelDatabase = cercaNelDatabase ? ricerca.data?.righe : undefined;
+  // Dal controllo qa: i trovati nel database si AGGIUNGONO a quelli già letti, che restano
+  // cercabili per nome e negozio anche se la ricerca nel database cade.
+  const daFiltrare = trovatiNelDatabase
+    ? [...trovatiNelDatabase, ...products.filter((p) => !trovatiNelDatabase.some((t) => t.id === p.id))]
+    : products;
   const filtered = daFiltrare.filter((p) => {
-    if (!search) return true;
-    const s = search.toLowerCase();
+    if (!termine) return true;
+    const s = termine.toLowerCase();
     return p.name.toLowerCase().includes(s) || p.seller?.store_name?.toLowerCase().includes(s);
   });
 
@@ -167,8 +195,33 @@ export default function AdminProductsPage() {
         <div role="status" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
           <p>
-            <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PRODOTTI} prodotti inseriti su {totale}. La ricerca per nome li cerca tutti nel database.
+            <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PRODOTTI} prodotti inseriti su {totale}. La ricerca per prodotto o negozio li cerca tutti nel database.
           </p>
+        </div>
+      )}
+
+      {cercaNelDatabase && (ricerca.isLoading || ricerca.isError || (ricerca.data && (ricerca.data.trovati > ricerca.data.righe.length || ricerca.data.troppiNegozi))) && (
+        <div role="status" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
+          <div className="space-y-1">
+            {ricerca.isLoading && <p>Cerco in tutto il catalogo…</p>}
+            {ricerca.isError && (
+              <p>
+                <strong>La ricerca nel database non è riuscita:</strong> qui sotto ci sono solo i risultati fra gli ultimi {TETTO_PRODOTTI} prodotti.{' '}
+                <button type="button" onClick={() => void ricerca.refetch()} className="font-semibold underline">Riprova</button>
+              </p>
+            )}
+            {ricerca.data && ricerca.data.trovati > ricerca.data.righe.length && (
+              <p>
+                <strong>Ricerca tagliata:</strong> nel database ci sono {ricerca.data.trovati} prodotti che corrispondono, ne mostro i {ricerca.data.righe.length} più recenti. Scrivi qualcosa di più preciso per vedere gli altri.
+              </p>
+            )}
+            {ricerca.data?.troppiNegozi && (
+              <p>
+                <strong>Troppi negozi:</strong> più di {TETTO_NEGOZI} negozi hanno questo testo nel nome, e dei negozi cerco solo i primi {TETTO_NEGOZI}. Scrivi qualcosa di più preciso.
+              </p>
+            )}
+          </div>
         </div>
       )}
 

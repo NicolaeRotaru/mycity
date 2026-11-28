@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import ProductForm, { type ProductInitialValues, type ProductPayload } from '@/components/seller/ProductForm';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { COLONNE_DEL_SERVIZIO, DOVE_SI_FA, MESSAGGIO_SERVIZI_NON_ANCORA_ATTIVI, mancanoLeColonneDelServizio, type DoveSiFa } from '@/lib/products/servizio';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
@@ -161,8 +162,15 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       const nonRecedibile = (recesso as { non_recedibile?: unknown } | null)?.non_recedibile === true;
       // La spunta compare solo se la colonna c'e' davvero (dopo la 180): se no
       // il salvataggio la manderebbe a una colonna che non esiste.
+      // 27/11/2026 — Con la stessa lettura arrivano tipo, durata e «dove si fa» (migrazione 999g).
+      // Prima della 999g la riga non li ha e non si aggiungono: l'annuncio resta un prodotto.
+      const colonneDelServizio: Record<string, unknown> = {};
+      for (const c of COLONNE_DEL_SERVIZIO) {
+        if (recesso && c in (recesso as Record<string, unknown>)) colonneDelServizio[c] = (recesso as Record<string, unknown>)[c];
+      }
       return {
         ...(data as Record<string, unknown>),
+        ...colonneDelServizio,
         non_recedibile: nonRecedibile,
         [RECESSO_SEGNABILE]: colonnaDelRecessoPresente(recesso),
       } as Record<string, unknown>;
@@ -289,7 +297,9 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       toast.success('Modifiche salvate');
       router.push('/seller/products');
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    // 27/11/2026 — Un servizio salvato prima della migrazione 999g: il database non ha ancora le colonne.
+    onError: (err: unknown) =>
+      toast.error(mancanoLeColonneDelServizio(err) ? MESSAGGIO_SERVIZI_NON_ANCORA_ATTIVI : friendlyError(err)),
   });
 
   /**
@@ -436,6 +446,9 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     status: (riga.status as string) ?? 'available',
     variants: modulo.taglie,
     nonRecedibile: riga.non_recedibile === true,
+    tipo: riga.tipo === 'servizio' ? 'servizio' : 'prodotto',
+    durataMinuti: typeof riga.durata_minuti === 'number' ? riga.durata_minuti : null,
+    doveServizio: (DOVE_SI_FA as readonly unknown[]).includes(riga.dove_servizio) ? (riga.dove_servizio as DoveSiFa) : null,
   };
   // La spunta «escluso dal recesso»: la porta unica PATCH /api/seller/products/:id
   // la tiene (COLONNA_DEL_RECESSO in lib/products/salvataggio-tracciato.ts), e si

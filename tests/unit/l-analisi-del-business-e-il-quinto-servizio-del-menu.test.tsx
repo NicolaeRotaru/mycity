@@ -113,7 +113,8 @@ describe('il quarto servizio, nel listino e nel menu', () => {
     const analisi = voci.indexOf('/seller/servizi/analisi');
     expect(analisi).toBeGreaterThan(social);
     expect(voci).not.toContain('/seller/abbonamento'); // sta sotto il nome del negozio, nel menu dell account
-    expect(r.querySelector('a[href="/seller/servizi/analisi"]')?.textContent).toContain('Analisi del business');
+    // 28/11/2026 — La voce del menu si chiama come l'ha scritta Nicola; il titolo del listino resta.
+    expect(r.querySelector('a[href="/seller/servizi/analisi"]')?.textContent).toContain('Analisi di mercato');
   });
 });
 

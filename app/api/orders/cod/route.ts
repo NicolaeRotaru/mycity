@@ -35,6 +35,7 @@ import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { ordineInContantiPuoNascere } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
 import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
+import { conColonneDelServizio } from '@/lib/products/servizio';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { formatPriceFromCents } from '@/lib/format';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
@@ -917,10 +918,12 @@ export const POST = withAuthRateLimit(
     type RigaVariante = { id: string; product_id: string; label: string; stock: number };
 
     const [prodottiLetti, discountMap, variantiLette, venditoriLetti] = await Promise.all([
-      supa
-        .from('products')
-        .select('id, name, price, seller_id, stock, status, has_variants')
-        .in('id', uniqueProductIds),
+      // 27/11/2026 — Col `tipo` (999g) la cassa rifiuta un servizio. Prima della 999g la colonna
+      // non c'è: si rilegge senza, e ogni riga vale «prodotto» (lib/products/servizio.ts).
+      conColonneDelServizio(
+        () => supa.from('products').select('id, name, price, seller_id, stock, status, has_variants, tipo').in('id', uniqueProductIds),
+        () => supa.from('products').select('id, name, price, seller_id, stock, status, has_variants').in('id', uniqueProductIds),
+      ),
       // Sconti promo attivi (per prodotto): il cliente paga il prezzo scontato che
       // vede, non il prezzo pieno. Stessa fonte del badge "In promo -X%".
       fetchActiveDiscounts(supa, allProductIds),
@@ -1974,7 +1977,8 @@ export const POST = withAuthRateLimit(
               storeHours: orariNegozio.get(c.sellerId),
             });
             // R03-003 — un rifiuto di Resend non lancia: si legge l'esito (lib/stripe/webhook/posta-non-partita.ts).
-            const esito = await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+            // R03-002 — se Resend la rifiuta, l'email entra in coda e il giro send-emails la rimanda.
+            const esito = await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale', rimandaA: c.sellerId });
             await avvisaSeLaPostaNonParte('email «Nuovo ordine» al negozio', { orderId: c.orderId, sellerId: c.sellerId }, esito);
             await avvisaSeLaPostaESpenta(c.orderId, esito);
           } catch (e) {
@@ -1997,7 +2001,8 @@ export const POST = withAuthRateLimit(
               paymentMethod: 'cod',
             });
             // R24 — avviso di servizio: senza il tasto «annulla l'iscrizione».
-            const esito = await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+            // R03-002 — emailCliente è l'indirizzo dell'account (user.email): se Resend la rifiuta, la coda la rimanda.
+            const esito = await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale', rimandaA: user.id });
             await avvisaSeLaPostaNonParte('conferma dell ordine al cliente', { orderId: c.orderId }, esito);
             await avvisaSeLaPostaESpenta(c.orderId, esito);
           } catch (e) {

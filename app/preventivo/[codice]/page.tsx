@@ -13,6 +13,8 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { giorniDellaVisita } from '@/lib/agenzia/visita-sdg';
 import ConfermaAbbonamento, { type FasciaDaConfermare } from './ConfermaAbbonamento';
+import SitoPronto from '@/components/seller/lavoro-consegnato/SitoPronto';
+import { sitoConsegnatoDi } from '@/lib/agenzia/lavoro-consegnato/registro';
 
 /**
  * LA CONFERMA DELL'ABBONAMENTO DAL LINK — 27/11/2026.
@@ -71,6 +73,13 @@ export default async function ConfermaDalLink({
   if (demo.tipo === 'guasto') return <Cornice><p className="text-ink-700">{demo.messaggio}</p></Cornice>;
 
   const p = demo.preventivo;
+  // Il riquadro del sito non deve mai far cadere la conferma, che è quella che incassa.
+  let sitoPronto: ReturnType<typeof sitoConsegnatoDi> = null;
+  try {
+    sitoPronto = sitoConsegnatoDi(demo.pc.sellerId);
+  } catch (errore) {
+    logger.warn('[preventivo-codice] sito pronto non letto: la pagina va avanti senza', { errore: String(errore) });
+  }
   // Una fascia scritta male nel database non rompe la pagina: vale la consigliata.
   const dalVenditore = fasciaValida(demo.pc.fasciaScelta) ? demo.pc.fasciaScelta : null;
   const fasce: FasciaDaConfermare[] = ABBONAMENTI.map((f) => {
@@ -98,6 +107,8 @@ export default async function ConfermaDalLink({
         </p>
         <p className="mt-1 text-sm text-ink-600">{descriviAttivita(p.tipoAttivita)} · {FRASE_PARTNER}</p>
       </header>
+      {/* 27/11/2026 — Nicola: il sito già fatto per lui si vede appena il titolare apre il link del venditore. Solo il sito. */}
+      {sitoPronto && <SitoPronto sito={sitoPronto.sito} versione={sitoPronto.fascia} attivita={p.attivita} />}
       {/* ?fascia= arriva dal pulsante della vecchia pagina dell'abbonamento: sceglie, ma l'etichetta resta su quella del venditore. */}
       <ConfermaAbbonamento
         codice={codice}
@@ -106,6 +117,7 @@ export default async function ConfermaDalLink({
         segnata={dalVenditore ?? p.consigliato}
         dalVenditore={dalVenditore !== null}
         giorni={giorniDellaVisita(new Date(), await orariGiaPresi())}
+        serviziDelVenditore={demo.pc.serviziScelti ?? null}
       />
     </Cornice>
   );

@@ -1,6 +1,7 @@
 import { Globe, Share2, TrendingUp, Video, type LucideIcon } from 'lucide-react';
 import { LISTINO, SERVIZI_AGENZIA, type ServizioAgenzia } from '@/lib/agenzia/preventivo';
 import { PERCORSO_ABBONAMENTO, hrefServizio } from '@/lib/agenzia/indirizzi-servizi';
+import { ETICHETTE_SERVIZI } from '@/lib/agenzia/servizi-scelti';
 
 /**
  * LE VOCI DEL MENU «SERVIZI» — 23/11/2026, rifatte il 24/11/2026.
@@ -24,13 +25,10 @@ const ICONE: Record<ServizioAgenzia, LucideIcon> = {
 };
 
 /** Le etichette corte del menu: il titolo intero del listino non ci sta nella barra. */
-export const ETICHETTE_SERVIZI: Record<ServizioAgenzia, string> = {
-  foto_video: 'Foto e video',
-  sito_web: 'Sito web',
-  social: 'Gestione social',
-  // 24/11/2026 — Nicola: «deve esserci dentro una voce dei servizi», prima di «Abbonamento».
-  analisi: 'Analisi del business',
-};
+// 28/11/2026 01:25 — Nicola: «le voci sono: Foto e video, Gestione social e google, Gestione sitoweb, Analisi di
+// mercato». Le etichette stanno in lib/agenzia/servizi-scelti.ts, perché le usa anche il server (l'ordine di SDG,
+// l'avviso a Nicola) e la scelta dell'agente.
+export { ETICHETTE_SERVIZI };
 
 export { PERCORSO_ABBONAMENTO, hrefServizio };
 

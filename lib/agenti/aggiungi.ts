@@ -1,8 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '@/lib/env';
-import { NuovaAttivitaInArrivo, type NuovaAttivita } from '@/lib/agenzia/nuova-attivita';
+import { accorciaDettaglio, NuovaAttivitaInArrivo, type NuovaAttivita } from '@/lib/agenzia/nuova-attivita';
 import type { TipoAttivita } from '@/lib/agenzia/tipi-attivita';
 import type { Scheda } from '@/lib/agenti/scheda';
+import type { ServiziScelti } from '@/lib/agenzia/servizi-scelti';
 
 /**
  * «AGGIUNGI ATTIVITÀ» DALLA PAGINA DELL'AGENTE — 27/11/2026.
@@ -59,13 +60,15 @@ export function attivitaDallaScheda(scheda: Scheda): NuovaAttivita | null {
   const misura = scheda.sito?.misura;
   const sito = misura?.aperto && /^https:\/\//i.test(misura.url) ? misura.url : undefined;
   const tipo = tipoDaTesto(scheda.tipo);
+  const dettaglio = accorciaDettaglio(scheda.tipo);
   const candidato = {
     tipo: 'nuova-attivita' as const,
     origine: 'agente',
     // eslint-disable-next-line no-control-regex
     nome: String(scheda.nome ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80),
     ...(tipo ? { tipo_attivita: tipo } : {}),
-    ...(scheda.tipo ? { dettaglio: scheda.tipo.trim().slice(0, 80) } : {}),
+    // 28/11/2026 — Il tipo descritto entra già alla misura del database (60 caratteri), tagliato fra due parole.
+    ...(dettaglio ? { dettaglio } : {}),
     ...(scheda.citta ? { citta: scheda.citta.trim().slice(0, 60) } : {}),
     ...(scheda.indirizzo ? { indirizzo: scheda.indirizzo.trim().slice(0, 200) } : {}),
     ...(sito ? { sito: sito.slice(0, 300) } : {}),
@@ -87,6 +90,22 @@ export async function segnaChiHaPortatoIlCliente(admin: SupabaseClient, idAttivi
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chi.lavoro) || !email.includes('@')) return false;
   try {
     const { error } = await admin.from('preventivi_con_codice').update({ lavoro: chi.lavoro.toLowerCase(), agente_email: email }).eq('seller_id', idAttivita).eq('stato', 'aperto');
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 28/11/2026 — Quali servizi gli servono, scelti dall'agente insieme all'abbonamento (migrazione 999h): vanno sul
+ * preventivo aperto, e all'accettazione passano nell'ordine di SDG (lib/agenzia/ordine-sdg.ts), dove decidono quali
+ * lavori dell'AD partono. Senza la 999h le colonne non ci sono: si va avanti senza, e valgono tutti e quattro.
+ * Vero se è scritto.
+ */
+export async function segnaIServiziScelti(admin: SupabaseClient, idAttivita: string, b: ServiziScelti): Promise<boolean> {
+  if (!b.servizi.length) return false;
+  try {
+    const { error } = await admin.from('preventivi_con_codice').update({ servizi_scelti: b.servizi, nota_agente: b.nota }).eq('seller_id', idAttivita).eq('stato', 'aperto');
     return !error;
   } catch {
     return false;

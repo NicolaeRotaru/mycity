@@ -1,5 +1,6 @@
 'use client';
 
+import { useServizi } from '@/components/hooks/useServizi';
 import { useQuery } from '@tanstack/react-query';
 import { Heart } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -37,6 +38,9 @@ export default function FavoritesPage() {
   });
   const products = data?.prodotti ?? [];
   const nascosti = data ? data.salvati - products.length : 0;
+
+  // 27/11/2026 — Quali sono servizi (999g): niente «+» del carrello, c'è l'etichetta «Servizio».
+  const servizi = useServizi(products.map((p) => p.id));
 
   if (isLoading) return <LoadingState />;
 
@@ -122,6 +126,7 @@ export default function FavoritesPage() {
             images={Array.isArray(p.images) ? p.images : []}
             stock={p.stock ?? undefined}
             hasVariants={p.has_variants ?? undefined}
+            servizio={servizi.get(p.id) ?? null}
             createdAt={p.created_at}
             storeName={p.profiles?.store_name ?? undefined}
             sellerId={p.seller_id ?? undefined}

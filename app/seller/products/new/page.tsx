@@ -13,6 +13,7 @@ import BulkPhotoCreate from '@/components/seller/BulkPhotoCreate';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import { DOVE_SI_FA, MESSAGGIO_SERVIZI_NON_ANCORA_ATTIVI, mancanoLeColonneDelServizio, type DoveSiFa } from '@/lib/products/servizio';
 import { queryKeys } from '@/lib/queries/keys';
 import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { colonnaDelRecessoPresente } from '@/lib/ordini/recesso';
@@ -211,6 +212,10 @@ function NewProductInner() {
         variants: sourceVariants.map((v) => ({ ...v, id: undefined })),
         // «Escluso dal recesso» si copia: la copia di un pane non diventa recedibile.
         nonRecedibile: s.non_recedibile === true,
+        // 27/11/2026 — La copia di un servizio resta un servizio (999g; prima della 999g `tipo` non c'è).
+        tipo: s.tipo === 'servizio' ? 'servizio' : 'prodotto',
+        durataMinuti: typeof s.durata_minuti === 'number' ? s.durata_minuti : null,
+        doveServizio: (DOVE_SI_FA as readonly unknown[]).includes(s.dove_servizio) ? (s.dove_servizio as DoveSiFa) : null,
       };
     }
     return snapshotToInitial(loadAutosave<Snapshot>(AUTOSAVE_KEY) ?? {});
@@ -317,6 +322,11 @@ function NewProductInner() {
         clearAutosave(AUTOSAVE_KEY);
         toast.error(`Il prodotto è stato creato, ma le taglie no (${friendlyError(err.causa)}). Aggiungile qui dalla modifica.`);
         router.push(`/seller/products/${err.prodottoId}/edit`);
+        return;
+      }
+      // 27/11/2026 — Un servizio salvato prima della migrazione 999g: il database non ha ancora le colonne.
+      if (mancanoLeColonneDelServizio(err)) {
+        toast.error(MESSAGGIO_SERVIZI_NON_ANCORA_ATTIVI);
         return;
       }
       toast.error(friendlyError(err));

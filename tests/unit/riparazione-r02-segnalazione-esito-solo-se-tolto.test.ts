@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * segnalazione «accolta» («il contenuto è stato rimosso») se il contenuto è ancora online.
  */
 
-const db: { segnalazione: Record<string, unknown> | null; prodotto: Record<string, unknown> | null; negozio: Record<string, unknown> | null; cade: string | null } = {
-  segnalazione: null, prodotto: null, negozio: null, cade: null,
+const db: { segnalazione: Record<string, unknown> | null; prodotto: Record<string, unknown> | null; negozio: Record<string, unknown> | null; recensione?: Record<string, unknown> | null; cade: string | null } = {
+  segnalazione: null, prodotto: null, negozio: null, recensione: null, cade: null,
 };
 const comunicate: string[] = [];
 
@@ -32,7 +32,7 @@ vi.mock('@/lib/supabase/server', () => ({
       q.maybeSingle = async () => (db.cade === t
         ? { data: null, error: { message: 'rete caduta' } }
         : {
-            data: t === 'segnalazioni' ? db.segnalazione : t === 'products' ? db.prodotto : t === 'profiles' ? db.negozio : null,
+            data: t === 'segnalazioni' ? db.segnalazione : t === 'products' ? db.prodotto : t === 'profiles' ? db.negozio : t === 'reviews' ? (db.recensione ?? null) : null,
             error: null,
           });
       return q;
@@ -49,7 +49,7 @@ const chiama = () =>
   }));
 
 describe('R02-003 · l esito «rimosso» parte solo se il contenuto è davvero fuori', () => {
-  beforeEach(() => { comunicate.length = 0; db.prodotto = null; db.negozio = null; db.cade = null; });
+  beforeEach(() => { comunicate.length = 0; db.prodotto = null; db.negozio = null; db.recensione = null; db.cade = null; });
 
   it('prodotto accolto ma ancora in vetrina: 409, niente esito', async () => {
     db.segnalazione = { stato: 'accolta', tipo: 'prodotto', oggetto_id: 'p-1' };
@@ -72,9 +72,13 @@ describe('R02-003 · l esito «rimosso» parte solo se il contenuto è davvero f
     expect(comunicate).toEqual([]);
   });
 
-  it('recensione accolta: da qui non si toglie, 409', async () => {
+  // 27/11/2026 (R01-007) — Prima: «recensione accolta: da qui non si toglie, 409» per qualunque
+  // recensione. Ora il 409 resta solo finché la recensione è pubblicata (riparazione-r01-recensione-accolta).
+  it('recensione accolta ma ancora pubblicata: 409', async () => {
     db.segnalazione = { stato: 'accolta', tipo: 'recensione', oggetto_id: 'r-1' };
+    db.recensione = { id: 'r-1' };
     expect((await chiama()).status).toBe(409);
+    expect(comunicate).toEqual([]);
   });
 
   it('respinta: l esito parte senza controlli', async () => {

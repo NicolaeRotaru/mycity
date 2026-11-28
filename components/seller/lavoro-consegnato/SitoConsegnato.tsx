@@ -30,6 +30,9 @@ export default function SitoConsegnato({ sito, fascia = 'premium' }: { sito: Sit
         {!sito.indirizzo && (
           <p className="mt-3 text-sm text-ink-700">Il sito è pronto: appena è pubblicato lo vedi qui, dal vivo.</p>
         )}
+        {!online && sito.anteprima && (
+          <img src={sito.anteprima} alt={`La prima pagina del sito: ${sito.titolo}`} width={1280} height={800} loading="lazy" className="mt-3 block h-auto w-full rounded-xl border border-cream-300" />
+        )}
         {sito.codice && <p className="mt-3 text-sm text-ink-700">Il codice del sito: <LinkEsterno href={sito.codice}>{sito.codice}</LinkEsterno></p>}
       </section>
 
