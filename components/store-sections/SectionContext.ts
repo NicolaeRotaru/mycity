@@ -23,6 +23,8 @@ export type StoreContextRow = {
   stripe_charges_enabled?: boolean | null;
   stripe_payouts_enabled?: boolean | null;
   founded_year: number | null;
+  /** 28/11/2026 — Il giorno d'iscrizione: fa nascere la firma dell'armonia nascosta del negozio. */
+  created_at?: string | null;
 };
 
 export type SectionReview = {

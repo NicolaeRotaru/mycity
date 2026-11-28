@@ -1,5 +1,6 @@
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { giornoAPiacenza } from '@/lib/armonia/cielo';
 import {
   ABBONAMENTI,
   consigliataDallOfferta,
@@ -160,7 +161,8 @@ export async function leggiPreventivo(idAttivita: string, scelto?: Abbonamento, 
   });
   // L'armonia nascosta (28/11/2026): la firma del sito nasce dal giorno d'iscrizione, che non cambia mai.
   // `p.data` invece è «oggi»: con quello la bozza cambiava faccia da un giorno all'altro (collaudo del 28/11).
-  preventivo.nascitaAttivita = typeof p.created_at === 'string' ? p.created_at.slice(0, 10) : null;
+  // Il giorno a Piacenza, non quello in UTC: è lo stesso che usa la pagina del negozio (HeroSection).
+  preventivo.nascitaAttivita = typeof p.created_at === 'string' ? giornoAPiacenza(new Date(p.created_at)) : null;
   // L'offerta su misura (24/11/2026): dalla vetrina, dalla scheda e dalle analisi. Un guasto qui non
   // ferma il preventivo: senza offerta la pagina mostra quello che mostrava prima.
   try {

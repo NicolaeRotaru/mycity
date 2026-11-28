@@ -72,6 +72,12 @@ function appUrl() {
   return env.appUrl().replace(/\/$/, '');
 }
 
+/**
+ * ARMONIA NASCOSTA nelle email e nelle ricevute (Nicola, 28/11/2026: «sì» a «solo proporzioni e forme,
+ * mai nei testi»). La cornice usa gli spazi di Fibonacci (13, 21, 34) e una colonna di 610 px, numero di
+ * Fibonacci; i titoli stanno sulla scala aurea (26 px). Niente disegni SVG: Gmail e Outlook li tolgono.
+ * Skill «armonia» di ad-mycity.
+ */
 function shell(title: string, body: string, footer?: string): string {
   return `<!doctype html>
 <html lang="it">
@@ -81,16 +87,16 @@ function shell(title: string, body: string, footer?: string): string {
 <title>${escapeHtml(title)}</title>
 </head>
 <body style="margin:0;background:${COLORI.sfondo};font-family:${CARATTERE};color:${COLORI.testo}">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${COLORI.sfondo};padding:24px 0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${COLORI.sfondo};padding:21px 0">
   <tr><td align="center">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:${COLORI.foglio};border-radius:12px;overflow:hidden">
-      <tr><td style="padding:24px 32px;background:${COLORI.marchio};color:${COLORI.suFoglio}">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:610px;background:${COLORI.foglio};border-radius:13px;overflow:hidden">
+      <tr><td style="padding:21px 34px;background:${COLORI.marchio};color:${COLORI.suFoglio}">
         <div style="font-size:20px;font-weight:700;letter-spacing:-0.01em">${BRAND}</div>
       </td></tr>
-      <tr><td style="padding:32px">
+      <tr><td style="padding:34px">
         ${body}
       </td></tr>
-      <tr><td style="padding:24px 32px;background:${COLORI.piede};color:${COLORI.tenue};font-size:12px;line-height:1.5">
+      <tr><td style="padding:21px 34px;background:${COLORI.piede};color:${COLORI.tenue};font-size:13px;line-height:1.5">
         ${footer ?? `Hai ricevuto questa email perché hai un account su ${BRAND}. <br>
         <a href="${appUrl()}/profile/settings" style="color:${COLORI.marchio}">Gestisci preferenze</a> ·
         <a href="${appUrl()}/privacy" style="color:${COLORI.marchio}">Privacy</a> ·
@@ -103,7 +109,7 @@ function shell(title: string, body: string, footer?: string): string {
 }
 
 function btn(href: string, label: string): string {
-  return `<a href="${href}" style="display:inline-block;background:${COLORI.marchio};color:${COLORI.suFoglio};text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">${escapeHtml(label)}</a>`;
+  return `<a href="${href}" style="display:inline-block;background:${COLORI.marchio};color:${COLORI.suFoglio};text-decoration:none;padding:13px 21px;border-radius:8px;font-weight:600">${escapeHtml(label)}</a>`;
 }
 
 /**
@@ -166,7 +172,7 @@ export function orderConfirmedBuyerTemplate(args: {
   const riga = (etichetta: string, valore: string) =>
     `<tr><td style="padding:8px 0;color:${COLORI.tenue}">${etichetta}</td><td style="padding:8px 0;text-align:right">${escapeHtml(valore)}</td></tr>`;
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Ordine ricevuto</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">Ordine ricevuto</h1>
     <p style="margin:0 0 12px;line-height:1.6">${saluto(args.name)} abbiamo ricevuto il tuo ordine da <strong>${escapeHtml(args.storeName)}</strong>.</p>
     <table cellpadding="0" cellspacing="0" style="width:100%;margin:16px 0">
       <tr><td style="padding:8px 0;color:${COLORI.tenue}">Ordine</td><td style="padding:8px 0;text-align:right;font-family:monospace">${escapeHtml(numeroOrdine(args.orderId))}</td></tr>
@@ -254,7 +260,7 @@ export function newOrderSellerTemplate(args: {
   scadenza = conLaData(scadenza, nato);
   const fascia = args.deliverySlot?.trim() ? conLaData(args.deliverySlot.trim(), nato) : null;
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">🛒 Nuovo ordine</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">🛒 Nuovo ordine</h1>
     <p style="margin:0 0 12px;line-height:1.6">Hai ricevuto un nuovo ordine di ${args.itemsCount} articol${args.itemsCount === 1 ? 'o' : 'i'} per <strong>${formatPrice(args.total)}</strong>.</p>
     ${fascia ? `<p style="margin:0 0 12px;line-height:1.6">Consegna: <strong>${escapeHtml(fascia)}</strong></p>` : ''}
     <p style="margin:0 0 12px;line-height:1.6;color:${COLORI.attenzione};font-weight:600">${escapeHtml(scadenza)}</p>
@@ -309,7 +315,7 @@ export function veloceNonConfermataTemplate(args: { orderId: string; frase: stri
   // si ripetono (nel testo semplice restano, lì il titolo non c'è).
   const corpo = frase.startsWith(`${titolo}. `) ? frase.slice(titolo.length + 2) : frase;
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">${titolo}</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">${titolo}</h1>
     <p style="margin:0 0 12px;line-height:1.6">${escapeHtml(corpo)}</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Vedi il tuo ordine')}</p>
   `;
@@ -334,7 +340,7 @@ export function veloceNonConfermataTemplate(args: { orderId: string; frase: stri
 export function messaggioNuovoAlNegozioTemplate(args: { conversationId: string }) {
   const chatUrl = `${appUrl()}/messages/${encodeURIComponent(String(args.conversationId ?? ''))}`;
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Hai un messaggio nuovo da un cliente</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">Hai un messaggio nuovo da un cliente</h1>
     <p style="margin:0 0 12px;line-height:1.6">Un cliente ti ha scritto nella chat di MyCity. Rispondi da lì: il messaggio lo trovi aprendo la conversazione.</p>
     <p style="margin:0 0 12px;line-height:1.6">Se ti scrive ancora prima che tu abbia letto, non ti mandiamo altre email: le trovi tutte nella stessa chat.</p>
     <p style="margin:24px 0">${btn(chatUrl, 'Apri la chat')}</p>
@@ -388,7 +394,7 @@ export function orderReadyTemplate(args: {
   `;
 
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">📦 Il tuo ordine è pronto</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">📦 Il tuo ordine è pronto</h1>
     ${args.pickupInStore ? corpoRitiro : corpoConsegna}
     <p style="margin:24px 0">${btn(orderUrl, 'Vedi l’ordine')}</p>
   `;
@@ -406,7 +412,7 @@ export function orderReadyTemplate(args: {
 export function orderDeliveredTemplate(args: { orderId: string; name?: string | null; total: number }) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.buono}">✅ Ordine consegnato</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.buono}">✅ Ordine consegnato</h1>
     <p style="margin:0 0 12px;line-height:1.6">${saluto(args.name)} il tuo ordine è stato consegnato.</p>
     <p style="margin:0 0 12px;line-height:1.6">Grazie per aver scelto ${BRAND}. Lascia una recensione per aiutare altri acquirenti.</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Lascia recensione')}</p>
@@ -501,7 +507,7 @@ export function ordineAnnullatoTemplate(args: {
   const titolo = args.annullatoDalCliente ? 'Hai annullato il tuo ordine' : 'Il tuo ordine è stato annullato';
   const bottone = args.annullatoDalCliente ? 'Torna ai negozi' : 'Cerca in un altro negozio';
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">${titolo}</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">${titolo}</h1>
     ${p(`L'ordine <strong>${ordine}</strong>${negozio ? ` da <strong>${escapeHtml(negozio)}</strong>` : ''} è stato annullato e non verrà preparato né consegnato.`)}
     ${motivo ? `<p style="margin:0 0 12px;color:${COLORI.tenue}">Motivo: ${escapeHtml(motivo)}</p>` : ''}
     ${p(`<strong>${rigaSoldi}</strong>`)}
@@ -536,7 +542,7 @@ export function ordineAnnullatoAlNegozioTemplate(args: { orderId: string; frase:
   const ordine = numeroOrdine(args.orderId);
   const orderUrl = `${appUrl()}/seller/orders/${args.orderId}`;
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Ordine ${ordine} annullato</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">Ordine ${ordine} annullato</h1>
     <p style="margin:0 0 12px;line-height:1.6">${escapeHtml(args.frase)}</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Vedi l’ordine')}</p>
   `;
@@ -601,7 +607,7 @@ export function refundIssuedTemplate(args: {
       ? ` Ti abbiamo restituito anche ${creditoTornato} di credito MyCity che avevi usato su questo ordine: è già disponibile nel tuo profilo, alla voce «Gift card» (${creditoUrl}).`
       : '';
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">💶 Rimborso emesso</h1>
+      <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">💶 Rimborso emesso</h1>
       ${p(`Abbiamo emesso un rimborso di <strong>${importo}</strong> sul tuo ordine.`)}
       ${rigaMotivo}
       ${p('Il rimborso arriverà sulla carta che hai usato per pagare, di solito entro 5-10 giorni lavorativi: i tempi li decide la tua banca.')}
@@ -657,7 +663,7 @@ export function refundIssuedTemplate(args: {
     modo === 'credito' ? 'Rimborso in credito MyCity' : modo === 'bonifico' ? 'Rimborso con bonifico' : 'Rimborso in credito MyCity e con bonifico';
   const [bottoneUrl, bottone] = modo === 'credito' ? [creditoUrl, 'Vedi il tuo credito'] : [orderUrl, 'Vedi dettaglio'];
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">💶 ${titolo}</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">💶 ${titolo}</h1>
     ${righe[0]}
     ${rigaMotivo}
     ${righe.slice(1).join('\n    ')}
@@ -687,7 +693,7 @@ export function bonificoDaFareTemplate(args: { ordineId: string; bonificoCents: 
   const ordine = `#${args.ordineId.slice(0, 6).toUpperCase()}`;
   const cifra = formatPrice(args.bonificoCents / 100);
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">💶 Bonifico di rimborso da fare</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">💶 Bonifico di rimborso da fare</h1>
     <p style="margin:0 0 12px;line-height:1.6">${escapeHtml(args.testo)}</p>
   `;
   return {
@@ -728,7 +734,7 @@ export function giftCardRecipientTemplate(args: { code: string; amountEuro: numb
   const fromGrezzo = args.senderName?.trim() ? args.senderName.trim().replace(/[\r\n]+/g, ' ') : 'Qualcuno';
   const from = escapeHtml(fromGrezzo);
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">🎁 Hai ricevuto una gift card</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">🎁 Hai ricevuto una gift card</h1>
     <p style="margin:0 0 12px;line-height:1.6"><strong>${from}</strong> ti ha regalato una gift card MyCity da <strong>${formatPrice(args.amountEuro)}</strong>, spendibile nei negozi di Piacenza.</p>
     ${args.message?.trim() ? `<p style="margin:0 0 16px;padding:12px 16px;background:${COLORI.piede};border-radius:8px;font-style:italic;color:${COLORI.citazione}">«${escapeHtml(args.message.trim())}»</p>` : ''}
     <p style="margin:0 0 8px;color:${COLORI.tenue}">Il tuo codice</p>
@@ -756,7 +762,7 @@ export function giftCardBuyerTemplate(args: { code: string; amountEuro: number; 
   const toGrezzo = args.recipientName?.trim() ? args.recipientName.trim().replace(/[\r\n]+/g, ' ') : 'il destinatario';
   const to = escapeHtml(toGrezzo);
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Gift card acquistata ✓</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">Gift card acquistata ✓</h1>
     <p style="margin:0 0 12px;line-height:1.6">Grazie! La tua gift card da <strong>${formatPrice(args.amountEuro)}</strong> per <strong>${to}</strong> è pronta e gli abbiamo inviato il codice via email.</p>
     <p style="margin:0 0 8px;color:${COLORI.tenue}">Codice (in caso voglia condividerlo tu)</p>
     <p style="margin:0 0 20px;font-family:monospace;font-size:20px;font-weight:700;letter-spacing:2px;color:${COLORI.marchio}">${escapeHtml(args.code)}</p>
@@ -840,7 +846,7 @@ const TEMPLATE_CICLO_DI_VITA = {
     const nome = d.name?.trim();
     const saluto = nome ? `Ciao ${escapeHtml(nome)}, grazie` : 'Grazie';
     const body = `
-      <h1 style="margin:0 0 16px;font-size:24px;font-weight:700;color:${COLORI.titolo}">Benvenuto su ${BRAND}</h1>
+      <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">Benvenuto su ${BRAND}</h1>
       <p style="margin:0 0 16px;line-height:1.6">${saluto} per esserti iscritto. Il marketplace dei negozi di Piacenza ti aspetta.</p>
       <p style="margin:24px 0">${btn(appUrl(), 'Inizia a esplorare')}</p>
     `;
@@ -876,7 +882,7 @@ const TEMPLATE_CICLO_DI_VITA = {
       ? { riga: 'Paghi con la carta quando ordini, oppure in contanti alla consegna', inBreve: 'paghi con la carta o in contanti alla consegna' }
       : { riga: 'Paghi in contanti alla consegna: tieni pronto l’importo', inBreve: 'paghi in contanti alla consegna' };
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">3 cose da sapere</h1>
+      <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">3 cose da sapere</h1>
       <ul style="margin:0 0 16px;padding-left:20px;line-height:1.8">
         <li>${comePaghi.riga}</li>
         <li>${comeArriva.riga}</li>
@@ -903,7 +909,7 @@ const TEMPLATE_CICLO_DI_VITA = {
    */
   first_order_promo: (): EmailPronta => {
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Il tuo primo ordine ti aspetta</h1>
+      <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">Il tuo primo ordine ti aspetta</h1>
       <p style="margin:0 0 16px;line-height:1.6">Scegli un negozio di Piacenza e ordina quello che ti serve: paghi alla consegna.</p>
       <p style="margin:24px 0">${btn(`${appUrl()}/search`, 'Vai ai negozi')}</p>
     `;
@@ -916,7 +922,7 @@ const TEMPLATE_CICLO_DI_VITA = {
 
   reengagement_14d: (): EmailPronta => {
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Cosa succede in città</h1>
+      <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">Cosa succede in città</h1>
       <p style="margin:0 0 16px;line-height:1.6">Eventi e novità dai negozi di Piacenza.</p>
       <p style="margin:24px 0">${btn(`${appUrl()}/events`, 'Vedi gli eventi')}</p>
     `;
@@ -939,7 +945,7 @@ const TEMPLATE_CICLO_DI_VITA = {
    */
   winback_60d: (): EmailPronta => {
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Novità dai negozi di Piacenza</h1>
+      <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">Novità dai negozi di Piacenza</h1>
       <p style="margin:0 0 16px;line-height:1.6">Ecco cosa trovi oggi nei negozi di Piacenza su ${BRAND}.</p>
       <p style="margin:24px 0">${btn(`${appUrl()}/search`, 'Guarda i negozi')}</p>
     `;
@@ -1013,7 +1019,7 @@ const TEMPLATE_CICLO_DI_VITA = {
       .map((i) => `${i.quantity ?? 1}× ${(i.name ?? 'Prodotto').trim()}`)
       .join(', ');
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Il tuo carrello ti aspetta</h1>
+      <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">Il tuo carrello ti aspetta</h1>
       <p style="margin:0 0 16px;line-height:1.6">${saluto(d.name)}</p>
       <p style="margin:0 0 16px;line-height:1.6">Hai lasciato qualcosa nel carrello: è ancora lì.</p>
       ${righe ? `<ul style="margin:0 0 16px;padding-left:20px;line-height:1.8">${righe}</ul>` : ''}
@@ -1130,7 +1136,7 @@ export function codiceDelPreventivoTemplate(args: { negozio: string; codice: str
   const codice = escapeHtml(args.codice);
   const abbonamento = escapeHtml(args.abbonamento);
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Il tuo codice per ${negozio}</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">Il tuo codice per ${negozio}</h1>
     <p style="margin:0 0 12px;line-height:1.6">Stai confermando l'abbonamento ${abbonamento} ai servizi di MyCity. Scrivi questo codice nella pagina dove hai premuto «Confermo»:</p>
     <p style="margin:24px 0;font-size:32px;font-weight:800;letter-spacing:8px;color:${COLORI.titolo}">${codice}</p>
     <p style="margin:0 0 12px;line-height:1.6;font-size:13px">Il codice vale 10 minuti. Se non sei stato tu a chiederlo, ignora questa email: senza il codice non entra nessuno.</p>
@@ -1156,7 +1162,7 @@ export function accessoDopoIlPreventivoTemplate(args: { negozio: string; link: s
   // 27/11/2026 — Il giorno in cui SDG passa dal titolare, scelto nel link (lib/agenzia/visita-sdg.ts).
   const visita = args.visita ? escapeHtml(args.visita) : null;
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Benvenuto su MyCity, ${negozio}</h1>
+    <h1 style="margin:0 0 21px;font-size:26px;font-weight:700;color:${COLORI.titolo}">Benvenuto su MyCity, ${negozio}</h1>
     <p style="margin:0 0 12px;line-height:1.6">Hai accettato il preventivo dei servizi di MyCity, realizzati da SDG Agenzia, il partner di MyCity. Da qui entri nel tuo account: mentre controlliamo i dati del negozio vedi a che punto è; quando è approvato trovi la tua pagina, l'abbonamento e i dati del locale da controllare.</p>
     ${visita ? `<p style="margin:0 0 12px;line-height:1.6"><strong>Ci vediamo ${visita}.</strong> Il team creativo di SDG passa da te: scriviamo insieme il piano dei contenuti del primo mese, e il fotografo e il videomaker fanno subito le prime foto e i primi video. Se quel giorno non ti va più bene, rispondi a questa email e lo spostiamo.</p>` : ''}
     <p style="margin:0 0 12px;line-height:1.6">${PAGAMENTO_ONLINE_SERVIZI ? "Se non hai ancora pagato l'abbonamento, lo paghi dallo stesso link del preventivo che ti abbiamo mandato." : visita ? "L'abbonamento, per ora, si paga in contanti, di persona." : "L'abbonamento, per ora, si paga in contanti, di persona: ti contattiamo noi per fissare l'inizio."}</p>

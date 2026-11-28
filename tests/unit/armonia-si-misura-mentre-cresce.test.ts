@@ -29,7 +29,8 @@ describe('la misura dell\'armonia', () => {
     const m = misura();
     expect(m.visibili).toBeGreaterThan(100);
     expect(m.file_in_armonia).toEqual(expect.arrayContaining(['components/Footer.tsx', 'components/seller/AnteprimaServizio.tsx']));
-    expect(PIANO[0].file).toBe('app/store');
+    expect(PIANO[0].file).toBe('components/store-sections');
+    expect(m.file_in_armonia).toContain('components/store-sections/HeroSection.tsx');
     expect(PIANO[PIANO.length - 1].file).toBe('app/checkout');
   });
 });

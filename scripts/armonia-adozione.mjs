@@ -38,7 +38,7 @@ const SEGNI_ARMONIA = [
  * solo con proporzioni e spazi, perché lì si toccano i soldi.
  */
 export const PIANO = [
-  { file: 'app/store', perche: 'la pagina di ogni negozio, con la firma di quel negozio' },
+  { file: 'components/store-sections', perche: 'la pagina di ogni negozio, con la firma di quel negozio (la copertina è fatta dal 28/11)' },
   { file: 'app/product', perche: 'la scheda prodotto: foto in rapporto 3:2 o 4:3, titoli sulla scala aurea' },
   { file: 'app/page.tsx', perche: 'la home: spazi di Fibonacci e la trama di MyCity nei margini' },
   { file: 'components/ProductCard.tsx', perche: 'le schede prodotto: spazi e caratteri' },

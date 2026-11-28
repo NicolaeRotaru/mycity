@@ -22,11 +22,14 @@ type Props = {
   className?: string;
   /** Vero: la trama si vede solo nei margini, il centro (dove sta il testo) resta pulito. */
   margini?: boolean;
+  /** Una maschera CSS diversa, quando il testo non sta al centro (per esempio in basso nella copertina). */
+  maschera?: string;
 };
 
 const SOLO_MARGINI = 'radial-gradient(ellipse at center, transparent 38%, #000 82%)';
 
-export default function TramaNascosta({ firma, motivo, centro = 'rosa', opacita = 0.06, larghezza = 610, altezza = 377, className = '', margini = true }: Props) {
+export default function TramaNascosta({ firma, motivo, centro = 'rosa', opacita = 0.06, larghezza = 610, altezza = 377, className = '', margini = true, maschera }: Props) {
+  const mascheraUsata = maschera ?? (margini ? SOLO_MARGINI : undefined);
   const d = trama(motivo ?? firma.motivo, larghezza, altezza, 34, firma.seme);
   const [cx, cy] = puntoAureo(larghezza, altezza, firma.seme + 1);
   const m = Math.min(larghezza, altezza);
@@ -40,7 +43,7 @@ export default function TramaNascosta({ firma, motivo, centro = 'rosa', opacita 
       className={`armonia-trama armonia-respiro pointer-events-none absolute inset-0 h-full w-full ${className}`}
       style={{
         opacity: Math.min(Math.max(opacita, 0), 0.08),
-        ...(margini ? { maskImage: SOLO_MARGINI, WebkitMaskImage: SOLO_MARGINI } : {}),
+        ...(mascheraUsata ? { maskImage: mascheraUsata, WebkitMaskImage: mascheraUsata } : {}),
       }}
       data-armonia={motivo ?? firma.motivo}
     >

@@ -17,6 +17,16 @@ import { consegnaDellaVetrina, vetrinaChiedeLaVeloce } from '@/lib/promessa-cons
 import { useOraDiPiacenza, useVeloceDelNegozio } from '@/components/ui/DeliveryCutoff';
 import type { SectionConfig, SectionContext } from './SectionContext';
 import { ALTEZZA_COPERTINA } from './misure-vetrina';
+import { firmaDi, tokenCss } from '@/lib/armonia';
+import TramaNascosta from '@/components/armonia/TramaNascosta';
+
+/**
+ * ARMONIA NASCOSTA nella pagina del negozio (Nicola, 28/11/2026, primo passo del piano): ogni negozio ha la
+ * sua firma, dal nome e dal giorno d'iscrizione a Piacenza (la stessa della bozza del suo sito). Quando non
+ * c'è una foto di copertina, nel fondo colorato compare la trama della firma: nella parte alta, che sfuma
+ * prima del nome scritto in basso. Sopra una foto non si mette niente.
+ */
+const COPERTINA_SENZA_TESTO = 'linear-gradient(to bottom, #000 0%, #000 30%, transparent 62%)';
 
 const SOCIAL_ICON: Record<string, LucideIcon> = {
   instagram: Instagram,
@@ -51,6 +61,7 @@ function initials(name?: string | null): string {
 export default function HeroSection({ config, ctx }: { config: SectionConfig<'hero'>; ctx: SectionContext }) {
   const router = useRouter();
   const { store, customization: custom, accent } = ctx;
+  const firma = firmaDi({ nome: store.store_name ?? '', data: store.created_at ? new Date(store.created_at) : null });
   const media = (Array.isArray(store.store_media) ? store.store_media : []) as StoreMediaItem[];
   const street = streetFromAddress(store.store_address);
   const hours = (store.store_hours ?? {}) as StoreHours;
@@ -91,7 +102,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
   const category = badges.length > 0 ? badgeLabel(badges[0]) : null;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-cream-300 bg-white shadow-warm">
+    <div className="overflow-hidden rounded-2xl border border-cream-300 bg-white shadow-warm" style={tokenCss(firma)} data-armonia-numero={firma.numero}>
       {/* Striscia colore brand del negozio */}
       <div className="h-1.5" style={{ backgroundColor: accent }} aria-hidden />
 
@@ -115,7 +126,9 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
           />
         ) : (
           // Nessun media: gradiente on-brand scelto dal venditore (fallback grazioso).
-          <div className={`h-full w-full ${coverClassName(custom)}`} aria-hidden />
+          <div className={`relative h-full w-full overflow-hidden ${coverClassName(custom)}`} aria-hidden>
+            <TramaNascosta firma={firma} className="text-white" opacita={0.08} maschera={COPERTINA_SENZA_TESTO} />
+          </div>
         )}
 
         {/* Gradiente scuro in basso per leggibilità del nome/meta */}

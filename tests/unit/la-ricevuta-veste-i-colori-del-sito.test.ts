@@ -89,7 +89,8 @@ describe('i colori che escono dalla posta sono quelli del sito', () => {
     // cosa che si vede, e deve essere la stessa terracotta del pulsante che
     // porta i soldi (--color-cta = primary-700).
     for (const { nome, html } of MESSAGGI) {
-      const testata = html.match(/padding:24px 32px;background:(#[0-9A-Fa-f]{6})/);
+      // 28/11/2026 — la cornice è passata agli spazi di Fibonacci (armonia nascosta): la testata si trova da 21px 34px.
+      const testata = html.match(/padding:21px 34px;background:(#[0-9A-Fa-f]{6})/);
       expect(testata, `«${nome}» ha perso la fascia col marchio`).toBeTruthy();
       expect(testata![1].toUpperCase(), `«${nome}»`).toBe(colore('primary-700'));
     }

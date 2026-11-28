@@ -230,11 +230,13 @@ export type SchedaNegozio = {
   store_customization: unknown;
   store_site: unknown;
   founded_year: number | null;
+  /** 28/11/2026 — Il giorno d'iscrizione: fa nascere la firma dell'armonia nascosta del negozio. */
+  created_at?: string | null;
 };
 
 /** Le colonne della vetrina: elencate per nome, mai `*`. */
 export const COLONNE_SCHEDA_NEGOZIO =
-  'id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, stripe_charges_enabled, stripe_payouts_enabled, store_logo, store_hours, store_media, store_description, store_customization, store_site, founded_year';
+  'id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, stripe_charges_enabled, stripe_payouts_enabled, store_logo, store_hours, store_media, store_description, store_customization, store_site, founded_year, created_at';
 
 /**
  * Il negozio della vetrina.
