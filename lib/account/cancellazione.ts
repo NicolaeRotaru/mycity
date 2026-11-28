@@ -242,6 +242,17 @@ export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
     perche: 'nome, email e messaggio di chi ha riscattato il regalo e poi ha chiesto di sparire',
   },
   {
+    // 28/11/2026 (R08-012) — Il buono regalo non ancora pagato: la cassa scrive qui nome, email e
+    // messaggio del destinatario invece di mandarli a Stripe (migrazione onda2_A_1). La chiave è
+    // gift_card_in_attesa.buyer_id -> auth.users ON DELETE CASCADE: la riga se ne va con chi compra.
+    // Si ripulisce lo stesso prima, come le altre.
+    tabella: 'gift_card_in_attesa',
+    colonna: 'buyer_id',
+    azzera: { recipient_name: null, recipient_email: null, message: null },
+    sopravvive: false,
+    perche: 'nome, email e messaggio del destinatario di un buono regalo non ancora pagato',
+  },
+  {
     /*
      * 3/9/2026 — L'INDIRIZZO DI CASA RESTAVA SCRITTO DENTRO GLI ORDINI.
      *

@@ -983,6 +983,39 @@ export interface Database {
         };
         Relationships: [];
       };
+      gift_card_in_attesa: {
+        Row: {
+          id: string;
+          buyer_id: string;
+          chiave: string;
+          amount_cents: number;
+          recipient_name: string | null;
+          recipient_email: string | null;
+          message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          buyer_id: string;
+          chiave: string;
+          amount_cents: number;
+          recipient_name?: string | null;
+          recipient_email?: string | null;
+          message?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          buyer_id?: string;
+          chiave?: string;
+          amount_cents?: number;
+          recipient_name?: string | null;
+          recipient_email?: string | null;
+          message?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       gift_card_pending_voids: {
         Row: {
           stripe_payment_intent: string;
