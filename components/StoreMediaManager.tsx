@@ -10,6 +10,7 @@ import { friendlyError } from '@/lib/errors';
 import { sizedImage } from '@/lib/image-url';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { fileColTipoGiusto, mappaAccept, tipiScrittiPerUmani } from '@/lib/storage/casella-di-caricamento';
+import { acceptSenzaHeic, avvisoFotoHeic, tutteSenzaHeic } from '@/lib/immagini/heic-in-jpeg';
 import { useTranslations } from 'next-intl';
 
 interface Props {
@@ -72,7 +73,14 @@ const StoreMediaManager = ({ value, onChange, onUploadingChange }: Props) => {
         const next = [...value];
         let entrati = 0;
         let scartati = 0;
-        for (const grezzo of files) {
+        // Una foto HEIC salvata com'e' su Chrome e Android resta un riquadro rotto: qui diventa
+        // JPEG, o non parte (`lib/immagini/heic-in-jpeg.ts`).
+        const { pronte, rifiutate } = await tutteSenzaHeic(files);
+        if (rifiutate.length > 0) {
+          toast.error(avvisoFotoHeic(rifiutate.length));
+          scartati += rifiutate.length;
+        }
+        for (const grezzo of pronte) {
           const file = fileColTipoGiusto(grezzo);
           const isVideo = file.type.startsWith('video/');
           const isImage = file.type.startsWith('image/');
@@ -220,7 +228,8 @@ const StoreMediaManager = ({ value, onChange, onUploadingChange }: Props) => {
             isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
           } ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
         >
-          <input {...getInputProps({ 'aria-label': 'Carica le foto del negozio' })} />
+          {/* Senza HEIC nel campo l'iPhone, scegliendo dalla galleria, consegna gia' un JPEG. */}
+          <input {...getInputProps({ accept: acceptSenzaHeic(mappaAccept()), 'aria-label': 'Carica le foto del negozio' })} />
           <p className="text-sm text-ink-600">
             {uploading
               ? tStates('loading')

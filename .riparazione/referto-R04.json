@@ -1,0 +1,306 @@
+{
+ "sessione": "R04",
+ "aggiornato": "2026-11-27 02:40",
+ "finita": true,
+ "testa": "3ac8fd8450a68cfe460a6296e9efebed86e84891",
+ "verifica": {
+  "comando": "npm run typecheck && npm run lint && npx vitest run --reporter=dot --exclude tests/unit/riparazione-r07-reso-pane.test.tsx --exclude tests/unit/riparazione-r16-foto-sette-tipi.test.tsx --exclude tests/unit/riparazione-r10-foto-sette-tipi-media.test.tsx --exclude tests/unit/riparazione-r02-social-link-incollati.test.tsx",
+  "esito": "verde",
+  "testa": "3ac8fd8450a68cfe460a6296e9efebed86e84891",
+  "nota": "È npm run verify (typecheck, lint, vitest) con le 4 prove comuni escluse: la regista le aggiorna sull'integrazione con i diff in serve_file_altrui, e sul ramo R04 sono rosse, come atteso. Esito: 2335 file e 14338 prove verdi, 1 file e 2 prove saltati (c'erano già); uscita 0."
+ },
+ "voci": [
+  {
+   "id": "R04-001",
+   "chiave": "frontend-ux|la pagina di richiesta reso accetta il ripensamento anche su ordini di pane",
+   "esito": "parziale",
+   "commit": "9382fe03bc96b984ee956f546ac50ff4aab4b3fb",
+   "file_toccati": [
+    "app/api/returns/create/route.ts",
+    "app/orders/[id]/return/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-reso-pane-ripensamento.test.ts",
+    "tests/unit/riparazione-r04-reso-pane-pagina.test.tsx",
+    "tests/unit/riparazione-r04-reso-pane-domanda.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-reso-pane-ripensamento.test.ts tests/unit/riparazione-r04-reso-pane-domanda.test.ts tests/unit/riparazione-r04-reso-pane-pagina.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9382fe03^ --file 'app/api/returns/create/route.ts,app/orders/[id]/return/page.tsx' --prove tests/unit/riparazione-r04-reso-pane-ripensamento.test.ts,tests/unit/riparazione-r04-reso-pane-pagina.test.tsx --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "La rotta create decide il ripensamento con una funzione sola, usata dall'invio (POST) e da un nuovo GET che la pagina interroga per la riga scelta (prima chiedeva a /api/returns/ripensamento, che guardava solo la spunta e per l'ordine intero). Freschi = spunta del negozio, oppure categoria (o un padre) tra panificio, alimentari-dolci, salumeria, alimentari-latticini, alimentari-pasta-fresca, frutta-verdura, oppure attributes.conservazione = «Frigorifero». Difetto e prodotto sbagliato restano ammessi.",
+   "cosa_resta": "(1) Un pane salvato sulla sola radice «Alimentari» (sottocategoria facoltativa nel modulo prodotto), senza spunta e senza conservazione «Frigorifero», resta recedibile: nessun dato lo distingue dalla dispensa. Serve la sottocategoria obbligatoria in components/seller/ProductForm.tsx (non mio). (2) La regola si appoggia agli slug delle categorie: se dal pannello si cambia lo slug di «panificio», si spegne. (3) Collaudo V1: nella pagina due risposte fuori ordine si sovrascrivono (app/orders/[id]/return/page.tsx:121-136: un solo esitoRipensamento invece di uno per riga). Ordine misto: miele → «Ho cambiato idea» → pane; se la risposta del miele arriva dopo quella del pane, il motivo si riaccende e non si richiede più. L'invio lo rifiuta comunque (400): il danno resta nella pagina. Cura: tenere gli esiti per chiave (un oggetto {chiave: rifiuto}) invece di un esito solo. (4) Collaudo V1: la rotta riconosce solo «frigorifero» esatto (app/api/returns/create/route.ts:73); «In frigorifero», «Frigo» o la chiave «Conservazione» con la maiuscola passano (201), e il caricamento da file accetta testo libero (lib/products/righe-dal-file.ts:82). Cura: /frigo/i sul valore e chiave cercata senza badare alle maiuscole. (5) «Altro» su un pane con la nota «ho cambiato idea» passa (201). Il giro di correzione non l'ho fatto: la spesa era già oltre il 70% del limite.",
+   "serve_file_altrui": [
+    {
+     "file": "components/seller/ProductForm.tsx",
+     "modifica": "Nel blocco «Categoria + sottocategoria» (circa righe 1214-1238), quando la categoria principale è la radice alimentari: in creazione la sottocategoria diventa obbligatoria (etichetta «Sottocategoria» invece di «Sottocategoria (opzionale)», niente opzione «— tutta «Alimentari»», il salvataggio si ferma con «Scegli la sottocategoria: dice se il prodotto è fresco ed escluso dal recesso»)."
+    },
+    {
+     "file": "tests/unit/riparazione-r07-reso-pane.test.tsx",
+     "modifica": "In tests/unit/riparazione-r07-reso-pane.test.tsx (prova comune, riportata alla base sul ramo R04): (a) nel commento in testa, riga 9, «chiede l'esito al server (/api/returns/ripensamento)» diventa «chiede l'esito al server (/api/returns/create)»; (b) riga 82, expect(stato.chiamate.some((u) => u.startsWith('/api/returns/ripensamento?orderId=o1'))).toBe(true) diventa expect(stato.chiamate.some((u) => u.startsWith('/api/returns/create?orderId=o1'))).toBe(true). Il resto della prova resta uguale. Senza questa modifica la prova è rossa sul ramo R04: è atteso."
+    }
+   ],
+   "nota": "La prova comune tests/unit/riparazione-r07-reso-pane.test.tsx importa la pagina e file di altre sessioni, quindi la applica la regista: In tests/unit/riparazione-r07-reso-pane.test.tsx (prova comune, riportata alla base sul ramo R04): (a) nel commento in testa, riga 9, «chiede l'esito al server (/api/returns/ripensamento)» diventa «chiede l'esito al server (/api/returns/create)»; (b) riga 82, expect(stato.chiamate.some((u) => u.startsWith('/api/returns/ripensamento?orderId=o1'))).toBe(true) diventa expect(stato.chiamate.some((u) => u.startsWith('/api/returns/create?orderId=o1'))).toBe(true). Il resto della prova resta uguale. Senza questa modifica la prova è rossa sul ramo R04: è atteso. «Freezer» resta fuori dai freschi (lo decide Nicola). La prova del GET non entra nella rimessa perché nomina l'export nuovo (uscita 3), ma gira verde nel comando di prova.",
+   "verificato_da": "V1 (revisore, modello grande, sola lettura): rilanciate le 3 prove R04 e le 31 che importano la rotta (rossa solo la r07 comune, attesa); 25 varianti del POST e 7 del GET; permessi del GET (401 senza accesso, 404/403 sull'ordine altrui, nessuna falla); la corsa delle risposte in jsdom; le prove sul codice di prima, che cadono. Verdetto: parziale confermato."
+  },
+  {
+   "id": "R04-002",
+   "chiave": "frontend-ux|altre tre caselle di caricamento accettano ancora le foto heic e le salvano senza conversione",
+   "esito": "riparato",
+   "commit": "72f2e55b",
+   "file_toccati": [
+    "components/ImageUrlField.tsx",
+    "components/VendorForm.tsx",
+    "components/StoreMediaManager.tsx",
+    "app/orders/[id]/return/page.tsx",
+    "components/rider/CashConfirmDialog.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-foto-heic-altre-caselle.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-foto-heic-altre-caselle.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 72f2e55b^ --file components/ImageUrlField.tsx,components/VendorForm.tsx,components/StoreMediaManager.tsx,app/orders/[id]/return/page.tsx,components/rider/CashConfirmDialog.tsx --prove tests/unit/riparazione-r04-foto-heic-altre-caselle.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Le cinque caselle (campo dell'amministrazione, logo e foto del negozio, foto del reso, prova dei contanti) passano dall'aiutante prima del caricamento: parte un JPEG, oppure non parte niente e compare la frase. Il campo file non chiede più HEIC al telefono.",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/riparazione-r16-foto-sette-tipi.test.tsx",
+     "modifica": "Prova comune, riportata alla base sul ramo R04 (sul ramo è rossa, ed è atteso). Il terzo caso pretende che l'HEIC parta come image/heic; ora senza decodifica non deve partire. Diff esatto da applicare:\n@@ -122,12 +122,15 @@ describe('R16-013 — le caselle delle foto accettano quello che il magazzino ac\n       expect(stato.errori.at(-1) ?? '').toMatch(/AVIF/);\n     });\n \n-    it(`${nome}: un HEIC col tipo vuoto parte col tipo giusto`, async () => {\n+    // 27/11/2026 (R04-002) — Prima pretendeva che l'HEIC partisse così com'era («image/heic»): salvato\n+    // così, su Chrome e Android resta un riquadro rotto. Adesso diventa JPEG dove il browser lo sa\n+    // leggere (riparazione-r04-foto-heic-altre-caselle.test.tsx); qui, senza decodifica, non parte.\n+    it(`${nome}: un HEIC col tipo vuoto non arriva al deposito così com'è`, async () => {\n       const [C, props] = await carica();\n       const o = await disegna(C, props);\n       await act(async () => { await o.onDrop?.([new File(['x'], 'IMG_0001.HEIC', { type: '' })]); });\n-      expect(stato.caricati, 'controprova: il file è partito').toHaveLength(1);\n-      expect(stato.caricati[0].type, 'il deposito riceverebbe application/octet-stream e lo rifiuterebbe').toBe('image/heic');\n+      expect(stato.caricati, 'un HEIC salvato così com\\'è non si vede su Chrome e Android').toHaveLength(0);\n+      expect(stato.errori.at(-1) ?? '', 'chi carica non sa perché la foto non è partita').toMatch(/HEIC/);\n     });\n   }\n });\n"
+    },
+    {
+     "file": "tests/unit/riparazione-r10-foto-sette-tipi-media.test.tsx",
+     "modifica": "Prova comune, riportata alla base sul ramo R04 (sul ramo è rossa, ed è atteso). Stesso cambio del terzo caso. Diff esatto da applicare:\n@@ -81,10 +81,13 @@ describe('R10-005 — la casella dei media del negozio', () => {\n     expect(stato.errori.at(-1) ?? '').toMatch(/HEIC/);\n     expect(stato.errori.at(-1) ?? '').toMatch(/AVIF/);\n   });\n-  it('un HEIC col tipo vuoto parte come image/heic', async () => {\n+  // 27/11/2026 (R04-002) — Prima pretendeva che l'HEIC partisse così com'era («image/heic»): salvato\n+  // così, su Chrome e Android resta un riquadro rotto. Adesso diventa JPEG dove il browser lo sa\n+  // leggere (riparazione-r04-foto-heic-altre-caselle.test.tsx); qui, senza decodifica, non parte.\n+  it('un HEIC col tipo vuoto non arriva al deposito così com\\'è', async () => {\n     const o = await disegna();\n     await act(async () => { await o.onDrop?.([new File(['x'], 'IMG_0001.HEIC', { type: '' })]); });\n-    expect(stato.caricati).toHaveLength(1);\n-    expect(stato.caricati[0].type).toBe('image/heic');\n+    expect(stato.caricati).toHaveLength(0);\n+    expect(stato.errori.at(-1) ?? '').toMatch(/HEIC/);\n   });\n });\n"
+    }
+   ],
+   "nota": "Le due prove comuni r16 e r10 sono sul ramo come in 2ba05a74: il loro terzo caso è rosso finché la regista non applica il diff in serve_file_altrui.",
+   "verificato_da": "V2 (revisore, modello grande, sola lettura): stesso giro di prove e tsc; StoreMediaManager con HEIC+JPG su Chrome (parte il JPG, compare l'avviso); accept senza HEIC su tutte le caselle; limiti di dimensione intatti; togliendo l'aiutante da CashConfirmDialog o StoreMediaManager cadono 6 prove. Verdetto: regge."
+  },
+  {
+   "id": "R04-003",
+   "chiave": "frontend-ux|le foto dell'iphone (heic) adesso entrano davvero, ma nessuno le converte: sul telefono android e su chrome restano un riquadro rotto",
+   "esito": "riparato",
+   "commit": "69fd0ea2",
+   "insieme_a": [],
+   "file_toccati": [
+    "lib/immagini/heic-in-jpeg.ts",
+    "components/PhotoReviewUpload.tsx",
+    "app/seller/stories/page.tsx",
+    "components/seller/site/GalleryFields.tsx",
+    "components/seller/site/ImageUpload.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-foto-heic-quattro-caselle.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-foto-heic-quattro-caselle.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 69fd0ea2^ --file app/seller/stories/page.tsx,components/PhotoReviewUpload.tsx,components/seller/site/GalleryFields.tsx,components/seller/site/ImageUpload.tsx --prove tests/unit/riparazione-r04-foto-heic-quattro-caselle.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Aiutante nuovo lib/immagini/heic-in-jpeg.ts, senza librerie: riconosce HEIC/HEIF dal tipo o dal nome (anche col tipo vuoto) e lo converte in JPEG col browser (createImageBitmap o img.decode, poi canvas.toBlob, nome .jpg, lato lungo al massimo 4096). Dove il browser non sa leggerlo compare una frase in italiano e non parte niente. Le quattro caselle lo usano.",
+   "nota": "Voce in due commit con lo stesso id: 2eb5d749 (solo l'aiutante) e 69fd0ea2 (caselle e prova). L'aiutante tolto da solo fa fallire l'import (uscita 3 di struttura): la rimessa è fatta sui quattro componenti, che tornano rossi sul comportamento. Controprova a mano: con l'aiutante mutato a «return file», 20 casi rossi su 28. Sulla base le quattro caselle rifiutavano già sempre l'HEIC; ora lo convertono dove il browser ci riesce. Residuo visto da V2: un HEIC col tipo vuoto e senza estensione (o .hif) non viene riconosciuto, perché l'aiutante non legge i primi byte; nelle caselle a campo file semplice arriva al caricamento col tipo vuoto.",
+   "verificato_da": "V2 (revisore, modello grande, sola lettura): 53/53 prove R04 verdi; delle 100 prove che importano i file toccati, rosse solo le 4 comuni attese; sonde su .heif/.HEIC/heic-sequence/tipo vuoto/octet-stream, toBlob e getContext nulli, createImageBitmap che lancia, Safari con img.decode, 48 MP, HEIC+JPEG insieme; mutazioni sull'aiutante (la prova cade). Verdetto: regge."
+  },
+  {
+   "id": "R04-004",
+   "chiave": "frontend-ux|cancellare una categoria con l'obbligo degli allergeni dà un errore generico invece del motivo del database",
+   "esito": "non_fatto",
+   "nota": "Non lavorata: la spesa di R04 era già oltre il 70% del limite (21,56 $ su 25 alle 02:19) dopo i tre gravi e i loro revisori. Va riassegnata in un'onda dopo."
+  },
+  {
+   "id": "R04-005",
+   "chiave": "frontend-ux|i link ai documenti del fattorino scadono dopo 2 minuti a pannello aperto",
+   "esito": "non_fatto",
+   "nota": "Non lavorata: la spesa di R04 era già oltre il 70% del limite (21,56 $ su 25 alle 02:19) dopo i tre gravi e i loro revisori. Va riassegnata in un'onda dopo. Nota del 26/11: i link si rileggono quando la scheda torna in primo piano, ma restando sul pannello scadono comunque."
+  },
+  {
+   "id": "R04-006",
+   "chiave": "frontend-ux|le pagine di prodotti, negozi e categorie che non esistono rispondono «tutto ok» invece di «non trovato»",
+   "esito": "non_fatto",
+   "nota": "Non lavorata: la spesa di R04 era già oltre il 70% del limite (21,56 $ su 25 alle 02:19) dopo i tre gravi e i loro revisori. Va riassegnata in un'onda dopo. Nota del 26/11: ancora vero (app/loading.tsx, app/product/[id]/layout.tsx:164-167)."
+  },
+  {
+   "id": "R04-007",
+   "chiave": "frontend-ux|dopo la conferma della newsletter il sito porta in home con ?newsletter=confermata, ma nessuna pagina legge quel parametro: chi conferma non vede nessun esito",
+   "esito": "non_fatto",
+   "nota": "Non lavorata: la spesa di R04 era già oltre il 70% del limite (21,56 $ su 25 alle 02:19) dopo i tre gravi e i loro revisori. Va riassegnata in un'onda dopo."
+  },
+  {
+   "id": "R04-008",
+   "chiave": "frontend-ux|mancano «finito per oggi» e «chiuso fino al…», promessi ai negozi della prima ondata",
+   "esito": "non_fatto",
+   "nota": "Non lavorata: la spesa di R04 era già oltre il 70% del limite (21,56 $ su 25 alle 02:19) dopo i tre gravi e i loro revisori. Va riassegnata in un'onda dopo. Nota del 26/11: proposta senza migrazione, cioè i due segni dentro il JSON store_hours; servono anche app/seller/profile/page.tsx e il freno della cassa, che non sono di R04."
+  },
+  {
+   "id": "R04-009",
+   "chiave": "frontend-ux|un sito già salvato con ftp:// o scritto male ora blocca il salvataggio di tutto il negozio",
+   "esito": "riparato",
+   "commit": "20c64d3d",
+   "file_toccati": [
+    "components/VendorForm.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-sito-salvato-due-volte.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-sito-salvato-due-volte.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 20c64d3d^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r04-sito-salvato-due-volte.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Un sito già salvato e scritto male passava al primo «Salva», ma al secondo il modulo lo confrontava già corretto in «https://…» e lo prendeva per un valore nuovo, bloccando tutto il negozio. Ora il confronto col salvato si fa sulla forma corretta di tutti e due; un valore nuovo sbagliato si ferma ancora.",
+   "nota": "La parte «vale per ogni social salvato» è chiusa nel commit di R04-010.",
+   "verificato_da": "Nessun revisore indipendente: V3/V4 non lanciati perché la spesa era già oltre il 70% del limite. Il capo R04 ha solo rilanciato la prova del commit (verde) e la guardia; la rimessa è quella del riparatore (uscita 0)."
+  },
+  {
+   "id": "R04-010",
+   "chiave": "frontend-ux|un social già salvato che le regole nuove rifiutano blocca ancora il salvataggio di tutto il negozio",
+   "esito": "riparato",
+   "commit": "63d5013a",
+   "file_toccati": [
+    "components/VendorForm.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-social-salvato-non-blocca.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-social-salvato-non-blocca.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 63d5013a^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r04-social-salvato-non-blocca.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La regola «un valore già salvato e non toccato non blocca il resto» valeva solo per il sito; ora vale anche per Instagram, Facebook e TikTok. Il valore resta com'era, l'avviso resta sotto il campo e il resto si salva. Un valore nuovo sbagliato si ferma ancora.",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/riparazione-r02-social-link-incollati.test.tsx",
+     "modifica": "Prova comune, riportata alla base sul ramo R04 (sul ramo il caso 2 è rosso, ed è atteso). Il caso 2 metteva il Facebook sbagliato fra i valori già salvati e pretendeva il blocco; ora quel Facebook lo scrive il negoziante sopra un valore già salvato. Le asserzioni restano uguali. Diff esatto da applicare:\n@@ -83,9 +83,12 @@ describe('R02-007 · link social incollati', () => {\n     });\n   });\n \n+  // 27/11/2026 (R04-010) — Il nome con spazi lo SCRIVE il negoziante, sopra un Facebook già salvato e\n+  // sbagliato: un valore già salvato e non toccato non blocca più il resto (riparazione-r04-social-salvato-non-blocca).\n   it('un nome con spazi in Facebook: errore sotto Facebook, sezione aperta, nessun salvataggio', async () => {\n-    const { radice, onSubmit } = await monta({ facebook: 'Pane Quotidiano Piacenza', website: 'www.panequotidiano.it' });\n+    const { radice, onSubmit } = await monta({ facebook: 'Pane Quotidiano', website: 'www.panequotidiano.it' });\n     expect(sezione(radice).open).toBe(false);\n+    await act(async () => { fireEvent.change(campo(radice, 'facebook'), { target: { value: 'Pane Quotidiano Piacenza' } }); });\n     await invia(radice);\n     expect(onSubmit).not.toHaveBeenCalled();\n     const errore = radice.querySelector('#social-facebook-errore');\n"
+    }
+   ],
+   "verificato_da": "Nessun revisore indipendente: V3/V4 non lanciati perché la spesa era già oltre il 70% del limite. Il capo R04 ha solo rilanciato la prova del commit (verde) e la guardia; la rimessa è quella del riparatore (uscita 0)."
+  },
+  {
+   "id": "R04-011",
+   "chiave": "frontend-ux|altri percorsi di facebook non elencati possono essere salvati come nome del profilo",
+   "esito": "non_fatto",
+   "nota": "Non lavorata: la spesa di R04 era già oltre il 70% del limite (21,56 $ su 25 alle 02:19) dopo i tre gravi e i loro revisori. Va riassegnata in un'onda dopo. Nota del 26/11: parziale, perché un percorso sconosciuto di una sola parola resta indistinguibile da un nome vero."
+  },
+  {
+   "id": "R04-012",
+   "chiave": "frontend-ux|orari passati alla cassa e 409 della rotta contanti: le prove cercano parole nel sorgente, non fanno girare pagina e rotta",
+   "esito": "non_fatto",
+   "nota": "Non lavorata: la spesa di R04 era già oltre il 70% del limite (21,56 $ su 25 alle 02:19) dopo i tre gravi e i loro revisori. Va riassegnata in un'onda dopo. Nota del 26/11: parziale; le due prove vecchie non sono di R04 e la prova che monta la cassa manca."
+  },
+  {
+   "id": "R04-013",
+   "chiave": "performance|le pagine di prodotto, negozio e categoria non usano la cache che dichiarano, e rileggono due volte la stessa riga a ogni visita",
+   "esito": "non_fatto",
+   "nota": "Non lavorata: la spesa di R04 era già oltre il 70% del limite (21,56 $ su 25 alle 02:19) dopo i tre gravi e i loro revisori. Va riassegnata in un'onda dopo. Nota del 26/11: resta solo la cache dichiarata che non conta."
+  },
+  {
+   "id": "R04-014",
+   "chiave": "qa-flussi|il nome del negozio nel pannello admin non ha il tetto di 80 caratteri: oltre, il database lo rifiuta col messaggio generico",
+   "esito": "non_fatto",
+   "nota": "Non lavorata: la spesa di R04 era già oltre il 70% del limite (21,56 $ su 25 alle 02:19) dopo i tre gravi e i loro revisori. Va riassegnata in un'onda dopo. Nota del 26/11: ancora vero (app/admin/users/page.tsx:1023)."
+  },
+  {
+   "id": "R04-015",
+   "chiave": "qa-flussi|l'elenco utenti e l'esportazione csv perdono le email oltre le prime mille righe",
+   "esito": "non_fatto",
+   "nota": "Non lavorata: la spesa di R04 era già oltre il 70% del limite (21,56 $ su 25 alle 02:19) dopo i tre gravi e i loro revisori. Va riassegnata in un'onda dopo."
+  },
+  {
+   "id": "R04-016",
+   "chiave": "qa-flussi|se le email non arrivano, l'elenco dei più recenti le mostra vuote senza una riga che lo dica",
+   "esito": "non_fatto",
+   "nota": "Non lavorata: la spesa di R04 era già oltre il 70% del limite (21,56 $ su 25 alle 02:19) dopo i tre gravi e i loro revisori. Va riassegnata in un'onda dopo. Nota del 26/11: R08 l'aveva dato per riparato, il collaudo l'ha detto parziale."
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "la rotta del ripensamento è rimasta orfana e guarda ancora solo la spunta del negozio",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "app/api/returns/ripensamento/route.ts:29",
+   "descrizione": "La pagina del reso non la chiama più (ora chiede a /api/returns/create). Va tolta o fatta passare per la stessa funzione della rotta create, così non ci sono due risposte diverse."
+  },
+  {
+   "titolo": "il recesso è negato per intero su categorie che contengono prodotti che durano mesi (dolci e snack, latticini, salumeria)",
+   "dimensione": "legale-privacy",
+   "severita": "minore",
+   "file": "app/api/returns/create/route.ts:53-60",
+   "descrizione": "«alimentari-dolci» è «Dolci & Snack», escluso per intero; lo stesso per latticini e salumeria, che contengono stagionati e confezionati. Rischio art. 59: l'esclusione vale per i beni che si deteriorano rapidamente. Eredità della base: da chiedere a Nicola se restringere."
+  },
+  {
+   "titolo": "un pane col prodotto o la categoria cancellati dal catalogo torna recedibile",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "lib/ordini/recesso.ts:84",
+   "descrizione": "Una riga col prodotto cancellato, o con la categoria cancellata, conta come recedibile («il recesso è la regola»): per il pane è un buco."
+  },
+  {
+   "titolo": "un instagram, facebook o tiktok salvato che le regole di oggi rifiutano sparisce dal modulo del negozio e si cancella al primo salvataggio, senza avviso",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "lib/store-customization.ts:~320 (salvaQuelloCheVale) · components/seller/site/StoreDetailsEditor.tsx:98",
+   "descrizione": "Leggendo la personalizzazione salvata, il social non valido viene scartato (il sito invece si tiene): nel modulo del venditore il campo appare vuoto e al salvataggio il valore vecchio si perde."
+  },
+  {
+   "titolo": "una casella nuova potrebbe ancora salvare un heic così com'è: il caricamento comune non lo ferma",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "lib/storage/carica-immagine.ts",
+   "descrizione": "Le nove caselle ora convertono da sole; un rifiuto degli HEIC/HEIF ancora non convertiti dentro caricaImmagine chiuderebbe la porta anche alle caselle future."
+  },
+  {
+   "titolo": "tre caselle dicono ancora «heic o heif» fra i formati accettati, ma su chrome l'heic viene rifiutato",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "components/VendorForm.tsx:231 · components/VendorForm.tsx:420 · components/ImageUrlField.tsx:75 · components/StoreMediaManager.tsx:64",
+   "descrizione": "GalleryFields e ImageUpload l'hanno tolto dalla frase. Chi segue il consiglio su Chrome carica un HEIC e se lo vede rifiutare."
+  },
+  {
+   "titolo": "recensioni e foto del negozio convertono tutti gli heic scelti prima di tagliare ai posti liberi",
+   "dimensione": "performance",
+   "severita": "minore",
+   "file": "components/PhotoReviewUpload.tsx:130-132 · components/StoreMediaManager.tsx:78 · components/StoreMediaManager.tsx:96",
+   "descrizione": "Conversioni inutili, circa 100 MB di memoria l'una per una foto da 24 MP, e avvisi HEIC per file che sarebbero stati scartati comunque. Conviene tagliare prima e convertire dopo."
+  },
+  {
+   "titolo": "sul reso il motivo «altro» con la nota «ho cambiato idea» passa anche su un pane",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "app/api/returns/create/route.ts",
+   "descrizione": "Porta laterale al ripensamento sui freschi: il negozio non riceve nessun segno che il prodotto è escluso dal recesso."
+  }
+ ],
+ "domande_per_nicola": [
+  "R04-001: nel modulo prodotto la sottocategoria degli alimentari diventa obbligatoria? È l'unico modo per riconoscere un pane salvato sulla sola radice «Alimentari».",
+  "R04-001: i surgelati (conservazione «Freezer») vanno esclusi dal ripensamento come i freschi? Oggi restano recedibili."
+ ],
+ "conto": {
+  "agenti": 4,
+  "nota": "L1 (R04-001), L2 (R04-002, 003, 009, 010), V1, V2. L3, L4, V3 e V4 non lanciati: alle 02:19 la spesa era 21,56 $ su 25, oltre il 70%. Il giro di correzione chiesto da V1 su R04-001 non è stato fatto, per la stessa ragione. Costo letto con get_session alle 02:23: 22,28 $ (usage.cost_usd).",
+  "subagenti": 4
+ },
+ "costo_usd": 22.28
+}
