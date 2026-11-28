@@ -32,6 +32,7 @@ export function finto(tabelle: Record<string, Riga[]>, opzioni: { prima124?: boo
     const filtri: Array<(r: Riga) => boolean> = [];
     let valori: Riga | null = null;
     let lim = Infinity;
+    let da = 0;
     let unico = false;
     let fuoriSchema: typeof colonnaMancante | typeof colonnaFuoriCache | null = null;
     const q: Record<string, unknown> = {};
@@ -59,6 +60,8 @@ export function finto(tabelle: Record<string, Riga[]>, opzioni: { prima124?: boo
         return q;
       },
       limit: (n: number) => ((lim = n), q),
+      // Onda 2 (R06-006) — Le letture a pagine: da `a` a `b` compresi, come PostgREST.
+      range: (a: number, b: number) => ((da = a), (lim = b - a + 1), q),
       maybeSingle: () => ((unico = true), q),
       single: () => ((unico = true), q),
       then: (ok: (x: unknown) => unknown, ko: (e: unknown) => unknown) => {
@@ -66,7 +69,7 @@ export function finto(tabelle: Record<string, Riga[]>, opzioni: { prima124?: boo
         if (fuoriSchema) return Promise.resolve({ data: null, error: fuoriSchema }).then(ok, ko);
         const prese = righe.filter((r) => filtri.every((f) => f(r)));
         if (valori) for (const r of prese) Object.assign(r, valori);
-        const data = prese.slice(0, lim).map((r) => ({ ...r }));
+        const data = prese.slice(da, da + lim).map((r) => ({ ...r }));
         return Promise.resolve({ data: unico ? (data[0] ?? null) : data, error: null }).then(ok, ko);
       },
     });

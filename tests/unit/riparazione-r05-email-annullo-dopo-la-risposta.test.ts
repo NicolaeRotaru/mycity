@@ -39,15 +39,20 @@ beforeEach(() => {
 
 describe('R05-005 · l email dell annullo parte dopo la risposta', () => {
   it('la richiesta risponde senza aspettare l invio (che qui non finisce mai)', async () => {
-    sendEmail.mockImplementation(() => new Promise(() => undefined));
+    // Onda 2 (R06-012) — Le email dopo la risposta stanno in fila (lib/api/dopo-la-risposta.ts): l'invio
+    // appeso si sblocca a fine prova, o la fila terrebbe fermo il lavoro della prova dopo per 10 s.
+    let sblocca: () => void = () => undefined;
+    sendEmail.mockImplementation(() => new Promise((r) => { sblocca = () => r({ ok: true }); }));
     const esito = await fraPoco(annulla());
     expect(esito).not.toBe(ASPETTA);
     expect(esito).toMatchObject({ ok: true });
     expect(db.tabelle.orders[0].delivery_status).toBe('CANCELED');
     // L'email parte dopo la risposta.
     expect(dopo.length).toBe(1);
-    void dopo[0]();
+    const lavoro = dopo[0]() as Promise<unknown>;
     await vi.waitFor(() => expect(sendEmail).toHaveBeenCalledTimes(1));
+    sblocca();
+    await lavoro;
   });
 
   it('un invio fallito lascia agli amministratori un avviso da riprovare, non solo il registro', async () => {

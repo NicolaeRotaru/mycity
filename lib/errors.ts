@@ -250,6 +250,12 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
       trackErrorShown(e.code, e.message ?? '', context?.page);
       return 'Il nome del negozio è troppo lungo: al massimo 80 caratteri. Accorcialo e riprova.';
     }
+    // Onda 2 (R06-002) — La guardia della posizione del negozio nel database (trigger
+    // posizione_negozio_in_area) ha la frase del selettore (FRASE_NEGOZIO_FUORI_AREA), non il 23514 generico.
+    if (e.code === '23514' && /posizione del negozio/i.test(`${e.message ?? ''} ${e.details ?? ''}`)) {
+      trackErrorShown(e.code, e.message ?? '', context?.page);
+      return 'Questa posizione è fuori da Piacenza e dintorni, dove consegniamo: cerca di nuovo l’indirizzo con la città o tocca la mappa sul negozio.';
+    }
     if (e.code && SUPABASE_CODE_MAP[e.code]) {
       trackErrorShown(e.code, e.message ?? '', context?.page);
       return SUPABASE_CODE_MAP[e.code];

@@ -177,8 +177,13 @@ const StoreLocationPicker = ({ defaultValue, onChange, etichetta }: Props) => {
       // «Via Roma 12» poteva diventare la Via Roma di Podenzano, a 10 km, e si confermava. Se la città
       // manca (dopo l'ultima virgola, come la legge lib/geocodifica.ts, o in fondo al testo) si cerca a Piacenza.
       const testo = address.trim().replace(/,\s*(italia|italy)\s*$/i, '').replace(/[\s,]+$/, '');
-      const coda = testo.includes(',') ? testo.slice(testo.lastIndexOf(',') + 1) : '';
-      const haCitta = /\d{5}|\p{L}/u.test(coda) || /piacenza(\s*\(?pc\)?)?$/i.test(testo);
+      const coda = testo.includes(',') ? testo.slice(testo.lastIndexOf(',') + 1).trim() : '';
+      // 28/11/2026 (onda 2, R06-002) — Una lettera qualunque dopo la virgola non è una città: «Via Roma,
+      // 12/B», «Via Roma, 12 bis», «Via Roma 12, int. 3» restavano «…, Italia» e potevano confermare
+      // la via omonima di un altro comune. La coda è una città se ha il CAP, oppure se ha lettere e
+      // non comincia con un numero né con «bis», «ter», «int.», «interno», «scala», «piano».
+      const codaECivico = /^\d/.test(coda) || /^(bis|ter|int\.?|interno|scala|sc\.|piano|p\.)(\s|\d|$)/i.test(coda);
+      const haCitta = /\d{5}/.test(coda) || (/\p{L}/u.test(coda) && !codaECivico) || /piacenza(\s*\(?pc\)?)?$/i.test(testo);
       // 🟠-15: geocoding via proxy server-side (UA corretto, rate-limit, timeout).
       const res = await fetch('/api/geocode', {
         method: 'POST',

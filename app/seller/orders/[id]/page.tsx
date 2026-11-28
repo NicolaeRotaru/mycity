@@ -112,6 +112,9 @@ type OrderRow = {
   }[];
 };
 
+/** R06-014 — Gli stati in cui la consegna è in mano al fattorino: da preso in carico a in strada. */
+const STATI_DEL_FATTORINO: readonly string[] = ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'];
+
 function isCod(method: string | null | undefined): boolean {
   const m = (method ?? '').toLowerCase();
   return m === 'cod' || m === 'cash';
@@ -650,16 +653,23 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           <Clock size={16} aria-hidden className="shrink-0" /> In attesa che un fattorino prenda in carico questo ordine.
         </div>
       )}
-      {order.rider_id && order.delivery_status !== 'DELIVERED' && (
+      {/* 28/11/2026 (onda 2, R06-014) — «Sta gestendo la consegna» solo mentre la consegna è sua: su un
+          ordine annullato (il fattorino resta scritto sulla riga) diceva una consegna che non c'era più. */}
+      {order.rider_id && STATI_DEL_FATTORINO.includes(order.delivery_status) && (
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 text-sm text-primary-800 flex items-center gap-2">
           <Bike size={16} aria-hidden className="shrink-0" /> <span>Fattorino <strong>{order.rider?.full_name ?? 'assegnato'}</strong> sta gestendo la consegna.</span>
         </div>
       )}
-      {/* CONTANTI: avviso incasso al rider */}
-      {cod && order.delivery_status !== 'CANCELED' && (
+      {/* CONTANTI: avviso incasso al rider. R06-014 — Al futuro finché la consegna non è chiusa; a
+          consegna fatta al passato; mai sul ritiro in negozio, dove i contanti li prende il negozio. */}
+      {cod && !order.pickup_in_store && order.delivery_status !== 'CANCELED' && (
         <div className="bg-olive-50 border border-olive-200 rounded-xl p-4 text-sm text-olive-800 flex items-center gap-2">
           <Banknote size={16} aria-hidden className="shrink-0 text-olive-700" />
-          <span>Il fattorino incassa <strong>{formatPrice(order.total_price)}</strong> in contanti alla consegna.</span>
+          {order.delivery_status === 'DELIVERED' ? (
+            <span>Il fattorino ha incassato <strong>{formatPrice(order.total_price)}</strong> in contanti alla consegna.</span>
+          ) : (
+            <span>Il fattorino incassa <strong>{formatPrice(order.total_price)}</strong> in contanti alla consegna.</span>
+          )}
         </div>
       )}
       {/* CLIENTE + INDIRIZZO */}

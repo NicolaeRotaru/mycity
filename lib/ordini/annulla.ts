@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { after } from 'next/server';
+import { nellaFila } from '@/lib/api/dopo-la-risposta';
 import { refundOrder } from '@/lib/stripe/payout';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
@@ -129,6 +130,65 @@ async function resoTuttoDaUnAltro(admin: SupabaseClient, order: OrdineDaAnnullar
 }
 
 /**
+ * 28/11/2026 (onda 2, R06-005) — IL CREDITO MYCITY TORNA DA UNA STRADA SOLA.
+ *
+ * Stava dentro `annullaERimborsa`; il giro degli ordini scaduti ne aveva una copia sua, con un
+ * tentativo solo: un timeout di `wallet_credit` e il credito del cliente restava fermo fino a un
+ * intervento a mano, mentre l'annullo del cliente ci riprovava tre volte. Ora la usano tutti e due.
+ * Ritorna i centesimi NON restituiti. Le regole (ritentativi sicuri perché `wallet_credit` è
+ * idempotente su motivo+ordine, avviso agli amministratori) sono scritte qui sotto.
+ */
+export async function restituisciIlCreditoDellOrdine(
+  admin: SupabaseClient,
+  order: { id: string; user_id: string; wallet_applied_cents?: number | null },
+  motivoCredito: string,
+  opzioni: { avvisaGliAmministratori?: boolean } = {},
+): Promise<number> {
+  const walletCents = Number(order.wallet_applied_cents ?? 0);
+  if (walletCents <= 0) return 0;
+  let ultimoErrore: unknown = null;
+  for (let tentativo = 1; tentativo <= TENTATIVI_STORNO_CREDITO; tentativo++) {
+    try {
+      const { error: wErr } = await admin.rpc('wallet_credit', {
+        p_user: order.user_id,
+        p_cents: walletCents,
+        p_reason: motivoCredito,
+        p_ref: order.id,
+      });
+      if (!wErr) return 0;
+      ultimoErrore = wErr.message;
+    } catch (err) {
+      ultimoErrore = err instanceof Error ? err.message : err;
+    }
+    logger.warn('[annullaERimborsa] storno credito fallito, ritento', { orderId: order.id, tentativo, err: ultimoErrore });
+    if (tentativo < TENTATIVI_STORNO_CREDITO) {
+      await new Promise((r) => setTimeout(r, PAUSA_STORNO_CREDITO_MS * tentativo));
+    }
+  }
+  logger.error('[annullaERimborsa] credito MyCity NON restituito: ordine annullato, soldi del cliente fermi', {
+    orderId: order.id,
+    userId: order.user_id,
+    cents: walletCents,
+    err: ultimoErrore,
+  });
+  // Il giro degli ordini scaduti manda il suo avviso, con la merce non tornata nella stessa riga.
+  if (opzioni.avvisaGliAmministratori === false) return walletCents;
+  try {
+    await notifyAdmins(
+      '⚠️ Credito MyCity non restituito dopo un annullo',
+      `L'ordine #${order.id.slice(0, 6).toUpperCase()} è annullato, ma il credito MyCity che il cliente aveva speso ` +
+        `(${(walletCents / 100).toFixed(2).replace('.', ',')} €) non è tornato sul suo saldo: la scrittura è caduta ` +
+        `${TENTATIVI_STORNO_CREDITO} volte. Un nuovo annullo non ci riprova, perché l'ordine risulta già annullato. ` +
+        `Va restituito a mano (cliente ${order.user_id}, ordine ${order.id}).`,
+      '/admin/orders',
+    );
+  } catch (err) {
+    logger.error('[annullaERimborsa] avviso agli amministratori non partito', { orderId: order.id, err });
+  }
+  return walletCents;
+}
+
+/**
  * Porta l'ordine ad annullato e rimette a posto il denaro: rimborso sulla carta
  * se era pagato, credito MyCity restituito se ne era stato usato, merce a
  * magazzino. NON decide CHI può annullare: quello resta a chi la chiama.
@@ -173,48 +233,8 @@ export async function annullaERimborsa(
   // ② Se non torna nemmeno cosi', lo si dice: errore nel registro, avviso agli
   // amministratori con ordine, cliente e importo, e la cifra mancante esce
   // nell'esito (`creditoNonTornatoCents`). Ritorna i centesimi NON restituiti.
-  async function restituisciCredito(): Promise<number> {
-    const walletCents = Number(order.wallet_applied_cents ?? 0);
-    if (walletCents <= 0) return 0;
-    let ultimoErrore: unknown = null;
-    for (let tentativo = 1; tentativo <= TENTATIVI_STORNO_CREDITO; tentativo++) {
-      try {
-        const { error: wErr } = await admin.rpc('wallet_credit', {
-          p_user: order.user_id,
-          p_cents: walletCents,
-          p_reason: opts.motivoCredito ?? 'order_canceled',
-          p_ref: order.id,
-        });
-        if (!wErr) return 0;
-        ultimoErrore = wErr.message;
-      } catch (err) {
-        ultimoErrore = err instanceof Error ? err.message : err;
-      }
-      logger.warn('[annullaERimborsa] storno credito fallito, ritento', { orderId: order.id, tentativo, err: ultimoErrore });
-      if (tentativo < TENTATIVI_STORNO_CREDITO) {
-        await new Promise((r) => setTimeout(r, PAUSA_STORNO_CREDITO_MS * tentativo));
-      }
-    }
-    logger.error('[annullaERimborsa] credito MyCity NON restituito: ordine annullato, soldi del cliente fermi', {
-      orderId: order.id,
-      userId: order.user_id,
-      cents: walletCents,
-      err: ultimoErrore,
-    });
-    try {
-      await notifyAdmins(
-        '⚠️ Credito MyCity non restituito dopo un annullo',
-        `L'ordine #${order.id.slice(0, 6).toUpperCase()} è annullato, ma il credito MyCity che il cliente aveva speso ` +
-          `(${(walletCents / 100).toFixed(2).replace('.', ',')} €) non è tornato sul suo saldo: la scrittura è caduta ` +
-          `${TENTATIVI_STORNO_CREDITO} volte. Un nuovo annullo non ci riprova, perché l'ordine risulta già annullato. ` +
-          `Va restituito a mano (cliente ${order.user_id}, ordine ${order.id}).`,
-        '/admin/orders',
-      );
-    } catch (err) {
-      logger.error('[annullaERimborsa] avviso agli amministratori non partito', { orderId: order.id, err });
-    }
-    return walletCents;
-  }
+  const restituisciCredito = () =>
+    restituisciIlCreditoDellOrdine(admin, order, opts.motivoCredito ?? 'order_canceled');
 
   // 31/10/2026 (collaudo) — L'email di annullo scrive «Il credito MyCity che avevi usato (4,00 €) ti è
   // stato restituito» leggendo `wallet_applied_cents`. Se lo storno è caduto, quella riga mentiva: l'email
@@ -345,7 +365,6 @@ export async function annullaERimborsa(
         ...(merceUscita ? { merceNonTorna: true } : {}),
       });
       rimborsoUscito = true;
-      await avvisaIlClienteDelRimborso(admin, order, res.importoCents, opts.reason);
       // refundOrder ha già impostato CANCELED + canceled_at + payment_status.
       //
       // 28/8/2026 — IL CREDITO TORNA ANCHE QUI. Il rimborso sulla carta copre
@@ -355,7 +374,13 @@ export async function annullaERimborsa(
       // di carta si annullava restituendo 10 €. La funzione del database che
       // faceva il rifiuto del negozio lo restituiva già: senza questa riga,
       // farlo passare di qui sarebbe un passo indietro per chi compra.
+      // R06-013 — Prima si rende il credito, poi parte «Rimborso emesso»: l'email dice anche il credito
+      // tornato davvero (non lancia mai, vedi `restituisciCredito`).
       const creditoNonTornato = await restituisciCredito();
+      await avvisaIlClienteDelRimborso(
+        admin, order, res.importoCents, opts.reason,
+        Math.max(0, Number(order.wallet_applied_cents ?? 0) - creditoNonTornato),
+      );
       await restituisciCoupon();
       // 30/10/2026 — `refundOrder` manda «Rimborso emesso» con l'importo e basta: se la consegna del
       // carrello si è rifatta, il cliente riceve anche il perché dei 16 € su 18 e il conto della frutta.
@@ -533,10 +558,17 @@ export async function avvisaIlClienteDellAnnullo(
 /**
  * Il lavoro parte con `after()` di Next, dopo la risposta. Fuori da una richiesta `after()` lancia:
  * torna false, e chi chiama aspetta l'invio, come prima.
+ *
+ * 28/11/2026 (onda 2, R06-012) — IN FILA, NON TUTTE INSIEME. Next fa partire insieme tutti i lavori
+ * registrati con `after()`, senza tetto. Il giro degli ordini scaduti ne registra fino a tre per
+ * ordine (cliente, rimborso, negozio) su cento ordini: trecento email nello stesso istante, e il
+ * limite d'invio della posta ne respingeva molte (con un avviso agli amministratori per ognuna). Le
+ * altre email dopo la risposta (lib/api/dopo-la-risposta.ts, R05-003) stavano già in fila: queste no.
+ * Ora passano dalla stessa fila (`nellaFila`): ogni lavoro parte quando il precedente ha finito.
  */
 function dopoLaRisposta(lavoro: () => Promise<void>): boolean {
   try {
-    after(lavoro);
+    after(() => nellaFila(lavoro));
     return true;
   } catch {
     return false;
@@ -560,11 +592,18 @@ export async function avvisaIlClienteDelRimborso(
   ordine: { id: string; user_id: string | null },
   importoCents: number | null | undefined,
   motivo: string | null | undefined,
+  /**
+   * 28/11/2026 (onda 2, R06-013) — Il credito MyCity speso sull'ordine e tornato DAVVERO sul saldo
+   * (dopo lo storno riuscito): «Rimborso emesso» lo dice insieme alla carta. Senza, con la carta e il
+   * credito insieme e il carrello scaduto tutto, nessuna email diceva che il credito era tornato.
+   */
+  creditoTornatoCents = 0,
 ): Promise<void> {
   const importo = Number(importoCents ?? 0);
   if (!Number.isFinite(importo) || importo <= 0) return;
+  const credito = Number.isFinite(Number(creditoTornatoCents)) ? Math.max(0, Number(creditoTornatoCents)) : 0;
   const lavoro = async () => {
-    const esito = await spedisciLEmailDelRimborso(admin, ordine, importo, motivo);
+    const esito = await spedisciLEmailDelRimborso(admin, ordine, importo, motivo, credito);
     if (esito !== 'invio-fallito' && esito !== 'indirizzo-non-letto') return;
     await notifyAdmins(
       '⚠️ Email del rimborso non partita',
@@ -583,6 +622,7 @@ async function spedisciLEmailDelRimborso(
   ordine: { id: string; user_id: string | null },
   importoCents: number,
   motivo: string | null | undefined,
+  creditoTornatoCents = 0,
 ): Promise<'partita' | 'senza-indirizzo' | 'indirizzo-non-letto' | 'invio-fallito'> {
   if (!ordine.user_id) return 'senza-indirizzo';
   let email: string | null | undefined;
@@ -601,7 +641,13 @@ async function spedisciLEmailDelRimborso(
     return 'senza-indirizzo';
   }
   try {
-    const t = refundIssuedTemplate({ orderId: ordine.id, amount: importoCents / 100, reason: motivo ?? null, modo: 'carta' });
+    const t = refundIssuedTemplate({
+      orderId: ordine.id,
+      amount: importoCents / 100,
+      reason: motivo ?? null,
+      modo: 'carta',
+      ...(creditoTornatoCents > 0 ? { creditoEuro: creditoTornatoCents / 100 } : {}),
+    });
     const res = await sendEmail({ to: email, subject: t.subject, html: t.html, text: t.text });
     if (!res.ok) {
       logger.error('[annullo] email del rimborso NON partita', { orderId: ordine.id });
