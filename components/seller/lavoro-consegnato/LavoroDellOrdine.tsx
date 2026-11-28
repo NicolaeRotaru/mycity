@@ -2,15 +2,18 @@ import { FASCE } from '@/lib/agenti/fasce';
 import type { LavoroDellOrdine } from '@/lib/agenzia/lavoro-dell-ordine';
 import type { ParteConsegnata } from '@/lib/agenzia/lavoro-consegnato/quale-parte';
 import { PAGINE_PER_FASCIA } from '@/lib/agenzia/sito-dell-ordine-ad';
+import { paginePubbliche } from '@/lib/agenzia/sito-finito/costruisci';
 import { Elenco, LinkEsterno, SCHEDA, Sezione, giornoCorto } from './comuni';
 
 /**
  * IL LAVORO NATO CON L'ORDINE, NELLA ZONA «SERVIZI» DEL TITOLARE — 28/11/2026.
  *
  * Nicola, 28/11: all'accettazione nascono in automatico, in base all'abbonamento, il sito, il piano editoriale e
- * l'analisi. Il titolare li vede qui, nelle tre voci Sito web, Gestione social e Analisi del business, sempre come
- * BOZZA: «la confermiamo insieme alla visita». Il sito non è online: va online solo dopo il sì del titolare e di SDG.
- * Quello che non è ancora pronto dice «in preparazione»: mai un errore tecnico, mai una pagina vuota.
+ * l'analisi. Il titolare li vede qui, nelle tre voci Sito web, Gestione social e Analisi del business. Piano e analisi
+ * sono BOZZE: «la confermiamo insieme alla visita». Il sito invece è ONLINE appena è pronto (Nicola, 28/11 verso le
+ * 14:10: «deve essere già su Vercel il sito del cliente che ha accettato»): qui c'è il pulsante per aprirlo, e sotto le
+ * informazioni che servono per completarlo. Quello che non è ancora pronto dice «in preparazione»: mai un errore
+ * tecnico, mai una pagina vuota.
  */
 
 const nomeDelSito = (f: string) => {
@@ -22,11 +25,12 @@ const nomeDelSito = (f: string) => {
 };
 
 export const SCRITTA_BOZZA = 'Bozza, la confermiamo insieme alla visita';
+export const SCRITTA_ONLINE = 'Il tuo sito è online';
 
-function Intestazione({ ordine }: { ordine: LavoroDellOrdine }) {
+function Intestazione({ ordine, online }: { ordine: LavoroDellOrdine; online: boolean }) {
   return (
     <p className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-      <span className="rounded-full bg-cream-200 px-2.5 py-0.5 text-[11px] font-bold text-ink-900">{FASCE[ordine.fascia]?.nome ?? ordine.fascia} · {SCRITTA_BOZZA}</span>
+      <span className="rounded-full bg-cream-200 px-2.5 py-0.5 text-[11px] font-bold text-ink-900">{FASCE[ordine.fascia]?.nome ?? ordine.fascia} · {online ? 'Online' : SCRITTA_BOZZA}</span>
     </p>
   );
 }
@@ -49,11 +53,11 @@ export default function LavoroDellOrdineDelTitolare({ parte, ordine }: { parte: 
   const fascia = FASCE[ordine.fascia]?.nome ?? ordine.fascia;
   return (
     <div>
-      <Intestazione ordine={ordine} />
-      {parte === 'sito' && (ordine.sito.bozza ? <BozzaDelSito ordine={ordine} /> : (
+      <Intestazione ordine={ordine} online={parte === 'sito' && !!ordine.sito.bozza && !!ordine.sito.indirizzo} />
+      {parte === 'sito' && (ordine.sito.bozza ? <IlTuoSito ordine={ordine} /> : (
         <InPreparazione
-          titolo="La bozza del tuo sito"
-          testo={`${attesa(ordine.sito.stato)} Col ${fascia} il sito ha ${PAGINE_PER_FASCIA[ordine.fascia] === 1 ? 'una pagina' : `${PAGINE_PER_FASCIA[ordine.fascia]} pagine`}. La guardiamo insieme alla visita, e va online solo dopo il tuo sì.`}
+          titolo="Il tuo sito"
+          testo={`${attesa(ordine.sito.stato)} Col ${fascia} il sito ha ${PAGINE_PER_FASCIA[ordine.fascia] === 1 ? 'una pagina' : `${PAGINE_PER_FASCIA[ordine.fascia]} pagine`}. Appena è pronto va online da solo, e qui trovi il pulsante per aprirlo.`}
         />
       ))}
       {parte === 'social' && <PianoDellOrdine ordine={ordine} />}
@@ -64,22 +68,38 @@ export default function LavoroDellOrdineDelTitolare({ parte, ordine }: { parte: 
   );
 }
 
-function BozzaDelSito({ ordine }: { ordine: LavoroDellOrdine }) {
+function IlTuoSito({ ordine }: { ordine: LavoroDellOrdine }) {
   const b = ordine.sito.bozza!;
+  const indirizzo = ordine.sito.indirizzo;
+  // I testi come stanno sul sito: senza le frasi da bozza, che sul sito online non ci sono.
+  const pagine = paginePubbliche(b.pagine);
+  const link = (percorso: string) => (indirizzo ? (percorso === '/' ? indirizzo : `${indirizzo}${percorso}`) : null);
   return (
     <>
-      <section className={`mb-4 ${SCHEDA}`} aria-labelledby="bozza-sito">
-        <h2 id="bozza-sito" className="text-xl font-bold text-ink-900">{ordine.nomeAttivita}</h2>
+      <section className={`mb-4 ${SCHEDA}`} aria-labelledby="sito-online">
+        <h2 id="sito-online" className="text-xl font-bold text-ink-900">{indirizzo ? SCRITTA_ONLINE : `Il sito di ${ordine.nomeAttivita}`}</h2>
         <p className="mt-1 text-sm text-ink-700">{b.sottotitolo}</p>
-        <p className="mt-3"><span className="rounded-full bg-cream-200 px-2.5 py-0.5 text-[11px] font-bold text-ink-800">Non è online</span></p>
-        <p className="mt-2 text-sm text-ink-700">Va online solo dopo il tuo sì e quello di SDG. Ogni testo è una proposta: lo cambiamo come vuoi tu.</p>
+        {indirizzo ? (
+          <>
+            <p className="mt-3">
+              <a href={indirizzo} target="_blank" rel="noopener" className="inline-flex min-h-[44px] items-center rounded-xl bg-primary-600 px-4 py-2 font-bold text-white hover:bg-primary-700">
+                Apri il tuo sito
+              </a>
+            </p>
+            <p className="mt-2 break-all text-sm text-ink-700">Il suo indirizzo: <a href={indirizzo} target="_blank" rel="noopener" className="font-semibold text-primary-700 underline">{indirizzo.replace(/^https?:\/\//, '')}</a></p>
+            <p className="mt-2 text-sm text-ink-700">Puoi già mandarlo ai tuoi clienti. Ogni testo si cambia quando vuoi: basta dircelo.</p>
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-ink-700">Sta andando online: tra poco qui trovi il pulsante per aprirlo.</p>
+        )}
       </section>
-      {b.pagine.map((p, i) => (
-        <Sezione key={p.percorso} id={`bozza-pagina-${i}`} titolo={`Pagina ${i + 1}: ${p.titolo}`}>
+      {pagine.map((p, i) => (
+        <Sezione key={p.percorso} id={`sito-pagina-${i}`} titolo={`Pagina ${i + 1}: ${p.titolo}`}>
+          {link(p.percorso) && <p className="mb-2 text-sm"><LinkEsterno href={link(p.percorso)!}>Apri questa pagina</LinkEsterno></p>}
           <div className="space-y-3">
             {p.sezioni.map((s, j) => (
               <div key={`${s.titolo}-${j}`}>
-                <h3 className="font-semibold text-ink-900">{s.titolo} <span className="ml-1 rounded-full bg-cream-100 px-2 py-0.5 text-[11px] font-semibold text-ink-700">da confermare</span></h3>
+                <h3 className="font-semibold text-ink-900">{s.titolo}</h3>
                 <p className="mt-1">{s.testo}</p>
               </div>
             ))}
@@ -87,7 +107,8 @@ function BozzaDelSito({ ordine }: { ordine: LavoroDellOrdine }) {
         </Sezione>
       ))}
       {b.daConfermare.length > 0 && (
-        <Sezione id="bozza-da-confermare" titolo="Da confermare alla visita">
+        <Sezione id="sito-da-completare" titolo="Per completarlo ci servono da te">
+          <p className="mb-2 text-ink-600">Il sito è già online con quello che sappiamo. Con queste informazioni lo rendiamo completo: dacele alla visita o scrivicele.</p>
           <Elenco voci={b.daConfermare.map((d) => `${d.voce}: ${d.perche}`)} />
         </Sezione>
       )}

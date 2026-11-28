@@ -18,8 +18,11 @@ import { TETTI_FLUSSO_14, type dallaSchedaDellAgente } from './piano-completo-ad
  *
  * Gli stessi divieti della porta di oggi (lib/agenzia/bozza-sito-ad.ts), più stretti: niente prezzi, niente
  * telefoni, email, indirizzi web, orari, nomi di persona, voti o recensioni di Google (`fraseMostrabile` del rapporto
- * dell'imprenditore, più `haUnNomeDiPersona`). Il sito non li ha mai passati all'AD: se compaiono, sono inventati. Ogni testo è «da
- * confermare». La bozza NON va online da sola: la pubblica SDG solo dopo il sì del titolare e di SDG.
+ * dell'imprenditore, più `haUnNomeDiPersona`). Il sito non li ha mai passati all'AD: se compaiono, sono inventati.
+ *
+ * 28/11/2026 verso le 14:10 — Nicola: «deve essere già su Vercel il sito del cliente che ha accettato». Da qui il sito
+ * va online da solo appena l'AD lo scrive (rotta app/sito, lib/agenzia/sito-finito). Per questo l'AD scrive testi
+ * finiti; le frasi da bozza rimaste nei siti di prima le toglie `testoPubblico` prima di mostrarle.
  */
 
 /** Le pagine della bozza, per fascia (FASCE.*.inPratica.sito: «Una pagina», «Più pagine», «Più pagine, aggiornato ogni mese»). */
@@ -32,7 +35,7 @@ const PAGINE_SUGGERITE: Record<Abbonamento, string> = {
   premium: '«Home», «Chi siamo», «Cosa offriamo», «Novità del mese», «Dove siamo e contatti»',
 };
 
-export const COMPITO_SITO = `Sei l'AD digitale di MyCity. SDG Agenzia (il partner di MyCity per siti, social, foto e video) ha un cliente nuovo: il titolare ha appena confermato l'abbonamento. Scrivi la BOZZA DEL SITO del locale. Il titolare la vede come bozza e la conferma con SDG alla prima visita: niente va online prima del suo sì e di quello di SDG.
+export const COMPITO_SITO = `Sei l'AD digitale di MyCity. SDG Agenzia (il partner di MyCity per siti, social, foto e video) ha un cliente nuovo: il titolare ha appena confermato l'abbonamento. Scrivi i testi del SITO del locale. Il sito va online da solo appena lo scrivi, col nome del locale: ogni testo deve essere finito, come sul sito vero di un locale. Il titolare lo vede online e ci dice cosa cambiare.
 
 COSA HAI, in «dati»: il locale (nome, tipo, città, indirizzo pubblico), l'abbonamento con il NUMERO DI PAGINE, le pagine suggerite, la «nota_dell_agente» se c'è (un'indicazione per te, per esempio «vuole far vedere la sala per le feste»: non copiarla nel sito), e quello che hai già scritto nella scheda per il venditore (cosa ha, cosa manca, reputazione, social, cosa faremo con questa fascia). Usali: non rifare la scheda.
 
@@ -40,12 +43,13 @@ LE PAGINE SONO UN CONTRATTO: esattamente «pagine» pagine, non di più e non di
 
 LE REGOLE, che non si rompono mai:
 - MAI prezzi, nemmeno indicativi: li scrive il titolare.
-- MAI telefoni, email, indirizzi web, orari di apertura: non li hai, quindi sarebbero inventati. Dove servono scrivi «da confermare col titolare» a parole (per esempio «Orari: da confermare col titolare»).
+- MAI telefoni, email, indirizzi web, orari di apertura: non li hai, quindi sarebbero inventati. Non parlarne affatto: indirizzo, telefono, orari, mappa e social li aggiunge il sito da solo, coi dati veri del negozio.
+- MAI frasi da bozza: niente «da confermare», «il titolare», «sarà inserito», «metteremo», «dopo la conferma». Il sito è già online e il visitatore non deve leggere promesse a metà.
 - MAI voti, stelle o numero di recensioni di Google o TripAdvisor, MAI testi o nomi di chi scrive le recensioni.
 - MAI nomi di persone (titolare, dipendenti, clienti): solo il nome del locale.
-- MAI dati inventati: prodotti, servizi, storia del locale solo se li hai nei dati. Se non li hai, scrivi una frase generale per quel tipo di locale e mettila fra le cose «da_confermare».
+- MAI dati inventati: prodotti, servizi, storia del locale solo se li hai nei dati. Se non li hai, scrivi una frase generale e vera per quel tipo di locale, senza dire che manca qualcosa, e metti fra le cose «da_confermare» cosa chiedere al titolare.
 - Mai superlativi che non si possono provare («il migliore», «l'unico»). Niente gioco (Sisal, scommesse) né tabacco.
-- Ogni testo è una proposta: ogni sezione ha «stato» = «da_confermare».
+- Il campo «stato» di ogni sezione vale sempre «da_confermare»: serve al team, sul sito non si vede.
 
 COME SCRIVERE: italiano semplice, frasi di al massimo 25 parole, il tono del locale. Testo di una sezione: da 20 a 900 caratteri. In «da_confermare» al massimo 8 cose da chiedere al titolare alla visita (voce e perché). In «fonti» solo indirizzi https che hai davvero letto, mai pagine di Google o TripAdvisor. In «note» al massimo 4 righe per il team (foto da fare alla visita, cosa manca).
 
@@ -105,7 +109,7 @@ export type BozzaSitoOrdine = {
   daConfermare: { voce: string; perche: string }[];
   fonti: string[];
   note: string[];
-  /** Sempre falso: la bozza va online solo dopo il sì del titolare e di SDG, e la pubblica una persona. */
+  /** Campo di prima del 28/11, resta per i siti già salvati: se il sito è online lo decide la rotta app/sito. */
   pubblicata: false;
 };
 
