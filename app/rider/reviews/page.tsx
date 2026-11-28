@@ -173,7 +173,7 @@ export default function RiderReviewsPage() {
         {/* Tips */}
         <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 p-4 text-sm text-primary-900">
           <h3 className="mb-2 flex items-center gap-1.5 font-bold">
-            <Lightbulb size={16} strokeWidth={2.2} aria-hidden /> Come migliorare il rating
+            <Lightbulb size={16} strokeWidth={2.2} aria-hidden /> Come migliorare il voto
           </h3>
           <ul className="space-y-1 text-[13px]">
             <li>• Saluta sempre con un sorriso e mostra il volto</li>
