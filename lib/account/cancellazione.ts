@@ -813,7 +813,8 @@ export type CassaContanti = {
  *    anche i contanti già versati, con la cifra gonfiata (R08-004, R08-005).
  *
  * Adesso il conto lo fa il database in una sola lettura (`cassa_da_versare_del_fattorino`, migrazione
- * onda2_C2_1): gli ordini in contanti consegnati e non ancora rimessi, più i rimborsati coi contanti
+ * onda2_C2_1): gli ordini in contanti consegnati e non ancora rimessi — e quelli ancora in strada coi
+ * contanti già dichiarati incassati (N-003) —, più i rimborsati coi contanti
  * ancora in mano (le regole della pagina Rimesse contanti), e le giornate che il registro dice ancora
  * aperte. Una giornata che il registro tiene aperta ferma la cancellazione come prima: si ferma in più
  * casi, mai in meno. Finché la funzione non è applicata si legge il registro come prima.
