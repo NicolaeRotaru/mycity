@@ -24,6 +24,7 @@ import {
   ordineDiAccensione,
   poligono,
   quadratoDi,
+  rosaEtrusca,
   prossimaLuna,
   ritardiDiAccensione,
   motivoPerFirma,
@@ -69,7 +70,7 @@ describe('i numeri', () => {
   });
 
   it('i numeri vietati non passano mai', () => {
-    for (const n of [14, 17, 18, 88, 666, 1488]) expect(numeroAmmesso(n)).toBe(false);
+    for (const n of [14, 17, 18, 88, 666, 1488, 8814]) expect(numeroAmmesso(n)).toBe(false);
     expect(numeroAmmesso(333)).toBe(true);
     expect(ammessoVicino(17)).toBe(19);
   });
@@ -153,6 +154,7 @@ describe('la magia', () => {
     const selettori = [...css.matchAll(blocco)].map((m) => m[1]).join(',');
     expect(selettori).toContain('.armonia-respiro');
     expect(selettori).toContain('.armonia-entra');
+    expect(css).toMatch(/@media \(forced-colors: active\), \(prefers-contrast: more\) \{\s*\.armonia-trama \{ display: none !important; \}/);
   });
 
   it("l'ordine di accensione è una permutazione e segue il quadrato", () => {
@@ -161,14 +163,26 @@ describe('la magia', () => {
   });
 
   it('il sigillo è sempre lo stesso, senza vocali né ripetizioni, e cade sulle caselle del quadrato', () => {
-    const s = sigillo('Clienti felici');
+    const s = sigillo('Clienti felici', 'Saturno');
     expect(s.lettere).toBe('CLNTF');
-    expect(sigillo('Clienti felici')).toEqual(s);
+    expect(sigillo('Clienti felici', 'Saturno')).toEqual(s);
     expect(s.tracciato.startsWith('M')).toBe(true);
     for (const [x, y] of s.punti) {
       expect([10, 50, 90]).toContain(x);
       expect([10, 50, 90]).toContain(y);
     }
+    // Per un negozio il quadrato è Giove; niente cerchietto né barra: solo M e L.
+    const g = sigillo('Piacenza compra dai suoi negozi');
+    expect(g.tracciato).toMatch(/^M[\d.]+ [\d.]+(L[\d.]+ [\d.]+)*$/);
+    for (let i = 1; i < g.punti.length; i++) expect(g.punti[i]).not.toEqual(g.punti[i - 1]);
+  });
+
+  it('la rosa etrusca ha sedici raggi tutti uguali, dentro l\'anello: non può sembrare una croce celtica', () => {
+    const raggi = [...rosaEtrusca(0, 0, 100).matchAll(/M(-?[\d.]+) (-?[\d.]+)L(-?[\d.]+) (-?[\d.]+)/g)]
+      .map((m) => Math.hypot(Number(m[3]) - Number(m[1]), Number(m[4]) - Number(m[2])));
+    expect(raggi).toHaveLength(16);
+    for (const l of raggi) expect(Math.abs(l - raggi[0])).toBeLessThan(0.3);
+    for (const m of rosaEtrusca(0, 0, 100).matchAll(/L(-?[\d.]+) (-?[\d.]+)/g)) expect(Math.hypot(Number(m[1]), Number(m[2]))).toBeLessThanOrEqual(100.1);
   });
 });
 

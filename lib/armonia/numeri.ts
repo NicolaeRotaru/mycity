@@ -44,6 +44,7 @@ export const NUMERI_VIETATI: Readonly<Record<number, string>> = {
   88: 'codice neonazista',
   666: 'il numero della bestia: lo riconoscono tutti',
   1488: 'codice neonazista',
+  8814: 'codice neonazista (1488 rovesciato)',
 };
 
 export const numeroAmmesso = (n: number): boolean => !(Math.round(n) in NUMERI_VIETATI);

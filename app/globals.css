@@ -666,3 +666,7 @@ select.border-cream-300 {
 @media (prefers-reduced-motion: reduce) {
   .armonia-respiro, .armonia-entra { animation: none !important; }
 }
+/* Chi usa i colori forzati di Windows o chiede più contrasto non vede la trama: resta solo il contenuto. */
+@media (forced-colors: active), (prefers-contrast: more) {
+  .armonia-trama { display: none !important; }
+}

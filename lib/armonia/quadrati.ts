@@ -122,20 +122,24 @@ export type Sigillo = {
   lettere: string;
   /** I punti del tracciato sul quadrato 3×3, in un riquadro da 0 a 100. */
   punti: Array<readonly [number, number]>;
-  /** Il tracciato SVG (viewBox 0 0 100 100): un cerchietto all'inizio, la linea, una barra alla fine. */
+  /** Il tracciato SVG (viewBox 0 0 100 100): solo la linea, senza il cerchietto e la barra dei sigilli classici. */
   tracciato: string;
 };
 
 /**
- * Il sigillo di un'intenzione, tracciato sul quadrato di Saturno.
- * Ogni lettera diventa il suo numero (da 1 a 9), ogni numero è una casella del Lo Shu:
- * la linea passa da una casella all'altra. «Clienti felici ogni giorno» dà sempre lo stesso segno.
+ * Il sigillo di un'intenzione, tracciato sul quadrato di un pianeta: per un negozio Giove, uno dei tre
+ * pianeti benefici di Ficino (ricerca del 28/11). Ogni lettera diventa il suo numero (da 1 a 9), ogni
+ * numero è una casella del quadrato: la linea passa da una casella all'altra; due lettere di fila sulla
+ * stessa casella (in PIACENZA la E e la N valgono 5) contano una volta. Niente cerchietto all'inizio né
+ * barra alla fine, i segni che lo farebbero riconoscere come sigillo. Lo stesso testo dà sempre lo stesso segno.
  */
-export function sigillo(intenzione: string): Sigillo {
+export function sigillo(intenzione: string, pianeta: Pianeta = 'Giove'): Sigillo {
   const viste = new Set<string>();
   const lettere = [...lettereDi(intenzione)].filter((l) => !'AEIOU'.includes(l) && !viste.has(l) && viste.add(l)).join('');
+  const q = QUADRATI[pianeta];
+  const passo = 80 / (q.length - 1);
   const casella = new Map<number, readonly [number, number]>();
-  SATURNO.forEach((riga, r) => riga.forEach((v, c) => casella.set(v, [c * 40 + 10, r * 40 + 10] as const)));
+  q.forEach((riga, r) => riga.forEach((v, c) => casella.set(v, [Math.round(c * passo + 10), Math.round(r * passo + 10)] as const)));
   const punti: Array<readonly [number, number]> = [];
   for (const l of lettere) {
     const p = casella.get(valoreLettera(l))!;
@@ -143,17 +147,6 @@ export function sigillo(intenzione: string): Sigillo {
     if (!ultimo || ultimo[0] !== p[0] || ultimo[1] !== p[1]) punti.push(p);
   }
   if (punti.length === 0) return { lettere, punti, tracciato: '' };
-  const [x0, y0] = punti[0];
-  let tracciato = `M${x0 + 3} ${y0}A3 3 0 1 0 ${x0 - 3} ${y0}A3 3 0 1 0 ${x0 + 3} ${y0}M${x0} ${y0}`;
-  for (const [x, y] of punti.slice(1)) tracciato += `L${x} ${y}`;
-  if (punti.length > 1) {
-    const [xa, ya] = punti[punti.length - 2];
-    const [xb, yb] = punti[punti.length - 1];
-    const len = Math.hypot(xb - xa, yb - ya) || 1;
-    const nx = (-(yb - ya) / len) * 5;
-    const ny = ((xb - xa) / len) * 5;
-    const r = (v: number) => Math.round(v * 10) / 10;
-    tracciato += `M${r(xb - nx)} ${r(yb - ny)}L${r(xb + nx)} ${r(yb + ny)}`;
-  }
+  const tracciato = punti.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join('');
   return { lettere, punti, tracciato };
 }

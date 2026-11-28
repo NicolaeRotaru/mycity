@@ -37,7 +37,7 @@ export default function TramaNascosta({ firma, motivo, centro = 'rosa', opacita 
       focusable="false"
       viewBox={`0 0 ${larghezza} ${altezza}`}
       preserveAspectRatio="xMidYMid slice"
-      className={`armonia-respiro pointer-events-none absolute inset-0 h-full w-full ${className}`}
+      className={`armonia-trama armonia-respiro pointer-events-none absolute inset-0 h-full w-full ${className}`}
       style={{
         opacity: Math.min(Math.max(opacita, 0), 0.08),
         ...(margini ? { maskImage: SOLO_MARGINI, WebkitMaskImage: SOLO_MARGINI } : {}),
