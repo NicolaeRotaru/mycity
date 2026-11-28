@@ -26,6 +26,7 @@ import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
+import { scontoMostrato } from '@/lib/sconto-mostrato';
 import { uploadProductImages } from '@/lib/products/uploadImages';
 import {
   avvisoDopoIlPatch,
@@ -1039,8 +1040,11 @@ export default function ProductForm({
   // ---- Anteprima prezzo -----------------------------------------------------
   const priceNum = prezzoDelCampo(watch('price')) || 0;
   const cmpNum = prezzoDelCampo(watch('compareAtPrice')) || 0;
-  const hasDiscount = cmpNum > priceNum && priceNum > 0;
-  const discountPct = hasDiscount ? Math.round((1 - priceNum / cmpNum) * 100) : 0;
+  // R10-004 (onda 2) — L'anteprima segue la regola della scheda vera (`scontoMostrato`): un listino
+  // che al centesimo è uguale al prezzo non si barra, e il bollino non scrive «-0%».
+  const scontoAnteprima = scontoMostrato({ prezzo: priceNum, prezzoDiListino: cmpNum });
+  const hasDiscount = scontoAnteprima.barratoCents !== null;
+  const discountPct = scontoAnteprima.percento;
 
   const busy = submitting || uploading;
   const primaryIntent: 'publish' | 'save' = mode === 'create' ? 'publish' : 'save';
@@ -1547,7 +1551,7 @@ export default function ProductForm({
                   <span className="text-xs font-normal text-ink-400">{UNIT_SUFFIX[unit]}</span>
                 </span>
                 {hasDiscount && <span className="text-xs text-ink-400 line-through">{formatPrice(cmpNum)}</span>}
-                {hasDiscount && <span className="text-xs font-bold text-secondary-600">-{discountPct}%</span>}
+                {discountPct !== null && <span className="text-xs font-bold text-secondary-600">-{discountPct}%</span>}
               </p>
             </div>
           </div>

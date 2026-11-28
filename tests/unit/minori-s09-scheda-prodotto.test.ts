@@ -86,7 +86,9 @@ describe('310 — con una promozione il prezzo grande è quello che si paga', ()
   const src = readFileSync('app/product/[id]/page.tsx', 'utf8');
   it('il prezzo mostrato è scontato come in cassa, col pieno barrato', () => {
     expect(src).toMatch(/const price = scontoPromo > 0 \? discountedUnitCents\(prezzoPieno, scontoPromo\) \/ 100 : prezzoPieno;/);
-    expect(src).toMatch(/scontoPromo > 0 && \(\s*<span className="text-lg text-ink-400 line-through">/);
+    // R10-004 (onda 2) — Il pieno si barra quando la promo cambia davvero il prezzo (`scontoMostrato`).
+    expect(src).toMatch(/const sconto = scontoMostrato\(\{ prezzo: prezzoPieno, scontoPercento: scontoPromo,/);
+    expect(src).toMatch(/sconto\.origine === 'promo' && \(\s*<span className="text-lg text-ink-400 line-through">/);
   });
   // R02-020 / R02-021 — Al carrello va il prezzo che la scheda mostra (scontato con la promo attiva):
   // carrello e cassa lo sostituiscono col pieno del database meno la promo, non lo scontano di nuovo.
