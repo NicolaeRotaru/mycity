@@ -640,3 +640,24 @@ textarea.border-cream-300,
 select.border-cream-300 {
   border-color: var(--border-control);
 }
+
+/* ---------- ARMONIA NASCOSTA (Nicola, 28/11/2026) ----------
+   La base di ogni sito che facciamo e del marketplace: sezione aurea, Fibonacci, il respiro.
+   Libreria lib/armonia · componenti components/armonia · regola: skill «armonia» di ad-mycity.
+   Chi ha chiesto meno movimento vede tutto fermo: lo fa la regola prefers-reduced-motion qui sopra. */
+:root {
+  --armonia-phi: 1.618;
+  --armonia-s-1: 8px; --armonia-s-2: 13px; --armonia-s-3: 21px;
+  --armonia-s-4: 34px; --armonia-s-5: 55px; --armonia-s-6: 89px;
+  --armonia-t-0: 16px; --armonia-t-1: 26px; --armonia-t-2: 42px; --armonia-t-3: 68px;
+  --armonia-colonna-grande: 61.8034%;
+  --armonia-colonna-piccola: 38.1966%;
+  --armonia-max: 987px;
+  --armonia-curva: cubic-bezier(0.382, 0, 0.618, 1);
+}
+/* Sei respiri al minuto: la trama di sfondo si allarga e si stringe appena. */
+@keyframes armonia-respiro { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.018); } }
+.armonia-respiro { transform-origin: 50% 50%; animation: armonia-respiro 10s var(--armonia-curva) infinite; }
+/* Le schede entrano nell'ordine del quadrato magico del pianeta: partono già visibili, mai da zero. */
+@keyframes armonia-entra { from { opacity: 0.4; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.armonia-entra { animation: armonia-entra var(--armonia-durata, 333ms) var(--armonia-curva) both; }
