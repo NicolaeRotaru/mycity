@@ -49,6 +49,8 @@ type PayoutOrder = {
   stripe_transfer_id: string | null;
   delivery_status: string | null;
   payment_method: string | null;
+  /** Ritiro in negozio: col rimborso pieno resta il segno del ritiro al banco (payout_status diventa REFUNDED). */
+  pickup_in_store?: boolean | null;
   created_at: string | null;
   delivered_at: string | null;
   seller: { store_name: string | null; billing_iban: string | null } | null;
@@ -119,15 +121,23 @@ const nomeDelMese = (mese: string) => new Date(`${mese}-15T12:00:00Z`).toLocaleD
  * che guarda gli stessi cancelli.
  */
 function ritiroDaRegolare(o: PayoutOrder): boolean {
+  if (o.payment_method !== 'cod' || o.payout_at || o.pratica_aperta === true) return false;
+  // Gli stessi cancelli dei contanti (916, 999i, 999j): con un reso, un reclamo o una contestazione
+  // aperti il ritiro aspetta. Col rimborso si regola (vedi `dovutoDalRitiro`).
+  if (o.dispute_status && o.dispute_status !== 'WON') return false;
+  if (o.payout_status === 'CASH_IN_STORE') {
+    return (!o.internal_dispute_status || o.internal_dispute_status === 'RESOLVED') && o.payment_status !== 'REFUNDED';
+  }
+  // Il ritiro rimborsato per intero: REFUNDED col segno del ritiro, il reclamo assente o chiuso.
   return (
-    o.payment_method === 'cod' && o.payout_status === 'CASH_IN_STORE' && !o.payout_at &&
-    // Gli stessi cancelli dei contanti (916, 999i): con un reso, un reclamo o una contestazione aperti,
-    // o col rimborso pieno, il ritiro aspetta. Col rimborso parziale si regola (vedi `dovutoDalRitiro`).
-    o.pratica_aperta !== true &&
-    (!o.dispute_status || o.dispute_status === 'WON') &&
-    (!o.internal_dispute_status || o.internal_dispute_status === 'RESOLVED') &&
-    o.payment_status !== 'REFUNDED'
+    ritiroRimborsatoPerIntero(o) &&
+    (!o.internal_dispute_status || o.internal_dispute_status === 'RESOLVED' || o.internal_dispute_status === 'LOST')
   );
+}
+
+/** Un ritiro al banco rimborsato per intero: il rimborso scrive REFUNDED, il ritiro resta in pickup_in_store. */
+function ritiroRimborsatoPerIntero(o: PayoutOrder): boolean {
+  return o.payment_method === 'cod' && o.payout_status === 'REFUNDED' && o.pickup_in_store === true;
 }
 
 /**
@@ -221,8 +231,13 @@ const TETTO_PAYOUT = 1000;
  */
 // R22-001 — anche lo storno non riuscito: è fuori dai totali e non deve prendere il posto di un contante da versare.
 const STATI_CHIUSI = ['TRANSFERRED', 'PAID_MANUALLY', 'REFUNDED', 'REVERSED', 'REVERSAL_FAILED', 'CASH_IN_STORE'];
-/** R22-002 — Un ritiro al banco con la commissione ancora da regolare resta fra gli aperti. */
-const RITIRO_DA_REGOLARE = 'and(payout_status.eq.CASH_IN_STORE,payout_at.is.null)';
+/**
+ * R22-002 — Un ritiro al banco con la commissione ancora da regolare resta fra gli aperti; anche quello
+ * rimborsato per intero, che il rimborso ha portato a REFUNDED (999j).
+ */
+const RITIRO_DA_REGOLARE =
+  'and(payout_status.eq.CASH_IN_STORE,payout_at.is.null),' +
+  'and(payout_status.eq.REFUNDED,pickup_in_store.is.true,payment_method.eq.cod,payout_at.is.null)';
 /**
  * R22-001 — Quello che il lunedì si paga: contanti HELD e ritiri al banco da regolare. Si leggono da
  * soli, col loro tetto, dal consegnato prima: le righe ferme (contanti dal fattorino, reclami, IBAN,
@@ -232,7 +247,9 @@ const PAGABILI = `and(payout_status.eq.HELD,payment_method.eq.cod),${RITIRO_DA_R
 
 /** Lo stesso insieme di PAGABILI, sulla riga già letta. */
 const pagabile = (o: PayoutOrder) =>
-  (o.payout_status === 'HELD' && o.payment_method === 'cod') || (o.payout_status === 'CASH_IN_STORE' && !o.payout_at);
+  (o.payout_status === 'HELD' && o.payment_method === 'cod') ||
+  (o.payout_status === 'CASH_IN_STORE' && !o.payout_at) ||
+  (ritiroRimborsatoPerIntero(o) && !o.payout_at);
 
 type LettiPayout = PayoutOrder[] & {
   totale?: number;
@@ -356,7 +373,7 @@ export default function AdminPayoutsPage() {
         supabase
           .from('orders')
           .select(
-            'id, seller_id, total_price, seller_payout_cents, seller_payout_reversed_cents, application_fee_cents, wallet_applied_cents, dispute_status, internal_dispute_status, payment_status, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
+            'id, seller_id, total_price, seller_payout_cents, seller_payout_reversed_cents, application_fee_cents, wallet_applied_cents, dispute_status, internal_dispute_status, payment_status, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, pickup_in_store, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
             // R11-011 — il server restituisce al massimo mille righe: la riga in più non arriva mai.
             { count: 'exact' },
           )
@@ -400,7 +417,7 @@ export default function AdminPayoutsPage() {
       // in silenzio e il lunedì dopo ricompariva, pagato due volte. Una lettura caduta li ferma tutti.
       // Anche i ritiri al banco da regolare: con un reso o un reclamo aperto la commissione aspetta (916).
       const contantiHeld = righe
-        .filter((o) => o.payment_method === 'cod' && (o.payout_status === 'HELD' || (o.payout_status === 'CASH_IN_STORE' && !o.payout_at)))
+        .filter((o) => o.payment_method === 'cod' && (o.payout_status === 'HELD' || ((o.payout_status === 'CASH_IN_STORE' || ritiroRimborsatoPerIntero(o)) && !o.payout_at)))
         .map((o) => o.id);
       const aperti = new Set<string>();
       let letturaCaduta = false;

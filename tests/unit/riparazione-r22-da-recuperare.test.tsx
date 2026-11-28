@@ -210,6 +210,30 @@ describe('R22-003 — dopo il bonifico a mano: quote da recuperare, ritiri fermi
     expect([...(stato.chiamate[0] as { p_ritiri: string[] }).p_ritiri].sort()).toEqual(['r1', 'r4']);
   });
 
+  // 28/11/2026 (999j) — Il ritiro rimborsato per intero (REFUNDED, col segno del ritiro) restava fuori da
+  // ogni bonifico, e il contante restava al negozio. Adesso entra nel lunedì con tutto quello che deve.
+  it('un ritiro rimborsato per intero entra nel lunedì con tutto il contante; un contante rimborsato no', async () => {
+    stato.ordini = [
+      contante('c1', 1800, '2026-11-18'),
+      contante('c2', 1800, '2026-11-18'),
+      // Ritiro da 20 € rimborsato per intero, reclamo chiuso a favore del cliente: il negozio deve 2,00 € + 18,00 €.
+      ritiro('r9', 200, '2026-11-19', {
+        payout_status: 'REFUNDED', payment_status: 'REFUNDED', pickup_in_store: true,
+        seller_payout_reversed_cents: 1800, internal_dispute_status: 'LOST',
+      }),
+      // Un contante rimborsato per intero: il negozio non ha incassato niente, non c'è niente da riprendere.
+      contante('x1', 1800, '2026-11-18', { payout_status: 'REFUNDED', payment_status: 'REFUNDED', seller_payout_reversed_cents: 1800 }),
+    ];
+    const host = await apri();
+    const blocco = bloccoDi(host, 'Pane Quotidiano');
+    // 36,00 € di contanti − 20,00 € del ritiro rimborsato = 16,00 €.
+    expect(daVersareLunedi(blocco), 'il ritiro rimborsato per intero non entra nel lunedì').toMatch(/16,00/);
+    vi.stubGlobal('prompt', vi.fn(() => 'CRO-0055667788'));
+    await premi(tastoIn(blocco)!);
+    expect(stato.chiamate[0]).toMatchObject({ n: 'segna_bonifico_manuale', p_ritiri: ['r9'], p_importo_cents: 1600 });
+    expect([...(stato.chiamate[0] as { p_order_ids: string[] }).p_order_ids].sort()).toEqual(['c1', 'c2']);
+  });
+
   it('il secondo clic con un altro CRO: la pagina dice il CRO già scritto', async () => {
     stato.ordini = [contante('c1', 1800, '2026-11-18')];
     stato.risposta = { message: 'BONIFICO_GIA_SEGNATO: questo bonifico è già scritto col riferimento CRO-PRIMO e 1800 centesimi' };
