@@ -6,17 +6,25 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 /**
  * R09-002 — La pagina delle recensioni, senza la funzione dei nomi (migrazione 181), scriveva l'avviso a
- * ogni apertura. Adesso una volta per processo; le recensioni restano senza nome («Cliente»).
+ * ogni apertura. Adesso una volta per processo; le recensioni sono firmate col nome di consegna degli
+ * ordini (R11-001: prima restavano «Cliente» anche per chi aveva ordinato).
  */
-const stato = vi.hoisted(() => ({ code: 'PGRST202' }));
+const stato = vi.hoisted(() => ({ code: 'PGRST202', rpc: 0 }));
 vi.mock('next-intl', () => ({ useTranslations: () => (k: string) => k }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     auth: { getUser: async () => ({ data: { user: { id: 'negozio-1' } } }) },
-    rpc: async () => ({ data: null, error: { code: stato.code, message: 'errore nomi' } }),
-    from: () => ({
+    rpc: async () => { stato.rpc += 1; return { data: null, error: { code: stato.code, message: 'errore nomi' } }; },
+    // Senza la 181 il nome arriva dagli ordini che il negozio legge già (il nome di consegna).
+    from: (tabella: string) => tabella === 'orders' ? ({
+      select: () => ({
+        in: () => ({
+          order: () => ({ limit: async () => ({ data: [{ user_id: 'u1', delivery_full_name: 'Maria Rossi' }], error: null }) }),
+        }),
+      }),
+    }) : ({
       select: () => ({
         eq: () => ({
           order: async () => ({
@@ -57,11 +65,15 @@ beforeEach(async () => {
 });
 
 describe('R09-002 · recensioni: l\'avviso della funzione assente non si ripete', () => {
-  it('due aperture senza la 181: un avviso, recensioni leggibili', async () => {
+  it('due aperture senza la 181: un avviso, recensioni leggibili e firmate col nome di consegna', async () => {
     stato.code = 'PGRST202';
-    expect(await apri()).toContain('Buonissimo');
+    stato.rpc = 0;
+    const prima = await apri();
+    expect(prima).toContain('Buonissimo');
+    expect(prima, 'senza la 181 le recensioni non usano il ripiego dei nomi').toContain('Maria Rossi');
     expect(await apri()).toContain('Buonissimo');
     expect(await avvisi()).toBe(1);
+    expect(stato.rpc, 'una sola chiamata alla funzione per apertura').toBe(2);
   });
 
   it('un guasto vero: un avviso a ogni apertura', async () => {

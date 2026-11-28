@@ -207,16 +207,20 @@ describe('① in chat il negozio legge il nome di ogni cliente', () => {
     s.smonta();
   }, 60000);
 
-  it.each(MONDI)('senza la 181 la chat resta in piedi e dice «Cliente», non «Utente» — %s', async (_n, mondo) => {
+  it.each(MONDI)('senza la 181 la chat resta in piedi e legge il nome di consegna degli ordini, non «Utente» — %s', async (_n, mondo) => {
     const elenco = await aSchermo('app/messages/page.tsx', {}, mondo, PANE, { con181: false });
     expect(elenco.errori.size, [...elenco.errori.values()].join(' · ')).toBe(0);
     const testo = await attendiFinche(elenco.s, () => (elenco.s.radice.textContent ?? '').includes('A che ora chiudete?'));
-    expect(riga(elenco.s, 'A che ora chiudete?')).toContain('Cliente');
+    const diMaria = riga(elenco.s, 'A che ora chiudete?');
+    expect(diMaria, 'senza la 181 la chat non usa il ripiego dei nomi').toContain('Maria Rossi');
+    expect(diMaria).not.toContain('Giulia Bianchi');
+    expect(riga(elenco.s, 'Avete la focaccia senza sale?')).toContain('Giulia Bianchi');
     expect(testo).not.toContain('Utente');
+    expect(testo).not.toContain('Carlo Estraneo');
     elenco.s.smonta();
     const una = await aSchermo('app/messages/[id]/page.tsx', { params: { id: CONV_MARIA } }, mondo, PANE, { con181: false });
     await attendiFinche(una.s, () => !!una.s.radice.querySelector('h2'));
-    expect(una.s.radice.querySelector('h2')?.textContent).toBe('Cliente');
+    expect(una.s.radice.querySelector('h2')?.textContent).toBe('Maria Rossi');
     una.s.smonta();
   }, 60000);
 });
@@ -234,12 +238,13 @@ describe('② le recensioni del negozio si aprono', () => {
     s.smonta();
   }, 60000);
 
-  it.each(MONDI)('senza la 181 la recensione resta leggibile, firmata «Cliente» — %s', async (_n, mondo) => {
+  it.each(MONDI)('senza la 181 la recensione resta leggibile, firmata col nome di consegna degli ordini — %s', async (_n, mondo) => {
     const { s, errori } = await aSchermo('app/seller/reviews/page.tsx', {}, mondo, PANE, { con181: false });
     expect(errori.get(JSON.stringify(['seller', 'reviews'])), 'la lettura delle recensioni e caduta').toBeUndefined();
     const testo = await attendiFinche(s, () => (s.radice.textContent ?? '').includes('Focaccia ancora calda'));
     expect(testo).toContain('Focaccia ancora calda');
-    expect(testo).toContain('Cliente');
+    expect(testo, 'senza la 181 le recensioni non usano il ripiego dei nomi').toContain('Maria Rossi');
+    expect(testo).not.toContain('Carlo Estraneo');
     s.smonta();
   }, 60000);
 });
