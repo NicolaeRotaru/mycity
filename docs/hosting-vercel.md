@@ -189,6 +189,8 @@ questo repository. Stanno in `AZIONI-IN-ATTESA` nella repo dell'AD.
   `SUPABASE_SERVICE_ROLE_KEY` (70 errori veri nei log di produzione, su
   `/api/track` e `/api/consent`) e `NEXT_PUBLIC_APP_URL`. Senza la prima il sito
   **non può registrare un ordine**: il webhook di Stripe non scrive.
-- Il **dominio**. `mycity-marketplace.com` risolve ancora su `216.24.57.1`, che è
-  l'indirizzo di Render. Finché resta lì, il sito su Vercel è raggiungibile solo
-  a `mycity-phi.vercel.app`.
+- ~~Il **dominio**~~ — fatto. Al 28/11/2026 `www.mycity-marketplace.com` è il
+  dominio di produzione su Vercel (il dominio senza `www` rimanda lì con un
+  308). L'indirizzo che Vercel dà al progetto, `mycity-phi.vercel.app`, resta
+  acceso ma il middleware lo rimanda al dominio vero (`lib/dominio-unico.ts`):
+  un sito con due indirizzi ha due accessi e due carrelli separati.
