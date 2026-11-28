@@ -276,6 +276,43 @@ export async function rateLimitAsync(opts: RateLimitOptions): Promise<RateLimitR
 }
 
 /**
+ * 28/11/2026 (R02-010, onda 2) — UN PERMESSO PRESO PER UN TENTATIVO CHE NON E' PARTITO SI RESTITUISCE.
+ *
+ * Il freno di sei ore sui prodotti importati in errore (`ext-sync-errore:<id>`, max 1) si
+ * consuma PRIMA del tentativo. Se poi il tentativo si ferma per un motivo che non e' del
+ * prodotto (il budget AI finito, la spesa di oggi che non si legge, il modello che manca) il
+ * prodotto non e' stato ritentato ma il suo unico permesso era gia' speso: restava frenato sei
+ * ore anche col budget tornato. Qui si toglie l'ultimo colpo preso su quella chiave, dallo
+ * stesso contatore che lo ha contato (Upstash se risponde, se no la memoria della copia). Mai
+ * sotto zero: un colpo che non c'e' non diventa un permesso in piu'. Non lancia mai.
+ */
+const TOGLI_UN_COLPO =
+  "local v = tonumber(redis.call('GET', KEYS[1]) or '0') if v > 0 then return redis.call('DECR', KEYS[1]) end return 0";
+
+async function upstashTogli(key: string): Promise<boolean> {
+  if (!UPSTASH_URL || !UPSTASH_TOKEN) return false;
+  try {
+    const res = await fetch(`${UPSTASH_URL}/pipeline`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([['EVAL', TOGLI_UN_COLPO, '1', `rl:${key}`]]),
+      signal: AbortSignal.timeout(500),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as Array<{ result?: unknown; error?: unknown }>;
+    return Array.isArray(data) && !data[0]?.error;
+  } catch {
+    return false;
+  }
+}
+
+export async function restituisciColpo(opts: Pick<RateLimitOptions, 'key'>): Promise<void> {
+  if (await upstashTogli(opts.key)) return;
+  const bucket = buckets.get(opts.key);
+  if (bucket && bucket.times.length > 0) bucket.times.pop();
+}
+
+/**
  * Quanti proxy fidati stanno davanti all'applicazione. In produzione ce n'è uno
  * (l'ingresso della piattaforma). Se un giorno se ne aggiunge un altro — per
  * esempio un CDN davanti — si alza questo numero via variabile d'ambiente,

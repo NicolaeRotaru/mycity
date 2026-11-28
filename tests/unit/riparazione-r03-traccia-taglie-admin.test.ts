@@ -44,6 +44,9 @@ vi.mock('@/lib/products/persistVariantsServer', () => ({
 }));
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
+    // 27/11/2026 — La funzione che salva prodotto e varianti in una transazione non c'è in questo
+    // finto, come in un database senza la migrazione: la rotta torna ai due passi che la prova guarda.
+    rpc: async (nome: string) => ({ data: null, error: { code: 'PGRST202', message: `Could not find the function public.${nome} in the schema cache` } }),
     from(tavola: string) {
       const righe = () => (tavola === 'products' ? db.prodotti : tavola === 'product_variants' ? db.taglie : []);
       return {

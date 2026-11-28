@@ -121,6 +121,38 @@ async function rimettiComEra(
   return !error && Array.isArray(data) && data.length > 0;
 }
 
+/** La scorta del prodotto non è più quella vista all'apertura: si ferma tutto e lo si dice. */
+const scortaDelProdottoCambiata = (vista: number | undefined) =>
+  ApiErrors.conflict(
+    `La scorta è cambiata mentre la scheda era aperta: avevi davanti ${vista} pezzi. Riapri il prodotto, controlla il numero e salva di nuovo.`,
+  );
+
+/**
+ * 27/11/2026 — La funzione del database che scrive prodotto e varianti in una transazione
+ * (`salva_prodotto_e_varianti`, migrazioni 405 e 709) non c'è ancora: PostgREST risponde PGRST202,
+ * Postgres 42883 che la nomina. Solo allora si torna al percorso in due passi. Un 42883 che nomina
+ * un'altra funzione nasce DENTRO di lei: non si ripiega in silenzio, si dice l'errore.
+ */
+function salvataggioUnicoMancante(e: { code?: string; message?: string }): boolean {
+  return e.code === 'PGRST202' || (e.code === '42883' && /salva_prodotto_e_varianti/.test(e.message ?? ''));
+}
+
+/** Gli errori della funzione nelle stesse risposte del percorso in due passi. Non è rimasto scritto niente. */
+function rispostaDelSalvataggioUnico(e: { message?: string; details?: string }, vista: number | undefined) {
+  if (e.message === 'scorta_prodotto_cambiata') return scortaDelProdottoCambiata(vista);
+  if (e.message === 'scorta_variante_cambiata') {
+    let d: { label?: unknown; vista?: unknown; adesso?: unknown } = {};
+    try { d = JSON.parse(e.details ?? '{}'); } catch { /* il messaggio resta generico */ }
+    const ora = typeof d.adesso === 'number' ? `ora sono ${d.adesso}` : 'nel frattempo è cambiata';
+    // Lo stesso testo di lib/products/persistVariantsServer.ts: il motivo e cosa fare, non «Riprova».
+    return ApiErrors.conflict(
+      `La scorta di «${String(d.label ?? 'una variante')}» è cambiata mentre modificavi: avevi davanti ${Number(d.vista ?? 0)} pezzi, ${ora}. Riapri il prodotto, controlla il numero e salva di nuovo.`,
+    );
+  }
+  if (e.message === 'prodotto_non_trovato') return ApiErrors.notFound('Prodotto non trovato');
+  return ApiErrors.internal('Impossibile aggiornare il prodotto');
+}
+
 /**
  * R03-002 — Le taglie di un prodotto come stanno in banca dati, in una forma che si confronta:
  * in ordine di posizione, con nome, opzioni, scorta e la posizione letta. `null` se non si leggono.
@@ -284,7 +316,25 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
   // R03-002 — Com'erano le taglie prima del salvataggio: se cambiano (anche da sole) la traccia lo dice.
   const taglieDiPrima = variants ? await taglieInBanca(admin, id) : null;
 
+  // 27/11/2026 — UNA SCRITTURA SOLA. Con le varianti, prodotto e varianti li scrive la funzione del
+  // database in una transazione: una taglia venduta fra il controllo e la scrittura, o una scrittura
+  // delle varianti che cade, non lascia più nome e prezzo scritti da soli. Le condizioni sulle
+  // scorte viste sono le stesse, dentro la funzione, con le righe bloccate. Senza la funzione resta
+  // il percorso di prima, in due passi con il ripristino.
+  let salvatoInsieme = false;
   if (variants) {
+    const { error } = await admin.rpc('salva_prodotto_e_varianti', {
+      p_product_id: id,
+      p_prodotto: patch,
+      p_scorta_vista: condizione ?? null,
+      p_varianti: variants.map((v) => ({ ...(v.id ? { id: v.id } : {}), options: v.options, label: v.label, stock: v.stock })),
+      p_scorte_viste: scorteViste ?? null,
+    });
+    if (!error) salvatoInsieme = true;
+    else if (!salvataggioUnicoMancante(error)) return rispostaDelSalvataggioUnico(error, condizione);
+  }
+
+  if (variants && !salvatoInsieme) {
     try {
       await controllaScorteVarianti(admin, id, variants as ProductVariant[], scorteViste);
     } catch (errore) {
@@ -292,7 +342,7 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
       return ApiErrors.internal('Errore nel salvataggio delle varianti');
     }
   }
-  if (Object.keys(patch).length > 0) {
+  if (!salvatoInsieme && Object.keys(patch).length > 0) {
     if (condizione === undefined) {
       const { error } = await admin.from('products').update(patch).eq('id', id);
       if (error) return ApiErrors.internal('Impossibile aggiornare il prodotto');
@@ -304,15 +354,11 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
       // (in banca 4), scritto 4 dopo un pezzo rotto e' una vendita da non
       // cancellare, non un salvataggio rimandato. Si ferma tutto e lo si dice;
       // il modulo riparte dalla banca dati.
-      if (!data || data.length === 0) {
-        return ApiErrors.conflict(
-          `La scorta è cambiata mentre la scheda era aperta: avevi davanti ${condizione} pezzi. Riapri il prodotto, controlla il numero e salva di nuovo.`,
-        );
-      }
+      if (!data || data.length === 0) return scortaDelProdottoCambiata(condizione);
     }
   }
 
-  if (variants) {
+  if (variants && !salvatoInsieme) {
     try {
       await saveProductVariantsServer(admin, id, variants as ProductVariant[], scorteViste);
     } catch (errore) {

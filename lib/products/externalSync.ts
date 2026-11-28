@@ -6,7 +6,7 @@ import { MODELS } from '@/lib/ai/client';
 import { runMessage } from '@/lib/ai/run';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { rateLimitAsync } from '@/lib/rate-limit';
+import { rateLimitAsync, restituisciColpo } from '@/lib/rate-limit';
 import { CATEGORY_ATTRIBUTES } from '@/lib/category-attributes';
 import {
   type Marketplace,
@@ -292,4 +292,14 @@ export const RIPROVA_DOPO_ERRORE_MS = 6 * 60 * 60_000;
 export async function ritentoDopoErroreConsentito(productId: string): Promise<boolean> {
   const esito = await rateLimitAsync({ key: `ext-sync-errore:${productId}`, max: 1, windowMs: RIPROVA_DOPO_ERRORE_MS });
   return esito.allowed;
+}
+
+/**
+ * 28/11/2026 (R02-010, onda 2) — Il permesso di sei ore preso da `ritentoDopoErroreConsentito`
+ * torna al prodotto quando il tentativo si e' fermato per un motivo non suo (budget AI finito,
+ * spesa di oggi non leggibile, modello che manca): se no il prodotto restava frenato sei ore
+ * senza essere stato ritentato. Non lancia mai.
+ */
+export async function restituisciRitentoDopoErrore(productId: string): Promise<void> {
+  await restituisciColpo({ key: `ext-sync-errore:${productId}` });
 }
