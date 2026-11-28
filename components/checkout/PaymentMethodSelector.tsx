@@ -107,7 +107,7 @@ export function PaymentMethodSelector({
       <legend className="sr-only">Come vuoi pagare</legend>
       {stripeAvailable && (
         <label
-          className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
+          className={`flex flex-wrap items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
             value === 'card'
               ? 'border-primary-500 bg-primary-50'
               : 'border-cream-300 bg-white hover:border-primary-200'
@@ -124,7 +124,7 @@ export function PaymentMethodSelector({
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">
             <CreditCard size={20} aria-hidden />
           </span>
-          <div className="min-w-0 flex-1 break-words">
+          <div className="min-w-0 flex-1 basis-20 break-words">
             <p className="font-bold text-ink-900">Carta di credito / debito</p>
             <p className="text-sm text-ink-600">
               Visa, Mastercard, Amex, Apple Pay, Google Pay — pagamento sicuro su Stripe.
@@ -139,7 +139,7 @@ export function PaymentMethodSelector({
       )}
 
       <label
-        className={`flex items-start gap-3 rounded-xl border-2 p-4 transition-colors ${
+        className={`flex flex-wrap items-start gap-3 rounded-xl border-2 p-4 transition-colors ${
           motivoNoContanti
             ? 'cursor-not-allowed border-cream-300 bg-cream-50'
             : value === 'cod'
@@ -160,10 +160,10 @@ export function PaymentMethodSelector({
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-olive-100 text-olive-700">
           <Banknote size={20} aria-hidden />
         </span>
-        <div className="min-w-0 flex-1 break-words">
+        <div className="min-w-0 flex-1 basis-20 break-words">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="min-w-0 font-bold text-ink-900">Contanti alla consegna</p>
-            <Badge variant="cod">Zero rischio</Badge>
+            <Badge variant="cod" className="max-w-full [overflow-wrap:anywhere]">Zero rischio</Badge>
           </div>
           <p className="text-sm text-ink-600">Paghi al rider quando ricevi il pacco.</p>
           {motivoNoContanti && (
