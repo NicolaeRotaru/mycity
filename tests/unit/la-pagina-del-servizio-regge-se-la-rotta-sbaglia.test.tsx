@@ -136,3 +136,34 @@ describe('SDG', () => {
     console.log('[COLLAUDO SDG] console.error totali=', errori.length, 'di cui chiavi duplicate=', chiavi.length, chiavi.slice(0, 3).map((c) => String((c as unknown[]).slice(0, 3).join(' | ')).slice(0, 300)));
   });
 });
+
+// 28/11/2026 — Il titolare che ha accettato il preventivo vede nella zona «Servizi» il lavoro nato col suo ordine:
+// la bozza del sito, il piano, l'analisi. Sempre come bozza, e quello che non c'è ancora dice «in preparazione».
+describe('titolare con l ordine di SDG (28/11)', () => {
+  const ordine = {
+    fascia: 'business',
+    nomeAttivita: 'Ora del Gusto',
+    piano: { stato: 'in_preparazione', piano: { origine: 'sito', periodo: { dal: '2026-12-01', al: '2026-12-31', titolo: 'dicembre 2026' }, intestazione: { cliente: 'Ora del Gusto', abbonamento: 'Business', canaliETono: 'Instagram, tono caldo', hashtag: '#Piacenza', primaDiPubblicare: 'gli orari' }, contenuti: [{ data: '2026-12-05', ora: '09:00', tipo: 'Post', tema: 'La colazione del sabato', stato: 'Idea', didascalia: 'Il sabato comincia qui.', cosaRiprendere: 'Il bancone', inCitta: null, fonteEvento: null }], note: [] } },
+    sito: { stato: 'pronto', bozza: { origine: 'ad', fascia: 'business', sottotitolo: 'Bar in centro', pagine: [{ titolo: 'Home', percorso: '/', sezioni: [{ titolo: 'Chi siamo', testo: 'TESTO DELLA BOZZA DEL SITO', stato: 'da_confermare' }] }], daConfermare: [{ voce: 'Orari', perche: 'li scrive il titolare' }], fonti: [], note: [], pubblicata: false } },
+    analisi: { stato: 'in_preparazione', analisi: null },
+  };
+  it('Sito web: la bozza, con la scritta «Bozza, la confermiamo insieme alla visita» e «Non è online»', async () => {
+    lavoro = json(200, { ok: true, data: { lavoro: null, ordine } });
+    stato.slug = 'sito-web';
+    const d = await monta();
+    await vi.waitFor(() => expect(d.textContent).toContain('TESTO DELLA BOZZA DEL SITO'), { timeout: 3000 });
+    expect(d.textContent).toContain('Bozza, la confermiamo insieme alla visita');
+    expect(d.textContent).toContain('Non è online');
+    expect(vediPreventivo(d)).toBe(false);
+  });
+  it('Gestione social: il piano; Analisi: «in preparazione», mai una pagina vuota', async () => {
+    lavoro = json(200, { ok: true, data: { lavoro: null, ordine } });
+    stato.slug = 'social';
+    const d = await monta();
+    await vi.waitFor(() => expect(d.textContent).toContain('La colazione del sabato'), { timeout: 3000 });
+    expect(d.textContent).toContain('Bozza, la confermiamo insieme alla visita');
+    stato.slug = 'analisi';
+    const d2 = await monta();
+    await vi.waitFor(() => expect(d2.textContent).toContain('La tua analisi è in preparazione'), { timeout: 3000 });
+  });
+});

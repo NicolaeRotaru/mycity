@@ -5,7 +5,6 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { adCollegato, avviaLavoro, leggiLavoro } from '@/lib/agenti/n8n';
-import { normalizza, pulisci, unisci, type Scheda } from '@/lib/agenti/scheda';
 import { FLUSSO } from '@/lib/agenti/compito';
 import { eDiSdg } from '@/lib/products/sdgSeller';
 import { FASCE, canonePrimoMese, type Abbonamento } from './preventivo';
@@ -17,6 +16,7 @@ import { fraseVisita } from './visita';
 
 export { fraseVisita };
 import { COMPITO_PIANO, SCHEMA_PIANO, VENDITORE_DEI_PIANI, dallaSchedaDellAgente, datiPerIlPianoCompleto, pianoDallaRisposta } from './piano-completo-ad';
+import { PEZZI_ORDINE, chiediIlPezzo, schedaDellAgente } from './pezzi-dell-ordine';
 
 /**
  * L'ORDINE DI SERVIZIO CHE ARRIVA A SDG — 27/11/2026.
@@ -36,6 +36,9 @@ import { COMPITO_PIANO, SCHEMA_PIANO, VENDITORE_DEI_PIANI, dallaSchedaDellAgente
  *  4. avvisa Nicola, che oggi è chi apre la pagina di SDG (l'account di SDG non entra ancora);
  *  5. DOPO la risposta al titolare chiede all'AD il piano completo (lib/agenzia/piano-completo-ad.ts): se n8n non
  *     risponde l'ordine resta col piano del sito e lo stato «da collegare», e si può richiedere dalla pagina.
+ *     28/11/2026 — Insieme al piano partono la bozza del sito e l'analisi all'avvio, secondo la fascia
+ *     (lib/agenzia/pezzi-dell-ordine.ts, migrazione 999h): tre lavori, tre corse dell'AD per cliente. Anche loro dopo
+ *     la risposta e senza mai fermare l'accettazione: se l'AD non risponde restano «da collegare».
  * Gli abbonamenti di SDG non entrano mai in `orders` (trigger della 707): l'ordine ha la sua tabella.
  */
 
@@ -209,19 +212,10 @@ async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: st
     { unaVoltaPer: `ordine-sdg:${sellerId}` },
   ).catch((e: unknown) => logger.warn('[ordine-sdg] avviso a Nicola non partito', { sellerId, errore: String(e) }));
 
-  // 5) Il piano completo, dopo la risposta al titolare.
-  dopoLaRisposta(() => chiediIlPianoCompleto(id).then(() => undefined));
+  // 5) Il piano completo, la bozza del sito e l'analisi all'avvio, dopo la risposta al titolare. Ognuno per conto
+  //    suo: se uno non parte gli altri partono lo stesso, e nessuno lancia.
+  dopoLaRisposta(() => Promise.all([chiediIlPianoCompleto(id), ...PEZZI_ORDINE.map((pezzo) => chiediIlPezzo(id, pezzo))]).then(() => undefined));
   return { ok: true, nuovo: true, id };
-}
-
-/** La scheda dell'agente, letta da n8n e pulita come la legge la sua pagina; `null` se non c'è o non si legge. */
-async function schedaDellAgente(lavoro: string | null): Promise<Scheda | null> {
-  if (!lavoro) return null;
-  const r = await leggiLavoro(lavoro);
-  if (r.stato === 'sconosciuto') return null;
-  const prima = normalizza(r.prima);
-  if (!prima) return null;
-  return r.stato === 'pronta' ? unisci(prima, pulisci(r.risultato), r.avvisi ?? []) : prima;
 }
 
 export type EsitoRichiestaPiano = { esito: 'chiesto' | 'non-serve' | 'non-partito' | 'guasto'; dettaglio?: string };

@@ -16,6 +16,8 @@ export type DbFinto = {
   /** Chiavi uniche, per tabella. */
   uniche: Record<string, string>;
   scritture: { tabella: string; tipo: 'insert' | 'update'; valori: Riga }[];
+  /** I valori predefiniti delle colonne (DEFAULT del database), per tabella: entrano nelle righe nuove. */
+  predefiniti?: Record<string, Riga>;
 };
 
 export function nuovoDb(): DbFinto {
@@ -78,7 +80,7 @@ export function supabaseFinto(db: DbFinto) {
             if (azione.ignora) continue;
             return { data: null, error: { message: `duplicate key value violates unique constraint "${tabella}_${unica}_key"` } };
           }
-          const nuova = { id: nuovoId(), creato_il: new Date().toISOString(), aggiornato_il: new Date().toISOString(), ...riga };
+          const nuova = { id: nuovoId(), creato_il: new Date().toISOString(), aggiornato_il: new Date().toISOString(), ...(db.predefiniti?.[tabella] ?? {}), ...riga };
           righe().push(nuova);
           nuove.push(nuova);
           db.scritture.push({ tabella, tipo: 'insert', valori: riga });
