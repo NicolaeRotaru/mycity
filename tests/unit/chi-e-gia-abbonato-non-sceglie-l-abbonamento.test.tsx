@@ -185,13 +185,13 @@ describe('la pagina prodotto di un abbonamento di SDG', () => {
   });
 
   it('finché non si sa se è abbonato non promette la scelta', async () => {
-    expect(doveSiAttivaLAbbonamento(true, null)).toEqual({ href: PERCORSO_ABBONAMENTO, testo: 'Vai alla pagina Abbonamento del tuo negozio' });
+    expect(doveSiAttivaLAbbonamento(true, null)).toEqual({ href: PERCORSO_ABBONAMENTO, testo: 'Vai alla pagina Abbonamento della tua attività' });
     const r = await monta(AttivaAbbonamento, { chiGuardaEUnNegozio: true, giaAbbonato: null });
     expect(pulsanteScegli(r)).toHaveLength(0);
   });
 
   it('agli altri resta com’era', () => {
-    expect(doveSiAttivaLAbbonamento(true)).toEqual({ href: PERCORSO_ABBONAMENTO, testo: 'Scegli l’abbonamento dal tuo negozio' });
+    expect(doveSiAttivaLAbbonamento(true)).toEqual({ href: PERCORSO_ABBONAMENTO, testo: 'Scegli l’abbonamento dalla tua attività' });
     expect(doveSiAttivaLAbbonamento(false, true).href).toBe('/sell');
   });
 });

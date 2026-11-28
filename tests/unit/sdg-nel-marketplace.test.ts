@@ -5,7 +5,8 @@ import path from 'node:path';
 import { validaRigaDelCarrello, rispostaPerCarrelloNonVendibile, type ProdottoDelCatalogo } from '@/lib/ordini/valida-carrello';
 import { SDG_SELLER_ID, eDiSdg, doveSiAttivaLAbbonamento } from '@/lib/products/sdgSeller';
 import { MYCITY_SELLER_ID } from '@/lib/products/mycitySeller';
-import { PRODOTTI_SDG, ID_PRODOTTO_SDG } from '@/lib/agenzia/prodotti-sdg';
+import { PRODOTTI_SDG, ID_PRODOTTO_SDG, FRASE_COME_SI_PRENDE } from '@/lib/agenzia/prodotti-sdg';
+import { PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagamento-servizi';
 import { FASCE, ABBONAMENTI, FRASE_PARTNER } from '@/lib/agenzia/preventivo';
 
 /**
@@ -25,6 +26,11 @@ const MIGRAZIONE_711 = readFileSync(path.join(RADICE, 'migrations/711_l_analisi_
 // 26/11/2026 — Il rapporto dell'imprenditore cambia il testo dell'analisi: l'ultima che scrive le descrizioni è la 863.
 const MIGRAZIONE_999D = readFileSync(path.join(RADICE, 'migrations/999d_i_tre_abbonamenti_di_sdg_costano_300_600_900.sql'), 'utf8');
 const MIGRAZIONE_863 = readFileSync(path.join(RADICE, 'migrations/863_gli_abbonamenti_di_sdg_dicono_il_rapporto_dell_imprenditore.sql'), 'utf8');
+// 27/11/2026 — Si paga in contanti: la 999e riscrive la frase su come si prende l'abbonamento. È l'ultima che
+// scrive le descrizioni; la 863 e la 999d restano col testo di allora, che diceva «Si attiva dalla pagina Abbonamento».
+const MIGRAZIONE_999E = readFileSync(path.join(RADICE, 'migrations/999e_gli_abbonamenti_di_sdg_si_pagano_in_contanti.sql'), 'utf8');
+const FRASE_DI_ALLORA = 'Si attiva dalla pagina Abbonamento del tuo negozio, non dal carrello.';
+const descrizioneDiAllora = (descrizione: string) => descrizione.replace(FRASE_COME_SI_PRENDE, FRASE_DI_ALLORA);
 
 const abbonamento = (p: Partial<ProdottoDelCatalogo> = {}): ProdottoDelCatalogo => ({
   id: ID_PRODOTTO_SDG.base, name: 'Abbonamento Base — 300 € al mese', price: 300,
@@ -42,6 +48,15 @@ describe('la regola del carrello rifiuta gli abbonamenti di SDG (carta e contant
     expect(esito.scarto.motivo).toBe('ABBONAMENTO_NON_IN_CARRELLO');
     expect(esito.scarto.messaggio).toContain('pagina Abbonamento');
     expect(esito.scarto.messaggio).not.toContain('preventivo');
+    // 27/11/2026 — Per ora si paga in contanti: finché il pagamento online è spento, il messaggio non dice
+    // che l'abbonamento «si attiva» dal sito (come la descrizione dei prodotti, migrazione 999e).
+    if (!PAGAMENTO_ONLINE_SERVIZI) {
+      expect(esito.scarto.messaggio).not.toContain('si attiva');
+      expect(esito.scarto.messaggio).toContain('si paga in contanti, di persona');
+      // 27/11/2026, Nicola verso le 22:10 (registro dei fatti: sdg.lessico): sul lato SDG si dice «la tua attività», non «il tuo negozio».
+      expect(esito.scarto.messaggio).toContain('della tua attività');
+      expect(esito.scarto.messaggio).not.toContain('tuo negozio');
+    }
     expect(rispostaPerCarrelloNonVendibile(esito.scarto).status).toBe(400);
   });
 
@@ -83,6 +98,8 @@ describe('la pagina prodotto porta alla pagina Abbonamento, non al carrello', ()
   it('un negozio va alla sua pagina Abbonamento, chi non lo è va a iscriversi', () => {
     expect(doveSiAttivaLAbbonamento(true).href).toBe('/seller/abbonamento');
     expect(doveSiAttivaLAbbonamento(true).testo).not.toContain('preventivo');
+    // 27/11/2026, Nicola verso le 22:10 (registro dei fatti: sdg.lessico): sul lato SDG «la tua attività», non «il tuo negozio».
+    expect(doveSiAttivaLAbbonamento(true).testo).toBe('Scegli l’abbonamento dalla tua attività');
     expect(doveSiAttivaLAbbonamento(false).href).toBe('/sell');
   });
 
@@ -125,7 +142,7 @@ describe('i tre prodotti dicono quello che dice il listino', () => {
     const sql = MIGRAZIONE_999D.replace(/''/g, "'");
     expect(MIGRAZIONE_999D).toContain(`p.seller_id = '${SDG_SELLER_ID}'::uuid`);
     for (const p of PRODOTTI_SDG) {
-      expect(sql).toContain(`('${p.id}'::uuid, '${p.nome}', '${p.descrizione}', ${p.prezzoEuro})`);
+      expect(sql).toContain(`('${p.id}'::uuid, '${p.nome}', '${descrizioneDiAllora(p.descrizione)}', ${p.prezzoEuro})`);
     }
     expect(PRODOTTI_SDG.map((p) => p.prezzoEuro)).toEqual(['300.00', '600.00', '900.00']);
     expect(MIGRAZIONE_999D).toMatch(/RIESEGUIRE/);
@@ -151,11 +168,33 @@ describe('i tre prodotti dicono quello che dice il listino', () => {
     const sql = MIGRAZIONE_863.replace(/''/g, "'");
     expect(MIGRAZIONE_863).toContain(`p.seller_id = '${SDG_SELLER_ID}'::uuid`);
     for (const p of PRODOTTI_SDG) {
-      expect(sql).toContain(`('${p.id}'::uuid, '${p.descrizione}')`);
+      expect(sql).toContain(`('${p.id}'::uuid, '${descrizioneDiAllora(p.descrizione)}')`);
       expect(p.descrizione).toContain('· Analisi del business:');
       expect(p.descrizione).not.toContain('Scheda Google su Maps:');
       expect(p.descrizione).not.toContain('preventivo');
     }
     expect(MIGRAZIONE_711).toContain(`p.seller_id = '${SDG_SELLER_ID}'::uuid`);
+  });
+
+  // 27/11/2026 — Nicola, 26/11 verso le 16:00: per ora si paga in contanti. La descrizione non promette più che
+  // l'abbonamento «si attiva» dal sito finché il pagamento online è spento.
+  it('la migrazione 999e scrive le descrizioni di oggi: finché il pagamento online è spento, si paga in contanti', () => {
+    const sql = MIGRAZIONE_999E.replace(/''/g, "'");
+    expect(MIGRAZIONE_999E).toContain(`p.seller_id = '${SDG_SELLER_ID}'::uuid`);
+    for (const p of PRODOTTI_SDG) {
+      expect(sql).toContain(`('${p.id}'::uuid, '${p.descrizione}')`);
+      if (!PAGAMENTO_ONLINE_SERVIZI) {
+        expect(p.descrizione).toContain('si paga in contanti, di persona');
+        expect(p.descrizione).not.toContain('Si attiva dalla pagina Abbonamento');
+        // Nicola, 27/11 verso le 22:10 (sdg.lessico): sul lato SDG «la tua attività», non «il tuo negozio».
+        expect(p.descrizione).toContain('dalla pagina Abbonamento della tua attività');
+        expect(p.descrizione).not.toContain('tuo negozio');
+      }
+    }
+    // Tocca solo le descrizioni: nome e prezzo restano quelli della 999d.
+    expect(MIGRAZIONE_999E).toMatch(/SET description = v\.description\s+FROM/);
+    expect(MIGRAZIONE_999E).not.toMatch(/\bprice\s*=/);
+    expect(MIGRAZIONE_999E).toMatch(/RIESEGUIRE/);
+    expect(MIGRAZIONE_999E).toMatch(/TORNA INDIETRO/);
   });
 });

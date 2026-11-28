@@ -23,7 +23,11 @@ vi.mock('@/lib/env', () => ({ env: { appUrl: () => 'https://www.mycity-marketpla
 vi.mock('@/lib/email/client', () => ({ sendEmail: async () => ({ ok: true }) }));
 vi.mock('@/lib/email/templates', () => ({ accessoDopoIlPreventivoTemplate: () => ({ subject: 'Entra', html: '<p>Entra</p>' }) }));
 vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: async (_t: string, testo: string) => { stato.avvisi.push(testo); } }));
-vi.mock('@/lib/agenzia/pagamento-servizi', () => ({ pagamentoOnlineAttivo: () => stato.online }));
+// Il resto del modulo resta vero: le schede dei prodotti SDG leggono le sue costanti (PAGAMENTO_ONLINE_SERVIZI).
+vi.mock('@/lib/agenzia/pagamento-servizi', async (originale) => ({
+  ...(await originale<typeof import('@/lib/agenzia/pagamento-servizi')>()),
+  pagamentoOnlineAttivo: () => stato.online,
+}));
 vi.mock('@/lib/agenzia/scheda-dopo-abbonamento', () => ({ leggiSchedaEPagellaAperte: async () => null, schedaPerIlSito: () => null }));
 vi.mock('@/lib/agenzia/scheda-cliente', () => ({ campiPerIlProfilo: () => ({}), leggiSchedaSalvata: () => null }));
 vi.mock('@/lib/agenzia/abbonamento-contanti', () => ({

@@ -7,6 +7,7 @@
  * Se un giorno cambia il listino, cambiano tutti e due insieme.
  */
 import { ABBONAMENTI, FASCE, FRASE_CONDIZIONI, FRASE_PARTNER, LISTINO, SERVIZI_AGENZIA, type Abbonamento } from './preventivo';
+import { PAGAMENTO_ONLINE_SERVIZI } from './pagamento-servizi';
 
 /** Gli id fissi dei tre prodotti, uguali nella migrazione 707. */
 export const ID_PRODOTTO_SDG: Record<Abbonamento, string> = {
@@ -14,6 +15,16 @@ export const ID_PRODOTTO_SDG: Record<Abbonamento, string> = {
   business: '11111111-1111-1111-1111-5d9000000102',
   premium: '11111111-1111-1111-1111-5d9000000103',
 };
+
+/**
+ * Come si prende l'abbonamento. 27/11/2026 — Nicola, 26/11 verso le 16:00: per ora si paga in contanti e il
+ * pagamento online è spento (lib/agenzia/pagamento-servizi.ts). Finché è spento, la descrizione non dice che
+ * «si attiva» dal sito: dalla pagina Abbonamento il titolare lo chiede, e paga di persona. Quando si riaccende,
+ * torna la frase di prima, e serve una migrazione che riscriva le descrizioni (la prova lo ricorda).
+ */
+export const FRASE_COME_SI_PRENDE = PAGAMENTO_ONLINE_SERVIZI
+  ? 'Si attiva dalla pagina Abbonamento del tuo negozio, non dal carrello.'
+  : 'Non si compra dal carrello: lo chiedi dalla pagina Abbonamento della tua attività e, per ora, si paga in contanti, di persona.';
 
 export type ProdottoSdg = { id: string; fascia: Abbonamento; nome: string; prezzoEuro: string; descrizione: string };
 
@@ -32,7 +43,7 @@ export function prodottoSdg(fascia: Abbonamento): ProdottoSdg {
     `· Vetrina: ${f.vetrina}`,
     `· Assistenza: ${f.assistenza}`,
     '',
-    `Si attiva dalla pagina Abbonamento del tuo negozio, non dal carrello. ${FRASE_CONDIZIONI}`,
+    `${FRASE_COME_SI_PRENDE} ${FRASE_CONDIZIONI}`,
     FRASE_PARTNER,
   ].join('\n');
   return {

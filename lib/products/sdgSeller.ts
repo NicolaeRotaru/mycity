@@ -14,6 +14,7 @@
  * prodotto al posto di «Aggiungi al carrello» porta alla pagina Abbonamento.
  */
 import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
+import { PAGAMENTO_ONLINE_SERVIZI } from '@/lib/agenzia/pagamento-servizi';
 
 export const SDG_SELLER_ID = '11111111-1111-1111-1111-5d9000000001';
 
@@ -32,12 +33,17 @@ export function doveSiAttivaLAbbonamento(chiGuardaEUnNegozio: boolean, giaAbbona
   // 28/11/2026 — Un negozio che ha già l'abbonamento non sceglie di nuovo: va a vedere il suo. Finché non si sa
   // (lettura in corso o non riuscita, `null`) il pulsante non promette una scelta: porta alla pagina e basta.
   if (chiGuardaEUnNegozio && giaAbbonato === true) return { href: PERCORSO_ABBONAMENTO, testo: 'Vedi il tuo abbonamento' };
-  if (chiGuardaEUnNegozio && giaAbbonato === null) return { href: PERCORSO_ABBONAMENTO, testo: 'Vai alla pagina Abbonamento del tuo negozio' };
+  if (chiGuardaEUnNegozio && giaAbbonato === null) return { href: PERCORSO_ABBONAMENTO, testo: 'Vai alla pagina Abbonamento della tua attività' };
   return chiGuardaEUnNegozio
-    ? { href: PERCORSO_ABBONAMENTO, testo: 'Scegli l’abbonamento dal tuo negozio' }
+    ? { href: PERCORSO_ABBONAMENTO, testo: 'Scegli l’abbonamento dalla tua attività' }
     : { href: '/sell', testo: 'Iscrivi la tua attività per attivarlo' };
 }
 
-/** Il messaggio di chi prova a mettere un abbonamento nel carrello o in cassa. */
-export const MESSAGGIO_ABBONAMENTO_NON_IN_CARRELLO =
-  'è un abbonamento ai servizi: non si compra col carrello, si attiva dalla pagina Abbonamento del tuo negozio.';
+/**
+ * Il messaggio di chi prova a mettere un abbonamento nel carrello o in cassa. 27/11/2026 — Nicola, 26/11 verso
+ * le 16:00: per ora si paga in contanti e il pagamento online è spento (lib/agenzia/pagamento-servizi.ts):
+ * finché è spento, il messaggio non dice che «si attiva» dal sito, come la descrizione dei prodotti (migrazione 999e).
+ */
+export const MESSAGGIO_ABBONAMENTO_NON_IN_CARRELLO = PAGAMENTO_ONLINE_SERVIZI
+  ? 'è un abbonamento ai servizi: non si compra col carrello, si attiva dalla pagina Abbonamento del tuo negozio.'
+  : 'è un abbonamento ai servizi: non si compra col carrello, lo chiedi dalla pagina Abbonamento della tua attività e, per ora, si paga in contanti, di persona.';
