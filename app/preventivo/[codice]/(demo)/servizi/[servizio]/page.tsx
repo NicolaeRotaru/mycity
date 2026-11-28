@@ -90,7 +90,7 @@ export default async function ServizioDemo({ params }: { params: Promise<{ codic
       )}
 
       {!giaAPosto && id !== 'analisi' && (
-        <AnteprimaServizio id={id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} scheda={demo.scheda} />
+        <AnteprimaServizio id={id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} nascita={p.nascitaAttivita} scheda={demo.scheda} />
       )}
 
       <section className="mt-4 rounded-2xl border border-cream-300 bg-white p-5 shadow-warm sm:p-6" aria-labelledby="compreso-nei-piani">
