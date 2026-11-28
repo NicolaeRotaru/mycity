@@ -5,6 +5,7 @@ import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-qu
 import Link from 'next/link';
 import { ArrowRight, RotateCcw, SearchX } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { useServizi } from '@/components/hooks/useServizi';
 import ProductCard from './ProductCard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -388,6 +389,8 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     },
   });
   const ratings: RatingMap = domandaVoti.data ?? {};
+  // 27/11/2026 — Quali righe sono servizi: una lettura a parte, che prima della 999g torna vuota.
+  const servizi = useServizi(prods.map((p) => p.id));
 
   // Filtro "Promozione": insieme degli id prodotto con una promozione attiva del
   // negozio. Riusa la RPC active_promo_products (SECURITY INVOKER → rispetta RLS).
@@ -734,6 +737,8 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       // corrispondeva a niente di visibile.
       compareAtPrice={p.compare_at_price != null ? Number(p.compare_at_price) : null}
       hasVariants={p.has_variants ?? false}
+      // 27/11/2026 — Un servizio (999g) mostra «Servizio» e non ha il «+» del carrello.
+      servizio={servizi.get(p.id) ?? null}
       // 13/11/2026 (R15-006) — Una fila (`rail`) sta sempre sotto qualcos'altro: in home è la sesta
       // sezione, nelle categorie viene dopo l'intestazione e le altre file. Niente foto «urgenti».
       priority={prioritaPrimeFoto && !formaFila && i < 4}

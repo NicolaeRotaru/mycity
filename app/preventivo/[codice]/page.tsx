@@ -117,6 +117,7 @@ export default async function ConfermaDalLink({
         segnata={dalVenditore ?? p.consigliato}
         dalVenditore={dalVenditore !== null}
         giorni={giorniDellaVisita(new Date(), await orariGiaPresi())}
+        serviziDelVenditore={demo.pc.serviziScelti ?? null}
       />
     </Cornice>
   );

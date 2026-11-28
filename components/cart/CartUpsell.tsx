@@ -1,5 +1,6 @@
 'use client';
 
+import { leggiServizi } from '@/lib/products/servizio';
 import Link from 'next/link';
 import FotoConRipiego from '@/components/ui/FotoConRipiego';
 import caricatoreFotoRemote from '@/lib/image-loader';
@@ -48,7 +49,10 @@ export function CartUpsell({ items }: Props) {
     // 5/11/2026 — Col prezzo di oggi, promozione compresa, come la cassa: mostrava e salvava il
     // prezzo pieno, e il carrello poi scriveva «il prezzo è sceso» e la cassa «è cambiato».
     queryFn: async (): Promise<SuggestItem[]> => {
-      const righe = await leggiSuggerimentiCarrello(supabase, { sellerIds, excludeIds });
+      const tutte = await leggiSuggerimentiCarrello(supabase, { sellerIds, excludeIds });
+      // 27/11/2026 — Un servizio (999g) non si propone per il carrello: si prenota scrivendo al negozio.
+      const servizi = await leggiServizi(supabase, tutte.map((p) => p.id)).catch(() => new Map());
+      const righe = tutte.filter((p) => !servizi.has(p.id));
       if (righe.length === 0) return righe;
       const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>());
       return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 }));

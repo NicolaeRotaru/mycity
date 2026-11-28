@@ -1,5 +1,6 @@
 'use client';
 
+import { leggiServizi } from '@/lib/products/servizio';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
@@ -48,7 +49,10 @@ export function FrequentlyBoughtTogether({
     // Col prezzo di oggi, promozione compresa, come CartUpsell e la cassa: col prezzo pieno il
     // carrello poi scriveva «il prezzo è cambiato».
     queryFn: async (): Promise<Item[]> => {
-      const righe = await leggiSpessoCompratiInsieme(supabase, { productId, sellerId });
+      const tutte = await leggiSpessoCompratiInsieme(supabase, { productId, sellerId });
+      // 27/11/2026 — Un servizio (999g) non si propone per il carrello: si prenota scrivendo al negozio.
+      const servizi = await leggiServizi(supabase, tutte.map((p) => p.id)).catch(() => new Map());
+      const righe = tutte.filter((p) => !servizi.has(p.id));
       if (righe.length === 0) return righe;
       const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>());
       return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 }));

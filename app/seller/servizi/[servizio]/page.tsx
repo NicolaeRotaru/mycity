@@ -15,7 +15,8 @@ import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
 import SitoConsegnato from '@/components/seller/lavoro-consegnato/SitoConsegnato';
 import PianoEditorialeConsegnato from '@/components/seller/lavoro-consegnato/PianoEditorialeConsegnato';
 import AnalisiConsegnata from '@/components/seller/lavoro-consegnato/AnalisiConsegnata';
-import { parteDaMostrare } from '@/lib/agenzia/lavoro-consegnato/quale-parte';
+import LavoroDellOrdineDelTitolare from '@/components/seller/lavoro-consegnato/LavoroDellOrdine';
+import { parteDaMostrare, parteDellOrdine } from '@/lib/agenzia/lavoro-consegnato/quale-parte';
 import {
   CHIAVE_LAVORO_CONSEGNATO,
   leggiLavoroConsegnato,
@@ -59,8 +60,12 @@ export default function PaginaDelServizio() {
   const { data: bozzaAd } = useQuery({ queryKey: CHIAVE_BOZZA_AD, queryFn: leggiBozzaDellAd, enabled: id === 'sito_web' });
   // 27/11/2026 — Chi ha già il lavoro consegnato (SDG col Premium, il Caffè di Piacenza col sito Business) vede quello, non il preventivo.
   // Se la lettura fallisce (`lavoroInErrore`) resta la pagina di sempre: mai una pagina vuota.
-  const { data: lavoro, isLoading: lavoroInLettura } = useQuery({ queryKey: CHIAVE_LAVORO_CONSEGNATO, queryFn: leggiLavoroConsegnato, retry: false });
+  const { data: letto, isLoading: lavoroInLettura } = useQuery({ queryKey: CHIAVE_LAVORO_CONSEGNATO, queryFn: leggiLavoroConsegnato, retry: false });
+  const lavoro = letto?.lavoro ?? null;
   const parte = parteDaMostrare(id, lavoro);
+  // 28/11/2026 — Chi ha accettato il preventivo vede il lavoro nato col suo ordine (bozza del sito, piano, analisi).
+  const ordine = letto?.ordine ?? null;
+  const parteOrdine = parte ? null : parteDellOrdine(id, ordine);
   const voce = LISTINO[id];
   const riga = p?.righe.find((r) => r.id === id) ?? null;
   const giaAPosto = !!p && !riga && p.giaAPosto.includes(id);
@@ -80,6 +85,8 @@ export default function PaginaDelServizio() {
           {parte === 'social' && lavoro.social && <PianoEditorialeConsegnato social={lavoro.social} />}
           {parte === 'analisi' && lavoro.analisi && <AnalisiConsegnata analisi={lavoro.analisi} />}
         </>
+      ) : parteOrdine && ordine ? (
+        <LavoroDellOrdineDelTitolare parte={parteOrdine} ordine={ordine} />
       ) : (
         <>
       {isLoading && <LoadingState />}

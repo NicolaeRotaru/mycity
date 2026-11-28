@@ -37,7 +37,7 @@ const TIPI: Record<string, string> = {
   'amenity=cafe': 'Bar e caffetteria', 'amenity=bar': 'Bar', 'amenity=pub': 'Pub', 'amenity=restaurant': 'Ristorante',
   'amenity=fast_food': 'Cibo da asporto', 'amenity=ice_cream': 'Gelateria', 'amenity=pharmacy': 'Farmacia', 'amenity=biergarten': 'Birreria',
   'shop=bakery': 'Panetteria', 'shop=pastry': 'Pasticceria', 'shop=confectionery': 'Dolciumi', 'shop=chocolate': 'Cioccolateria',
-  'shop=butcher': 'Macelleria', 'shop=greengrocer': 'Frutta e verdura', 'shop=deli': 'Gastronomia', 'shop=cheese': 'Formaggi',
+  'shop=butcher': 'Macelleria', 'shop=greengrocer': 'Frutta e verdura', 'shop=deli': 'Gastronomia', 'shop=cheese': 'Formaggi', 'shop=food': 'Alimentari',
   'shop=seafood': 'Pescheria', 'shop=wine': 'Enoteca', 'shop=alcohol': 'Enoteca', 'shop=coffee': 'Torrefazione', 'shop=tea': 'Tè e infusi',
   'shop=supermarket': 'Supermercato', 'shop=convenience': 'Alimentari', 'shop=farm': 'Prodotti della fattoria', 'shop=pasta': 'Pastificio',
   'shop=clothes': 'Abbigliamento', 'shop=shoes': 'Calzature', 'shop=boutique': 'Boutique', 'shop=bag': 'Borse', 'shop=jewelry': 'Gioielleria',
@@ -63,7 +63,7 @@ const FAMIGLIE: string[][] = [
   ['shop=cosmetics', 'shop=perfumery'],
   ['shop=clothes', 'shop=boutique'],
   ['shop=dry_cleaning', 'shop=laundry'],
-  ['shop=deli', 'shop=cheese', 'shop=butcher'],
+  ['shop=deli', 'shop=cheese', 'shop=butcher', 'shop=food'],
   ['shop=supermarket', 'shop=convenience'],
 ];
 const CHIAVI = ['amenity', 'shop', 'craft', 'leisure', 'tourism'];

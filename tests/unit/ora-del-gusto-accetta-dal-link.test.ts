@@ -204,6 +204,14 @@ describe('accettare dal link col codice', () => {
     expect(db.preventivo?.stato).toBe('aperto');
   });
 
+  it('28/11: i servizi confermati sono almeno uno e solo fra i quattro, sennò niente', async () => {
+    expect((await accetta({ ...BUONO, servizi: [] })).status).toBe(400);
+    expect((await accetta({ ...BUONO, servizi: ['volantini'] })).status).toBe(400);
+    expect((await accetta({ ...BUONO, servizi: ['sito_web', 'prenotazioni'] })).status).toBe(400);
+    expect(db.preventivo?.stato).toBe('aperto');
+    expect(db.utenteAggiornato).toHaveLength(0);
+  });
+
   it('un preventivo chiuso non si accetta', async () => {
     db.preventivo!.stato = 'chiuso';
     expect((await accetta(BUONO)).status).toBe(409);

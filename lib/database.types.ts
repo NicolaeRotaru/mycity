@@ -1838,6 +1838,16 @@ export interface Database {
           piano_completo_il: string | null;
           creato_il: string;
           aggiornato_il: string;
+          sito: Json | null;
+          sito_stato: string;
+          lavoro_sito: string | null;
+          sito_errore: string | null;
+          sito_il: string | null;
+          analisi: Json | null;
+          analisi_stato: string;
+          lavoro_analisi: string | null;
+          analisi_errore: string | null;
+          analisi_il: string | null;
         };
         Insert: {
           id?: string;
@@ -1859,6 +1869,16 @@ export interface Database {
           piano_completo_il?: string | null;
           creato_il?: string;
           aggiornato_il?: string;
+          sito?: Json | null;
+          sito_stato?: string;
+          lavoro_sito?: string | null;
+          sito_errore?: string | null;
+          sito_il?: string | null;
+          analisi?: Json | null;
+          analisi_stato?: string;
+          lavoro_analisi?: string | null;
+          analisi_errore?: string | null;
+          analisi_il?: string | null;
         };
         Update: {
           id?: string;
@@ -1880,6 +1900,16 @@ export interface Database {
           piano_completo_il?: string | null;
           creato_il?: string;
           aggiornato_il?: string;
+          sito?: Json | null;
+          sito_stato?: string;
+          lavoro_sito?: string | null;
+          sito_errore?: string | null;
+          sito_il?: string | null;
+          analisi?: Json | null;
+          analisi_stato?: string;
+          lavoro_analisi?: string | null;
+          analisi_errore?: string | null;
+          analisi_il?: string | null;
         };
         Relationships: [];
       };
@@ -2012,6 +2042,8 @@ export interface Database {
           visita_il: string | null;
           lavoro: string | null;
           agente_email: string | null;
+          servizi_scelti: string[] | null;
+          nota_agente: string | null;
         };
         Insert: {
           seller_id: string;
@@ -2024,6 +2056,8 @@ export interface Database {
           visita_il?: string | null;
           lavoro?: string | null;
           agente_email?: string | null;
+          servizi_scelti?: string[] | null;
+          nota_agente?: string | null;
         };
         Update: {
           seller_id?: string;
@@ -2036,6 +2070,8 @@ export interface Database {
           visita_il?: string | null;
           lavoro?: string | null;
           agente_email?: string | null;
+          servizi_scelti?: string[] | null;
+          nota_agente?: string | null;
         };
         Relationships: [];
       };
@@ -2233,6 +2269,9 @@ export interface Database {
           external_synced_at: string | null;
           external_sync_status: string;
           non_recedibile: boolean;
+          tipo: string;
+          durata_minuti: number | null;
+          dove_servizio: string | null;
         };
         Insert: {
           id?: string;
@@ -2259,6 +2298,9 @@ export interface Database {
           external_synced_at?: string | null;
           external_sync_status?: string;
           non_recedibile?: boolean;
+          tipo?: string;
+          durata_minuti?: number | null;
+          dove_servizio?: string | null;
         };
         Update: {
           id?: string;
@@ -2285,6 +2327,9 @@ export interface Database {
           external_synced_at?: string | null;
           external_sync_status?: string;
           non_recedibile?: boolean;
+          tipo?: string;
+          durata_minuti?: number | null;
+          dove_servizio?: string | null;
         };
         Relationships: [];
       };

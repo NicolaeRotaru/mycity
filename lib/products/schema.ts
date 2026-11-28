@@ -1,5 +1,6 @@
 import * as z from 'zod';
 import { leggiPrezzo } from '@/app/seller/products/import/csv';
+import { DOVE_SI_FA, DURATA_MASSIMA, DURATA_MINIMA, type DoveSiFa, type TipoDiAnnuncio } from '@/lib/products/servizio';
 
 /**
  * Schema e modello condivisi del form prodotto (nuovo + modifica).
@@ -211,11 +212,67 @@ export interface BuildPayloadInput {
   expressEnabled: boolean | null;
   unlimitedStock: boolean;
   status: string;
+  /**
+   * 27/11/2026 — Prodotto o servizio (migrazione 999g). Senza, è un prodotto.
+   * `eraServizio`: in modifica, l'annuncio era un servizio quando si è aperto il modulo.
+   */
+  servizio?: {
+    tipo: TipoDiAnnuncio;
+    durataMinuti?: number | null;
+    dove?: DoveSiFa | '' | null;
+    eraServizio?: boolean;
+  };
+}
+
+/** Le colonne del servizio nel payload: ci sono solo quando servono (vedi `buildProductPayload`). */
+export type ColonneDelServizio = {
+  tipo?: TipoDiAnnuncio;
+  durata_minuti?: number | null;
+  dove_servizio?: DoveSiFa | null;
+};
+
+/** La durata scritta dal negoziante, se è un numero intero nei limiti; altrimenti niente. */
+export function durataValida(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(String(v).trim());
+  return Number.isInteger(n) && n >= DURATA_MINIMA && n <= DURATA_MASSIMA ? n : null;
 }
 
 /** Costruisce il payload DB (senza seller_id) da valori RHF + stato del form. */
-export function buildProductPayload(input: BuildPayloadInput) {
+export function buildProductPayload(input: BuildPayloadInput): ReturnType<typeof buildPayloadBase> & ColonneDelServizio {
   const { values, imageUrls, attributes, unit, condition, tags, expressEnabled, unlimitedStock, status } = input;
+  const base = buildPayloadBase(values, imageUrls, attributes, unit, condition, tags, expressEnabled, unlimitedStock, status);
+  /**
+   * 27/11/2026 — UN SERVIZIO NON HA SCORTA, CONDIZIONE NÉ CONSEGNA VELOCE.
+   *
+   * `stock = null` vuol dire già «illimitato» in tutto il codice. Le colonne del servizio partono
+   * solo quando servono: per un servizio, o per un annuncio che era un servizio e torna prodotto.
+   * Un prodotto qualsiasi non le porta, così il modulo salva anche prima della migrazione 999g.
+   */
+  const sv = input.servizio;
+  if (sv?.tipo === 'servizio') {
+    const dove = sv.dove && (DOVE_SI_FA as readonly string[]).includes(sv.dove) ? (sv.dove as DoveSiFa) : null;
+    const colonne: ColonneDelServizio = { tipo: 'servizio', durata_minuti: durataValida(sv.durataMinuti), dove_servizio: dove };
+    return { ...base, stock: null, condition: null, express_enabled: null, ...colonne };
+  }
+  if (sv?.eraServizio) {
+    const colonne: ColonneDelServizio = { tipo: 'prodotto', durata_minuti: null, dove_servizio: null };
+    return { ...base, ...colonne };
+  }
+  return base;
+}
+
+function buildPayloadBase(
+  values: ProductFormValues,
+  imageUrls: string[],
+  attributes: Record<string, unknown>,
+  unit: ProductUnit,
+  condition: ProductCondition | '',
+  tags: string[],
+  expressEnabled: boolean | null,
+  unlimitedStock: boolean,
+  status: string,
+) {
   return {
     name: values.name.trim(),
     description: values.description.trim(),
