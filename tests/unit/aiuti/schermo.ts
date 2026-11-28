@@ -20,11 +20,41 @@ type Schermo = {
 const SOSPESO = '[data-aiuto-sospeso]';
 
 type Opzioni = { permettiSospeso?: boolean };
-let permettiSospesoDaAccendi = false;
 
-function controllaNonSospeso(doc: Document, dove: string) {
-  const n = doc.querySelectorAll(SOSPESO).length;
-  if (n > 0 && !permettiSospesoDaAccendi) {
+/**
+ * Onda 2 (R07-011) — IL PERMESSO DI RESTARE SOSPESO E' DI OGNI SCHERMO, NON DELL'ULTIMA `accendi`.
+ *
+ * Prima il permesso era una variabile sola, riscritta da ogni `accendi`: con due schermi accesi
+ * valeva quello dell'ultimo per tutti e due. Uno schermo sospeso per sempre SENZA permesso, acceso
+ * prima di uno col permesso, passava in silenzio (la prova controllava un'assenza su niente); uno
+ * col permesso, acceso prima di uno senza, faceva rigettare `attendi()` a torto. Adesso ogni radice
+ * porta il suo permesso, e si contano solo i segnaposto delle radici che non ce l'hanno.
+ */
+const radiciAccese = new Map<HTMLElement, boolean>();
+
+function sospesiSenzaPermesso(): number {
+  let n = 0;
+  for (const [radice, permesso] of radiciAccese) {
+    if (!permesso && radice.isConnected) n += radice.querySelectorAll(SOSPESO).length;
+  }
+  return n;
+}
+
+/**
+ * Onda 2 (R07-011) — UN IMPORT LENTO NON E' UN IMPORT SOSPESO PER SEMPRE.
+ *
+ * `attendi()` dava venti giri di `setTimeout(0)` (qualche decina di millisecondi) e poi diceva
+ * «sospeso per sempre»: un import pigro che la macchina, carica, trasforma in mezzo secondo
+ * faceva cadere una prova giusta. Adesso si aspetta a TEMPO, sull'orologio vero (preso qui, prima
+ * che una prova accenda l'orologio finto: con l'orologio finto i giri non passerebbero mai).
+ */
+const ATTESA_MASSIMA_MS = 3000;
+const aspettaDavvero = globalThis.setTimeout.bind(globalThis);
+const adessoDavvero = Date.now.bind(Date);
+
+function controllaNonSospeso(dove: string) {
+  const n = sospesiSenzaPermesso();
+  if (n > 0) {
     throw new Error(
       `Lo schermo e' ancora sospeso ${dove} (${n} segnaposto [data-aiuto-sospeso]): il componente non si e' mai disegnato, ` +
         `e una prova che controlla un'assenza passerebbe senza aver provato niente. ` +
@@ -34,10 +64,10 @@ function controllaNonSospeso(doc: Document, dove: string) {
 }
 
 export function accendi(componente: unknown, proprieta: Record<string, unknown> = {}, opzioni: Opzioni = {}): Schermo {
-  permettiSospesoDaAccendi = opzioni.permettiSospeso === true;
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
   const radice = document.createElement('div');
   document.body.appendChild(radice);
+  radiciAccese.set(radice, opzioni.permettiSospeso === true);
   let root: Root;
   void act(() => {
     root = createRoot(radice);
@@ -51,12 +81,13 @@ export function accendi(componente: unknown, proprieta: Record<string, unknown> 
         azione();
       });
     },
-    sospeso: () => document.querySelectorAll(SOSPESO).length,
+    sospeso: () => radice.querySelectorAll(SOSPESO).length,
     smonta: () => {
       void act(() => {
         root.unmount();
       });
       radice.remove();
+      radiciAccese.delete(radice);
     },
   };
 }
@@ -67,13 +98,15 @@ export async function attendi(): Promise<void> {
     await Promise.resolve();
     await Promise.resolve();
   });
-  // Un import pigro puo' chiedere qualche giro in piu': si da' un po' di tempo prima di dire che e' sospeso per sempre.
-  for (let giro = 0; giro < 20 && document.querySelector(SOSPESO); giro++) {
+  // Un import pigro puo' chiedere tempo (la trasformazione del modulo): si aspetta fino a
+  // ATTESA_MASSIMA_MS di orologio vero prima di dire che e' sospeso per sempre.
+  const scadenza = adessoDavvero() + ATTESA_MASSIMA_MS;
+  while (sospesiSenzaPermesso() > 0 && adessoDavvero() < scadenza) {
     await act(async () => {
-      await new Promise((ok) => setTimeout(ok, 0));
+      await new Promise((ok) => aspettaDavvero(ok, 5));
     });
   }
-  controllaNonSospeso(document, 'dopo attendi()');
+  controllaNonSospeso('dopo attendi()');
 }
 
 /** Un clic vero, quello che fa partire onClick di React. */
