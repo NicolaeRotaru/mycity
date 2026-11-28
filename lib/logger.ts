@@ -49,11 +49,11 @@ const PII_KEYS =
  * timestamp, id, date e versioni restano leggibili). Un nome o una via scritti in una frase non si riconoscono dalla forma: per
  * quelli resta la regola delle chiavi.
  */
-const DATI_NEL_TESTO: Array<[forma: RegExp, sostituto: string]> = [
-  // IBAN (anche a gruppi di quattro), codice fiscale, gettone JWT.
+const DATI_NEL_TESTO: Array<[forma: RegExp, sostituto: string] | ((testo: string) => string)> = [
+  // IBAN (anche a gruppi di quattro), codice fiscale, gettone JWT (vedi `senzaGettoni`).
   [/\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?\b/g, '[redacted]'],
   [/\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b/gi, '[redacted]'],
-  [/\beyJ[\w-]+\.[\w-]+\.[\w-]+/g, '[redacted]'],
+  senzaGettoni,
   // Telefono o carta: il carattere prima si cattura e si rimette (niente lookbehind: Safari prima
   // della 16.4 non lo legge, e il logger gira anche nel browser).
   // Solo la FORMA di un telefono italiano: prefisso facoltativo (+39, 0039, +), poi un cellulare (3xx,
@@ -70,10 +70,49 @@ const DATI_NEL_TESTO: Array<[forma: RegExp, sostituto: string]> = [
   ],
 ];
 
+/**
+ * Il gettone JWT: tre pezzi di lettere, cifre, `_` e `-` separati da punti, il primo che comincia con
+ * «eyJ» a inizio parola. Toglie quello che toglieva `/\beyJ[\w-]+\.[\w-]+\.[\w-]+/g`, con un passaggio
+ * solo sul testo: prima le catene «pezzo.pezzo.…» (ognuna letta una volta), poi dentro ogni catena,
+ * pezzo per pezzo, il primo «eyJ» a inizio parola seguito da almeno altri due pezzi.
+ */
+const CATENA_DI_PEZZI = /[\w-]+(?:\.[\w-]+)*/g;
+
+function senzaGettoni(testo: string): string {
+  if (!testo.includes('eyJ')) return testo;
+  return testo.replace(CATENA_DI_PEZZI, (catena) => (catena.includes('eyJ') ? catenaSenzaGettoni(catena) : catena));
+}
+
+function catenaSenzaGettoni(catena: string): string {
+  const pezzi = catena.split('.');
+  const fuori: string[] = [];
+  let i = 0;
+  while (i < pezzi.length) {
+    const inizio = i + 2 < pezzi.length ? inizioDelGettone(pezzi[i]) : -1;
+    if (inizio < 0) {
+      fuori.push(pezzi[i]);
+      i += 1;
+    } else {
+      // Il gettone va da qui alla fine del terzo pezzo: quello che c'è prima resta.
+      fuori.push(`${pezzi[i].slice(0, inizio)}[redacted]`);
+      i += 3;
+    }
+  }
+  return fuori.join('.');
+}
+
+/** Dove comincia il gettone nel pezzo: il primo «eyJ» a inizio pezzo o dopo un `-`, con almeno un carattere dopo. */
+function inizioDelGettone(pezzo: string): number {
+  for (let j = pezzo.indexOf('eyJ'); j >= 0; j = pezzo.indexOf('eyJ', j + 1)) {
+    if (j + 3 < pezzo.length && (j === 0 || pezzo[j - 1] === '-')) return j;
+  }
+  return -1;
+}
+
 function oscuraTesto(testo: string): string {
   // L'email con la scansione lineare già usata per il filmato dello schermo (niente lookbehind).
   let t = testoSenzaEmail(testo, '[redacted]');
-  for (const [forma, sostituto] of DATI_NEL_TESTO) t = t.replace(forma, sostituto);
+  for (const passo of DATI_NEL_TESTO) t = typeof passo === 'function' ? passo(t) : t.replace(passo[0], passo[1]);
   return t;
 }
 
