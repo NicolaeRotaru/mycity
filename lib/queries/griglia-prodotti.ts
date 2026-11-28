@@ -355,20 +355,58 @@ async function leggiFraGliIdsColVoto(
   return { data: data.sort(nellOrdineDelDatabase(sort)).slice(da, a + 1), error: null };
 }
 
+/**
+ * 27/11/2026 — LE PAGINE DOPO LA PRIMA LEGGONO COME LA PRIMA.
+ *
+ * Se fra una pagina e l'altra la risposta su `prezzo_pagato` cambiava (la 911 applicata a pagina
+ * aperta, la sonda caduta per rete alla prima pagina), la pagina 1 era ordinata sul prezzo pieno e la
+ * 2 sul prezzo pagato: doppioni e prodotti saltati. Ora per ogni client si ricorda come è stata letta
+ * la prima pagina di ogni domanda (filtri e ordine, senza la finestra) e le pagine dopo leggono
+ * uguale; una prima pagina riletta (un nuovo scorrimento) decide di nuovo.
+ */
+const modiDelloScorrimento = new WeakMap<object, Map<string, boolean>>();
+const TETTO_MODI = 50;
+
+function chiaveDelloScorrimento(d: DomandaGriglia): string {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { finestra, ...resto } = d;
+  return JSON.stringify(resto);
+}
+
+function ricordaModo(supabase: SupabaseClient, chiave: string, pagato: boolean): void {
+  let modi = modiDelloScorrimento.get(supabase);
+  if (!modi) { modi = new Map(); modiDelloScorrimento.set(supabase, modi); }
+  modi.delete(chiave);
+  modi.set(chiave, pagato);
+  if (modi.size > TETTO_MODI) modi.delete(modi.keys().next().value as string);
+}
+
 export async function leggiProdottiDellaGriglia(
   supabase: SupabaseClient,
   d: DomandaGriglia,
 ): Promise<PaginaGriglia> {
   if (!guardaIlPrezzo(d)) return leggiLaGriglia(supabase, d, false);
-  const pagato = await cePrezzoPagato(supabase);
+  const chiave = chiaveDelloScorrimento(d);
+  const primaPagina = !d.finestra || d.finestra[0] === 0;
+  const comeLaPrima = primaPagina ? undefined : modiDelloScorrimento.get(supabase)?.get(chiave);
+  const pagato = comeLaPrima ?? (await cePrezzoPagato(supabase));
   try {
-    return await leggiLaGriglia(supabase, d, pagato);
+    const pagina = await leggiLaGriglia(supabase, d, pagato);
+    if (primaPagina) ricordaModo(supabase, chiave, pagato);
+    return pagina;
   } catch (errore) {
     // R21-003 — Il ripiego: la colonna non c'è (migrazione 911 non applicata) o il database ha superato
     // il tempo (57014) → la lettura di prima.
     if (!pagato || !prezzoPagatoNonVa(errore)) throw errore;
-    segnaSenzaPrezzoPagato(supabase);
-    return leggiLaGriglia(supabase, d, false);
+    // 27/11/2026 — Un 57014 può venire dal carico del database e non da `prezzo_pagato`: allora
+    // anche la lettura sul prezzo pieno cade, e il prezzo pagato non si spegne per cinque minuti.
+    // Si spegne solo se la lettura sul prezzo pieno riesce (o se la colonna manca davvero).
+    const tempoScaduto = !mancaPrezzoPagato(errore);
+    if (!tempoScaduto) segnaSenzaPrezzoPagato(supabase);
+    const pagina = await leggiLaGriglia(supabase, d, false);
+    if (tempoScaduto) segnaSenzaPrezzoPagato(supabase);
+    if (primaPagina) ricordaModo(supabase, chiave, false);
+    return pagina;
   }
 }
 
@@ -578,6 +616,8 @@ export async function contaProdottiDellaGriglia(
   // negozio si aggancia con `!inner` alla vista pubblica, NOMINANDO il vincolo (fra products e la
   // vista ci sono due strade: senza nome PostgREST risponde 300). Se l'aggancio non va si conta com'era (`senzaAggancio`) invece di non dare nessun numero.
   let senzaAggancio = false;
+  /** Un 57014 su `prezzo_pagato`: si spegne per cinque minuti solo se il conto sul prezzo pieno riesce. */
+  let tempoScaduto = false;
   const conta = (blocco?: string[]) => {
     const colonne = senzaAggancio ? 'id' : 'id, negozio:seller_public_profiles!products_seller_id_fkey!inner(id)';
     // R21-003 — Guardando `prezzo_pagato` si conta con una GET senza righe (limit 0) invece che con una HEAD:
@@ -604,7 +644,8 @@ export async function contaProdottiDellaGriglia(
       // cambia il prezzo su cui si conta: il numero sopra la griglia deve tornare con la lista.
       if (pagato && prezzoPagatoNonVa(error)) {
         pagato = false;
-        segnaSenzaPrezzoPagato(supabase);
+        if (mancaPrezzoPagato(error)) segnaSenzaPrezzoPagato(supabase);
+        else tempoScaduto = true;
         scontatiSotto = await scontatiSenzaPagato();
       } else if (!senzaAggancio) {
         // Su una HEAD postgrest-js non dà il codice dell'errore (solo `message: ""`): il ripiego
@@ -616,5 +657,6 @@ export async function contaProdottiDellaGriglia(
     if (error || count == null) return null;
     totale += count;
   }
+  if (tempoScaduto) segnaSenzaPrezzoPagato(supabase);
   return totale;
 }

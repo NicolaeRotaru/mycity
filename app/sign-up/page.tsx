@@ -17,6 +17,7 @@ import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 import { ritornoDopoLaConferma } from '@/lib/analytics/porta-di-ingresso';
 import { memoriaDellaScheda, percorsoVerificaEmail, ricordaEmailDaConfermare } from '@/lib/auth/conferma-email';
 import { indirizzoContatto } from '@/lib/contatti-pubblici';
+import { chiediPermessoDiIscrizione } from './azioni';
 
 /**
  * #79 — Quale versione dei testi legali si sta accettando. Va tenuta allineata
@@ -143,6 +144,17 @@ function SignUpInner() {
     }
     setIsLoading(true);
     try {
+      // 27/11/2026 (R12-012) — Prima di creare l'account il server conta le iscrizioni di questa
+      // rete (app/sign-up/azioni.ts): sopra la soglia si dice qui e Supabase non viene chiamato.
+      // Se il server non risponde (rete, un rilascio nuovo con la scheda aperta da prima) si va
+      // avanti come prima: chi vuole aggirare il freno chiama Supabase da sé, e una persona vera
+      // non deve restare fuori per un guasto nostro.
+      const permesso = await chiediPermessoDiIscrizione().catch(() => null);
+      if (permesso && !permesso.ok) {
+        setErroreIscrizione(permesso.messaggio);
+        toast.error(permesso.messaggio);
+        return;
+      }
       /**
        * 27/8/2026 (R160) — L'INTENZIONE VIAGGIA COL LINK DI CONFERMA.
        *
