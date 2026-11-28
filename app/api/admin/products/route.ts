@@ -7,6 +7,7 @@ import { controllaScorteVarianti, saveProductVariantsServer } from '@/lib/produc
 import { DaCompletare, tracciaDellaModifica, type VoceDiTraccia } from '@/lib/products/salvataggio-tracciato';
 import { type ProductVariant } from '@/lib/products/variants';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { colonnaNonTrovata } from '@/lib/db/migrazione-148';
 
 export const runtime = 'nodejs';
 
@@ -242,6 +243,10 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
   if (rest.tags !== undefined) patch.tags = rest.tags;
   if (rest.express_enabled !== undefined) patch.express_enabled = rest.express_enabled;
   if (rest.status !== undefined) patch.status = rest.status;
+  // 28/11/2026 (R01-010, onda 2) — Lo staff che rimette in vendita un prodotto tolto dopo una
+  // segnalazione accolta svuota il segno nella stessa scrittura: il database non lascia tornare
+  // «available» un prodotto col segno (migrazione onda2_A_3), nemmeno al server.
+  if (rest.status === 'available') patch.tolto_dallo_staff_at = null;
   Object.assign(patch, externalPatch(rest));
 
   // 31/10/2026 — LA SCORTA SI SCRIVE SOLO SE E' ANCORA QUELLA VISTA. Con
@@ -260,7 +265,12 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
   // R02-003 — Com'era il prodotto si legge anche senza varianti: serve alla traccia, che dice
   // il valore di prima e quello di dopo di ogni campo cambiato, come le altre porte.
   if (Object.keys(patch).length > 0) {
-    const { data, error } = await admin.from('products').select(Object.keys(patch).join(', ')).eq('id', id).maybeSingle();
+    let { data, error } = await admin.from('products').select(Object.keys(patch).join(', ')).eq('id', id).maybeSingle();
+    // Senza la migrazione onda2_A_3 la colonna del segno non c'è: non c'è niente da svuotare.
+    if (error && 'tolto_dallo_staff_at' in patch && colonnaNonTrovata(error, ['tolto_dallo_staff_at'])) {
+      delete patch.tolto_dallo_staff_at;
+      ({ data, error } = await admin.from('products').select(Object.keys(patch).join(', ')).eq('id', id).maybeSingle());
+    }
     if (error) return ApiErrors.internal('Impossibile aggiornare il prodotto');
     prima = data as unknown as Record<string, unknown> | null;
     // R04-002 — Prodotto che non esiste: 404, niente scritture e niente traccia con «prima» vuoto.

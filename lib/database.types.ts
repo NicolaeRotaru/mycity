@@ -2221,6 +2221,7 @@ export interface Database {
           external_synced_at: string | null;
           external_sync_status: string;
           non_recedibile: boolean;
+          tolto_dallo_staff_at: string | null;
         };
         Insert: {
           id?: string;
@@ -2247,6 +2248,7 @@ export interface Database {
           external_synced_at?: string | null;
           external_sync_status?: string;
           non_recedibile?: boolean;
+          tolto_dallo_staff_at?: string | null;
         };
         Update: {
           id?: string;
@@ -2273,6 +2275,7 @@ export interface Database {
           external_synced_at?: string | null;
           external_sync_status?: string;
           non_recedibile?: boolean;
+          tolto_dallo_staff_at?: string | null;
         };
         Relationships: [];
       };
