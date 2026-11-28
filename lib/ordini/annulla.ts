@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { after } from 'next/server';
+import { nellaFila } from '@/lib/api/dopo-la-risposta';
 import { refundOrder } from '@/lib/stripe/payout';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
@@ -538,10 +539,17 @@ export async function avvisaIlClienteDellAnnullo(
 /**
  * Il lavoro parte con `after()` di Next, dopo la risposta. Fuori da una richiesta `after()` lancia:
  * torna false, e chi chiama aspetta l'invio, come prima.
+ *
+ * 28/11/2026 (onda 2, R06-012) — IN FILA, NON TUTTE INSIEME. Next fa partire insieme tutti i lavori
+ * registrati con `after()`, senza tetto. Il giro degli ordini scaduti ne registra fino a tre per
+ * ordine (cliente, rimborso, negozio) su cento ordini: trecento email nello stesso istante, e il
+ * limite d'invio della posta ne respingeva molte (con un avviso agli amministratori per ognuna). Le
+ * altre email dopo la risposta (lib/api/dopo-la-risposta.ts, R05-003) stavano già in fila: queste no.
+ * Ora passano dalla stessa fila (`nellaFila`): ogni lavoro parte quando il precedente ha finito.
  */
 function dopoLaRisposta(lavoro: () => Promise<void>): boolean {
   try {
-    after(lavoro);
+    after(() => nellaFila(lavoro));
     return true;
   } catch {
     return false;
