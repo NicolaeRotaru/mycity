@@ -1,6 +1,6 @@
 # La mappa dei clienti da visitare
 
-28/11/2026. Migrazione `999g`, pagina `/agente/clienti`, rotte `/api/agente/clienti` e `/api/agenzia/clienti-da-visitare`.
+28/11/2026. Migrazione `999i`, pagina `/agente/clienti`, rotte `/api/agente/clienti` e `/api/agenzia/clienti-da-visitare`.
 
 Nicola: «la mappa deve visualizzarsi in 2 modi: 1) sulla mappa, 2) una lista che si può ordinare, e un ordine è la priorità del cliente da contattare».
 
@@ -14,7 +14,7 @@ Nicola: «la mappa deve visualizzarsi in 2 modi: 1) sulla mappa, 2) una lista ch
 
 ## Una sola fonte di verità per lo stato: il sito
 
-La tabella `clienti_da_visitare` (migrazione 999g) tiene la prenotazione e lo stato. Il browser non la legge: solo le rotte del sito, con la chiave di servizio.
+La tabella `clienti_da_visitare` (migrazione 999i) tiene la prenotazione e lo stato. Il browser non la legge: solo le rotte del sito, con la chiave di servizio.
 
 - **n8n scrive i dati delle attività**, mai la prenotazione né lo stato: `POST /api/agenzia/clienti-da-visitare` chiama la funzione `ricevi_clienti_da_visitare`.
 - **Il sito scrive prenotazione e stato**, solo per l'agente collegato (`/api/agente/clienti`).

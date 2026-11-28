@@ -4,7 +4,7 @@ import path from 'node:path';
 import { nuovoDb, supabaseFinto, type DbFinto } from '../agenzia/_supabase-finto';
 
 /**
- * LA MAPPA DEI CLIENTI DA VISITARE — 28/11/2026 (migrazione 999g).
+ * LA MAPPA DEI CLIENTI DA VISITARE — 28/11/2026 (migrazione 999i).
  *
  * Ogni agente vede tutta la mappa e prenota da solo («Ci vado io» / «Lascio»); dopo la visita segna lo stato.
  * Queste prove diventano rosse se:
@@ -318,8 +318,8 @@ describe('come si mostra', () => {
   });
 });
 
-describe('la migrazione 999g', () => {
-  const sql = fs.readFileSync(path.join(process.cwd(), 'migrations/999g_la_mappa_dei_clienti_da_visitare.sql'), 'utf8');
+describe('la migrazione 999i', () => {
+  const sql = fs.readFileSync(path.join(process.cwd(), 'migrations/999i_la_mappa_dei_clienti_da_visitare.sql'), 'utf8');
   it('il browser non legge e non scrive la tabella; la funzione la chiama solo il server', () => {
     expect(sql).toMatch(/ENABLE ROW LEVEL SECURITY/);
     expect(sql).toMatch(/REVOKE ALL ON public\.clienti_da_visitare FROM anon, authenticated/);

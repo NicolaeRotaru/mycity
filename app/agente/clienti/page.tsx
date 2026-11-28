@@ -1,6 +1,6 @@
 'use client';
 
-// LA MAPPA DEI CLIENTI DA VISITARE — 28/11/2026 (migrazione 999g).
+// LA MAPPA DEI CLIENTI DA VISITARE — 28/11/2026 (migrazione 999i).
 // Nicola: «la mappa deve visualizzarsi in 2 modi: 1) sulla mappa, 2) una lista che si può ordinare, e un ordine è la
 // priorità del cliente da contattare». Le attività vengono dal flusso n8n 16 (tutta la fila). Ognuno vede tutto;
 // «Ci vado io» e il cliente è tuo, gli altri lo vedono preso; «Lascio» e torna libero. Dopo la visita, una parola.

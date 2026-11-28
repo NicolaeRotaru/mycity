@@ -1,5 +1,5 @@
 -- =============================================================================
--- 999g — La mappa dei clienti da visitare
+-- 999i — La mappa dei clienti da visitare
 -- =============================================================================
 -- CHE COSA. Nicola, 28/11/2026: «la mappa deve visualizzarsi in 2 modi: 1) sulla mappa, 2) una lista che si può
 -- ordinare, e un ordine è la priorità del cliente da contattare». Le attività entro 5 km da Pane Quotidiano che il
@@ -124,6 +124,6 @@ REVOKE ALL ON FUNCTION public.ricevi_clienti_da_visitare(jsonb, timestamptz) FRO
 GRANT EXECUTE ON FUNCTION public.ricevi_clienti_da_visitare(jsonb, timestamptz) TO service_role;
 
 COMMENT ON TABLE public.clienti_da_visitare IS
-  'Le attività da visitare (flusso n8n 16, tutta la fila) con la prenotazione dell agente e lo stato dopo la visita. Unica fonte dello stato. Solo dal server (migrazione 999g).';
+  'Le attività da visitare (flusso n8n 16, tutta la fila) con la prenotazione dell agente e lo stato dopo la visita. Unica fonte dello stato. Solo dal server (migrazione 999i).';
 
 COMMIT;

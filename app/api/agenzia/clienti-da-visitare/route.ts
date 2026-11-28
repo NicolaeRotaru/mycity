@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 /**
- * IL FLUSSO 16 E LA MAPPA DEI CLIENTI — 28/11/2026 (migrazione 999g).
+ * IL FLUSSO 16 E LA MAPPA DEI CLIENTI — 28/11/2026 (migrazione 999i).
  *
  * Il flusso n8n «16 · Attività da visitare» parla col sito da qui, con un segreto suo:
  * `N8N_CLIENTI_DA_VISITARE_SEGRETO`, nell'intestazione `x-mycity-segreto` (regole in lib/api/porta-col-segreto.ts:
@@ -37,7 +37,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: true, data }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
     logger.error('[clienti-da-visitare] lettura non riuscita', { errore: String(e) });
-    return ApiErrors.unavailable('La mappa dei clienti non si legge: la migrazione 999g è applicata?');
+    return ApiErrors.unavailable('La mappa dei clienti non si legge: la migrazione 999i è applicata?');
   }
 }
 
@@ -63,7 +63,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   const { data, error } = await getAdminSupabase().rpc('ricevi_clienti_da_visitare', { p_righe: righe, p_giro: giro });
   if (error) {
     logger.error('[clienti-da-visitare] scrittura non riuscita', { errore: error.message });
-    return ApiErrors.unavailable('La mappa dei clienti non si scrive: la migrazione 999g è applicata?');
+    return ApiErrors.unavailable('La mappa dei clienti non si scrive: la migrazione 999i è applicata?');
   }
   return NextResponse.json({ ok: true, data: { ricevute: typeof data === 'number' ? data : righe.length, scartate } });
 }

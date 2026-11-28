@@ -87,7 +87,7 @@ export const PATCH = withAdminAuth(async ({ req }) => {
   }
   // Nessuna riga toccata: prima rispondeva «fatto» lo stesso, e Admin mostrava salvata una modifica mai avvenuta.
   if (!data?.length) return ApiErrors.conflict(m.azione === 'ritira' ? 'Questo link era già ritirato, o non esiste più.' : 'Questo agente non si trova.');
-  // 28/11/2026 — Chi viene sospeso lascia liberi i suoi clienti sulla mappa (migrazione 999g). Se la tabella non c'è
+  // 28/11/2026 — Chi viene sospeso lascia liberi i suoi clienti sulla mappa (migrazione 999i). Se la tabella non c'è
   // ancora, la sospensione vale lo stesso: si annota e basta.
   if (m.azione === 'sospendi') {
     try { await liberaIClientiDi(admin, m.userId); } catch (e) { logger.warn('[admin] clienti dell agente sospeso non liberati', { message: String(e) }); }

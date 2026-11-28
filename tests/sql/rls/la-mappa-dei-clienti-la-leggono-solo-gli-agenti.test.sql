@@ -1,5 +1,5 @@
 -- =============================================================================
--- La mappa dei clienti da visitare (migrazione 999g)
+-- La mappa dei clienti da visitare (migrazione 999i)
 -- =============================================================================
 -- Il browser (visitatore o utente collegato, anche un agente) non legge e non scrive la tabella e non chiama la
 -- funzione del giro: tutto passa dalle rotte del sito con la chiave di servizio. Il giro di n8n aggiorna i dati
@@ -14,8 +14,8 @@ CREATE TEMP TABLE esiti (nome text, ok boolean, dettaglio text) ON COMMIT DROP;
 GRANT ALL ON esiti TO anon, authenticated, service_role;
 
 INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
-  ('a999a111-1111-1111-1111-111111111111', 'agente-999g@test.it', '{"role":"customer"}');
-INSERT INTO public.agenti (user_id, email) VALUES ('a999a111-1111-1111-1111-111111111111', 'agente-999g@test.it');
+  ('a999a111-1111-1111-1111-111111111111', 'agente-999i@test.it', '{"role":"customer"}');
+INSERT INTO public.agenti (user_id, email) VALUES ('a999a111-1111-1111-1111-111111111111', 'agente-999i@test.it');
 INSERT INTO public.clienti_da_visitare (osm, nome, dossier, settimana, prenotata_da, stato) VALUES
   ('node/9991', 'Forno di prova', 'Chi è: un forno', '2026-11-23', 'a999a111-1111-1111-1111-111111111111', 'si'),
   ('node/9992', 'Bar che chiude', NULL, NULL, NULL, 'da_visitare');

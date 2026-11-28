@@ -1,4 +1,4 @@
-// /api/agente/clienti — la mappa dei clienti da visitare (28/11/2026, migrazione 999g).
+// /api/agente/clienti — la mappa dei clienti da visitare (28/11/2026, migrazione 999i).
 //  · GET  — tutta la fila, ordinata per priorità. Ogni agente vede tutto, ma di un cliente preso da un altro sa solo
 //    che è preso; l'admin vede anche da chi.
 //  · POST { osm, azione: 'prendi' | 'lascia' | 'stato', stato? } — «Ci vado io», «Lascio», e lo stato dopo la
@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 20;
 
 const nessunaCache = { 'Cache-Control': 'no-store' };
-const GUASTO = 'Non riesco a leggere la mappa dei clienti in questo momento. Controlla che la migrazione 999g sia applicata, o riprova fra poco.';
+const GUASTO = 'Non riesco a leggere la mappa dei clienti in questo momento. Controlla che la migrazione 999i sia applicata, o riprova fra poco.';
 
 export const GET = conAgente({ name: 'agente-clienti', max: 300, windowMs: 60 * 60_000 }, async ({ user, profile }) => {
   const chi: Chi = { id: user.id, admin: profile?.role === 'admin' };
