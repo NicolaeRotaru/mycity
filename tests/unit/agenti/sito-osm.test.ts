@@ -68,7 +68,7 @@ test('gli indirizzi da provare: col nome intero, senza articolo, senza la parola
   const c = candidatiDominio('La Dolce Dispensa', 'Piacenza');
   assert.equal(c[0], 'ladolcedispensa.it');
   assert.ok(c.includes('dolcedispensa.it'));
-  assert.ok(c.length <= 8);
+  assert.ok(c.length <= 12); // 28/11/2026: da 8 a 12, coi nomi senza parole comuni, invertiti e dai profili
   assert.ok(candidatiDominio('Pasticceria Groppi', 'Piacenza').includes('groppi.it'));
   assert.ok(candidatiDominio("Caffè dell'Arte", 'Piacenza').includes('caffedellarte.it'));
   assert.deepEqual(candidatiDominio('!!', 'Piacenza'), []);
