@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ORDER_STATUS_LABEL, etichettaPronto } from '@/lib/order-status';
+import { ORDER_STATUS_LABEL, etichettaPronto, etichettaProntoGenerica } from '@/lib/order-status';
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 
 /**
@@ -32,7 +32,13 @@ describe('l’etichetta di «pronto» segue l’interruttore del ritiro', () => 
 
   it('quella che gira sul sito oggi è coerente con l’interruttore di oggi', () => {
     if (RITIRO_IN_NEGOZIO_ATTIVO) {
-      expect(ORDER_STATUS_LABEL.READY).toMatch(/ritiro/i);
+      // R12-009 (28/11/2026) — Col ritiro acceso ci sono le due strade, e la targhetta non sa quale:
+      // «Pronto per il ritiro» manderebbe in negozio chi aspetta a casa (il difetto qui sopra),
+      // «Pronto per il fattorino» direbbe il contrario a chi ritira. Dice una cosa vera per tutti e
+      // due; dove l'ordine è noto si usa `etichettaPronto(ordine.pickup_in_store)`.
+      expect(ORDER_STATUS_LABEL.READY).toBe(etichettaProntoGenerica(true));
+      expect(ORDER_STATUS_LABEL.READY, 'la targhetta generica non manda a ritirare chi aspetta a casa').not.toMatch(/ritir/i);
+      expect(ORDER_STATUS_LABEL.READY).not.toMatch(/fattorino/i);
     } else {
       expect(
         ORDER_STATUS_LABEL.READY,

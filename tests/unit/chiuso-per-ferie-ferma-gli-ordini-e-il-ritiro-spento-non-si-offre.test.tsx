@@ -16,8 +16,9 @@ import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import StoreHoursEditor from '@/components/seller/StoreHoursEditor';
 import { isStoreClosedForOrder, motivoNegozioChiuso, negozioPuoServire, type StoreHours } from '@/lib/store-hours';
-import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
+import { motivoFasciaRifiutata, motivoRitiroRifiutato } from '@/lib/quando-arriva';
 import { BADGE_CATALOG, normalizeCustomization } from '@/lib/store-customization';
+import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/ritiro-in-negozio';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -90,25 +91,43 @@ describe('chiuso per ferie: «Chiudi» su ogni giorno ferma gli ordini', () => {
   });
 });
 
-describe('il ritiro in negozio è spento: non si consiglia e non si espone', () => {
-  it('il no della cassa non dice «oppure ritira in negozio»', () => {
-    const domani = motivoNegozioChiuso('Pane Quotidiano', DOMANI, MARTEDI_10);
-    const oggi = motivoNegozioChiuso('Pane Quotidiano', POMERIGGIO, MARTEDI_10);
-    expect(domani).toMatch(/Scegli un altro orario/);
-    expect(oggi).toMatch(/Scegli un altro orario/);
-    expect(domani).not.toMatch(/ritir/i);
-    expect(oggi).not.toMatch(/ritir/i);
-    const rotta = motivoFasciaRifiutata(DOMANI, [{ nome: 'Pane Quotidiano', orari: SETTIMANA_CHIUSA }], MARTEDI_10);
-    expect(rotta).not.toMatch(/ritir/i);
+/**
+ * R12-009 — Dal lancio il ritiro in negozio è acceso (decisione di Nicola): il no della cassa lo
+ * consiglia e il negoziante può esporre il bollino. Ma non al negozio in ferie: lì non si consiglia,
+ * e le due rotte rifiutano l'ordine col ritiro (prima, senza fascia, passava).
+ */
+describe('il ritiro in negozio è acceso: si consiglia e si espone, ma non col negozio in ferie', () => {
+  it('l interruttore è acceso', () => {
+    expect(RITIRO_IN_NEGOZIO_ATTIVO).toBe(true);
   });
 
-  it('il bollino «Ritiro in negozio» non si può scegliere', () => {
-    expect(BADGE_CATALOG.map((b) => b.key)).not.toContain('ritiro_in_negozio');
+  it('il no della cassa dice «oppure ritira in negozio» se il negozio apre', () => {
+    const domani = motivoNegozioChiuso('Pane Quotidiano', DOMANI, MARTEDI_10);
+    const oggi = motivoNegozioChiuso('Pane Quotidiano', POMERIGGIO, MARTEDI_10);
+    expect(domani).toMatch(/Scegli un altro orario, oppure ritira in negozio/);
+    expect(oggi).toMatch(/Scegli un altro orario, oppure ritira in negozio/);
+    const rotta = motivoFasciaRifiutata(DOMANI, [{ nome: 'Pane Quotidiano', orari: PANE_QUOTIDIANO }], new Date('2026-11-07T10:00:00'));
+    // Sabato alle 10 «Domani» è domenica, giorno non scritto: chiuso, ma il negozio apre lunedì.
+    expect(rotta).toMatch(/oppure ritira in negozio/);
+  });
+
+  it('col negozio in ferie il ritiro non si consiglia, e la rotta lo rifiuta', () => {
+    const rotta = motivoFasciaRifiutata(DOMANI, [{ nome: 'Pane Quotidiano', orari: SETTIMANA_CHIUSA }], MARTEDI_10);
+    expect(rotta).toMatch(/Pane Quotidiano/);
+    expect(rotta).not.toMatch(/ritir/i);
+    expect(motivoRitiroRifiutato([{ nome: 'Pane Quotidiano', orari: SETTIMANA_CHIUSA }])).toMatch(/Pane Quotidiano.*ritiro in negozio non si può fare/);
+    expect(motivoRitiroRifiutato([{ nome: 'Pane Quotidiano', orari: PANE_QUOTIDIANO }])).toBeNull();
+    // Orari mai impostati: nessun blocco, come per la consegna.
+    expect(motivoRitiroRifiutato([{ nome: 'Forno', orari: null }])).toBeNull();
+  });
+
+  it('il bollino «Ritiro in negozio» si può scegliere', () => {
+    expect(BADGE_CATALOG.map((b) => b.key)).toContain('ritiro_in_negozio');
     expect(BADGE_CATALOG.map((b) => b.key)).toContain('bio');
   });
 
-  it('un bollino già salvato non arriva alla pagina, e gli altri restano', () => {
+  it('un bollino già salvato arriva alla pagina, con gli altri', () => {
     const c = normalizeCustomization({ badges: ['ritiro_in_negozio', 'bio'] });
-    expect(c.badges).toEqual(['bio']);
+    expect(c.badges).toEqual(['ritiro_in_negozio', 'bio']);
   });
 });

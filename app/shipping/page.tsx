@@ -123,7 +123,8 @@ export default function ShippingPage() {
           <ul className="space-y-1 list-none pl-0">
             <li className="flex items-center gap-2"><Clock size={18} className="text-ink-500 shrink-0" aria-hidden /> In attesa di conferma</li>
             <li className="flex items-center gap-2"><ChefHat size={18} className="text-ink-500 shrink-0" aria-hidden /> In preparazione presso il venditore</li>
-            <li className="flex items-center gap-2"><Package size={18} className="text-ink-500 shrink-0" aria-hidden /> {etichettaPronto()}</li>
+            {/* R12-009 — Questa è la fila della consegna a casa: «pronto» vuol dire che passa il fattorino. */}
+            <li className="flex items-center gap-2"><Package size={18} className="text-ink-500 shrink-0" aria-hidden /> {etichettaPronto(false)}</li>
             <li className="flex items-center gap-2"><Bike size={18} className="text-ink-500 shrink-0" aria-hidden /> In consegna (con nome del rider)</li>
             <li className="flex items-center gap-2"><CheckCircle2 size={18} className="text-olive-600 shrink-0" aria-hidden /> Consegnato</li>
           </ul>

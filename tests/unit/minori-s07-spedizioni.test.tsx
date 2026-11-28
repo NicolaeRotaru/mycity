@@ -13,8 +13,11 @@ describe('S07 · /shipping col ritiro acceso', () => {
     expect(html).toMatch(/class="grid sm:grid-cols-2 gap-4 mb-10"/);
     expect(html).not.toMatch(/class="grid sm:grid-cols-3 gap-4 mb-10"/);
   });
-  it('il tracciamento usa l\'etichetta di «I miei ordini»: col ritiro acceso «Pronto per il ritiro»', () => {
-    expect(html).toContain('Pronto per il ritiro');
-    expect(html).not.toContain('Pronto per il ritiro / la consegna');
+  // R12-009 (28/11/2026) — Il tracciamento della pagina è la fila della consegna a casa (dopo «pronto»
+  // viene «In consegna (con nome del rider)»): «I miei ordini» su un ordine a domicilio dice
+  // `etichettaPronto(false)`. «Pronto per il ritiro» qui manderebbe in negozio chi aspetta a casa.
+  it('il tracciamento usa l\'etichetta di «I miei ordini» per la consegna a casa: «Pronto per il fattorino»', () => {
+    expect(html).toContain('Pronto per il fattorino');
+    expect(html).not.toContain('Pronto per il ritiro');
   });
 });

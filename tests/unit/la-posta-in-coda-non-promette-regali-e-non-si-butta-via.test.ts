@@ -123,7 +123,8 @@ describe('il «3 cose da sapere» parte senza consenso, quindi non porta incenti
       .map((v) => v.replace(/<[^>]*>/g, '').trim());
     expect(voci).toEqual([
       'Paghi in contanti alla consegna: tieni pronto l’importo', // 5/11/2026 (unione): a carta spenta, la riga di S03
-      'La spesa te la portiamo a casa',
+      // R12-009 (28/11/2026) — Il ritiro in negozio è acceso dal lancio (decisione di Nicola): la guida lo dice.
+      'La spesa te la portiamo a casa, oppure la ritiri tu in negozio',
       'Ogni ordine e il suo stato li trovi in «I miei ordini»',
     ]);
   });

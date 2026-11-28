@@ -59,12 +59,13 @@ describe('il ritiro in negozio: la promessa segue l’interruttore', () => {
     expect(riquadroRitiroInNegozio(true, 0)?.sottotitolo).not.toMatch(/\d+%/);
   });
 
-  it("com'è configurato ADESSO il sito non promette il ritiro", () => {
-    // Questo è il caso vero, oggi. Se un giorno l'interruttore si accende, questa riga cade e va
-    // riletta: è il momento in cui la promessa torna legittima.
-    expect(RITIRO_IN_NEGOZIO_ATTIVO).toBe(false);
-    expect(promesseRitiroInNegozio()).toEqual([]);
-    expect(riquadroRitiroInNegozio()).toBeNull();
+  it("com'è configurato ADESSO il sito promette il ritiro, gratis e senza sconto", () => {
+    // R12-009 — Dal lancio il ritiro è acceso (decisione di Nicola): la promessa è legittima. Lo
+    // sconto resta a zero (coi negozi non se n'è parlato), quindi nessuna percentuale.
+    expect(RITIRO_IN_NEGOZIO_ATTIVO).toBe(true);
+    expect(promesseRitiroInNegozio()).not.toEqual([]);
+    expect(riquadroRitiroInNegozio()).not.toBeNull();
+    expect(riquadroRitiroInNegozio()?.sottotitolo).not.toMatch(/\d+%/);
     expect(PICKUP_DISCOUNT_PERCENT).toBe(0);
   });
 });

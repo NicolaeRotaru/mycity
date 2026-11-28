@@ -53,7 +53,7 @@ export const TOPICS: ArgomentoAiuto[] = [
         // 26/11/2026 — Il motivo è facoltativo, come dice il riquadro del rifiuto («Motivo del rifiuto (opzionale)»).
         a: 'Sì, se non puoi prepararlo. Il motivo è facoltativo, ma aiuta il cliente (es. prodotto esaurito). Il cliente viene avvisato: se paga alla consegna non ha pagato niente, quindi non c\'è niente da restituire; se aveva pagato online gli torna il rimborso in automatico.' },
       { q: 'Come segnalo l\'ordine pronto?',
-        // 26/11/2026 — Il ritiro in negozio è spento al lancio: la seconda etichetta c'è solo quando si riaccende.
+        // 26/11/2026 — La seconda etichetta c'è solo col ritiro in negozio acceso (dal lancio, R12-009).
         a: RITIRO_IN_NEGOZIO_ATTIVO
           ? `Dalla pagina dell'ordine premi "${etichettaPronto(false)}" (oppure "${etichettaPronto(true)}" se il cliente passa in negozio). Il fattorino o il cliente vengono avvisati.`
           : `Dalla pagina dell'ordine premi "${etichettaPronto(false)}". Il fattorino viene avvisato.` },

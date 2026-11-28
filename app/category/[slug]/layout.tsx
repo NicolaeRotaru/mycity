@@ -22,7 +22,8 @@ export const revalidate = 0;
 const CATEGORY_LONG_DESC: Record<string, string> = {
   // 3/9/2026 — Prometteva «o ritiro in negozio», che alla cassa non c'e': la frase nasce
   // dall'interruttore in lib/promesse-pubbliche.ts, i minuti dal numero deciso in lib/delivery.ts.
-  alimentari: `Alimentari freschi e tipici di Piacenza. ${fraseComeArriva()}`,
+  // R12-009 — Col ritiro acceso la frase si allunga: il prefisso si accorcia per stare nei 160 caratteri.
+  alimentari: `Alimentari tipici piacentini. ${fraseComeArriva()}`,
   abbigliamento: 'Abbigliamento donna, uomo e bambino dei negozi di Piacenza. Compra online dai brand locali.',
   // 27/10/2026 (terzo giro) — Qui c’era una consegna promessa «rapida», senza confine né tempo.
   casa: `Casa, arredamento e cucina dai negozi di Piacenza, consegnati ${FINO_AL_CONFINE}.`,

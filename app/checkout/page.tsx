@@ -1520,8 +1520,8 @@ export default function CheckoutPage() {
 
           {/* STEP 2 — Quando vuoi riceverlo (consegna / express / ritiro) */}
           <StepCard n={2} icon={Truck} title="Quando vuoi riceverlo">
-            {/* Il ritiro in negozio oggi è spento (`RITIRO_IN_NEGOZIO_ATTIVO`), e
-                la scelta sta dietro quell'interruttore in PaymentMethodSelector.
+            {/* Il ritiro in negozio passa da `RITIRO_IN_NEGOZIO_ATTIVO` (acceso dal lancio, R12-009),
+                e la scelta sta dietro quell'interruttore in PaymentMethodSelector.
                 Qui lo si rilegge invece di fidarsi: la frase sul ritiro non deve
                 poter comparire quando il ritiro non si può fare. */}
             {RITIRO_IN_NEGOZIO_ATTIVO && pickupInStore ? (

@@ -140,7 +140,13 @@ export default function AdminDeliveryPage() {
               desc={RITIRO_IN_NEGOZIO_ATTIVO
                 ? 'Il ritiro azzera la consegna'
                 : 'Messo da parte: non se n’è ancora parlato coi negozi'}
-              value={RITIRO_IN_NEGOZIO_ATTIVO ? `− ${PICKUP_DISCOUNT_PERCENT}%` : 'non attivo'}
+              value={
+                !RITIRO_IN_NEGOZIO_ATTIVO
+                  ? 'non attivo'
+                  : PICKUP_DISCOUNT_PERCENT > 0
+                    ? `− ${PICKUP_DISCOUNT_PERCENT}%`
+                    : 'gratis per il cliente'
+              }
             />
           </div>
         </div>
