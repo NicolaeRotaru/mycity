@@ -841,13 +841,20 @@ export const POST = conFilaPerRichiesta(withAuthRateLimit(
      * di intento (`delivery.rivendicazione`) quale rivendicazione è sua: si chiudono solo quelle delle
      * casse appena liberate, mai il lucchetto di un'altra scheda. Se la lettura non riesce, la riga
      * resta aperta come prima e il lucchetto si spegne da solo in due minuti.
+     *
+     * 28/11/2026 (R08-007, onda 2) — Solo dove il codice è tornato davvero: se `release_coupon` è
+     * caduto (`codiceNonTornato`) l'uso resta contato, e la rivendicazione resta aperta come fanno
+     * l'avviso di Stripe (lib/stripe/webhook/carrello-scaduto.ts) e la cassa con la carta.
      */
-    if (riserveLiberate.liberati.length > 0) {
+    const rivendicazioniDaChiudere = riserveLiberate.liberati.filter(
+      (id) => !(riserveLiberate.codiceNonTornato ?? []).includes(id),
+    );
+    if (rivendicazioniDaChiudere.length > 0) {
       try {
         const { data: liberate } = await admin
           .from('pending_checkouts')
           .select('id, delivery')
-          .in('id', riserveLiberate.liberati);
+          .in('id', rivendicazioniDaChiudere);
         const sue = ((liberate ?? []) as Array<{ delivery?: { rivendicazione?: unknown } | null }>)
           .map((p) => p.delivery?.rivendicazione)
           .filter((r): r is string => typeof r === 'string' && r !== '');
