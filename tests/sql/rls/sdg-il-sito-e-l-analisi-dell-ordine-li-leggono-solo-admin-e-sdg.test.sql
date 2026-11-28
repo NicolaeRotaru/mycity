@@ -108,6 +108,18 @@ BEGIN
   INSERT INTO esiti VALUES ('un analisi «in corso» senza il codice del lavoro è rifiutata', v = 'rifiutato', v);
   v := pg_temp.rifiutato($q$UPDATE public.ordini_sdg SET sito_stato = 'online' WHERE nome_attivita = 'Bar A 999h'$q$);
   INSERT INTO esiti VALUES ('non esiste uno stato «online»: la bozza non si pubblica da qui', v = 'rifiutato', v);
+
+  -- I bisogni del sito sul preventivo (28/11): solo dall'elenco chiuso, almeno uno, nota di 200 caratteri al massimo.
+  INSERT INTO public.preventivi_con_codice (seller_id, codice, stato, fascia_scelta, bisogni_sito, nota_agente)
+  VALUES ('c999b111-1111-4111-8111-111111111111', repeat('8', 64), 'aperto', 'business', ARRAY['prenotazioni', 'menu_listino'], 'vuole far vedere la sala per le feste');
+  v := pg_temp.rifiutato($q$UPDATE public.preventivi_con_codice SET bisogni_sito = ARRAY['volantini'] WHERE codice = repeat('8', 64)$q$);
+  INSERT INTO esiti VALUES ('un bisogno fuori elenco è rifiutato', v = 'rifiutato', v);
+  v := pg_temp.rifiutato($q$UPDATE public.preventivi_con_codice SET bisogni_sito = ARRAY[]::text[] WHERE codice = repeat('8', 64)$q$);
+  INSERT INTO esiti VALUES ('un elenco di bisogni vuoto è rifiutato', v = 'rifiutato', v);
+  v := pg_temp.rifiutato($q$UPDATE public.preventivi_con_codice SET nota_agente = repeat('x', 201) WHERE codice = repeat('8', 64)$q$);
+  INSERT INTO esiti VALUES ('una nota dell agente oltre 200 caratteri è rifiutata', v = 'rifiutato', v);
+  v := pg_temp.prova_a_scrivere('c999b111-1111-4111-8111-111111111111', $q$UPDATE public.preventivi_con_codice SET bisogni_sito = ARRAY['eventi']$q$);
+  INSERT INTO esiti VALUES ('il titolare dal browser non cambia i bisogni del suo preventivo', v = 'negato', v);
 END $$;
 
 DO $$

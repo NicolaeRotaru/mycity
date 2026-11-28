@@ -3,6 +3,7 @@ import { env } from '@/lib/env';
 import { NuovaAttivitaInArrivo, type NuovaAttivita } from '@/lib/agenzia/nuova-attivita';
 import type { TipoAttivita } from '@/lib/agenzia/tipi-attivita';
 import type { Scheda } from '@/lib/agenti/scheda';
+import type { BisogniDelSito } from '@/lib/agenzia/bisogni-del-sito';
 
 /**
  * «AGGIUNGI ATTIVITÀ» DALLA PAGINA DELL'AGENTE — 27/11/2026.
@@ -87,6 +88,21 @@ export async function segnaChiHaPortatoIlCliente(admin: SupabaseClient, idAttivi
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chi.lavoro) || !email.includes('@')) return false;
   try {
     const { error } = await admin.from('preventivi_con_codice').update({ lavoro: chi.lavoro.toLowerCase(), agente_email: email }).eq('seller_id', idAttivita).eq('stato', 'aperto');
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 28/11/2026 — Di cosa ha bisogno il sito, scelto dall'agente insieme all'abbonamento (migrazione 999h): va sul
+ * preventivo aperto, e all'accettazione passa nell'ordine di SDG (lib/agenzia/ordine-sdg.ts). Senza la 999h le
+ * colonne non ci sono: si va avanti senza, e il sito parte da «farsi trovare». Vero se è scritto.
+ */
+export async function segnaIBisogniDelSito(admin: SupabaseClient, idAttivita: string, b: BisogniDelSito): Promise<boolean> {
+  if (!b.bisogni.length) return false;
+  try {
+    const { error } = await admin.from('preventivi_con_codice').update({ bisogni_sito: b.bisogni, nota_agente: b.nota }).eq('seller_id', idAttivita).eq('stato', 'aperto');
     return !error;
   } catch {
     return false;

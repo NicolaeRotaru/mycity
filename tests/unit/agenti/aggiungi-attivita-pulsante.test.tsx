@@ -26,12 +26,44 @@ async function monta() {
   return radice;
 }
 const bottone = (r: HTMLElement, testo: string) => [...r.querySelectorAll('button')].find((b) => b.textContent === testo) as HTMLButtonElement;
-const scegli = async (r: HTMLElement, valore: string) => {
+const scegli = async (r: HTMLElement, valore: string, bisogno: string | null = 'farsi_trovare') => {
   const radio = r.querySelector(`input[type="radio"][value="${valore}"]`) as HTMLInputElement;
   await act(async () => { radio.click(); });
+  // 28/11/2026 — Insieme all'abbonamento, almeno un bisogno del sito.
+  const casella = bisogno ? (r.querySelector(`input[type="checkbox"][value="${bisogno}"]`) as HTMLInputElement | null) : null;
+  if (casella && !casella.checked) await act(async () => { casella.click(); });
 };
 
 describe('il pulsante sotto la scheda', () => {
+  it('28/11: con l abbonamento ma senza un bisogno del sito il «Sì» resta spento; più bisogni e la nota partono insieme', async () => {
+    const chiamate: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, o: { body: string }) => {
+      chiamate.push(o.body);
+      return new Response(JSON.stringify({ ok: true, data: { nuova: true, link: null, avvisato: true, fascia: 'business', sbloccata: true, giaOnline: false } }), { status: 201 });
+    }));
+    const r = await monta();
+    await act(async () => { bottone(r, 'Aggiungi attività').click(); });
+    expect(r.textContent).toContain('Di cosa ha bisogno il suo sito?');
+    expect([...r.querySelectorAll('input[type="checkbox"]')].map((x) => (x as HTMLInputElement).value)).toEqual(['farsi_trovare', 'menu_listino', 'prenotazioni', 'vendere_online', 'eventi', 'portfolio']);
+    expect([...r.querySelectorAll('input[type="checkbox"]')].some((x) => (x as HTMLInputElement).checked)).toBe(false);
+    await scegli(r, 'business', null);
+    expect(bottone(r, 'Sì, aggiungi').disabled).toBe(true);
+    await act(async () => { bottone(r, 'Sì, aggiungi').click(); });
+    expect(chiamate).toHaveLength(0);
+    await scegli(r, 'business', 'prenotazioni');
+    await scegli(r, 'business', 'menu_listino');
+    const nota = r.querySelector('textarea') as HTMLTextAreaElement;
+    expect(nota.maxLength).toBe(200);
+    await act(async () => {
+      const imposta = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+      imposta.call(nota, 'vuole far vedere la sala per le feste');
+      nota.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(bottone(r, 'Sì, aggiungi').disabled).toBe(false);
+    await act(async () => { bottone(r, 'Sì, aggiungi').click(); });
+    expect(JSON.parse(chiamate[0])).toEqual({ lavoro: '11111111-2222-4333-8444-555555555555', fascia: 'business', bisogni: ['prenotazioni', 'menu_listino'], nota: 'vuole far vedere la sala per le feste' });
+  });
+
   it('chiede conferma, poi aggiunge e mostra il link del preventivo', async () => {
     const chiamate: { url: string; corpo: string }[] = [];
     vi.stubGlobal('fetch', vi.fn(async (url: string, o: { body: string }) => {
@@ -53,7 +85,7 @@ describe('il pulsante sotto la scheda', () => {
     await scegli(r, 'premium');
     expect(bottone(r, 'Sì, aggiungi').disabled).toBe(false);
     await act(async () => { bottone(r, 'Sì, aggiungi').click(); });
-    expect(chiamate).toEqual([{ url: '/api/agente/aggiungi', corpo: JSON.stringify({ lavoro: '11111111-2222-4333-8444-555555555555', fascia: 'premium' }) }]);
+    expect(chiamate).toEqual([{ url: '/api/agente/aggiungi', corpo: JSON.stringify({ lavoro: '11111111-2222-4333-8444-555555555555', fascia: 'premium', bisogni: ['farsi_trovare'] }) }]);
     expect(r.textContent).toContain('Ora del Gusto è su MyCity');
     expect(r.textContent).toContain('sbloccata col Premium');
     expect(r.textContent).toContain('https://www.mycity-marketplace.com/preventivo/abc');

@@ -7,6 +7,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { FASCE, euro } from '@/lib/agenti/fasce';
 import type { OrdineSdg, StatoPianoCompleto } from '@/lib/agenzia/ordine-sdg';
 import type { ColonnePezzi } from '@/lib/agenzia/pezzi-dell-ordine';
+import { TITOLI_BISOGNI } from '@/lib/agenzia/bisogni-del-sito';
 
 /**
  * GLI ORDINI DI SERVIZIO DI SDG — 27/11/2026 (migrazione 999c).
@@ -104,6 +105,7 @@ function SchedaOrdine({ o, chiedendo, chiedi }: { o: Ordine; chiedendo: Azione |
           <div><dt className="font-semibold text-ink-900">Agente</dt><dd className="break-all text-ink-700">{o.agente_email ?? 'nessuno: preventivo nato fuori dalla pagina degli agenti'}</dd></div>
           <div><dt className="font-semibold text-ink-900">Confermato il</dt><dd className="text-ink-700">{quando(o.accettato_il)}</dd></div>
           {fascia && <div className="sm:col-span-2"><dt className="font-semibold text-ink-900">Cosa comprende</dt><dd className="text-ink-700">Sito: {fascia.inPratica.sito}. Contenuti: {fascia.inPratica.piano}. Foto e video: {fascia.inPratica.foto}. Analisi: {fascia.inPratica.analisi}.</dd></div>}
+          {(d.bisogni ?? []).length > 0 && <div className="sm:col-span-2"><dt className="font-semibold text-ink-900">Di cosa ha bisogno il sito (scelto dall’agente)</dt><dd className="text-ink-700">{(d.bisogni ?? []).map((b) => TITOLI_BISOGNI[b] ?? b).join(' · ')}{d.notaAgente ? ` — nota: «${d.notaAgente}»` : ''}</dd></div>}
           {s?.sito && <div><dt className="font-semibold text-ink-900">Sito di oggi</dt><dd className="break-all text-ink-700">{s.sito}</dd></div>}
           {s && s.social.length > 0 && <div><dt className="font-semibold text-ink-900">Social trovati</dt><dd className="break-all text-ink-700">{s.social.map((x) => (x.fonte ? `${x.canale} (${x.fonte})` : x.canale)).join(', ')}</dd></div>}
         </dl>
@@ -174,6 +176,7 @@ function SchedaOrdine({ o, chiedendo, chiedi }: { o: Ordine; chiedendo: Azione |
         {o.sito && (
           <div className="mt-3 space-y-3 text-sm">
             <p className="text-ink-700"><b>Sottotitolo:</b> {o.sito.sottotitolo} · <b>{o.sito.pagine.length} {o.sito.pagine.length === 1 ? 'pagina' : 'pagine'}</b> · bozza, non online: si pubblica solo dopo il sì del titolare e di SDG.</p>
+            {(o.sito.pulsanti ?? []).length > 0 && <p className="text-ink-700"><b>Pulsanti:</b> {(o.sito.pulsanti ?? []).map((x) => `${x.etichetta} (${x.azione})`).join(' · ')}: numeri e collegamenti li mette SDG.</p>}
             {o.sito.pagine.map((p) => (
               <div key={p.percorso} className="rounded-xl border border-ink-100 p-3">
                 <p className="font-semibold text-ink-900">{p.titolo} <span className="font-normal text-ink-500">{p.percorso}</span></p>
@@ -197,6 +200,12 @@ function SchedaOrdine({ o, chiedendo, chiedi }: { o: Ordine; chiedendo: Azione |
               <div key={p.parte}>
                 <p className="font-semibold text-ink-900">{p.titolo}</p>
                 <ul className="list-disc pl-5 text-ink-700">{p.frasi.map((f) => <li key={f}>{f}</li>)}</ul>
+              </div>
+            ))}
+            {(o.analisi.approfondimenti ?? []).map((a) => (
+              <div key={a.bisogno}>
+                <p className="font-semibold text-ink-900">Approfondimento: {a.titolo}</p>
+                <ul className="list-disc pl-5 text-ink-700">{a.frasi.map((f) => <li key={f}>{f}</li>)}</ul>
               </div>
             ))}
             <div><p className="font-semibold text-ink-900">Prime mosse</p><ul className="list-disc pl-5 text-ink-700">{o.analisi.primeMosse.map((m) => <li key={m.cosa}>{m.cosa} — {m.perche}</li>)}</ul></div>

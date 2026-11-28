@@ -9,6 +9,7 @@ import type { Abbonamento } from './preventivo';
 import type { DatiAttivita, StatoPianoCompleto } from './ordine-sdg';
 import { VENDITORE_DEI_PIANI, dallaSchedaDellAgente } from './piano-completo-ad';
 import { COMPITO_SITO, SCHEMA_SITO, datiPerIlSito, sitoDallaRisposta, type BozzaSitoOrdine } from './sito-dell-ordine-ad';
+import { leggiBisogni } from './bisogni-del-sito';
 import { COMPITO_ANALISI, SCHEMA_ANALISI, analisiDallaRisposta, datiPerLAnalisi, type AnalisiAvvioOrdine } from './analisi-dell-ordine-ad';
 
 /**
@@ -112,6 +113,8 @@ export async function chiediIlPezzo(ordineId: string, pezzo: PezzoOrdine): Promi
       indirizzo: o.dati_attivita?.indirizzo ?? scheda?.indirizzo ?? null,
       fascia: o.fascia,
       scheda: dallaSchedaDellAgente(scheda, o.fascia),
+      // 28/11 — I bisogni scelti dall'agente, scritti nell'ordine dal preventivo: decidono sezioni, pulsanti e approfondimenti.
+      bisogni: leggiBisogni(o.dati_attivita?.bisogni, o.dati_attivita?.notaAgente),
     };
     const job = pezzo === 'sito'
       ? { flusso: FLUSSO, compito: COMPITO_SITO, schema: SCHEMA_SITO, dati: datiPerIlSito(locale) }
@@ -136,7 +139,7 @@ export async function chiediIlPezzo(ordineId: string, pezzo: PezzoOrdine): Promi
  * Guarda se un pezzo «in corso» è tornato: se è pronto e regge i controlli entra nell'ordine; se l'AD ha sbagliato,
  * ha scritto un prezzo o un dato inventato, o non risponde da troppo, l'ordine lo dice. Restituisce l'ordine aggiornato.
  */
-export async function aggiornaIlPezzo<T extends ColonnePezzi & { id: string; fascia: Abbonamento; nome_attivita: string; aggiornato_il: string }>(
+export async function aggiornaIlPezzo<T extends ColonnePezzi & { id: string; fascia: Abbonamento; nome_attivita: string; aggiornato_il: string; dati_attivita?: DatiAttivita | null }>(
   admin: SupabaseClient, o: T, pezzo: PezzoOrdine, adesso = Date.now(),
 ): Promise<T> {
   const c = col(pezzo);
@@ -146,7 +149,8 @@ export async function aggiornaIlPezzo<T extends ColonnePezzi & { id: string; fas
     const r = await leggiLavoro(lavoro);
     let cambio: Record<string, unknown> | null = null;
     if (r.stato === 'pronta' && r.venditore === VENDITORE_DEI_PIANI) {
-      const esito = pezzo === 'sito' ? sitoDallaRisposta(r.risultato, o.fascia, o.nome_attivita) : analisiDallaRisposta(r.risultato, o.fascia, o.nome_attivita);
+      const { bisogni } = leggiBisogni(o.dati_attivita?.bisogni, o.dati_attivita?.notaAgente);
+      const esito = pezzo === 'sito' ? sitoDallaRisposta(r.risultato, o.fascia, o.nome_attivita, bisogni) : analisiDallaRisposta(r.risultato, o.fascia, o.nome_attivita, bisogni);
       cambio = esito.ok
         ? { [c.dato]: 'sito' in esito ? esito.sito : esito.analisi, [c.stato]: 'pronto', [c.errore]: null, [c.il]: new Date(adesso).toISOString() }
         : { [c.stato]: 'errore', [c.errore]: esito.motivo.slice(0, 400) };

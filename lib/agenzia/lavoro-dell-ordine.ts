@@ -19,11 +19,16 @@ import type { AnalisiAvvioOrdine } from './analisi-dell-ordine-ad';
  * errori (sono per SDG), mai il canone.
  *
  * Prima della 999h le colonne di sito e analisi non ci sono: si legge solo il piano, e gli altri due dicono
- * «in preparazione». Se anche l'ordine non si legge, `null`: la pagina resta quella di sempre.
+ * «lo stiamo preparando». Se anche l'ordine non si legge, `null`: la pagina resta quella di sempre.
  */
 
-/** Per il titolare basta sapere se c'è o se lo stiamo preparando: «errore» e «da collegare» sono cose di SDG. */
-export type StatoPerIlTitolare = 'pronto' | 'in_preparazione';
+/**
+ * Per il titolare: c'è («pronto»), l'AD ci sta lavorando («in_preparazione»: pronto entro poche ore), oppure non è
+ * ancora partito o è andato storto («lo_stiamo_preparando»): i motivi sono cose di SDG, mai un errore tecnico.
+ */
+export type StatoPerIlTitolare = 'pronto' | 'in_preparazione' | 'lo_stiamo_preparando';
+const perIlTitolare = (stato: StatoPianoCompleto | undefined, c_e: boolean): StatoPerIlTitolare =>
+  stato === 'pronto' && c_e ? 'pronto' : stato === 'in_corso' ? 'in_preparazione' : 'lo_stiamo_preparando';
 export type LavoroDellOrdine = {
   fascia: Abbonamento;
   nomeAttivita: string;
@@ -64,9 +69,9 @@ export async function lavoroDallOrdine(sellerId: string): Promise<LavoroDellOrdi
     return {
       fascia: r.fascia,
       nomeAttivita: r.nome_attivita,
-      piano: { stato: r.piano_completo_stato === 'pronto' ? 'pronto' : 'in_preparazione', piano: r.piano },
-      sito: { stato: sitoPronto ? 'pronto' : 'in_preparazione', bozza: sitoPronto ? (r.sito ?? null) : null },
-      analisi: { stato: analisiPronta ? 'pronto' : 'in_preparazione', analisi: analisiPronta ? (r.analisi ?? null) : null },
+      piano: { stato: perIlTitolare(r.piano_completo_stato, true), piano: r.piano },
+      sito: { stato: perIlTitolare(r.sito_stato, sitoPronto), bozza: sitoPronto ? (r.sito ?? null) : null },
+      analisi: { stato: perIlTitolare(r.analisi_stato, analisiPronta), analisi: analisiPronta ? (r.analisi ?? null) : null },
     };
   } catch (e) {
     logger.warn('[lavoro-dell-ordine] lettura non riuscita', { errore: String(e) });

@@ -31,6 +31,11 @@ function Intestazione({ ordine }: { ordine: LavoroDellOrdine }) {
   );
 }
 
+/** Le due attese, dette al titolare senza errori tecnici (AD, 28/11 01:15). */
+export const FRASE_IN_PREPARAZIONE = 'In preparazione, pronto entro poche ore.';
+export const FRASE_LO_STIAMO_PREPARANDO = 'Lo stiamo preparando: appena è pronto lo trovi qui.';
+const attesa = (stato: LavoroDellOrdine['sito']['stato']) => (stato === 'in_preparazione' ? FRASE_IN_PREPARAZIONE : FRASE_LO_STIAMO_PREPARANDO);
+
 function InPreparazione({ titolo, testo }: { titolo: string; testo: string }) {
   return (
     <section className={`mb-4 ${SCHEDA}`} aria-live="polite">
@@ -47,13 +52,13 @@ export default function LavoroDellOrdineDelTitolare({ parte, ordine }: { parte: 
       <Intestazione ordine={ordine} />
       {parte === 'sito' && (ordine.sito.bozza ? <BozzaDelSito ordine={ordine} /> : (
         <InPreparazione
-          titolo="La bozza del tuo sito è in preparazione"
-          testo={`Col ${fascia} il sito ha ${PAGINE_PER_FASCIA[ordine.fascia] === 1 ? 'una pagina' : `${PAGINE_PER_FASCIA[ordine.fascia]} pagine`}. La bozza arriva qui da sola: la guardiamo insieme alla visita, e va online solo dopo il tuo sì.`}
+          titolo="La bozza del tuo sito"
+          testo={`${attesa(ordine.sito.stato)} Col ${fascia} il sito ha ${PAGINE_PER_FASCIA[ordine.fascia] === 1 ? 'una pagina' : `${PAGINE_PER_FASCIA[ordine.fascia]} pagine`}. La guardiamo insieme alla visita, e va online solo dopo il tuo sì.`}
         />
       ))}
       {parte === 'social' && <PianoDellOrdine ordine={ordine} />}
       {parte === 'analisi' && (ordine.analisi.analisi ? <AnalisiDellOrdine ordine={ordine} /> : (
-        <InPreparazione titolo="La tua analisi è in preparazione" testo="Il rapporto sulla tua attività, coi soli dati pubblici, arriva qui da solo. Lo leggiamo insieme alla visita." />
+        <InPreparazione titolo="La tua analisi del business" testo={`${attesa(ordine.analisi.stato)} È il rapporto sulla tua attività, coi soli dati pubblici: lo leggiamo insieme alla visita.`} />
       ))}
     </div>
   );
@@ -68,6 +73,9 @@ function BozzaDelSito({ ordine }: { ordine: LavoroDellOrdine }) {
         <p className="mt-1 text-sm text-ink-700">{b.sottotitolo}</p>
         <p className="mt-3"><span className="rounded-full bg-cream-200 px-2.5 py-0.5 text-[11px] font-bold text-ink-800">Non è online</span></p>
         <p className="mt-2 text-sm text-ink-700">Va online solo dopo il tuo sì e quello di SDG. Ogni testo è una proposta: lo cambiamo come vuoi tu.</p>
+        {(b.pulsanti ?? []).length > 0 && (
+          <p className="mt-2 text-sm text-ink-700"><b>I pulsanti del sito:</b> {(b.pulsanti ?? []).map((x) => x.etichetta).join(' · ')} (numeri e collegamenti li mettiamo noi).</p>
+        )}
       </section>
       {b.pagine.map((p, i) => (
         <Sezione key={p.percorso} id={`bozza-pagina-${i}`} titolo={`Pagina ${i + 1}: ${p.titolo}`}>
@@ -96,7 +104,7 @@ function PianoDellOrdine({ ordine }: { ordine: LavoroDellOrdine }) {
     <>
       <section className={`mb-4 ${SCHEDA}`} aria-labelledby="piano-ordine">
         <h2 id="piano-ordine" className="text-xl font-bold text-ink-900">Il piano editoriale, {p?.periodo?.titolo ?? 'primo mese'}</h2>
-        <p className="mt-1 text-sm text-ink-600">{ordine.piano.stato === 'pronto' ? 'Versione completa' : 'Prima versione: quella completa arriva qui da sola'} · {p?.contenuti?.length ?? 0} contenuti</p>
+        <p className="mt-1 text-sm text-ink-600">{ordine.piano.stato === 'pronto' ? 'Versione completa' : `Prima versione. Quella completa: ${attesa(ordine.piano.stato).toLowerCase()}`} · {p?.contenuti?.length ?? 0} contenuti</p>
         {p?.intestazione && (
           <dl className="mt-3 grid gap-1 text-sm text-ink-700">
             <div><dt className="inline font-semibold text-ink-900">Canali e tono: </dt><dd className="inline">{p.intestazione.canaliETono}</dd></div>
@@ -130,6 +138,14 @@ function AnalisiDellOrdine({ ordine }: { ordine: LavoroDellOrdine }) {
           <Elenco voci={p.frasi} />
           {p.fonti.length > 0 && (
             <p className="mt-2 text-xs text-ink-600">Fonti: {p.fonti.map((f, i) => <span key={f}>{i > 0 ? ' · ' : ''}<LinkEsterno href={f}>{nomeDelSito(f)}</LinkEsterno></span>)}</p>
+          )}
+        </Sezione>
+      ))}
+      {(a.approfondimenti ?? []).map((x) => (
+        <Sezione key={x.bisogno} id={`analisi-bisogno-${x.bisogno}`} titolo={`Più a fondo: ${x.titolo}`}>
+          <Elenco voci={x.frasi} />
+          {x.fonti.length > 0 && (
+            <p className="mt-2 text-xs text-ink-600">Fonti: {x.fonti.map((f, i) => <span key={f}>{i > 0 ? ' · ' : ''}<LinkEsterno href={f}>{nomeDelSito(f)}</LinkEsterno></span>)}</p>
           )}
         </Sezione>
       ))}

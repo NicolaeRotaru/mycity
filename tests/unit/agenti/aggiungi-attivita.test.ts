@@ -69,7 +69,8 @@ const { POST } = await import('@/app/api/agente/aggiungi/route');
 const { tipoDaTesto, nomeNonValido, stessoIndirizzo } = await import('@/lib/agenti/aggiungi');
 
 const LAVORO = '11111111-2222-4333-8444-555555555555';
-const premi = (corpo: unknown = { lavoro: LAVORO, fascia: 'business' }) =>
+// 28/11/2026 — Il «Sì» porta anche di cosa ha bisogno il sito: almeno una voce.
+const premi = (corpo: unknown = { lavoro: LAVORO, fascia: 'business', bisogni: ['farsi_trovare'] }) =>
   (POST as unknown as (r: Request) => Promise<Response>)(new Request('http://localhost/api/agente/aggiungi', { method: 'POST', body: JSON.stringify(corpo) }));
 
 const prima = {
@@ -205,7 +206,7 @@ describe('l abbonamento scelto dal titolare sblocca la sua pagina (27/11)', () =
 
   it('la scelta va sul preventivo, la pagina si sblocca in quella fascia e Nicola lo legge', async () => {
     stato.esitoSblocco = { esito: 'sbloccata', fascia: 'premium' };
-    const r = await premi({ lavoro: LAVORO, fascia: 'premium' });
+    const r = await premi({ lavoro: LAVORO, fascia: 'premium', bisogni: ['farsi_trovare'] });
     expect(r.status).toBe(201);
     const d = ((await r.json()) as { data: { fascia: string; sbloccata: boolean; giaOnline: boolean } }).data;
     expect(d).toMatchObject({ fascia: 'premium', sbloccata: true, giaOnline: false });
@@ -222,7 +223,7 @@ describe('l abbonamento scelto dal titolare sblocca la sua pagina (27/11)', () =
     await premi();
     expect(stato.avvisi).toEqual([]);
     stato.esitoSblocco = { esito: 'cambiata', fascia: 'premium', da: 'business' };
-    const r = await premi({ lavoro: LAVORO, fascia: 'premium' });
+    const r = await premi({ lavoro: LAVORO, fascia: 'premium', bisogni: ['farsi_trovare'] });
     expect(r.status).toBe(200);
     expect(stato.avvisi).toHaveLength(1);
     expect(stato.avvisi[0]).toContain('dal Business al Premium');
@@ -271,7 +272,11 @@ describe('il tipo libero della scheda nei sei tipi del sito', () => {
 describe('chi ha portato il cliente resta scritto sul preventivo (27/11, migrazione 999c)', () => {
   it('al «Sì, aggiungi» la scheda e l email dell agente vanno sul preventivo ancora aperto', async () => {
     expect((await premi()).status).toBe(201);
-    expect(stato.portati).toEqual([{ valori: { lavoro: LAVORO, agente_email: 'agente@esempio.it' }, filtri: { seller_id: 'att-1', stato: 'aperto' } }]);
+    expect(stato.portati).toEqual([
+      { valori: { lavoro: LAVORO, agente_email: 'agente@esempio.it' }, filtri: { seller_id: 'att-1', stato: 'aperto' } },
+      // 28/11/2026 — e di cosa ha bisogno il sito (999h).
+      { valori: { bisogni_sito: ['farsi_trovare'], nota_agente: null }, filtri: { seller_id: 'att-1', stato: 'aperto' } },
+    ]);
   });
 
   it('se la scrittura non riesce (999c non applicata) l agente ha il suo link lo stesso', async () => {
@@ -279,5 +284,28 @@ describe('chi ha portato il cliente resta scritto sul preventivo (27/11, migrazi
     const rotto = { from: () => ({ update: () => { throw new Error('column "lavoro" does not exist'); } }) } as unknown as Parameters<typeof segnaChiHaPortatoIlCliente>[0];
     expect(await segnaChiHaPortatoIlCliente(rotto, 'att-1', { lavoro: LAVORO, agenteEmail: 'agente@esempio.it' })).toBe(false);
     expect(await segnaChiHaPortatoIlCliente(rotto, 'att-1', { lavoro: 'non-un-codice', agenteEmail: 'agente@esempio.it' })).toBe(false);
+  });
+});
+
+// 28/11/2026, 01:10 — Nicola: il sito nasce dall'abbonamento «ma anche al servizio di cui ha bisogno», scelto
+// dall'agente prima di mandare il link. Senza bisogni il server rifiuta; un bisogno fuori elenco anche.
+describe('di cosa ha bisogno il sito (28/11, migrazione 999h)', () => {
+  it('senza bisogni, con un elenco vuoto o con un bisogno fuori elenco il server rifiuta e non iscrive niente', async () => {
+    expect((await premi({ lavoro: LAVORO, fascia: 'business' })).status).toBe(400);
+    expect((await premi({ lavoro: LAVORO, fascia: 'business', bisogni: [] })).status).toBe(400);
+    expect((await premi({ lavoro: LAVORO, fascia: 'business', bisogni: ['volantini'] })).status).toBe(400);
+    expect((await premi({ lavoro: LAVORO, fascia: 'business', bisogni: ['menu_listino', 'volantini'] })).status).toBe(400);
+    expect(stato.iscritte).toHaveLength(0);
+  });
+
+  it('una nota troppo lunga o con un telefono si rifiuta; una nota giusta va sul preventivo e nell avviso a Nicola', async () => {
+    expect((await premi({ lavoro: LAVORO, fascia: 'business', bisogni: ['eventi'], nota: 'x'.repeat(201) })).status).toBe(400);
+    expect((await premi({ lavoro: LAVORO, fascia: 'business', bisogni: ['eventi'], nota: 'chiamalo al 333 123 4567' })).status).toBe(400);
+    expect(stato.iscritte).toHaveLength(0);
+    const r = await premi({ lavoro: LAVORO, fascia: 'business', bisogni: ['prenotazioni', 'menu_listino'], nota: 'vuole far vedere la sala per le feste' });
+    expect(r.status).toBe(201);
+    // L'ordine dei bisogni è quello dell'elenco, qualunque sia l'ordine dei clic.
+    expect(stato.portati.at(-1)?.valori).toEqual({ bisogni_sito: ['menu_listino', 'prenotazioni'], nota_agente: 'vuole far vedere la sala per le feste' });
+    expect(JSON.stringify(stato.testiAvvisi)).toMatch(/menu o listino, prenotazioni e appuntamenti.*sala per le feste/);
   });
 });

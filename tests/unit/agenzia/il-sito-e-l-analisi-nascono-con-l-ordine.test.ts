@@ -74,7 +74,8 @@ function preparaDb() {
   const db = nuovoDb();
   db.predefiniti = { ordini_sdg: PREDEFINITI_999H };
   db.tabelle.profiles = [{ id: SELLER, role: 'seller', store_name: 'Caffè di Prova', store_address: 'Piazza Duomo 8, Piacenza', city: 'Piacenza', business_type: 'bar', business_type_detail: 'Bar e caffetteria', visibile_senza_abbonamento: false }];
-  db.tabelle.preventivi_con_codice = [{ seller_id: SELLER, codice: CODICE, stato: 'aperto', fascia_scelta: 'business', creato_il: '2026-11-27T10:00:00Z', accettato_il: null, condizioni_accettate_il: null, lavoro: LAVORO, agente_email: 'agente@esempio.it', visita_il: null }];
+  // 28/11 — I bisogni del sito scelti dall'agente al «Sì, aggiungi» (999h).
+  db.tabelle.preventivi_con_codice = [{ seller_id: SELLER, codice: CODICE, stato: 'aperto', fascia_scelta: 'business', creato_il: '2026-11-27T10:00:00Z', accettato_il: null, condizioni_accettate_il: null, lavoro: LAVORO, agente_email: 'agente@esempio.it', visita_il: null, bisogni_sito: ['menu_listino', 'prenotazioni'], nota_agente: 'vuole far vedere la sala per le feste' }];
   db.tabelle.abbonamenti_servizi = [];
   db.tabelle.schede_clienti = [];
   return db;
@@ -90,22 +91,28 @@ async function accetta(fascia: 'base' | 'business' | 'premium') {
 const aspettaILavori = (quanti: number) => vi.waitFor(() => expect(stato.avviati.length).toBeGreaterThanOrEqual(quanti)).then(() => new Promise((r) => setTimeout(r, 20)));
 
 const SEZIONE = { titolo: 'Chi siamo', testo: 'Un bar nel centro della città, per la colazione e per la pausa a metà giornata.', stato: 'da_confermare' };
-const sitoBuono = (pagine: number) => ({
+/** Una bozza giusta; `bisogni` segna una sezione per ognuno e mette i pulsanti che chiedono. */
+const sitoBuono = (pagine: number, bisogni: string[] = []) => ({
   sottotitolo: 'Bar e caffetteria in centro',
-  pagine: Array.from({ length: pagine }, (_, i) => ({ titolo: i === 0 ? 'Home' : `Pagina ${i + 1}`, percorso: i === 0 ? '/' : `/pagina-${i + 1}`, sezioni: [{ ...SEZIONE }] })),
+  pagine: Array.from({ length: pagine }, (_, i) => ({
+    titolo: i === 0 ? 'Home' : `Pagina ${i + 1}`, percorso: i === 0 ? '/' : `/pagina-${i + 1}`,
+    sezioni: [{ ...SEZIONE, bisogno: null as string | null }, ...(i === 0 ? bisogni.map((b) => ({ ...SEZIONE, titolo: `Sezione ${b}`, bisogno: b as string | null })) : [])].slice(0, 5),
+  })),
+  pulsanti: [...(bisogni.includes('prenotazioni') ? [{ etichetta: 'Prenota un tavolo', azione: 'whatsapp' }] : []), ...(bisogni.includes('vendere_online') ? [{ etichetta: 'Compra in vetrina', azione: 'vetrina' }] : [])],
   da_confermare: [{ voce: 'Orari di apertura', perche: 'non li abbiamo: li scrive il titolare' }],
   fonti: ['https://www.openstreetmap.org/node/1'],
   note: ['Foto della vetrina e del bancone alla visita'],
 });
-const conTesto = (testo: string, pagine = 3) => {
-  const s = sitoBuono(pagine);
-  s.pagine[0].sezioni = [{ ...SEZIONE, testo }];
+const conTesto = (testo: string, pagine = 3, bisogni: string[] = []) => {
+  const s = sitoBuono(pagine, bisogni);
+  s.pagine[0].sezioni[0] = { ...SEZIONE, testo, bisogno: null };
   return s;
 };
 
-const analisiBuona = (fascia: 'base' | 'business' | 'premium') => ({
+const analisiBuona = (fascia: 'base' | 'business' | 'premium', bisogni: string[] = []) => ({
   sintesi: ['Il locale è in centro, in una zona di passaggio tutto il giorno.'],
   parti: partiDaScrivere(fascia).map((parte) => ({ parte, frasi: ['Lo leggiamo insieme alla prima visita.'], fonti: [] as string[] })),
+  approfondimenti: bisogni.map((bisogno) => ({ bisogno, frasi: ['Due bar vicini prendono le prenotazioni solo al telefono.'], fonti: ['https://www.openstreetmap.org/node/2'] })),
   prime_mosse: [
     { cosa: 'Sistemare la vetrina su MyCity', perche: 'è la prima cosa che vede chi cerca un bar in zona' },
     { cosa: 'Pubblicare le prime foto del locale', perche: 'oggi online non ci sono foto recenti' },
@@ -157,12 +164,37 @@ describe('② la risposta dell AD entra solo se rispetta le regole', () => {
     await accetta('business');
     await aspettaILavori(3);
     const o = ordini()[0] as Parameters<typeof aggiornaIlPezzo>[1];
-    stato.lavori[String(o.lavoro_sito)] = { stato: 'pronta', venditore: VENDITORE_DEI_PIANI, risultato: sitoBuono(3) };
+    stato.lavori[String(o.lavoro_sito)] = { stato: 'pronta', venditore: VENDITORE_DEI_PIANI, risultato: sitoBuono(3, ['menu_listino', 'prenotazioni']) };
     const dopo = await aggiornaIlPezzo(getAdminSupabase(), o, 'sito');
     expect(dopo.sito_stato).toBe('pronto');
     expect(ordini()[0].sito_stato).toBe('pronto');
     expect(ordini()[0].sito).toMatchObject({ fascia: 'business', pubblicata: false });
     expect((ordini()[0].sito as { pagine: unknown[] }).pagine).toHaveLength(3);
+    expect(ordini()[0].sito).toMatchObject({ bisogni: ['menu_listino', 'prenotazioni'], pulsanti: [{ azione: 'whatsapp' }] });
+  });
+
+  it('28/11: i bisogni dell agente arrivano nei compiti del sito e dell analisi, e nell ordine', async () => {
+    await accetta('business');
+    await aspettaILavori(3);
+    expect(ordini()[0].dati_attivita).toMatchObject({ bisogni: ['menu_listino', 'prenotazioni'], notaAgente: 'vuole far vedere la sala per le feste' });
+    const sito = lavoroDi(COMPITO_SITO)!.job.dati as { bisogni: { bisogno: string; nel_sito: string }[]; nota_dell_agente: string | null };
+    expect(sito.bisogni.map((b) => b.bisogno)).toEqual(['menu_listino', 'prenotazioni']);
+    expect(sito.bisogni[0].nel_sito).toMatch(/SENZA prezzi/);
+    expect(sito.nota_dell_agente).toBe('vuole far vedere la sala per le feste');
+    const analisi = lavoroDi(COMPITO_ANALISI)!.job.dati as { bisogni: { bisogno: string; dove_guardare: string }[] };
+    expect(analisi.bisogni.map((b) => b.bisogno)).toEqual(['menu_listino', 'prenotazioni']);
+    expect(analisi.bisogni[1].dove_guardare).toMatch(/come prenotano i concorrenti/);
+  });
+
+  it('28/11: una bozza che dimentica un bisogno o il suo pulsante si scarta; un analisi che non lo approfondisce anche', () => {
+    const scelti = ['menu_listino', 'prenotazioni'] as const;
+    expect(sitoDallaRisposta(sitoBuono(3, [...scelti]), 'business', 'Caffè di Prova', [...scelti]).ok).toBe(true);
+    expect(sitoDallaRisposta(sitoBuono(3, ['menu_listino']), 'business', 'Caffè di Prova', [...scelti])).toMatchObject({ ok: false, motivo: expect.stringContaining('Prenotazioni e appuntamenti') });
+    const senzaPulsante = sitoBuono(3, [...scelti]);
+    senzaPulsante.pulsanti = [];
+    expect(sitoDallaRisposta(senzaPulsante, 'business', 'Caffè di Prova', [...scelti])).toMatchObject({ ok: false, motivo: expect.stringContaining('pulsante') });
+    expect(analisiDallaRisposta(analisiBuona('business', [...scelti]), 'business', 'Caffè di Prova', [...scelti]).ok).toBe(true);
+    expect(analisiDallaRisposta(analisiBuona('business', ['menu_listino']), 'business', 'Caffè di Prova', [...scelti])).toMatchObject({ ok: false, motivo: expect.stringContaining('non approfondisce') });
   });
 
   it.each([
@@ -198,7 +230,7 @@ describe('② la risposta dell AD entra solo se rispetta le regole', () => {
     await accetta('business');
     await aspettaILavori(3);
     const o = ordini()[0] as Parameters<typeof aggiornaIlPezzo>[1];
-    stato.lavori[String(o.lavoro_sito)] = { stato: 'pronta', venditore: VENDITORE_DEI_PIANI, risultato: conTesto('Il cappuccino lo trovi a 1,50 € tutte le mattine, con la brioche.') };
+    stato.lavori[String(o.lavoro_sito)] = { stato: 'pronta', venditore: VENDITORE_DEI_PIANI, risultato: conTesto('Il cappuccino lo trovi a 1,50 € tutte le mattine, con la brioche.', 3, ['menu_listino', 'prenotazioni']) };
     await aggiornaIlPezzo(getAdminSupabase(), o, 'sito');
     expect(ordini()[0]).toMatchObject({ sito_stato: 'errore', sito: null });
     expect(String(ordini()[0].sito_errore)).toMatch(/prezzo/);
@@ -291,7 +323,7 @@ describe('③ se l AD non risponde, l accettazione va lo stesso', () => {
     expect(await chiediIlPezzo(String(ordini()[0].id), 'sito')).toEqual({ esito: 'guasto', dettaglio: 'manca la migrazione 999h' });
     // E il titolare vede il suo piano, coi due pezzi «in preparazione».
     const visto = await lavoroDallOrdine(SELLER);
-    expect(visto).toMatchObject({ sito: { stato: 'in_preparazione', bozza: null }, analisi: { stato: 'in_preparazione', analisi: null } });
+    expect(visto).toMatchObject({ sito: { stato: 'lo_stiamo_preparando', bozza: null }, analisi: { stato: 'lo_stiamo_preparando', analisi: null } });
     expect(visto?.piano.piano).toBeTruthy();
   });
 });
@@ -318,7 +350,7 @@ describe('④ il titolare vede solo il suo lavoro', () => {
     expect(testo).toContain('MIO');
     expect(testo).not.toMatch(/ALTRUI|Bar Altrui|agente@esempio\.it|altro@esempio\.it|lavoro_sito|sito_errore/);
     expect(testo).not.toContain(LAVORO);
-    expect(mio?.analisi).toEqual({ stato: 'in_preparazione', analisi: null });
+    expect(mio?.analisi).toEqual({ stato: 'lo_stiamo_preparando', analisi: null });
   });
 
   it('un negozio senza ordine non riceve niente, nemmeno chiedendo con un id storto', async () => {

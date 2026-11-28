@@ -17,6 +17,7 @@ import { fraseVisita } from './visita';
 export { fraseVisita };
 import { COMPITO_PIANO, SCHEMA_PIANO, VENDITORE_DEI_PIANI, dallaSchedaDellAgente, datiPerIlPianoCompleto, pianoDallaRisposta } from './piano-completo-ad';
 import { PEZZI_ORDINE, chiediIlPezzo, schedaDellAgente } from './pezzi-dell-ordine';
+import { TITOLI_BISOGNI, leggiBisogni, type BisognoSito } from './bisogni-del-sito';
 
 /**
  * L'ORDINE DI SERVIZIO CHE ARRIVA A SDG — 27/11/2026.
@@ -61,6 +62,10 @@ export type DatiAttivita = {
     perche: string | null;
     servizi: Record<string, string>;
   } | null;
+  /** 28/11/2026 — Di cosa ha bisogno il sito, scelto dall'agente col titolare (migrazione 999h, dal preventivo). */
+  bisogni?: BisognoSito[];
+  /** La nota libera dell'agente: un'indicazione per l'AD e per SDG, mai un testo da pubblicare. */
+  notaAgente?: string | null;
 };
 
 export type OrdineSdg = {
@@ -138,13 +143,16 @@ async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: st
   if (!riga || riga.seller_id !== sellerId || riga.stato !== 'accettato') return { ok: false, motivo: 'non-accettato' };
 
   // 2) Agente e scheda (999c), visita (999b, se chi chiama non la passa), profilo, scheda del locale, canone.
-  const [chi, visita, profilo, schedaLocale, abbonamenti] = await Promise.all([
+  const [chi, visita, profilo, schedaLocale, abbonamenti, richiesta] = await Promise.all([
     colonneFacoltative(admin, codice, 'lavoro, agente_email'),
     visitaIl === undefined ? colonneFacoltative(admin, codice, 'visita_il') : Promise.resolve({ visita_il: visitaIl }),
     admin.from('profiles').select('store_name, store_address, city, business_type, business_type_detail').eq('id', sellerId).maybeSingle(),
     admin.from('schede_clienti').select('scheda').eq('id_attivita', sellerId).maybeSingle(),
     admin.from('abbonamenti_servizi').select('fascia, canone_centesimi, stato, origine').eq('seller_id', sellerId),
+    // 28/11 — I bisogni del sito scelti dall'agente (999h): prima della migrazione non ci sono, e il sito parte da «farsi trovare».
+    colonneFacoltative(admin, codice, 'bisogni_sito, nota_agente'),
   ]);
+  const { bisogni, nota: notaAgente } = leggiBisogni(richiesta?.bisogni_sito, richiesta?.nota_agente);
   const p = (profilo.data ?? {}) as { store_name?: string | null; store_address?: string | null; city?: string | null; business_type?: string | null; business_type_detail?: string | null };
   const nome = String(p.store_name ?? '').trim().slice(0, 120) || 'Attività senza nome';
   const tipo = tipoDelProfilo(p.business_type);
@@ -163,7 +171,7 @@ async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: st
     accettatoIl: riga.accettato_il ?? null,
     scheda: schedaLocale.error ? null : leggiSchedaSalvata((schedaLocale.data as { scheda?: unknown } | null)?.scheda),
   });
-  const dati: DatiAttivita = { tipo, dettaglio: p.business_type_detail ?? null, indirizzo: p.store_address ?? null, citta: p.city ?? null, dallaScheda: null };
+  const dati: DatiAttivita = { tipo, dettaglio: p.business_type_detail ?? null, indirizzo: p.store_address ?? null, citta: p.city ?? null, dallaScheda: null, bisogni, notaAgente };
 
   // 3) L'ordine: uno per attività. Con la chiave unica su seller_id, un secondo invio non scrive niente.
   const scritto = await admin
@@ -206,7 +214,8 @@ async function creaOrdine({ sellerId, codice, fascia, visitaIl }: { sellerId: st
       `Abbonamento ${FASCE[fascia].nome}, ${(canone / 100).toLocaleString('it-IT')} € al mese, in contanti al primo servizio.`,
       `${fraseVisita(visitaLetta)}.`,
       emailValida(chi?.agente_email) ? `Portato dall'agente ${emailValida(chi?.agente_email)}.` : 'Senza agente (preventivo nato fuori dalla pagina degli agenti).',
-      'Il piano editoriale del primo mese è già nell’ordine; quello completo lo prepara l’AD.',
+      bisogni.length ? `Il sito deve servire a: ${bisogni.map((b) => TITOLI_BISOGNI[b].toLowerCase()).join(', ')}.` : 'L’agente non ha scelto i bisogni del sito: si parte da «farsi trovare».',
+      'Il piano editoriale del primo mese è già nell’ordine; quello completo, la bozza del sito e l’analisi all’avvio li prepara l’AD.',
     ].join(' '),
     '/seller/ordini-sdg',
     { unaVoltaPer: `ordine-sdg:${sellerId}` },

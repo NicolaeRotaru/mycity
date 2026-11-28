@@ -147,6 +147,14 @@ describe('titolare con l ordine di SDG (28/11)', () => {
     sito: { stato: 'pronto', bozza: { origine: 'ad', fascia: 'business', sottotitolo: 'Bar in centro', pagine: [{ titolo: 'Home', percorso: '/', sezioni: [{ titolo: 'Chi siamo', testo: 'TESTO DELLA BOZZA DEL SITO', stato: 'da_confermare' }] }], daConfermare: [{ voce: 'Orari', perche: 'li scrive il titolare' }], fonti: [], note: [], pubblicata: false } },
     analisi: { stato: 'in_preparazione', analisi: null },
   };
+  it('Analisi andata storta: «lo stiamo preparando», mai un errore tecnico né il preventivo', async () => {
+    lavoro = json(200, { ok: true, data: { lavoro: null, ordine: { ...ordine, analisi: { stato: 'lo_stiamo_preparando', analisi: null } } } });
+    stato.slug = 'analisi';
+    const d = await monta();
+    await vi.waitFor(() => expect(d.textContent).toContain('Lo stiamo preparando'), { timeout: 3000 });
+    expect(d.textContent).not.toMatch(/errore|n8n|AD non/i);
+    expect(vediPreventivo(d)).toBe(false);
+  });
   it('Sito web: la bozza, con la scritta «Bozza, la confermiamo insieme alla visita» e «Non è online»', async () => {
     lavoro = json(200, { ok: true, data: { lavoro: null, ordine } });
     stato.slug = 'sito-web';
@@ -164,6 +172,7 @@ describe('titolare con l ordine di SDG (28/11)', () => {
     expect(d.textContent).toContain('Bozza, la confermiamo insieme alla visita');
     stato.slug = 'analisi';
     const d2 = await monta();
-    await vi.waitFor(() => expect(d2.textContent).toContain('La tua analisi è in preparazione'), { timeout: 3000 });
+    await vi.waitFor(() => expect(d2.textContent).toContain('In preparazione, pronto entro poche ore.'), { timeout: 3000 });
+    expect(vediPreventivo(d2)).toBe(false);
   });
 });
