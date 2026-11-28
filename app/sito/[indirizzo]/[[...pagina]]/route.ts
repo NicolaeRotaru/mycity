@@ -1,5 +1,6 @@
 import { leggiSitoDelCliente } from '@/lib/agenzia/sito-finito/leggi';
 import { paginaDelSito } from '@/lib/agenzia/sito-finito/costruisci';
+import { DOMINIO_MYCITY } from '@/lib/contatti-pubblici';
 
 /**
  * IL SITO DEL CLIENTE, ONLINE — 28/11/2026.
@@ -21,7 +22,7 @@ const INTESTAZIONI = {
   'cache-control': 'public, max-age=0, s-maxage=60',
 } as const;
 
-const NON_TROVATO = `<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Sito non trovato</title><style>body{margin:0;font:1rem/1.6 system-ui,sans-serif;background:#FBF7F2;color:#2C2A28;display:grid;place-items:center;min-height:100vh;padding:21px;text-align:center}a{color:#C0492C}</style></head><body><main><h1>Questo sito non c'è</h1><p>L'indirizzo è sbagliato, oppure il sito non è ancora pronto.</p><p><a href="/">Vai a MyCity</a></p></main></body></html>`;
+const NON_TROVATO = `<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Sito non trovato</title><style>body{margin:0;font:1rem/1.6 system-ui,sans-serif;background:#FBF7F2;color:#2C2A28;display:grid;place-items:center;min-height:100vh;padding:21px;text-align:center}a{color:#C0492C}</style></head><body><main><h1>Questo sito non c'è</h1><p>L'indirizzo è sbagliato, oppure il sito non è ancora pronto.</p><p><a href="https://${DOMINIO_MYCITY}/">Vai a MyCity</a></p></main></body></html>`;
 
 const nonTrovato = () => new Response(NON_TROVATO, { status: 404, headers: { ...INTESTAZIONI, 'cache-control': 'no-store' } });
 

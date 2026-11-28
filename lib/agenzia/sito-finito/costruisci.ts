@@ -1,6 +1,7 @@
 import { faseLuna, firmaDi, puntoAureo, ritardiDiAccensione, rosaEtrusca, tokenCss, trama, tracciatoLuna } from '@/lib/armonia';
 import { DAY_KEYS, orariImpostati, type HoursInterval, type StoreHours } from '@/lib/store-hours';
 import type { PaginaDellaBozza } from '@/lib/agenzia/sito-dell-ordine-ad';
+import { DOMINIO_MYCITY } from '@/lib/contatti-pubblici';
 
 /**
  * IL SITO FINITO DEL CLIENTE — 28/11/2026.
@@ -286,7 +287,7 @@ ${tramaSvg}
 <footer>
   <div class="contenitore riga">
     <span>© ${anno} ${esc(dati.nome)}${dati.indirizzo ? ` · ${esc(dati.indirizzo)}` : ''}</span>
-    <span>Sito curato da <a href="https://www.mycity-marketplace.com/">MyCity</a>${luna}</span>
+    <span>Sito curato da <a href="https://${DOMINIO_MYCITY}/">MyCity</a>${luna}</span>
   </div>
 </footer>
 </body>
