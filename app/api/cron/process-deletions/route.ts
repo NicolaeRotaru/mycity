@@ -814,7 +814,7 @@ async function haAnnullatoNelFrattempo(admin: Admin, userId: string): Promise<bo
 
 async function avvisaUnaVoltaPerAvviso(
   admin: Admin,
-  avvisiFermi: Array<{ id: string; userId: string; tappa?: TappaAvviso; forsePartita?: true }>,
+  avvisiFermi: Array<{ id: string; userId: string; tappa?: TappaAvviso; forsePartita?: true; registroIlleggibile?: true }>,
 ): Promise<{ nuovi: number; nonScritti: number }> {
   const conto = { nuovi: 0, nonScritti: 0 };
   if (avvisiFermi.length === 0) return conto;
@@ -831,7 +831,7 @@ async function avvisaUnaVoltaPerAvviso(
     logger.error('[cron-deletions] nessun amministratore a cui dirlo: allarme non recapitato', { avvisiFermi: avvisiFermi.length });
     return { nuovi: 0, nonScritti: avvisiFermi.length };
   }
-  for (const { id: idAvviso, userId, tappa, forsePartita } of avvisiFermi) {
+  for (const { id: idAvviso, userId, tappa, forsePartita, registroIlleggibile } of avvisiFermi) {
     const quale =
       tappa === 'termine-scaduto'
         ? ' La spiegazione ferma è quella del termine di legge scaduto.'
@@ -856,9 +856,16 @@ async function avvisaUnaVoltaPerAvviso(
         body:
           // R09-001 — Se una notte prima l'email è stata spedita ma il registro non l'ha segnata, può
           // essere arrivata: l'allarme non può dire «non è partita».
-          (forsePartita
-            ? "Una spiegazione dell'attesa per la cancellazione non risulta partita per email: una notte prima è stata spedita ma il registro non l'ha segnata, quindi può essere arrivata. "
-            : "Una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. ") +
+          // 28/11/2026 (R08-011) — Se il registro degli invii non si è letto (o non ha preso il turno),
+          // l'email stanotte non si è tentata e non si sa niente: né se una notte prima è partita, né se
+          // è la prima notte. lib/privacy/avvisi-a-chi-aspetta.ts lo segnava già (`registroIlleggibile`,
+          // R25-005), ma qui nessuno lo leggeva e l'allarme diceva «non è partita, non è un intoppo di
+          // una notte sola» anche alla prima notte e per un'email forse già arrivata.
+          (registroIlleggibile
+            ? "Non si sa se una spiegazione dell'attesa per la cancellazione sia partita per email: il registro degli invii non si è potuto leggere, quindi stanotte l'email non è stata tentata (per non mandarla due volte). Può essere la prima notte, e un'email di una notte prima può essere arrivata. "
+            : forsePartita
+              ? "Una spiegazione dell'attesa per la cancellazione non risulta partita per email: una notte prima è stata spedita ma il registro non l'ha segnata, quindi può essere arrivata. "
+              : "Una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. ") +
           "È scritta nel pannello del sito della persona, ma chi vuole andarsene può non rientrarci più: " +
           'controlla la posta del sito oppure scrivile tu. Il giro riprova da solo ogni notte; ' +
           'questo avviso non si ripete finché la spiegazione resta ferma, e si chiude da solo quando parte. ' +
