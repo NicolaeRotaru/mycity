@@ -64,13 +64,24 @@ type CategoriaPerIlRecesso = { id: string; slug: string; parent_id: string | nul
  * Il campo «Conservazione» del modulo alimentari (lib/category-attributes.ts) ha la voce
  * «Frigorifero»: è il negozio stesso a dire che il prodotto va tenuto in frigo, cioè che si
  * deteriora in fretta. Una mozzarella salvata sulla sola radice «Alimentari», senza
- * sottocategoria e senza spunta, accettava il ripensamento. Vale solo la voce esatta: «Freezer»
- * (surgelati) e «Luogo fresco e asciutto» non sono «freschi» nel fatto `legale.recesso-esclusi`.
+ * sottocategoria e senza spunta, accettava il ripensamento. «Freezer» (surgelati) e «Luogo fresco
+ * e asciutto» non sono «freschi» nel fatto `legale.recesso-esclusi`.
+ *
+ * 28/11/2026 (R04-001, onda 2) — NON SOLO LA VOCE ESATTA DEL MENU.
+ * Il caricamento da file (lib/products/righe-dal-file.ts) scrive gli attributi come testo libero,
+ * con la chiave com'è scritta nel file: «Conservazione: In frigorifero» o «conservazione: Frigo»
+ * passavano come ripensamento (201). Ora la chiave si cerca senza badare a maiuscole e spazi, e
+ * vale ogni valore che dice frigo. Resta fuori «in frigorifero dopo l'apertura»: è la dispensa
+ * (il vasetto di miele), che il recesso ce l'ha.
  */
+const DICE_FRIGO = /\bfrigo/i;
+const SOLO_DOPO_APERTO = /\b(dopo|una volta)\s+(l['’]\s*)?apert/i;
 function daFrigorifero(attributi: unknown): boolean {
-  if (!attributi || typeof attributi !== 'object') return false;
-  const c = (attributi as Record<string, unknown>).conservazione;
-  return typeof c === 'string' && c.trim().toLowerCase() === 'frigorifero';
+  if (!attributi || typeof attributi !== 'object' || Array.isArray(attributi)) return false;
+  return Object.entries(attributi as Record<string, unknown>).some(([chiave, valore]) => {
+    if (chiave.trim().toLowerCase() !== 'conservazione' || typeof valore !== 'string') return false;
+    return DICE_FRIGO.test(valore) && !SOLO_DOPO_APERTO.test(valore);
+  });
 }
 
 function segnaIDeperibili<P extends { category_id?: unknown; attributes?: unknown }>(prodotti: P[], categorie: CategoriaPerIlRecesso[]): P[] {
@@ -257,6 +268,20 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
     if ('errore' in esito) return esito.errore;
     if (esito.rifiuto) return ApiErrors.invalidRequest(esito.rifiuto);
     notaRecesso = esito.nota;
+  } else if (body.reason === 'OTHER') {
+    /**
+     * 28/11/2026 (R04-001, onda 2) — «ALTRO» SUL PANE ARRIVA AL NEGOZIO CON L'AVVISO.
+     * «Altro» con la nota «ho cambiato idea» su un pane passava come un reso qualsiasi, e il
+     * forno non aveva niente che gli dicesse che quel prodotto il recesso non ce l'ha. «Altro»
+     * non si rifiuta (può essere un pezzo mancante, e la garanzia vale sempre): decide il negozio,
+     * ma con la nota dei prodotti esclusi. Se la lettura cade, il reso nasce lo stesso, senza nota.
+     */
+    const esito = await esitoDelRipensamento(supa, body.orderId, body.orderItemId);
+    if (!('errore' in esito)) {
+      notaRecesso = esito.rifiuto
+        ? 'Prodotto escluso dal recesso (art. 59 Cod. Cons.): se il cliente ci ha solo ripensato, il reso non è dovuto. Per un difetto o un errore la garanzia vale sempre.'
+        : esito.nota;
+    }
   }
 
   const { data: existing } = await supa
