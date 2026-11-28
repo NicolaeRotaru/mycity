@@ -151,7 +151,8 @@ export default function PaginaAgente() {
             <button type="submit" className={c('bottone')} disabled={fase === 'leggo' || !testo.trim()}>{fase === 'leggo' ? 'Leggo…' : 'Analizza'}</button>
           </div>
           <p className={c('nota')}>Su Google Maps: apri l’attività → «Condividi» → «Copia link». Va bene anche scrivere il nome e la città.</p>
-          <label htmlFor="canale">Sito o Instagram, se li vedi sulla scheda Google (facoltativo)</label>
+          {/* 28/11/2026 — Armonia, un passo: lo spazio sopra il campo nuovo è un numero di Fibonacci (13 px, `mt-f2`). */}
+          <label htmlFor="canale" className="mt-f2 block">Sito o Instagram, se li vedi sulla scheda Google (facoltativo)</label>
           <input id="canale" className={c('campo')} type="text" inputMode="url" autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={300}
             placeholder="www.illocale.it  oppure  @illocale" value={canale} onChange={(e) => setCanale(e.target.value)} />
           <p className={c('nota')}>Sulla scheda Google tocca «Sito web» o il profilo social e copia l’indirizzo: così la scheda li trova di sicuro.</p>
