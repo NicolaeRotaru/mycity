@@ -44,7 +44,7 @@ export const POST = withAdminAuth(async ({ user, req }): Promise<NextResponse> =
 
   // 28/11/2026 (R01-010, onda 2) — IL VENDITORE LO RIMETTEVA IN VENDITA DA SOLO. La bozza da sola non
   // diceva «tolto dallo staff»: con «Attiva» il prodotto tornava in vetrina. Il segno
-  // `tolto_dallo_staff_at` (migrazione onda2_A_3) lo tiene fuori finché lo staff non lo rimette
+  // `tolto_dallo_staff_at` (migrazione 999k) lo tiene fuori finché lo staff non lo rimette
   // (rotta admin dei prodotti). Senza la migrazione si toglie lo stesso, senza il segno, e lo si dice.
   const tolto = { status: 'draft', tolto_dallo_staff_at: new Date().toISOString() };
   let { data: tolti, error: erroreScrittura } = await admin
@@ -53,7 +53,7 @@ export const POST = withAdminAuth(async ({ user, req }): Promise<NextResponse> =
     .eq('id', s.oggetto_id)
     .select('id');
   if (erroreScrittura && colonnaNonTrovata(erroreScrittura, ['tolto_dallo_staff_at'])) {
-    logger.warn('[segnalazioni] prodotto tolto senza il segno: manca la migrazione onda2_A_3', { prodotto: s.oggetto_id });
+    logger.warn('[segnalazioni] prodotto tolto senza il segno: manca la migrazione 999k', { prodotto: s.oggetto_id });
     ({ data: tolti, error: erroreScrittura } = await admin
       .from('products')
       .update({ status: 'draft' })

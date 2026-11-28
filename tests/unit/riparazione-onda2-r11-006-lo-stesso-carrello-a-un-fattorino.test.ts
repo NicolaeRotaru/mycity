@@ -12,7 +12,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
  * Onda 2 · R11-006 — Due ordini dello stesso carrello potevano finire a due fattorini diversi, e il
  * secondo faceva un viaggio intero per 1 euro.
  *
- * La regola vera sta nel database: `prendi_ordine` (migrazione onda2_E2_2_lo_stesso_carrello_va_a_un_
+ * La regola vera sta nel database: `prendi_ordine` (migrazione 999r_lo_stesso_carrello_va_a_un_
  * fattorino_solo) prende con l'ordine scelto anche gli altri ordini PRONTI e liberi dello stesso
  * carrello, e risponde `insieme`. La prova col database vero è
  * tests/sql/rls/onda2-e2-lo-stesso-carrello-a-un-fattorino.test.sql (Postgres locale). Qui: la

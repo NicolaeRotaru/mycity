@@ -1,5 +1,5 @@
 -- =============================================================================
--- R07-009 (onda 2) — La fascia piena ferma i contanti anche insieme (onda2_F1_1)
+-- R07-009 (onda 2) — La fascia piena ferma i contanti anche insieme (999s)
 -- =============================================================================
 -- Al massimo 5 giri per fascia (ORDINI_PER_FASCIA). La rotta dei contanti conta
 -- prima di inserire; due invii nello stesso istante leggerebbero tutti e due «c'è

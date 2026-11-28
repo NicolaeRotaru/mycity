@@ -91,7 +91,7 @@ import {
 
 const ADESSO = new Date('2026-11-22T10:00:00Z');
 
-/** Un bonifico da 10 € nato da un reclamo aperto il 1° novembre e deciso il 20 (righe della migrazione onda2_E1_1). */
+/** Un bonifico da 10 € nato da un reclamo aperto il 1° novembre e deciso il 20 (righe della migrazione 999o). */
 function bonificoDelReclamo(extra: Partial<RigaDelBonifico> = {}): RigaDelBonifico {
   return {
     order_id: 'abcdef12-0000-0000-0000-000000000001',
@@ -147,7 +147,7 @@ describe('il termine dei 14 giorni di un reclamo', () => {
     expect(allarmiDeiBonifici([bonificoDelReclamo()], ADESSO, 'decisione')).toEqual([]);
   });
 
-  it('prima della migrazione onda2_E1_1 (niente date del reclamo) il termine resta sconosciuto, come prima', () => {
+  it('prima della migrazione 999o (niente date del reclamo) il termine resta sconosciuto, come prima', () => {
     const riga = bonificoDelReclamo();
     delete riga.reclamo_aperto_il;
     delete riga.reclamo_deciso_il;

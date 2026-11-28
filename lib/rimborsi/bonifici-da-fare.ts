@@ -83,7 +83,7 @@ export const GIORNI_DI_PREAVVISO = 3;
  * presto, quindi l'allarme non arriva mai tardi. Se dice di no, si cambia QUI in 'decisione'
  * (disputes.resolved_at, il giorno in cui l'amministrazione l'ha chiuso a favore del cliente): la
  * pagina dei bonifici, l'allarme del sorvegliante, l'avviso e la rotta dei reclami leggono questa.
- * Le due date le dà `admin_bonifici_rimborso()` (migrazione onda2_E1_1).
+ * Le due date le dà `admin_bonifici_rimborso()` (migrazione 999o).
  */
 export type PartenzaDelTermineDeiReclami = 'apertura' | 'decisione';
 export const PARTENZA_DEL_TERMINE_DEI_RECLAMI: PartenzaDelTermineDeiReclami = 'apertura';
@@ -250,7 +250,7 @@ export type RigaDelBonifico = {
   /** Per un reso, quando è stato chiesto: da lì contano i 14 giorni. */
   chiesto_il: string | null;
   /**
-   * Per un reclamo, quando il cliente l'ha aperto e quando è stato deciso (migrazione onda2_E1_1: prima
+   * Per un reclamo, quando il cliente l'ha aperto e quando è stato deciso (migrazione 999o: prima
    * non ci sono, e il termine del reclamo resta sconosciuto). Quale conta lo dice PARTENZA_DEL_TERMINE_DEI_RECLAMI.
    */
   reclamo_aperto_il?: string | null;

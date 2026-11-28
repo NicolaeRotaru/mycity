@@ -179,7 +179,7 @@ const scarica = withAuthRateLimit(
     punti_fedelta: tutta((da, a) => admin.from('loyalty_accounts').select('*').eq('user_id', userId).order('user_id').range(da, a)),
     punti_movimenti: tutta((da, a) => admin.from('loyalty_transactions').select('*').eq('user_id', userId).order('id').range(da, a)),
     buoni_regalo: tutta((da, a) => admin.from('gift_cards').select('*').or(`buyer_id.eq.${userId},redeemed_by.eq.${userId}`).order('code').range(da, a)),
-    // 28/11/2026 (R08-012) — Il buono comprato e non ancora pagato (migrazione onda2_A_1): destinatario e
+    // 28/11/2026 (R08-012) — Il buono comprato e non ancora pagato (migrazione 999j): destinatario e
     // messaggio stanno qui finché il pagamento non arriva. Senza la chiave del tentativo, che è tecnica.
     // Finché la migrazione non è applicata la tabella non c'è: lì non c'è niente di suo, e l'elenco vuoto
     // è la verità (non una lettura caduta che renda il file «incompleto»).

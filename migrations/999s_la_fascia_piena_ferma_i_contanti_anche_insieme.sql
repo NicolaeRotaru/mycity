@@ -1,5 +1,5 @@
 -- =============================================================================
--- onda2_F1_1 — La fascia piena ferma i contanti anche quando due ordini arrivano insieme
+-- 999s — La fascia piena ferma i contanti anche quando due ordini arrivano insieme
 -- =============================================================================
 -- R07-009. In una fascia si accettano al massimo 5 giri (scelta di Nicola, fatto
 -- `consegna.capienza`; `ORDINI_PER_FASCIA` in lib/quando-arriva.ts). La rotta dei

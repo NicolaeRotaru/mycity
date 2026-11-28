@@ -4,7 +4,7 @@
 --   tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test
 --
 -- «Accolta» su una segnalazione di prodotto lo mette in bozza col segno tolto_dallo_staff_at
--- (app/api/admin/segnalazioni/accogli/route.ts). Il grilletto della migrazione onda2_A_3:
+-- (app/api/admin/segnalazioni/accogli/route.ts). Il grilletto della migrazione 999k:
 -- ① il negozio, coi suoi permessi (come il modulo e «Attiva»), non lo rimette in vendita
 -- ② il negozio non svuota il segno
 -- ③ nemmeno il server (chiave di servizio, le rotte dell'assistente) lo rimette in vendita col segno

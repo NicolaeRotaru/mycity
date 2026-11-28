@@ -1,5 +1,5 @@
 -- =============================================================================
--- L'ordine in contanti porta la chiave del suo carrello (onda2_E1_2)
+-- L'ordine in contanti porta la chiave del suo carrello (999p)
 -- =============================================================================
 -- Gira contro un database ricostruito dalle migrazioni vere:
 --   tests/sql/harness/apply.sh mycity_test
@@ -19,7 +19,7 @@
 -- (La semina degli ordini già nati si prova applicando la migrazione su un
 -- database con righe: vedi il referto della campagna.)
 --
--- Senza la migrazione onda2_E1_2 questa prova è ROSSA. Tutto in transazione, ROLLBACK.
+-- Senza la migrazione 999p questa prova è ROSSA. Tutto in transazione, ROLLBACK.
 -- =============================================================================
 
 BEGIN;

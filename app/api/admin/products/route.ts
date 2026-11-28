@@ -277,7 +277,7 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
   if (rest.status !== undefined) patch.status = rest.status;
   // 28/11/2026 (R01-010, onda 2) — Lo staff che rimette in vendita un prodotto tolto dopo una
   // segnalazione accolta svuota il segno nella stessa scrittura: il database non lascia tornare
-  // «available» un prodotto col segno (migrazione onda2_A_3), nemmeno al server.
+  // «available» un prodotto col segno (migrazione 999k), nemmeno al server.
   if (rest.status === 'available') patch.tolto_dallo_staff_at = null;
   Object.assign(patch, externalPatch(rest));
 
@@ -298,7 +298,7 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
   // il valore di prima e quello di dopo di ogni campo cambiato, come le altre porte.
   if (Object.keys(patch).length > 0) {
     let { data, error } = await admin.from('products').select(Object.keys(patch).join(', ')).eq('id', id).maybeSingle();
-    // Senza la migrazione onda2_A_3 la colonna del segno non c'è: non c'è niente da svuotare.
+    // Senza la migrazione 999k la colonna del segno non c'è: non c'è niente da svuotare.
     if (error && 'tolto_dallo_staff_at' in patch && colonnaNonTrovata(error, ['tolto_dallo_staff_at'])) {
       delete patch.tolto_dallo_staff_at;
       ({ data, error } = await admin.from('products').select(Object.keys(patch).join(', ')).eq('id', id).maybeSingle());

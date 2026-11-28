@@ -1,4 +1,4 @@
--- onda2_E2_1_la_posizione_del_negozio_resta_in_area.sql
+-- 999q_la_posizione_del_negozio_resta_in_area.sql
 --
 -- 28/11/2026 (onda 2, R06-002) — LA POSIZIONE DEL NEGOZIO RESTA DENTRO PIACENZA E DINTORNI ANCHE
 -- QUANDO NON PASSA DAL MODULO.

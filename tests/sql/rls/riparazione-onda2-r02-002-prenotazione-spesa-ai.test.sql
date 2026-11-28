@@ -1,5 +1,5 @@
 -- =============================================================================
--- R02-002 (onda 2) — La spesa AI si prenota nel conto condiviso (migrations/onda2_B_1)
+-- R02-002 (onda 2) — La spesa AI si prenota nel conto condiviso (migrations/999l)
 -- =============================================================================
 -- Tetto 100 centesimi.
 --   ① 60 entra (totale 60); 50 non ci sta: -1 e niente scritto;

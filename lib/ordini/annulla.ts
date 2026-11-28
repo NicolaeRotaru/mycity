@@ -1008,7 +1008,7 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
     .limit(1);
   if (errT || !Array.isArray(tentativi) || tentativi.length === 0) {
     // 28/11/2026 (R06-009, onda 2) — Senza la riga, la chiave del carrello scritta con l'ordine
-    // (migrazione onda2_E1_2): la regola del negozio che rifiuta scatta lo stesso.
+    // (migrazione 999p): la regola del negozio che rifiuta scatta lo stesso.
     const dallaChiave = await carrelloDallaChiave(admin, o);
     if (dallaChiave !== undefined) return dallaChiave;
     // 21/11/2026 (R04-007) — Senza la riga (e senza la chiave) non si sposta niente, ma non in silenzio.

@@ -8,7 +8,7 @@
 -- regole per riga: il controllo dell'area stava solo nel selettore. Qui il
 -- negozio (sessione vera, ruolo authenticated) prova a scrivere una posizione a
 -- Milano e il database la rifiuta. Senza la migrazione
--- onda2_E2_1_la_posizione_del_negozio_resta_in_area il file e' ROSSO.
+-- 999q_la_posizione_del_negozio_resta_in_area il file e' ROSSO.
 -- Tutto in transazione, ROLLBACK.
 -- =============================================================================
 

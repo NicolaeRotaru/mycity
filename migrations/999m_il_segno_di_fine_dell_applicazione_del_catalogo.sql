@@ -1,4 +1,4 @@
--- onda2_B_2 (R02-003) — Il segno di fine dell'applicazione di un lavoro AI sul catalogo.
+-- 999m (R02-003) — Il segno di fine dell'applicazione di un lavoro AI sul catalogo.
 --
 -- /api/ai/catalog-batch/apply segna il lavoro «applied» quando comincia e lo
 -- rimette «ready» se un guasto di passaggio lo lascia ripetibile. Se in mezzo

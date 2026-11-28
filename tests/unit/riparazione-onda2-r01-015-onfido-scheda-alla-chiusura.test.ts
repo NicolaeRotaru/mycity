@@ -140,7 +140,7 @@ describe('R01-015 · alla cancellazione dell\'account la scheda su Onfido si tog
     const diario: string[] = [];
     const aggiornamentiProfilo: Record<string, unknown>[] = [];
     const admin = {
-      // R08-006 (onda 2) — La funzione della cassa del fattorino (migrazione onda2_C2_1) qui non c'è:
+      // R08-006 (onda 2) — La funzione della cassa del fattorino (migrazione 999n) qui non c'è:
       // la guardia legge il registro, come prima della migrazione.
       rpc: async (nome: string) => ({ data: null, error: { code: 'PGRST202', message: `Could not find the function public.${nome}` } }),
       from(tabella: string) {

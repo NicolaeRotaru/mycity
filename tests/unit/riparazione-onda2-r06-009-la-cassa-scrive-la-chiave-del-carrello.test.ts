@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  *
  * L'annullo (regola del negozio che rifiuta) e il freno della veloce ritrovano il carrello in contanti
  * dalla riga del tentativo; se la riga manca, ora dalla chiave scritta sull'ordine (`cod_cart_key`,
- * migrazione onda2_E1_2). Qui la rotta vera (`POST /api/orders/cod`):
+ * migrazione 999p). Qui la rotta vera (`POST /api/orders/cod`):
  *  · ogni ordine dello stesso invio porta la stessa chiave, quella della riga del tentativo (la chiave
  *    del browser, o quella fatta dalla rotta quando il browser non la manda);
  *  · prima della migrazione (PostgREST risponde PGRST204 sulla colonna) l'ordine nasce lo stesso,
@@ -94,7 +94,7 @@ vi.mock('@/lib/supabase/server', () => {
         insert: (riga: Record<string, unknown>) => ({
           select: () => ({
             single: () => {
-              // Prima della migrazione onda2_E1_2: PostgREST ferma la scrittura che nomina la colonna.
+              // Prima della migrazione 999p: PostgREST ferma la scrittura che nomina la colonna.
               if (banco.senzaColonna && 'cod_cart_key' in riga) {
                 banco.rifiutati++;
                 return Promise.resolve({
@@ -188,14 +188,14 @@ describe('la rotta dei contanti scrive la chiave del carrello con ogni ordine', 
     expect((banco.righeCarrello[0] as { chiave: string }).chiave).toBe(chiavi[0]);
   });
 
-  it('prima della migrazione onda2_E1_2 l ordine nasce lo stesso, senza la chiave', async () => {
+  it('prima della migrazione 999p l ordine nasce lo stesso, senza la chiave', async () => {
     banco.senzaColonna = true;
     await ordina('chiave-del-browser-2');
     expect(banco.rifiutati).toBe(2);
     expect(banco.inseriti).toHaveLength(2);
     expect(banco.inseriti.every((r) => !('cod_cart_key' in r))).toBe(true);
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('migrazione onda2_E1_2 non ancora applicata'),
+      expect.stringContaining('migrazione 999p non ancora applicata'),
       expect.objectContaining({ dove: 'orders.insert (cod)' }),
     );
   });

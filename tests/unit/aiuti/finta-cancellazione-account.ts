@@ -27,7 +27,7 @@ export type Scenario = {
   /** L'indirizzo email dell'utente, quello che serve per la newsletter. */
   email?: string;
   /**
-   * R08-006 (onda 2) — La risposta di `cassa_da_versare_del_fattorino` (migrazione onda2_C2_1). Assente:
+   * R08-006 (onda 2) — La risposta di `cassa_da_versare_del_fattorino` (migrazione 999n). Assente:
    * la funzione non c'è (PGRST202) e la guardia legge il registro (`cassa`), come prima della migrazione.
    */
   contoCassa?: { data: unknown; error: { code?: string; message: string } | null };

@@ -8,7 +8,7 @@ import { ETICHETTA_ADESSO } from "@/lib/quando-arriva";
  * `cod_checkout_attempts`: senza la riga ogni ordine passava alla fascia da solo, con la sua campanella
  * al cliente, e l'euro della veloce restava sull'ordine che lo portava (R09-013 lo diceva agli
  * amministratori, ma il freno non cambiava). Ora ogni ordine nasce con la chiave del suo carrello
- * (`orders.cod_cart_key`, migrazione onda2_E1_2): senza la riga il freno legge la chiave e fa
+ * (`orders.cod_cart_key`, migrazione 999p): senza la riga il freno legge la chiave e fa
  * esattamente quello che fa con la riga.
  *
  * Mai unire carrelli diversi: contano la chiave e il cliente, non i minuti.

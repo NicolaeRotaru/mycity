@@ -13,7 +13,7 @@ import { fintoMondo, quandoChiudeLAccount } from './aiuti/finta-cancellazione-ac
  *  · R08-004/005 — giornata riaperta (`remitted_at` svuotato dopo il versamento): «risultano 55 € non
  *    versati», 40 dei quali versati da ore.
  *
- * Il conto adesso lo fa il database (`cassa_da_versare_del_fattorino`, migrazione onda2_C2_1, provata in
+ * Il conto adesso lo fa il database (`cassa_da_versare_del_fattorino`, migrazione 999n, provata in
  * tests/sql/rls/onda2-c2-la-cassa-da-versare-si-conta-dagli-ordini.test.sql). Qui si prova che la guardia
  * crede a quel conto, che non torna al registro quando il conto cade, e che ci torna solo quando la
  * funzione non è ancora applicata.

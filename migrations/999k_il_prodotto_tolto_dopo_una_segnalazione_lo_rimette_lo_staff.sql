@@ -1,5 +1,5 @@
 -- =============================================================================
--- onda2_A_3 — Il prodotto tolto dopo una segnalazione accolta lo rimette in vendita solo lo staff
+-- 999k — Il prodotto tolto dopo una segnalazione accolta lo rimette in vendita solo lo staff
 -- =============================================================================
 -- IL DIFETTO (R01-010). «Accolta» su una segnalazione di prodotto mette il prodotto in bozza
 -- (app/api/admin/segnalazioni/accogli/route.ts) e al venditore parte «il contenuto è stato rimosso».

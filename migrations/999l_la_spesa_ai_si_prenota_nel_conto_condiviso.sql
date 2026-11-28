@@ -1,4 +1,4 @@
--- onda2_B_1 (R02-002) — La spesa AI si prenota nel conto condiviso prima della chiamata.
+-- 999l (R02-002) — La spesa AI si prenota nel conto condiviso prima della chiamata.
 --
 -- Il tetto giornaliero della spesa AI (AI_GLOBAL_DAILY_BUDGET_EUR) si controllava
 -- leggendo `ai_spend_daily` (migrazioni 131 / 158) e la spesa entrava nel conto

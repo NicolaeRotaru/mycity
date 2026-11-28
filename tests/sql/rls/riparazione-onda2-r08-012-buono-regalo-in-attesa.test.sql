@@ -4,7 +4,7 @@
 --   tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test
 --
 -- La cassa del buono (app/api/gift-cards/checkout/route.ts) scrive nome, email e messaggio del destinatario
--- in gift_card_in_attesa invece di mandarli a Stripe (migrazione onda2_A_1).
+-- in gift_card_in_attesa invece di mandarli a Stripe (migrazione 999j).
 -- ① chi compra, coi suoi permessi, non legge la tabella (neanche le sue righe: le legge solo il server)
 -- ② e non ci scrive
 -- ③ il server scrive e rilegge il tentativo

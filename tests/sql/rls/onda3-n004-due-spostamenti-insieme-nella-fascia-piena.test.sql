@@ -9,7 +9,7 @@
 -- diversi vengono spostate lì nello stesso istante, da due sessioni vere (due giri del freno della
 -- veloce accavallati, o un freno e un amministratore). Il freno conta prima i giri
 -- (`rifiutoPerFasciaPiena`), ma fra la lettura e la scrittura non c'è lucchetto: tutti e due leggono
--- «c'è posto». L'ultima parola è del database (onda2_F1_1, anche BEFORE UPDATE OF delivery_slot):
+-- «c'è posto». L'ultima parola è del database (999s, anche BEFORE UPDATE OF delivery_slot):
 --   ① la sessione B aspetta il lucchetto della sessione A finché A non ha finito;
 --   ② A entra nella fascia, B si ferma con 23514 `fascia_piena`;
 --   ③ nella fascia restano 5 giri, non 6.

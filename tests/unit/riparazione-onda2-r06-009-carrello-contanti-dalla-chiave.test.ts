@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * quella riga la regola del negozio che rifiuta non scattava: il pane rifiutato si portava via la
  * consegna e la frutta restava a 1 € di consegna e 1 € al fattorino (R04-007 lo diceva solo agli
  * amministratori). Ora ogni ordine porta la chiave del suo carrello (`orders.cod_cart_key`, migrazione
- * onda2_E1_2, scritta con l'ordine): senza la riga, la regola scatta dalla chiave.
+ * 999p, scritta con l'ordine): senza la riga, la regola scatta dalla chiave.
  *
  * Mai unire carrelli diversi: conta la chiave e il cliente, non i minuti.
  */

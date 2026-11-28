@@ -1052,7 +1052,7 @@ export const POST = conFilaPerRichiesta(withAuthRateLimit(
       // 28/11/2026 (R07-009) — Al massimo `ORDINI_PER_FASCIA` giri per fascia anche coi contanti: la
       // regola stava solo nella rotta della carta, spenta al lancio, e qui la fascia si riempiva senza
       // limite. La stessa regola (lib/ordini/giri-della-fascia.ts); due invii insieme li ferma il
-      // database (migrazione onda2_F1_1, `eLaFasciaPienaDelDatabase`).
+      // database (migrazione 999s, `eLaFasciaPienaDelDatabase`).
       const piena = await rifiutoPerFasciaPiena(
         admin,
         { fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore },
@@ -1668,7 +1668,7 @@ export const POST = conFilaPerRichiesta(withAuthRateLimit(
         // coordinata che contraddice l'indirizzo scritto.
         delivery_lat: coordPerLaMappa?.lat ?? null,
         delivery_lng: coordPerLaMappa?.lng ?? null,
-        // 28/11/2026 (R06-009, R09-007; migrazione onda2_E1_2) — La chiave del carrello, la stessa della
+        // 28/11/2026 (R06-009, R09-007; migrazione 999p) — La chiave del carrello, la stessa della
         // riga del tentativo, scritta CON l'ordine: se la riga del tentativo non si scrive (o non c'è),
         // l'annullo e il freno della veloce ritrovano lo stesso gli altri ordini del carrello.
         cod_cart_key: chiaveCarrello,

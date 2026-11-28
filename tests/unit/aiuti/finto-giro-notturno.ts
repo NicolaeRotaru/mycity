@@ -238,7 +238,7 @@ export function fintoGiroNotturno(scenario: Scenario = {}) {
     rpc: async (nome: string, _argomenti?: Record<string, unknown>) => {
       diario.push({ op: 'rpc', nome });
       // R08-006 (onda 2) — Senza una risposta scritta dalla prova, la funzione della cassa (migrazione
-      // onda2_C2_1) qui non c'è: la guardia della cancellazione legge il registro, come prima.
+      // 999n) qui non c'è: la guardia della cancellazione legge il registro, come prima.
       if (nome === 'cassa_da_versare_del_fattorino' && !scenario.rpc?.[nome]) {
         return { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${nome}` } };
       }

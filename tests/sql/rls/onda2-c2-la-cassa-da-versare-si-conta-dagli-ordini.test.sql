@@ -7,7 +7,7 @@
 --
 -- La guardia della cancellazione (lib/account/cancellazione.ts) chiede al database quanti
 -- contanti dei negozi ha ancora in tasca un fattorino (`cassa_da_versare_del_fattorino`,
--- migrazione onda2_C2_1). Prima leggeva solo la riga del giorno in `cod_reconciliations`:
+-- migrazione 999n). Prima leggeva solo la riga del giorno in `cod_reconciliations`:
 --  · fattorino 1: versa alle 15, alle 18 incassa ancora. La riga ha remitted_at pieno: per il
 --    registro non deve niente e l'account si cancellava coi 37 € delle 18 in tasca (R08-006);
 --  · fattorino 2: giornata riaperta (remitted_at svuotato). Il registro diceva «55 € non
@@ -127,7 +127,7 @@ DECLARE
   chi text;
 BEGIN
   IF to_regprocedure('public.cassa_da_versare_del_fattorino(uuid)') IS NULL THEN
-    INSERT INTO esiti VALUES ('la funzione della cassa esiste', false, 'migrazione onda2_C2_1 non applicata');
+    INSERT INTO esiti VALUES ('la funzione della cassa esiste', false, 'migrazione 999n non applicata');
     RETURN;
   END IF;
   FOR chi IN SELECT jsonb_object_keys(attesi) LOOP

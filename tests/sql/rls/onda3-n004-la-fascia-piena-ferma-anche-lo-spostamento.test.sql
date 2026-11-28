@@ -5,7 +5,7 @@
 --   tests/sql/harness/apply.sh mycity_test
 --   psql -d mycity_test -f tests/sql/rls/onda3-n004-la-fascia-piena-ferma-anche-lo-spostamento.test.sql
 --
--- Il tetto di 5 giri per fascia (onda2_F1_1) scattava solo quando l'ordine NASCE. Il freno della
+-- Il tetto di 5 giri per fascia (999s) scattava solo quando l'ordine NASCE. Il freno della
 -- veloce (lib/ordini/veloce-non-confermata.ts) sposta con un UPDATE l'ordine «Adesso» che il negozio
 -- non ha confermato in 10 minuti nella prima fascia possibile: in una fascia piena entrava il sesto
 -- giro e nessuno lo fermava. Adesso il grilletto scatta anche BEFORE UPDATE OF delivery_slot:

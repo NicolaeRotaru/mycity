@@ -169,7 +169,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
    * a meta' applicazione, il database (640) rifiuterebbe il ritorno a «pronto» di questo. Ma il segno
    * non lo scriveva nessuno: ogni avvio dopo un'applicazione finita aspettava due minuti per niente.
    * Si scrive quando il lavoro resta «applicato» per sempre (finito, o non piu' rimettibile pronto).
-   * Una scrittura a parte e senza conseguenze: senza la colonna (migrazione onda2_B_2 non
+   * Una scrittura a parte e senza conseguenze: senza la colonna (migrazione 999m non
    * applicata) fallisce, e l'avvio aspetta i 120 s come prima.
    */
   const segnaFineApplicazione = async (): Promise<void> => {

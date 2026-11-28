@@ -10,7 +10,7 @@
 -- si ritrova dalla riga del tentativo di cassa; un ordine ancora in preparazione
 -- resta sulla bacheca (la regola su quelli la decide Nicola). Coi permessi veri
 -- del fattorino (authenticated + jwt). Senza la migrazione
--- onda2_E2_2_lo_stesso_carrello_va_a_un_fattorino_solo il file e' ROSSO.
+-- 999r_lo_stesso_carrello_va_a_un_fattorino_solo il file e' ROSSO.
 -- Transazione con ROLLBACK.
 -- =============================================================================
 
@@ -60,6 +60,16 @@ INSERT INTO public.cod_checkout_attempts (chiave, user_id, order_ids) VALUES
   ('r11-maria', 'e2110005-5555-4555-8555-555555555555',
    '[{"id":"e2110000-0000-4000-8000-0000000000a1"},{"id":"e2110000-0000-4000-8000-0000000000a2"},{"id":"e2110000-0000-4000-8000-0000000000a3"},{"id":"e2110000-0000-4000-8000-0000000000a4"}]'::jsonb);
 
+-- Contanti di Anna SENZA la riga del tentativo: b1 e b2 pronti, stessa chiave del carrello sull'ordine.
+INSERT INTO public.orders (
+  id, user_id, seller_id, total_price, payment_method, payment_status, delivery_status, pickup_in_store,
+  cod_cart_key, delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, rider_fee_cents
+) VALUES
+  ('e2110000-0000-4000-8000-0000000000b1', 'e2110006-6666-4666-8666-666666666666', 'e2110001-1111-4111-8111-111111111111',
+   12.00, 'cod', 'PENDING', 'READY', false, 'r11-anna-senza-riga', 'Anna Bianchi', '3337654321', 'Via Po 3', 'Piacenza', '29121', 300),
+  ('e2110000-0000-4000-8000-0000000000b2', 'e2110006-6666-4666-8666-666666666666', 'e2110002-2222-4222-8222-222222222222',
+   8.00, 'cod', 'PENDING', 'READY', false, 'r11-anna-senza-riga', 'Anna Bianchi', '3337654321', 'Via Po 3', 'Piacenza', '29121', 100);
+
 SET LOCAL mycity.allow_order_write = '';
 SET LOCAL ROLE authenticated;
 
@@ -90,6 +100,13 @@ INSERT INTO r SELECT 'luca contanti', public.prendi_ordine('e2110000-0000-4000-8
 INSERT INTO esiti SELECT 'contanti: col pane si prende la verdura pronta; non la frutta in preparazione né il ritiro in negozio',
   (risposta ->> 'ok')::boolean AND risposta -> 'insieme' = '["e2110000-0000-4000-8000-0000000000a4"]'::jsonb, risposta::text
   FROM r WHERE caso = 'luca contanti';
+
+-- ── contanti senza riga del tentativo: Gino prende b1 di Anna ─────────────
+SET LOCAL request.jwt.claims = '{"sub":"e2110003-3333-4333-8333-333333333333","role":"authenticated"}';
+INSERT INTO r SELECT 'gino anna chiave', public.prendi_ordine('e2110000-0000-4000-8000-0000000000b1');
+INSERT INTO esiti SELECT 'contanti senza la riga del tentativo: la chiave del carrello porta anche b2',
+  (risposta ->> 'ok')::boolean AND risposta -> 'insieme' = '["e2110000-0000-4000-8000-0000000000b2"]'::jsonb, risposta::text
+  FROM r WHERE caso = 'gino anna chiave';
 
 RESET ROLE;
 

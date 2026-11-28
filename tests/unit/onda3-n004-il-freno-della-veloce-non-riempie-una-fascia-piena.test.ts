@@ -6,7 +6,7 @@ import { ETICHETTA_ADESSO } from "@/lib/quando-arriva";
  *
  * In una fascia si accettano al massimo 5 giri (`ORDINI_PER_FASCIA`): la cassa e le rotte contano
  * prima di vendere (`rifiutoPerFasciaPiena`), il database ferma l'ultimo posto preso in due
- * (onda2_F1_1). Il freno della veloce sposta con un UPDATE l'ordine «Adesso» che il negozio non ha
+ * (999s). Il freno della veloce sposta con un UPDATE l'ordine «Adesso» che il negozio non ha
  * confermato in 10 minuti nella prima fascia possibile, senza contare: in una fascia piena entrava
  * il sesto giro (il database guardava solo la nascita dell'ordine), e adesso che il database guarda
  * anche lo spostamento il freno si sarebbe fermato su un errore crudo.
@@ -27,7 +27,7 @@ const sendEmailMock = vi.fn(async (_m: unknown) => ({ ok: true }));
 const notifyAdminsMock = vi.fn(async (..._a: unknown[]) => "scritto");
 const refundOrderMock = vi.fn(async (a: { amountCents: number }) => ({ refundId: "re_1", reversedCents: 0, pieno: false, importoCents: a.amountCents }));
 
-/** Il rifiuto del grilletto onda2_F1_1, come lo passa PostgREST. */
+/** Il rifiuto del grilletto 999s, come lo passa PostgREST. */
 const FASCIA_PIENA_DEL_DATABASE = {
   code: "23514",
   hint: "fascia_piena",

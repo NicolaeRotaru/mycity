@@ -11,7 +11,7 @@ import { logger } from '@/lib/logger';
  * trattavano ogni ordine da solo.
  *
  * Ora la rotta della cassa scrive la chiave del carrello (`orders.cod_cart_key`, la stessa della riga
- * del tentativo) nella stessa insert dell'ordine (migrazione onda2_E1_2): un ordine nato ha la sua
+ * del tentativo) nella stessa insert dell'ordine (migrazione 999p): un ordine nato ha la sua
  * chiave. Chi legge il carrello usa prima la riga del tentativo, come prima (porta anche l'ordine del
  * carrello); se la riga non c'è o non si legge, la chiave sull'ordine.
  *
@@ -21,7 +21,7 @@ import { logger } from '@/lib/logger';
 
 export const COLONNA_CHIAVE_DEL_CARRELLO = 'cod_cart_key';
 
-/** L'errore dice che `orders.cod_cart_key` non c'è ancora (migrazione onda2_E1_2 non applicata)? Per NOME. */
+/** L'errore dice che `orders.cod_cart_key` non c'è ancora (migrazione 999p non applicata)? Per NOME. */
 export function mancaLaChiaveDelCarrello(errore: unknown): boolean {
   const e = errore as { code?: unknown; message?: unknown; details?: unknown } | null;
   if (!e || (e.code !== 'PGRST204' && e.code !== '42703')) return false;
@@ -40,7 +40,7 @@ export async function conLaChiaveDelCarrello<T extends { error: unknown }>(
 ): Promise<T> {
   const primo = await conChiave();
   if (!primo.error || !mancaLaChiaveDelCarrello(primo.error)) return primo;
-  logger.warn('[db] migrazione onda2_E1_2 non ancora applicata: ordine scritto senza la chiave del carrello', { dove });
+  logger.warn('[db] migrazione 999p non ancora applicata: ordine scritto senza la chiave del carrello', { dove });
   return senzaChiave();
 }
 

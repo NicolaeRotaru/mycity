@@ -1,4 +1,4 @@
--- onda2_E2_2_lo_stesso_carrello_va_a_un_fattorino_solo.sql
+-- 999r_lo_stesso_carrello_va_a_un_fattorino_solo.sql
 --
 -- 28/11/2026 (onda 2, R11-006) — GLI ORDINI PRONTI DELLO STESSO CARRELLO VANNO A UN FATTORINO SOLO.
 --
@@ -9,7 +9,8 @@
 --
 -- Ora, quando un fattorino prende un ordine, nella stessa transazione prende anche gli altri ordini
 -- PRONTI e liberi dello stesso carrello (carta: stesso stripe_transfer_group o stessa sessione di
--- pagamento; contanti: stessa riga di cod_checkout_attempts.order_ids; sempre lo stesso cliente), con
+-- pagamento; contanti: stessa riga di cod_checkout_attempts.order_ids o stessa cod_cart_key
+-- (999p, da applicare prima); sempre lo stesso cliente), con
 -- le stesse condizioni della bacheca (ordini_disponibili_rider): READY, senza fattorino, non ritiro
 -- in negozio. Le righe del giro si bloccano prima della presa, in ordine di id, così due fattorini
 -- che toccano nello stesso istante due ordini dello stesso carrello non si fermano a vicenda: il
@@ -75,6 +76,17 @@ BEGIN
           ON o2.id::text = e.el ->> 'id'
          AND o2.user_id = o1.user_id
        WHERE o1.id = p_order_id
+      UNION
+      -- Contanti senza la riga del tentativo (scritta dopo gli ordini, in una scrittura a parte):
+      -- la chiave del carrello sta su ogni ordine dalla insert (999p, cod_cart_key), unica
+      -- per tentativo di cassa e sempre dello stesso cliente.
+      SELECT o2.id
+        FROM public.orders o1
+        JOIN public.orders o2
+          ON o2.user_id = o1.user_id
+         AND o2.cod_cart_key = o1.cod_cart_key
+       WHERE o1.id = p_order_id
+         AND o1.cod_cart_key IS NOT NULL
     ) g;
 
   -- Le righe del giro si bloccano prima della presa, in ordine di id: due fattorini che toccano

@@ -542,7 +542,7 @@ export async function prenotaSpesaNelContoCondiviso(
       if (adesso - _prenotazioneAssenteDetta >= RIPETI_ALLARME_MS) {
         _prenotazioneAssenteDetta = adesso;
         logger.error(
-          '[ai] la prenotazione della spesa nel conto condiviso NON ESISTE: le copie non vedono le chiamate in volo delle altre. Applicare la migrazione della prenotazione (onda2_B_1).',
+          '[ai] la prenotazione della spesa nel conto condiviso NON ESISTE: le copie non vedono le chiamate in volo delle altre. Applicare la migrazione della prenotazione (999l).',
           { detto_dal_database: risposta.error.message ?? '' },
         );
       }

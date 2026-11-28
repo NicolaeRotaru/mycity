@@ -222,7 +222,7 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<
     if (errT) throw new Error(`carrello dell'ordine ${o.id} non letto: ${errT.message}`);
     if (!Array.isArray(tentativi) || tentativi.length === 0) {
       // 28/11/2026 (R09-007, onda 2) — Senza la riga, la chiave del carrello scritta con l'ordine
-      // (migrazione onda2_E1_2, lib/ordini/chiave-del-carrello.ts): stesso cliente e stessa chiave sono
+      // (migrazione 999p, lib/ordini/chiave-del-carrello.ts): stesso cliente e stessa chiave sono
       // lo stesso carrello, con certezza, e il freno lo sposta intero come con la riga.
       const chiave = o.user_id ? await chiaveDelCarrelloInContanti(admin, o.id, 'veloce-non-confermata') : null;
       if (chiave) {
@@ -631,7 +631,7 @@ async function spostaIlCarrello(
   if (!fascia) return nonSiSposta(admin, o, adesso, 'né oggi né domani c’è una fascia in cui tutti i negozi del carrello siano aperti', orariDelNegozio);
   // 28/11/2026 (N-004, onda 3) — IL TETTO DEI GIRI VALE ANCHE PER IL FRENO. La cassa e le rotte non
   // vendono il sesto giro di una fascia (`rifiutoPerFasciaPiena`, ORDINI_PER_FASCIA); il freno spostava
-  // la veloce nella prima fascia possibile anche se era piena, e il database (onda2_F1_1) lo fermava
+  // la veloce nella prima fascia possibile anche se era piena, e il database (999s) lo fermava
   // con un errore crudo, oppure — prima che guardasse anche gli spostamenti — entrava il sesto giro.
   // Adesso si conta prima: la prima fascia che la cassa offrirebbe E che ha ancora un giro libero. Il
   // resto di un carrello già spostato a metà segue la sua fascia (stessa porta: non è un giro nuovo).
@@ -639,7 +639,7 @@ async function spostaIlCarrello(
     const conPosto = await primaFasciaConPosto(admin, o, adesso, orari);
     if (conPosto) fascia = conPosto;
     // Coi contanti nessuna fascia con posto: la spesa non si sposta, e il cliente legge perché.
-    // Con la carta il tetto non ferma l'ordine, come alla nascita (onda2_F1_1): resta la prima fascia.
+    // Con la carta il tetto non ferma l'ordine, come alla nascita (999s): resta la prima fascia.
     else if (!carrello.some((c) => c.payment_method !== 'cod')) {
       return nonSiSposta(admin, o, adesso, 'tutte le fasce di oggi e di domani in cui i negozi sono aperti sono piene', orariDelNegozio, true);
     }
@@ -810,7 +810,7 @@ async function spostaIlCarrello(
       'veloce-non-confermata.sposta', () => scrivi(valori), () => scrivi(senzaCampi(valori, CAMPI_124)));
     if (error) {
       // N-004 (onda 3) — L'ultimo posto della fascia l'ha preso un altro nello stesso istante (il
-      // database ha l'ultima parola, onda2_F1_1): non è un guasto. Il giro dopo ritrova l'ordine
+      // database ha l'ultima parola, 999s): non è un guasto. Il giro dopo ritrova l'ordine
       // «Adesso», riconta e sceglie una fascia con posto, o dice al cliente che sono piene.
       if (i === 0 && eLaFasciaPienaDelDatabase(error)) {
         logger.warn('[veloce-non-confermata] fascia piena al momento di scrivere: riprovo al giro dopo', { orderId: c.id, fascia });

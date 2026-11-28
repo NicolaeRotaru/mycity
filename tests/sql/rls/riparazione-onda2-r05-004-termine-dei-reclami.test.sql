@@ -17,7 +17,7 @@
 --   ③ un reclamo di un altro ordine non presta le sue date;
 --   ④ il server (il sorvegliante) legge le date; il cliente e un anonimo no.
 --
--- Senza la migrazione onda2_E1_1 questa prova è ROSSA (le colonne non ci sono).
+-- Senza la migrazione 999o questa prova è ROSSA (le colonne non ci sono).
 -- Tutto in transazione, ROLLBACK.
 -- =============================================================================
 

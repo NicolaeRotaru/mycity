@@ -125,7 +125,7 @@ export const POST = withAuthRateLimit(
     // scrivono qui, in `gift_card_in_attesa`, e a Stripe va solo l'id della riga.
     // Stesso tentativo (doppio clic), stessa riga: l'id resta uguale e Stripe
     // riconosce la richiesta come la stessa invece di rifiutarla.
-    // Se la riga non si scrive (migrazione onda2_A_1 non applicata, database
+    // Se la riga non si scrive (migrazione 999j non applicata, database
     // giu') il pagamento non parte: niente ripiego che rimandi i dati a Stripe.
     const attesa = await tentativoInAttesa(user.id, chiaveRiga, {
       amount_cents: amountCents,

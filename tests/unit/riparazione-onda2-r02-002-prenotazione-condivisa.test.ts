@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
  * insieme leggevano lo stesso «speso» e passavano ognuna fino al tetto.
  *
  * Qui il database e' un client Supabase finto (mai quello vero) che fa quello
- * che fanno le funzioni della migrazione onda2_B_1 e della 158; una «copia» e'
+ * che fanno le funzioni della migrazione 999l e della 158; una «copia» e'
  * il modulo ricaricato da capo, e le tre copie lavorano INSIEME (Promise.all).
  * Il modello finto costa quanto la stima della chiamata (uscita = max_tokens).
  */

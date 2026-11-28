@@ -74,7 +74,7 @@ function rispostaFinta() {
 /**
  * Il conto condiviso finto: una casella per giorno per tutte le copie, come la tabella vera.
  * Onda 2 (R02-002): anche la prenotazione della stima (`prenota_spesa_ai` /
- * `restituisci_spesa_ai`, migrazione onda2_B_1) e' una scrittura, e con la scrittura
+ * `restituisci_spesa_ai`, migrazione 999l) e' una scrittura, e con la scrittura
  * negata non passa. «solo-registra-negata»: la prenotazione passa e la spesa vera no.
  */
 function contoCondivisoFinto() {

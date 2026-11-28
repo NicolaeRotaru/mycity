@@ -109,7 +109,7 @@ describe('giro notturno delle cancellazioni', () => {
     process.env.CRON_SECRET = 'secret123';
     scaduti = { data: [], error: null };
     rpcMock.mockImplementation(async (nome: string) => (nome === 'process_expired_deletions' ? scaduti
-      // R08-006 (onda 2) — La cassa del fattorino contata dal database (migrazione onda2_C2_1): niente da versare.
+      // R08-006 (onda 2) — La cassa del fattorino contata dal database (migrazione 999n): niente da versare.
       : nome === 'cassa_da_versare_del_fattorino' ? { data: { centesimi: 0, giornate: 0, ordini: 0 }, error: null }
       : { data: [], error: null }));
     updateEqMock.mockResolvedValue({ error: null });

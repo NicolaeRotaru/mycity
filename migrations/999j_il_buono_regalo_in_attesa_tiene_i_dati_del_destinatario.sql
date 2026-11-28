@@ -1,5 +1,5 @@
 -- =============================================================================
--- onda2_A_1 — Il buono regalo in attesa tiene i dati del destinatario da noi, non su Stripe
+-- 999j — Il buono regalo in attesa tiene i dati del destinatario da noi, non su Stripe
 -- =============================================================================
 -- IL DIFETTO (R08-012). Chi compra un buono regalo scrive nome, email e un messaggio privato del
 -- DESTINATARIO, una persona che con noi non ha nessun rapporto. La rotta del pagamento

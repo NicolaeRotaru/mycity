@@ -494,7 +494,7 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
     // 28/11/2026 (R08-012) — Il tentativo di comprare un buono che non e' mai stato pagato: la
     // cassa scrive destinatario e messaggio in `gift_card_in_attesa` invece di mandarli a Stripe, e
     // il webhook cancella la riga quando il buono nasce. Restano le righe dei pagamenti abbandonati.
-    // Finche' la migrazione onda2_A_1 non e' applicata la tabella non c'e', e non c'e' niente da
+    // Finche' la migrazione 999j non e' applicata la tabella non c'e', e non c'e' niente da
     // potare: lo si scrive nel registro invece di rendere rossa ogni notte.
     {
       cosa: 'gift_card_in_attesa',
@@ -505,7 +505,7 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
           .lt('created_at', giorni(GIORNI_DEI_BUONI_REGALO_NON_PAGATI));
         if (!error) return;
         if (error.code === '42P01' || error.code === 'PGRST205') {
-          registro.info('[cron-deletions] gift_card_in_attesa non ancora creata (migrazione onda2_A_1)');
+          registro.info('[cron-deletions] gift_card_in_attesa non ancora creata (migrazione 999j)');
           return;
         }
         throw new Error(error.message);

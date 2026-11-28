@@ -234,7 +234,7 @@ describe('R07-009 · coi contanti al massimo cinque giri per fascia', () => {
     expect((await ordina('Domani · 11:00–13:00')).status).toBe(200);
   });
 
-  it('se il database ferma l’ordine (due invii insieme, migrazione onda2_F1_1) è il 409 della fascia piena, non un 500', async () => {
+  it('se il database ferma l’ordine (due invii insieme, migrazione 999s) è il 409 della fascia piena, non un 500', async () => {
     stato.erroreInserimento = { code: '23514', hint: 'fascia_piena', message: MOTIVO_FASCIA_PIENA };
     const r = await ordina();
     expect(r.status).toBe(409);

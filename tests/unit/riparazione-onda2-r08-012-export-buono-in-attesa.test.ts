@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * R08-012 (onda 2) — «Scarica i miei dati» legge anche i buoni regalo comprati e non ancora pagati
- * (gift_card_in_attesa, migrazione onda2_A_1): lì stanno nome, email e messaggio del destinatario scritti
+ * (gift_card_in_attesa, migrazione 999j): lì stanno nome, email e messaggio del destinatario scritti
  * da chi compra. Finché la migrazione non è applicata la tabella non c'è: la sezione esce vuota (è la
  * verità) e il file non si dichiara incompleto per questo. Un guasto vero resta un guasto.
  */

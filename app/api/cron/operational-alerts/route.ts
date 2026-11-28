@@ -861,7 +861,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
    * La pagina /admin/bonifici-rimborso li mette in evidenza, ma solo a chi la apre: qui il sorvegliante
    * avvisa a 3 giorni o meno dal termine e a termine passato, una volta al giorno finché il bonifico non
    * è «Fatto» (lib/rimborsi/bonifici-da-fare.ts, `allarmiDeiBonifici`). Per i resi il termine parte dalla
-   * richiesta, per i reclami dalla data che dice PARTENZA_DEL_TERMINE_DEI_RECLAMI (migrazione onda2_E1_1;
+   * richiesta, per i reclami dalla data che dice PARTENZA_DEL_TERMINE_DEI_RECLAMI (migrazione 999o;
    * senza, il reclamo ha il termine sconosciuto e resta solo in evidenza sulla pagina).
    * La lettura è della migrazione 910: finché non è applicata la funzione non c'è (PGRST202 / 42883) e il
    * controllo tace, come prima, senza far risultare incompleto ogni giro. Ogni altro errore è un controllo saltato.

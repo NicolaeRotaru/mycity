@@ -1,4 +1,4 @@
--- onda2_E1_1 — Il bonifico di rimborso di un reclamo ha un giorno da cui contare i 14 giorni (R05-004, 28/11/2026).
+-- 999o — Il bonifico di rimborso di un reclamo ha un giorno da cui contare i 14 giorni (R05-004, 28/11/2026).
 --
 -- Il difetto. La 910 elenca i bonifici di rimborso da fare a mano (ordini in contanti) e, per un
 -- reso, il giorno in cui il cliente l'ha chiesto: da lì contano i 14 giorni, e il sorvegliante
@@ -28,7 +28,7 @@ BEGIN;
 DO $$
 BEGIN
   IF to_regclass('private.bonifici_rimborso') IS NULL THEN
-    RAISE EXCEPTION 'onda2_E1_1: manca private.bonifici_rimborso, applica prima la migrazione 910';
+    RAISE EXCEPTION '999o: manca private.bonifici_rimborso, applica prima la migrazione 910';
   END IF;
 END $$;
 
@@ -95,7 +95,7 @@ REVOKE EXECUTE ON FUNCTION public.admin_bonifici_rimborso() FROM anon;
 GRANT EXECUTE ON FUNCTION public.admin_bonifici_rimborso() TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.admin_bonifici_rimborso() IS
-  'I bonifici di rimborso scritti sugli ordini (segno bonifico:<centesimi>:<chiave>), con l esito (DA_FARE, FATTO, RESPINTO), il cliente, per i resi il giorno della richiesta e per i reclami quando è stato aperto e deciso. Solo amministratori o il server (migrazioni 910 e onda2_E1_1).';
+  'I bonifici di rimborso scritti sugli ordini (segno bonifico:<centesimi>:<chiave>), con l esito (DA_FARE, FATTO, RESPINTO), il cliente, per i resi il giorno della richiesta e per i reclami quando è stato aperto e deciso. Solo amministratori o il server (migrazioni 910 e 999o).';
 
 COMMIT;
 

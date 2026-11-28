@@ -8,7 +8,7 @@ import { erroreDiSalvataggio } from '@/lib/products/prontoPerLaVendita';
  *
  * Qui la parte del codice: «Accolta» scrive il segno `tolto_dallo_staff_at`, la rotta admin dei
  * prodotti lo svuota quando lo staff rimette in vendita, e il rifiuto del database (23514, scritto
- * dal grilletto della migrazione onda2_A_3) arriva al venditore col suo motivo. Il grilletto è
+ * dal grilletto della migrazione 999k) arriva al venditore col suo motivo. Il grilletto è
  * provato su un Postgres vero col file della migrazione (vedi il rapporto dell'onda 2).
  */
 

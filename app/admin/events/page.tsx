@@ -36,7 +36,8 @@ function isoDaCampo(campo: string | undefined): string | null {
  * 27/11/2026 — Il modulo non salva più lo sconto, ma gli eventi salvati prima lo tengono. L'elenco lo
  * dice all'admin, evento per evento.
  * 28/11/2026 (R01-002, onda 2) — La pagina Eventi non mostra più il badge «-n%»; resta da sapere che
- * risalvare l'evento cancella lo sconto salvato (l'archivio lo fa la migrazione onda2_A_2, prima della 880).
+ * risalvare l'evento cancella lo sconto salvato. In produzione la 880 li ha già tolti: si ritrovano solo
+ * da un backup di prima della 880.
  */
 function AvvisoScontoRimasto({ percento }: { percento: number | null }) {
   if (!percento) return null;

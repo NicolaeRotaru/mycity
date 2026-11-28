@@ -244,7 +244,7 @@ export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
   },
   {
     // 28/11/2026 (R08-012) — Il buono regalo non ancora pagato: la cassa scrive qui nome, email e
-    // messaggio del destinatario invece di mandarli a Stripe (migrazione onda2_A_1). La chiave è
+    // messaggio del destinatario invece di mandarli a Stripe (migrazione 999j). La chiave è
     // gift_card_in_attesa.buyer_id -> auth.users ON DELETE CASCADE: la riga se ne va con chi compra.
     // Si ripulisce lo stesso prima, come le altre.
     tabella: 'gift_card_in_attesa',
@@ -813,7 +813,7 @@ export type CassaContanti = {
  *    anche i contanti già versati, con la cifra gonfiata (R08-004, R08-005).
  *
  * Adesso il conto lo fa il database in una sola lettura (`cassa_da_versare_del_fattorino`, migrazione
- * onda2_C2_1): gli ordini in contanti consegnati e non ancora rimessi — e quelli ancora in strada coi
+ * 999n): gli ordini in contanti consegnati e non ancora rimessi — e quelli ancora in strada coi
  * contanti già dichiarati incassati (N-003) —, più i rimborsati coi contanti
  * ancora in mano (le regole della pagina Rimesse contanti), e le giornate che il registro dice ancora
  * aperte. Una giornata che il registro tiene aperta ferma la cancellazione come prima: si ferma in più

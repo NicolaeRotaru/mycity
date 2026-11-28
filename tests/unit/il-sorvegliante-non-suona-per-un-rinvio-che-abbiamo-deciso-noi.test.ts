@@ -175,7 +175,7 @@ describe('il sorvegliante e i rinvii che abbiamo deciso noi', () => {
  * giorno in cui una delle due cambia da sola, diventa rossa.
  */
 describe('le due definizioni di «cassa aperta» dicono la stessa cosa', () => {
-  // R08-006 (onda 2) — Con la funzione della cassa (migrazione onda2_C2_1) la guardia conta anche i
+  // R08-006 (onda 2) — Con la funzione della cassa (migrazione 999n) la guardia conta anche i
   // contanti che si vedono solo dagli ordini, e si ferma in PIÙ casi di questo registro (mai in meno):
   // lì il sorvegliante suona per un rinvio nostro, il verso rumoroso e non quello muto. Qui si confronta
   // la regola del registro, cioè la guardia quando la funzione non c'è.

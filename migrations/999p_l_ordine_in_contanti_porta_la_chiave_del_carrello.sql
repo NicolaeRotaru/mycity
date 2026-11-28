@@ -1,4 +1,4 @@
--- onda2_E1_2 — L'ordine in contanti porta la chiave del suo carrello (R06-009, R09-007; 28/11/2026).
+-- 999p — L'ordine in contanti porta la chiave del suo carrello (R06-009, R09-007; 28/11/2026).
 --
 -- Il difetto. Il carrello con la carta si ritrova dalla sessione di pagamento, scritta su ogni
 -- ordine (`stripe_session_id`). Quello in contanti solo dalla riga contro il doppio clic
@@ -49,7 +49,7 @@ BEGIN
 END $$;
 
 COMMENT ON COLUMN public.orders.cod_cart_key IS
-  'La chiave del carrello in contanti (la stessa di cod_checkout_attempts.chiave), scritta con l ordine: ritrova gli ordini dello stesso carrello anche senza la riga del tentativo. Vuota per la carta (migrazione onda2_E1_2).';
+  'La chiave del carrello in contanti (la stessa di cod_checkout_attempts.chiave), scritta con l ordine: ritrova gli ordini dello stesso carrello anche senza la riga del tentativo. Vuota per la carta (migrazione 999p).';
 
 CREATE INDEX IF NOT EXISTS orders_cod_cart_key_idx
   ON public.orders (user_id, cod_cart_key)

@@ -11,7 +11,7 @@ import { FASCE_AMMESSE, MOTIVO_FASCIA_PIENA, ORDINI_PER_FASCIA, finestraDellaFas
  * al lancio è spenta (`CARTA_ACCESA`): la rotta dei contanti, l'unica accesa, accettava ordini senza
  * limite nella stessa fascia. Adesso il conteggio sta qui, e lo chiedono tutte e due le rotte prima
  * di scrivere l'ordine. Per i contanti l'ultima parola è del database (migrazione
- * `onda2_F1_1_la_fascia_piena_ferma_i_contanti_anche_insieme.sql`): due invii nello stesso istante
+ * `999s_la_fascia_piena_ferma_i_contanti_anche_insieme.sql`): due invii nello stesso istante
  * leggerebbero tutti e due «c'è posto».
  *
  * Il giorno e la finestra di una fascia si contano dal giorno in cui è stata scelta, come fanno tutti
@@ -129,7 +129,7 @@ export async function rifiutoPerFasciaPiena(
 }
 
 /**
- * Il «no» del database (migrazione onda2_F1_1): 23514 col segno `fascia_piena`. È un 409, non un guasto.
+ * Il «no» del database (migrazione 999s): 23514 col segno `fascia_piena`. È un 409, non un guasto.
  * N-004 (onda 3) — Lo dice anche quando l'ordine ENTRA nella fascia con uno spostamento (il freno della veloce).
  */
 export function eLaFasciaPienaDelDatabase(errore: unknown): boolean {
