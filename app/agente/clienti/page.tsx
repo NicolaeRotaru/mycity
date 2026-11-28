@@ -26,7 +26,7 @@ type Risposta<T> = { ok?: boolean; data?: T; error?: { message?: string } } | nu
 function Pallino({ c }: { c: Pick<Cliente, 'stato' | 'presa' | 'tipo' | 'segmento'> }) {
   const Icona = ICONE[categoriaDi(c)];
   return (
-    <span aria-hidden="true" className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-white shadow" style={{ background: COLORI[coloreDi(c)].tinta }}>
+    <span aria-hidden="true" className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-white shadow-warm" style={{ background: COLORI[coloreDi(c)].tinta }}>
       <Icona size={14} color="#FFFFFF" strokeWidth={2.25} />
     </span>
   );
@@ -36,7 +36,7 @@ function Scheda({ c, admin, occupato, onAzione }: { c: Cliente; admin: boolean; 
   const tel = telDaChiamare(c.telefono);
   const puoCambiare = c.presa === 'mia' || admin;
   return (
-    <article className="rounded-2xl border border-surface-200 bg-white p-4 shadow-sm" aria-label={`Scheda di ${c.nome}`}>
+    <article className="rounded-2xl border border-surface-200 bg-white p-4 shadow-warm-sm" aria-label={`Scheda di ${c.nome}`}>
       <div className="flex items-start gap-2">
         <Pallino c={c} />
         <div className="min-w-0">
