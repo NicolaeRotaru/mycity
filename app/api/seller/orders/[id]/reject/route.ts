@@ -104,6 +104,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
           "L'amministrazione è già avvisata: riprova più tardi.",
       );
     }
+    // R08-001 (onda 2) — Un 500 senza riga nel registro non lo vede nessuno (come l'annullo del cliente
+    // e dell'amministrazione): il guasto restava solo nella risposta al negozio.
+    logger.error('[seller-reject] rifiuto ordine fallito', { orderId: order.id, motivo: esito.motivo, dettaglio: esito.dettaglio });
     return ApiErrors.internal('Rifiuto fallito');
   }
 
