@@ -290,6 +290,32 @@ function conIlSitoGiaSalvato(data: StoreCustomization, raw: Record<string, unkno
 }
 
 /**
+ * 28/11/2026 (R04-010) — PER CHI MODIFICA E RISCRIVE LA PERSONALIZZAZIONE (StoreDetailsEditor, ThemePicker).
+ *
+ * normalizeCustomization scarta un Instagram, Facebook, TikTok, WhatsApp o Google Maps GIÀ salvato che le
+ * regole di oggi rifiutano («Pane Quotidiano Piacenza», con gli spazi): per la vetrina va bene, il link non
+ * si mostra. Ma chi riscrive tutta la personalizzazione partendo da lì lo cancellava dal database al primo
+ * «Salva» dei dettagli o al primo cambio di colore, senza dire niente: il campo si apriva già vuoto. Qui si
+ * rimette così com'era salvato (come già il sito, sopra): il modulo lo mostra, al «Salva» dice sotto il campo
+ * che va corretto e, se non lo si tocca, lo riscrive uguale. Gli schemi che eseguono codice si scartano.
+ */
+const CHIAVI_SOCIAL = Object.keys(storeCustomizationSchema.shape.socials.unwrap().shape);
+export function personalizzazioneDaModificare(raw: unknown): StoreCustomization {
+  const data = normalizeCustomization(raw);
+  if (!raw || typeof raw !== 'object') return data;
+  const socials = (raw as Record<string, unknown>).socials;
+  if (!socials || typeof socials !== 'object' || Array.isArray(socials)) return data;
+  const letti = (data.socials ?? {}) as Record<string, unknown>;
+  const tenuti: Record<string, string> = {};
+  for (const k of CHIAVI_SOCIAL) {
+    if (letti[k] !== undefined) continue;
+    const v = sitoGiaSalvatoDaTenere((socials as Record<string, unknown>)[k]);
+    if (v !== undefined) tenuti[k] = v;
+  }
+  return Object.keys(tenuti).length > 0 ? { ...data, socials: { ...data.socials, ...tenuti } } : data;
+}
+
+/**
  * 17/11/2026 (R01-010) — UN CAMPO FUORI REGOLA NON CANCELLA GLI ALTRI.
  *
  * `safeParse` dell'intero oggetto è tutto-o-niente: se domani si toglie una copertina dalla

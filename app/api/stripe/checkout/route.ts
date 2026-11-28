@@ -25,8 +25,9 @@ import type { RiserveLiberate } from '@/lib/ordini/ordine-in-contanti-puo-nascer
 import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
 import { riusoDellaCassaAperta, type EsitoRiuso, type SessioneRiletta } from '@/lib/ordini/riuso-della-cassa-aperta';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
-import { giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
+import { fasciaAlGiornoDellOrdine, giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
 import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
+import { conColonneDelServizio } from '@/lib/products/servizio';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/riconcilia-consenso';
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
@@ -54,6 +55,27 @@ export const runtime = 'nodejs';
  * veloce (migrazione 840). `null` = lettura non riuscita (cosa farne lo dice chi chiama).
  */
 type GiornoEFinestra = { giorno: string; da: number; a: number };
+
+/**
+ * 27/11/2026 — LA FASCIA DETTA DAL GIORNO IN CUI ARRIVA LA RICHIESTA, ANCHE CON LA CARTA.
+ *
+ * La stessa regola della rotta dei contanti (app/api/orders/cod/route.ts). Lunedì alle 23:59
+ * «Domani · 9:00–11:00» è martedì: arrivata alle 00:01, la rotta la giudicava (e il webhook la
+ * contava da `session.created`) per mercoledì. La cassa manda il giorno della fascia
+ * (`delivery_date`): se cade un giorno prima di quello che dice l'etichetta letta adesso, la
+ * mezzanotte è passata in viaggio e l'etichetta si riporta a oggi (`fasciaAlGiornoDellOrdine`):
+ * «Domani» di ieri è «Oggi», una fascia di ieri è passata (`null`). Uno scarto di più giorni è
+ * l'orologio del telefono sbagliato: non sposta niente.
+ */
+function fasciaDelGiornoDellaRichiesta(fascia: string, giornoDellaFascia: string, adesso: Date): string | null {
+  const finestra = finestraDellaFascia(fascia);
+  const oggi = giornoDiPiacenza(adesso);
+  if (!finestra || !oggi || !/^\d{4}-\d{2}-\d{2}$/.test(giornoDellaFascia)) return fascia;
+  const giorniDaOggi = Math.round((Date.parse(giornoDellaFascia) - Date.parse(oggi)) / 86_400_000);
+  if (giorniDaOggi !== (finestra.giorno === 'domani' ? 0 : -1)) return fascia;
+  // Ieri a mezzogiorno (UTC): un istante del giorno in cui la cassa ha proposto la fascia.
+  return fasciaAlGiornoDellOrdine(fascia, Date.parse(oggi) - 12 * 3_600_000, adesso);
+}
 
 function giornoEFinestra(fascia: string, sceltaIl: string | number | Date): GiornoEFinestra | null {
   const f = finestraDellaFascia(fascia);
@@ -101,6 +123,38 @@ async function giriNellaFascia(
   }
 }
 
+/**
+ * 27/11/2026 — I RIFIUTI DELLA FASCIA, UNA REGOLA SOLA PER LA RICHIESTA NUOVA E PER LA PAGINA GIÀ APERTA.
+ *
+ * La fascia passata (o a meno di un'ora), il negozio chiuso in quella fascia e il tetto dei giri.
+ * Il riuso della pagina di Stripe usciva prima di questi controlli: alle 12:30, con «Oggi ·
+ * 11:00–13:00», restituiva la pagina vecchia (e il webhook al pagamento rimborsava) mentre una
+ * richiesta nuova prendeva 409. Adesso tutte e due le strade chiedono qui, prima della pulizia.
+ */
+async function rifiutoDellaFascia(
+  admin: ReturnType<typeof getAdminSupabase>,
+  body: { deliverySlot?: string | null; pickupInStore: boolean },
+  negozi: readonly { nome?: string | null; orari?: unknown }[],
+  clienteId: string,
+): Promise<string | null> {
+  if (body.pickupInStore) return null;
+  const rifiutata = motivoFasciaRifiutata(body.deliverySlot, negozi);
+  if (rifiutata) return rifiutata;
+  // 26/11/2026 — Al massimo `ORDINI_PER_FASCIA` giri per fascia (fatto `consegna.capienza`): al sesto
+  // 409. La veloce non è una fascia, e il ritiro non chiede un giro. Sta prima della pulizia, come
+  // gli altri rifiuti: un tentativo respinto non chiude le altre casse. Un conteggio non riuscito
+  // non ferma il pagamento: il tetto è morbido (il negozio accetta ogni ordine e può rifiutare
+  // quelli in più), e una lettura caduta non deve spegnere la carta; resta scritto.
+  const fascia = body.deliverySlot;
+  if (!fascia || eConsegnaVeloce({ fascia, ritiroInNegozio: false })) return null;
+  const giri = await giriNellaFascia(admin, fascia, clienteId, new Date());
+  if (giri === null) {
+    logger.warn('[stripe] giri della fascia non contati: il tetto non è stato controllato', { userId: clienteId });
+    return null;
+  }
+  return !giri.mio && giri.altri + 1 > ORDINI_PER_FASCIA ? MOTIVO_FASCIA_PIENA : null;
+}
+
 const ItemSchema = z.object({
   productId: z.string().uuid(),
   quantity: z.number().int().positive().max(99),
@@ -141,6 +195,9 @@ const Body = z.object({
   // negozio può servire (vedi `negozioPuoServire`), quindi si accettano solo le
   // sette che la cassa propone davvero — l'elenco è in lib/quando-arriva.ts.
   deliverySlot: campoFasciaConsegna,
+  // Il giorno di Roma della fascia, «AAAA-MM-GG», come la cassa l'ha proposta: lo manda già.
+  // Serve solo a `fasciaDelGiornoDellaRichiesta`.
+  delivery_date: z.string().max(40).optional().nullable(),
   /**
    * 30/8/2026 (R163) — La chiave del checkout nata nel browser all'ingresso in
    * cassa. Serve solo ai conti: viaggia dentro la riga di intento fino al
@@ -198,6 +255,17 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // nasceva con `delivery_slot` vuoto e il negozio non sapeva per quando prepararlo (la cassa
   // del sito ne manda sempre una). Qui, dopo lo spegnimento del ritiro: un ritiro spento è una consegna.
   if (!body.pickupInStore && !body.deliverySlot) return ApiErrors.invalidRequest('Scegli quando vuoi ricevere l’ordine.');
+
+  // 27/11/2026 — «Domani» premuto alle 23:59 e arrivato dopo mezzanotte: la fascia si riporta al
+  // giorno della richiesta, una volta sola e prima di ogni uso (impronta, controlli, riga di intento),
+  // come nella rotta dei contanti.
+  if (!body.pickupInStore && body.deliverySlot && body.delivery_date) {
+    const riportata = fasciaDelGiornoDellaRichiesta(body.deliverySlot, body.delivery_date, new Date());
+    if (riportata === null) {
+      return ApiErrors.conflict('La fascia che hai scelto è già passata. Scegline una ancora disponibile, oppure ordina per domani.');
+    }
+    body.deliverySlot = riportata;
+  }
 
   const supa = await getServerSupabase();
   const admin = getAdminSupabase();
@@ -317,10 +385,12 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     }));
 
   const [prodottiLetti, discountMap, variantiLette, venditoriLetti, tentativoGiaAperto] = await Promise.all([
-    supa
-      .from('products')
-      .select('id, name, price, images, seller_id, stock, status, has_variants')
-      .in('id', uniqueProductIds),
+    // 27/11/2026 — Col `tipo` (999g) la cassa rifiuta un servizio. Prima della 999g la colonna
+    // non c'è: si rilegge senza, e ogni riga vale «prodotto» (lib/products/servizio.ts).
+    conColonneDelServizio(
+      () => supa.from('products').select('id, name, price, images, seller_id, stock, status, has_variants, tipo').in('id', uniqueProductIds),
+      () => supa.from('products').select('id, name, price, images, seller_id, stock, status, has_variants').in('id', uniqueProductIds),
+    ),
     // Sconti promo attivi (per prodotto): il cliente deve pagare il prezzo scontato
     // mostrato dal badge "In promo -X%", non il prezzo pieno. Fonte autorevole DB.
     fetchActiveDiscounts(supa, allProductIds),
@@ -363,6 +433,93 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     // scritto — senza questa lettura la difesa dal doppio invio non c'e' piu'.
     logger.warn('[stripe] tentativo gia aperto non cercato', { message: tentativoGiaAperto.error.message });
   }
+
+  /**
+   * 28/11/2026 (R05-008) — I NEGOZI DEL CARRELLO, PRESI ALLO STESSO MODO DALLE DUE STRADE.
+   *
+   * La vetrina pubblica non restituisce ogni negozio che vende: un negozio approvato senza insegna,
+   * o in modalità demo (fuori vetrina, migrazione 709), non c'è. La richiesta nuova lo riprendeva
+   * dal profilo col client di servizio; il riuso della pagina già aperta no, e il negozio mancante
+   * saltava il «negozio chiuso»: alle 14:00 la pagina per «Oggi · 13:00–16:30» di un forno che
+   * riapre alle 16:30 si restituiva, mentre una richiesta nuova prendeva 409. E con la lettura
+   * caduta, al riuso si guardava solo l'orologio. Adesso le due strade chiedono qui (una lettura
+   * sola, ricordata): o tornano tutti i negozi del carrello, o il rifiuto della richiesta nuova.
+   *
+   * 28/10/2026 — UNA LETTURA DEI NEGOZI CORTA FERMA IL PAGAMENTO.
+   *
+   * Stessa porta della rotta dei contanti: l'errore si buttava e nessuno
+   * contava i negozi tornati. Con la lista vuota «negozio chiuso» e «fuori
+   * zona» non controllavano nessuno e la consegna perdeva le coordinate del
+   * negozio. Ogni negozio del carrello deve tornare, o il pagamento non si apre.
+   */
+  type NegozioDelCarrello = {
+    id: string;
+    store_name: string | null;
+    store_lat: number | null;
+    store_lng: number | null;
+    store_hours: unknown;
+  };
+  type NegoziDelCarrello =
+    | { negozi: NegozioDelCarrello[]; rifiuto: null }
+    | { negozi: null; rifiuto: ReturnType<typeof ApiErrors.unavailable> };
+  let negoziRisolti: Promise<NegoziDelCarrello> | null = null;
+  const negoziDelCarrello = (): Promise<NegoziDelCarrello> =>
+    (negoziRisolti ??= (async (): Promise<NegoziDelCarrello> => {
+      if (venditoriLetti.error || !venditoriLetti.data) {
+        logger.error('[stripe] lettura dei negozi fallita: pagamento non aperto', {
+          userId: user.id,
+          negozi: sellerIds.length,
+          message: venditoriLetti.error?.message ?? 'nessun dato',
+        });
+        return {
+          negozi: null,
+          rifiuto: ApiErrors.unavailable('Non riusciamo a controllare il negozio in questo momento. Riprova fra poco.'),
+        };
+      }
+      const negozi: NegozioDelCarrello[] = venditoriLetti.data.map((s) => ({
+        id: s.id,
+        store_name: s.store_name ?? null,
+        store_lat: s.store_lat ?? null,
+        store_lng: s.store_lng ?? null,
+        store_hours: (s as { store_hours?: unknown }).store_hours,
+      }));
+      const negoziLetti = new Set(negozi.map((s) => s.id));
+      const negoziMancanti = sellerIds.filter((id) => !negoziLetti.has(id));
+      if (negoziMancanti.length === 0) return { negozi, rifiuto: null };
+      // Un negozio approvato senza insegna (o fuori vetrina) la vetrina non lo restituisce: i dati
+      // per i controlli si prendono dal profilo, col client di servizio. Chi non è un negozio
+      // approvato non passa.
+      const { data: profiliMancanti, error: errProfili } = await admin
+        .from('profiles')
+        .select('id, store_name, store_lat, store_lng, store_hours, role, is_approved')
+        .in('id', negoziMancanti);
+      const recuperati = (profiliMancanti ?? []).filter((p) => p.role === 'seller' && p.is_approved === true);
+      if (errProfili || recuperati.length !== negoziMancanti.length) {
+        logger.error('[stripe] negozi del carrello non trovati: pagamento non aperto', {
+          userId: user.id,
+          negoziMancanti,
+          trovatiNelProfilo: recuperati.length,
+          message: errProfili?.message,
+        });
+        return {
+          negozi: null,
+          rifiuto: errProfili
+            ? ApiErrors.unavailable('Non riusciamo a controllare il negozio in questo momento. Riprova fra poco.')
+            : ApiErrors.conflict('Un negozio del carrello non accetta ordini in questo momento. Toglilo dal carrello e riprova.'),
+        };
+      }
+      for (const p of recuperati) {
+        negozi.push({
+          id: p.id,
+          store_name: p.store_name ?? null,
+          store_lat: p.store_lat ?? null,
+          store_lng: p.store_lng ?? null,
+          store_hours: p.store_hours,
+        });
+      }
+      return { negozi, rifiuto: null };
+    })());
+
   const sessioneGiaAperta =
     (tentativoGiaAperto.data as {
       id: string;
@@ -386,20 +543,25 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
      * chi scrive questa rotta non può più restituire una cassa senza averlo
      * guardato, perché senza quel resoconto non gli si compila.
      */
+    // 28/11/2026 (R05-008) — I negozi come per la richiesta nuova: anche quelli fuori vetrina, letti
+    // col client di servizio. Lettura caduta o negozio che non vende: la pagina vecchia non si
+    // restituisce, si risponde col rifiuto della richiesta nuova. Prima della pulizia, come gli altri.
+    const negoziAlRiuso = await negoziDelCarrello();
+    if (negoziAlRiuso.rifiuto) return negoziAlRiuso.rifiuto;
+    const orariAlRiuso = negoziAlRiuso.negozi.map((s) => ({ nome: s.store_name, orari: s.store_hours }));
     // R26-021 — La veloce si controlla PRIMA della pulizia: un rifiuto non chiude le altre casse.
     if (eConsegnaVeloce({ fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore })) {
       const veloceOra = veloceSiPuo({
         adesso: romeNow(),
-        negozi: venditoriLetti.error || !venditoriLetti.data
-          ? null
-          : venditoriLetti.data.map((s) => ({
-              nome: (s as { store_name?: string | null }).store_name ?? 'Il negozio',
-              orari: (s as { store_hours?: unknown }).store_hours,
-            })),
+        negozi: orariAlRiuso.map((n) => ({ nome: n.nome ?? 'Il negozio', orari: n.orari })),
         fattoriniOnline: await contaFattoriniOnline(admin),
       });
       if (!veloceOra.possibile) return ApiErrors.conflict(veloceOra.perche);
     }
+    // 27/11/2026 — Anche la fascia e il tetto, prima della pulizia: la pagina vecchia non scavalca
+    // il 409 che prenderebbe una richiesta nuova.
+    const fasciaNoAlRiuso = await rifiutoDellaFascia(admin, body, orariAlRiuso, user.id);
+    if (fasciaNoAlRiuso) return ApiErrors.conflict(fasciaNoAlRiuso);
 
     let sessioneRiletta: SessioneRiletta = null;
     try {
@@ -511,55 +673,11 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     });
   }
 
-  /**
-   * 28/10/2026 — UNA LETTURA DEI NEGOZI CORTA FERMA IL PAGAMENTO.
-   *
-   * Stessa porta della rotta dei contanti: l'errore si buttava e nessuno
-   * contava i negozi tornati. Con la lista vuota «negozio chiuso» e «fuori
-   * zona» non controllavano nessuno e la consegna perdeva le coordinate del
-   * negozio. Ogni negozio del carrello deve tornare, o il pagamento non si apre.
-   */
-  if (venditoriLetti.error || !venditoriLetti.data) {
-    logger.error('[stripe] lettura dei negozi fallita: pagamento non aperto', {
-      userId: user.id,
-      negozi: sellerIds.length,
-      message: venditoriLetti.error?.message ?? 'nessun dato',
-    });
-    return ApiErrors.unavailable('Non riusciamo a controllare il negozio in questo momento. Riprova fra poco.');
-  }
-  const sellers = [...venditoriLetti.data];
-  const negoziLetti = new Set(sellers.map((s) => s.id));
-  const negoziMancanti = sellerIds.filter((id) => !negoziLetti.has(id));
-  if (negoziMancanti.length > 0) {
-    // Un negozio approvato senza insegna la vetrina non lo restituisce: i dati
-    // per i controlli si prendono dal profilo, col client di servizio. Chi non
-    // e' un negozio approvato non passa.
-    const { data: profiliMancanti, error: errProfili } = await admin
-      .from('profiles')
-      .select('id, store_name, store_lat, store_lng, store_hours, role, is_approved')
-      .in('id', negoziMancanti);
-    const recuperati = (profiliMancanti ?? []).filter((p) => p.role === 'seller' && p.is_approved === true);
-    if (errProfili || recuperati.length !== negoziMancanti.length) {
-      logger.error('[stripe] negozi del carrello non trovati: pagamento non aperto', {
-        userId: user.id,
-        negoziMancanti,
-        trovatiNelProfilo: recuperati.length,
-        message: errProfili?.message,
-      });
-      return errProfili
-        ? ApiErrors.unavailable('Non riusciamo a controllare il negozio in questo momento. Riprova fra poco.')
-        : ApiErrors.conflict('Un negozio del carrello non accetta ordini in questo momento. Toglilo dal carrello e riprova.');
-    }
-    for (const p of recuperati) {
-      sellers.push({
-        id: p.id,
-        store_name: p.store_name,
-        store_lat: p.store_lat,
-        store_lng: p.store_lng,
-        store_hours: p.store_hours,
-      });
-    }
-  }
+  // 28/10/2026 / 28/11/2026 (R05-008) — Ogni negozio del carrello deve tornare, o il pagamento non
+  // si apre: la regola sta in `negoziDelCarrello`, la stessa del riuso della pagina già aperta.
+  const letturaNegozi = await negoziDelCarrello();
+  if (letturaNegozi.rifiuto) return letturaNegozi.rifiuto;
+  const sellers = letturaNegozi.negozi;
 
   const sellerNameMap = new Map<string, string>();
   const sellerCoordMap = new Map<string, { lat: number | null; lng: number | null }>();
@@ -584,24 +702,14 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // carta e coi contanti prendeva un 409, e senza orari del negozio passava anche una fascia
   // finita. Adesso è la regola unica di lib/quando-arriva.ts, la stessa dei contanti: stesso 409,
   // stesso messaggio.
-  if (!body.pickupInStore) {
-    const rifiutata = motivoFasciaRifiutata(
-      body.deliverySlot,
-      (sellers ?? []).map((s) => ({ nome: s.store_name, orari: (s as { store_hours?: unknown }).store_hours })),
-    );
-    if (rifiutata) return ApiErrors.conflict(rifiutata);
-  }
-
-  // 26/11/2026 — Al massimo `ORDINI_PER_FASCIA` giri per fascia (fatto `consegna.capienza`): al sesto
-  // 409. La veloce non è una fascia, e il ritiro non chiede un giro. Sta prima della pulizia, come
-  // gli altri rifiuti: un tentativo respinto non chiude le altre casse. Un conteggio non riuscito
-  // non ferma il pagamento: il tetto è morbido (il negozio accetta ogni ordine e può rifiutare
-  // quelli in più), e una lettura caduta non deve spegnere la carta; resta scritto.
-  if (!body.pickupInStore && !consegnaVeloce && body.deliverySlot) {
-    const giri = await giriNellaFascia(admin, body.deliverySlot, user.id, new Date());
-    if (giri === null) logger.warn('[stripe] giri della fascia non contati: il tetto non è stato controllato', { userId: user.id });
-    else if (!giri.mio && giri.altri + 1 > ORDINI_PER_FASCIA) return ApiErrors.conflict(MOTIVO_FASCIA_PIENA);
-  }
+  // 26/11/2026 — E il tetto dei giri per fascia: la regola sta in `rifiutoDellaFascia`.
+  const fasciaNo = await rifiutoDellaFascia(
+    admin,
+    body,
+    (sellers ?? []).map((s) => ({ nome: s.store_name, orari: (s as { store_hours?: unknown }).store_hours })),
+    user.id,
+  );
+  if (fasciaNo) return ApiErrors.conflict(fasciaNo);
 
   // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso, un
   // fattorino approvato e online. La stessa decisione della cassa e dei contanti (`veloceSiPuo`).

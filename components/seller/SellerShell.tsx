@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { esciEVaiAllAccesso } from '@/lib/auth/uscita';
 import { useProfile } from '@/components/hooks/useProfile';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { queryKeys } from '@/lib/queries/keys';
@@ -21,6 +22,7 @@ import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { VOCI_SERVIZI } from '@/components/seller/servizi-nel-menu';
 import MenuAccount, { usePianoDelNegozio } from '@/components/seller/MenuAccount';
 import { toneFor, formatDate } from '@/lib/notifiche-aspetto';
+import { eDiSdg } from '@/lib/products/sdgSeller';
 
 type NavItem = { href: string; icon: LucideIcon; label: string; badge?: 'todo' };
 type NavGroup = { group: string; items: NavItem[] };
@@ -63,6 +65,25 @@ const NAV: NavGroup[] = [
   ] },
 ];
 
+/**
+ * 28/11/2026 — SDG AGENZIA APRIVA «ORDINI» E LEGGEVA «NESSUN ORDINE».
+ *
+ * Nicola, alle 00:36: entrato come SDG Agenzia, la voce «Ordini» diceva «Nessun ordine», e alle 00:34
+ * era nato un ordine di servizio vero. Gli ordini di SDG non sono ordini di prodotti: stanno nella
+ * tabella `ordini_sdg` e si leggono in /seller/ordini-sdg, a cui il menu non portava. Per l'account
+ * di SDG la voce porta lì e si chiama «Ordini di servizio»; per tutti gli altri negozi non cambia
+ * niente. Il pallino dei «da fare» conta gli ordini dei prodotti, e SDG non ne ha: per lui non c'è.
+ */
+const VOCE_ORDINI_DI_SERVIZIO: NavItem = { href: '/seller/ordini-sdg', icon: Receipt, label: 'Ordini di servizio' };
+
+function menuDelNegozio(sellerId: string | null | undefined): NavGroup[] {
+  if (!eDiSdg(sellerId)) return NAV;
+  return NAV.map((sec) => ({
+    ...sec,
+    items: sec.items.map((n) => (n.href === '/seller/orders' ? VOCE_ORDINI_DI_SERVIZIO : n)),
+  }));
+}
+
 const COPILOT_HREF = '/seller/products/ai-batch';
 
 function isActive(pathname: string, href: string): boolean {
@@ -70,6 +91,8 @@ function isActive(pathname: string, href: string): boolean {
     // Dashboard attivo anche sulla root /seller (redirect verso la dashboard).
     return pathname === '/seller/dashboard' || pathname === '/seller';
   }
+  // Per SDG anche «Ordini» (/seller/orders) mostra gli ordini di servizio: la sua voce resta accesa.
+  if (href === VOCE_ORDINI_DI_SERVIZIO.href && pathname === '/seller/orders') return true;
   // Tiene attiva solo la voce più specifica: products non resta attivo su
   // products/ai-batch (che ha la sua voce AI Studio).
   if (href === '/seller/products') {
@@ -109,18 +132,22 @@ function useSellerTodoCount(sellerId: string | null) {
 }
 
 /**
- * Le promozioni contano solo per chi le ha accese nelle impostazioni (`notif_promos`):
- * chi le ha spente non riceve la push, e il pallino non deve accendersi per loro.
- * Se la preferenza non si legge, si va avanti senza le promozioni: un errore
+ * Le promozioni e la newsletter contano solo per chi le ha accese nelle impostazioni
+ * (`notif_promos`, `notif_newsletter`): chi le ha spente non riceve la push, e il pallino
+ * non deve accendersi per loro. Ritorna le categorie da lasciare fuori dal conto.
+ * Se la preferenza non si legge, si va avanti senza le due categorie: un errore
  * sulla preferenza non deve spegnere il pallino degli ordini non letti.
  */
-async function promoAccese(userId: string): Promise<boolean> {
+export async function categorieSpenteDelCampanello(userId: string): Promise<string[]> {
   const { data: preferenze, error } = await supabase
     .from('profiles')
-    .select('notif_promos')
+    .select('notif_promos, notif_newsletter')
     .eq('id', userId)
     .maybeSingle();
-  return !error && preferenze?.notif_promos === true;
+  const spente: string[] = [];
+  if (error || preferenze?.notif_promos !== true) spente.push('promo');
+  if (error || preferenze?.notif_newsletter !== true) spente.push('newsletter');
+  return spente;
 }
 
 /** Conta le notifiche non lette per il pallino del campanello. */
@@ -137,7 +164,7 @@ function useNotifUnread(userId: string | null) {
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .eq('is_read', false);
-      if (!(await promoAccese(userId))) conta = conta.neq('category', 'promo');
+      for (const categoria of await categorieSpenteDelCampanello(userId)) conta = conta.neq('category', categoria);
       const { count, error } = await conta;
       if (error) return 0;
       return count ?? 0;
@@ -181,7 +208,7 @@ function useUltimeNotifiche(userId: string | null) {
         .from('notifications')
         .select('id, user_id, title, body, link, is_read, created_at')
         .eq('user_id', userId);
-      if (!(await promoAccese(userId))) lista = lista.neq('category', 'promo');
+      for (const categoria of await categorieSpenteDelCampanello(userId)) lista = lista.neq('category', categoria);
       const { data, error } = await lista
         .order('created_at', { ascending: false })
         .limit(ULTIME_NELLA_TENDINA);
@@ -395,7 +422,10 @@ export default function SellerShell({ children }: { children: React.ReactNode })
   useBottomSheetA11y(navOpen && !desktop, menuRef, hamburgerRef, () => setNavOpen(false));
 
   // L'identità arriva dal profilo già condiviso: due chiamate di rete al minuto in meno (R075).
-  const todo = useSellerTodoCount(profile?.id ?? null);
+  // SDG non ha ordini di prodotti: il conteggio non parte, e la sua voce non ha il pallino.
+  const sdg = eDiSdg(profile?.id);
+  const nav = menuDelNegozio(profile?.id);
+  const todo = useSellerTodoCount(sdg ? null : profile?.id ?? null);
   const notifUnread = useNotifUnread(profile?.id ?? null);
   const { etichetta: piano } = usePianoDelNegozio();
 
@@ -434,9 +464,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
   }, []);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/sign-in');
-    router.refresh();
+    await esciEVaiAllAccesso(router);
   };
 
   const onSearchSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -475,7 +503,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
           }`}
         >
           {!collapsed && (
-            <Link href="/seller/dashboard" className="font-serif text-2xl font-extrabold leading-none tracking-tight">
+            <Link href="/seller/dashboard" prefetch={false} className="font-serif text-2xl font-extrabold leading-none tracking-tight">
               <span className="text-accent-300">My</span>
               <span className="text-white">City</span>
               <span className="ml-1.5 font-sans text-xs font-bold uppercase tracking-label text-ink-300">
@@ -509,6 +537,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
         <div className={`shrink-0 px-3 pb-1 pt-3 ${collapsed ? 'lg:px-2.5' : ''}`}>
           <Link
             href={COPILOT_HREF}
+            prefetch={false}
             title="Copilot — gestisci parlando"
             className={`flex w-full items-center gap-2.5 rounded-lg bg-gradient-to-br from-primary-600 to-secondary-600 px-3.5 py-3 text-left text-white shadow-warm hover:from-primary-700 hover:to-secondary-700 ${
               collapsed ? 'lg:justify-center lg:px-2.5' : ''
@@ -529,7 +558,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
 
         {/* Nav */}
         <nav className={`flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-2 ${collapsed ? 'lg:px-2' : ''}`}>
-          {NAV.map((sec) => (
+          {nav.map((sec) => (
             <div key={sec.group} className="mb-1.5">
               {!collapsed && (
                 <p className="mx-3 mb-1 mt-1.5 text-2xs font-bold uppercase tracking-label text-white/40">
@@ -541,9 +570,13 @@ export default function SellerShell({ children }: { children: React.ReactNode })
                 const Icon = n.icon;
                 const showBadge = n.badge === 'todo' && todo > 0;
                 return (
+                  // Niente precarico: ogni pagina /seller ripassa dal controllo d'accesso del
+                  // middleware (getUser + lettura del profilo). Precaricate tutte insieme, le voci
+                  // della barra facevano due chiamate a Supabase ciascuna a ogni apertura del pannello.
                   <Link
                     key={n.href}
                     href={n.href}
+                    prefetch={false}
                     aria-current={on ? 'page' : undefined}
                     title={n.label}
                     className={`relative flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm transition-colors ${

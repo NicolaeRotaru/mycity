@@ -14,6 +14,7 @@ import {
   controllaIndirizzoImmagine,
   MESSAGGIO_IMMAGINE_NON_ARRIVATA,
 } from '@/lib/indirizzo-immagine-ammesso';
+import { acceptSenzaHeic, avvisoFotoHeic, senzaHeic } from '@/lib/immagini/heic-in-jpeg';
 
 /**
  * Campo immagine riutilizzabile: accetta SIA un URL incollato a mano SIA il
@@ -75,10 +76,17 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
       );
     },
     onDrop: async (files) => {
-      const file = files[0];
-      if (!file) return;
+      const scelta = files[0];
+      if (!scelta) return;
       setUploading(true);
       try {
+        // Un HEIC salvato com'e' su Chrome e Android resta un riquadro rotto: qui diventa JPEG, o
+        // non parte (`lib/immagini/heic-in-jpeg.ts`).
+        const file = await senzaHeic(scelta);
+        if (!file) {
+          toast.error(avvisoFotoHeic());
+          return;
+        }
         // Il percorso partiva col solo `pathPrefix`, cioe' `events` o `shop`: due nomi che il
         // database rifiuta, perche' accetta come prima cartella solo l'identificativo di chi carica
         // o `home` per lo staff. Questo campo lo usano tre schermate, tutte di amministrazione,
@@ -148,7 +156,8 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
       >
         {/* Il campo file di react-dropzone non e' nascosto: e' rimpicciolito a un pixel, quindi
             chi usa un lettore di schermo ci arriva e sente «campo», senza sapere cosa sia. */}
-        <input {...getInputProps({ 'aria-label': 'Carica immagine' })} />
+        {/* Senza HEIC nel campo l'iPhone, scegliendo dalla galleria, consegna gia' un JPEG. */}
+        <input {...getInputProps({ accept: acceptSenzaHeic(mappaAccept(bucket)), 'aria-label': 'Carica immagine' })} />
         <Upload size={16} strokeWidth={2.2} className="text-ink-500" aria-hidden />
         <span className="text-ink-600">
           {uploading ? 'Caricamento…' : isDragActive ? 'Rilascia qui…' : 'Carica da dispositivo'}

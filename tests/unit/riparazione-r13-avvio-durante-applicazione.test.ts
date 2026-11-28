@@ -13,8 +13,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
  * gara: /apply prenota, parte un avvio, /apply rimette «pronto». L'avvio deve
  * aspettare (409), e il «pronto» deve passare. Poi i casi che non devono
  * cambiare: un'applicazione finita (col segno di fine della 750) o vecchia non
- * ferma niente, e senza la colonna (la 750 non ancora applicata) l'avvio va
- * avanti come prima.
+ * ferma niente, e senza la colonna l'avvio aspetta lo stesso, contando i 120 s
+ * dall'inizio dell'applicazione.
  */
 
 const FAKE_USER = { id: 'seller-1', email: 's@x.com' };
@@ -227,14 +227,14 @@ describe('un avvio mentre un lavoro sul catalogo si sta applicando', () => {
     expect(submitBatchMock).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['42703', 'PGRST204'])('senza la colonna (errore %s) l avvio va avanti come prima', async (codice) => {
+  it.each(['42703', 'PGRST204'])('senza la colonna (errore %s) l avvio aspetta lo stesso (409)', async (codice) => {
     colonnaPresente = false;
     codiceColonnaAssente = codice;
     righe = [lavoroPronto('job-in-corso', { status: 'applied', updated_at: fa(5_000) })];
     const risposta = await POST(richiesta());
-    expect(risposta.status).toBe(200);
-    expect(submitBatchMock).toHaveBeenCalledTimes(1);
-    expect(aperti()).toHaveLength(1);
+    expect(risposta.status).toBe(409);
+    expect(submitBatchMock).not.toHaveBeenCalled();
+    expect(aperti()).toHaveLength(0);
   });
 
   it('se la lettura dei lavori applicati cade per un altro guasto, non parte niente', async () => {

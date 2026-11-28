@@ -162,7 +162,8 @@ export async function caricaImmagine(
   const tipoDichiarato = String(contentType || file.type || '').toLowerCase();
   if (tipoDichiarato.startsWith('image/') && !regola.tipiAmmessi.includes(tipoDichiarato)) {
     // 1605 — La frase nasce dalla stessa lista che rifiuta: prima nominava tre formati su sette.
-    throw new Error(`Formato non accettato: usa una foto ${formatiLeggibili(regola.tipiAmmessi)}.`);
+    // 27/11/2026 — …e propone solo i formati che le caselle offrono davvero (`formatiDaProporre`).
+    throw new Error(`Formato non accettato: usa una foto ${formatiDaProporre(regola.tipiAmmessi)}.`);
   }
   const peso = pesoDi(file);
   if (peso !== null && peso > regola.maxByte) {
@@ -225,4 +226,20 @@ export function formatiLeggibili(tipi: readonly string[]): string {
   const nomi = [...new Set(tipi.map((t) => t.replace(/^image\//, '').replace('jpeg', 'jpg').toUpperCase()))];
   if (nomi.length <= 1) return nomi.join('');
   return `${nomi.slice(0, -1).join(', ')} o ${nomi[nomi.length - 1]}`;
+}
+
+/**
+ * 27/11/2026 — I FORMATI CHE LA FRASE PROPONE: quelli della regola, senza HEIC e HEIF.
+ *
+ * La porta li accetta ancora (il deposito li prende), ma le caselle da cui partono le foto che i
+ * clienti vedono — storie, recensioni, foto prodotto, vetrina — non li offrono piu': nessuno li
+ * converte, e su Chrome e sui telefoni Android si vedrebbero come un riquadro vuoto. La frase che
+ * rifiutava un TIFF nelle storie diceva «usa una foto … HEIC o HEIF», cioe' proponeva proprio il
+ * formato che la casella delle storie respinge. Si propone solo cio' che passa dappertutto: la
+ * lista resta quella della regola, tolti i due formati dell'iPhone.
+ */
+const FORMATI_DELL_IPHONE = /^image\/hei[cf]$/i;
+
+export function formatiDaProporre(tipi: readonly string[]): string {
+  return formatiLeggibili(tipi.filter((t) => !FORMATI_DELL_IPHONE.test(t)));
 }

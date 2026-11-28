@@ -46,6 +46,7 @@ import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import {
   createProductSchema,
   buildProductPayload,
+  durataValida,
   scortaCambiata,
   condizioneDalSuggerimento,
   UNIT_OPTIONS,
@@ -71,6 +72,14 @@ import {
   type VariantOptionType,
 } from '@/lib/products/variants';
 import { leggiPrezzo } from '@/app/seller/products/import/csv';
+import {
+  DOVE_SI_FA,
+  DURATA_MASSIMA,
+  DURATA_MINIMA,
+  ETICHETTE_DOVE,
+  type DoveSiFa,
+  type TipoDiAnnuncio,
+} from '@/lib/products/servizio';
 
 /**
  * R02-021 — Perché questi assi non entrano nei tetti di lib/products/variants.ts, o `null` se entrano.
@@ -167,6 +176,10 @@ export interface ProductInitialValues {
   variants?: ProductVariant[];
   /** Escluso dal recesso (art. 59 Cod. Cons.): fresco che si deteriora in fretta o su ordinazione. */
   nonRecedibile?: boolean | null;
+  /** 27/11/2026 — Prodotto o servizio (migrazione 999g), con i due dettagli del servizio. */
+  tipo?: TipoDiAnnuncio | null;
+  durataMinuti?: number | null;
+  doveServizio?: DoveSiFa | null;
 }
 
 /** `non_recedibile` parte solo se il negoziante l'ha cambiato (vedi sotto, nel salvataggio). */
@@ -294,6 +307,18 @@ export default function ProductForm({
   const [unit, setUnit] = useState<ProductUnit>((initialValues?.unit as ProductUnit) ?? 'pezzo');
   const [condition, setCondition] = useState<ProductCondition | ''>((initialValues?.condition as ProductCondition) ?? '');
   const [unlimitedStock, setUnlimitedStock] = useState<boolean>(initialValues?.stock === null);
+  /**
+   * 27/11/2026 — «Cosa vuoi mettere in vendita? Un prodotto · Un servizio». Un servizio non ha
+   * scorta, varianti, condizione, consegna veloce, codice a barre né recesso: quei campi spariscono.
+   * Ha due dettagli facoltativi, la durata e dove si fa (lib/products/servizio.ts).
+   */
+  const [tipo, setTipo] = useState<TipoDiAnnuncio>(initialValues?.tipo === 'servizio' ? 'servizio' : 'prodotto');
+  const [eraServizio] = useState<boolean>(() => initialValues?.tipo === 'servizio');
+  const [durataMinuti, setDurataMinuti] = useState<string>(
+    initialValues?.durataMinuti != null ? String(initialValues.durataMinuti) : '',
+  );
+  const [doveServizio, setDoveServizio] = useState<DoveSiFa | ''>(initialValues?.doveServizio ?? '');
+  const eUnServizio = tipo === 'servizio';
   // Tempo di consegna (scelta binaria) salvato in express_enabled. 29/10/2026: per ora non cambia
   // cosa vede il cliente — la cassa offre la fascia oraria, e la veloce con le regole di `veloceSiPuo`.
   // Un valore storico null ("eredita") viene risolto sul default del negozio.
@@ -884,6 +909,15 @@ export default function ProductForm({
           return;
         }
       }
+      // 27/11/2026 — Un servizio non ha varianti: se ce ne sono, prima si tolgono.
+      if (eUnServizio && hasVariants) {
+        toast.error('Un servizio non ha opzioni (taglie, colori): togli prima le varianti, oppure salvalo come prodotto.');
+        return;
+      }
+      if (eUnServizio && durataMinuti.trim() !== '' && durataValida(durataMinuti) === null) {
+        toast.error(`La durata va scritta in minuti, fra ${DURATA_MINIMA} e ${DURATA_MASSIMA} (es. 45).`);
+        return;
+      }
       const payload: ProductPayload = buildProductPayload({
         values,
         imageUrls,
@@ -896,6 +930,7 @@ export default function ProductForm({
         // viene comunque riallineato dal trigger DB dopo l'insert delle varianti.
         unlimitedStock: hasVariants ? false : unlimitedStock,
         status: finalStatus,
+        servizio: { tipo, durataMinuti: durataValida(durataMinuti), dove: doveServizio, eraServizio },
       });
       if (hasVariants) payload.stock = totalVariantStock(variants);
       /**
@@ -909,7 +944,7 @@ export default function ProductForm({
       // In creazione (anche «Duplica», che parte con la spunta del prodotto copiato) il
       // confronto è col default della banca dati (false): una spunta già messa deve partire.
       const recessoDiPartenza = mode === 'create' ? false : recedibileAllApertura;
-      if (recessoSegnabile && nonRecedibile !== recessoDiPartenza) payload.non_recedibile = nonRecedibile;
+      if (recessoSegnabile && !eUnServizio && nonRecedibile !== recessoDiPartenza) payload.non_recedibile = nonRecedibile;
       /**
        * 28/10/2026 — CHI CORREGGE LA DESCRIZIONE NON RIMETTE IN MAGAZZINO LA
        * MERCE VENDUTA. La scorta partiva sempre, col numero visto all'apertura:
@@ -923,7 +958,7 @@ export default function ProductForm({
       // Riscritta uguale a quella vista (es. ha sfornato e rimesso 5): parte, e la
       // porta la scrive solo se in banca dati c'è ancora quel numero; se le vendite
       // l'hanno mossa lo dice, invece di rispondere «salvato» senza salvare.
-      const scortaRiscritta = mode === 'edit' && scortaToccata.current && !unlimitedStock && 'stock' in payload;
+      const scortaRiscritta = mode === 'edit' && scortaToccata.current && !unlimitedStock && !eUnServizio && 'stock' in payload;
       if (mode === 'edit' && !scortaRiscritta && !scortaCambiata(payload.stock, scortaAllApertura.current.prodotto)) {
         delete (payload as Partial<ProductPayload>).stock;
       }
@@ -959,7 +994,7 @@ export default function ProductForm({
        *
        * LA PROVA: tests/unit/il-salvataggio-non-scrive-quello-che-nessuno-ha-toccato.test.ts
        */
-      if (consegnaDelNegozioNonLetta && !consegnaSceltaDalNegoziante) {
+      if (consegnaDelNegozioNonLetta && !consegnaSceltaDalNegoziante && !eUnServizio) {
         delete (payload as Partial<ProductPayload>).express_enabled;
       }
       await onSubmit(payload, {
@@ -1072,8 +1107,31 @@ export default function ProductForm({
       )}
 
       <form onSubmit={makeSubmit(primaryIntent)} className="bg-white border rounded-lg p-6 space-y-4">
+        <fieldset>
+          <legend className="text-sm font-medium text-ink-700 mb-2">Cosa vuoi mettere in vendita?</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {(['prodotto', 'servizio'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTipo(t)}
+                aria-pressed={tipo === t}
+                className={cn(
+                  'rounded-lg border-2 p-3 text-left text-sm font-semibold transition',
+                  tipo === t ? 'border-primary-500 bg-primary-50 text-ink-900' : 'border-cream-300 bg-white text-ink-700 hover:border-primary-300',
+                )}
+              >
+                {t === 'prodotto' ? 'Un prodotto' : 'Un servizio'}
+                <span className="block text-xs font-normal text-ink-500">
+                  {t === 'prodotto' ? 'Si compra col carrello e si consegna' : 'Es. taglio, riparazione, servizio fotografico: il cliente lo prenota scrivendoti'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
         <Input
-          label="Nome prodotto"
+          label={eUnServizio ? 'Nome del servizio' : 'Nome prodotto'}
           {...register('name')}
           placeholder="Es. Pomodori biologici"
           hint={`Al massimo ${NOME_PRODOTTO_MAX} caratteri (${lunghezzaNomeProdotto(watch('name') ?? '')}/${NOME_PRODOTTO_MAX}).`}
@@ -1164,6 +1222,7 @@ export default function ProductForm({
             {...register('compareAtPrice')}
             error={typeof errors.compareAtPrice?.message === 'string' ? errors.compareAtPrice.message : undefined}
           />
+          {!eUnServizio && (
           <Select label="Condizione" value={condition} onChange={(e) => setCondition(e.target.value as ProductCondition | '')}>
             <option value="">— non specificata</option>
             {/* 30/10/2026 — Niente usato fra le scelte (MyCity non lo vende). Il valore di un
@@ -1175,11 +1234,35 @@ export default function ProductForm({
               <option key={c} value={c}>{CONDITION_LABELS[c]}</option>
             ))}
           </Select>
+          )}
         </div>
 
         {/* Disponibilità + illimitato — nascosto quando ci sono varianti
             (la disponibilità è gestita per variante, vedi sotto). */}
-        {hasVariants ? (
+        {eUnServizio ? (
+          <div className="grid grid-cols-2 gap-4 items-start">
+            <Input
+              label="Durata in minuti (facoltativa)"
+              type="number"
+              inputMode="numeric"
+              min={DURATA_MINIMA}
+              max={DURATA_MASSIMA}
+              placeholder="Es. 45"
+              value={durataMinuti}
+              onChange={(e) => setDurataMinuti(e.target.value)}
+            />
+            <Select label="Dove si fa (facoltativo)" value={doveServizio} onChange={(e) => setDoveServizio(e.target.value as DoveSiFa | '')}>
+              <option value="">— non specificato</option>
+              {DOVE_SI_FA.map((d) => (
+                <option key={d} value={d}>{ETICHETTE_DOVE[d]}</option>
+              ))}
+            </Select>
+            <p className="col-span-2 text-xs text-ink-500">
+              Un servizio non si paga online: il cliente ti scrive dalla chat del sito per prenotare, e
+              giorno, ora e pagamento li concordate voi.
+            </p>
+          </div>
+        ) : hasVariants ? (
           <p className="rounded-lg bg-cream-50 px-3 py-2.5 text-sm text-ink-600">
             Disponibilità gestita per variante (totale: <strong>{totalVariantStock(variants)} pezzi</strong>).
           </p>
@@ -1203,7 +1286,7 @@ export default function ProductForm({
           </div>
         )}
 
-        {recessoSegnabile && (
+        {recessoSegnabile && !eUnServizio && (
           <Checkbox
             label="Escluso dal recesso: fresco che si deteriora in fretta, o fatto su ordinazione"
             checked={nonRecedibile}
@@ -1240,7 +1323,7 @@ export default function ProductForm({
 
         {/* Attributi per categoria (+ scan EAN se previsto) */}
         <div id="attributi-categoria" className="border-t pt-4 space-y-3">
-          {hasEanField && (
+          {hasEanField && !eUnServizio && (
             <button
               type="button"
               onClick={() => setScanOpen(true)}
@@ -1249,7 +1332,7 @@ export default function ProductForm({
               <ScanLine size={16} strokeWidth={2.2} aria-hidden /> Scansiona codice EAN
             </button>
           )}
-          {aiAccesa && variantableFields.length > 0 && (
+          {aiAccesa && !eUnServizio && variantableFields.length > 0 && (
             <button
               type="button"
               onClick={() => void handleSuggestVariants()}
@@ -1265,8 +1348,8 @@ export default function ProductForm({
             values={attributes}
             onChange={setAttribute}
             categoryLabel={topCategoryLabel}
-            variantAxes={variantAxes}
-            onToggleVariant={toggleVariantAxis}
+            variantAxes={eUnServizio ? undefined : variantAxes}
+            onToggleVariant={eUnServizio ? undefined : toggleVariantAxis}
             onAxisValuesChange={setAxisValues}
           />
 
@@ -1329,7 +1412,8 @@ export default function ProductForm({
           <p className="text-xs text-ink-400 mt-1">Invio o virgola per aggiungere. Aiutano i clienti a trovarti.</p>
         </div>
 
-        {/* Tempo di consegna — scelta binaria sempre visibile */}
+        {/* Tempo di consegna — scelta binaria sempre visibile (non per un servizio: non si consegna) */}
+        {!eUnServizio && (
         <div className="border-t pt-4">
           <p className="text-sm font-medium text-ink-700 mb-2">Tempo di consegna</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1386,6 +1470,7 @@ export default function ProductForm({
             null
           )}
         </div>
+        )}
 
         <ProductImagesField
           value={imageUrls}

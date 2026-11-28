@@ -26,7 +26,9 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { conAgente } from '@/lib/agenti/rotta';
 import { leggiLavoro } from '@/lib/agenti/n8n';
 import { normalizza, pulisci, unisci } from '@/lib/agenti/scheda';
-import { attivitaDallaScheda, linkDelPreventivo, nomeNonValido, segnaChiHaPortatoIlCliente, stessoIndirizzo } from '@/lib/agenti/aggiungi';
+import { attivitaDallaScheda, linkDelPreventivo, nomeNonValido, segnaChiHaPortatoIlCliente, segnaIServiziScelti, stessoIndirizzo } from '@/lib/agenti/aggiungi';
+import { ETICHETTE_SERVIZI, ServiziInArrivo } from '@/lib/agenzia/servizi-scelti';
+
 import { attivitaGiaIscritta, iscriviAttivita } from '@/lib/agenzia/nuova-attivita';
 import { avviaDopoLIscrizione } from '@/lib/agenzia/dopo-iscrizione';
 import { ABBONAMENTI, FASCE } from '@/lib/agenzia/preventivo';
@@ -36,10 +38,14 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+// 28/11/2026, 01:10 e 01:25 — Nicola: il lavoro nasce dall'abbonamento «ma anche al servizio di cui ha bisogno, che
+// lo selezionerà il venditore nel momento in cui seleziona l'abbonamento», fra «Foto e video, Gestione social e
+// google, Gestione sitoweb, Analisi di mercato». Almeno un servizio, nessuno fuori elenco, e una nota facoltativa di
+// 200 caratteri senza contatti (lib/agenzia/servizi-scelti.ts).
 const Richiesta = z.object({
   lavoro: z.string().uuid('Codice del lavoro non valido.'),
   fascia: z.enum(ABBONAMENTI, { message: 'Scegli l’abbonamento che ha scelto il titolare.' }),
-});
+}).and(ServiziInArrivo);
 
 /** Un lavoro dopo la risposta. Fuori da una richiesta (le prove) `after` non c'è: si lancia e basta. */
 const dopoLaRisposta = (fn: () => Promise<void>) => {
@@ -104,6 +110,10 @@ export const POST = conAgente({ name: 'agente-aggiungi', max: 20, windowMs: 60 *
   // 27/11/2026 — Chi l'ha portato (999c): la pagina dell'agente sa quando il titolare conferma, l'ordine di SDG dice l'agente.
   const portato = await segnaChiHaPortatoIlCliente(admin, fatto.id, { lavoro: esito.data.lavoro, agenteEmail: email });
   if (!portato) logger.warn('[agente-aggiungi] agente non scritto sul preventivo: controlla la migrazione 999c', { id: fatto.id });
+  // 28/11/2026 — Quali servizi gli servono (999h): passano nell'ordine di SDG all'accettazione.
+  const scelti = { servizi: esito.data.servizi, nota: esito.data.nota };
+  const serviziSegnati = await segnaIServiziScelti(admin, fatto.id, scelti);
+  if (!serviziSegnati) logger.warn('[agente-aggiungi] servizi scelti non scritti sul preventivo: controlla la migrazione 999h', { id: fatto.id });
   const sblocco = await sbloccaInContanti(admin, fatto.id, fascia);
   if (!sbloccoRiuscito(sblocco)) logger.error('[agente-aggiungi] pagina del negozio non sbloccata', { id: fatto.id, fascia, dettaglio: sblocco.dettaglio });
   logger.info('[agente-aggiungi] attività aggiunta', { id: fatto.id, nuova: fatto.nuova, conLink: Boolean(link), fascia, sblocco: sblocco.esito });
@@ -129,7 +139,7 @@ export const POST = conAgente({ name: 'agente-aggiungi', max: 20, windowMs: 60 *
         : fatto.nuova
           ? `${attivita.nome} ha detto sì col ${nomeFascia}: attività aggiunta dall'agente`
           : `${attivita.nome}: la pagina si è sbloccata di nuovo col ${nomeFascia}`,
-      `L'agente ${email} ha premuto «Aggiungi attività» e ha scelto il ${nomeFascia}. ${pagina} Il negozio è su MyCity, nascosto e senza accesso finché il titolare non accetta il preventivo; il link lo trovi in Admin → Preventivi col link.`,
+      `L'agente ${email} ha premuto «Aggiungi attività» e ha scelto il ${nomeFascia}. Servizi scelti: ${scelti.servizi.map((x) => ETICHETTE_SERVIZI[x]).join(', ')}${scelti.nota ? ` (nota dell'agente: «${scelti.nota}»)` : ''}. ${pagina} Il negozio è su MyCity, nascosto e senza accesso finché il titolare non accetta il preventivo; il link lo trovi in Admin → Preventivi col link.`,
       '/admin/preventivi',
       // Una volta per attività alla nascita; ogni cambio di fascia e ogni nuovo sblocco ha il suo avviso.
       { unaVoltaPer: fatto.nuova ? `agente-aggiungi:${fatto.id}` : `agente-aggiungi:${fatto.id}:${sblocco.esito}:${fascia}:${new Date().toISOString()}` },

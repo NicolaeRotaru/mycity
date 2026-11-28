@@ -58,9 +58,16 @@ const REASON_LABEL: Record<string, string> = {
   other:               'Altro',
 };
 
+/**
+ * 27/11/2026 — Il filtro di partenza (quello che raggiungono la scheda ordine e il cruscotto) tiene
+ * insieme i reclami ancora da decidere: aperti E in valutazione. Prima partiva da «Aperto» e un
+ * reclamo gia' in esame, che la scheda ordine conta come aperto, qui non si vedeva.
+ */
+const DA_GESTIRE: Dispute['status'][] = ['open', 'under_review'];
+
 export default function AdminDisputesPage() {
   const qc = useQueryClient();
-  const [filter, setFilter] = useState<Dispute['status'] | 'all'>('open');
+  const [filter, setFilter] = useState<Dispute['status'] | 'all' | 'da_gestire'>('da_gestire');
   const [openId, setOpenId] = useState<string | null>(null);
   const [resolution, setResolution] = useState('');
   const [refundEur, setRefundEur] = useState('');
@@ -78,7 +85,8 @@ export default function AdminDisputesPage() {
         `)
         .order('created_at', { ascending: false })
         .limit(LIMITE_RECLAMI);
-      if (filter !== 'all') q = q.eq('status', filter);
+      if (filter === 'da_gestire') q = q.in('status', DA_GESTIRE);
+      else if (filter !== 'all') q = q.eq('status', filter);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as unknown as Dispute[];
@@ -258,7 +266,7 @@ export default function AdminDisputesPage() {
       )}
 
       <div className="flex flex-wrap gap-2">
-        {(['open', 'under_review', 'resolved_buyer', 'resolved_seller', 'rejected', 'all'] as const).map((f) => (
+        {(['da_gestire', 'open', 'under_review', 'resolved_buyer', 'resolved_seller', 'rejected', 'all'] as const).map((f) => (
           <button
             key={f}
             type="button"
@@ -270,7 +278,7 @@ export default function AdminDisputesPage() {
                 : 'bg-white border border-cream-300 text-ink-700 hover:border-primary-300'
             }`}
           >
-            {f === 'all' ? 'Tutti' : STATUS_META[f].label}
+            {f === 'all' ? 'Tutti' : f === 'da_gestire' ? 'Da gestire' : STATUS_META[f].label}
           </button>
         ))}
       </div>

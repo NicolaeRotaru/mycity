@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
-import { abbonamentoInCorso } from '@/lib/abbonamento-portale';
+import { abbonamentoInCorso, portaleApribile } from '@/lib/abbonamento-portale';
 
 export const runtime = 'nodejs';
 
@@ -38,7 +38,9 @@ export const POST = withAuthRateLimit(
       return ApiErrors.unavailable('L’abbonamento dei negozi non è attivo al momento.');
     }
 
-    if (!profile?.stripe_customer_id) {
+    // Il cliente Stripe nasce al primo clic su «attiva»: chi abbandona la cassa ha il
+    // customer id ma nessun abbonamento. Conta lo stato, con la stessa regola del bottone.
+    if (!profile?.stripe_customer_id || !portaleApribile(profile.subscription_status)) {
       return ApiErrors.invalidRequest('Nessun abbonamento da gestire.');
     }
 

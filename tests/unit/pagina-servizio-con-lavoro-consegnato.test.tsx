@@ -61,7 +61,7 @@ afterEach(() => { for (const r of accesi.splice(0)) act(() => r.unmount()); docu
 describe('la pagina del servizio con il lavoro consegnato', () => {
   it.each([['sito-web', 'sito-stato'], ['social', 'piano-calendario'], ['analisi', 'an-sintesi']])('per SDG %s mostra il lavoro e niente preventivo', async (slug, ancora) => {
     stato.slug = slug;
-    stato.dati['lavoro-consegnato'] = lavoroConsegnatoDi(SDG_SELLER_ID);
+    stato.dati['lavoro-consegnato'] = { lavoro: lavoroConsegnatoDi(SDG_SELLER_ID), ordine: null };
     const r = await monta();
     expect(r.querySelector(`#${ancora}`)).not.toBeNull();
     expect(r.textContent).toContain('Premium · lavoro consegnato');
@@ -73,7 +73,7 @@ describe('la pagina del servizio con il lavoro consegnato', () => {
 
   it('un altro negozio, o la lettura senza lavoro, vede la pagina di oggi col pulsante', async () => {
     stato.slug = 'social';
-    stato.dati['lavoro-consegnato'] = lavoroConsegnatoDi('0de1905e-7000-4000-8000-000000000001'); // null
+    stato.dati['lavoro-consegnato'] = { lavoro: lavoroConsegnatoDi('0de1905e-7000-4000-8000-000000000001'), ordine: null }; // null
     const r = await monta();
     expect(r.textContent).toContain('È compreso in tutti e tre gli abbonamenti');
     expect(r.querySelector('a[href="/seller/abbonamento"]')?.textContent).toMatch(/Scegli l.abbonamento/);
@@ -82,7 +82,7 @@ describe('la pagina del servizio con il lavoro consegnato', () => {
 
   it('foto e video resta il preventivo anche per SDG', async () => {
     stato.slug = 'foto-video';
-    stato.dati['lavoro-consegnato'] = lavoroConsegnatoDi(SDG_SELLER_ID);
+    stato.dati['lavoro-consegnato'] = { lavoro: lavoroConsegnatoDi(SDG_SELLER_ID), ordine: null };
     const r = await monta();
     expect(r.querySelector('a[href="/seller/abbonamento"]')).not.toBeNull();
   });

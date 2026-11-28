@@ -11,6 +11,7 @@ import { useTranslations } from 'next-intl';
 import { Banknote, Camera } from 'lucide-react';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
+import { acceptSenzaHeic, avvisoFotoHeic, senzaHeic } from '@/lib/immagini/heic-in-jpeg';
 
 /** Il magazzino privato delle prove d'incasso. La sua regola sta in lib/storage/regole-secchi.ts. */
 const SECCHIO_PROVE_INCASSO = 'cod-proof';
@@ -74,7 +75,16 @@ export default function CashConfirmDialog({
   useEffect(() => () => {
     for (const u of Object.values(anteprimeRef.current)) if (u) URL.revokeObjectURL(u);
   }, []);
-  const scegliFoto = async (f: File, kind: 'cash' | 'delivery') => {
+  const scegliFoto = async (scelta: File, kind: 'cash' | 'delivery') => {
+    // Una prova HEIC salvata com'e' non si apre su Chrome e Android, cioe' proprio dove
+    // l'amministrazione la controlla: qui diventa JPEG, o non parte (`lib/immagini/heic-in-jpeg.ts`).
+    setUploading(kind);
+    const f = await senzaHeic(scelta);
+    if (!f) {
+      setUploading(null);
+      toast.error(avvisoFotoHeic());
+      return;
+    }
     const vecchia = anteprimeRef.current[kind];
     if (vecchia) URL.revokeObjectURL(vecchia);
     const nuova = typeof URL.createObjectURL === 'function' ? URL.createObjectURL(f) : null;
@@ -335,7 +345,7 @@ function PhotoSlot({
            non ha nessuna lista: il fattorino poteva mandare un TIFF da 80 MB e non se ne accorgeva
            nessuno. La lista arriva dalla stessa regola che poi rifiuta il file, quindi il campo e
            la porta non possono dire due cose diverse. */
-        accept={attributoAccept(SECCHIO_PROVE_INCASSO)}
+        accept={acceptSenzaHeic(attributoAccept(SECCHIO_PROVE_INCASSO))}
         capture="environment"
         className="sr-only"
         onChange={(e) => {

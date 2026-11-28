@@ -1,5 +1,6 @@
 'use client';
 
+import { useServizi } from '@/components/hooks/useServizi';
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -173,6 +174,9 @@ function SharedCartInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartParam, tentativo]);
 
+  // 27/11/2026 — Un servizio (999g) non entra nel carrello: si prenota scrivendo al negozio.
+  const servizi = useServizi(products.map((p) => p.id));
+
   if (loading) return <LoadingState message="Carico la lista…" />;
 
   if (nonLetta) {
@@ -222,7 +226,7 @@ function SharedCartInner() {
       const stock = product.stock ?? Infinity;
       const qty = Math.min(item.quantity, stock);
       // 24/11/2026 — Un abbonamento di SDG non entra nel carrello: non si conta fra gli aggiunti.
-      if (qty < 1 || eDiSdg(product.seller_id)) continue;
+      if (qty < 1 || eDiSdg(product.seller_id) || servizi.has(product.id)) continue;
       addToCart({
         id: product.id,
         name: product.name,

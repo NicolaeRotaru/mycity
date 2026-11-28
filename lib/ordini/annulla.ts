@@ -10,7 +10,7 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { sendEmail } from '@/lib/email/client';
 import { ordineAnnullatoAlNegozioTemplate, ordineAnnullatoTemplate, refundIssuedTemplate } from '@/lib/email/templates';
 import { formatPriceFromCents } from '@/lib/format';
-import { consegnaDopoLAnnullo, type RigaRicalcolata } from '@/lib/ordini/prezzi';
+import { consegnaDopoLAnnullo, consegnaSenzaLaVeloce, type RigaRicalcolata } from '@/lib/ordini/prezzi';
 import { eConsegnaVeloce } from '@/lib/ordini/consegna-veloce';
 // 30/10/2026 — Il ricalcolo dopo un annullo legge e scrive `gross_total_cents`, che esiste solo dopo
 // la migrazione 124: senza ripiego, prima della 124 la lettura falliva intera e la regola del negozio
@@ -109,6 +109,24 @@ export type OrdineDaAnnullare = {
 const TENTATIVI_STORNO_CREDITO = 3;
 /** Pausa fra un tentativo e l'altro, moltiplicata per il numero del tentativo. */
 const PAUSA_STORNO_CREDITO_MS = 200;
+
+/**
+ * R06-008 — Dopo un rimborso caduto: sull'ordine adesso risulta reso (o prenotato) tutto il totale,
+ * e più di quanto aveva letto chi annulla? Allora l'ha fatto un altro annullo nel frattempo. Un reso
+ * parziale arrivato in mezzo non basta: lì l'ordine resta vivo e il rimborso è fallito davvero.
+ * Nel dubbio (lettura caduta) no: si risponde come prima.
+ */
+async function resoTuttoDaUnAltro(admin: SupabaseClient, order: OrdineDaAnnullare): Promise<boolean> {
+  try {
+    const { data, error } = await admin.from('orders').select('total_price, refunded_amount_cents').eq('id', order.id).maybeSingle();
+    if (error || !data) return false;
+    const adesso = data as { total_price?: number | string | null; refunded_amount_cents?: number | null };
+    const reso = Number(adesso.refunded_amount_cents ?? 0);
+    return reso > Number(order.refunded_amount_cents ?? 0) && reso >= Math.round(Number(adesso.total_price ?? 0) * 100);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Porta l'ordine ad annullato e rimette a posto il denaro: rimborso sulla carta
@@ -255,16 +273,16 @@ export async function annullaERimborsa(
    * ancora quel codice. In quel caso non si restituisce niente: lo fara'
    * l'ultimo ordine del carrello che se ne va.
    *
-   * LIMITE DICHIARATO, e vale solo per i contanti: questo controllo guarda solo
-   * il carrello della carta (la sessione di pagamento). 21/11/2026 (R04-007) —
-   * Non perché il carrello in contanti non si possa trovare: si ritrova dalla
-   * riga del tentativo di cassa (`cod_checkout_attempts.order_ids`, letta per
-   * cliente, con l'indice), come fa la consegna del carrello più sotto
-   * (`ordiniDelCarrello`). Sulle righe dell'ordine però non c'è una chiave del
-   * carrello, e senza quella riga il carrello non si ritrova. Qui coi contanti
-   * si restituisce come prima — meglio un uso regalato che un cliente che perde
-   * il buono senza aver comprato. La chiusura completa vuole una colonna
-   * «carrello» sugli ordini: e' una migrazione, quindi si firma a parte.
+   * Il carrello della carta è la sessione di pagamento. 27/11/2026 (R06-010) —
+   * Quello in contanti si ritrova dalla riga del tentativo di cassa
+   * (`cod_checkout_attempts.order_ids`, letta per cliente, con l'indice), come fa
+   * la consegna del carrello più sotto (`ordiniDelCarrello`): prima qui coi
+   * contanti non si guardava, e un codice monouso tornava libero mentre l'altro
+   * negozio dello stesso carrello lo teneva. LIMITE DICHIARATO: sulle righe
+   * dell'ordine non c'è una chiave del carrello, e senza quella riga il carrello
+   * non si ritrova: allora si restituisce come prima — meglio un uso regalato che
+   * un cliente che perde il buono senza aver comprato. La chiusura completa vuole
+   * una colonna «carrello» sugli ordini: e' una migrazione, quindi si firma a parte.
    */
   // 5/11/2026 — La restituzione del codice sta fuori (`restituisciIlCodiceDellOrdine`, più sotto in
   // questo file): la usa anche il giro degli ordini scaduti, che prima chiamava release_coupon col
@@ -309,6 +327,7 @@ export async function annullaERimborsa(
     }
 
     let giro: GiroDelCarrello | null = null;
+    let rimborsoUscito = false;
     try {
       // 30/10/2026 — Prima si rifà la consegna dei negozi rimasti: il rimborso rende il totale nuovo.
       giro = await ricalcolaLaConsegnaDelGiro(admin, order.id);
@@ -325,6 +344,7 @@ export async function annullaERimborsa(
         notifyBuyer: false,
         ...(merceUscita ? { merceNonTorna: true } : {}),
       });
+      rimborsoUscito = true;
       await avvisaIlClienteDelRimborso(admin, order, res.importoCents, opts.reason);
       // refundOrder ha già impostato CANCELED + canceled_at + payment_status.
       //
@@ -357,6 +377,20 @@ export async function annullaERimborsa(
         ...(creditoNonTornato > 0 ? { creditoNonTornatoCents: creditoNonTornato } : {}),
       };
     } catch (err) {
+      // 27/11/2026 (R06-008) — IL DOPPIO TOCCO NON È UN RIMBORSO FALLITO.
+      // Due tocchi su «Annulla» con la carta: il primo prenota il rimborso, il secondo trova il tetto
+      // pieno e `refundOrder` lancia («già registrato», o «importo non valido» se il primo ha finito).
+      // Qui si rispondeva «rimborso fallito» a chi aveva toccato, e la `rimetti` del secondo, che aveva
+      // scritto il suo segno col rimborsato letto prima, trovava la riga cambiata dal primo e mandava
+      // agli amministratori un falso «Carrello da sistemare a mano». Se adesso sull'ordine risulta reso
+      // tutto, e più di quanto aveva letto chi annulla, i soldi li ha già presi un altro annullo: lo si
+      // dice (GIA_ANNULLATO) e il carrello resta com'è, quello su cui il primo ha fatto il rimborso.
+      if (!rimborsoUscito && (await resoTuttoDaUnAltro(admin, order))) {
+        logger.info('[annullaERimborsa] doppio annullo: il rimborso l ha già preso un altro annullo dello stesso ordine', {
+          orderId: order.id, err: err instanceof Error ? err.message : String(err),
+        });
+        return { ok: false, motivo: 'GIA_ANNULLATO' };
+      }
       logger.error('[annullaERimborsa] rimborso fallito', { orderId: order.id, err });
       // 30/10/2026 (collaudo) — Il rimborso non è partito e l'ordine resta vivo: la consegna del
       // carrello torna com'era. Senza, il pane restava a 1 € di consegna e il fattorino a 0.
@@ -1021,26 +1055,45 @@ const nelCarrello = (c: RigaDelGiro[] | null, orderId: string): c is RigaDelGiro
 
 /** Il conto sul carrello letto; l'ordine che se ne va col conto di prima del segno. */
 function contoDelCarrello(ordine: RigaDelGiro, carrello: RigaDelGiro[], orderId: string) {
-  return consegnaDopoLAnnullo({
-    ordini: carrello.map((c) => {
-      const r = c.id === orderId ? ordine : c;
-      const consegna = Number(r.delivery_fee_cents ?? 0);
-      const spedizione = centesimi(r.shipping_cost);
-      const merce = lordoDi(r) - consegna - spedizione;
-      return {
-        id: r.id,
-        spesaCents: merce + centesimi(r.discount_amount),
-        merceCents: merce,
-        shippingCents: spedizione,
-        deliveryFeeCents: consegna,
-        riderFeeCents: Number(r.rider_fee_cents ?? 0),
-        giaAnnullato: r.delivery_status === 'CANCELED' && r.id !== orderId,
-      };
-    }),
+  const ordini = carrello.map((c) => {
+    const r = c.id === orderId ? ordine : c;
+    const consegna = Number(r.delivery_fee_cents ?? 0);
+    const spedizione = centesimi(r.shipping_cost);
+    const merce = lordoDi(r) - consegna - spedizione;
+    return {
+      id: r.id,
+      spesaCents: merce + centesimi(r.discount_amount),
+      merceCents: merce,
+      shippingCents: spedizione,
+      deliveryFeeCents: consegna,
+      riderFeeCents: Number(r.rider_fee_cents ?? 0),
+      giaAnnullato: r.delivery_status === 'CANCELED' && r.id !== orderId,
+    };
+  });
+  const consegnaVeloce = eConsegnaVeloce({ fascia: ordine.delivery_slot, ritiroInNegozio: false });
+  const conto = consegnaDopoLAnnullo({ ordini, annullaId: orderId, consegnaVeloce, pickupInStore: false });
+  if (conto || consegnaVeloce || !ordine.stripe_session_id?.trim()) return conto;
+
+  // 27/11/2026 (R06-016) — IL CARRELLO CARTA SPOSTATO DAL FRENO SI RICONOSCE ANCORA.
+  // Con la carta il freno della veloce (lib/ordini/veloce-non-confermata.ts) scrive solo la fascia:
+  // l'euro della veloce torna sulla carta con un rimborso, ma resta scritto in `delivery_fee_cents`.
+  // Qui la fascia nuova diceva «non veloce», il conto scritto era quello della veloce, e il carrello
+  // non si riconosceva: dopo un rifiuto i rimasti tenevano consegna e fattorino da negozio in più
+  // (1 € invece di 3), e la differenza la pagava MyCity. Si toglie l'euro (`consegnaSenzaLaVeloce`),
+  // si rifà il conto della fascia e l'euro si rimette dov'era nelle cifre scritte: è già reso a parte,
+  // quindi non si sposta su un altro ordine e non si rende due volte.
+  const senza = consegnaSenzaLaVeloce(ordini);
+  if (!senza) return null;
+  const euro = new Map(senza.righe.map((r) => [r.id, -r.deltaCents]));
+  const contoInFascia = consegnaDopoLAnnullo({
+    ordini: ordini.map((o) => ({ ...o, deliveryFeeCents: o.deliveryFeeCents - (euro.get(o.id) ?? 0) })),
     annullaId: orderId,
-    consegnaVeloce: eConsegnaVeloce({ fascia: ordine.delivery_slot, ritiroInNegozio: false }),
+    consegnaVeloce: false,
     pickupInStore: false,
   });
+  if (!contoInFascia) return null;
+  const conLEuro = <T extends { id: string; deliveryFeeCents: number }>(r: T): T => ({ ...r, deliveryFeeCents: r.deliveryFeeCents + (euro.get(r.id) ?? 0) });
+  return { ...contoInFascia, rimasti: contoInFascia.rimasti.map(conLEuro), annullato: conLEuro(contoInFascia.annullato) };
 }
 type ContoDelGiro = NonNullable<ReturnType<typeof consegnaDopoLAnnullo>>;
 
@@ -1343,16 +1396,16 @@ export async function ricalcolaLaConsegnaDelGiro(admin: SupabaseClient, orderId:
 /** Il codice sconto dell'ordine torna disponibile, una volta sola e solo se nessun altro ordine del carrello lo tiene. */
 async function tieneIlCodice(
   admin: SupabaseClient,
-  order: { id: string; stripe_session_id?: string | null },
+  order: { id: string; user_id?: string | null; stripe_session_id?: string | null },
   codice: string,
 ): Promise<boolean> {
   const carrello = order.stripe_session_id?.trim();
-  if (!carrello) return false;
   try {
-    const { data, error } = await admin
-      .from('orders')
-      .select('id')
-      .eq('stripe_session_id', carrello)
+    // R06-010 — Coi contanti il carrello è la riga del tentativo di cassa; senza la riga, come prima.
+    const fratelli = carrello ? null : await fratelliInContanti(admin, order);
+    if (!carrello && !fratelli) return false;
+    const domanda = admin.from('orders').select('id');
+    const { data, error } = await (carrello ? domanda.eq('stripe_session_id', carrello) : domanda.in('id', fratelli ?? []))
       .eq('coupon_code', codice)
       .neq('id', order.id)
       .neq('delivery_status', 'CANCELED')
@@ -1370,9 +1423,33 @@ async function tieneIlCodice(
   }
 }
 
+/**
+ * R06-010 — Gli altri ordini del carrello in contanti, dalla riga del tentativo di cassa
+ * (`cod_checkout_attempts.order_ids`, come `ordiniDelCarrello`). null se la riga non c'è o non si legge.
+ */
+async function fratelliInContanti(admin: SupabaseClient, order: { id: string; user_id?: string | null }): Promise<string[] | null> {
+  if (!order.user_id) return null;
+  const { data, error } = await admin
+    .from('cod_checkout_attempts')
+    .select('order_ids')
+    .eq('user_id', order.user_id)
+    .contains('order_ids', JSON.stringify([{ id: order.id }]))
+    .limit(1);
+  if (error) {
+    logger.warn('[annullaERimborsa] carrello in contanti non letto: il codice torna come prima', { orderId: order.id, err: error.message });
+    return null;
+  }
+  if (!Array.isArray(data) || data.length === 0) return null;
+  const elenco = (data[0] as { order_ids: unknown }).order_ids;
+  const ids = Array.isArray(elenco)
+    ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter((id) => !!id && id !== order.id)
+    : [];
+  return ids.length > 0 ? ids : null;
+}
+
 export async function restituisciIlCodiceDellOrdine(
   admin: SupabaseClient,
-  order: { id: string; coupon_code?: string | null; stripe_session_id?: string | null },
+  order: { id: string; user_id?: string | null; coupon_code?: string | null; stripe_session_id?: string | null },
 ): Promise<void> {
   const unAltroOrdineDelCarrelloTieneIlCodice = (codice: string) => tieneIlCodice(admin, order, codice);
   const codice = order.coupon_code?.trim();

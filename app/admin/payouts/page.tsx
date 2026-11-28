@@ -12,6 +12,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import { CARTA_ACCESA } from '@/lib/funzioni-al-lancio';
 import { ordiniDaVersareLunedi, gruppoDelPannello, nettoDopoStorni, settimanaPrima, type GruppoDelPannello, type OrdineNegozio } from '@/lib/guadagni/negozio';
+import type { ContantiDaStripe } from '@/app/api/admin/contanti-da-stripe/route';
 
 /**
  * Payout venditori (admin · Trust & Safety).
@@ -44,6 +45,8 @@ type PayoutOrder = {
   internal_dispute_status?: string | null;
   payment_status?: string | null;
   pratica_aperta?: boolean;
+  /** R05-002 — contante consegnato da quando i contanti li paga Stripe: non si versa a mano. */
+  lo_paga_stripe?: boolean;
   payout_status: string | null;
   payout_at: string | null;
   stripe_transfer_id: string | null;
@@ -71,6 +74,7 @@ const TONO: Record<GruppoDelPannello, PayoutTone> = { da_versare: 'ready', in_so
  */
 function payoutTone(o: PayoutOrder): { tone: PayoutTone; label: string; cls: string } {
   if (bonificoStripeAppeso(o)) return { tone: 'hold', label: 'Fermo: bonifico Stripe da controllare', cls: CLASSI.in_sospeso };
+  if (o.lo_paga_stripe) return { tone: 'hold', label: 'In sospeso · lo paga Stripe', cls: CLASSI.in_sospeso };
   const { gruppo, etichetta } = gruppoDelPannello(o);
   const label = o.payout_status === 'PAID_MANUALLY' && o.payout_at ? `${etichetta} ${fmtDate(o.payout_at)}` : etichetta;
   return { tone: TONO[gruppo], label, cls: CLASSI[gruppo] };
@@ -83,6 +87,30 @@ function payoutTone(o: PayoutOrder): { tone: PayoutTone; label: string; cls: str
  */
 function bonificoStripeAppeso(o: PayoutOrder): boolean {
   return o.payment_method === 'cod' && o.payout_status === 'HELD' && !!o.stripe_transfer_id;
+}
+
+/**
+ * R05-002 — Con PAGAMENTI_CONTANTI_DA_STRIPE_DAL valida i contanti HELD consegnati da quell'istante li paga
+ * il giro con Stripe (contantiPagabiliDaStripe, lib/stripe/payout.ts): versati anche a mano, sarebbero
+ * pagati due volte. `dal` arriva dal server (/api/admin/contanti-da-stripe); `null` = li versi tu.
+ */
+function loPagaStripe(o: PayoutOrder, dal: number | null): boolean {
+  if (dal === null || o.payment_method !== 'cod' || o.payout_status !== 'HELD' || !o.delivered_at) return false;
+  const consegna = Date.parse(o.delivered_at);
+  return !Number.isNaN(consegna) && consegna >= dal;
+}
+
+/** Fuori dal bonifico del lunedì e dal tasto: un bonifico Stripe appeso, o un contante che paga Stripe. */
+const fuoriDalBonifico = (o: PayoutOrder) => bonificoStripeAppeso(o) || o.lo_paga_stripe === true;
+
+/** R05-002 — L'istante da cui i contanti li paga Stripe, o `null`. Un esito storto è un errore, non un «no». */
+async function leggiContantiDaStripe(): Promise<number | null> {
+  const r = await fetch('/api/admin/contanti-da-stripe', { cache: 'no-store' });
+  const corpo = (await r.json().catch(() => null)) as { ok?: boolean; data?: Partial<ContantiDaStripe> } | null;
+  const dal = corpo?.data?.dal;
+  if (r.ok && corpo?.ok === true && dal === null) return null;
+  if (r.ok && corpo?.ok === true && typeof dal === 'number' && Number.isFinite(dal)) return dal;
+  throw new Error('contanti da Stripe: esito non previsto');
 }
 
 type SellerGroup = {
@@ -167,7 +195,7 @@ function conto(contanti: PayoutOrder[], ritiri: PayoutOrder[]): ContoDelLunedi {
 function contoDelLunedi(ordini: PayoutOrder[], adesso: Date): ContoDelLunedi {
   const { al } = settimanaPrima(adesso);
   const ritiri = ordini.filter((o) => ritiroDaRegolare(o) && !!o.delivered_at && giornoDiRoma(o.delivered_at) <= al);
-  return conto(ordiniDaVersareLunedi(ordini.filter((o) => !bonificoStripeAppeso(o)), adesso), ritiri);
+  return conto(ordiniDaVersareLunedi(ordini.filter((o) => !fuoriDalBonifico(o)), adesso), ritiri);
 }
 
 /** Quello che resta per il lunedì dopo: contanti e ritiri di questa settimana, con la loro commissione. */
@@ -175,7 +203,7 @@ function contoDiQuestaSettimana(ordini: PayoutOrder[], adesso: Date): ContoDelLu
   const lunedi = contoDelLunedi(ordini, adesso);
   const nelLunedi = new Set([...lunedi.contanti, ...lunedi.ritiri].map((o) => o.id));
   return conto(
-    ordini.filter((o) => gruppoDelPannello(o).gruppo === 'da_versare' && !bonificoStripeAppeso(o) && !nelLunedi.has(o.id)),
+    ordini.filter((o) => gruppoDelPannello(o).gruppo === 'da_versare' && !fuoriDalBonifico(o) && !nelLunedi.has(o.id)),
     ordini.filter((o) => ritiroDaRegolare(o) && !nelLunedi.has(o.id)),
   );
 }
@@ -378,10 +406,12 @@ export default function AdminPayoutsPage() {
         ...((data ?? []) as unknown as PayoutOrder[]).slice(0, TETTO_PAYOUT).filter((o) => !idPagabili.has(o.id) && !pagabile(o)),
       ];
       const giaLetti = new Set(righe.map((o) => o.id));
+      // R05-001 — un ritiro da regolare (CASH_IN_STORE senza payout_at) sta anche fra i chiusi: rimasto fuori
+      // dalla finestra dei pagabili non rientra da qui, fuori finestra e senza il controllo di resi e reclami.
       const righeChiuse = [
         ...((daStorni.data ?? []) as unknown as PayoutOrder[]).slice(0, TETTO_PAYOUT),
         ...((daChiusi.data ?? []) as unknown as PayoutOrder[]).slice(0, TETTO_PAYOUT),
-      ].filter((o) => !giaLetti.has(o.id) && (giaLetti.add(o.id), true));
+      ].filter((o) => !pagabile(o) && !giaLetti.has(o.id) && (giaLetti.add(o.id), true));
       const totaleChiusi = Math.max(typeof daChiusi.count === 'number' ? daChiusi.count : 0, daChiusi.data?.length ?? 0);
       // Collaudo K04 — resi e reclami aperti si leggono dalle loro tabelle, come fanno il giro e la
       // funzione 916: senza, un contante con un reso aperto entrava nei «Da versare», la funzione lo saltava
@@ -474,6 +504,10 @@ export default function AdminPayoutsPage() {
     },
   });
   const righeRecuperi = useMemo(() => (servonoManuali ? (recuperi.data ?? []) : []), [servonoManuali, recuperi.data]);
+  // R05-002 — Da quando i contanti li paga Stripe: la variabile la legge solo il server. Finché non si
+  // legge, la pagina resta com'era (contanti «Da versare»); se la lettura cade, lo dice.
+  const daStripe = useQuery({ queryKey: ['admin', 'payouts', 'contanti-da-stripe'], queryFn: leggiContantiDaStripe, refetchInterval: 60_000 });
+  const inizioStripe = daStripe.isSuccess && typeof daStripe.data === 'number' ? daStripe.data : null;
   const rileggi = () => {
     void refetch();
     // refetch() parte anche a lettura spenta: senza traccia di bonifici a mano non si chiama.
@@ -488,10 +522,12 @@ export default function AdminPayoutsPage() {
   // R05-001 — i chiusi hanno il loro tetto: tagliati loro, è un minimo solo «già pagato».
   const tagliatoChiusi = meta.chiusi ? (meta.totaleChiusi ?? 0) > TETTO_PAYOUT : tagliato;
   const orders = useMemo(() => {
-    const tutti = [...letti, ...((letti as LettiPayout).chiusi ?? [])];
+    const tutti = [...letti, ...((letti as LettiPayout).chiusi ?? [])].map((o) =>
+      loPagaStripe(o, inizioStripe) ? { ...o, lo_paga_stripe: true } : o,
+    );
     // Lo stesso ordine di prima, aperti e chiusi mescolati: il più recente in cima.
     return tutti.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
-  }, [letti]);
+  }, [letti, inizioStripe]);
   // Con l'elenco tagliato ogni somma è un minimo, non il totale.
   const almeno = tagliato ? 'almeno ' : '';
   const almenoDovuto = tagliatoPagabili ? 'almeno ' : '';
@@ -603,13 +639,14 @@ export default function AdminPayoutsPage() {
       />
 
       {/* L'avviso viene PRIMA dei riquadri: chi legge solo il numero deve già sapere che è parziale. */}
-      {(tagliato || tagliatoPagabili) && (
+      {(tagliato || tagliatoPagabili || tagliatoChiusi) && (
         <div role="status" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
           <div className="space-y-1">
             {tagliato && (
               <p>
-                <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PAYOUT} ordini consegnati col bonifico ancora aperto. Mancano i più
+                <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PAYOUT} ordini consegnati ancora da chiudere (bonifico aperto
+                o ritiro al banco da regolare). Mancano i più
                 vecchi fra quelli fermi (dal fattorino, con un reclamo, senza IBAN); i contanti da versare si leggono a parte. I totali
                 di questa pagina, anche quelli dei singoli negozi, possono essere più bassi del vero.
               </p>
@@ -621,6 +658,13 @@ export default function AdminPayoutsPage() {
                 «Bonifico fatto» sono solo una parte del dovuto: dopo il bonifico ricarica la pagina per il resto.
               </p>
             )}
+            {/* I chiusi hanno il loro tetto: oltre, l'elenco dei pagati si taglia e «Già pagato» è un minimo. */}
+            {tagliatoChiusi && (
+              <p>
+                <strong>Ordini già chiusi oltre {TETTO_PAYOUT}:</strong> nell&apos;elenco ci sono solo gli ultimi {TETTO_PAYOUT} (pagati,
+                rimborsati, stornati). Mancano i più vecchi: «Già pagato» è un minimo.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -628,6 +672,13 @@ export default function AdminPayoutsPage() {
       {servonoManuali && recuperi.isError && (
         <p role="alert" className="text-sm text-secondary-700">
           Non riesco a leggere i contanti da recuperare dai negozi (rimborsi arrivati dopo un bonifico a mano). Riprova tra poco.
+        </p>
+      )}
+
+      {daStripe.isError && (
+        <p role="alert" className="text-sm text-secondary-700">
+          Non so da quando i contanti li paga Stripe (PAGAMENTI_CONTANTI_DA_STRIPE_DAL): se è accesa, i contanti consegnati da
+          quel giorno non vanno versati a mano. Riprova tra poco.
         </p>
       )}
 
@@ -653,6 +704,14 @@ export default function AdminPayoutsPage() {
           (consegne dal {fmtGiorno(settimana.dal)} al {fmtGiorno(settimana.al)} e arretrati), poi premi «Bonifico fatto».
           Gli importi sono già al netto degli storni e della commissione dei ritiri pagati al banco: se la commissione
           supera i contanti, il resto va nella fattura del mese.
+          {/* R05-002 — con PAGAMENTI_CONTANTI_DA_STRIPE_DAL valida quei contanti li paga il giro, non tu. */}
+          {inizioStripe !== null && (
+            <>
+              {' '}I contanti consegnati dal{' '}
+              {new Date(inizioStripe).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' })} li
+              paga Stripe: sono «In sospeso · lo paga Stripe», non li versi tu.
+            </>
+          )}
         </p>
       </div>
 

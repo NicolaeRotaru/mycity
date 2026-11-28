@@ -89,7 +89,7 @@ describe('pagina Reclami', () => {
     stato.reclami = [];
     const host = await apri();
     const premuti = [...host.querySelectorAll('button[aria-pressed="true"]')].map((b) => b.textContent);
-    expect(premuti).toEqual(['Aperto']);
+    expect(premuti).toEqual(['Da gestire']);
   });
 
   it('1819: se cade la lettura dei pagamenti, il riquadro lo dice invece di sparire', async () => {

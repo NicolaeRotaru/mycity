@@ -9,6 +9,8 @@ import { friendlyError, apiErrorMessage } from '@/lib/errors';
 
 type Props = {
   sellerId: string;
+  /** 27/11/2026 — L'id del pulsante: la barra in fondo di un servizio lo segue e lo preme. */
+  id?: string;
   className?: string;
   label?: string;
 };
@@ -21,7 +23,7 @@ type Props = {
  * corrente. Se è seller / rider / admin nasconde il pulsante (non ha senso
  * mostrarlo nel proprio negozio o se non sei un acquirente).
  */
-export default function ContactSellerButton({ sellerId, className = '', label = 'Contatta il negozio' }: Props) {
+export default function ContactSellerButton({ sellerId, id, className = '', label = 'Contatta il negozio' }: Props) {
   const router = useRouter();
   const { isAuthenticated, isRider, isAdmin, profile } = useProfile();
   const [loading, setLoading] = useState(false);
@@ -58,6 +60,7 @@ export default function ContactSellerButton({ sellerId, className = '', label = 
   return (
     <button
       type="button"
+      id={id}
       onClick={handleClick}
       disabled={loading}
       className={`inline-flex items-center justify-center gap-2 border border-primary-200 bg-white hover:bg-primary-50 text-primary-800 disabled:opacity-50 px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors ${className}`}

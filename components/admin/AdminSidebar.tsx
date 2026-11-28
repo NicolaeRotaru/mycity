@@ -16,6 +16,7 @@ import {
   Globe,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { esciEVaiAllAccesso } from '@/lib/auth/uscita';
 import { useProfile } from '@/components/hooks/useProfile';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { useBranding } from '@/components/hooks/useBranding';
@@ -259,9 +260,7 @@ function useAdminIdentity() {
   const initials =
     name.trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase() || 'A';
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/sign-in');
-    router.refresh();
+    await esciEVaiAllAccesso(router);
   };
   return { name, initials, handleSignOut };
 }

@@ -81,10 +81,13 @@ describe('R10-005 — la casella dei media del negozio', () => {
     expect(stato.errori.at(-1) ?? '').toMatch(/HEIC/);
     expect(stato.errori.at(-1) ?? '').toMatch(/AVIF/);
   });
-  it('un HEIC col tipo vuoto parte come image/heic', async () => {
+  // 27/11/2026 (R04-002) — Prima pretendeva che l'HEIC partisse così com'era («image/heic»): salvato
+  // così, su Chrome e Android resta un riquadro rotto. Adesso diventa JPEG dove il browser lo sa
+  // leggere (riparazione-r04-foto-heic-altre-caselle.test.tsx); qui, senza decodifica, non parte.
+  it('un HEIC col tipo vuoto non arriva al deposito così com\'è', async () => {
     const o = await disegna();
     await act(async () => { await o.onDrop?.([new File(['x'], 'IMG_0001.HEIC', { type: '' })]); });
-    expect(stato.caricati).toHaveLength(1);
-    expect(stato.caricati[0].type).toBe('image/heic');
+    expect(stato.caricati).toHaveLength(0);
+    expect(stato.errori.at(-1) ?? '').toMatch(/HEIC/);
   });
 });

@@ -20,16 +20,20 @@ const listino = ID_FASCE.map((id) => `- ${id}: ${FASCE[id].benefici.map((b) => `
 
 export const COMPITO = `Sei l'AD digitale di MyCity. Un venditore di SDG Agenzia (il partner di MyCity per siti, social, foto e video) è in strada davanti a un'attività e sta per entrare a proporre i nostri servizi. Gli serve la SCHEDA DEL CLIENTE: un foglio interno, solo per lui, da leggere in un minuto prima di entrare. Il titolare non la vedrà mai.
 
-FAI PRESTO: il venditore aspetta fuori dalla porta. Lancia tutte le ricerche insieme, all'inizio, al massimo 6. Apri una pagina solo se serve davvero, al massimo 2. Poi scrivi subito. Rispetta i massimi dello schema: liste corte, frasi corte.
+FAI PRESTO: il venditore aspetta fuori dalla porta. Lancia tutte le ricerche insieme, all'inizio, al massimo 6. Apri una pagina solo se serve davvero, al massimo 2: prima il sito ufficiale, se lo trovi. Poi scrivi subito. Rispetta i massimi dello schema: liste corte, frasi corte.
 
 COSA HAI GIÀ, in «dati»: il nome e l'indirizzo letti dal link Google Maps del venditore, quello che dice la mappa libera (OpenStreetMap), i concorrenti vicini contati sulla mappa libera, e la misura del sito fatta dal programma (se il sito è noto). Non ricercare quello che c'è già: usalo. La scheda Google la scrive il programma: tu non scrivere la voce «Scheda Google Maps».
 
-LE RICERCHE: falle SEMPRE tutte e quattro, insieme, nella prima risposta:
-1. «<nome> <città>»: il sito ufficiale, cosa vende, da quando c'è, se fa consegne o prenotazioni;
+LE RICERCHE: falle SEMPRE tutte e quattro, insieme, nella prima risposta, e SEMPRE con WebSearch in modalità «extended», mai «standard». La modalità standard non vede i piccoli negozi italiani: nella prova del 28/11 su 10 attività di Piacenza non ha trovato niente per 6 su 7, mentre la «extended» ha trovato telefono, orari, profili e storia.
+1. «<nome> <via> <città>»: gli elenchi (PagineGialle, Virgilio, PagineBianche), il sito ufficiale, il telefono, gli orari, cosa vende, da quando c'è, se fa consegne o prenotazioni;
 2. «<nome> <città> instagram»: il profilo, ogni quanto pubblica, se fa video;
 3. «<nome> <città> facebook»: la pagina, quanto è viva, se risponde alle recensioni;
-4. «<nome> recensioni»: Tripadvisor, gli elenchi dei locali, cosa piace e cosa no.
+4. «<nome> <città> recensioni»: Tripadvisor, gli elenchi dei locali, cosa piace e cosa no.
 Poi, se servono, al massimo 2 ricerche in più: la stampa locale (Libertà, Il Piacenza, PiacenzaSera, Piacenza24), TikTok, gli omonimi da non confondere.
+
+IL SITO TROVATO VA IN «sito.url»: se una ricerca o un elenco mostra l'indirizzo del sito ufficiale, mettilo SEMPRE in «sito.url», anche se non l'hai aperto. Il programma lo apre e lo misura da solo: se resta solo dentro una frase, la misura non si fa.
+
+CHIUSA, TRASFERITA O CON UN ALTRO NOME: guardalo in ogni risultato. Se un elenco o una pagina dice «chiuso definitivamente», «cessata attività», un altro indirizzo o un altro nome per questa attività, scrivilo come prima voce di «in_30_secondi» e di «attenzione», con la fonte in «campi». Se può essere chiusa, in «perche_consigliato» scrivi che il consiglio vale solo se il venditore la trova aperta.
 
 QUELLO CHE HA TROVATO IL PROGRAMMA È VERO: il programma apre le pagine, tu vedi solo gli estratti della ricerca. Se in «dati» c'è «misura_del_sito», il sito esiste e quella è la sua misura; se ci sono «profili_collegati», quei profili esistono. Non scrivere mai che mancano.
 NON TROVATO NON VUOL DIRE CHE NON C'È: un sito o un profilo che le ricerche non mostrano va in «domande» («Avete un profilo Instagram?»), con stato non_trovato, e in «non_ha» va solo quello che sei sicuro che manca. Se non sai se il sito c'è, per la tabella firmata vale «medio»: non consigliare il Base «per partire da zero».

@@ -23,7 +23,7 @@ type GoogleMaps = { maps?: { importLibrary?: (nome: string) => Promise<unknown> 
 
 /** Carica una volta sola lo script di Google e la libreria Places; risolve a `false` se non riesce. */
 let caricamento: Promise<boolean> | null = null;
-function caricaPlaces(chiave: string): Promise<boolean> {
+export function caricaPlaces(chiave: string): Promise<boolean> {
   if (caricamento) return caricamento;
   caricamento = new Promise<boolean>((risolvi) => {
     const pronta = () => {

@@ -12,6 +12,8 @@ import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
 const stato = vi.hoisted(() => ({ lettura: {} as Record<string, unknown> }));
 vi.mock('@/lib/supabase/client', () => ({ supabase: {} }));
 vi.mock('@tanstack/react-query', () => ({ useInfiniteQuery: () => stato.lettura }));
+// Dal 28/11/2026 la pagina chiede chi è il negozio (per SDG Agenzia mostra la strada agli ordini di servizio).
+vi.mock('@/components/hooks/useProfile', () => ({ useProfile: () => ({ profile: { id: 's-1' } }) }));
 vi.mock('@/components/ui/ErrorState', () => ({ ErrorState: ({ title }: { title: string }) => <p>{title}</p> }));
 
 const { default: Lista } = await import('@/app/seller/orders/page');

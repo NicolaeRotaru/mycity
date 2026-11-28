@@ -20,6 +20,8 @@ const db = vi.hoisted(() => ({
   abbonamenti: [] as Array<{ stato: string }>,
   utenteAggiornato: [] as Array<Record<string, unknown>>,
   erroreUtente: null as null | { message: string; code?: string },
+  // 27/11/2026 23:34 — gli altri utenti di MyCity, per sapere se l'email è già di un altro (listUsers).
+  altriUtenti: [] as { id: string; email: string }[],
   posta: [] as Array<Record<string, unknown>>,
   avvisi: [] as string[],
   testiAvvisi: [] as string[],
@@ -97,6 +99,7 @@ vi.mock('@/lib/supabase/server', () => {
             db.utenteAggiornato.push({ id, ...v });
             return { data: { user: { id } }, error: null };
           },
+          listUsers: async ({ page }: { page: number }) => ({ data: { users: page === 1 ? db.altriUtenti : [] }, error: null }),
           getUserById: async (id: string) => ({ data: { user: db.emailUtente ? { id, email: db.emailUtente } : null }, error: null }),
           generateLink: async () => ({ data: { properties: { action_link: 'https://supabase.test/verify?token=t' } }, error: null }),
         },
@@ -129,6 +132,7 @@ beforeEach(() => {
   db.abbonamenti = [];
   db.utenteAggiornato = [];
   db.erroreUtente = null;
+  db.altriUtenti = [];
   db.posta = [];
   db.avvisi = [];
   db.testiAvvisi = [];
@@ -200,6 +204,14 @@ describe('accettare dal link col codice', () => {
     expect(db.preventivo?.stato).toBe('aperto');
   });
 
+  it('28/11: i servizi confermati sono almeno uno e solo fra i quattro, sennò niente', async () => {
+    expect((await accetta({ ...BUONO, servizi: [] })).status).toBe(400);
+    expect((await accetta({ ...BUONO, servizi: ['volantini'] })).status).toBe(400);
+    expect((await accetta({ ...BUONO, servizi: ['sito_web', 'prenotazioni'] })).status).toBe(400);
+    expect(db.preventivo?.stato).toBe('aperto');
+    expect(db.utenteAggiornato).toHaveLength(0);
+  });
+
   it('un preventivo chiuso non si accetta', async () => {
     db.preventivo!.stato = 'chiuso';
     expect((await accetta(BUONO)).status).toBe(409);
@@ -219,12 +231,29 @@ describe('dopo aver accettato (collaudo del 24/11)', () => {
     expect(db.testiAvvisi[0]).toContain('IBAN');
   });
 
-  it('l email già usata e il guasto rispondono con lo stesso messaggio', async () => {
+  // Il 24/11 l'email già usata e il guasto davano lo stesso messaggio, perché da qui non si scoprisse se un'email è
+  // su MyCity. Dal 27/11 si arriva qui solo col codice dell'email giusto: chi legge ha dimostrato che la casella è
+  // sua. La regola cambia apposta (Nicola, Luna Rossa, 27/11 23:34): l'email già usata si dice chiaro, il guasto no.
+  it('dopo il codice giusto l email già usata si dice chiaro, il guasto resta col messaggio prudente', async () => {
     db.erroreUtente = { message: 'already registered', code: 'email_exists' };
-    const uno = await (await accetta(BUONO)).json();
+    const uno = await accetta(BUONO);
     db.erroreUtente = { message: 'boom' };
-    const due = await (await accetta(BUONO)).json();
-    expect(uno.error.message).toBe(due.error.message);
+    const due = await accetta(BUONO);
+    expect(uno.status).toBe(409);
+    expect(due.status).toBe(409);
+    const [primo, secondo] = [(await uno.json()).error.message, (await due.json()).error.message];
+    expect(primo).toContain('ha già un account');
+    expect(secondo).not.toContain('ha già un account');
+    expect(secondo).toContain('Non sono riuscito a collegare questa email');
+  });
+
+  it('la risposta vera di Supabase (500 «Error updating user») con l email su un altro utente si riconosce', async () => {
+    db.erroreUtente = { message: 'Error updating user', code: 'unexpected_failure' };
+    db.altriUtenti = [{ id: 'cliente-1', email: 'titolare@example.it' }];
+    const r = await accetta(BUONO);
+    expect(r.status).toBe(409);
+    expect((await r.json()).error.message).toContain('ha già un account');
+    expect(db.preventivo?.stato).toBe('aperto');
   });
 
   it('chi ha accettato e non ha pagato paga dal link, con la fascia scelta e l email collegata', async () => {

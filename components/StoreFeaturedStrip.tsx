@@ -1,5 +1,6 @@
 'use client';
 
+import { useServizi } from '@/components/hooks/useServizi';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from './ProductCard';
@@ -52,6 +53,9 @@ export default function StoreFeaturedStrip({ sellerId, storeName, productIds, ac
     },
   });
 
+  // 27/11/2026 — Quali sono servizi (999g): niente «+» del carrello, c'è l'etichetta «Servizio».
+  const servizi = useServizi(products.map((p) => p.id));
+
   if (ids.length === 0 || products.length === 0) return null;
 
   // Preserva l'ordine scelto dal venditore
@@ -78,6 +82,7 @@ export default function StoreFeaturedStrip({ sellerId, storeName, productIds, ac
             images={Array.isArray(p.images) ? p.images : []}
             stock={p.stock ?? undefined}
             hasVariants={p.has_variants ?? undefined}
+            servizio={servizi.get(p.id) ?? null}
             createdAt={p.created_at}
             storeName={storeName ?? undefined}
             sellerId={sellerId}

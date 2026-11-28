@@ -2,6 +2,7 @@ import type { NextResponse } from 'next/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { discountedUnitCents } from '@/lib/promotions';
 import { eDiSdg, MESSAGGIO_ABBONAMENTO_NON_IN_CARRELLO } from '@/lib/products/sdgSeller';
+import { eServizio, MESSAGGIO_SERVIZIO_NON_IN_CARRELLO } from '@/lib/products/servizio';
 
 /**
  * «QUESTA RIGA DEL CARRELLO SI PUÒ VENDERE?» — LA RISPOSTA IN UN POSTO SOLO.
@@ -37,6 +38,8 @@ export type ProdottoDelCatalogo = {
   stock?: number | null;
   status?: string | null;
   has_variants?: boolean | null;
+  /** 'prodotto' o 'servizio' (migrazione 999g). Prima della 999g non c'è, e vale «prodotto». */
+  tipo?: string | null;
 };
 
 /** La variante richiesta, come arriva da `product_variants`. */
@@ -62,7 +65,8 @@ export type MotivoScarto =
   | 'VARIANTE_DA_SCEGLIERE'
   | 'VARIANTE_NON_VALIDA'
   | 'SCORTE_INSUFFICIENTI'
-  | 'ABBONAMENTO_NON_IN_CARRELLO';
+  | 'ABBONAMENTO_NON_IN_CARRELLO'
+  | 'SERVIZIO_NON_IN_CARRELLO';
 
 export type CarrelloNonVendibile = {
   motivo: MotivoScarto;
@@ -124,6 +128,19 @@ export function validaRigaDelCarrello<P extends ProdottoDelCatalogo>(input: {
     return {
       ok: false,
       scarto: { motivo: 'ABBONAMENTO_NON_IN_CARRELLO', messaggio: `${p.name} ${MESSAGGIO_ABBONAMENTO_NON_IN_CARRELLO}` },
+    };
+  }
+  /**
+   * 27/11/2026 — UN SERVIZIO NON DIVENTA UN ORDINE.
+   *
+   * Il parrucchiere, la sarta, il fotografo: per ora un servizio si prenota scrivendo al
+   * negozio, non si paga online (lib/products/servizio.ts). Nel database lo ferma anche il
+   * trigger della 999g, ma qui chi compra legge perché, col nome del servizio.
+   */
+  if (eServizio(p)) {
+    return {
+      ok: false,
+      scarto: { motivo: 'SERVIZIO_NON_IN_CARRELLO', messaggio: `${p.name} ${MESSAGGIO_SERVIZIO_NON_IN_CARRELLO}` },
     };
   }
   if (p.seller_id !== sellerId) {

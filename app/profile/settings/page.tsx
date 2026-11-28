@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
+import { esciEVaiAllAccesso } from '@/lib/auth/uscita';
 import { toast } from 'sonner';
 import PushNotificationOptIn from '@/components/PushNotificationOptIn';
 import PublicProfileToggle from '@/components/PublicProfileToggle';
@@ -335,13 +336,16 @@ export default function SettingsPage() {
     // clic dopo senza saperlo. Si dice, si chiude la sessione di questo browser
     // (solo in locale: sul server e' gia' chiusa) e si torna all'accesso.
     toast.success('Password cambiata: accedi con quella nuova');
-    try {
-      await supabase.auth.signOut({ scope: 'local' });
-    } catch {
-      // La sessione sul server non c'e' gia' piu': all'accesso si va lo stesso.
-    }
-    router.push(`/sign-in?returnTo=${encodeURIComponent('/profile/settings')}`);
-    router.refresh();
+    await esciEVaiAllAccesso(router, {
+      verso: `/sign-in?returnTo=${encodeURIComponent('/profile/settings')}`,
+      esci: async () => {
+        try {
+          await supabase.auth.signOut({ scope: 'local' });
+        } catch {
+          // La sessione sul server non c'e' gia' piu': all'accesso si va lo stesso.
+        }
+      },
+    });
   };
 
   const handleChangeEmail = async (e: React.FormEvent) => {
