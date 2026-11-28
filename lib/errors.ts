@@ -11,7 +11,7 @@
 import { trackErrorShown } from './analytics/events';
 import { PASSWORD_RUBATA, PASSWORD_SEMPLICE } from './auth/errori-nuova-password';
 import { TIPI_IMMAGINE } from './storage/regole-secchi';
-import { formatiLeggibili } from './storage/carica-immagine';
+import { formatiDaProporre } from './storage/carica-immagine';
 // 13/11/2026 (R24-007) — Le frasi italiane di Zod. R07-010: le frasi stanno in un file senza Zod
 // (lib/zod-frasi): questo file entra in ogni pagina dal piede del sito e non deve accendere il
 // traduttore (lib/zod-i18n), che si carica a parte quando serve.
@@ -357,7 +357,9 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         // 17/11/2026 (R01-008) — I formati dalla lista vera della porta (sette, non tre): la stessa
         // frase di lib/storage/carica-immagine.ts. Chi fotografa con l'iPhone (HEIC) leggeva che la
         // sua foto non andava bene.
-        return `Formato non accettato: usa una foto ${formatiLeggibili(TIPI_IMMAGINE)}.`;
+        // 28/11/2026 (R01-004, onda 2) — Senza HEIC e HEIF, come la frase della porta: le caselle
+        // delle foto pubbliche non li offrono (nessuno li converte), proporli era un invito a sbagliare.
+        return `Formato non accettato: usa una foto ${formatiDaProporre(TIPI_IMMAGINE)}.`;
       }
       if (/exceeded the maximum allowed size|payload too large/i.test(e.message)) {
         trackErrorShown('storage_troppo_pesante', e.message, context?.page);

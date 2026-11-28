@@ -43,8 +43,9 @@ describe('① le frasi del deposito arrivano al negoziante in italiano', () => {
   it('il formato che il deposito non accetta', () => {
     const detto = friendlyError({ message: 'mime type image/svg+xml is not supported' });
     expect(detto, "il negoziante leggeva l'inglese e non sapeva che bastava un PNG").not.toMatch(/mime type/i);
-    // 17/11/2026 (R01-008) — i sette formati della porta, non i tre di prima.
-    expect(detto).toBe('Formato non accettato: usa una foto JPG, PNG, WEBP, GIF, AVIF, HEIC o HEIF.');
+    // 17/11/2026 (R01-008) — i formati della porta, non i tre di prima.
+    // 28/11/2026 (R01-004, onda 2) — senza HEIC e HEIF, come la frase della porta.
+    expect(detto).toBe('Formato non accettato: usa una foto JPG, PNG, WEBP, GIF o AVIF.');
   });
 
   it('la foto troppo pesante, in tutti e due i modi in cui il deposito lo dice', () => {
