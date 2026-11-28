@@ -132,18 +132,22 @@ function useSellerTodoCount(sellerId: string | null) {
 }
 
 /**
- * Le promozioni contano solo per chi le ha accese nelle impostazioni (`notif_promos`):
- * chi le ha spente non riceve la push, e il pallino non deve accendersi per loro.
- * Se la preferenza non si legge, si va avanti senza le promozioni: un errore
+ * Le promozioni e la newsletter contano solo per chi le ha accese nelle impostazioni
+ * (`notif_promos`, `notif_newsletter`): chi le ha spente non riceve la push, e il pallino
+ * non deve accendersi per loro. Ritorna le categorie da lasciare fuori dal conto.
+ * Se la preferenza non si legge, si va avanti senza le due categorie: un errore
  * sulla preferenza non deve spegnere il pallino degli ordini non letti.
  */
-async function promoAccese(userId: string): Promise<boolean> {
+export async function categorieSpenteDelCampanello(userId: string): Promise<string[]> {
   const { data: preferenze, error } = await supabase
     .from('profiles')
-    .select('notif_promos')
+    .select('notif_promos, notif_newsletter')
     .eq('id', userId)
     .maybeSingle();
-  return !error && preferenze?.notif_promos === true;
+  const spente: string[] = [];
+  if (error || preferenze?.notif_promos !== true) spente.push('promo');
+  if (error || preferenze?.notif_newsletter !== true) spente.push('newsletter');
+  return spente;
 }
 
 /** Conta le notifiche non lette per il pallino del campanello. */
@@ -160,7 +164,7 @@ function useNotifUnread(userId: string | null) {
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .eq('is_read', false);
-      if (!(await promoAccese(userId))) conta = conta.neq('category', 'promo');
+      for (const categoria of await categorieSpenteDelCampanello(userId)) conta = conta.neq('category', categoria);
       const { count, error } = await conta;
       if (error) return 0;
       return count ?? 0;
@@ -204,7 +208,7 @@ function useUltimeNotifiche(userId: string | null) {
         .from('notifications')
         .select('id, user_id, title, body, link, is_read, created_at')
         .eq('user_id', userId);
-      if (!(await promoAccese(userId))) lista = lista.neq('category', 'promo');
+      for (const categoria of await categorieSpenteDelCampanello(userId)) lista = lista.neq('category', categoria);
       const { data, error } = await lista
         .order('created_at', { ascending: false })
         .limit(ULTIME_NELLA_TENDINA);
@@ -499,7 +503,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
           }`}
         >
           {!collapsed && (
-            <Link href="/seller/dashboard" className="font-serif text-2xl font-extrabold leading-none tracking-tight">
+            <Link href="/seller/dashboard" prefetch={false} className="font-serif text-2xl font-extrabold leading-none tracking-tight">
               <span className="text-accent-300">My</span>
               <span className="text-white">City</span>
               <span className="ml-1.5 font-sans text-xs font-bold uppercase tracking-label text-ink-300">
@@ -533,6 +537,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
         <div className={`shrink-0 px-3 pb-1 pt-3 ${collapsed ? 'lg:px-2.5' : ''}`}>
           <Link
             href={COPILOT_HREF}
+            prefetch={false}
             title="Copilot — gestisci parlando"
             className={`flex w-full items-center gap-2.5 rounded-lg bg-gradient-to-br from-primary-600 to-secondary-600 px-3.5 py-3 text-left text-white shadow-warm hover:from-primary-700 hover:to-secondary-700 ${
               collapsed ? 'lg:justify-center lg:px-2.5' : ''
@@ -565,9 +570,13 @@ export default function SellerShell({ children }: { children: React.ReactNode })
                 const Icon = n.icon;
                 const showBadge = n.badge === 'todo' && todo > 0;
                 return (
+                  // Niente precarico: ogni pagina /seller ripassa dal controllo d'accesso del
+                  // middleware (getUser + lettura del profilo). Precaricate tutte insieme, le voci
+                  // della barra facevano due chiamate a Supabase ciascuna a ogni apertura del pannello.
                   <Link
                     key={n.href}
                     href={n.href}
+                    prefetch={false}
                     aria-current={on ? 'page' : undefined}
                     title={n.label}
                     className={`relative flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm transition-colors ${

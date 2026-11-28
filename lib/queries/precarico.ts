@@ -5,6 +5,7 @@ import { domandaCategorie, domandaNegozio, type ClientDiLettura } from '@/lib/qu
 import { domandaVendutoDa } from '@/lib/queries/venduto-da';
 import { domandaRiepilogoRecensioni, type ClientConFunzioni } from '@/lib/queries/riepilogo-recensioni-negozio';
 import { leggiSchedaPerIlGuscio } from '@/lib/queries/scheda-con-venduto-da';
+import { queryKeys } from '@/lib/queries/keys';
 import { domandaCategoriePiene } from '@/lib/queries/categorie-piene';
 
 /**
@@ -123,10 +124,28 @@ export function precaricaSito(): Promise<DehydratedState> {
  */
 export const precaricaProdotto = perRichiesta((id: string): Promise<DehydratedState> =>
   precarica(async (supa, qc) => {
-    const voci = await leggiSchedaPerIlGuscio(supa, id).catch(() => []);
+    const [voci, sconto] = await Promise.all([
+      leggiSchedaPerIlGuscio(supa, id).catch(() => []),
+      leggiScontoAttivo(supa, id).catch(() => null),
+    ]);
     for (const voce of voci) qc.setQueryData(voce.queryKey, voce.data);
+    // R10-009 — Solo con la scheda in mano (un prodotto che l'estraneo non vede si rilegge tutto
+    // nel browser) e solo con una lettura riuscita: uno zero di ripiego non è «nessuno sconto».
+    if (voci.length > 0 && sconto !== null) qc.setQueryData(queryKeys.products.activeDiscount(id), sconto);
   }),
 );
+
+/**
+ * R10-009 — Lo sconto attivo del prodotto: la scheda (prezzo grande) e ActivePromoBadge lo chiedono
+ * con questa chiave e questa lettura (`product_active_discount`, `Number(data) || 0`). Il precarico
+ * non lo riempiva, e il browser lo rileggeva a ogni apertura, col prezzo pieno nell'HTML. Parte
+ * insieme alla scheda: nessun viaggio in più in fila.
+ */
+async function leggiScontoAttivo(supa: ClientDiLettura, id: string): Promise<number> {
+  const { data, error } = await (supa as ClientDiLettura & ClientConFunzioni).rpc('product_active_discount', { p_product: id });
+  if (error) throw error;
+  return Number(data) || 0;
+}
 
 /**
  * 22/11/2026 — La domanda della vetrina è quella del browser (`domandaNegozio`: stessa chiave,
