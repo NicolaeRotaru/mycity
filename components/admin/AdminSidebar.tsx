@@ -331,7 +331,7 @@ export function AdminMobileTopbar() {
           <CampanellaConTendina userId={profileId} idPannello="pannello-notifiche-admin" etichettaConConto />
           {/* Le iniziali, come il negozio: sul computer nome e ruolo stanno in fondo alla barra laterale. */}
           <Link href="/profile" className="flex items-center gap-2 md:hidden" title={`${name} · Admin`} aria-label={`Il tuo account: ${name}, Admin`}>
-            <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-sm font-bold text-white">
+            <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-primary-700 text-sm font-bold text-white">
               {initials}
             </span>
           </Link>
