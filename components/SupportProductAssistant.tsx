@@ -459,7 +459,9 @@ export default function SupportProductAssistant() {
                     {righeDellaProposta(m.proposal.patch, m.proposal.product).map((line, k) => (
                       <li key={k} className="flex gap-1.5">
                         <span className="text-secondary-500">•</span>
-                        <span>{line}</span>
+                        {/* R05-013 (onda 2) — La descrizione proposta arriva intera, con i suoi a capo:
+                            senza `whitespace-pre-line` i paragrafi diventavano una riga sola. */}
+                        <span className="min-w-0 whitespace-pre-line break-words">{line}</span>
                       </li>
                     ))}
                   </ul>
@@ -555,7 +557,7 @@ export default function SupportProductAssistant() {
                     </div>
                   </div>
                   {m.newDraft.draft.description && (
-                    <p className="mb-2 line-clamp-3 text-sm text-ink-600">{m.newDraft.draft.description}</p>
+                    <p className="mb-2 line-clamp-3 whitespace-pre-line break-words text-sm text-ink-600">{m.newDraft.draft.description}</p>
                   )}
                   {(() => {
                     // Solo le caratteristiche che entrano; dopo la creazione,
