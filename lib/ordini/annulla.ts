@@ -345,7 +345,6 @@ export async function annullaERimborsa(
         ...(merceUscita ? { merceNonTorna: true } : {}),
       });
       rimborsoUscito = true;
-      await avvisaIlClienteDelRimborso(admin, order, res.importoCents, opts.reason);
       // refundOrder ha già impostato CANCELED + canceled_at + payment_status.
       //
       // 28/8/2026 — IL CREDITO TORNA ANCHE QUI. Il rimborso sulla carta copre
@@ -355,7 +354,13 @@ export async function annullaERimborsa(
       // di carta si annullava restituendo 10 €. La funzione del database che
       // faceva il rifiuto del negozio lo restituiva già: senza questa riga,
       // farlo passare di qui sarebbe un passo indietro per chi compra.
+      // R06-013 — Prima si rende il credito, poi parte «Rimborso emesso»: l'email dice anche il credito
+      // tornato davvero (non lancia mai, vedi `restituisciCredito`).
       const creditoNonTornato = await restituisciCredito();
+      await avvisaIlClienteDelRimborso(
+        admin, order, res.importoCents, opts.reason,
+        Math.max(0, Number(order.wallet_applied_cents ?? 0) - creditoNonTornato),
+      );
       await restituisciCoupon();
       // 30/10/2026 — `refundOrder` manda «Rimborso emesso» con l'importo e basta: se la consegna del
       // carrello si è rifatta, il cliente riceve anche il perché dei 16 € su 18 e il conto della frutta.
@@ -560,11 +565,18 @@ export async function avvisaIlClienteDelRimborso(
   ordine: { id: string; user_id: string | null },
   importoCents: number | null | undefined,
   motivo: string | null | undefined,
+  /**
+   * 28/11/2026 (onda 2, R06-013) — Il credito MyCity speso sull'ordine e tornato DAVVERO sul saldo
+   * (dopo lo storno riuscito): «Rimborso emesso» lo dice insieme alla carta. Senza, con la carta e il
+   * credito insieme e il carrello scaduto tutto, nessuna email diceva che il credito era tornato.
+   */
+  creditoTornatoCents = 0,
 ): Promise<void> {
   const importo = Number(importoCents ?? 0);
   if (!Number.isFinite(importo) || importo <= 0) return;
+  const credito = Number.isFinite(Number(creditoTornatoCents)) ? Math.max(0, Number(creditoTornatoCents)) : 0;
   const lavoro = async () => {
-    const esito = await spedisciLEmailDelRimborso(admin, ordine, importo, motivo);
+    const esito = await spedisciLEmailDelRimborso(admin, ordine, importo, motivo, credito);
     if (esito !== 'invio-fallito' && esito !== 'indirizzo-non-letto') return;
     await notifyAdmins(
       '⚠️ Email del rimborso non partita',
@@ -583,6 +595,7 @@ async function spedisciLEmailDelRimborso(
   ordine: { id: string; user_id: string | null },
   importoCents: number,
   motivo: string | null | undefined,
+  creditoTornatoCents = 0,
 ): Promise<'partita' | 'senza-indirizzo' | 'indirizzo-non-letto' | 'invio-fallito'> {
   if (!ordine.user_id) return 'senza-indirizzo';
   let email: string | null | undefined;
@@ -601,7 +614,13 @@ async function spedisciLEmailDelRimborso(
     return 'senza-indirizzo';
   }
   try {
-    const t = refundIssuedTemplate({ orderId: ordine.id, amount: importoCents / 100, reason: motivo ?? null, modo: 'carta' });
+    const t = refundIssuedTemplate({
+      orderId: ordine.id,
+      amount: importoCents / 100,
+      reason: motivo ?? null,
+      modo: 'carta',
+      ...(creditoTornatoCents > 0 ? { creditoEuro: creditoTornatoCents / 100 } : {}),
+    });
     const res = await sendEmail({ to: email, subject: t.subject, html: t.html, text: t.text });
     if (!res.ok) {
       logger.error('[annullo] email del rimborso NON partita', { orderId: ordine.id });

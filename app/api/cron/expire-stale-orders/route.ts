@@ -278,6 +278,8 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     }
 
     const nonTornato: string[] = [];
+    // R06-013 — «Rimborso emesso» parte dopo lo storno del credito MyCity, per dire anche quello.
+    let rimborsoDaDire: { importoCents: number | null | undefined; motivo: string } | null = null;
     try {
       if (isCardPaid) {
         try {
@@ -295,7 +297,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
             annullatoDaChiChiama: true,
           });
           refunded++;
-          await avvisaIlClienteDelRimborso(admin, o, rimborso?.importoCents, motivoDelRimborso);
+          rimborsoDaDire = { importoCents: rimborso?.importoCents, motivo: motivoDelRimborso };
         } catch (errRimborso) {
           // 6/9/2026 — UN ORDINE CHE NON SI PUO' RIMBORSARE NON SI RIMETTE IN CODA.
           //
@@ -392,6 +394,13 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
           creditoTornato = false;
           nonTornato.push(`il credito MyCity speso (${(walletCents / 100).toFixed(2).replace('.', ',')} €) non è tornato al cliente`);
         }
+      }
+
+      // 28/11/2026 (onda 2, R06-013) — Con la carta e il credito insieme, «Rimborso emesso» dice anche il
+      // credito tornato davvero. Prima partiva prima dello storno e diceva solo la carta; e se il carrello
+      // scadeva tutto nello stesso giro l'email di annullo non parte (R15-013): nessuno diceva del credito.
+      if (rimborsoDaDire) {
+        await avvisaIlClienteDelRimborso(admin, o, rimborsoDaDire.importoCents, rimborsoDaDire.motivo, creditoTornato ? walletCents : 0);
       }
 
       // 5/11/2026 — Merce o credito non tornati: l'ordine è già annullato e il giro non lo riprende.
