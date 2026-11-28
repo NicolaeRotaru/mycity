@@ -801,13 +801,13 @@ jobs:
   # `if:`. Il riepilogo dice quante sono passate, quali sono rosse e quali
   # saltate, col motivo.
   #
-  # PER ORA NON FERMA LA RICHIESTA: il passo ha `continue-on-error: true`,
-  # perche' una prova e' gia' rossa sul telefono (tests/e2e/03-cart-and-search
-  # .spec.ts, «search page renders with input»: prende il primo campo di
-  # ricerca, che sul telefono e' quello nascosto del computer). Il rosso si
-  # vede, col nome della prova, ma non blocca il lavoro di tutti. L'ordine:
-  # prima si ripara quella prova, poi si toglie `continue-on-error` qui sotto
-  # e il telefono diventa un controllo che ferma come gli altri.
+  # 28/11/2026 (R11-010) — ADESSO FERMA LA RICHIESTA COME GLI ALTRI. Fino a
+  # oggi il passo aveva `continue-on-error: true`, perche' una prova era gia'
+  # rossa sul telefono (tests/e2e/03-cart-and-search.spec.ts, «search page
+  # renders with input»: prendeva il primo campo di ricerca, che sul telefono
+  # e' quello nascosto del computer). La prova adesso cerca il campo per ruolo
+  # e nome, cioe' quello che si vede su quello schermo; tolto
+  # `continue-on-error`, un rosso sul telefono ferma «Main» come gli altri.
   e2e-telefono:
     name: Prove nel browser sullo schermo di un telefono
     # Come gli altri lavori col browser: Ubuntu 24.04 fisso.
@@ -838,9 +838,6 @@ jobs:
         run: npm run build
 
       - name: Percorri il sito sullo schermo di un telefono e dichiara cosa hai provato
-        # Vedi in cima al lavoro: da togliere quando la prova rossa sul
-        # telefono e' riparata.
-        continue-on-error: true
         env:
           NEXT_PUBLIC_SUPABASE_URL: "https://prove-nel-browser-senza-database.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "chiave-finta-per-le-prove-nel-browser"
@@ -906,7 +903,6 @@ jobs:
           for (const p of saltate) righe.push(`  - \`${p.nome}\` — ${p.motivo || 'saltata senza motivo dichiarato'}`);
           righe.push('');
           righe.push(hannoGuardato > 0 ? `${hannoGuardato} prove hanno aperto il sito sullo schermo di un telefono.` : 'NESSUNA prova ha guardato niente sul telefono.');
-          righe.push('Per ora questo lavoro non ferma la richiesta: il rosso qui sopra si vede, ma non blocca.');
           if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, righe.join('\n') + '\n');
           console.log(righe.join('\n'));
 

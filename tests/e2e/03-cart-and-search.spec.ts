@@ -22,7 +22,12 @@ test.describe('Cart and Search', () => {
 
   test('search page renders with input', async ({ page }) => {
     await page.goto('/search');
-    const input = page.locator('input[type="search"], input[placeholder*="Cerca"]').first();
+    // 28/11/2026 (R11-010) — La barra in alto ha due campi «Cerca»: quello del computer (in un blocco
+    // `hidden md:block`) e quello del telefono (`md:hidden`). `.first()` prendeva sempre il primo, che
+    // sul telefono è nascosto: la prova era rossa sullo schermo di un telefono (progetto mobile-safari)
+    // anche con la pagina giusta. Per ruolo e nome Playwright guarda solo gli elementi non nascosti:
+    // su ogni schermo trova il campo che la persona vede, uno solo.
+    const input = page.getByRole('searchbox', { name: 'Cerca', exact: true });
     await expect(input).toBeVisible();
   });
 
