@@ -186,22 +186,28 @@ describe('R22-003 — dopo il bonifico a mano: quote da recuperare, ritiri fermi
     expect(daVersareLunedi(bottega), 'la quota da recuperare non si toglie dal lunedì').toMatch(/0,00/);
   });
 
-  it('un ritiro con un reso, un reclamo interno o un rimborso parziale non si regola: la commissione aspetta', async () => {
+  // 28/11/2026 (999i) — Qui il ritiro rimborsato in parte aspettava (scelta R22), ma niente lo
+  // rimetteva mai in gioco: restava fuori da ogni bonifico. Adesso si regola, con la commissione più la
+  // quota del negozio nel rimborso. Reso e reclamo aperti aspettano come prima.
+  it('un ritiro con un reso o un reclamo interno aspetta; quello rimborsato in parte si regola con commissione e quota stornata', async () => {
     stato.ordini = [
       contante('c1', 1800, '2026-11-18'),
       ritiro('r1', 200, '2026-11-19'),
       ritiro('r2', 300, '2026-11-19'),
       ritiro('r3', 400, '2026-11-19', { internal_dispute_status: 'OPEN' }),
-      ritiro('r4', 500, '2026-11-19', { payment_status: 'PARTIALLY_REFUNDED' }),
+      // Ritiro da 20 €: commissione 2 €, netto 18 €, rimborso parziale di 5 € con 4,50 € di quota del negozio.
+      ritiro('r4', 200, '2026-11-19', { payment_status: 'PARTIALLY_REFUNDED', seller_payout_reversed_cents: 450 }),
     ];
     stato.resi = [{ order_id: 'r2', status: 'REQUESTED' }];
     const host = await apri();
     const blocco = bloccoDi(host, 'Pane Quotidiano');
-    expect(daVersareLunedi(blocco), 'si trattiene la commissione di ritiri fermi').toMatch(/16,00/);
+    // 18,00 € di contanti − 2,00 € (r1) − 6,50 € (r4: 2,00 € + 4,50 €) = 9,50 €.
+    expect(daVersareLunedi(blocco), 'il ritiro rimborsato in parte non entra nel lunedì, o entra con la cifra sbagliata').toMatch(/9,50/);
     const tasto = tastoIn(blocco);
     vi.stubGlobal('prompt', vi.fn(() => 'CRO-0099887766'));
     await premi(tasto!);
-    expect(stato.chiamate[0]).toMatchObject({ n: 'segna_bonifico_manuale', p_ritiri: ['r1'], p_importo_cents: 1600 });
+    expect(stato.chiamate[0]).toMatchObject({ n: 'segna_bonifico_manuale', p_importo_cents: 950 });
+    expect([...(stato.chiamate[0] as { p_ritiri: string[] }).p_ritiri].sort()).toEqual(['r1', 'r4']);
   });
 
   it('il secondo clic con un altro CRO: la pagina dice il CRO già scritto', async () => {

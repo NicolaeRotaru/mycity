@@ -115,19 +115,29 @@ const nomeDelMese = (mese: string) => new Date(`${mese}-15T12:00:00Z`).toLocaleD
 /**
  * R22-002 — Un ritiro pagato in contanti al banco con la commissione ancora da regolare: il negozio
  * ha già tutto in cassa e la commissione MyCity si toglie dal bonifico del lunedì (regola
- * ritiro.in-negozio). «Regolata» vuol dire payout_at scritto da segna_bonifico_manuale (916), che
- * guarda gli stessi cancelli.
+ * ritiro.in-negozio). «Regolata» vuol dire payout_at scritto da segna_bonifico_manuale (916, 999i),
+ * che guarda gli stessi cancelli.
  */
 function ritiroDaRegolare(o: PayoutOrder): boolean {
   return (
     o.payment_method === 'cod' && o.payout_status === 'CASH_IN_STORE' && !o.payout_at &&
-    // Gli stessi cancelli dei contanti (916): con un reso, un reclamo, una contestazione o un rimborso,
-    // anche parziale, la commissione aspetta.
+    // Gli stessi cancelli dei contanti (916, 999i): con un reso, un reclamo o una contestazione aperti,
+    // o col rimborso pieno, il ritiro aspetta. Col rimborso parziale si regola (vedi `dovutoDalRitiro`).
     o.pratica_aperta !== true &&
     (!o.dispute_status || o.dispute_status === 'WON') &&
     (!o.internal_dispute_status || o.internal_dispute_status === 'RESOLVED') &&
-    o.payment_status !== 'REFUNDED' && o.payment_status !== 'PARTIALLY_REFUNDED'
+    o.payment_status !== 'REFUNDED'
   );
+}
+
+/**
+ * Quanto il negozio deve a MyCity su un ritiro al banco: la commissione più la sua quota dei rimborsi
+ * già scritta sull'ordine (`seller_payout_reversed_cents`, mai oltre il suo netto). Il contante l'ha
+ * tenuto il negozio, il rimborso al cliente l'ha fatto MyCity. Lo stesso conto della 999i.
+ */
+function dovutoDalRitiro(o: PayoutOrder): number {
+  const centesimi = (v: unknown) => Math.max(0, Math.round(Number(v) || 0));
+  return centesimi(o.application_fee_cents) + Math.min(centesimi(o.seller_payout_reversed_cents), centesimi(o.seller_payout_cents));
 }
 
 type ContoDelLunedi = {
@@ -145,11 +155,13 @@ type ContoDelLunedi = {
  * Contanti più credito MyCity dei ritiri meno commissione dei ritiri, in centesimi interi e mai sotto
  * zero: il resto va in fattura. Su un ritiro il negozio ha incassato in cassa il lordo meno il credito
  * usato dal cliente, quindi MyCity gli deve «credito − commissione» (lo stesso conto della 916).
+ * La «commissione» di un ritiro rimborsato in parte comprende la quota del negozio nel rimborso
+ * (`dovutoDalRitiro`, 999i).
  */
 function conto(contanti: PayoutOrder[], ritiri: PayoutOrder[]): ContoDelLunedi {
   const contantiCents = contanti.reduce((s, o) => s + netto(o), 0);
   const creditoCents = ritiri.reduce((s, o) => s + Math.max(0, Math.round(Number(o.wallet_applied_cents) || 0)), 0);
-  const commissioneCents = ritiri.reduce((s, o) => s + Math.max(0, Math.round(Number(o.application_fee_cents) || 0)), 0);
+  const commissioneCents = ritiri.reduce((s, o) => s + dovutoDalRitiro(o), 0);
   const trattenutaCents = Math.min(contantiCents + creditoCents, commissioneCents);
   return {
     contanti,

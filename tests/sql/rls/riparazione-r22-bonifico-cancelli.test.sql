@@ -12,14 +12,21 @@
 -- stessi casi erano fermi. E un secondo clic sullo stesso bonifico con un CRO o una
 -- cifra diversi rispondeva «fatto» e teneva il CRO del primo, senza dirlo.
 --
+-- 28/11/2026 (999i) — Il ritiro rimborsato in parte non aspetta più: aspettare non aveva una
+-- fine (niente lo rimetteva in gioco) e la commissione non si regolava mai. Adesso si regola con
+-- la commissione più la quota del negozio nel rimborso (④). Reso e reclamo aperti restano fermi.
+--
 -- COSA CONTROLLA, con il forno di Pane Quotidiano:
---   ① un ritiro con un reso aperto, con un reclamo interno aperto, rimborsato in
---     parte: rifiutati (BONIFICO_CAMBIATO) e non resta scritto niente;
+--   ① un ritiro con un reso aperto, con un reclamo interno aperto: rifiutati
+--     (BONIFICO_CAMBIATO) e non resta scritto niente;
 --   ② il bonifico vero (contanti 18,00 € meno 2,00 € del ritiro buono = 16,00 €) passa;
 --   ③ il secondo clic uguale risponde come il primo; con un altro CRO o un'altra cifra
---     risponde BONIFICO_GIA_SEGNATO col CRO già scritto, e il bonifico resta quello.
+--     risponde BONIFICO_GIA_SEGNATO col CRO già scritto, e il bonifico resta quello;
+--   ④ il ritiro rimborsato in parte (commissione 2,00 €, quota stornata 4,50 €) si regola da
+--     solo: compensazione da 0 €, 6,50 € in fattura.
 --
--- Senza la correzione della 916 questa prova è ROSSA. Tutto in transazione, ROLLBACK.
+-- Senza la correzione della 916 questa prova è ROSSA, e senza la 999i è rosso ④. Tutto in
+-- transazione, ROLLBACK.
 -- =============================================================================
 
 BEGIN;
@@ -40,7 +47,7 @@ UPDATE public.profiles
 UPDATE public.profiles SET role = 'admin', full_name = 'Anna Conti' WHERE id = 'e2210000-0000-0000-0000-00000000000c';
 
 -- c1 contanti da versare; a1 ritiro buono; a2 ritiro con un reso aperto; a3 ritiro con un
--- reclamo interno aperto; a4 ritiro rimborsato in parte.
+-- reclamo interno aperto; a4 ritiro rimborsato in parte (4,50 € di quota del negozio stornata).
 INSERT INTO public.orders (
   id, user_id, seller_id, total_price, gross_total_cents,
   payment_method, payment_status, delivery_status, pickup_in_store,
@@ -60,7 +67,8 @@ SELECT v.id::uuid, 'e2210000-0000-0000-0000-00000000000b', 'e2210000-0000-0000-0
 UPDATE public.orders o
    SET payout_status = CASE WHEN o.pickup_in_store THEN 'CASH_IN_STORE' ELSE 'HELD' END,
        seller_payout_cents = 1800, application_fee_cents = 200, delivered_at = '2026-11-18T10:00:00Z',
-       internal_dispute_status = CASE WHEN o.id = 'e2210000-1111-0000-0000-0000000000a3'::uuid THEN 'OPEN' END
+       internal_dispute_status = CASE WHEN o.id = 'e2210000-1111-0000-0000-0000000000a3'::uuid THEN 'OPEN' END,
+       seller_payout_reversed_cents = CASE WHEN o.id = 'e2210000-1111-0000-0000-0000000000a4'::uuid THEN 450 ELSE 0 END
  WHERE o.seller_id = 'e2210000-0000-0000-0000-00000000000a';
 
 INSERT INTO public.returns (id, order_id, buyer_id, seller_id, reason, status, created_at)
@@ -99,8 +107,6 @@ INSERT INTO esiti SELECT 'un ritiro con un reso aperto è rifiutato', r LIKE 'P0
   FROM pg_temp.esito(pg_temp.bonifico('e2210000-1111-0000-0000-0000000000a2', 'CRO-1', 1600)) AS r;
 INSERT INTO esiti SELECT 'un ritiro con un reclamo interno aperto è rifiutato', r LIKE 'P0001 BONIFICO_CAMBIATO%', 'risposta: ' || r
   FROM pg_temp.esito(pg_temp.bonifico('e2210000-1111-0000-0000-0000000000a3', 'CRO-1', 1600)) AS r;
-INSERT INTO esiti SELECT 'un ritiro rimborsato in parte è rifiutato', r LIKE 'P0001 BONIFICO_CAMBIATO%', 'risposta: ' || r
-  FROM pg_temp.esito(pg_temp.bonifico('e2210000-1111-0000-0000-0000000000a4', 'CRO-1', 1600)) AS r;
 RESET request.jwt.claims;
 RESET ROLE;
 INSERT INTO esiti
@@ -130,6 +136,27 @@ SELECT 'resta un bonifico solo, col CRO e la cifra del primo',
        coalesce(string_agg(format('%s %s', b.riferimento, b.importo_cents), ', '), '(nessuno)')
   FROM private.bonifici_manuali b WHERE b.seller_id = 'e2210000-0000-0000-0000-00000000000a';
 
+-- ④ Il ritiro rimborsato in parte, da solo: 2,00 € + 4,50 € = 6,50 €, senza contanti → compensazione.
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"e2210000-0000-0000-0000-00000000000c","role":"authenticated"}';
+INSERT INTO esiti SELECT 'un ritiro rimborsato in parte si regola con commissione e quota stornata', r = 'PASSATO', 'risposta: ' || r
+  FROM pg_temp.esito($q$SELECT public.segna_bonifico_manuale(
+    'e2210000-0000-0000-0000-00000000000a'::uuid, '{}'::uuid[], NULL,
+    ARRAY['e2210000-1111-0000-0000-0000000000a4']::uuid[], 0)$q$) AS r;
+RESET request.jwt.claims;
+RESET ROLE;
+INSERT INTO esiti
+SELECT 'la compensazione del ritiro rimborsato in parte scrive 6,50 € in fattura',
+       count(*) = 1
+         AND coalesce(bool_and(b.commissione_cents = 650 AND b.trattenuta_cents = 0 AND b.importo_cents = 0
+                               AND b.in_fattura_cents = 650 AND b.riferimento IS NULL AND l.cents = 650), false)
+         AND (SELECT o.payout_at IS NOT NULL FROM public.orders o WHERE o.id = 'e2210000-1111-0000-0000-0000000000a4'),
+       coalesce(string_agg(format('commissione %s · trattenuta %s · importo %s · in fattura %s',
+                b.commissione_cents, b.trattenuta_cents, b.importo_cents, b.in_fattura_cents), ', '), '(nessun bonifico)')
+  FROM private.bonifici_manuali b
+  JOIN private.bonifici_manuali_ordini l ON l.bonifico_id = b.id
+ WHERE l.order_id = 'e2210000-1111-0000-0000-0000000000a4';
+
 -- ── Verdetto ──────────────────────────────────────────────────────────────
 SELECT nome, CASE WHEN verde THEN 'ok' ELSE 'ROTTO' END AS esito, dettaglio
   FROM esiti ORDER BY nome;
@@ -141,8 +168,8 @@ BEGIN
     INTO rossi, elenco
   FROM esiti e WHERE e.verde IS NOT TRUE;
 
-  IF (SELECT count(*) FROM esiti) <> 9 THEN
-    RAISE EXCEPTION 'la prova doveva fare 9 controlli e ne ha fatti %', (SELECT count(*) FROM esiti);
+  IF (SELECT count(*) FROM esiti) <> 10 THEN
+    RAISE EXCEPTION 'la prova doveva fare 10 controlli e ne ha fatti %', (SELECT count(*) FROM esiti);
   END IF;
   IF rossi > 0 THEN
     RAISE EXCEPTION E'% controllo/i rosso/i sui cancelli del bonifico fatto:\n  %', rossi, elenco;
