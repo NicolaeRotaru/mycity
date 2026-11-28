@@ -14,6 +14,13 @@ import { NextRequest } from 'next/server';
  *
  * Gli involucri di autenticazione sono quelli veri; Stripe e database sono finti, nessuna
  * chiamata vera. L'orologio è finto: l'attesa del bonifico si misura da una data fissa.
+ *
+ * Onda 2 (28/11/2026): il finto restituisce solo le colonne chieste in `select()`, registra ogni
+ * aggiornamento coi valori esatti (`toEqual`, come faceva la prova di prima), e sul MIO ordine ci
+ * sono un reclamo già chiuso, una contestazione in banca e un reclamo interno. Sei mutanti che la
+ * versione di prima lasciava verdi (filtro di stato dei reclami tolto, contestazione e reclamo
+ * interno ignorati, `delivered_at` non chiesto, un campo in più sul profilo) adesso sono rossi.
+ * La prova di prima (riparazione-r06-stripe-connect-rotte) è tolta: tutti i suoi casi stanno qui.
  */
 
 type Riga = Record<string, unknown>;
@@ -24,7 +31,9 @@ const stato: {
   tabelle: Record<string, Riga[]>;
   /** Le righe che il database rifiuta di aggiornare (una regola, un grilletto): l'aggiornamento torna vuoto. */
   bloccate: Set<unknown>;
-} = { utente: null, tabelle: {}, bloccate: new Set() };
+  /** Ogni aggiornamento chiesto, coi valori esatti: un campo in più scritto sul profilo si vede. */
+  aggiornamenti: Array<{ tabella: string; valori: Riga }>;
+} = { utente: null, tabelle: {}, bloccate: new Set(), aggiornamenti: [] };
 
 const stripeFinto = {
   accountsRetrieve: vi.fn(),
@@ -33,28 +42,41 @@ const stripeFinto = {
   rilascio: vi.fn(),
 };
 
-/** Una tabella finta che applica i filtri come PostgREST. */
+/**
+ * Una tabella finta che applica i filtri come PostgREST, e come PostgREST restituisce solo le
+ * colonne chieste in `select()` (onda 2: prima tornava la riga intera, e una rotta che non chiedeva
+ * `delivered_at` saltava l'ora d'attesa del bonifico senza che la prova se ne accorgesse).
+ */
 function tabella(nome: string) {
   const filtri: Array<(r: Riga) => boolean> = [];
   let aggiorna: Riga | null = null;
   let conSelect = false;
+  let colonne: string[] | null = null;
   let tetto: number | null = null;
   const righe = (): Riga[] => {
     const tutte = stato.tabelle[nome] ?? [];
     const scelte = tutte.filter((r) => filtri.every((f) => f(r)));
     return tetto === null ? scelte : scelte.slice(0, tetto);
   };
+  const proietta = (r: Riga): Riga =>
+    colonne === null ? { ...r } : Object.fromEntries(colonne.filter((c) => c in r).map((c) => [c, r[c]]));
   const esegui = (): { data: unknown; error: unknown } => {
     if (aggiorna) {
+      stato.aggiornamenti.push({ tabella: nome, valori: { ...aggiorna } });
       const toccate = righe().filter((r) => !stato.bloccate.has(r.id));
       for (const r of toccate) Object.assign(r, aggiorna);
       // Come supabase-js: senza .select() dopo l'aggiornamento non torna nessuna riga.
-      return { data: conSelect ? toccate.map((r) => ({ ...r })) : null, error: null };
+      return { data: conSelect ? toccate.map(proietta) : null, error: null };
     }
-    return { data: righe().map((r) => ({ ...r })), error: null };
+    return { data: righe().map(proietta), error: null };
   };
   const q: Record<string, unknown> = {};
-  q.select = () => { conSelect = true; return q; };
+  q.select = (elenco?: string) => {
+    conSelect = true;
+    const chieste = String(elenco ?? '*').split(',').map((c) => c.trim()).filter(Boolean);
+    colonne = chieste.includes('*') ? null : chieste;
+    return q;
+  };
   q.eq = (c: string, v: unknown) => { filtri.push((r) => r[c] === v); return q; };
   q.neq = (c: string, v: unknown) => { filtri.push((r) => r[c] !== v); return q; };
   q.in = (c: string, v: readonly unknown[]) => { filtri.push((r) => v.includes(r[c])); return q; };
@@ -147,6 +169,7 @@ beforeEach(() => {
   vi.setSystemTime(ADESSO);
   stato.utente = { id: IO, email: 'negozio@example.com' };
   stato.bloccate = new Set();
+  stato.aggiornamenti = [];
   stato.tabelle = {
     profiles: [
       // Il profilo di un altro, approvato e collegato, MESSO PRIMA del mio: una rotta che lo
@@ -158,12 +181,16 @@ beforeEach(() => {
       { id: ALTRO_ORDINE, dispute_status: 'OPEN', internal_dispute_status: 'OPEN', delivered_at: '2026-11-27T09:59:00.000Z' },
       { id: ORDINE, dispute_status: null, internal_dispute_status: null, delivered_at: '2026-11-20T08:00:00.000Z' },
     ],
-    // Resi e reclami aperti ci sono, ma su un altro ordine; sul mio solo un reso già chiuso.
+    // Resi e reclami aperti ci sono, ma su un altro ordine; sul mio solo un reso e un reclamo già chiusi.
     returns: [
       { id: 'reso-altrui', order_id: ALTRO_ORDINE, status: 'REQUESTED' },
       { id: 'reso-chiuso', order_id: ORDINE, status: 'REJECTED' },
     ],
-    disputes: [{ id: 'reclamo-altrui', order_id: ALTRO_ORDINE, status: 'open' }],
+    // Sul mio ordine un reclamo già CHIUSO: non deve fermare niente (si contano solo quelli aperti).
+    disputes: [
+      { id: 'reclamo-altrui', order_id: ALTRO_ORDINE, status: 'open' },
+      { id: 'reclamo-chiuso', order_id: ORDINE, status: 'resolved_seller' },
+    ],
   };
   process.env.INTERNAL_API_SECRET = 'segreto-di-prova';
 });
@@ -209,6 +236,10 @@ describe('R12-011 · /api/stripe/connect/onboarding (negozio)', () => {
     });
     expect(mio()).toMatchObject({ stripe_account_id: 'acct_nuovo', stripe_payouts_enabled: false });
     expect(altrui()).toMatchObject({ stripe_account_id: 'acct_altrui', stripe_payouts_enabled: true });
+    expect(stato.aggiornamenti).toEqual([{
+      tabella: 'profiles',
+      valori: { stripe_account_id: 'acct_nuovo', stripe_charges_enabled: false, stripe_payouts_enabled: false, stripe_details_submitted: false },
+    }]);
   });
 
   it('riparte dal MIO conto già collegato, non da quello dell’altro', async () => {
@@ -316,6 +347,11 @@ describe('R12-011 · /api/stripe/connect/refresh-status', () => {
     expect(stripeFinto.accountsRetrieve).toHaveBeenCalledWith('acct_mio');
     expect(mio()).toMatchObject({ stripe_charges_enabled: true, stripe_payouts_enabled: true, stripe_details_submitted: true });
     expect(altrui()).not.toHaveProperty('stripe_charges_enabled');
+    // Esattamente i tre flag, niente di più: un campo in più scritto sul profilo è un difetto.
+    expect(stato.aggiornamenti).toEqual([{
+      tabella: 'profiles',
+      valori: { stripe_charges_enabled: true, stripe_payouts_enabled: true, stripe_details_submitted: true },
+    }]);
   });
 
   it('un conto non ancora abilitato scrive false sul mio profilo, e l’altro resta com’era', async () => {
@@ -384,6 +420,26 @@ describe('R12-011 · /api/stripe/payout (bonifico manuale)', () => {
     stato.tabelle.disputes.push({ id: 'reclamo-mio', order_id: ORDINE, status: 'under_review' });
     expect((await vai()).status).toBe(409);
     expect(stripeFinto.rilascio).not.toHaveBeenCalled();
+  });
+
+  it('409 e niente bonifico se c’è una contestazione in banca aperta sul MIO ordine; vinta, si paga', async () => {
+    const mioOrdine = stato.tabelle.orders.find((o) => o.id === ORDINE)!;
+    mioOrdine.dispute_status = 'OPEN';
+    expect((await vai()).status).toBe(409);
+    expect(stripeFinto.rilascio).not.toHaveBeenCalled();
+    mioOrdine.dispute_status = 'WON';
+    stripeFinto.rilascio.mockResolvedValue({ ok: true, transferId: 'tr_1' });
+    expect((await vai()).status).toBe(200);
+  });
+
+  it('409 e niente bonifico se c’è un reclamo interno aperto sul MIO ordine; risolto, si paga', async () => {
+    const mioOrdine = stato.tabelle.orders.find((o) => o.id === ORDINE)!;
+    mioOrdine.internal_dispute_status = 'OPEN';
+    expect((await vai()).status).toBe(409);
+    expect(stripeFinto.rilascio).not.toHaveBeenCalled();
+    mioOrdine.internal_dispute_status = 'RESOLVED';
+    stripeFinto.rilascio.mockResolvedValue({ ok: true, transferId: 'tr_1' });
+    expect((await vai()).status).toBe(200);
   });
 
   it('409 se il MIO ordine è stato consegnato meno di un’ora fa (orologio finto)', async () => {
