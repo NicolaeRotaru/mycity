@@ -33,6 +33,7 @@ import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/r
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
 import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
@@ -199,7 +200,8 @@ const Body = z.object({
  *
  * Rate limit: 30 checkout / 10 min per utente.
  */
-export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, windowMs: 10 * 60_000 }, async ({ user, profile, req }): Promise<NextResponse> => {
+// R09-006 — Una fila per richiesta per i lavori dopo la risposta (email, campanelle): vedi lib/api/fila-per-richiesta.ts.
+export const POST = conFilaPerRichiesta(withAuthRateLimit({ name: 'stripe-checkout', max: 30, windowMs: 10 * 60_000 }, async ({ user, profile, req }): Promise<NextResponse> => {
   const purchaseBlock = assertCanPurchase(profile);
   if (purchaseBlock) return purchaseBlock;
   // 31/10/2026 — Al lancio la carta è spenta (CARTA_ACCESA, scelta di Nicola): la
@@ -1316,4 +1318,4 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     }
     return ApiErrors.internal('Errore nella creazione del pagamento.');
   }
-});
+}));

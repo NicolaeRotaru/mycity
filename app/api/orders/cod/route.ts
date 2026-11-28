@@ -29,6 +29,7 @@ import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/r
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
 import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { decisioneSuChiaveOccupata, MESSAGGIO_ORDINE_IN_CORSO } from '@/lib/ordini/tentativo';
 import { idOrdiniDelTentativo } from '@/lib/ordini/chiave-dopo-l-errore';
@@ -400,7 +401,8 @@ async function conLaChiaveLiberata(risposta: NextResponse): Promise<NextResponse
  *
  * Rate limit: 30 ordini / 10 min per utente.
  */
-export const POST = withAuthRateLimit(
+// R09-006 — Una fila per richiesta per i lavori dopo la risposta (email, campanelle): vedi lib/api/fila-per-richiesta.ts.
+export const POST = conFilaPerRichiesta(withAuthRateLimit(
   { name: 'orders-cod', max: 30, windowMs: 10 * 60_000 },
   async ({ user, profile, req }): Promise<NextResponse> => {
     const purchaseBlock = assertCanPurchase(profile);
@@ -2131,4 +2133,4 @@ export const POST = withAuthRateLimit(
     // rotta. Qui rispondeva un oggetto nudo, senza `ok` e senza `data`.
     return apiSuccess({ orderIds: createdOrderIds, ordini: ordiniCreati });
   },
-);
+));

@@ -6,6 +6,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { sullaPortaDeiDiritti } from '@/lib/privacy/porta-dei-diritti';
 import { motivoDellAttesa } from '@/lib/privacy/avvisi-a-chi-aspetta';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+import { conFilaPerRichiesta } from '@/lib/api/fila-per-richiesta';
 import { sendEmail } from '@/lib/email/client';
 import { NOMI_TEMPLATE_CICLO_DI_VITA, TEMPLATE_DI_SERVIZIO, richiestaCancellazioneTemplate } from '@/lib/email/templates';
 
@@ -260,6 +261,7 @@ async function statoDellaRichiesta(
   };
 }
 
-export const POST = chiedi;
-export const DELETE = annulla;
-export const GET = leggiLoStato;
+// R09-006 — Una fila per richiesta per i lavori dopo la risposta (email, campanelle): vedi lib/api/fila-per-richiesta.ts.
+export const POST = conFilaPerRichiesta(chiedi);
+export const DELETE = conFilaPerRichiesta(annulla);
+export const GET = conFilaPerRichiesta(leggiLoStato);
