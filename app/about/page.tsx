@@ -1,4 +1,4 @@
-import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { CONFINE_DELLA_ZONA } from '@/lib/ordini/zona-di-consegna';
 import { COMMISSIONE_PERCENTO } from '@/app/seller/earnings/commissione';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
@@ -29,7 +29,7 @@ export const metadata = {
 // viene resa LIVE da una count query (vedi buildStats); le altre restano claim.
 const STATS = [
   // 29/10/2026 — Erano i minuti della veloce come «tempi di consegna» certi: il dato vero è il confine.
-  { value: `${RAGGIO_CONSEGNA_KM} km`, label: 'il confine della consegna, dal negozio' },
+  { value: CONFINE_DELLA_ZONA, label: 'il confine della consegna, dal negozio' },
   // 31/10/2026 (ondata 6) — Era «0€ commissioni mensili»: il negozio paga il 10% sul venduto tramite MyCity.
   { value: `${COMMISSIONE_PERCENTO}%`, label: 'per i negozi, solo su quello che vendono tramite MyCity' },
   // 5/11/2026 — Era «Pay-on-delivery», in inglese in una pagina tutta italiana.
