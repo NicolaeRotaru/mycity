@@ -408,6 +408,7 @@ export interface Database {
           error: string | null;
           created_at: string;
           updated_at: string;
+          applicazione_finita_il: string | null;
         };
         Insert: {
           id?: string;
@@ -421,6 +422,7 @@ export interface Database {
           error?: string | null;
           created_at?: string;
           updated_at?: string;
+          applicazione_finita_il?: string | null;
         };
         Update: {
           id?: string;
@@ -434,6 +436,7 @@ export interface Database {
           error?: string | null;
           created_at?: string;
           updated_at?: string;
+          applicazione_finita_il?: string | null;
         };
         Relationships: [];
       };
