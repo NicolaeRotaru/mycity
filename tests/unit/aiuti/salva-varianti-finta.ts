@@ -113,7 +113,8 @@ async function salvaProdottoEVariantiFinta(client: ClientFinto, a: CaricoInsieme
       const id = typeof v.id === 'string' && v.id ? v.id : null;
       if (id && inBanca.has(id)) {
         tenute.add(id);
-        const vista = typeof viste?.[id] === 'number' ? (viste[id] as number) : undefined;
+        const vistaGrezza = viste?.[id];
+        const vista = typeof vistaGrezza === 'number' ? vistaGrezza : undefined;
         const scrivi = vista === undefined || stock !== vista;
         const adesso = inBanca.get(id);
         if (scrivi && vista !== undefined && adesso !== vista) {
