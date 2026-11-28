@@ -119,14 +119,16 @@ class OnfidoProvider implements KycProvider {
    * `letto: false` vuol dire che Onfido non ha risposto; un controllo non di Onfido (manual_, mock_)
    * non ha scheda.
    */
-  private async schedaDelControllo(checkId: string | null | undefined): Promise<{ id: string | null; letto: boolean }> {
+  private async schedaDelControllo(
+    checkId: string | null | undefined,
+  ): Promise<{ id: string | null; letto: boolean; sparito?: boolean }> {
     if (!checkId || checkId.startsWith('manual_') || checkId.startsWith('mock_')) return { id: null, letto: true };
     try {
       const res = await fetch(`${ONFIDO}/checks/${encodeURIComponent(checkId)}`, {
         headers: this.intestazioni(false),
         signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS),
       });
-      if (res.status === 404) return { id: null, letto: true };
+      if (res.status === 404) return { id: null, letto: true, sparito: true };
       if (!res.ok) return { id: null, letto: false };
       const check = await res.json().catch(() => null);
       return { id: typeof check?.applicant_id === 'string' ? check.applicant_id : null, letto: true };
@@ -147,7 +149,14 @@ class OnfidoProvider implements KycProvider {
       logger.error('[kyc] scheda Onfido non trovata dal controllo: va tolta a mano', { checkId });
       return 'fallita';
     }
-    if (!scheda.id) return 'niente';
+    if (!scheda.id) {
+      // 28/11/2026 (onda 2) — Il controllo non c'è più su Onfido: la scheda da lui non si ritrova, ma
+      // può esserci ancora. Resta la traccia con l'id, per cercarla a mano dal pannello di Onfido.
+      if (scheda.sparito) {
+        logger.warn('[kyc] controllo Onfido non trovato: la scheda, se c\'è ancora, va cercata a mano', { checkId });
+      }
+      return 'niente';
+    }
     return (await this.togliScheda(scheda.id)) ? 'tolta' : 'fallita';
   }
 
@@ -178,7 +187,14 @@ class OnfidoProvider implements KycProvider {
       dob: subject.birthDate ?? undefined,
     });
     try {
-      const giaAperta = (await this.schedaDelControllo(checkPrecedente)).id;
+      const precedente = await this.schedaDelControllo(checkPrecedente);
+      // 28/11/2026 (onda 2) — Se Onfido non dice qual era la scheda del controllo di prima (5xx,
+      // 429, rete), crearne una nuova vorrebbe dire una seconda scheda con gli stessi dati
+      // personali: ci si ferma e si riprova, come quando l'aggiornamento della scheda non riesce.
+      if (!precedente.letto) {
+        return { ok: false, error: 'Onfido non risponde: la verifica di prima non si è potuta leggere. Riprova tra poco.' };
+      }
+      const giaAperta = precedente.id;
       if (giaAperta) {
         const aggiornata = await fetch(`${ONFIDO}/applicants/${encodeURIComponent(giaAperta)}`, {
           method: 'PUT',
