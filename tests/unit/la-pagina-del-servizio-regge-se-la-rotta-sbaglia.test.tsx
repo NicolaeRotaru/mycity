@@ -165,13 +165,18 @@ describe('titolare con l ordine di SDG (28/11)', () => {
     expect(d.textContent).not.toMatch(/errore|n8n|AD non/i);
     expect(vediPreventivo(d)).toBe(false);
   });
-  it('Sito web: la bozza, con la scritta «Bozza, la confermiamo insieme alla visita» e «Non è online»', async () => {
-    lavoro = json(200, { ok: true, data: { lavoro: null, ordine } });
+  // 28/11/2026 verso le 14:10 — Nicola: «deve essere già su Vercel il sito del cliente che ha accettato». Il sito
+  // pronto è online: la pagina dice «Il tuo sito è online» col pulsante, non più «Non è online» e «da confermare».
+  it('Sito web: il sito pronto è online, col pulsante per aprirlo e senza scritte da bozza', async () => {
+    const online = { ...ordine, sito: { ...ordine.sito, indirizzo: 'https://www.mycity-marketplace.com/sito/ora-del-gusto-ffb27af9' } };
+    lavoro = json(200, { ok: true, data: { lavoro: null, ordine: online } });
     stato.slug = 'sito-web';
     const d = await monta();
     await vi.waitFor(() => expect(d.textContent).toContain('TESTO DELLA BOZZA DEL SITO'), { timeout: 3000 });
-    expect(d.textContent).toContain('Bozza, la confermiamo insieme alla visita');
-    expect(d.textContent).toContain('Non è online');
+    expect(d.textContent).toContain('Il tuo sito è online');
+    expect(d.querySelector('a[href="https://www.mycity-marketplace.com/sito/ora-del-gusto-ffb27af9"]')?.textContent).toContain('Apri il tuo sito');
+    expect(d.textContent).not.toContain('Non è online');
+    expect(d.textContent).not.toContain('da confermare');
     expect(vediPreventivo(d)).toBe(false);
   });
   it('Gestione social: il piano; Analisi: «in preparazione», mai una pagina vuota', async () => {
