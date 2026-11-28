@@ -18,10 +18,12 @@ for f in "$ROOT"/tests/sql/rls/*.test.sql; do
   name="$(basename "$f")"
   echo "▶ $name"
   if out="$(psql -q -X -d "$DB" -v ON_ERROR_STOP=1 -f "$f" 2>&1)"; then
-    echo "$out" | grep -E "^INFO:" | sed 's/^INFO:/  /'
+    # psql con -f scrive «psql:<file>:<riga>: INFO:  …», non «INFO: …»: il filtro di prima non
+    # mostrava mai niente, nemmeno i dettagli di un file rosso (i tempi della prova di velocità).
+    echo "$out" | grep -E "(^|: )(INFO|NOTICE):" | sed -E 's/^psql:[^ ]*: //; s/^(INFO|NOTICE):/  /'
   else
     rossi=$((rossi + 1))
-    echo "$out" | grep -E "^INFO:|^ERROR:|^psql:.*ERROR" | sed 's/^INFO:/  /; s/^/  /'
+    echo "$out" | grep -E "(^|: )(INFO|NOTICE|ERROR):" | sed -E 's/^psql:[^ ]*: //; s/^(INFO|NOTICE):/  /; s/^/  /'
   fi
 done
 
