@@ -51,7 +51,11 @@ describe('quando il controllo della deriva non riesce a collegarsi', () => {
     expect(t).toContain('IPv6');
     expect(t).toContain('IPv4');
     expect(t).toContain('porta 5432');
-    expect(t).toContain('db.clmpyfvpvfjgeviworth.supabase.co:5432');
+    // Il tipo di indirizzo, non l'indirizzo: nel log vanno parole e codice, mai la macchina.
+    expect(t).toContain('connessione diretta di Supabase');
+    expect(t).toContain('ENETUNREACH');
+    expect(t).not.toContain('clmpyfvpvfjgeviworth');
+    expect(t).not.toContain('2a05:d012');
   });
 
   it('riconosce la rete irraggiungibile anche quando Node ha provato piu\' indirizzi insieme', () => {
@@ -118,17 +122,17 @@ describe('quando il controllo della deriva non riesce a collegarsi', () => {
     expect(t).not.toContain('non risponde');
   });
 
-  it('una password di poche lettere non storpia il messaggio d\'errore', () => {
-    // 15/10/2026 (secondo collaudo) — Con la password «x» l'errore «timeout
-    // expired» diventava «timeout e***pired».
-    const scaduto = new Error('timeout expired');
+  it('del guasto stampa il codice, non il messaggio', () => {
+    // Prima qui si stampava il messaggio con la password oscurata; adesso il messaggio non entra
+    // affatto nel log, e la password corta o lunga non puo' esserci.
+    const scaduto = Object.assign(new Error('timeout expired'), { code: 'ETIMEDOUT' });
     const t = testo(spiegaIlCollegamentoFallito(scaduto, 'postgresql://postgres.abc:x@aws-0-eu-west-3.pooler.supabase.com:6543/postgres'));
-    expect(t).toContain('Errore: timeout expired');
-    // Da quattro lettere in su si oscura come prima.
+    expect(t).toContain("Codice dell'errore: ETIMEDOUT");
+    expect(t).not.toContain('timeout expired');
     const lunga = new Error('autenticazione fallita per Pa55');
-    expect(testo(spiegaIlCollegamentoFallito(lunga, 'postgresql://u:Pa55@aws-0-eu-west-3.pooler.supabase.com:5432/postgres'))).not.toContain(
-      'Pa55',
-    );
+    const t2 = testo(spiegaIlCollegamentoFallito(lunga, 'postgresql://u:Pa55@aws-0-eu-west-3.pooler.supabase.com:5432/postgres'));
+    expect(t2).not.toContain('Pa55');
+    expect(t2).toContain("Codice dell'errore: senza codice");
   });
 
   it('se la riga e\' gia\' quella del pooler non manda a rimetterla: indica password e utente', () => {
@@ -161,7 +165,7 @@ describe('quando il controllo della deriva non riesce a collegarsi', () => {
     const t = testo(spiegaIlCollegamentoFallito(errore, url));
     expect(t).not.toContain(scritta);
     expect(t).not.toContain('p@ss/word');
-    expect(t).toContain('***');
+    expect(t).toContain("Codice dell'errore: 28P01");
   });
 
   it('una riga illeggibile non porta la password nel testo, e spiega come si scrive', () => {
@@ -234,7 +238,8 @@ describe('lo script vero, lanciato come nella CI', () => {
     // pooler non c'entra, e il messaggio non deve mandarci (collaudo del 15/10).
     const { uscita, uscitaTesto } = lancia({ SUPABASE_DB_URL: `postgresql://postgres:${PASSWORD}@127.0.0.1:1/postgres` });
     expect(uscita).toBe(1);
-    expect(uscitaTesto).toContain('non riesco a collegarmi al database (127.0.0.1:1)');
+    expect(uscitaTesto).toContain('non riesco a collegarmi al database (database su questa stessa macchina)');
+    expect(uscitaTesto).not.toContain('127.0.0.1');
     expect(uscitaTesto).toContain('questa stessa macchina');
     expect(uscitaTesto).not.toContain('Session pooler');
     expect(uscitaTesto).not.toContain(PASSWORD);

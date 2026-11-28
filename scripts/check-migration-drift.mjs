@@ -77,8 +77,9 @@ const NAME_RE = /^(\d{3}[a-z]?)_([a-z0-9_]+)\.sql$/;
  * diventato rumore di fondo. La strada che funziona e' il «Session pooler»,
  * che risponde in IPv4: la stessa riga che serve alla copia notturna.
  *
- * Qui si traduce l'errore in quello che c'e' da fare. Mai la password nel
- * testo: si nominano solo macchina e porta.
+ * Qui si traduce l'errore in quello che c'e' da fare. Nel testo vanno solo il
+ * tipo di indirizzo (pooler, connessione diretta, questa macchina) e il codice
+ * dell'errore: mai la macchina, la porta, l'utente o il messaggio di Postgres.
  */
 export const ESEMPIO_SESSION_POOLER =
   'postgresql://postgres.<progetto>:<password>@aws-0-<regione>.pooler.supabase.com:5432/postgres';
@@ -86,21 +87,13 @@ export const ESEMPIO_SESSION_POOLER =
 /** Codici con cui il sistema dice «da qui quella rete non si raggiunge». */
 const RETE_IRRAGGIUNGIBILE = new Set(['ENETUNREACH', 'EHOSTUNREACH', 'EADDRNOTAVAIL', 'EAFNOSUPPORT']);
 
-/** Macchina, porta e password di una stringa di connessione; `letta: false` se non si legge. */
+/** La macchina di una stringa di connessione; `letta: false` se non si legge. Serve solo a scegliere il consiglio. */
 function partiDellIndirizzo(url) {
   try {
     const u = new URL(String(url ?? ''));
-    return {
-      letta: true,
-      macchina: u.hostname.replace(/^\[|\]$/g, ''),
-      porta: u.port || '5432',
-      // Tutte e due le forme: l'errore potrebbe ripetere la stringa com'e'
-      // scritta (p%40ss) o gia' decodificata (p@ss).
-      password: u.password ? decodeURIComponent(u.password) : '',
-      passwordScritta: u.password,
-    };
+    return { letta: true, macchina: u.hostname.replace(/^\[|\]$/g, '') };
   } catch {
-    return { letta: false, macchina: '', porta: '', password: '', passwordScritta: '' };
+    return { letta: false, macchina: '' };
   }
 }
 
@@ -127,25 +120,27 @@ const ACCESSO_RIFIUTATO = new Set(['28P01', '28000']);
 const NOME_NON_TROVATO = new Set(['ENOTFOUND', 'EAI_AGAIN', 'EAI_NONAME']);
 
 /**
- * Toglie dal testo tutto quello che potrebbe essere una password: le due forme
- * della password, se la riga si legge, e comunque qualunque «://utente:segreto@»
- * — che e' l'unica difesa quando la riga NON si legge e la password non si sa
- * isolare.
- *
- * 15/10/2026 (secondo collaudo di R53) — Una password di una o due lettere
- * veniva cercata e sostituita in tutto il messaggio: con «x» l'errore
- * «timeout expired» diventava «timeout e***pired». Sotto le quattro lettere
- * una password non e' un segreto che un log possa tradire (si indovina in un
- * attimo), e oscurarla rende illeggibile proprio la riga che spiega il guasto.
+ * Nel log va solo il codice dell'errore, mai il suo messaggio: un codice di Node (ECONNREFUSED…) o uno
+ * SQLSTATE di Postgres (28P01…). Tutto il resto diventa «senza codice».
  */
-const LUNGHEZZA_MINIMA_DA_OSCURARE = 4;
+const CODICE_STAMPABILE = /^(?:E[A-Z0-9_]{2,30}|[0-9A-Z]{5})$/;
 
-function senzaSegreti(testo, segreti) {
-  let pulito = String(testo);
-  for (const segreto of segreti) {
-    if (segreto && segreto.length >= LUNGHEZZA_MINIMA_DA_OSCURARE) pulito = pulito.split(segreto).join('***');
-  }
-  return pulito.replace(/:\/\/[^@\s]*@/g, '://***@');
+export function codiciDaStampare(codici) {
+  const buoni = [...new Set(codici.map((c) => String(c ?? '')).filter((c) => CODICE_STAMPABILE.test(c)))];
+  return buoni.length > 0 ? buoni.join(', ') : 'senza codice';
+}
+
+/**
+ * Che tipo di indirizzo e' quello in SUPABASE_DB_URL, detto a parole: nel log va il tipo, mai la
+ * macchina, la porta o l'utente.
+ */
+function tipoDiIndirizzo(letta, macchina) {
+  if (!letta) return 'l\'indirizzo in SUPABASE_DB_URL';
+  if (eLocale(macchina)) return 'database su questa stessa macchina';
+  if (/^db\.[^.]+\.supabase\.co$/i.test(macchina)) return 'connessione diretta di Supabase';
+  if (/\.pooler\.supabase\.com$/i.test(macchina)) return 'pooler di Supabase';
+  if (eSupabase(macchina)) return 'indirizzo di Supabase';
+  return 'l\'indirizzo in SUPABASE_DB_URL';
 }
 
 /** L'errore stesso e, se e' un gruppo (piu' indirizzi provati), quelli dentro. */
@@ -160,7 +155,7 @@ function erroriDentro(errore) {
  * Funzione pura: riceve l'errore e la stringa di connessione, non tocca niente.
  */
 export function spiegaIlCollegamentoFallito(errore, url) {
-  const { letta, macchina, porta, password, passwordScritta } = partiDellIndirizzo(url);
+  const { letta, macchina } = partiDellIndirizzo(url);
   const errori = erroriDentro(errore);
   const codici = errori.map((e) => String(e.code ?? '')).filter(Boolean);
   const irraggiungibile = codici.some((c) => RETE_IRRAGGIUNGIBILE.has(c));
@@ -172,13 +167,9 @@ export function spiegaIlCollegamentoFallito(errore, url) {
   const sessionPooler = /\.pooler\.supabase\.com$/i.test(macchina);
   const rigaDelPooler = `   Da GitHub Actions serve la riga del «Session pooler» (IPv4) di Supabase: ${ESEMPIO_SESSION_POOLER}`;
 
-  const grezzo = String(errore?.message ?? errore ?? '').trim() || codici.join(', ') || 'errore sconosciuto';
-  const dettaglio = senzaSegreti(grezzo, [password, passwordScritta]);
-
-  const dove = letta ? `${macchina || 'database locale'}:${porta}` : 'l\'indirizzo in SUPABASE_DB_URL';
   const righe = [
-    `❌ check-migration-drift: non riesco a collegarmi al database (${dove}).`,
-    `   Errore: ${dettaglio}`,
+    `❌ check-migration-drift: non riesco a collegarmi al database (${tipoDiIndirizzo(letta, macchina)}).`,
+    `   Codice dell'errore: ${codiciDaStampare(codici)}`,
   ];
 
   if (!letta) {
@@ -442,8 +433,7 @@ export function confrontaIPermessi(delDatabase, attesi) {
  */
 export function spiegaIlRegistroIlleggibile(errore) {
   const codice = String(errore?.code ?? '');
-  const messaggio = String(errore?.message ?? errore ?? 'errore sconosciuto');
-  const righe = [`❌ check-migration-drift: collegato al database, ma non riesco a leggere il registro delle migrazioni (${codice || 'senza codice'}: ${messaggio}).`];
+  const righe = [`❌ check-migration-drift: collegato al database, ma non riesco a leggere il registro delle migrazioni (${codiciDaStampare([codice])}).`];
   if (codice === '42P01' || codice === '3F000') {
     righe.push('   Perche\': questo database non ha il registro delle migrazioni di Supabase (supabase_migrations.schema_migrations). SUPABASE_DB_URL punta al database giusto?');
   } else if (codice === '42501') {
@@ -537,7 +527,7 @@ async function main() {
       const res = await client.query(DOMANDA_DEI_PERMESSI);
       permessi = res.rows.map((r) => ({ tipo: r.tipo, oggetto: r.oggetto, ruolo: r.ruolo, permesso: r.permesso }));
     } catch (err) {
-      console.error(`❌ check-migration-drift: collegato, ma non riesco a leggere i permessi (${String(err?.code ?? 'senza codice')}: ${String(err?.message ?? err)}).`);
+      console.error(`❌ check-migration-drift: collegato, ma non riesco a leggere i permessi (${codiciDaStampare([err?.code])}).`);
       await client.end().catch(() => {});
       process.exit(USCITA.NON_HO_CONTROLLATO);
     }
@@ -587,8 +577,8 @@ function lanciatoDaRigaDiComando() {
 
 if (lanciatoDaRigaDiComando()) {
   main().catch((err) => {
-    // 5/11/2026 — Solo il messaggio: l'oggetto d'errore intero di pg porta dettagli che non servono.
-    console.error('check-migration-drift: errore', err instanceof Error ? err.message : String(err));
+    // Solo il codice dell'errore, come negli altri esiti: il messaggio resta fuori dal log.
+    console.error(`❌ check-migration-drift: errore inatteso (${codiciDaStampare([err?.code])}).`);
     process.exit(1);
   });
 }
