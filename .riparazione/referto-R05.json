@@ -1,0 +1,306 @@
+{
+  "sessione": "R05",
+  "aggiornato": "2026-11-27 02:15",
+  "finita": true,
+  "testa": "85bcea0080debe445e83076b4c8d96f85f508085",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "85bcea0080debe445e83076b4c8d96f85f508085",
+    "nota": "typecheck, lint e vitest: 2340 file di prove passati, 1 saltato (14308 prove)."
+  },
+  "voci": [
+    {
+      "id": "R05-001",
+      "chiave": "pagamenti-stripe|i contanti vecchi ancora da versare spariscono dal pannello dei bonifici quando gli ordini consegnati superano mille",
+      "esito": "riparato",
+      "commit": "443b5a8f",
+      "file_toccati": [
+        "app/admin/payouts/page.tsx",
+        "tests/unit/riparazione-r05-contanti-oltre-mille.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-contanti-oltre-mille.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r05-contanti-oltre-mille.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 443b5a8f^ --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r05-contanti-oltre-mille.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La base leggeva già i contanti HELD a parte (finestra dei pagabili dal consegnato prima). Restava il buco lasciato dal collaudo del 26/11: con i pagabili oltre il tetto, un ritiro al banco da regolare fuori dalla finestra rientrava dalla lettura dei chiusi senza il controllo di resi e reclami, la sua commissione finiva in p_ritiri e la funzione del bonifico rifiutava tutto (contanti vecchi non pagati). Ora righeChiuse scarta i pagabili. Prova: pagina resa con Supabase finto, orologio finto, 1.002 contanti più un ritiro col reso aperto; rossa senza la correzione.",
+      "verificato_da": "qa V1 (subagente revisore, diverso dal riparatore): regge. Prova rilanciata (verde), diff letto, 15 prove vicine sulla pagina verdi (107 casi); nessuna variante trovata che paghi due volte o perda un contante."
+    },
+    {
+      "id": "R05-002",
+      "chiave": "pagamenti-stripe|il pannello dei bonifici non dice a nicola quanto versare a ogni negozio il lunedì",
+      "esito": "parziale",
+      "commit": "3421bc8b",
+      "file_toccati": [
+        "app/admin/payouts/page.tsx",
+        "app/api/admin/contanti-da-stripe/route.ts",
+        "tests/unit/riparazione-r05-bonifici-del-lunedi.test.tsx",
+        "tests/unit/riparazione-r05-contanti-da-stripe-rotta.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-bonifici-del-lunedi.test.tsx",
+        "tests/unit/riparazione-r05-contanti-da-stripe-rotta.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r05-bonifici-del-lunedi.test.tsx tests/unit/riparazione-r05-contanti-da-stripe-rotta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3421bc8b^ --file app/admin/payouts/page.tsx,app/api/admin/contanti-da-stripe/route.ts --prove tests/unit/riparazione-r05-bonifici-del-lunedi.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Punti 1-3 della nota del 26/11 già chiusi nella base (916 + page.tsx ritiroDaRegolare, contoDelLunedi, bonifici_manuali_per_mese): un caso di prova ciascuno, verdi anche sulla base. Punto 4: rotta nuova solo admin (withAdminAuth) che dice il giorno d inizio dei contanti pagati da Stripe; la pagina toglie quegli HELD dal lunedì e dal tasto «Bonifico fatto», li mostra «In sospeso · lo paga Stripe» e, se la lettura cade, lo dice con un avviso. Controllo del ruolo provato (seller/buyer/rider rifiutati; rossi con withAuth al posto di withAdminAuth).",
+      "verificato_da": "qa V1 (subagente revisore, diverso dal riparatore): parziale. Punti 1-3 verdi anche sulla base (già chiusi); punto 4 verde con la rotta che risponde. Con prove temporanee: se la rotta cade, è in lettura o la rilettura cade, la pagina torna a contare come da versare a mano i contanti che paga Stripe.",
+      "cosa_resta": "Se il giorno d inizio dei contanti pagati da Stripe non si legge, la pagina torna a contarli «Da versare» (app/admin/payouts/page.tsx:507-510, inizioStripe = daStripe.isSuccess ? data : null). Casi provati dal revisore: (A) rotta in errore con PAGAMENTI_CONTANTI_DA_STRIPE_DAL=2026-11-16: il tasto chiama segna_bonifico_manuale con anche gli ordini dal 16 e p_importo_cents 4000 invece di 1000, solo con un avviso rosso; lo stesso, senza avviso, mentre la lettura è in corso o ripete (circa 2 s con retry 1); (B) prima lettura buona, rilettura caduta: React Query tiene il dato ma isSuccess è false e «Da versare lunedì» passa da 10,00 a 40,00 €. La 916 non lo ferma (guarda solo lo stato dell ordine). Cura da fare in page.tsx: usare daStripe.data anche quando la rilettura cade, e finché non c è nessun dato (in lettura o in errore) trattare come lettura caduta i contanti HELD (niente tasto «Bonifico fatto» per quei negozi), come la regola già scritta per resi e reclami; aggiornare il caso di tests/unit/riparazione-r05-bonifici-del-lunedi.test.tsx:330-338, che oggi si aspetta 40,00 con la lettura caduta. Minore: la rotta chiama inizioContantiDaStripe() a ogni richiesta e con la variabile vuota scrive un logger.warn ogni 60 s per scheda aperta. Non fatto per la soglia di spesa della sessione."
+    },
+    {
+      "id": "R05-003",
+      "chiave": "pagamenti-stripe|la rpc del tasto «bonifico fatto» dei negozi non è definita in nessuna migrazione del deposito",
+      "esito": "gia_riparato_prima",
+      "prova": "app/admin/payouts/page.tsx:301-307 chiama supabase.rpc(segna_bonifico_manuale, {p_seller, p_order_ids, p_riferimento, p_ritiri, p_importo_cents}); migrations/916_il_bonifico_fatto_ai_negozi_resta_scritto.sql:124-134 la definisce con la stessa firma (uuid, uuid[], text, uuid[], integer) RETURNS integer, SECURITY DEFINER, search_path vuoto, controllo is_admin() alla riga 155, grant solo ad authenticated (312-315); i codici BONIFICO_GIA_SEGNATO e BONIFICO_CAMBIATO che la pagina legge ci sono (197, 202, 247). La 916 è antenata della base 2ba05a74 (commit c591bd96).",
+      "nota": "Le migrazioni 350 e 410 citate dal registro non servono più. Resta da applicare la 916 sul database vero, se non lo è già: lo decide Nicola.",
+      "verificato_da": "qa V1 (subagente revisore, diverso dal riparatore): regge. 916 nella base (8fbe5f2a, c591bd96 antenati di 2ba05a74), firma uguale alla chiamata di page.tsx:301, security definer con search_path vuoto e is_admin(), grant solo ad authenticated."
+    },
+    {
+      "id": "R05-004",
+      "chiave": "pagamenti-stripe|il bonifico di rimborso al cliente non si può segnare come fatto, e nessuno controlla la scadenza dei 14 giorni",
+      "esito": "parziale",
+      "commit": "034202cd4737c6b129b8428f56697d7666a09b3a",
+      "file_toccati": [
+        "lib/rimborsi/bonifici-da-fare.ts",
+        "tests/unit/riparazione-r05-bonifico-rimborso-termine-nell-avviso.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-bonifico-rimborso-termine-nell-avviso.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r05-bonifico-rimborso-termine-nell-avviso.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 034202cd^ --file lib/rimborsi/bonifici-da-fare.ts --prove tests/unit/riparazione-r05-bonifico-rimborso-termine-nell-avviso.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "L'avviso del bonifico da fare dice se il termine dei 14 giorni (a calendario di Piacenza) è già passato o mancano 3 giorni o meno (fraseDelTermine, campo facoltativo adesso). Prova con l'orologio finto (mezzanotte di Piacenza, 1/3/4 giorni, reclamo senza data). La pagina /admin/bonifici-rimborso, la 910, allarmiDeiBonifici ed elencoDeiBonifici c'erano già dal 26/11.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/operational-alerts/route.ts",
+          "modifica": "SOLO DOPO che la 910 è applicata (senza, ogni giro è 'incompleto' e risponde 500). Aggiungere l'import `import { allarmiDeiBonifici, type RigaDelBonifico } from '@/lib/rimborsi/bonifici-da-fare';`. Dopo il blocco try/catch del tetto di spesa AI (righe 768-773), prima di «UN CONTROLLO SALTATO», mettere: `try { const { data, error } = await admin.rpc('admin_bonifici_rimborso'); if (error) throw new Error(error.message); alerts.push(...allarmiDeiBonifici((data ?? []) as RigaDelBonifico[], new Date())); } catch (e) { logger.error('[operational-alerts] bonifici di rimborso non letti', { motivo: e instanceof Error ? e.message : String(e) }); controlliSaltati.push('bonifici di rimborso'); }`"
+        },
+        {
+          "file": "components/admin/AdminSidebar.tsx",
+          "modifica": "Dopo la riga 52 `{ href: '/admin/payouts', icon: Wallet, label: 'Payout venditori' },` aggiungere `{ href: '/admin/bonifici-rimborso', icon: Banknote, label: 'Bonifici di rimborso' },` (Banknote è già importato)."
+        },
+        {
+          "file": "tests/unit/il-rimborso-dei-contanti-arriva-col-bonifico.test.ts",
+          "modifica": "Riga 121: `expect(avviso.link).toBe('/admin/orders');` diventa `expect(avviso.link).toBe('/admin/bonifici-rimborso');`. Riga 130: `expect(testo).toContain(\"cerca questa causale nei movimenti del conto. Se c'è, è già pagato.\");` diventa `expect(testo).not.toContain('cerca questa causale nei movimenti del conto');`"
+        },
+        {
+          "file": "tests/unit/un-reclamo-su-contanti-mai-incassati-non-regala-credito.test.ts",
+          "modifica": "Riga 158: `expect(avvisi[0].link).toBe('/admin/orders');` diventa `expect(avvisi[0].link).toBe('/admin/bonifici-rimborso');`"
+        },
+        {
+          "file": "app/api/admin/disputes/[id]/resolve/route.ts",
+          "modifica": "Solo se Nicola approva l'apertura del reclamo come partenza: alla riga 109 aggiungere created_at alla select (`'id, status, order_id, opener_id, against_id, refund_cents, created_at'`). Nella chiamata a refundOrder (righe 319-330) aggiungere `resoChiestoIl: (dispute as { created_at?: string | null }).created_at ?? null,`"
+        }
+      ],
+      "domanda": "Nicola: per un bonifico di rimborso nato da un reclamo, i 14 giorni partono dal giorno in cui il cliente ha aperto il reclamo (disputes.created_at)? Sì/no.",
+      "cosa_resta": "(1) Nicola applica migrations/910_il_bonifico_di_rimborso_si_segna_fatto.sql. Finché non c è, la pagina dice «Non riesco a leggere i bonifici» e il pezzo del cron (serve_file_altrui) non va messo. (2) Dopo le due prove comuni cambiate (serve_file_altrui), in lib/rimborsi/bonifici-da-fare.ts, funzione avvisoDelBonificoDaFare: togliere dalla frase della causale il pezzo « Questo avviso arriva a ogni amministratore: prima di pagare cerca questa causale nei movimenti del conto. Se c è, è già pagato.» (resta «Nella causale del bonifico scrivi «${causale}».»), cambiare link: /admin/orders in link: PAGINA_DEI_BONIFICI e togliere il commento del 26/11 alle righe 187-190; solo con la 910 applicata, sennò resta senza guardia contro il doppio pagamento. (3) Partenza del termine dei reclami, se Nicola dice sì (domanda): nell onda delle migrazioni, questo SQL esatto:\nCREATE OR REPLACE FUNCTION public.admin_bonifici_rimborso()\nRETURNS TABLE (\n  order_id uuid,\n  chiave text,\n  centesimi integer,\n  cliente_nome text,\n  cliente_email text,\n  chiesto_il timestamptz,\n  stato text,\n  fatto_da_nome text,\n  fatto_il timestamptz,\n  respinto_da_nome text,\n  respinto_il timestamptz\n)\nLANGUAGE plpgsql\nSTABLE\nSECURITY DEFINER\nSET search_path TO 'public'\nAS $function$\nBEGIN\n  IF NOT (public.is_admin() OR coalesce((SELECT auth.jwt() ->> 'role'), '') = 'service_role') THEN\n    RAISE EXCEPTION 'bonifici di rimborso: riservato agli amministratori' USING ERRCODE = '42501';\n  END IF;\n\n  RETURN QUERY\n    SELECT o.id,\n           m[2],\n           m[1]::int,\n           coalesce(nullif(btrim(p.full_name), ''), nullif(btrim(o.delivery_full_name), '')),\n           u.email::text,\n           coalesce(r.created_at, d.created_at),\n           coalesce(b.stato, 'DA_FARE'),\n           pf.full_name,\n           b.fatto_il,\n           pr.full_name,\n           b.respinto_il\n      FROM public.orders o\n      CROSS JOIN LATERAL regexp_split_to_table(o.stripe_refund_id, ',') AS s(segno)\n      CROSS JOIN LATERAL regexp_match(btrim(s.segno), '^bonifico:([0-9]+):(.+)$') AS m\n      LEFT JOIN private.bonifici_rimborso b ON b.chiave = m[2] AND b.order_id = o.id\n      LEFT JOIN public.returns r ON m[2] = 'return_' || r.id::text AND r.order_id = o.id\n      LEFT JOIN public.disputes d ON m[2] = 'dispute_' || d.id::text AND d.order_id = o.id\n      LEFT JOIN public.profiles p ON p.id = o.user_id\n      LEFT JOIN auth.users u ON u.id = o.user_id\n      LEFT JOIN public.profiles pf ON pf.id = b.fatto_da\n      LEFT JOIN public.profiles pr ON pr.id = b.respinto_da\n     WHERE o.stripe_refund_id LIKE '%bonifico:%'\n       AND length(m[1]) <= 9;\nEND;\n$function$;\n\nFino ad allora i bonifici dei reclami hanno il «termine sconosciuto»: stanno in evidenza sulla pagina, ma nessun allarme li guarda.",
+      "verificato_da": "qa V1 (subagente revisore, diverso dal riparatore): regge come parziale. Prova rilanciata (verde) e 18 prove su avviso e bonifici-da-fare verdi (201 casi); conto a mezzogiorno UTC del giorno di Piacenza, cambio d ora neutro; serve_file_altrui controllato riga per riga, esatto; SQL di cosa_resta compatibile con CREATE OR REPLACE. Nota: il commento del 26/11 alla punta del ramo sta alle righe 189-192, non 187-190."
+    },
+    {
+      "id": "R05-007",
+      "chiave": "pagamenti-stripe|il portale dell'abbonamento si apre anche a chi ha solo il cliente stripe, senza abbonamento",
+      "esito": "riparato",
+      "commit": "a366ccbc",
+      "file_toccati": [
+        "app/api/seller/subscription/portal/route.ts",
+        "tests/unit/riparazione-r05-portale-senza-abbonamento.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-portale-senza-abbonamento.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r05-portale-senza-abbonamento.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a366ccbc^ --file app/api/seller/subscription/portal/route.ts --prove tests/unit/riparazione-r05-portale-senza-abbonamento.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La rotta del portale rifiuta con «Nessun abbonamento da gestire» chi ha il cliente Stripe ma uno stato none, null o inactive, con la stessa regola del bottone (portaleApribile di lib/abbonamento-portale.ts). Prova con Supabase e Stripe finti: 400 e Stripe mai chiamato; active dà 200.",
+      "verificato_da": "qa V2 (subagente revisore, diverso dal riparatore): regge. Prova rilanciata (verde), 4 prove vicine sul portale verdi (19/19), prova temporanea su 14 combinazioni di stato e interruttore: none/vuoto 400, active/past_due/trialing 200, canceled coerente con portaleApribile."
+    },
+    {
+      "id": "R05-008",
+      "chiave": "pagamenti-stripe|il riuso della pagina di stripe restituisce la pagina vecchia senza rifare i controlli della fascia, e salta anche il tetto",
+      "esito": "parziale",
+      "commit": "1effa3cd",
+      "file_toccati": [
+        "app/api/stripe/checkout/route.ts",
+        "tests/unit/riparazione-r05-riuso-cassa-fascia-e-tetto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-riuso-cassa-fascia-e-tetto.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r05-riuso-cassa-fascia-e-tetto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1effa3cd^ --file app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r05-riuso-cassa-fascia-e-tetto.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Fascia rifiutata più tetto dei giri in una funzione sola (rifiutoDellaFascia), chiamata dalla richiesta nuova e dal riuso della pagina già aperta, prima della pulizia e del retrieve. Prova con orologio finto: pagina aperta alle 15:00 per «Oggi · 16:30–18:00» rimandata alle 17:35 dà 409; fascia piena dà 409 del tetto; senza cambi si riprende la stessa pagina.",
+      "verificato_da": "qa V2 (subagente revisore, diverso dal riparatore): regge con un residuo. Prova rilanciata (verde), 40 prove sulla rotta della carta verdi (305/305); prova temporanea con negozio chiuso il mercoledì: il riuso ora dà 409.",
+      "cosa_resta": "app/api/stripe/checkout/route.ts:472-483: se la lettura dei negozi cade, al riuso passano negozi = [] e il controllo «negozio chiuso» salta (si guarda solo l orologio), mentre la richiesta nuova prende 503 (route.ts:603-610). Caso provato dal revisore: 25/11 alle 15:00 pagina aperta, lettura dei negozi in errore, negozio chiuso il mercoledì: il riuso dà 200 con la pagina vecchia. Cura: al riuso, con la lettura dei negozi caduta, rispondere 503 come la richiesta nuova (o non riusare la pagina). Al pagamento il webhook rimborsa, quindi niente soldi persi."
+    },
+    {
+      "id": "R05-012",
+      "chiave": "qa-flussi|con la carta, «domani» premuto alle 23:59 e arrivato dopo mezzanotte vale il giorno dopo",
+      "esito": "riparato",
+      "commit": "436a6706",
+      "file_toccati": [
+        "app/api/stripe/checkout/route.ts",
+        "tests/unit/riparazione-r05-carta-domani-dopo-mezzanotte.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-carta-domani-dopo-mezzanotte.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r05-carta-domani-dopo-mezzanotte.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 436a6706^ --file app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r05-carta-domani-dopo-mezzanotte.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La rotta della carta legge delivery_date e riporta la fascia al giorno della richiesta prima di ogni uso (come la rotta contanti, fasciaDelGiornoDellaRichiesta); una fascia di ieri dà 409. Prova con orologio finto a martedì 00:01 di Roma.",
+      "verificato_da": "qa V2 (subagente revisore, diverso dal riparatore): regge. Prova rilanciata (verde), 40 prove sulla rotta della carta verdi; prova temporanea su 8 varianti: le due notti del cambio d ora, 23:30 in ora legale, delivery_date che prova a spostare la fascia (non sposta niente, i controlli girano dopo il riporto)."
+    },
+    {
+      "id": "R05-006",
+      "chiave": "pagamenti-stripe|se la lettura di resi e reclami cade, il pannello propone la compensazione dei soli ritiri al banco",
+      "esito": "gia_riparato_prima",
+      "prova": "app/admin/payouts/page.tsx (base 2ba05a74:390-392, commit 7ff54612): contantiHeld comprende anche i ritiri CASH_IN_STORE senza payout_at; con letturaCaduta tutti diventano pratica_aperta e ritiroDaRegolare li esclude, quindi nessun tasto di compensazione. Controllato con una prova a perdere (resi in errore, un contante e un ritiro: nessun tasto; a lettura buona compare «Segna la compensazione»), poi cancellata.",
+      "verificato_da": "qa V2 (subagente revisore, diverso dal riparatore): regge. contantiHeld comprende già i ritiri senza payout_at sulla base (7ff54612 antenato); prova temporanea: resi caduti, reclami caduti, solo ritiri, 200 contanti: nessun tasto; a lettura buona il tasto compare."
+    },
+    {
+      "id": "R05-005",
+      "chiave": "dati-analytics|l'elenco prodotti dell'amministratore si ferma a mille senza dirlo, e la ricerca non trova i prodotti più vecchi",
+      "esito": "parziale",
+      "commit": "85bcea00",
+      "file_toccati": [
+        "app/admin/payouts/page.tsx",
+        "tests/unit/riparazione-r05-pagati-oltre-mille.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-pagati-oltre-mille.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r05-pagati-oltre-mille.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 85bcea00^ --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r05-pagati-oltre-mille.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La parte dei prodotti era già sistemata sulla base (app/admin/products/page.tsx: count exact, avviso del taglio, ricerca per nome nel database). In payouts il tetto degli aperti usa già count exact e REVERSAL_FAILED sta già fra i chiusi. Chiusi qui gli ultimi due pezzi della nota del 26/11: l'avviso quando l'elenco dei già chiusi è tagliato a 1000, e il testo sbagliato «col bonifico ancora aperto» per i ritiri al banco.",
+      "nota": "La testata a 360 px non è stata misurata in un browser: sulla base il campo ha già w-full e min-w-0.",
+      "verificato_da": "qa V2 (subagente revisore, diverso dal riparatore): regge con imperfezioni. products/page.tsx identico fra base e HEAD con count exact, avviso e ricerca ilike; prova rilanciata (verde), 15 prove su payouts e products verdi (102/102).",
+      "cosa_resta": "(1) Il nuovo avviso dei chiusi tagliati conta anche i ritiri da regolare (STATI_CHIUSI contiene CASH_IN_STORE): app/admin/payouts/page.tsx:392, 415, 523, 662. Con 0 chiusi e 1.001 ritiri da regolare compare «Ordini già chiusi oltre 1000… Mancano i più vecchi», falso; cura: contare in totaleChiusi solo i chiusi non pagabili (stesso filtro !pagabile(o) della lettura). (2) Parte prodotti, già sulla base: app/admin/products/page.tsx:89-104, 170, la ricerca nel database si ferma a 200 risultati senza dirlo, e se cade si vedono in silenzio solo i risultati locali mentre l avviso promette «li cerca tutti nel database». La testata a 360 px non è stata misurata in un browser."
+    },
+    {
+      "id": "R05-009",
+      "chiave": "pagamenti-stripe|il freno del conto stripe di prova vale solo sulle anteprime di vercel, e il suo errore arriva al negoziante come errore generico",
+      "esito": "non_fatto",
+      "nota": "Lotto L6 non aperto: dopo L5 la spesa della sessione era arrivata al 70% del limite (17 $ su 25), e la regola della campagna vieta lotti nuovi oltre quella soglia. Da riassegnare."
+    },
+    {
+      "id": "R05-010",
+      "chiave": "pagamenti-stripe|una contestazione che arriva prima che l'ordine nasca (carrello ancora in attesa) esce in silenzio",
+      "esito": "non_fatto",
+      "nota": "Lotto L6 non aperto: dopo L5 la spesa della sessione era arrivata al 70% del limite (17 $ su 25), e la regola della campagna vieta lotti nuovi oltre quella soglia. Da riassegnare."
+    },
+    {
+      "id": "R05-011",
+      "chiave": "pagamenti-stripe|una contestazione che arriva senza ordini con il carrello ancora aperto viene lavorata in silenzio",
+      "esito": "non_fatto",
+      "nota": "Lotto L6 non aperto: dopo L5 la spesa della sessione era arrivata al 70% del limite (17 $ su 25), e la regola della campagna vieta lotti nuovi oltre quella soglia. Da riassegnare."
+    },
+    {
+      "id": "R05-013",
+      "chiave": "stati-ui|la descrizione proposta nella chat assistenza arriva intera ma su una riga sola",
+      "esito": "non_fatto",
+      "nota": "Lotto L6 non aperto: dopo L5 la spesa della sessione era arrivata al 70% del limite (17 $ su 25), e la regola della campagna vieta lotti nuovi oltre quella soglia. Da riassegnare."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "se la lettura dei bonifici manuali del mese cade, le righe «commissione in fattura» spariscono senza avviso",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "app/admin/payouts/page.tsx:436-447",
+      "descrizione": "Se bonifici_manuali_per_mese dà errore, la pagina non mostra le righe della commissione da mettere in fattura e non dice che la lettura è caduta (c è solo «almeno» su «Già pagato»)."
+    },
+    {
+      "titolo": "alla pagina dei bonifici di rimborso non porta nessun link: né il menu admin né l avviso",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/admin/bonifici-rimborso/page.tsx",
+      "descrizione": "Oggi ci si arriva solo scrivendo l indirizzo a mano; la cura è nel serve_file_altrui di R05-004 (menu) e nel passo (2) di cosa_resta (link dell avviso)."
+    },
+    {
+      "titolo": "se cade la lettura di resi e reclami, il riquadro «Contanti da versare» mostra 0,00 € invece di dire che la cifra non è stata letta",
+      "dimensione": "dati-analytics",
+      "severita": "minore",
+      "file": "app/admin/payouts/page.tsx:688",
+      "descrizione": "Il tasto è già nascosto, ma la cifra 0,00 € (anche «Da versare lunedì» nel riquadro del negozio) è fuorviante quando la lettura è caduta."
+    },
+    {
+      "titolo": "la funzione che riporta la fascia al giorno della richiesta è scritta due volte, nella rotta della carta e in quella dei contanti",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/api/orders/cod/route.ts:64",
+      "descrizione": "fasciaDelGiornoDellaRichiesta è copiata in app/api/stripe/checkout/route.ts: se una delle due cambia, le due casse possono dare giorni diversi. Andrebbe in un aiutante comune."
+    },
+    {
+      "titolo": "con la carta, «domani» premuto alle 23:59:59 può valere il giorno dopo se la sessione Stripe nasce dopo mezzanotte",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "lib/stripe/webhook/ordini.ts:303-304",
+      "descrizione": "La rotta della carta decide il giorno col suo orologio (app/api/stripe/checkout/route.ts:262), il webhook con session.created: se la richiesta arriva alle 23:59:59 senza riporto e la sessione nasce alle 00:00:01, il webhook conta «Domani» dal giorno dopo. Finestra di pochi secondi, ragionata sul codice e non provata."
+    },
+    {
+      "titolo": "due commenti citano ancora la migrazione 350, che non esiste",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "lib/admin/etichette.ts:48",
+      "descrizione": "Anche lib/guadagni/negozio.ts:91: la funzione del bonifico fatto la definisce la 916."
+    }
+  ],
+  "domande_per_nicola": [
+    "Pannello bonifici: se la rotta che dice da quando i contanti li paga Stripe non risponde, oggi la pagina avvisa e lascia quei contanti «Da versare» (come prima). Vuoi invece bloccare il tasto «Bonifico fatto» finché la rotta non risponde?",
+    "Nicola: per un bonifico di rimborso nato da un reclamo, i 14 giorni partono dal giorno in cui il cliente ha aperto il reclamo (disputes.created_at)? Sì/no."
+  ],
+  "conto": {
+    "agenti": 7,
+    "nota": "5 riparatori (L1-L5) e 2 revisori (V1 gravi, V2 minori), piano A approvato. L6 non aperto e nessun giro di correzione dopo i revisori: spesa a 21,31 $ su 25 alla lettura delle 02:01. costo_usd letto con get_session alle 02:12 (il contatore può non contare ancora l ultimo revisore).",
+    "subagenti": 7
+  },
+  "costo_usd": 21.31
+}
