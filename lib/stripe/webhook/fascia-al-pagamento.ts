@@ -170,6 +170,9 @@ export async function avvisaIlClienteDelRimborsoAutomatico(
     subject: a.oggetto,
     html: `${p(a.frase)}${p(`Motivo: ${a.motivo}`)}${p(banca)}<p style="margin:24px 0"><a href="${escapeHtml(carrello)}">${escapeHtml(a.invito)}</a></p>`,
     text: testo,
+    // 28/11/2026 (R03-002) — Se non parte, la coda la rimanda: solo all'indirizzo dell'account
+    // (customer_email = user.email al checkout), come la conferma d'ordine in ordini.ts.
+    rimandaA: a.buyerId && destinatario.toLowerCase() === session.customer_email?.toLowerCase() ? a.buyerId : null,
   }));
 }
 
